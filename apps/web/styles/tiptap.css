@@ -85,7 +85,7 @@
 }
 
 .ProseMirror img {
-  @apply rounded;
+  @apply rounded-lg;
 }
 
 .ProseMirror > * {

@@ -50,7 +50,7 @@ const PersonalHomeHeader = () => {
   return (
     <div className="flex w-full items-center justify-between">
       <div className="flex items-center gap-4">
-        <div className="relative h-14 w-14 overflow-hidden rounded-sm bg-grey-01">
+        <div className="relative h-14 w-14 overflow-hidden rounded-lg bg-grey-01">
           <Avatar value={address} avatarUrl={person?.avatarUrl} size={56} square={true} />
         </div>
         <h2 className="text-largeTitle">{person?.name ?? 'Anonymous'}</h2>

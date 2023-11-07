@@ -57,9 +57,9 @@ export const TripleTypeDropdown = ({ value, options }: Props) => {
             }}
             align="end"
             sideOffset={2}
-            className="z-10 w-[160px] origin-top-right self-end overflow-hidden rounded border border-grey-02 bg-white"
+            className="z-10 w-[160px] origin-top-right self-end overflow-hidden rounded-lg border border-grey-02 bg-white"
           >
-            <DropdownPrimitive.Group className="divide-y divide-grey-02 overflow-hidden rounded">
+            <DropdownPrimitive.Group className="divide-y divide-grey-02 overflow-hidden rounded-lg">
               {options.map((option, index) => (
                 <DropdownPrimitive.Item
                   key={`triple-type-dropdown-${index}`}

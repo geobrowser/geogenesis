@@ -30,7 +30,7 @@ export const EntityPageCover = ({
   if (coverUrl) {
     return (
       <div className={cx('relative mx-auto h-[320px] w-full max-w-[1192px]', !space && avatarUrl ? 'mb-20' : 'mb-8')}>
-        <div className="relative h-full w-full overflow-hidden rounded bg-grey-01">
+        <div className="relative h-full w-full overflow-hidden rounded-lg bg-grey-01">
           <Image
             src={getImagePath(coverUrl)}
             layout="fill"
@@ -43,7 +43,7 @@ export const EntityPageCover = ({
         {!space && avatarUrl && (
           <div className="absolute bottom-0 left-0 right-0">
             <div className="mx-auto w-full max-w-[784px]">
-              <div className="relative h-[80px] w-[80px] translate-y-1/2 overflow-hidden rounded border border-white bg-grey-01 shadow-lg">
+              <div className="relative h-[80px] w-[80px] translate-y-1/2 overflow-hidden rounded-lg border border-white bg-grey-01 shadow-lg">
                 <Image
                   src={getImagePath(avatarUrl)}
                   layout="fill"
@@ -63,7 +63,7 @@ export const EntityPageCover = ({
   if (!space && avatarUrl) {
     return (
       <div className="mx-auto mb-10 w-[784px]">
-        <div className="relative h-[80px] w-[80px] overflow-hidden rounded border border-white bg-grey-01 shadow-lg">
+        <div className="relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-grey-01 shadow-lg">
           <Image src={getImagePath(avatarUrl)} layout="fill" objectFit="cover" className="h-full w-full" alt="" />
         </div>
       </div>
