@@ -56,14 +56,14 @@ const MobileSlider = ({ label, children }: SliderProps) => {
               onClick={handlePrev}
               icon={<LeftArrowLong />}
               color="grey-04"
-              className={cx(!hasPrev && 'opacity-25')}
+              className={cx(!hasPrev && 'opacity-25', 'transition-opacity duration-300')}
               disabled={!hasPrev}
             />
             <IconButton
               onClick={handleNext}
               icon={<RightArrowLong />}
               color="grey-04"
-              className={cx(!hasNext && 'opacity-25')}
+              className={cx(!hasNext && 'opacity-25', 'transition-opacity duration-300')}
               disabled={!hasNext}
             />
           </div>
@@ -113,14 +113,14 @@ const DesktopSlider = ({ label, children }: SliderProps) => {
               onClick={handlePrev}
               icon={<LeftArrowLong />}
               color="grey-04"
-              className={cx(!hasPrev && 'opacity-25')}
+              className={cx(!hasPrev && 'opacity-25', 'transition-opacity duration-300')}
               disabled={!hasPrev}
             />
             <IconButton
               onClick={handleNext}
               icon={<RightArrowLong />}
               color="grey-04"
-              className={cx(!hasNext && 'opacity-25')}
+              className={cx(!hasNext && 'opacity-25', 'transition-opacity duration-300')}
               disabled={!hasNext}
             />
           </div>

@@ -6,8 +6,10 @@ import type { Metadata } from 'next';
 
 import { AppConfig, Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
+import { fetchSubspaces } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
+import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
 import { Editor } from '~/partials/editor/editor';
@@ -16,6 +18,7 @@ import {
   EntityReferencedByServerContainer,
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { Subspaces } from '~/partials/space-page/subspaces';
 
 import { SpaceLayout } from './space-layout';
 
@@ -87,6 +90,9 @@ export default async function SpacePage({ params }: Props) {
 
   return (
     <SpaceLayout params={params} usePermissionlessSpace={isPermissionlessSpace}>
+      <React.Suspense fallback={<SubspacesSkeleton />}>
+        <SubspacesContainer entityId={props.id} />
+      </React.Suspense>
       <Editor shouldHandleOwnSpacing />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
@@ -96,6 +102,36 @@ export default async function SpacePage({ params }: Props) {
     </SpaceLayout>
   );
 }
+
+const SubspacesSkeleton = () => {
+  return (
+    <>
+      <div className="h-10" />
+      <div className="no-scrollbar grid grid-cols-3 gap-8 overflow-x-scroll xl:grid-cols-2" aria-hidden>
+        <div>
+          <Skeleton className="aspect-video w-full" />
+          <div className="mt-2 text-metadataMedium text-text opacity-0">
+            Need a placeholder that wraps around to two lines.
+          </div>
+        </div>
+        <Skeleton className="aspect-video w-full" />
+        <Skeleton className="aspect-video w-full xl:hidden" />
+      </div>
+      <Spacer height={40} />
+    </>
+  );
+};
+
+type SubspacesContainerProps = {
+  entityId: string;
+};
+
+const SubspacesContainer = async ({ entityId }: SubspacesContainerProps) => {
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+  const subspaces = await fetchSubspaces({ entityId, endpoint: config.subgraph });
+
+  return <Subspaces subspaces={subspaces} />;
+};
 
 const getData = async (spaceId: string, config: AppConfig) => {
   const { isPermissionlessSpace, space } = await API.space(spaceId);
