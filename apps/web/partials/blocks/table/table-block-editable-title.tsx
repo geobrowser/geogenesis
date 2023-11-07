@@ -3,8 +3,6 @@ import * as React from 'react';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useTableBlock } from '~/core/state/table-block-store';
 
-// import { Entity } from '~/core/utils/entity';
-
 export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const userCanEdit = useUserIsEditing(spaceId);
   const { name, setName } = useTableBlock();
