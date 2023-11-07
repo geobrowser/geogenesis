@@ -28,14 +28,32 @@ export function useTableBlock() {
   const [pageNumber, setPageNumber] = React.useState(0);
   const { subgraph, config } = Services.useServices();
   const merged = useMergedData();
-  const { actionsByEntityId, allActions, create, update } = useActionsStore();
+  const { allActions, create, update } = useActionsStore();
 
-  const { data: blockEntity } = useQuery({
-    queryKey: ['table-block-entity', entityId, actionsByEntityId[entityId]],
-    queryFn: () => merged.fetchEntity({ id: entityId, endpoint: config.subgraph }),
+  // We need to track local changes to the entity and re-fetch it when
+  // any changes occur. We re-fetch instead of deriving the new entity
+  // since not all of the triples for an entity will be part of the
+  // actions store.
+  //
+  // Right now the block will re-render if changes are made to _any_
+  // triple on the block entity. This works mostly as intended except
+  // when making changes to the name triple. The name triple shouldn't
+  // re-render the block, but currently it does.
+  //
+  // We can't filter out the name triple from the array of actions since
+  // toggling edit mode will revert back to the original representation of
+  // the name at the time of mounting the block. Any subsequent changes
+  // won't be visible.
+  const actionsForEntityId = React.useMemo(() => {
+    return Entity.actionsForEntityId(allActions, entityId);
+  }, [allActions, entityId]);
+
+  const { data: blockEntity, isLoading } = useQuery({
+    // Refetch the entity if there have been local changes
+    queryKey: ['table-block-entity', entityId, actionsForEntityId],
+    queryFn: ({ signal }) => merged.fetchEntity({ id: entityId, endpoint: config.subgraph, signal }),
   });
 
-  // @TODO: Correctly memoize the references/content to blockEntity/triples
   const nameTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME) ?? null;
   }, [blockEntity?.triples]);
@@ -44,13 +62,24 @@ export function useTableBlock() {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
   }, [blockEntity?.triples]);
 
-  const { data: filterState, isLoading: isFilterStateLoading } = useQuery({
-    queryKey: ['table-block-filter-value', filterTriple?.value],
-    queryFn: async () => {
-      const filterValue = Value.stringValue(filterTriple ?? undefined) ?? '';
+  // We memoize the filterString since several of the subsequent queries rely
+  // on the graphql representation of the filter. Memoizing it means we avoid
+  // unnecessary re-renders.
+  const filterString = React.useMemo(() => {
+    const stringValue = Value.stringValue(filterTriple ?? undefined);
 
+    if (stringValue && stringValue !== '') {
+      return stringValue;
+    }
+
+    return TableBlockSdk.createGraphQLStringFromFilters([], selectedType.entityId);
+  }, [filterTriple, selectedType.entityId]);
+
+  const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
+    queryKey: ['table-block-filter-value', filterString],
+    queryFn: async () => {
       const filterState = TableBlockSdk.createFiltersFromGraphQLString(
-        filterValue,
+        filterString,
         async id => await merged.fetchEntity({ id, endpoint: config.subgraph })
       );
 
@@ -59,10 +88,9 @@ export function useTableBlock() {
   });
 
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
-    queryKey: ['table-block-columns', filterState, selectedType.entityId, entityId],
+    // @TODO: ShownColumns changes should trigger a refetch
+    queryKey: ['table-block-columns', filterString, selectedType.entityId, entityId],
     queryFn: async ({ signal }) => {
-      const filterString = filterState ? TableBlockSdk.createGraphQLStringFromFilters(filterState, entityId) : '';
-
       const params: FetchRowsOptions['params'] = {
         endpoint: config.subgraph,
         query: '',
@@ -94,11 +122,9 @@ export function useTableBlock() {
   });
 
   const { data: rows, isLoading: isLoadingRows } = useQuery({
-    queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, filterState, entityId],
+    queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterString],
     queryFn: async ({ signal }) => {
       if (!columns) return [];
-
-      const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState ?? [], selectedType.entityId);
 
       const params: FetchRowsOptions['params'] = {
         endpoint: config.subgraph,
@@ -251,7 +277,7 @@ export function useTableBlock() {
     entityId,
     spaceId,
 
-    isLoading: isLoadingColumns || isLoadingRows || isFilterStateLoading,
+    isLoading: isLoadingColumns || isLoadingRows || isLoadingFilterState || isLoading,
 
     nameTriple,
   };
