@@ -129,6 +129,7 @@ export function useTableBlockStoreV2() {
   });
 
   const { data: columnRelationTypes } = useQuery({
+    queryKey: ['table-block-column-relation-types', columns, allActions],
     queryFn: async () => {
       if (!columns) return {};
       // 1. Fetch all attributes that are entity values
@@ -232,18 +233,6 @@ export function useTableBlockStoreV2() {
     [create, update, entityId, filterTriple, nameTriple, selectedType.entityId, spaceId]
   );
 
-  console.log('table block v2', {
-    blockEntity,
-    nameTriple,
-    filterTriple,
-    filterState,
-    rows,
-    columns,
-    isLoadingColumns,
-    isLoadingRows,
-    isFilterStateLoading,
-  });
-
   return {
     blockEntity,
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
@@ -284,7 +273,6 @@ interface Props {
   spaceId: string;
   children: React.ReactNode;
 
-  // @TODO: This should be type Entity
   selectedType?: GeoType;
   entityId: string;
 }
