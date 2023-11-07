@@ -56,7 +56,14 @@ export function TableBlock({ spaceId }: Props) {
   const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
 
-  useTableBlockStoreV2({ spaceId, entityId: 'e1df6f0c-39ad-40fe-b2ac-8d6cff3798bc' });
+  useTableBlockStoreV2({
+    spaceId,
+    entityId: 'e1df6f0c-39ad-40fe-b2ac-8d6cff3798bc',
+    selectedType: {
+      entityId: 'cb9d261d-456b-4eaf-87e5-1e9faa441867',
+      name: 'Project',
+    },
+  });
 
   const shownColumns = [
     ...(blockEntity?.triples
