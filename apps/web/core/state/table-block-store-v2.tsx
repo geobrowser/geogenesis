@@ -1,28 +1,24 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useQuery } from '@tanstack/react-query';
 
-import React from 'react';
+import * as React from 'react';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { useMergedData } from '../hooks/use-merged-data';
 import { FetchRowsOptions } from '../io/fetch-rows';
 import { Services } from '../services';
-import { Column } from '../types';
+import { Column, GeoType } from '../types';
 import { Value } from '../utils/value';
 
 interface TableBlockStoreConfig {
   spaceId: string;
-  entityId: string; // entity id for the table block entity
-  selectedType: {
-    entityId: string;
-    name: string | null;
-  };
 }
 
 const PAGE_SIZE = 10;
 
-export function useTableBlockStoreV2({ spaceId, entityId, selectedType }: TableBlockStoreConfig) {
+export function useTableBlockStoreV2({ spaceId }: TableBlockStoreConfig) {
+  const { entityId, selectedType } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
   const { subgraph, config } = Services.useServices();
   const merged = useMergedData();
@@ -64,7 +60,7 @@ export function useTableBlockStoreV2({ spaceId, entityId, selectedType }: TableB
         endpoint: config.subgraph,
         query: '',
         filter: filterString,
-        typeIds: selectedType.entityId ? [selectedType.entityId] : [],
+        typeIds: [selectedType.entityId],
         first: PAGE_SIZE + 1,
         skip: pageNumber * PAGE_SIZE,
       };
@@ -101,7 +97,7 @@ export function useTableBlockStoreV2({ spaceId, entityId, selectedType }: TableB
         endpoint: config.subgraph,
         query: '',
         filter: filterString,
-        typeIds: selectedType.entityId ? [selectedType.entityId] : [],
+        typeIds: [selectedType.entityId],
         first: PAGE_SIZE + 1,
         skip: pageNumber * PAGE_SIZE,
       };
@@ -136,30 +132,49 @@ export function useTableBlockStoreV2({ spaceId, entityId, selectedType }: TableB
   };
 }
 
-/**
- * v1
- * {
-    "endpoint": "https://api.thegraph.com/subgraphs/name/baiirun/geo",
-    "query": "",
-    "filter": "{typeIds_contains_nocase: [\"cb9d261d-456b-4eaf-87e5-1e9faa441867\"], entityOf_: {space: \"0x1A39E2Fe299Ef8f855ce43abF7AC85D6e69E05F5\"}}",
-    "typeIds": [
-        "cb9d261d-456b-4eaf-87e5-1e9faa441867"
-    ],
-    "first": 11,
-    "skip": 0
+// This component is used to wrap table blocks in the entity page
+// and provide store context for the table to load and edit data
+// for that specific table block.
+//
+// It works similarly to the EntityTableStoreProvider, but it's
+// scoped specifically for table blocks since it has functionality
+// unique to table blocks.
+const TableBlockContext = React.createContext<{ entityId: string; selectedType: GeoType } | undefined>(undefined);
+
+interface Props {
+  spaceId: string;
+  children: React.ReactNode;
+
+  // @TODO: This should be type Entity
+  selectedType?: GeoType;
+  entityId: string;
 }
 
-v2
+export function TableBlockProvider({ spaceId, children, selectedType, entityId }: Props) {
+  if (!selectedType) {
+    // A table block might reference a type that has been deleted which will not be found
+    // in the types store.
+    console.error(`Undefined type in blockId: ${entityId}`);
+    throw new Error('Missing selectedType in TableBlockStoreProvider');
+  }
 
-{
-    "endpoint": "https://api.thegraph.com/subgraphs/name/baiirun/geo",
-    "query": "",
-    "filter": "{typeIds_contains_nocase: [\"e1df6f0c-39ad-40fe-b2ac-8d6cff3798bc\"], entityOf_: {space: \"0x1A39E2Fe299Ef8f855ce43abF7AC85D6e69E05F5\"}}",
-    "typeIds": [
-        "cb9d261d-456b-4eaf-87e5-1e9faa441867"
-    ],
-    "first": 11,
-    "skip": 0
+  const store = React.useMemo(() => {
+    return {
+      spaceId,
+      entityId,
+      selectedType,
+    };
+  }, [spaceId, selectedType, entityId]);
+
+  return <TableBlockContext.Provider value={store}>{children}</TableBlockContext.Provider>;
 }
- * 
- */
+
+export function useTableBlockInstance() {
+  const value = React.useContext(TableBlockContext);
+
+  if (!value) {
+    throw new Error(`Missing EntityPageTableBlockStoreProvider`);
+  }
+
+  return value;
+}

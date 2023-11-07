@@ -5,6 +5,7 @@ import * as React from 'react';
 import { useMemo } from 'react';
 
 import { TableBlockStoreProvider } from '~/core/state/table-block-store';
+import { TableBlockProvider } from '~/core/state/table-block-store-v2';
 import { useTypesStore } from '~/core/state/types-store/types-store';
 import { GeoType } from '~/core/types';
 
@@ -85,7 +86,9 @@ function TableNodeChildren({
       }
     >
       <TableBlockStoreProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
-        <TableBlock spaceId={spaceId} />
+        <TableBlockProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
+          <TableBlock spaceId={spaceId} />
+        </TableBlockProvider>
       </TableBlockStoreProvider>
     </ErrorBoundary>
   );
