@@ -38,7 +38,7 @@ interface Props {
 }
 
 export function TableBlock({ spaceId }: Props) {
-  const { setFilterState } = useTableBlock();
+  const { setFilterState } = useTableBlockStoreV2();
 
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
@@ -55,9 +55,7 @@ export function TableBlock({ spaceId }: Props) {
     hasPreviousPage,
     pageNumber,
     type,
-  } = useTableBlockStoreV2({
-    spaceId,
-  });
+  } = useTableBlockStoreV2();
 
   const shownColumns = [
     ...(blockEntity?.triples
