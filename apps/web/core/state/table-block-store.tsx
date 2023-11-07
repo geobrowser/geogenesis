@@ -317,6 +317,7 @@ export class TableBlockStore {
         const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
         // Merge all local and server triples
+        // @TODO: Why are we doing uniqBy? If this was for the fromActions bug it should be fixed now.
         const mergedTriples = A.uniqBy(
           Triple.fromActions(this.ActionsStore.allActions$.get(), relationTypeEntities),
           t => t.id
