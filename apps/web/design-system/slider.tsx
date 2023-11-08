@@ -36,7 +36,7 @@ const MobileSlider = ({ label, children }: SliderProps) => {
       const element = document.getElementById(`${prefix}-slider-mobile-${page - 1}`);
       element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
-  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, prefix]);
 
   const hasNext = page < slides.length - 1;
   const handleNext = useCallback(() => {
@@ -44,7 +44,7 @@ const MobileSlider = ({ label, children }: SliderProps) => {
       const element = document.getElementById(`${prefix}-slider-mobile-${page + 1}`);
       element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
-  }, [page, slides.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, slides.length, prefix]);
 
   return (
     <>
@@ -93,7 +93,7 @@ const DesktopSlider = ({ label, children }: SliderProps) => {
       const element = document.getElementById(`${prefix}-slider-desktop-${page - 1}`);
       element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
-  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, prefix]);
 
   const hasNext = page < slides.length - 1;
   const handleNext = useCallback(() => {
@@ -101,7 +101,7 @@ const DesktopSlider = ({ label, children }: SliderProps) => {
       const element = document.getElementById(`${prefix}-slider-desktop-${page + 1}`);
       element?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
-  }, [page, slides.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, slides.length, prefix]);
 
   return (
     <>
