@@ -159,7 +159,7 @@ export function mergeActionsWithEntity(allActionsInStore: Action[], networkEntit
   const triplesForEntity = pipe(
     allActionsInStore,
     actions => actionsForEntityId(actions, networkEntity.id),
-    actions => Triple.fromActions(actions, networkEntity ? networkEntity.triples : []),
+    actions => Triple.fromActions(actions, networkEntity.triples),
     triples => Triple.withLocalNames(allActionsInStore, triples)
   );
 
