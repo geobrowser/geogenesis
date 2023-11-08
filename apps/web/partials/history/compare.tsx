@@ -198,7 +198,7 @@ const Versions = () => {
       </div>
       <div className="flex flex-col gap-16 divide-y divide-grey-02">
         {changedEntityIds.map((entityId: EntityId) => (
-          <ChangedEntity key={entityId} change={changes[entityId]} entityId={entityId} />
+          <ChangedEntity key={entityId} change={changes[entityId] as Changeset} entityId={entityId} />
         ))}
       </div>
     </div>
@@ -342,7 +342,7 @@ const Proposals = () => {
       </div>
       <div className="flex flex-col gap-16 divide-y divide-grey-02">
         {changedEntityIds.map((entityId: EntityId) => (
-          <ChangedEntity key={entityId} change={changes[entityId]} entityId={entityId} />
+          <ChangedEntity key={entityId} change={changes[entityId] as Changeset} entityId={entityId} />
         ))}
       </div>
     </div>
@@ -367,7 +367,7 @@ const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
     attributeIds.forEach(attributeId => {
       const attribute = attributes[attributeId];
 
-      if (attribute.name === 'Name' && typeof attribute.after === 'string') {
+      if (attribute?.name === 'Name' && typeof attribute.after === 'string') {
         renderedName = attribute.after;
       }
     });
@@ -385,7 +385,7 @@ const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
       {blockIds.length > 0 && (
         <div className="mt-4">
           {blockIds.map((blockId: BlockId) => (
-            <ChangedBlock key={blockId} blockId={blockId} block={blocks[blockId]} />
+            <ChangedBlock key={blockId} blockId={blockId} block={blocks[blockId] as BlockChange} />
           ))}
         </div>
       )}
@@ -395,7 +395,7 @@ const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
             <ChangedAttribute
               key={attributeId}
               attributeId={attributeId}
-              attribute={attributes[attributeId]}
+              attribute={attributes[attributeId] as AttributeChange}
               entityId={entityId}
             />
           ))}
@@ -833,7 +833,7 @@ function parseMarkdown(markdownString: string) {
     markdownLevel++;
   }
 
-  markdownType = markdownComponent[markdownLevel];
+  markdownType = markdownComponent[markdownLevel] as MarkdownType;
   markdownContent = markdownContent.trim();
 
   return { markdownType, markdownContent };

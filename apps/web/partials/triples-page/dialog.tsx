@@ -122,7 +122,7 @@ export function FilterDialog({ inputContainerWidth, filterState, setFilterState 
                 variant="secondary"
                 disabled={getFilterOptions(filterState).length === 0}
                 onClick={() => {
-                  const defaultOption = getFilterOptions(filterState)[0];
+                  const defaultOption = getFilterOptions(filterState)[0] as { value: FilterField; label: string };
 
                   const newFilterState = produce(filterState, draft => {
                     draft.push({ field: defaultOption.value, value: '' });

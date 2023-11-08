@@ -15,10 +15,11 @@
     "jsx": "preserve",
     "incremental": true,
     "downlevelIteration": true,
+    "noUncheckedIndexedAccess": true,
     "baseUrl": ".",
     "paths": {
       "~/*": ["./*"],
-      "@geogenesis/*": ["../packages/*"]
+      "@geogenesis/*": ["../../packages/*"]
     },
     "plugins": [
       {

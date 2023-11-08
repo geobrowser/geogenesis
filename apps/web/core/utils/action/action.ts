@@ -83,7 +83,7 @@ function getFirstAndLastChanges(actions: ActionType[]): FirstLastAction[] {
   //
   // Since we iterate forwards here, we always only get the first action for a given id.
   for (let i = 0; i <= actions.length - 1; i++) {
-    const action = actions[i];
+    const action = actions[i] as Action;
 
     // If we haven't seen this id before, add the action to the map
     switch (action.type) {
@@ -103,7 +103,7 @@ function getFirstAndLastChanges(actions: ActionType[]): FirstLastAction[] {
 
   // Since we iterate backwards here, we always only get the last action for a given id.
   for (let i = actions.length - 1; i >= 0; i--) {
-    const action = actions[i];
+    const action = actions[i] as Action;
 
     // If we haven't seen this id before, add the action to the map
     switch (action.type) {
@@ -283,5 +283,5 @@ export const splitActions = (actions: ActionType[], unstagedChanges: Record<stri
     }
   });
 
-  return [actionsToPublish, actionsToPersist];
+  return [actionsToPublish, actionsToPersist] as const;
 };

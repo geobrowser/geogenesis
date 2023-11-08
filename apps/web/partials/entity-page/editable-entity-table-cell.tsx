@@ -130,7 +130,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     });
   };
 
-  const uploadImage = (triple: Triple, imageSrc: string) => {
+  const uploadImage = (imageSrc: string, triple?: Triple) => {
+    if (!triple) return;
+
     send({
       type: 'UPLOAD_IMAGE',
       payload: {
@@ -151,7 +153,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     });
   };
 
-  const removeImage = (triple: Triple) => {
+  const removeImage = (triple?: Triple) => {
+    if (!triple) return;
+
     send({
       type: 'REMOVE_IMAGE',
       payload: {
@@ -160,7 +164,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     });
   };
 
-  const updateStringTripleValue = (triple: Triple, value: string) => {
+  const updateStringTripleValue = (value: string, triple?: Triple) => {
+    if (!triple) return;
+
     send({
       type: 'UPDATE_STRING_VALUE',
       payload: {
@@ -170,7 +176,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     });
   };
 
-  const updateUrlTripleValue = (triple: Triple, value: string) => {
+  const updateUrlTripleValue = (value: string, triple?: Triple) => {
+    if (!triple) return;
+
     send({
       type: 'UPDATE_URL_VALUE',
       payload: {
@@ -180,7 +188,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     });
   };
 
-  const updateDateTripleValue = (triple: Triple, value: string) => {
+  const updateDateTripleValue = (value: string, triple?: Triple) => {
+    if (!triple) return;
+
     send({
       type: 'UPDATE_DATE_VALUE',
       payload: {
@@ -242,7 +252,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           onBlur={e =>
             isEmptyCell
               ? createStringTripleWithValue(e.target.value)
-              : updateStringTripleValue(firstTriple, e.target.value)
+              : updateStringTripleValue(e.target.value, firstTriple)
           }
           value={Value.stringValue(firstTriple) ?? ''}
         />
@@ -253,7 +263,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           imageSrc={Value.imageValue(firstTriple) || ''}
           variant="table-cell"
           onImageChange={imageSrc => {
-            isEmptyCell ? createImageWithValue(imageSrc) : uploadImage(firstTriple, imageSrc);
+            isEmptyCell ? createImageWithValue(imageSrc) : uploadImage(imageSrc, firstTriple);
           }}
           onImageRemove={() => {
             removeImage(firstTriple);
@@ -264,7 +274,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       {isDateValueType && (
         <DateField
           isEditing={true}
-          onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateDateTripleValue(firstTriple, date))}
+          onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateDateTripleValue(date, firstTriple))}
           value={Value.dateValue(firstTriple) ?? ''}
           variant="tableCell"
         />
@@ -276,7 +286,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           onBlur={e =>
             isEmptyCell
               ? createUrlTripleWithValue(e.currentTarget.value)
-              : updateUrlTripleValue(firstTriple, e.currentTarget.value)
+              : updateUrlTripleValue(e.currentTarget.value, firstTriple)
           }
           value={Value.urlValue(firstTriple) ?? ''}
           placeholder="Add value..."

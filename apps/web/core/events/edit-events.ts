@@ -284,6 +284,8 @@ const listener =
 
             const firstTriple = triples[0];
 
+            if (!firstTriple) return;
+
             create(
               Triple.withId({
                 ...firstTriple,
@@ -349,8 +351,13 @@ const listener =
         const { newAttribute, oldAttribute, triplesByAttributeId } = event.payload;
         const triplesToUpdate = triplesByAttributeId[oldAttribute.id];
 
+        if (!triplesToUpdate) return;
+
         if (triplesToUpdate.length > 0) {
-          if (triplesByAttributeId[newAttribute.id]?.length > 0) {
+          const triplesForAttributeId = triplesByAttributeId[oldAttribute.id];
+          if (!triplesForAttributeId) return;
+
+          if (triplesForAttributeId.length > 0) {
             // If triples at the new id already exists we want the user to use the existing entry method
             return;
           }
@@ -371,27 +378,32 @@ const listener =
       case 'ADD_PAGE_ENTITY_VALUE': {
         const { triplesByAttributeId, attribute, linkedEntity, entityName } = event.payload;
 
+        const triplesForAttributeId = triplesByAttributeId[attribute.id];
+        const firstTripleForAttributeId = triplesForAttributeId?.[0];
+
         // This first if clause handles the case when we delete an entity value triple and
         // there’s no entity value triples left, but we want to keep the
         // field in place for better UX in the entity page
         if (
+          triplesForAttributeId &&
           triplesByAttributeId[attribute.id]?.length === 1 &&
-          triplesByAttributeId[attribute.id][0].value.type === 'entity' &&
-          !triplesByAttributeId[attribute.id][0].value.id
+          firstTripleForAttributeId &&
+          firstTripleForAttributeId.value.type === 'entity' &&
+          !firstTripleForAttributeId.value.id
         ) {
           return update(
             Triple.ensureStableId({
-              ...triplesByAttributeId[attribute.id][0],
+              ...firstTripleForAttributeId,
               value: {
-                ...triplesByAttributeId[attribute.id][0].value,
+                ...firstTripleForAttributeId.value,
                 type: 'entity',
                 id: linkedEntity.id,
                 name: linkedEntity.name,
               },
-              attributeName: triplesByAttributeId[attribute.id][0].attributeName,
+              attributeName: firstTripleForAttributeId.attributeName,
               entityName: entityName,
             }),
-            triplesByAttributeId[attribute.id][0]
+            firstTripleForAttributeId
           );
         }
 
@@ -401,7 +413,7 @@ const listener =
             entityId: context.entityId,
             entityName: entityName,
             attributeId: attribute.id,
-            attributeName: triplesByAttributeId[attribute.id][0].attributeName,
+            attributeName: firstTripleForAttributeId?.attributeName ?? '',
             value: {
               type: 'entity',
               id: linkedEntity.id,

@@ -20,7 +20,7 @@ interface Props {
 export function MoveEntityReviewPage({ entityId, triples }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
   return (
-    <div className="rounded border border-grey-02 shadow-button p-5">
+    <div className="rounded border border-grey-02 p-5 shadow-button">
       <div className="pb-6">
         <Text as="p" variant="bodySemibold">
           Entity ID
@@ -79,7 +79,7 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
             <Text as="p" variant="bodySemibold">
-              {triples[0].attributeName || attributeId}
+              {triples[0]?.attributeName || attributeId}
             </Text>
             <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
           </div>

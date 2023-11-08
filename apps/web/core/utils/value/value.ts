@@ -28,7 +28,8 @@ export function dateValue(triple?: Triple) {
   return triple?.value?.type === 'date' ? triple.value.value : null;
 }
 
-export function imageValue(triple: Triple) {
+export function imageValue(triple?: Triple) {
+  if (!triple) return null;
   return triple?.value?.type === 'image' ? triple.value.value : null;
 }
 

@@ -46,7 +46,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
   const { triples } = useEntityPageStore();
   const { setCompareMode, setSelectedVersion, setPreviousVersion, setIsCompareOpen } = useDiff();
 
-  const isOnePage = versions?.pages && versions.pages[0].length < 10;
+  const isOnePage = versions?.pages && versions.pages[0]?.length && versions.pages[0].length < 10;
 
   const isLastPage =
     versions?.pages &&

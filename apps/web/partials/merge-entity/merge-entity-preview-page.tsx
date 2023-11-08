@@ -21,7 +21,7 @@ export function MergeEntityPreviewPage({ entityId, triples }: Props) {
 
   return (
     <div className="rounded border border-grey-02 shadow-button">
-      <div className="p-5 pb-6 border-b border-grey-02">
+      <div className="border-b border-grey-02 p-5 pb-6">
         <Text as="p" variant="bodySemibold">
           Entity ID
         </Text>
@@ -77,9 +77,9 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
-            <div className="p-5 border-b border-grey-02">
+            <div className="border-b border-grey-02 p-5">
               <Text as="p" variant="bodySemibold">
-                {triples[0].attributeName || attributeId}
+                {triples[0]?.attributeName || attributeId}
               </Text>
               <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
             </div>

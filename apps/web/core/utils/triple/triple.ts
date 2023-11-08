@@ -184,12 +184,12 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]): Triple
 
     // The triple is part of the entity whose name changed
     if (newEntityNames[triple.entityId]) {
-      newTriple.entityName = newEntityNames[triple.entityId];
+      newTriple.entityName = newEntityNames[triple.entityId] as string;
     }
 
     // The triple has an attribute whose name changed
     if (newEntityNames[triple.attributeId]) {
-      newTriple.attributeName = newEntityNames[triple.attributeId];
+      newTriple.attributeName = newEntityNames[triple.attributeId] as string;
     }
 
     // The triple has a an entity value whose name changed

@@ -28,7 +28,7 @@ export const mapMergedTriplesToRelationValueTypes = (
       triples.reduce<RelationValueTypesByAttributeId>((acc, relationType) => {
         if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
 
-        acc[relationType.entityId].push({
+        acc[relationType.entityId]?.push({
           typeId: relationType.value.id,
           typeName: relationType.value.name,
           spaceIdOfAttribute: relationType.space,

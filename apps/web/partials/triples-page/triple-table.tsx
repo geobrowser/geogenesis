@@ -146,7 +146,7 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
                 return (
                   <TableCell
                     isExpandable={cell.column.id === 'value' && (cell.getValue() as Value).type === 'string'}
-                    isExpanded={expandedCells[cellId]}
+                    isExpanded={Boolean(expandedCells[cellId])}
                     width={cell.column.getSize()}
                     key={cell.id}
                     toggleExpanded={() =>

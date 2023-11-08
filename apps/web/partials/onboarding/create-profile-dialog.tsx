@@ -343,7 +343,7 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar, sta
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const file = e.target.files[0];
+      const file = e.target.files[0] as File;
       const ipfsUri = await storageClient.uploadFile(file);
       const imageValue = Value.toImageValue(ipfsUri);
       setAvatar(imageValue);

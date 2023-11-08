@@ -24,5 +24,5 @@ export function useFormWithValidation<T>(values: T, validate: (values: T) => boo
       isValidating,
       error,
     },
-  ];
+  ] as const;
 }

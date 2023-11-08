@@ -67,7 +67,7 @@ export class Merged implements IMergedDataSource {
 
     // Merge any local actions with the network triples
     const updatedTriples = Triple.fromActions(actions, networkTriples);
-    const mergedTriplesWithName = Triple.withLocalNames(actions, updatedTriples);
+    const mergedTriplesWithName = Triple.withLocalNames(actions ?? [], updatedTriples);
 
     // Apply any server filters to locally created data.
     let locallyFilteredTriples = mergedTriplesWithName;

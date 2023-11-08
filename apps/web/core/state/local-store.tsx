@@ -45,7 +45,10 @@ export class LocalStore {
 
         return triples.reduce<Record<string, ITriple[]>>((acc, triple) => {
           if (!acc[triple.entityId]) acc[triple.entityId] = [];
-          acc[triple.entityId] = acc[triple.entityId].concat(triple);
+
+          // Have to this wonky defensive coding because TypeScript does not type
+          // narrow when using noUncheckedIndexedAccess
+          acc[triple.entityId] = acc[triple.entityId]?.concat([triple]) ?? [];
           return acc;
         }, {});
       })

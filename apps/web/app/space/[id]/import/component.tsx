@@ -11,7 +11,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
-import { Entity as EntityType, Triple as TripleType } from '~/core/types';
+import { Entity, Entity as EntityType, Triple as TripleType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { GeoDate } from '~/core/utils/utils';
 
@@ -37,7 +37,13 @@ type Props = {
 
 type SupportedValueType = 'string' | 'date' | 'url';
 
-type EntityAttributesType = Record<string, { index: number; type: SupportedValueType; name: string }>;
+type EntityAttribute = {
+  index: number;
+  type: SupportedValueType;
+  name: string;
+};
+
+type EntityAttributesType = Record<string, EntityAttribute>;
 
 export const Component = ({ spaceId }: Props) => {
   const pathname = usePathname();
@@ -114,13 +120,13 @@ export const Component = ({ spaceId }: Props) => {
           Triple.withId({
             space: spaceId,
             entityId: newEntityId,
-            entityName: entity[entityNameIndex],
+            entityName: entity[entityNameIndex] ?? '',
             attributeId: 'name',
             attributeName: 'Name',
             value: {
               type: 'string',
               id: ID.createValueId(),
-              value: entity[entityNameIndex],
+              value: entity[entityNameIndex] ?? '',
             },
           })
         );
@@ -130,7 +136,7 @@ export const Component = ({ spaceId }: Props) => {
           Triple.withId({
             space: spaceId,
             entityId: newEntityId,
-            entityName: entity[entityNameIndex],
+            entityName: entity[entityNameIndex] ?? '',
             attributeId: 'type',
             attributeName: 'Types',
             value: {
@@ -144,7 +150,13 @@ export const Component = ({ spaceId }: Props) => {
         // Create entity attribute values
         Object.keys(entityAttributes).forEach(attributeId => {
           if (entityAttributes[attributeId]?.type === 'date') {
-            const date = dayjs.utc(entity[entityAttributes[attributeId].index], 'MM/DD/YYYY');
+            const attribute = entityAttributes[attributeId];
+
+            if (!attribute) {
+              return null;
+            }
+
+            const date = dayjs.utc(entity[attribute.index], 'MM/DD/YYYY');
 
             if (!date.isValid()) {
               return null;
@@ -162,7 +174,7 @@ export const Component = ({ spaceId }: Props) => {
               Triple.withId({
                 space: spaceId,
                 entityId: newEntityId,
-                entityName: entity[entityNameIndex],
+                entityName: entity[entityNameIndex] ?? '',
                 attributeId,
                 attributeName: entityAttributes[attributeId]?.name ?? '',
                 value: {
@@ -173,17 +185,23 @@ export const Component = ({ spaceId }: Props) => {
               })
             );
           } else {
+            const attribute = entityAttributes[attributeId];
+
+            if (!attribute) {
+              return null;
+            }
+
             create(
               Triple.withId({
                 space: spaceId,
                 entityId: newEntityId,
-                entityName: entity[entityNameIndex],
+                entityName: entity[entityNameIndex] ?? '',
                 attributeId,
                 attributeName: entityAttributes[attributeId]?.name ?? '',
                 value: {
                   type: (entityAttributes[attributeId]?.type ?? 'string') as SupportedValueType,
                   id: ID.createValueId(),
-                  value: entity[entityAttributes[attributeId].index],
+                  value: entity[attribute.index] ?? '',
                 },
               })
             );
@@ -300,7 +318,7 @@ export const Component = ({ spaceId }: Props) => {
                     options={headers.map((header: string, index: number) => {
                       return {
                         value: index.toString(),
-                        label: `${header} (e.g., ${examples[index].substring(0, 16)})`,
+                        label: `${header} (e.g., ${examples[index]?.substring(0, 16)})`,
                       };
                     })}
                     className="max-w-full overflow-clip"
@@ -328,12 +346,12 @@ export const Component = ({ spaceId }: Props) => {
                           newEntityAttributes[attribute.id] = {
                             ...newEntityAttributes[attribute.id],
                             type: value as SupportedValueType,
-                          };
+                          } as EntityAttribute;
                         } else {
                           newEntityAttributes[attribute.id] = {
                             ...newEntityAttributes[attribute.id],
-                            type: 'string' as SupportedValueType,
-                          };
+                            type: 'string' as const,
+                          } as EntityAttribute;
                         }
 
                         setEntityAttributes(newEntityAttributes);
@@ -360,7 +378,7 @@ export const Component = ({ spaceId }: Props) => {
                             ...newEntityAttributes[attribute.id],
                             index: parseInt(value, 10),
                             name: attribute.value.type === 'entity' ? attribute.value.name ?? '' : '',
-                          };
+                          } as EntityAttribute;
                         } else {
                           delete newEntityAttributes[attribute.id];
                         }
@@ -372,7 +390,7 @@ export const Component = ({ spaceId }: Props) => {
                         ...headers.map((header: string, index: number) => {
                           return {
                             value: index.toString(),
-                            label: `${header} (e.g., ${examples[index].substring(0, 16)})`,
+                            label: `${header} (e.g., ${examples[index]?.substring(0, 16)})`,
                           };
                         }),
                       ]}

@@ -33,10 +33,10 @@ const LOCAL_CHAIN: Chain = {
   },
   rpcUrls: {
     default: {
-      http: [Environment.options.development.rpc],
+      http: [Environment.options.development.rpc] as [string],
     },
     public: {
-      http: [Environment.options.development.rpc],
+      http: [Environment.options.development.rpc] as [string],
     },
   },
 };
@@ -65,7 +65,7 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
 
         if (chain.id === LOCAL_CHAIN.id) {
           return {
-            http: LOCAL_CHAIN.rpcUrls.default.http[0],
+            http: LOCAL_CHAIN.rpcUrls.default.http[0] as string,
           };
         }
 

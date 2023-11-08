@@ -234,7 +234,7 @@ function EntityAttributes({
       type: 'REMOVE_PAGE_ENTITY',
       payload: {
         triple,
-        isLastEntity: groupedTriples[triple.attributeId].length === 1,
+        isLastEntity: groupedTriples[triple.attributeId]?.length === 1,
       },
     });
   };
@@ -456,7 +456,9 @@ function EntityAttributes({
         );
       case 'entity':
         if (isEmptyEntity) {
-          const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
+          const allowedTypesForId = allowedTypes[attributeId];
+          const relationTypes =
+            allowedTypesForId?.length && allowedTypesForId.length > 0 ? allowedTypes[attributeId] : undefined;
 
           return (
             <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
@@ -530,12 +532,16 @@ function EntityAttributes({
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
         const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
 
-        const tripleType: TripleValueType = triples[0].value.type || 'string';
+        const firstTriple = triples[0];
 
-        const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
-        const attributeName = triples[0].attributeName;
-        const isPlaceholder = triples[0].placeholder;
-        const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
+        const tripleType: TripleValueType = firstTriple?.value.type || 'string';
+
+        const isEmptyEntity = triples.length === 1 && firstTriple?.value.type === 'entity' && !firstTriple.value.id;
+        const attributeName = firstTriple?.attributeName;
+        const isPlaceholder = firstTriple?.placeholder;
+        const allowedTypesForId = allowedTypes[attributeId];
+        const relationTypes =
+          allowedTypesForId?.length && allowedTypesForId.length > 0 ? allowedTypes[attributeId] : undefined;
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
@@ -571,7 +577,7 @@ function EntityAttributes({
                   <AttributeConfigurationMenu
                     trigger={<SquareButton icon={<CogSmall />} />}
                     attributeId={attributeId}
-                    attributeName={attributeName}
+                    attributeName={attributeName ?? ''}
                   />
                 ) : null}
                 {!isPlaceholder && (

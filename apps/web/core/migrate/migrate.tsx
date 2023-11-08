@@ -14,6 +14,7 @@ import {
   DeleteTripleAction,
   EditTripleAction,
   Triple as ITriple,
+  Triple,
   TripleValueType,
   TripleWithDateValue,
   TripleWithStringValue,
@@ -282,11 +283,13 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
       const updateActions: EditTripleAction[] = triplesToUpdate.map(([newTriple, oldTriple]) => ({
         type: 'editTriple',
         before: {
-          ...oldTriple,
+          // we know the old and new triples exist from the previous data transformations.
+          // type narrowing on noUncheckedIndexAccess sucks.
+          ...(oldTriple as Triple),
           type: 'deleteTriple',
         },
         after: {
-          ...newTriple,
+          ...(newTriple as Triple),
           type: 'createTriple',
         },
       }));

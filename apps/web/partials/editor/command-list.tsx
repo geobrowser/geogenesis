@@ -92,7 +92,7 @@ export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ comma
                 key={index}
                 data-index={index}
                 onMouseOver={() => setSelectedIndex(index)}
-                onClick={() => invokeItem(items[selectedIndex])}
+                onClick={() => invokeItem(items[selectedIndex] as CommandSuggestionItem)}
               >
                 <div className="grid h-9 w-9 place-items-center bg-divider">{icon}</div>
                 <Text variant="metadataMedium">{title}</Text>

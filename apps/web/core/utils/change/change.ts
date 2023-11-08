@@ -490,7 +490,7 @@ export async function fromVersion(
       switch (triple.value.type) {
         case 'entity': {
           changes[entityId] = {
-            ...changes[entityId],
+            ...(changes[entityId] as Changeset),
             attributes: {
               ...(changes[entityId]?.attributes ?? {}),
               [triple.attributeId]: {
@@ -508,7 +508,7 @@ export async function fromVersion(
 
         default: {
           changes[entityId] = {
-            ...changes[entityId],
+            ...(changes[entityId] as Changeset),
             attributes: {
               ...(changes[entityId]?.attributes ?? {}),
               [triple.attributeId]: {
@@ -532,7 +532,7 @@ export async function fromVersion(
       switch (triple.value.type) {
         case 'entity': {
           changes[entityId] = {
-            ...changes[entityId],
+            ...(changes[entityId] as Changeset),
             attributes: {
               ...(changes[entityId]?.attributes ?? {}),
               [triple.attributeId]: {
@@ -549,7 +549,7 @@ export async function fromVersion(
         }
         default: {
           changes[entityId] = {
-            ...changes[entityId],
+            ...(changes[entityId] as Changeset),
             attributes: {
               ...(changes[entityId]?.attributes ?? {}),
               [triple.attributeId]: {
@@ -573,7 +573,7 @@ export async function fromVersion(
       if (selectedEntityBlock === null) return;
 
       changes[entityId] = {
-        ...changes[entityId],
+        ...(changes[entityId] as Changeset),
         blocks: {
           ...(changes[entityId]?.blocks ?? {}),
           [selectedEntityBlock.id]: {
@@ -591,7 +591,7 @@ export async function fromVersion(
       if (previousEntityBlock === null) return;
 
       changes[entityId] = {
-        ...changes[entityId],
+        ...(changes[entityId] as Changeset),
         blocks: {
           ...(changes[entityId]?.blocks ?? {}),
           [previousEntityBlock.id]: {
@@ -608,7 +608,7 @@ export async function fromVersion(
       if (previousEntityBlock === null) return;
 
       changes[entityId] = {
-        ...changes[entityId],
+        ...(changes[entityId] as Changeset),
         blocks: {
           ...(changes[entityId]?.blocks ?? {}),
           [previousEntityBlock.id]: {
@@ -723,7 +723,7 @@ export async function fromProposal(
         switch (triple.value.type) {
           case 'entity': {
             changes[entityId] = {
-              ...changes[entityId],
+              ...(changes[entityId] as Changeset),
               attributes: {
                 ...(changes[entityId]?.attributes ?? {}),
                 [triple.attributeId]: {
@@ -741,7 +741,7 @@ export async function fromProposal(
 
           default: {
             changes[entityId] = {
-              ...changes[entityId],
+              ...(changes[entityId] as Changeset),
               attributes: {
                 ...(changes[entityId]?.attributes ?? {}),
                 [triple.attributeId]: {
@@ -765,7 +765,7 @@ export async function fromProposal(
         switch (triple.value.type) {
           case 'entity': {
             changes[entityId] = {
-              ...changes[entityId],
+              ...(changes[entityId] as Changeset),
               attributes: {
                 ...(changes[entityId]?.attributes ?? {}),
                 [triple.attributeId]: {
@@ -782,7 +782,7 @@ export async function fromProposal(
           }
           default: {
             changes[entityId] = {
-              ...changes[entityId],
+              ...(changes[entityId] as Changeset),
               attributes: {
                 ...(changes[entityId]?.attributes ?? {}),
                 [triple.attributeId]: {
@@ -806,7 +806,7 @@ export async function fromProposal(
         if (selectedEntityBlock === null) return;
 
         changes[entityId] = {
-          ...changes[entityId],
+          ...(changes[entityId] as Changeset),
           blocks: {
             ...(changes[entityId]?.blocks ?? {}),
             [selectedEntityBlock.id]: {
@@ -824,7 +824,7 @@ export async function fromProposal(
         if (previousEntityBlock === null) return;
 
         changes[entityId] = {
-          ...changes[entityId],
+          ...(changes[entityId] as Changeset),
           blocks: {
             ...(changes[entityId]?.blocks ?? {}),
             [previousEntityBlock.id]: {
@@ -841,7 +841,7 @@ export async function fromProposal(
         if (previousEntityBlock === null) return;
 
         changes[entityId] = {
-          ...changes[entityId],
+          ...(changes[entityId] as Changeset),
           blocks: {
             ...(changes[entityId]?.blocks ?? {}),
             [previousEntityBlock.id]: {

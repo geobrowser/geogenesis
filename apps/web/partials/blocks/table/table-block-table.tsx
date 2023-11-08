@@ -196,7 +196,9 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
           )}
           {table.getRowModel().rows.map((row, index: number) => {
             const cells = row.getVisibleCells();
-            const entityId = cells?.[0]?.getValue<Cell>()?.entityId;
+            // If we are rendering the row we know there's a first cell so it's
+            // safe to cast.
+            const entityId = cells?.[0]?.getValue<Cell>()?.entityId as string;
 
             return (
               <tr key={entityId ?? index} className="hover:bg-bg">
@@ -204,6 +206,7 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
                   const isExpandable = firstTriple && firstTriple.value.type === 'string';
+                  const isExpanded = Boolean(expandedCells[cellId]);
 
                   return (
                     <TableCell
@@ -211,7 +214,7 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
                       isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
                       href={NavUtils.toEntity(space, entityId)}
                       isExpandable={isExpandable}
-                      isExpanded={expandedCells[cellId]}
+                      isExpanded={isExpanded}
                       width={cell.column.getSize()}
                       toggleExpanded={() =>
                         setExpandedCells(prev => ({

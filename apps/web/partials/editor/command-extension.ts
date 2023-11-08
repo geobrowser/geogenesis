@@ -69,14 +69,14 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
         onUpdate(props) {
           reactRenderer.updateProps(props);
 
-          popup[0].setProps({
+          popup[0]?.setProps({
             getReferenceClientRect: props.clientRect as any, // fixme
           });
         },
 
         onKeyDown(props) {
           if (props.event.key === 'Escape') {
-            popup[0].hide();
+            popup[0]?.hide();
 
             return true;
           }
@@ -85,7 +85,7 @@ export const ConfiguredCommandExtension = CommandExtension.configure({
         },
 
         onExit() {
-          popup[0].destroy();
+          popup[0]?.destroy();
           reactRenderer.destroy();
         },
       };
