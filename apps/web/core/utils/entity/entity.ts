@@ -155,6 +155,51 @@ export function mergeActionsWithEntities(actions: Record<string, Action[]>, netw
   );
 }
 
+export function mergeActionsWithEntity(allActionsInStore: Action[], networkEntity: IEntity): IEntity {
+  const triplesForEntity = pipe(
+    allActionsInStore,
+    actions => actionsForEntityId(actions, networkEntity.id),
+    actions => Triple.fromActions(actions, networkEntity.triples),
+    triples => Triple.withLocalNames(allActionsInStore, triples)
+  );
+
+  return {
+    id: networkEntity.id,
+    name: name(triplesForEntity),
+    description: description(triplesForEntity),
+    nameTripleSpace: nameTriple(triplesForEntity)?.space,
+    types: types(triplesForEntity, triplesForEntity[0]?.space),
+    triples: triplesForEntity,
+  };
+}
+
+export function fromActions(allActionsInStore: Action[], entityId: string): IEntity {
+  const actions = actionsForEntityId(allActionsInStore, entityId);
+  const triplesForEntity = Triple.fromActions(actions, []);
+  const triplesForEntityWithLocalNames = Triple.withLocalNames(allActionsInStore, triplesForEntity);
+
+  return {
+    id: entityId,
+    name: name(triplesForEntityWithLocalNames),
+    description: description(triplesForEntityWithLocalNames),
+    nameTripleSpace: nameTriple(triplesForEntityWithLocalNames)?.space,
+    types: types(triplesForEntityWithLocalNames, triplesForEntityWithLocalNames[0]?.space),
+    triples: triplesForEntityWithLocalNames,
+  };
+}
+
+export function actionsForEntityId(allActionsInStore: Action[], id: string): Action[] {
+  return allActionsInStore.filter(a => {
+    switch (a.type) {
+      case 'createTriple':
+      case 'deleteTriple':
+        return a.entityId === id;
+      case 'editTriple':
+        return a.after.entityId === id;
+    }
+  });
+}
+
 /**
  * This function traverses through all the triples associated with an entity and attempts to find the avatar URL of the entity.
  */
