@@ -191,6 +191,12 @@ export type Profile = {
   address: `0x${string}`;
 };
 
+export type OnchainProfile = {
+  id: string;
+  homeSpace: string;
+  account: string;
+};
+
 export type AppEnv = 'development' | 'testnet' | 'production';
 
 export type RelationValueType = {

@@ -2,8 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Environment } from '../environment';
 import { Services } from '../services';
+import { OnchainProfile } from '../types';
 
-export function useGeoProfile(account?: `0x${string}`) {
+export function useGeoProfile(account?: `0x${string}`): {
+  profile: OnchainProfile | null;
+  isLoading: boolean;
+  isFetched: boolean;
+} {
   const { subgraph } = Services.useServices();
 
   const {
