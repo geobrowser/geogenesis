@@ -11,7 +11,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
-import { Entity, Entity as EntityType, Triple as TripleType } from '~/core/types';
+import { Entity as EntityType, Triple as TripleType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { GeoDate } from '~/core/utils/utils';
 
