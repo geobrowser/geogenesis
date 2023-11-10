@@ -2,10 +2,11 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
+
 import { graphql } from './graphql';
 
 export interface FetchOnchainProfileOptions {
-  endpoint: string;
   address: string;
   signal?: AbortController['signal'];
 }
@@ -37,9 +38,10 @@ function getFetchProfileQuery(address: string) {
 
 export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): Promise<OnchainGeoProfile | null> {
   const queryId = uuid();
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
-    endpoint: options.endpoint,
+    endpoint: config.profileSubgraph,
     query: getFetchProfileQuery(options.address),
     signal: options?.signal,
   });
@@ -59,7 +61,7 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchProfile. queryId: ${queryId} endpoint: ${
-              options.endpoint
+              config.profileSubgraph
             } address: ${options.address}
             
             queryString: ${getFetchProfileQuery(options.address)}
@@ -72,7 +74,7 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${options.endpoint} address: ${options.address}`
+            `${error._tag}: Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${config.profileSubgraph} address: ${options.address}`
           );
 
           return {
