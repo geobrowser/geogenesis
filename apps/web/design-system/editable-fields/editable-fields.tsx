@@ -140,7 +140,7 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const file = e.target.files[0];
+      const file = e.target.files[0] as File;
       const imageSrc = await storageClient.uploadFile(file);
       onImageChange(imageSrc);
     }
@@ -187,7 +187,7 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
 
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const file = e.target.files[0];
+      const file = e.target.files[0] as File;
       const imageSrc = await storageClient.uploadFile(file);
       onImageChange(imageSrc);
     }

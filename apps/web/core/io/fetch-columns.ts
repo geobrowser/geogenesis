@@ -44,7 +44,7 @@ export async function fetchColumns({ params, api, signal }: FetchColumnsOptions)
 
   const schemaColumns: Column[] = columnsTriples.map((triple, i) => ({
     id: triple.value.id,
-    triples: relatedColumnTriples[i].triples,
+    triples: relatedColumnTriples[i]?.triples ?? [],
   }));
 
   return [

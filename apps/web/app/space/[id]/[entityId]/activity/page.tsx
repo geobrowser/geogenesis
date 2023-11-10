@@ -40,7 +40,7 @@ async function ActivityList({ params, searchParams }: Props) {
   const id = decodeURIComponent(params.entityId);
   // Alternatively we can fetch the on-chain profile from the id and use
   // the address associated with the on-chain profile. But this works.
-  const address = id.split('–')[0];
+  const address = id.split('–')[0] as string; // we know the params are a string here and have at least a first component
 
   const [proposals, spaces] = await Promise.all([
     fetchProposalsByUser({

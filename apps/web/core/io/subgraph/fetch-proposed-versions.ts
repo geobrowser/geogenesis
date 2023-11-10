@@ -2,6 +2,8 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { ProposedVersion } from '~/core/types';
+
 import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
 import { NetworkProposedVersion, fromNetworkActions } from './network-local-mapping';
@@ -62,7 +64,7 @@ export async function fetchProposedVersions({
   spaceId,
   signal,
   page = 0,
-}: FetchProposedVersionsOptions) {
+}: FetchProposedVersionsOptions): Promise<ProposedVersion[]> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
@@ -127,7 +129,14 @@ export async function fetchProposedVersions({
     return {
       ...v,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profiles[v.createdBy.id] ?? v.createdBy,
+      createdBy: profiles[v.createdBy.id] ?? {
+        id: v.createdBy.id,
+        name: null,
+        avatarUrl: null,
+        coverUrl: null,
+        address: v.createdBy.id as `0x${string}`,
+        profileLink: null,
+      },
       actions: fromNetworkActions(v.actions, spaceId),
     };
   });

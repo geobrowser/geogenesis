@@ -292,7 +292,7 @@ const ReviewChanges = () => {
                   setProposals({
                     ...proposals,
                     [activeSpace]: { ...proposals[activeSpace], name: currentTarget.value },
-                  })
+                  } as Proposals)
                 }
                 placeholder="Name your proposal..."
                 className="bg-transparent text-3xl font-semibold text-text placeholder:text-grey-02 focus:outline-none"
@@ -396,7 +396,7 @@ const ChangedEntity = ({
     attributeIds.forEach(attributeId => {
       const attribute = attributes[attributeId];
 
-      if (attribute.name === 'Name' && typeof attribute.after === 'string') {
+      if (attribute?.name === 'Name' && typeof attribute.after === 'string') {
         renderedName = attribute.after;
       }
     });
@@ -419,7 +419,7 @@ const ChangedEntity = ({
       {blockIds.length > 0 && (
         <div className="mt-4">
           {blockIds.map((blockId: BlockId) => (
-            <ChangedBlock key={blockId} blockId={blockId} block={blocks[blockId]} />
+            <ChangedBlock key={blockId} blockId={blockId} block={blocks[blockId] as BlockChange} />
           ))}
         </div>
       )}
@@ -430,7 +430,7 @@ const ChangedEntity = ({
               key={attributeId}
               spaceId={spaceId}
               attributeId={attributeId}
-              attribute={attributes[attributeId]}
+              attribute={attributes[attributeId] as AttributeChange}
               entityId={entityId}
               entity={entity}
               unstagedChanges={unstagedChanges}
@@ -1025,17 +1025,10 @@ function parseMarkdown(markdownString: string) {
     markdownLevel++;
   }
 
-  markdownType = markdownComponent[markdownLevel];
+  markdownType = markdownComponent[markdownLevel] as MarkdownType;
   markdownContent = markdownContent.trim();
 
   return { markdownType, markdownContent };
-}
-
-function getSpaceImage(spaces: Space[], spaceId: string): string {
-  return getImagePath(
-    spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ??
-      'https://via.placeholder.com/600x600/FF00FF/FFFFFF'
-  );
 }
 
 type TableFiltersProps = {

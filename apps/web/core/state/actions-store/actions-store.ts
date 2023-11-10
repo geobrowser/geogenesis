@@ -95,7 +95,7 @@ export class ActionsStore implements IActionsStore {
       computed(
         () =>
           Object.keys(this.actions$.get()).filter(
-            spaceId => Action.unpublishedChanges(this.actions$.get()[spaceId]).length > 0
+            spaceId => Action.unpublishedChanges(this.actions$.get()[spaceId] ?? []).length > 0
           ) ?? []
       )
     );

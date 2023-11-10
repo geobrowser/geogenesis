@@ -48,7 +48,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
 
   const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
-  const isOnePage = proposals?.pages && proposals.pages[0].length < 10;
+  const isOnePage = proposals?.pages && proposals.pages[0]?.length && proposals.pages[0].length < 10;
 
   const isLastPage =
     proposals?.pages &&

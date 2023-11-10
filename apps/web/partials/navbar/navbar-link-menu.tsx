@@ -71,7 +71,7 @@ type ComponentRoute = {
 };
 
 function getComponentRoute({ urlComponents, index, spaceNames, spaceImages }: GetComponentRouteConfig): ComponentRoute {
-  const component = urlComponents[index];
+  const component = urlComponents[index] as string;
 
   switch (index) {
     case 0:

@@ -10,7 +10,7 @@ export default async function handler(request: NextRequest) {
   let hash = searchParams.get('hash') ?? '';
 
   if (hash.includes('.png')) {
-    hash = hash.split('.')[0];
+    hash = hash.split('.')[0] as string;
   }
 
   if (!hash) {

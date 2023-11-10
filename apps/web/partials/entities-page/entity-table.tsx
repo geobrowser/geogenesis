@@ -201,7 +201,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
           )}
           {table.getRowModel().rows.map((row, index: number) => {
             const cells = row.getVisibleCells();
-            const entityId = cells?.[0]?.getValue<Cell>()?.entityId;
+            const entityId = cells?.[0]?.getValue<Cell>()?.entityId as string;
 
             return (
               <tr key={entityId ?? index} className="hover:bg-bg">
@@ -209,6 +209,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
                   const isExpandable = firstTriple && firstTriple.value.type === 'string';
+                  const isExpanded = Boolean(expandedCells[cellId]);
 
                   return (
                     <TableCell
@@ -216,7 +217,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
                       isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
                       href={NavUtils.toEntity(space, entityId)}
                       isExpandable={isExpandable}
-                      isExpanded={expandedCells[cellId]}
+                      isExpanded={isExpanded}
                       width={cell.column.getSize()}
                       toggleExpanded={() =>
                         setExpandedCells(prev => ({

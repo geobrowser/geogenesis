@@ -32,7 +32,7 @@ export async function getFirstThreeEditorsForSpace(spaceId: string): Promise<Edi
   const firstThreeEditors = maybeEditorsProfiles.map((profile, i) => {
     if (!profile) {
       return {
-        id: space.editors[i],
+        id: space.editors[i] as string,
         avatarUrl: null,
         name: null,
         address: space.editors[i] as `0x${string}`,

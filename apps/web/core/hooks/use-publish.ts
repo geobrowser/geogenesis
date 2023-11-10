@@ -58,7 +58,7 @@ export function usePublish() {
       // unpublished actions being merged together.
       // If the actionsBySpace[spaceId] is empty, then we return an empty array
       const nonPublishedActions = actionsBySpace[spaceId]
-        ? actionsBySpace[spaceId].filter(a => {
+        ? actionsBySpace[spaceId]?.filter(a => {
             switch (a.type) {
               case 'createTriple':
               case 'deleteTriple':
@@ -84,7 +84,7 @@ export function usePublish() {
       // as hasBeenPublished and merge with the existing actions in the space.
       restore({
         ...actionsBySpace,
-        [spaceId]: [...publishedActions, ...nonPublishedActions],
+        [spaceId]: [...publishedActions, ...(nonPublishedActions ?? [])],
       });
     },
     [storageClient, wallet, publishService, restore, actionsBySpace]

@@ -53,7 +53,7 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
 
   const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
-  const isOnePage = proposals?.pages && proposals.pages[0].length < 10;
+  const isOnePage = proposals?.pages && proposals.pages[0]?.length && proposals.pages[0].length < 10;
 
   const isLastPage =
     proposals?.pages &&
@@ -80,7 +80,9 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
           </Link>
         )}
         <HistoryPanel>
-          {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
+          {proposals?.pages?.length === 1 && proposals?.pages[0]?.length && proposals.pages[0].length === 0 && (
+            <HistoryEmpty />
+          )}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>
               {group.map((p, index) => (

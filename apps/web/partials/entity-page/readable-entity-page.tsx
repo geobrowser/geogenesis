@@ -79,7 +79,7 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
             <Text as="p" variant="bodySemibold">
-              {triples[0].attributeName || attributeId}
+              {triples[0]?.attributeName || attributeId}
             </Text>
             <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
           </div>

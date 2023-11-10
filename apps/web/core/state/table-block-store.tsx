@@ -207,7 +207,7 @@ export function useTableBlock() {
         (acc, relationType) => {
           if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
 
-          acc[relationType.entityId].push({
+          acc[relationType.entityId]?.push({
             typeId: relationType.value.id,
 
             // We can safely cast here because we filter for entity type values above.

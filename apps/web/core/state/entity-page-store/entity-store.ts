@@ -711,6 +711,7 @@ export class EntityStore implements IEntityStore {
         node.type === 'paragraph' &&
         node.content &&
         node.content.length > 0 &&
+        node.content[0] &&
         node.content[0].text &&
         !node.content[0].text.startsWith('/'); // Do not create a block if the text node starts with a slash command
 

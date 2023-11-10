@@ -90,5 +90,8 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
     return null;
   }
 
-  return result.geoProfiles[0];
+  // We know that the first entry exists because of the above check.
+  // Current TypeScript doesn't type narrow on object access when using
+  // `noUncheckedIndexAccess` so we have to cast.
+  return result.geoProfiles[0] as OnchainGeoProfile;
 }
