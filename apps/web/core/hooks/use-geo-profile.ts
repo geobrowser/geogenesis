@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { Environment } from '../environment';
 import { Services } from '../services';
 import { OnchainProfile } from '../types';
 
@@ -22,7 +21,6 @@ export function useGeoProfile(account?: `0x${string}`): {
 
       return await subgraph.fetchOnchainProfile({
         address: account,
-        endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).profileSubgraph,
       });
     },
     // Only fetch the profile when the page is loaded. If a user has gone through onboarding,

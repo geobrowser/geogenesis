@@ -15,7 +15,6 @@ export async function fetchProfilePermissionless(options: FetchProfilePermission
 
   const onchainProfile = await fetchOnchainProfile({
     address: options.address,
-    endpoint: config.profileSubgraph,
   });
 
   if (!onchainProfile) {
