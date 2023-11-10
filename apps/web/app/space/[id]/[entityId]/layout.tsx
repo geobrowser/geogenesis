@@ -9,6 +9,7 @@ import { API, Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
+import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
@@ -101,43 +102,45 @@ export default async function ProfileLayout({ children, params }: Props) {
   const profile = await getProfilePage(params.entityId, config.subgraph);
 
   return (
-    <EntityStoreProvider
-      id={params.entityId}
-      spaceId={params.id}
-      initialTriples={profile.triples}
-      initialSchemaTriples={[]}
-      initialBlockIdsTriple={profile.blockIdsTriple}
-      initialBlockTriples={profile.blockTriples}
-    >
-      <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-      <EntityPageContentContainer>
-        <EditableHeading
-          spaceId={params.id}
-          entityId={params.entityId}
-          name={profile.name ?? params.entityId}
-          triples={profile.triples}
-        />
-        <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
+    <TypesStoreServerContainer spaceId={params.id}>
+      <EntityStoreProvider
+        id={params.entityId}
+        spaceId={params.id}
+        initialTriples={profile.triples}
+        initialSchemaTriples={[]}
+        initialBlockIdsTriple={profile.blockIdsTriple}
+        initialBlockTriples={profile.blockTriples}
+      >
+        <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+        <EntityPageContentContainer>
+          <EditableHeading
+            spaceId={params.id}
+            entityId={params.entityId}
+            name={profile.name ?? params.entityId}
+            triples={profile.triples}
+          />
+          <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
 
-        <Spacer height={40} />
-        <TabGroup
-          tabs={TABS.map(label => {
-            const href =
-              label === 'Overview'
-                ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
-                : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
-            return {
-              href,
-              label,
-            };
-          })}
-        />
+          <Spacer height={40} />
+          <TabGroup
+            tabs={TABS.map(label => {
+              const href =
+                label === 'Overview'
+                  ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
+                  : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
+              return {
+                href,
+                label,
+              };
+            })}
+          />
 
-        <Spacer height={20} />
+          <Spacer height={20} />
 
-        {children}
-      </EntityPageContentContainer>
-    </EntityStoreProvider>
+          {children}
+        </EntityPageContentContainer>
+      </EntityStoreProvider>
+    </TypesStoreServerContainer>
   );
 }
 
