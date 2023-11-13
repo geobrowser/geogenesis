@@ -15,16 +15,18 @@ import { MainVotingSettingsType } from '../../types';
 
 export class GeoPluginClientEncoding extends ClientCore {
   private geoSpacePluginAddress: string;
-  private geoMemberAccessPluginAddress: string;
-  private geoMainVotingPluginAddress: string;
+  private geoGovernancePluginAddress: string;
+  // private geoMemberAccessPluginAddress: string;
+  // private geoMainVotingPluginAddress: string;
 
   constructor(pluginContext: GeoPluginContext) {
     super(pluginContext);
 
     // Plugin Addresses
     this.geoSpacePluginAddress = pluginContext.geoSpacePluginAddress;
-    this.geoMemberAccessPluginAddress = pluginContext.geoMemberAccessPluginAddress;
-    this.geoMainVotingPluginAddress = pluginContext.geoMainVotingPluginAddress;
+    this.geoGovernancePluginAddress = pluginContext.geoGovernancePluginAddress;
+    // this.geoMemberAccessPluginAddress = pluginContext.geoMemberAccessPluginAddress;
+    // this.geoMainVotingPluginAddress = pluginContext.geoMainVotingPluginAddress;
   }
 
   // Space Plugin: Functions

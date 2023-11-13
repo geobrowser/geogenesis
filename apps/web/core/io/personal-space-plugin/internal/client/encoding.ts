@@ -26,10 +26,6 @@ export class GeoPersonalSpacePluginClientEncoding extends ClientCore {
       },
     ];
 
-    if (!prepareInstallationInputs) {
-      throw new Error('Could not find inputs for prepareInstallation in the ABI');
-    }
-
     // Encode the data using encodeAbiParameters
     const encodedData = encodeAbiParameters(prepareInstallationInputs, [params.initialEditorAddress]);
 
