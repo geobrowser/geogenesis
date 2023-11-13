@@ -4,12 +4,10 @@ import { WalletClient } from 'wagmi';
 
 export type GeoPluginContextParams = ContextParams & {
   geoSpacePluginAddress?: string;
-  geoMemberAccessPluginAddress?: string;
-  geoMainVotingPluginAddress?: string;
+  geoGovernancePluginAddress?: string;
 
   geoSpacePluginRepoAddress?: string;
-  geoMemberAccessPluginRepoAddress?: string;
-  geoMainVotingPluginRepoAddress?: string;
+  geoGovernancePluginRepoAddress?: string;
 };
 
 export type PrepareInstallationParams = {

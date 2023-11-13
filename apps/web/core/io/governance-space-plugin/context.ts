@@ -1,10 +1,6 @@
 import { Context, ContextCore } from '@aragon/sdk-client-common';
 
-import {
-  GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
-  GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
-  GEO_SPACE_PLUGIN_REPO_ADDRESS,
-} from '../../constants';
+import { GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS, GEO_SPACE_PLUGIN_REPO_ADDRESS } from '../../constants';
 import { GeoPluginContextState, GeoPluginOverriddenState } from './internal/types';
 import { GeoPluginContextParams } from './types';
 
@@ -36,15 +32,9 @@ export class GeoPluginContext extends ContextCore {
     }
 
     // Member Access Plugin:
-    if (contextParams.geoMemberAccessPluginAddress) {
-      this.state.geoMemberAccessPluginAddress = contextParams.geoMemberAccessPluginAddress;
-      this.overriden.geoMemberAccessPluginAddress = true;
-    }
-
-    // Main Voting Plugin:
-    if (contextParams.geoMainVotingPluginAddress) {
-      this.state.geoMainVotingPluginAddress = contextParams.geoMainVotingPluginAddress;
-      this.overriden.geoMainVotingPluginAddress = true;
+    if (contextParams.geoGovernancePluginAddress) {
+      this.state.geoGovernancePluginAddress = contextParams.geoGovernancePluginAddress;
+      this.overriden.geoGovernancePluginAddress = true;
     }
   }
 
@@ -54,11 +44,9 @@ export class GeoPluginContext extends ContextCore {
     if (!this.overriden.geoSpacePluginRepoAddress) {
       this.state.geoSpacePluginRepoAddress = GEO_SPACE_PLUGIN_REPO_ADDRESS;
     }
-    if (!this.overriden.geoMemberAccessPluginRepoAddress) {
-      this.state.geoMemberAccessPluginRepoAddress = GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS;
-    }
-    if (!this.overriden.geoMainVotingPluginRepoAddress) {
-      this.state.geoMainVotingPluginRepoAddress = GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS;
+
+    if (!this.overriden.geoGovernancePluginRepoAddress) {
+      this.state.geoGovernancePluginRepoAddress = GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS;
     }
   }
 
@@ -66,23 +54,15 @@ export class GeoPluginContext extends ContextCore {
     return this.state.geoSpacePluginAddress;
   }
 
-  get geoMemberAccessPluginAddress(): string {
-    return this.state.geoMemberAccessPluginAddress;
-  }
-
-  get geoMainVotingPluginAddress(): string {
-    return this.state.geoMainVotingPluginAddress;
+  get geoGovernancePluginAddress(): string {
+    return this.state.geoGovernancePluginAddress;
   }
 
   get geoSpacePluginRepoAddress(): string {
     return this.state.geoSpacePluginRepoAddress;
   }
 
-  get geoMemberAccessPluginRepoAddress(): string {
-    return this.state.geoMemberAccessPluginRepoAddress;
-  }
-
-  get geoMainVotingPluginRepoAddress(): string {
-    return this.state.geoMainVotingPluginRepoAddress;
+  get geoGovernancePluginRepoAddress(): string {
+    return this.state.geoGovernancePluginRepoAddress;
   }
 }

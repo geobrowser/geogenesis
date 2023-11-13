@@ -2,6 +2,7 @@ import { ClientCore } from '@aragon/sdk-client-common';
 import { encodeAbiParameters, encodeFunctionData, hexToBytes } from 'viem';
 
 import {
+  GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS,
   GEO_MAIN_VOTING_PLUGIN_REPO_ADDRESS,
   GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS,
   GEO_SPACE_PLUGIN_REPO_ADDRESS,
@@ -117,6 +118,102 @@ export class GeoPluginClientEncoding extends ClientCore {
 
     return {
       id: GEO_SPACE_PLUGIN_REPO_ADDRESS,
+      data: hexToBytes(encodedData),
+    };
+  }
+
+  static getGovernancePluginInstallItem(params: {
+    votingSettings: {
+      votingMode: number;
+      supportThreshold: number;
+      minParticipation: number;
+      minDuration: number;
+      minProposerVotingPower: number;
+    };
+    initialEditors: string[];
+    pluginUpgrader: string;
+    memberAccessProposalDuration: number;
+  }) {
+    console.log(params);
+    // MajorityVotingBase.VotingSettings memory _votingSettings,
+    // address[] memory _initialEditors,
+    // uint64 _memberAccessProposalDuration,
+    // address _pluginUpgrader
+    const prepareInstallationInputs = [
+      {
+        components: [
+          //  struct VotingSettings {
+          //     VotingMode votingMode;
+          //     uint32 supportThreshold;
+          //     uint32 minParticipation;
+          //     uint64 minDuration;
+          //     uint256 minProposerVotingPower;
+          // }
+          // votingSettings: comes from the MainVotingPlugin
+          {
+            internalType: 'enum MajorityVotingBase.VotingMode',
+            name: 'votingMode',
+            type: 'uint8',
+          },
+          {
+            internalType: 'uint32',
+            name: 'supportThreshold',
+            type: 'uint32',
+          },
+          {
+            internalType: 'uint32',
+            name: 'minParticipation',
+            type: 'uint32',
+          },
+          {
+            internalType: 'uint64',
+            name: 'minDuration',
+            type: 'uint64',
+          },
+          {
+            internalType: 'uint256',
+            name: 'minProposerVotingPower',
+            type: 'uint256',
+          },
+
+          // proposal duration: comes from the member access plugin
+          {
+            internalType: 'uint64',
+            name: 'proposalDuration',
+            type: 'uint64',
+          },
+        ],
+        internalType: 'struct MajorityVotingBase.VotingSettings',
+        name: 'votingSettings',
+        type: 'tuple',
+      },
+      {
+        internalType: 'address[]',
+        name: 'initialEditors',
+        type: 'address[]',
+      },
+      {
+        internalType: 'uint64',
+        name: 'memberAccessProposalDuration',
+        type: 'uint64',
+      },
+      {
+        internalType: 'address',
+        name: 'pluginUpgrader',
+        type: 'address',
+      },
+    ];
+
+    // Encode the data using encodeAbiParameters
+    const encodedData = encodeAbiParameters(prepareInstallationInputs, [
+      params.votingSettings,
+      params.initialEditors,
+      params.memberAccessProposalDuration,
+      params.pluginUpgrader,
+    ]);
+
+    return {
+      id: GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS, // Assuming you have this constant defined somewhere
       data: hexToBytes(encodedData),
     };
   }

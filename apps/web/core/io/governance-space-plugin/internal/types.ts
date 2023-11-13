@@ -4,10 +4,8 @@ export type GeoPluginContextState = ContextState & {
   // include all but personal space, can be separate
   geoSpacePluginAddress: string;
   geoSpacePluginRepoAddress: string;
-  geoMainVotingPluginAddress: string;
-  geoMainVotingPluginRepoAddress: string;
-  geoMemberAccessPluginAddress: string;
-  geoMemberAccessPluginRepoAddress: string;
+  geoGovernancePluginAddress: string;
+  geoGovernancePluginRepoAddress: string;
 };
 
 export type GeoPluginOverriddenState = OverriddenState & {
