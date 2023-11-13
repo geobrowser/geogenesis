@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { MockNetworkData } from '~/core/io';
 import { Providers } from '~/core/providers';
 
-import { Component } from '~/app/space/[id]/triples/component';
+import { Component } from '~/app/space/(entities)/[id]/entities/component';
 
 describe('Space page', () => {
   it('Should render header as non-editor', () => {

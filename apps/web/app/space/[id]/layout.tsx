@@ -33,8 +33,6 @@ interface Props {
 export default async function Layout({ children, params }: Props) {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  console.log('params', params);
-
   const { isPermissionlessSpace } = await API.space(params.id);
 
   if (isPermissionlessSpace) {
