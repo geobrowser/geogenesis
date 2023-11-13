@@ -4,11 +4,9 @@ import Link from 'next/link';
 
 import * as React from 'react';
 
-import { useAccount, useWalletClient } from 'wagmi';
+import { useWalletClient } from 'wagmi';
 
-import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useLocalStorage } from '~/core/hooks/use-local-storage';
-import { usePerson } from '~/core/hooks/use-person';
 import { Publish } from '~/core/io';
 import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { useActiveProposal } from '~/core/state/active-proposal-store';

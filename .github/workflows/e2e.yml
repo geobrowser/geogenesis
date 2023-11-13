@@ -11,7 +11,7 @@ on:
       - master
 
 env:
-  NEXT_PUBLIC_IS_TEST: true
+  NEXT_PUBLIC_IS_TEST_ENV: true
 
 jobs:
   playwright:

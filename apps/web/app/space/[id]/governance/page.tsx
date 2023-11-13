@@ -12,8 +12,6 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 
-import { SpaceLayout } from '../space-layout';
-
 interface Props {
   params: { id: string };
 }
@@ -26,41 +24,37 @@ export default async function GovernancePage({ params }: Props) {
   const acceptedProposalsCount = proposalsCount === 1000 ? '1,000+' : proposalsCount.toString();
   const rejectedProposalsCount = 0;
 
-  const { isPermissionlessSpace } = await API.space(params.id);
-
   return (
-    <SpaceLayout params={params} usePermissionlessSpace={isPermissionlessSpace}>
-      <div className="space-y-4">
-        <div className="flex items-center gap-5">
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Voting period</h2>
-            <p className="text-mediumTitle">{votingPeriod}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Pass threshold</h2>
-            <p className="text-mediumTitle">{passThreshold}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Active proposals</h2>
-            <p className="text-mediumTitle">0</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
-            <div className="flex items-center gap-3 text-mediumTitle">
-              <span>{acceptedProposalsCount}</span>
-              <div className="h-4 w-px bg-grey-02" />
-              <span>{rejectedProposalsCount}</span>
-            </div>
-          </GovernanceMetadataBox>
-        </div>
-        <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
-          All Proposals
-        </SmallButton>
-        <React.Suspense>
-          <GovernanceProposalsList spaceId={params.id} />
-        </React.Suspense>
+    <div className="space-y-4">
+      <div className="flex items-center gap-5">
+        <GovernanceMetadataBox>
+          <h2 className="text-metadata text-grey-04">Voting period</h2>
+          <p className="text-mediumTitle">{votingPeriod}</p>
+        </GovernanceMetadataBox>
+        <GovernanceMetadataBox>
+          <h2 className="text-metadata text-grey-04">Pass threshold</h2>
+          <p className="text-mediumTitle">{passThreshold}</p>
+        </GovernanceMetadataBox>
+        <GovernanceMetadataBox>
+          <h2 className="text-metadata text-grey-04">Active proposals</h2>
+          <p className="text-mediumTitle">0</p>
+        </GovernanceMetadataBox>
+        <GovernanceMetadataBox>
+          <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
+          <div className="flex items-center gap-3 text-mediumTitle">
+            <span>{acceptedProposalsCount}</span>
+            <div className="h-4 w-px bg-grey-02" />
+            <span>{rejectedProposalsCount}</span>
+          </div>
+        </GovernanceMetadataBox>
       </div>
-    </SpaceLayout>
+      <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
+        All Proposals
+      </SmallButton>
+      <React.Suspense>
+        <GovernanceProposalsList spaceId={params.id} />
+      </React.Suspense>
+    </div>
   );
 }
 

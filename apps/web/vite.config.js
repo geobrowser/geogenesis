@@ -6,6 +6,9 @@ export default defineConfig({
   // @ts-expect-error -- Not sure why these types are mismatched. Fix later.
   plugins: [react()],
   test: {
+    env: {
+      NEXT_PUBLIC_IS_TEST_ENV: 'true',
+    },
     globals: true,
     environment: 'jsdom',
     alias: {

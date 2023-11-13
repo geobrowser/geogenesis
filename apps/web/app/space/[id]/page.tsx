@@ -17,8 +17,6 @@ import {
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
-import { SpaceLayout } from './space-layout';
-
 interface Props {
   params: { id: string };
 }
@@ -86,14 +84,14 @@ export default async function SpacePage({ params }: Props) {
   const props = await getData(params.id, config);
 
   return (
-    <SpaceLayout params={params} usePermissionlessSpace={isPermissionlessSpace}>
+    <>
       <Editor shouldHandleOwnSpacing />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
       <React.Suspense fallback={<EntityReferencedByLoading />}>
         <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
       </React.Suspense>
-    </SpaceLayout>
+    </>
   );
 }
 
