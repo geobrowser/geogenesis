@@ -17,6 +17,7 @@ import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton, SmallButton } from '~/design-system/button';
+import { Create } from '~/design-system/icons/create';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
 import { Search } from '~/design-system/icons/search';
@@ -126,7 +127,6 @@ export function TableBlock({ spaceId }: Props) {
           >
             <Search color="grey-02" />
           </span>
-
           <AnimatePresence initial={false} mode="wait">
             {filterState.length > 0 ? (
               <motion.div
@@ -156,19 +156,13 @@ export function TableBlock({ spaceId }: Props) {
               </motion.div>
             )}
           </AnimatePresence>
-
           <TableBlockContextMenu />
 
-          <span>
-            {isEditing && (
-              <>
-                <Spacer width={12} />
-                <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filterId, filterValue)}>
-                  <SmallButton className="whitespace-nowrap">New entity</SmallButton>
-                </Link>
-              </>
-            )}
-          </span>
+          {isEditing && (
+            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filterId, filterValue)}>
+              <Create />
+            </Link>
+          )}
         </div>
       </div>
 
