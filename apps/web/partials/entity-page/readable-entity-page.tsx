@@ -29,7 +29,7 @@ export function ReadableEntityPage({ triples: serverTriples, id }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
 
   return (
-    <div className="rounded border border-grey-02 shadow-button flex flex-col gap-6 p-5">
+    <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
       <EntityAttributes entityId={id} triples={sortedTriples} />
     </div>
   );

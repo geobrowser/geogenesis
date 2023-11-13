@@ -58,7 +58,7 @@ export const FlowBar = () => {
               exit="hidden"
               transition={transition}
               custom={!isReviewOpen}
-              className="pointer-events-auto inline-flex items-center gap-4 rounded bg-white p-2 pl-3 shadow-card"
+              className="pointer-events-auto inline-flex items-center gap-4 rounded-lg bg-white p-2 pl-3 shadow-card"
             >
               <div className="inline-flex items-center font-medium">
                 <span>{pluralize('edit', actionsCount, true)}</span>

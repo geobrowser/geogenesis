@@ -202,7 +202,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                 ease: 'easeInOut',
               }}
               avoidCollisions={true}
-              className="z-10 w-[472px] origin-top-left rounded border border-grey-02 bg-white p-2 shadow-lg"
+              className="z-10 w-[472px] origin-top-left rounded-lg border border-grey-02 bg-white p-2 shadow-lg"
               sideOffset={8}
               align="start"
             >

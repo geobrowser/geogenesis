@@ -149,12 +149,11 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
-  const { unpublishedColumns } = useTableBlock();
   const isEditMode = isEditor && editable;
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(columns, isEditMode, unpublishedColumns),
+    columns: formatColumns(columns, isEditMode, []),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -174,7 +173,7 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
   });
 
   return (
-    <div className="overflow-x-scroll rounded">
+    <div className="overflow-x-scroll rounded-lg">
       <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (

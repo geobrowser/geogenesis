@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import { Services } from './services';
 import { ActionsStoreProvider } from './state/actions-store/actions-store-provider';
+import { ActiveProposalProvider } from './state/active-proposal-store';
 import { AragonSDKProvider } from './state/aragon-dao-store';
 import { DiffProvider } from './state/diff-store';
 import { LocalStoreProvider } from './state/local-store';
@@ -35,6 +36,7 @@ export function Providers({ children, onConnectionChange }: Props) {
                 <StatusBarContextProvider>
                   <DiffProvider>
                     <AragonSDKProvider>{mounted && children}</AragonSDKProvider>
+                    <ActiveProposalProvider>{children}</ActiveProposalProvider>
                   </DiffProvider>
                 </StatusBarContextProvider>
               </LocalStoreProvider>

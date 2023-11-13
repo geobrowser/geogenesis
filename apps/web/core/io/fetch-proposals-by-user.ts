@@ -140,7 +140,10 @@ export async function fetchProposalsByUser({
       description: p.description,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
       createdBy: profile?.[1] ?? {
-        ...p.createdBy,
+        id: p.createdBy.id,
+        name: null,
+        avatarUrl: null,
+        coverUrl: null,
         address: p.createdBy.id as `0x${string}`,
         profileLink: null,
       },
@@ -148,7 +151,10 @@ export async function fetchProposalsByUser({
         return {
           ...v,
           createdBy: profile?.[1] ?? {
-            ...p.createdBy,
+            id: p.createdBy.id,
+            name: null,
+            avatarUrl: null,
+            coverUrl: null,
             address: p.createdBy.id as `0x${string}`,
             profileLink: null,
           },

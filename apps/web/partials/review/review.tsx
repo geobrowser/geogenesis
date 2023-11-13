@@ -18,14 +18,13 @@ import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { Environment } from '~/core/environment';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { Subgraph } from '~/core/io';
+import { API, Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Action as ActionType, Entity as EntityType, Space } from '~/core/types';
+import type { Action as ActionType, Entity as EntityType, Space, Triple } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
@@ -66,12 +65,66 @@ type Proposal = {
 
 type EntityId = string;
 
+type GatewaySpaceWithEntityConfig = {
+  space: {
+    spaceConfigEntityId: string;
+  } & Space;
+  isPermissionlessSpace: boolean;
+};
+
 const ReviewChanges = () => {
+  const { subgraph } = Services.useServices();
   const { state } = useStatusBar();
 
-  const { spaces } = useSpaces();
   const { allSpacesWithActions } = useActionsStore();
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
+
+  const { data: spaces, isLoading: isSpacesLoading } = useQuery({
+    queryKey: ['spaces-in-review', allSpacesWithActions],
+    queryFn: async () => {
+      const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+      const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => API.space(s)));
+      const spaces = maybeSpaces.filter(
+        (s): s is GatewaySpaceWithEntityConfig => s.space !== null && s.space.spaceConfigEntityId !== null
+      );
+
+      const spaceConfigToSpaceMap = new Map<string, string>();
+
+      for (const space of spaces) {
+        spaceConfigToSpaceMap.set(space.space.spaceConfigEntityId, space.space.id);
+      }
+
+      const spaceConfigs = (
+        await Promise.all(
+          spaces.map(space =>
+            subgraph.fetchEntity({
+              endpoint: space.isPermissionlessSpace ? config.permissionlessSubgraph : config.subgraph,
+              id: space.space.spaceConfigEntityId,
+            })
+          )
+        )
+      ).filter((c): c is EntityType => c !== null);
+
+      const spacesMap = new Map<string, { id: string; name: string | null; image: string | null }>();
+
+      for (const config of spaceConfigs) {
+        const id = spaceConfigToSpaceMap.get(config.id);
+
+        if (id) {
+          const maybeImageHash = Entity.cover(config.triples) ?? Entity.avatar(config.triples);
+          const image = maybeImageHash ? getImagePath(maybeImageHash) : null;
+
+          spacesMap.set(id, {
+            id,
+            name: config.name,
+            image,
+          });
+        }
+      }
+
+      return spacesMap;
+    },
+  });
 
   // Set a new default active space when active spaces change
   useEffect(() => {
@@ -93,12 +146,12 @@ const ReviewChanges = () => {
       <span className="inline-flex items-center gap-2 text-button text-text">
         <span className="relative h-4 w-4 overflow-hidden rounded-sm">
           <img
-            src={getSpaceImage(spaces, spaceId)}
+            src={spaces?.get(spaceId)?.image ?? undefined}
             className="absolute inset-0 h-full w-full object-cover object-center"
             alt=""
           />
         </span>
-        <span>{spaces.find(({ id }) => id === spaceId)?.attributes.name}</span>
+        <span>{spaces?.get(spaceId)?.name}</span>
       </span>
     ),
     disabled: activeSpace === spaceId,
@@ -153,7 +206,7 @@ const ReviewChanges = () => {
     }
   }, [activeSpace, proposalName, proposals, makeProposal, wallet, unstagedChanges, dispatch, actionsFromSpace]);
 
-  if (isLoading || !data) {
+  if (isLoading || !data || isSpacesLoading) {
     return null;
   }
 
@@ -175,12 +228,12 @@ const ReviewChanges = () => {
                 <span className="inline-flex items-center gap-2 text-button text-text ">
                   <span className="relative h-4 w-4 overflow-hidden rounded-sm">
                     <img
-                      src={getSpaceImage(spaces, activeSpace)}
+                      src={spaces?.get(activeSpace)?.image ?? undefined}
                       className="absolute inset-0 h-full w-full object-cover object-center"
                       alt=""
                     />
                   </span>
-                  <span>{spaces.find(({ id }) => id === activeSpace)?.attributes.name}</span>
+                  <span>{spaces?.get(activeSpace)?.name}</span>
                 </span>
               )}
               {allSpacesWithActions.length > 1 && (
@@ -189,12 +242,12 @@ const ReviewChanges = () => {
                     <span className="inline-flex items-center gap-2">
                       <span className="relative h-4 w-4 overflow-hidden rounded-sm">
                         <img
-                          src={getSpaceImage(spaces, activeSpace)}
+                          src={spaces?.get(activeSpace)?.image ?? undefined}
                           className="absolute inset-0 h-full w-full object-cover object-center"
                           alt=""
                         />
                       </span>
-                      <span>{spaces.find(({ id }) => id === activeSpace)?.attributes.name}</span>
+                      <span>{spaces?.get(activeSpace)?.name}</span>
                     </span>
                   }
                   align="start"
@@ -210,7 +263,7 @@ const ReviewChanges = () => {
           </Button>
         </div>
       </div>
-      <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[32px] bg-bg shadow-big">
+      <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[16px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
           <div className="relative flex flex-col gap-16">
             <div className="absolute right-0 top-0 flex items-center gap-8">
@@ -444,8 +497,8 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
           <div className="flex-1 py-4">
             <div>
               {before && (
-                <span className="inline-block rounded bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="rounded" />
+                <span className="-lg inline-block bg-errorTertiary p-1">
+                  <img src={getImagePath(before)} className="rounded-lg" />
                 </span>
               )}
             </div>
@@ -453,8 +506,8 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
           <div className="flex-1 py-4">
             <div>
               {after && (
-                <span className="inline-block rounded bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="rounded" />
+                <span className="inline-block rounded-lg bg-successTertiary p-1">
+                  <img src={getImagePath(after)} className="rounded-lg" />
                 </span>
               )}
             </div>
@@ -494,7 +547,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
                 <TableBlockPlaceholder
                   columns={2}
                   rows={2}
-                  className="mt-2 !overflow-hidden rounded border border-grey-02 p-0 opacity-50 shadow-button"
+                  className="mt-2 !overflow-hidden rounded-lg border border-grey-02 p-0 opacity-50 shadow-button"
                 />
               </>
             )}
@@ -525,7 +578,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
                 <TableBlockPlaceholder
                   columns={2}
                   rows={2}
-                  className="mt-2 !overflow-hidden rounded border border-grey-02 p-0 opacity-50 shadow-button"
+                  className="mt-2 !overflow-hidden rounded-lg border border-grey-02 p-0 opacity-50 shadow-button"
                 />
               </>
             )}
@@ -728,8 +781,8 @@ const ChangedAttribute = ({
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {typeof before !== 'object' && (
-                <span className="inline-block rounded bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="rounded" />
+                <span className="inline-block rounded-lg bg-errorTertiary p-1">
+                  <img src={getImagePath(before)} className="rounded-lg" />
                 </span>
               )}
             </div>
@@ -746,8 +799,8 @@ const ChangedAttribute = ({
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {typeof after !== 'object' && (
-                <span className="inline-block rounded bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="rounded" />
+                <span className="inline-block rounded-lg bg-successTertiary p-1">
+                  <img src={getImagePath(after)} className="rounded-lg" />
                 </span>
               )}
             </div>

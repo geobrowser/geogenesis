@@ -6,11 +6,12 @@ on:
   push:
     branches:
       - master
-      - stream/social
   pull_request:
     branches:
       - master
-      - stream/social
+
+env:
+  NEXT_PUBLIC_IS_TEST: true
 
 jobs:
   playwright:

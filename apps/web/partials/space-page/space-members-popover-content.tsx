@@ -22,7 +22,7 @@ export async function SpaceMembersContent({ spaceId }: Props) {
   ]);
 
   return (
-    <div className="z-10 w-[356px] divide-y divide-grey-02 rounded border border-grey-02 bg-white shadow-lg">
+    <div className="z-10 w-[356px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
       <div className="max-h-[265px] overflow-hidden overflow-y-auto">
         {allEditors.map(e => (
           <MemberRow key={e.id} editor={e} />

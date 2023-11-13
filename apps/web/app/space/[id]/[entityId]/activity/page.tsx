@@ -9,7 +9,6 @@ import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -38,32 +37,26 @@ export default async function ActivityPage({ searchParams, params }: Props) {
 async function ActivityList({ params, searchParams }: Props) {
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const [personEntity, spaces] = await Promise.all([
-    Subgraph.fetchEntity({
+  const id = decodeURIComponent(params.entityId);
+  // Alternatively we can fetch the on-chain profile from the id and use
+  // the address associated with the on-chain profile. But this works.
+  const address = id.split('–')[0];
+
+  const [proposals, spaces] = await Promise.all([
+    fetchProposalsByUser({
       endpoint: config.subgraph,
-      id: params.entityId,
+      userId: address,
+      spaceId: searchParams.spaceId,
+      api: {
+        fetchProfile: Subgraph.fetchProfile,
+      },
     }),
     Subgraph.fetchSpaces({
       endpoint: config.subgraph,
     }),
   ]);
 
-  const firstWalletsTriple = personEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.WALLETS_ATTRIBUTE);
-
-  // Right now wallets are associated with an Entity. The name of the Entity is the address associated with
-  // the wallet. Eventually this will get replaced by a proper Profile system.
-  const userId = Value.nameOfEntityValue(firstWalletsTriple);
-
-  if (!userId) return <p className="text-body text-grey-04">There is no information here yet.</p>;
-
-  const proposals = await fetchProposalsByUser({
-    endpoint: config.subgraph,
-    userId,
-    spaceId: searchParams.spaceId,
-    api: {
-      fetchProfile: Subgraph.fetchProfile,
-    },
-  });
+  if (proposals.length === 0) return <p className="pt-1 text-body text-grey-04">There is no information here yet.</p>;
 
   const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.NAME]]));
 

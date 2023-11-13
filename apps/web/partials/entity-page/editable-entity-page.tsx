@@ -16,7 +16,7 @@ import { NavUtils, groupBy } from '~/core/utils/utils';
 
 import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
-import { Button, SquareButton } from '~/design-system/button';
+import { SquareButton } from '~/design-system/button';
 import { DeletableChipButton } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -143,7 +143,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
   return (
     <>
-      <div className="rounded border border-grey-02 shadow-button">
+      <div className="rounded-lg border border-grey-02 shadow-button">
         <div className="flex flex-col gap-6 p-5">
           <EntityAttributes
             entityId={id}
@@ -158,9 +158,9 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
           />
         </div>
         <div className="p-4">
-          <Button onClick={onCreateNewTriple} variant="secondary" icon={<Create />}>
+          <SquareButton onClick={onCreateNewTriple} icon={<Create />}>
             Add triple
-          </Button>
+          </SquareButton>
         </div>
       </div>
       <EntityPresenceProvider entityId={id} spaceId={spaceId}>

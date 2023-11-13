@@ -37,23 +37,24 @@ interface Props {
 }
 
 export function TableBlock({ spaceId }: Props) {
-  const {
-    columns,
-    rows,
-    blockEntity,
-    hasNextPage,
-    hasPreviousPage,
-    setPage,
-    pageNumber,
-    filterState,
-    setFilterState,
-    isLoading,
-    type,
-  } = useTableBlock();
+  const { setFilterState } = useTableBlock();
 
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
+
+  const {
+    columns,
+    rows,
+    setPage,
+    filterState,
+    isLoading,
+    hasNextPage,
+    blockEntity,
+    hasPreviousPage,
+    pageNumber,
+    type,
+  } = useTableBlock();
 
   const shownColumns = [
     ...(blockEntity?.triples
@@ -207,7 +208,7 @@ export function TableBlock({ spaceId }: Props) {
       )}
 
       <motion.div layout="position" transition={{ duration: 0.15 }}>
-        <div className="overflow-hidden rounded border border-grey-02 p-0 shadow-button">
+        <div className="overflow-hidden rounded-lg border border-grey-02 p-0 shadow-button">
           {isLoading ? (
             <TableBlockPlaceholder />
           ) : (
@@ -270,7 +271,7 @@ export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }
   const PLACEHOLDER_ROWS = new Array(rows).fill(0);
 
   return (
-    <div className={cx('overflow-x-scroll rounded-sm', className)}>
+    <div className={cx('overflow-x-scroll rounded-lg', className)}>
       <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
         <thead>
           <tr>

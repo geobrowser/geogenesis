@@ -2,14 +2,17 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import * as React from 'react';
 
+import { Metadata } from 'next';
+
 import { Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
+import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
@@ -26,6 +29,51 @@ const TABS = ['Overview', 'Activity'] as const;
 interface Props {
   params: { id: string; entityId: string };
   children: React.ReactNode;
+}
+
+export const runtime = 'edge';
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const spaceId = params.id;
+  const entityId = decodeURIComponent(params.entityId);
+
+  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+
+  const { isPermissionlessSpace } = await API.space(params.id);
+
+  if (isPermissionlessSpace) {
+    config = {
+      ...config,
+      subgraph: config.permissionlessSubgraph,
+    };
+  }
+
+  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+  const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
+
+  return {
+    title: entityName ?? 'New entity',
+    description,
+    openGraph: {
+      title: entityName ?? 'New entity',
+      description,
+      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
+      images: [
+        {
+          url: openGraphImageUrl,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      description,
+      images: [
+        {
+          url: openGraphImageUrl,
+        },
+      ],
+    },
+  };
 }
 
 export default async function ProfileLayout({ children, params }: Props) {
@@ -54,44 +102,45 @@ export default async function ProfileLayout({ children, params }: Props) {
   const profile = await getProfilePage(params.entityId, config.subgraph);
 
   return (
-    <EntityStoreProvider
-      id={params.entityId}
-      spaceId={params.id}
-      initialTriples={profile.triples}
-      initialSchemaTriples={[]}
-      initialBlockIdsTriple={profile.blockIdsTriple}
-      initialBlockTriples={profile.blockTriples}
-    >
-      <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-      <EntityPageContentContainer>
-        <EditableHeading
-          spaceId={params.id}
-          entityId={params.entityId}
-          name={profile.name ?? params.entityId}
-          triples={profile.triples}
-          showAccessControl
-        />
-        <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
+    <TypesStoreServerContainer spaceId={params.id}>
+      <EntityStoreProvider
+        id={params.entityId}
+        spaceId={params.id}
+        initialTriples={profile.triples}
+        initialSchemaTriples={[]}
+        initialBlockIdsTriple={profile.blockIdsTriple}
+        initialBlockTriples={profile.blockTriples}
+      >
+        <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+        <EntityPageContentContainer>
+          <EditableHeading
+            spaceId={params.id}
+            entityId={params.entityId}
+            name={profile.name ?? params.entityId}
+            triples={profile.triples}
+          />
+          <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
 
-        <Spacer height={40} />
-        <TabGroup
-          tabs={TABS.map(label => {
-            const href =
-              label === 'Overview'
-                ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
-                : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
-            return {
-              href,
-              label,
-            };
-          })}
-        />
+          <Spacer height={40} />
+          <TabGroup
+            tabs={TABS.map(label => {
+              const href =
+                label === 'Overview'
+                  ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
+                  : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
+              return {
+                href,
+                label,
+              };
+            })}
+          />
 
-        <Spacer height={20} />
+          <Spacer height={20} />
 
-        {children}
-      </EntityPageContentContainer>
-    </EntityStoreProvider>
+          {children}
+        </EntityPageContentContainer>
+      </EntityStoreProvider>
+    </TypesStoreServerContainer>
   );
 }
 
