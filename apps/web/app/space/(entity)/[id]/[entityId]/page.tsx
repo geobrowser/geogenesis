@@ -7,6 +7,8 @@ import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import DefaultEntityPage from './default-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
 
+export const runtime = 'edge';
+
 interface Props {
   params: { id: string; entityId: string };
   searchParams: {

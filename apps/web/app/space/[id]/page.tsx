@@ -17,6 +17,8 @@ import {
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
+export const runtime = 'edge';
+
 interface Props {
   params: { id: string };
 }

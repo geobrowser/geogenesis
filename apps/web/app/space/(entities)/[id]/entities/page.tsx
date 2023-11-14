@@ -15,6 +15,8 @@ import { EntityTable } from '~/core/utils/entity-table';
 
 import { Component } from './component';
 
+export const runtime = 'edge';
+
 interface Props {
   params: { id: string };
   searchParams: {
