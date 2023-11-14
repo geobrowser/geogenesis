@@ -28,9 +28,7 @@ export const Subspaces = ({ subspaces }: SubspacesProps) => {
           if (!space) return null;
 
           const href = `/space/${space.id}`;
-
-          const src =
-            space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? 'https://via.placeholder.com/600x600/FF00FF/FFFFFF';
+          const src = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '/placeholder.png';
 
           return (
             <Link key={index} href={href} className="group">
