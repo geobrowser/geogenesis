@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { Provider } from 'jotai';
 
 import * as React from 'react';
 
@@ -23,19 +24,22 @@ interface Props {
 export function Providers({ children, onConnectionChange }: Props) {
   return (
     <QueryClientProvider client={queryClient}>
-      <WalletProvider onConnectionChange={onConnectionChange}>
-        <Services.Provider>
-          <ActionsStoreProvider>
-            <LocalStoreProvider>
-              <StatusBarContextProvider>
-                <DiffProvider>
-                  <ActiveProposalProvider>{children}</ActiveProposalProvider>
-                </DiffProvider>
-              </StatusBarContextProvider>
-            </LocalStoreProvider>
-          </ActionsStoreProvider>
-        </Services.Provider>
-      </WalletProvider>
+      <Provider>
+        <WalletProvider onConnectionChange={onConnectionChange}>
+          <Services.Provider>
+            <ActionsStoreProvider>
+              <LocalStoreProvider>
+                <StatusBarContextProvider>
+                  <DiffProvider>
+                    <ActiveProposalProvider>{children}</ActiveProposalProvider>
+                  </DiffProvider>
+                </StatusBarContextProvider>
+              </LocalStoreProvider>
+            </ActionsStoreProvider>
+          </Services.Provider>
+        </WalletProvider>
+      </Provider>
+
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
