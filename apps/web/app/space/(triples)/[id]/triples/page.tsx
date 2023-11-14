@@ -9,6 +9,8 @@ import { Entity } from '~/core/utils/entity';
 
 import { Component } from './component';
 
+export const runtime = 'edge';
+
 interface Props {
   params: { id: string };
   searchParams: {
