@@ -9,7 +9,6 @@ import { EntityOthersToast } from '~/core/presence/entity-others-toast';
 import { SpacePresenceProvider } from '~/core/presence/presence-provider';
 import { useEditable } from '~/core/state/editable-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
-import { Column, Row } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
 import { PageContainer, PageNumberContainer } from '~/design-system/table/styles';
