@@ -11,7 +11,7 @@ import { SpaceNavbar } from '~/partials/space-page/space-navbar';
 
 interface Props {
   space: Space;
-  spaceName?: string;
+  spaceName: string | null;
   spaceImage: string | null;
   initialSelectedType: Triple | null;
   initialTypes: Triple[];

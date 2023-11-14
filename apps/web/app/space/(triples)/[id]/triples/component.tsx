@@ -19,7 +19,7 @@ interface Props {
 export function Component({ spaceId, spaceImage, spaceName, initialParams }: Props) {
   return (
     <div>
-      <SpaceHeader spaceId={spaceId} spaceImage={spaceImage ?? undefined} spaceName={spaceName} />
+      <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
 
       <Spacer height={34} />
       <SpaceNavbar spaceId={spaceId} />

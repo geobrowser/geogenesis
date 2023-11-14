@@ -1,7 +1,6 @@
 'use client';
 
-import { observable } from '@legendapp/state';
-import { useSelector } from '@legendapp/state/react';
+import { atom, useAtomValue, useSetAtom } from 'jotai';
 
 import * as React from 'react';
 import { ReactNode, createContext, useContext, useMemo } from 'react';
@@ -22,13 +21,14 @@ interface Props {
   children: ReactNode;
 }
 
-export const secondarySubgraph$ = observable<boolean>(false);
-export const setSecondarySubgraphAsMain = (value: boolean) => {
-  secondarySubgraph$.set(value);
-};
+export const shouldUseSecondarySubgraphAtom = atom(false);
+
+export function useSecondarySubgraph() {
+  return useSetAtom(shouldUseSecondarySubgraphAtom);
+}
 
 export function ServicesProvider({ children }: Props) {
-  const secondarySubgraph = useSelector(secondarySubgraph$);
+  const secondarySubgraph = useAtomValue(shouldUseSecondarySubgraphAtom);
 
   const services = useMemo((): Services => {
     let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);

@@ -336,9 +336,11 @@ export function useMigrateHub() {
             return action.before.space;
         }
       });
+
       if (Object.keys(actionsToBatch).length === 0) {
         return;
       }
+
       startTransition(() => {
         addActionsToSpaces(actionsToBatch);
       });

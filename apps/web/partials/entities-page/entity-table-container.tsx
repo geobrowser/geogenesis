@@ -21,7 +21,7 @@ import { EntityTable } from './entity-table';
 
 interface Props {
   spaceId: string;
-  spaceName?: string;
+  spaceName: string | null;
   showHeader?: boolean;
 }
 

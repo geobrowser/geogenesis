@@ -11,6 +11,7 @@ import { Params } from '~/core/params';
 import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { Space } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 
 import { Component } from './component';
@@ -60,11 +61,17 @@ const getData = async ({
 
   const spaceId = space.id;
 
-  const spaces = await Subgraph.fetchSpaces({ endpoint: config.subgraph });
+  const configEntity = space?.spaceConfigEntityId
+    ? await Subgraph.fetchEntity({
+        id: space?.spaceConfigEntityId,
+        endpoint: config.subgraph,
+      })
+    : null;
 
-  const spaceImage = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
-  const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
-  const spaceName = spaceNames[spaceId];
+  const spaceName = configEntity ? configEntity.name : space?.attributes[SYSTEM_IDS.NAME];
+  const spaceImage = configEntity
+    ? Entity.cover(configEntity.triples) ?? Entity.avatar(configEntity.triples)
+    : space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
   const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
     fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
@@ -137,8 +144,8 @@ const getData = async ({
 
   return {
     space,
-    spaceName,
-    spaceImage,
+    spaceName: spaceName ?? null,
+    spaceImage: spaceImage ?? null,
     initialSelectedType,
     initialForeignTypes,
     initialColumns: serverColumns,
