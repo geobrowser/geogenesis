@@ -12,6 +12,8 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 
+export const runtime = 'edge';
+
 interface Props {
   params: { id: string };
 }

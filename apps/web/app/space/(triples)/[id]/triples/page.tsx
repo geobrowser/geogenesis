@@ -9,6 +9,8 @@ import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
 
 import { Component } from './component';
 
+export const runtime = 'edge';
+
 interface Props {
   params: { id: string };
   searchParams: {

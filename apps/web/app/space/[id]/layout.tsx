@@ -25,6 +25,8 @@ import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-he
 
 import { SpaceConfigProvider } from './space-config-provider';
 
+export const runtime = 'edge';
+
 interface Props {
   params: { id: string; entityId?: string };
   children: React.ReactNode;
