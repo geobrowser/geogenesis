@@ -17,9 +17,9 @@ import { useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useEntityTable } from '~/core/hooks/use-entity-table';
 import { useEditable } from '~/core/state/editable-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store/entity-table-store';
+import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 import { Cell, Column, Row } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
@@ -79,8 +79,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { create, update, remove, actions } = useActionsStore();
-    // We know that cell is rendered as a React component by react-table
 
+    // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { columns, columnRelationTypes } = useEntityTable();
 

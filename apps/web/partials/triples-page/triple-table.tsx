@@ -117,7 +117,7 @@ export const TripleTable = ({ space, triples }: Props) => {
   });
 
   return (
-    <div className="overflow-hidden rounded border border-b-0 border-grey-02 xl:overflow-x-scroll">
+    <div className="overflow-hidden rounded xl:overflow-x-scroll">
       <Table cellSpacing={0} cellPadding={0} className="relative -inset-px">
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
