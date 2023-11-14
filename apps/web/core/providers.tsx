@@ -10,7 +10,6 @@ import { ActionsStoreProvider } from './state/actions-store/actions-store-provid
 import { ActiveProposalProvider } from './state/active-proposal-store';
 import { DiffProvider } from './state/diff-store';
 import { LocalStoreProvider } from './state/local-store';
-import { SpaceStoreProvider } from './state/space-store';
 import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
 
@@ -27,15 +26,13 @@ export function Providers({ children, onConnectionChange }: Props) {
       <WalletProvider onConnectionChange={onConnectionChange}>
         <Services.Provider>
           <ActionsStoreProvider>
-            <SpaceStoreProvider>
-              <LocalStoreProvider>
-                <StatusBarContextProvider>
-                  <DiffProvider>
-                    <ActiveProposalProvider>{children}</ActiveProposalProvider>
-                  </DiffProvider>
-                </StatusBarContextProvider>
-              </LocalStoreProvider>
-            </SpaceStoreProvider>
+            <LocalStoreProvider>
+              <StatusBarContextProvider>
+                <DiffProvider>
+                  <ActiveProposalProvider>{children}</ActiveProposalProvider>
+                </DiffProvider>
+              </StatusBarContextProvider>
+            </LocalStoreProvider>
           </ActionsStoreProvider>
         </Services.Provider>
       </WalletProvider>
