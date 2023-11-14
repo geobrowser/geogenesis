@@ -56,7 +56,7 @@ function TableNodeComponent({ node }: NodeViewRendererProps) {
 
   const selectedType = useMemo(() => {
     return types.find(type => type.entityId === typeId);
-  }, [JSON.stringify(types), typeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [types, typeId]);
 
   return (
     <NodeViewWrapper>
