@@ -141,7 +141,7 @@ const ModalCard = ({ key, children }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="pointer-events-auto relative z-10 mt-32 aspect-square h-full max-h-[440px] w-full max-w-[360px] overflow-hidden rounded border border-grey-02 bg-white p-4 shadow-dropdown"
+      className="pointer-events-auto relative z-10 mt-32 aspect-square h-full max-h-[440px] w-full max-w-[360px] overflow-hidden rounded-lg border border-grey-02 bg-white p-4 shadow-dropdown"
     >
       {children}
     </motion.div>
@@ -202,7 +202,7 @@ function StepStart({ onNext }: StepStartProps) {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="aspect-video rounded bg-grey-02 shadow-lg">
+        <div className="aspect-video rounded-lg bg-grey-02 shadow-lg">
           <img src="/create.png" alt="" className="h-full w-full" />
         </div>
         <Button onClick={onNext} className="w-full">
@@ -258,8 +258,8 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
           </div>
         </div>
         <div className="flex justify-center pb-4">
-          <div className="rounded border-8 border-white bg-cover bg-center shadow-card">
-            <div className="overflow-hidden rounded">
+          <div className="rounded-lg border-8 border-white bg-cover bg-center shadow-card">
+            <div className="overflow-hidden rounded-lg">
               {avatar ? (
                 <div
                   style={{
@@ -340,7 +340,7 @@ function StepComplete({ workflowStep: stage }: StepCompleteProps) {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="aspect-video rounded bg-grey-02 shadow-lg">
+        <div className="aspect-video rounded-lg bg-grey-02 shadow-lg">
           <img src="/creating.png" alt="" className="h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">

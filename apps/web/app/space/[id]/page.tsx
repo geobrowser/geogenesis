@@ -20,8 +20,6 @@ import {
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { Subspaces } from '~/partials/space-page/subspaces';
 
-import { SpaceLayout } from './space-layout';
-
 interface Props {
   params: { id: string };
 }
@@ -89,7 +87,7 @@ export default async function SpacePage({ params }: Props) {
   const props = await getData(params.id, config);
 
   return (
-    <SpaceLayout params={params} usePermissionlessSpace={isPermissionlessSpace}>
+    <>
       <React.Suspense fallback={<SubspacesSkeleton />}>
         <SubspacesContainer entityId={props.id} />
       </React.Suspense>
@@ -99,7 +97,7 @@ export default async function SpacePage({ params }: Props) {
       <React.Suspense fallback={<EntityReferencedByLoading />}>
         <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
       </React.Suspense>
-    </SpaceLayout>
+    </>
   );
 }
 

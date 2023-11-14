@@ -4,12 +4,16 @@ import { describe, expect, it } from 'vitest';
 import { MockNetworkData } from '~/core/io';
 import { Providers } from '~/core/providers';
 
-import { Component } from '~/app/space/[id]/entities/component';
+import { Component } from '~/app/space/(entities)/[id]/entities/component';
 
 describe('Space page', () => {
   it('Should render header as non-editor', () => {
     render(
-      <Providers>
+      <Providers
+        onConnectionChange={async () => {
+          //
+        }}
+      >
         <Component
           space={MockNetworkData.makeStubSpace('1')}
           spaceName="Banana"
@@ -34,7 +38,11 @@ describe('Space page', () => {
 
   it('Should render empty table', () => {
     render(
-      <Providers>
+      <Providers
+        onConnectionChange={async () => {
+          //
+        }}
+      >
         <Component
           space={MockNetworkData.makeStubSpace('1')}
           spaceName="Banana"
@@ -58,7 +66,11 @@ describe('Space page', () => {
 
   it('Should render non-empty table', () => {
     render(
-      <Providers>
+      <Providers
+        onConnectionChange={async () => {
+          //
+        }}
+      >
         <Component
           space={MockNetworkData.makeStubSpace('1')}
           spaceName="Banana"

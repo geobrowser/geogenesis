@@ -263,7 +263,7 @@ const ReviewChanges = () => {
           </Button>
         </div>
       </div>
-      <div className="rounded-t-4 mt-3 h-full overflow-y-auto overscroll-contain bg-bg shadow-big">
+      <div className="mt-3 h-full overflow-y-auto overscroll-contain rounded-t-[16px] bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
           <div className="relative flex flex-col gap-16">
             <div className="absolute right-0 top-0 flex items-center gap-8">
@@ -497,8 +497,8 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
           <div className="flex-1 py-4">
             <div>
               {before && (
-                <span className="inline-block rounded bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="rounded" />
+                <span className="-lg inline-block bg-errorTertiary p-1">
+                  <img src={getImagePath(before)} className="rounded-lg" />
                 </span>
               )}
             </div>
@@ -506,8 +506,8 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
           <div className="flex-1 py-4">
             <div>
               {after && (
-                <span className="inline-block rounded bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="rounded" />
+                <span className="inline-block rounded-lg bg-successTertiary p-1">
+                  <img src={getImagePath(after)} className="rounded-lg" />
                 </span>
               )}
             </div>
@@ -547,7 +547,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
                 <TableBlockPlaceholder
                   columns={2}
                   rows={2}
-                  className="mt-2 !overflow-hidden rounded border border-grey-02 p-0 opacity-50 shadow-button"
+                  className="mt-2 !overflow-hidden rounded-lg border border-grey-02 p-0 opacity-50 shadow-button"
                 />
               </>
             )}
@@ -578,7 +578,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
                 <TableBlockPlaceholder
                   columns={2}
                   rows={2}
-                  className="mt-2 !overflow-hidden rounded border border-grey-02 p-0 opacity-50 shadow-button"
+                  className="mt-2 !overflow-hidden rounded-lg border border-grey-02 p-0 opacity-50 shadow-button"
                 />
               </>
             )}
@@ -781,8 +781,8 @@ const ChangedAttribute = ({
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {typeof before !== 'object' && (
-                <span className="inline-block rounded bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="rounded" />
+                <span className="inline-block rounded-lg bg-errorTertiary p-1">
+                  <img src={getImagePath(before)} className="rounded-lg" />
                 </span>
               )}
             </div>
@@ -799,8 +799,8 @@ const ChangedAttribute = ({
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {typeof after !== 'object' && (
-                <span className="inline-block rounded bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="rounded" />
+                <span className="inline-block rounded-lg bg-successTertiary p-1">
+                  <img src={getImagePath(after)} className="rounded-lg" />
                 </span>
               )}
             </div>

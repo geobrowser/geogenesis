@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 
-import { useAccount, useWalletClient } from 'wagmi';
+import * as React from 'react';
 
-import { useGeoProfile } from '~/core/hooks/use-geo-profile';
+import { useWalletClient } from 'wagmi';
+
 import { useLocalStorage } from '~/core/hooks/use-local-storage';
-import { usePerson } from '~/core/hooks/use-person';
 import { Publish } from '~/core/io';
 import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { useActiveProposal } from '~/core/state/active-proposal-store';
@@ -27,40 +27,19 @@ const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as
 type Props = {
   activeProposals: any[];
   membershipRequests: MembershipRequestWithProfile[];
+  header: React.ReactNode;
 };
 
-export const Component = ({ activeProposals, membershipRequests }: Props) => {
+export const Component = ({ activeProposals, membershipRequests, header }: Props) => {
   return (
     <>
       <div className="mx-auto max-w-[784px]">
-        <PersonalHomeHeader />
+        {header}
         <PersonalHomeNavigation />
         <PersonalHomeDashboard activeProposals={activeProposals} membershipRequests={membershipRequests} />
       </div>
       <ActiveProposal />
     </>
-  );
-};
-
-const PersonalHomeHeader = () => {
-  const { address } = useAccount();
-  const { person } = usePerson(address);
-  const { profile: onchainProfile } = useGeoProfile(address);
-
-  return (
-    <div className="flex w-full items-center justify-between">
-      <div className="flex items-center gap-4">
-        <div className="relative h-14 w-14 overflow-hidden rounded-lg bg-grey-01">
-          <Avatar value={address} avatarUrl={person?.avatarUrl} size={56} square={true} />
-        </div>
-        <h2 className="text-largeTitle">{person?.name ?? 'Anonymous'}</h2>
-      </div>
-      {onchainProfile?.homeSpace && (
-        <Link prefetch={false} href={NavUtils.toSpace(onchainProfile.homeSpace)}>
-          <SmallButton className="!bg-transparent !text-text">View personal space</SmallButton>
-        </Link>
-      )}
-    </div>
   );
 };
 
