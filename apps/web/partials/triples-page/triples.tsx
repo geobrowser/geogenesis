@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useTriples } from '~/core/hooks/use-triples';
+import { useTriples } from '~/core/state/triple-store/triple-store';
 import { Triple } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';

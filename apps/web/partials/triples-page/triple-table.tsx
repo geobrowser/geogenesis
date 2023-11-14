@@ -8,7 +8,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 
-import { memo, useState } from 'react';
+import { useState } from 'react';
 
 import { Triple, Value } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -92,7 +92,7 @@ interface Props {
   space: string;
 }
 
-export const TripleTable = memo(function TripleTable({ triples, space }: Props) {
+export const TripleTable = ({ triples, space }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({
@@ -166,4 +166,4 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
       </Table>
     </div>
   );
-});
+};
