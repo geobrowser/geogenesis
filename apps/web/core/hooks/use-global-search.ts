@@ -49,6 +49,7 @@ export function useGlobalSearch() {
 
       return resultOrError.right;
     },
+    staleTime: 10,
   });
 
   return {
