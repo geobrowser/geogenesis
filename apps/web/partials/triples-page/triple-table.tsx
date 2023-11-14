@@ -92,7 +92,7 @@ interface Props {
   space: string;
 }
 
-export const TripleTable = ({ triples, space }: Props) => {
+export const TripleTable = ({ space, triples }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({

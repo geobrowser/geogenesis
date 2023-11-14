@@ -1,6 +1,7 @@
-import { observable } from '@legendapp/state';
-import { useSelector } from '@legendapp/state/react';
+'use client';
+
 import { useQuery } from '@tanstack/react-query';
+import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
@@ -9,6 +10,7 @@ import { Services } from '~/core/services';
 import { FilterState, Triple as TripleType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 
+import { DEFAULT_PAGE_SIZE } from './constants';
 import { useTripleStoreInstance } from './triple-store-provider';
 
 export type InitialTripleStoreParams = {
@@ -17,20 +19,13 @@ export type InitialTripleStoreParams = {
   filterState: FilterState;
 };
 
-export const DEFAULT_PAGE_SIZE = 100;
-export const DEFAULT_INITIAL_PARAMS = {
-  query: '',
-  pageNumber: 0,
-  filterState: [],
-};
-
 export function initialFilterState(): FilterState {
   return [];
 }
 
-const query$ = observable('');
-const pageNumber$ = observable(0);
-const filterState$ = observable<FilterState>([]);
+const queryAtom = atom('');
+const pageNumberAtom = atom(0);
+const filterStateAtom = atom<FilterState>([]);
 
 export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number } = {}) {
   const { subgraph, config } = Services.useServices();
@@ -38,17 +33,19 @@ export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number
   const { actions } = useActionsStore();
   const hydrated = React.useRef(false);
 
-  const query = useSelector(query$);
-  const pageNumber = useSelector(pageNumber$);
-  const filterState = useSelector<FilterState>(filterState$);
+  const [query, setQuery] = useAtom(queryAtom);
+  const [pageNumber, setPageNumber] = useAtom(pageNumberAtom);
+  const [filterState, setFilter] = useAtom(filterStateAtom);
 
   React.useEffect(() => {
-    query$.set(initialParams.query);
-    pageNumber$.set(initialParams.pageNumber);
-    filterState$.set(initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState);
-  }, [initialParams]);
+    setQuery(initialParams.query);
+    setPageNumber(initialParams.pageNumber);
 
-  const { data: networkData } = useQuery({
+    const initialFilter = initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState;
+    setFilter(initialFilter);
+  }, [initialParams, setQuery, setPageNumber, setFilter]);
+
+  const { data: networkData, isLoading } = useQuery({
     queryKey: ['triples', space, query, filterState, pageNumber, pageSize],
     queryFn: async ({ signal }): Promise<{ triples: TripleType[]; hasNextPage: boolean }> => {
       try {
@@ -87,29 +84,24 @@ export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number
   }, [actions, networkData, space]);
 
   const setNextPage = React.useCallback(() => {
-    pageNumber$.set(prev => prev + 1);
-  }, []);
+    setPageNumber(prev => prev + 1);
+  }, [setPageNumber]);
 
   const setPreviousPage = React.useCallback(() => {
-    pageNumber$.set(prev => {
+    setPageNumber(prev => {
       if (prev - 1 < 0) return 0;
       return prev - 1;
     });
-  }, []);
+  }, [setPageNumber]);
 
-  const setFilterState = React.useCallback((newFilter: FilterState) => {
-    const newState = newFilter.length === 0 ? initialFilterState() : newFilter;
-    pageNumber$.set(0);
-    filterState$.set(newState);
-  }, []);
-
-  const setQuery = React.useCallback((newQuery: string) => {
-    query$.set(newQuery);
-  }, []);
-
-  const setPageNumber = React.useCallback((newPageNumber: number) => {
-    pageNumber$.set(newPageNumber);
-  }, []);
+  const setFilterState = React.useCallback(
+    (newFilter: FilterState) => {
+      const newState = newFilter.length === 0 ? initialFilterState() : newFilter;
+      setPageNumber(0);
+      setFilter(newState);
+    },
+    [setFilter, setPageNumber]
+  );
 
   return {
     triples,
@@ -127,6 +119,6 @@ export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number
     filterState,
     setFilterState,
 
-    hydrated: hydrated.current,
+    hydrated: !isLoading,
   };
 }

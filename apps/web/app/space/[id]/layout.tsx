@@ -6,7 +6,7 @@ import * as React from 'react';
 import { AppConfig, Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
