@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { batch } from '@legendapp/state';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
@@ -94,18 +93,17 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
       const mergedEntitySpaceId = mergedEntityId === entityIdOne ? spaceEntityOne?.id : spaceEntityTwo?.id;
 
       if (!mergedEntitySpaceId) throw new Error('SpaceID not found for merging entities.');
-      batch(() => {
-        unmergedTriples.forEach(t => remove(t)); // delete the triples that aren't merged
-        mergedTriples.forEach(t => {
-          create(
-            Triple.withId({
-              ...t,
-              entityId: mergedEntityId,
-              space: mergedEntitySpaceId,
-            })
-          );
-        }); // create the triples that are merged
-      });
+
+      unmergedTriples.forEach(t => remove(t)); // delete the triples that aren't merged
+      mergedTriples.forEach(t => {
+        create(
+          Triple.withId({
+            ...t,
+            entityId: mergedEntityId,
+            space: mergedEntitySpaceId,
+          })
+        );
+      }); // create the triples that are merged
 
       await migrateHub.dispatch({
         type: 'DELETE_ENTITY',

@@ -1,7 +1,5 @@
 'use client';
 
-import { batch } from '@legendapp/state';
-
 import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
@@ -42,10 +40,8 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
   };
 
   const onDelete = () => {
-    batch(() => {
-      triples.forEach(t => remove(t));
-      schemaTriples.forEach(t => remove(t));
-    });
+    triples.forEach(t => remove(t));
+    schemaTriples.forEach(t => remove(t));
 
     onMenuOpenChange(false);
   };
