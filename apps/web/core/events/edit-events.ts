@@ -5,12 +5,13 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { EntityStore } from '~/core/state/entity-page-store/entity-store';
 import { ImageValue, Triple as TripleType, TripleValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { groupBy } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
+
+import { ActionsStore } from '../state/actions-store/actions-store';
 
 export type EditEvent =
   | {
@@ -172,9 +173,9 @@ export type EditEvent =
     };
 
 interface EditApi {
-  create: EntityStore['create'];
-  update: EntityStore['update'];
-  remove: EntityStore['remove'];
+  create: ActionsStore['create'];
+  update: ActionsStore['update'];
+  remove: ActionsStore['remove'];
 }
 
 interface ListenerConfig {

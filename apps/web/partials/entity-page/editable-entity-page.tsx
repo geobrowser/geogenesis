@@ -6,10 +6,10 @@ import * as React from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { EntityOthersToast } from '~/core/presence/entity-others-toast';
 import { EntityPresenceProvider } from '~/core/presence/presence-provider';
 import { Services } from '~/core/services';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple, RelationValueTypesByAttributeId, TripleValueType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
@@ -49,13 +49,12 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
   const {
     triples: localTriples,
     schemaTriples,
-    update,
-    create,
-    remove,
     hideSchema,
     hiddenSchemaIds,
     attributeRelationTypes,
   } = useEntityPageStore();
+
+  const { create, update, remove } = useActionsStore();
 
   const { actionsFromSpace } = useActionsStore(spaceId);
   const { subgraph, config } = Services.useServices();

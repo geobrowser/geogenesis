@@ -3,37 +3,25 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { Services } from '~/core/services';
-import { Triple } from '~/core/types';
+import { OmitStrict, Triple } from '~/core/types';
 
-import { useActionsStoreInstance } from '../actions-store/actions-store-provider';
-import { EntityStore } from './entity-store';
-
-const EntityStoreContext = createContext<EntityStore | undefined>(undefined);
+const EntityStoreContext = createContext<OmitStrict<Props, 'children'> | undefined>(undefined);
 
 interface Props {
   id: string;
   spaceId: string;
   children: React.ReactNode;
   initialTriples: Triple[];
-  initialSchemaTriples: Triple[];
 }
 
-export function EntityStoreProvider({ id, spaceId, children, initialTriples, initialSchemaTriples }: Props) {
-  const { subgraph, config } = Services.useServices();
-  const ActionsStore = useActionsStoreInstance();
-
+export function EntityStoreProvider({ id, spaceId, children, initialTriples }: Props) {
   const store = useMemo(() => {
-    return new EntityStore({
+    return {
       spaceId,
       initialTriples,
-      initialSchemaTriples,
       id,
-      subgraph,
-      config,
-      ActionsStore,
-    });
-  }, [spaceId, initialTriples, initialSchemaTriples, id, ActionsStore, subgraph, config]);
+    };
+  }, [spaceId, initialTriples, id]);
 
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;
 }

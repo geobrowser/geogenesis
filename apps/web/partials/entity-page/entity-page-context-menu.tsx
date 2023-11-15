@@ -4,8 +4,9 @@ import { batch } from '@legendapp/state';
 
 import * as React from 'react';
 
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
@@ -26,8 +27,10 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
   const [isMenuOpen, onMenuOpenChange] = React.useState(false);
   const [isMoveEntityMenuOpen, onMoveEntityMenuOpenChange] = React.useState(false);
   const [isMergeEntityMenuOpen, onMergeEntityMenuOpenChange] = React.useState(false);
+
   const isEditing = useUserIsEditing(spaceId);
-  const { triples, schemaTriples, remove } = useEntityPageStore();
+  const { remove } = useActionsStore();
+  const { triples, schemaTriples } = useEntityPageStore();
 
   const onCopyId = async () => {
     try {

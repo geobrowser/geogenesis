@@ -11,10 +11,10 @@ import StarterKit from '@tiptap/starter-kit';
 
 import * as React from 'react';
 
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor-store';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 
 import { SquareButton } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';

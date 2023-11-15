@@ -52,12 +52,7 @@ export default async function Layout({ children, params }: Props) {
   return (
     <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
       <TypesStoreServerContainer spaceId={params.id}>
-        <EntityStoreProvider
-          id={props.id}
-          spaceId={props.spaceId}
-          initialTriples={props.triples}
-          initialSchemaTriples={[]}
-        >
+        <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
           <EditorProvider
             id={props.id}
             spaceId={props.spaceId}

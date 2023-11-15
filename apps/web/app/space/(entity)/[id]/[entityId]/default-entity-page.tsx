@@ -51,12 +51,7 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider
-        id={props.id}
-        spaceId={props.spaceId}
-        initialTriples={props.triples}
-        initialSchemaTriples={[]}
-      >
+      <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
         <EditorProvider
           id={props.id}
           spaceId={props.spaceId}

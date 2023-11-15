@@ -9,10 +9,10 @@ import * as React from 'react';
 import { useWalletClient } from 'wagmi';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { MigrateAction, useMigrateHub } from '~/core/migrate/migrate';
 import { Services } from '~/core/services';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
 import { Triple as TripleType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';

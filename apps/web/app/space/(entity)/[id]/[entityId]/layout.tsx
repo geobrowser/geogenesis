@@ -107,12 +107,7 @@ export default async function ProfileLayout({ children, params }: Props) {
   return (
     <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
       <TypesStoreServerContainer spaceId={params.id}>
-        <EntityStoreProvider
-          id={params.entityId}
-          spaceId={params.id}
-          initialTriples={profile.triples}
-          initialSchemaTriples={[]}
-        >
+        <EntityStoreProvider id={params.entityId} spaceId={params.id} initialTriples={profile.triples}>
           <EditorProvider
             id={profile.id}
             spaceId={params.id}

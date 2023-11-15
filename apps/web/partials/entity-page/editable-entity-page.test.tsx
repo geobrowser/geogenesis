@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
-import { MockNetworkData } from '~/core/io';
 import { Providers } from '~/core/providers';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 
@@ -18,21 +17,7 @@ describe('Editable Entity Page', () => {
           //
         }}
       >
-        <EntityStoreProvider
-          id="1"
-          spaceId="1"
-          initialBlockIdsTriple={null}
-          initialBlockTriples={[]}
-          initialTriples={[]}
-          initialSchemaTriples={[
-            {
-              ...MockNetworkData.makeStubTriple('Schema'),
-              attributeName: 'Schema',
-              attributeId: 'Schema',
-              placeholder: true,
-            },
-          ]}
-        >
+        <EntityStoreProvider id="1" spaceId="1" initialTriples={[]}>
           <EditableEntityPage id="1" spaceId="1" triples={[]} />
         </EntityStoreProvider>
       </Providers>
@@ -51,26 +36,7 @@ describe('Editable Entity Page', () => {
           //
         }}
       >
-        <EntityStoreProvider
-          id="1"
-          spaceId="1"
-          initialBlockIdsTriple={null}
-          initialBlockTriples={[]}
-          initialTriples={[]}
-          initialSchemaTriples={[
-            {
-              ...MockNetworkData.makeStubTriple('Schema'),
-              attributeName: 'Schema',
-              attributeId: 'Schema',
-              value: {
-                type: 'entity',
-                name: '',
-                id: '',
-              },
-              placeholder: true,
-            },
-          ]}
-        >
+        <EntityStoreProvider id="1" spaceId="1" initialTriples={[]}>
           <EditableEntityPage id="1" spaceId="1" triples={[]} />
         </EntityStoreProvider>
       </Providers>
