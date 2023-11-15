@@ -79,7 +79,7 @@ importers:
       '@vitest/ui': ^0.25.6
       '@wagmi/core': ^1.4.3
       autoprefixer: ^10.4.13
-      boring-avatars: ^1.7.0
+      boring-avatars: ^1.10.1
       class-variance-authority: ^0.4.0
       classnames: ^2.3.2
       cmdk: ^0.1.21
@@ -98,6 +98,7 @@ importers:
       fake-indexeddb: ^4.0.2
       framer-motion: ^10.15.2
       immer: ^9.0.16
+      jotai: ^2.5.1
       js-confetti: ^0.11.0
       jsdom: ^20.0.0
       lokijs: ^1.5.12
@@ -164,7 +165,7 @@ importers:
       '@vercel/analytics': 0.1.6_react@18.2.0
       '@vercel/og': 0.5.4
       '@wagmi/core': 1.4.3_zqvb3lj4paonteqkgqlayb523m
-      boring-avatars: 1.7.0
+      boring-avatars: 1.10.1
       class-variance-authority: 0.4.0_typescript@5.1.6
       classnames: 2.3.2
       cmdk: 0.1.21_ew3x2u2ugx4vldoypxrzsnu5mm
@@ -175,6 +176,7 @@ importers:
       effect: 2.0.0-next.48
       framer-motion: 10.15.2_biqbaboplfbrettd7655fr4n2y
       immer: 9.0.16
+      jotai: 2.5.1_o5ysialsahsznabqayk7pree4e
       js-confetti: 0.11.0
       lokijs: 1.5.12
       next: 13.5.5_qtpcxnaaarbm4ws7ughq6oxfve
@@ -7706,8 +7708,8 @@ packages:
       - supports-color
     dev: true
 
-  /boring-avatars/1.7.0:
-    resolution: {integrity: sha512-ZNHd8J7C/V0IjQMGQowLJ5rScEFU23WxePigH6rqKcT2Esf0qhYvYxw8s9i3srmlfCnCV00ddBjaoGey1eNOfA==}
+  /boring-avatars/1.10.1:
+    resolution: {integrity: sha512-WcgHDeLrazCR03CDPEvCchLsUecZAZvs4F6FnMiGlTEjyQQf15Q5TRl4EUaAQ1dacvhPq7lC9EOTWkCojQ6few==}
     dev: false
 
   /borsh/0.7.0:
@@ -13658,6 +13660,22 @@ packages:
     resolution: {integrity: sha512-3TV69ZbrvV6U5DfQimop50jE9Dl6J8O1ja1dvBbMba/sZ3YBEQqJ2VZRoQPVnhlzjNtU1vaXRZVrVjU4qtm8yA==}
     hasBin: true
     dev: true
+
+  /jotai/2.5.1_o5ysialsahsznabqayk7pree4e:
+    resolution: {integrity: sha512-vanPCCSuHczUXNbVh/iUunuMfrWRL4FdBtAbTRmrfqezJcKb8ybBTg8iivyYuUHapjcDETyJe1E4inlo26bVHA==}
+    engines: {node: '>=12.20.0'}
+    peerDependencies:
+      '@types/react': '>=17.0.0'
+      react: '>=17.0.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      react:
+        optional: true
+    dependencies:
+      '@types/react': 18.2.33
+      react: 18.2.0
+    dev: false
 
   /joycon/3.1.1:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
