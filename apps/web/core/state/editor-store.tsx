@@ -539,8 +539,6 @@ interface Props {
 }
 
 export const EditorProvider = ({ id, spaceId, initialBlockIdsTriple, initialBlockTriples, children }: Props) => {
-  console.log('provider rerendering');
-
   const value = React.useMemo(() => {
     return {
       id,

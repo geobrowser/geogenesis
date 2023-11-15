@@ -79,8 +79,6 @@ export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, place
 
   const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
 
-  console.log('rerendering editor');
-
   const editor = useEditor({
     extensions,
     editable: true,
