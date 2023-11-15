@@ -25,23 +25,18 @@ import { Value } from '../utils/value';
 const markdownConverter = new Showdown.Converter();
 
 export function useEditorStore() {
-  const { id, spaceId, initialBlockIdsTriple, initialBlockTriples } = useEditorInstance();
+  const { id: entityId, spaceId, initialBlockIdsTriple, initialBlockTriples } = useEditorInstance();
   const { subgraph, config } = Services.useServices();
   const { create, update, remove, actionsByEntityId, allActions } = useActionsStore();
   const { name } = useEntityPageStore();
 
   const blockIdsTriple = React.useMemo(() => {
-    // We deeply track the specific blockIdsTriple for this entity. This is so the block editor
-    // does not re-render when other properties of the entity are changed.
-    const entityChanges = actionsByEntityId[id];
-
-    // @ts-expect-error legendstate's types do not like accessing a nested computed value in a
-    // record by id like
-    const blocksIdTriple: ITriple | undefined = entityChanges?.[SYSTEM_IDS.BLOCKS]?.get();
+    const entityChanges = actionsByEntityId[entityId];
+    const blocksIdTriple: ITriple | undefined = entityChanges?.[SYSTEM_IDS.BLOCKS];
 
     // Favor the local version of the blockIdsTriple if it exists
     return blocksIdTriple ?? initialBlockIdsTriple ?? null;
-  }, [actionsByEntityId, id, initialBlockIdsTriple]);
+  }, [actionsByEntityId, entityId, initialBlockIdsTriple]);
 
   const blockIds = React.useMemo(() => {
     return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
@@ -277,12 +272,12 @@ export function useEditorStore() {
             entityName: getNodeName(node),
             attributeId: SYSTEM_IDS.PARENT_ENTITY,
             attributeName: 'Parent Entity',
-            value: { id: id, type: 'entity', name },
+            value: { id: entityId, type: 'entity', name },
           })
         );
       }
     },
-    [create, getBlockTriple, id, name, spaceId]
+    [create, getBlockTriple, entityId, name, spaceId]
   );
 
   /* Helper function for creating a new row type triple for TABLE_BLOCKs only  */
@@ -385,7 +380,7 @@ export function useEditorStore() {
       if (!existingBlockTriple) {
         const triple = Triple.withId({
           space: spaceId,
-          entityId: id,
+          entityId: entityId,
           entityName: name,
           attributeId: SYSTEM_IDS.BLOCKS,
           attributeName: 'Blocks',
@@ -448,7 +443,7 @@ export function useEditorStore() {
 
       return update(updatedTriple, existingBlockTriple);
     },
-    [allActions, blockIds, blockIdsTriple, config.subgraph, create, id, name, remove, subgraph, update, spaceId]
+    [allActions, blockIds, blockIdsTriple, config.subgraph, create, entityId, name, remove, subgraph, update, spaceId]
   );
 
   /* Iterate over the content's of a TipTap editor to create or update triple blocks */
