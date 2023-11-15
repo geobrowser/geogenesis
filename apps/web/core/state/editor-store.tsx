@@ -24,6 +24,16 @@ import { useEntityPageStore } from './entity-page-store/entity-store';
 
 const markdownConverter = new Showdown.Converter();
 
+/**
+ * The editor store manages state for the entity page blocks editor, primarily
+ * around transforming/mapping metadata for each block to our Geo entity format
+ * and back to Tiptap's JSON format.
+ *
+ * 1. Maps our entity/block format to Tiptap's JSON format
+ * 2. Tracks the triple with the editor block ids
+ * 3. Manages the metadata for each block entity, e.g., the block name, block type,
+ *    markdown content, image src, table configuration, etc.
+ */
 export function useEditorStore() {
   const { id: entityId, spaceId, initialBlockIdsTriple, initialBlockTriples } = useEditorInstance();
   const { subgraph, config } = Services.useServices();
@@ -54,7 +64,7 @@ export function useEditorStore() {
     );
   }, [allActions, blockIds, initialBlockTriples]);
 
-  /* Transforms our block triples back into a TipTap-friendly JSON format */
+  // Transforms our block triples back into a TipTap-friendly JSON format
   const editorJson = React.useMemo(() => {
     const json = {
       type: 'doc',
@@ -132,10 +142,8 @@ export function useEditorStore() {
     [blockTriples]
   );
 
-  /*
-  Helper function for creating a new block of type TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
-  We don't support changing types of blocks, so all we need to do is create a new block with the new type
-  */
+  // Helper function for creating a new block of type TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
+  // We don't support changing types of blocks, so all we need to do is create a new block with the new type
   const createBlockTypeTriple = React.useCallback(
     (node: JSONContent) => {
       const blockEntityId = getNodeId(node);
@@ -161,9 +169,7 @@ export function useEditorStore() {
     [create, getBlockTriple, spaceId]
   );
 
-  /*
-  Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
-  */
+  // Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
   const upsertBlockNameTriple = React.useCallback(
     (node: JSONContent) => {
       const blockEntityId = getNodeId(node);
@@ -198,7 +204,7 @@ export function useEditorStore() {
     [create, getBlockTriple, spaceId, update]
   );
 
-  /* Helper function for upserting a new block markdown content triple for TEXT_BLOCKs only  */
+  // Helper function for upserting a new block markdown content triple for TEXT_BLOCKs only
   const upsertBlockMarkdownTriple = React.useCallback(
     (node: JSONContent) => {
       const blockEntityId = getNodeId(node);
@@ -257,7 +263,7 @@ export function useEditorStore() {
     [create, getBlockTriple, spaceId, update]
   );
 
-  /* Helper function for creating backlinks to the parent entity  */
+  // Helper function for creating backlinks to the parent entity
   const createParentEntityTriple = React.useCallback(
     (node: JSONContent) => {
       const blockEntityId = getNodeId(node);
@@ -280,7 +286,7 @@ export function useEditorStore() {
     [create, getBlockTriple, entityId, name, spaceId]
   );
 
-  /* Helper function for creating a new row type triple for TABLE_BLOCKs only  */
+  // Helper function for creating a new row type triple for TABLE_BLOCKs only
   const createTableBlockMetadata = React.useCallback(
     (node: JSONContent) => {
       const blockEntityId = getNodeId(node);
@@ -342,7 +348,7 @@ export function useEditorStore() {
     [create, getBlockTriple, spaceId]
   );
 
-  /* Helper function for creating a new block image triple for IMAGE_BLOCKs only  */
+  // Helper function for creating a new block image triple for IMAGE_BLOCKs only
   const createBlockImageTriple = React.useCallback(
     (node: JSONContent) => {
       const blockEntityId = getNodeId(node);
@@ -368,10 +374,8 @@ export function useEditorStore() {
     [create, spaceId]
   );
 
-  /*
-  Helper function to create or update the block IDs on an entity
-  Since we don't currently support array value types, we store all ordered blocks as a single stringified array
-  */
+  // Helper function to create or update the block IDs on an entity
+  // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
   const upsertBlocksTriple = React.useCallback(
     async (newBlockIds: string[]) => {
       const existingBlockTriple = blockIdsTriple;
@@ -446,7 +450,9 @@ export function useEditorStore() {
     [allActions, blockIds, blockIdsTriple, config.subgraph, create, entityId, name, remove, subgraph, update, spaceId]
   );
 
-  /* Iterate over the content's of a TipTap editor to create or update triple blocks */
+  // Iterate over the content's of a TipTap editor to create or update triple blocks
+  // @TODO: We should instead only execute functions for each block type, instead of
+  // executing _every_ function for every block type.
   const updateEditorBlocks = React.useCallback(
     (editor: Editor) => {
       const { content = [] } = editor.getJSON();
