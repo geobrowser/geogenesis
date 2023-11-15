@@ -61,6 +61,9 @@ export const OnboardingDialog = () => {
       return;
     }
 
+    let runSpaceAddress = spaceAddress;
+    let runProfileId = profileId;
+
     if (workflowStep === 'idle') {
       setStep('completing');
       setWorkflowStep('creating-spaces');
@@ -70,6 +73,7 @@ export const OnboardingDialog = () => {
           account: address,
         });
 
+        runSpaceAddress = spaceAddress;
         setPersonalSpaceAddress(spaceAddress);
 
         setWorkflowStep('registering-profile');
@@ -81,14 +85,15 @@ export const OnboardingDialog = () => {
 
     if (workflowStep === 'idle' || workflowStep === 'registering-profile') {
       try {
-        const profileId = await publish.registerGeoProfile(wallet, spaceAddress as `0x${string}`);
+        const profileId = await publish.registerGeoProfile(wallet, runSpaceAddress as `0x${string}`);
+        runProfileId = profileId;
         setProfileId(profileId);
 
         // Update the query cache with the new profile while we wait for the profiles subgraph to
         // index the new onchain profile.
         queryClient.setQueryData(['onchain-profile', address], {
           id: getGeoPersonIdFromOnchainId(address, profileId),
-          homeSpace: spaceAddress,
+          homeSpace: runSpaceAddress,
           account: address,
         });
 
@@ -110,7 +115,7 @@ export const OnboardingDialog = () => {
           spaceAddress: spaceAddress as `0x${string}`,
           avatarUri: avatar || null,
           username: name || null,
-          profileId,
+          profileId: runProfileId,
         });
 
         console.log('Profile and personal space created:', { profileEntityId, spaceAddress });
