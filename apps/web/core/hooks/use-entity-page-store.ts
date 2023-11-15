@@ -8,26 +8,13 @@ import { useEntityStoreInstance } from '../state/entity-page-store/entity-store-
 import { useConfiguredAttributeRelationTypes } from './use-configured-attribute-relation-types';
 
 export function useEntityPageStore() {
-  const {
-    create,
-    spaceId,
-    triples$,
-    schemaTriples$,
-    blockIds$,
-    update,
-    remove,
-    hideSchema,
-    hiddenSchemaIds$,
-    id,
-    updateEditorBlocks,
-    editorJson$,
-  } = useEntityStoreInstance();
+  const { create, spaceId, triples$, schemaTriples$, update, remove, hideSchema, hiddenSchemaIds$, id, name$ } =
+    useEntityStoreInstance();
   const triples = useSelector(triples$);
   const schemaTriples = useSelector<ITriple[]>(schemaTriples$);
   const hiddenSchemaIds = useSelector<string[]>(hiddenSchemaIds$);
-  const blockIds = useSelector<string[]>(blockIds$);
-  const editorJson = useSelector(editorJson$);
   const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: id });
+  const name = useSelector(name$);
 
   return {
     triples,
@@ -38,10 +25,8 @@ export function useEntityPageStore() {
     remove,
     hideSchema,
     hiddenSchemaIds,
-    updateEditorBlocks,
-    editorJson,
-    blockIds,
     id,
     attributeRelationTypes,
+    name,
   };
 }

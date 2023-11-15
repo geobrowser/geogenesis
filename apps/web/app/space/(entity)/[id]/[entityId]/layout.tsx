@@ -7,6 +7,7 @@ import { Metadata } from 'next';
 import { Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
+import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -111,37 +112,42 @@ export default async function ProfileLayout({ children, params }: Props) {
           spaceId={params.id}
           initialTriples={profile.triples}
           initialSchemaTriples={[]}
-          initialBlockIdsTriple={profile.blockIdsTriple}
-          initialBlockTriples={profile.blockTriples}
         >
-          <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-          <EntityPageContentContainer>
-            <EditableHeading
-              spaceId={params.id}
-              entityId={params.entityId}
-              name={profile.name ?? params.entityId}
-              triples={profile.triples}
-            />
-            <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
+          <EditorProvider
+            id={profile.id}
+            spaceId={params.id}
+            initialBlockIdsTriple={profile.blockIdsTriple}
+            initialBlockTriples={profile.blockTriples}
+          >
+            <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+            <EntityPageContentContainer>
+              <EditableHeading
+                spaceId={params.id}
+                entityId={params.entityId}
+                name={profile.name ?? params.entityId}
+                triples={profile.triples}
+              />
+              <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
 
-            <Spacer height={40} />
-            <TabGroup
-              tabs={TABS.map(label => {
-                const href =
-                  label === 'Overview'
-                    ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
-                    : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
-                return {
-                  href,
-                  label,
-                };
-              })}
-            />
+              <Spacer height={40} />
+              <TabGroup
+                tabs={TABS.map(label => {
+                  const href =
+                    label === 'Overview'
+                      ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
+                      : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
+                  return {
+                    href,
+                    label,
+                  };
+                })}
+              />
 
-            <Spacer height={20} />
+              <Spacer height={20} />
 
-            {children}
-          </EntityPageContentContainer>
+              {children}
+            </EntityPageContentContainer>
+          </EditorProvider>
         </EntityStoreProvider>
       </TypesStoreServerContainer>
     </SpaceConfigProvider>

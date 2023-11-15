@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { AppConfig, Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
+import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -56,40 +57,45 @@ export default async function Layout({ children, params }: Props) {
           spaceId={props.spaceId}
           initialTriples={props.triples}
           initialSchemaTriples={[]}
-          initialBlockIdsTriple={props.blockIdsTriple}
-          initialBlockTriples={props.blockTriples}
         >
-          <EntityPageCover avatarUrl={null} coverUrl={coverUrl} space />
+          <EditorProvider
+            id={props.id}
+            spaceId={props.spaceId}
+            initialBlockIdsTriple={props.blockIdsTriple}
+            initialBlockTriples={props.blockTriples}
+          >
+            <EntityPageCover avatarUrl={null} coverUrl={coverUrl} space />
 
-          <EntityPageContentContainer>
-            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
-            <SpacePageMetadataHeader
-              spaceId={props.spaceId}
-              membersComponent={
-                <React.Suspense fallback={<MembersSkeleton />}>
-                  <SpaceEditors spaceId={params.id} />
-                  <SpaceMembers spaceId={params.id} />
-                </React.Suspense>
-              }
-            />
+            <EntityPageContentContainer>
+              <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+              <SpacePageMetadataHeader
+                spaceId={props.spaceId}
+                membersComponent={
+                  <React.Suspense fallback={<MembersSkeleton />}>
+                    <SpaceEditors spaceId={params.id} />
+                    <SpaceMembers spaceId={params.id} />
+                  </React.Suspense>
+                }
+              />
 
-            <Spacer height={40} />
-            <TabGroup
-              tabs={[
-                {
-                  label: 'Overview',
-                  href: `${NavUtils.toSpace(params.id)}`,
-                },
-                {
-                  label: 'Governance',
-                  href: `${NavUtils.toSpace(params.id)}/governance`,
-                },
-              ]}
-            />
-            <Spacer height={20} />
+              <Spacer height={40} />
+              <TabGroup
+                tabs={[
+                  {
+                    label: 'Overview',
+                    href: `${NavUtils.toSpace(params.id)}`,
+                  },
+                  {
+                    label: 'Governance',
+                    href: `${NavUtils.toSpace(params.id)}/governance`,
+                  },
+                ]}
+              />
+              <Spacer height={20} />
 
-            {children}
-          </EntityPageContentContainer>
+              {children}
+            </EntityPageContentContainer>
+          </EditorProvider>
         </EntityStoreProvider>
       </TypesStoreServerContainer>
     </SpaceConfigProvider>

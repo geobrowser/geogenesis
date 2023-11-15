@@ -14,6 +14,7 @@ import * as React from 'react';
 import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useEditorStore } from '~/core/state/editor-store';
 
 import { SquareButton } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';
@@ -71,11 +72,14 @@ export const tiptapExtensions = [
   }),
 ];
 
-export const Editor = React.memo(function Editor({ placeholder = null, shouldHandleOwnSpacing }: Props) {
-  const { editorJson, spaceId, updateEditorBlocks, blockIds } = useEntityPageStore();
+export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, placeholder = null }: Props) {
+  const { spaceId } = useEntityPageStore();
+  const { editorJson, blockIds, updateEditorBlocks } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
 
   const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
+
+  console.log('rerendering editor');
 
   const editor = useEditor({
     extensions,

@@ -17,27 +17,15 @@ interface Props {
   children: React.ReactNode;
   initialTriples: Triple[];
   initialSchemaTriples: Triple[];
-  initialBlockIdsTriple: Triple | null;
-  initialBlockTriples: Triple[];
 }
 
-export function EntityStoreProvider({
-  id,
-  spaceId,
-  children,
-  initialBlockIdsTriple,
-  initialBlockTriples,
-  initialTriples,
-  initialSchemaTriples,
-}: Props) {
+export function EntityStoreProvider({ id, spaceId, children, initialTriples, initialSchemaTriples }: Props) {
   const { subgraph, config } = Services.useServices();
   const ActionsStore = useActionsStoreInstance();
 
   const store = useMemo(() => {
     return new EntityStore({
       spaceId,
-      initialBlockIdsTriple,
-      initialBlockTriples,
       initialTriples,
       initialSchemaTriples,
       id,
@@ -45,17 +33,7 @@ export function EntityStoreProvider({
       config,
       ActionsStore,
     });
-  }, [
-    spaceId,
-    initialBlockTriples,
-    initialTriples,
-    initialBlockIdsTriple,
-    initialSchemaTriples,
-    id,
-    ActionsStore,
-    subgraph,
-    config,
-  ]);
+  }, [spaceId, initialTriples, initialSchemaTriples, id, ActionsStore, subgraph, config]);
 
   return <EntityStoreContext.Provider value={store}>{children}</EntityStoreContext.Provider>;
 }
