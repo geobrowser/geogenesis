@@ -14,13 +14,13 @@ import { htmlToPlainText } from '~/partials/editor/editor-utils';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { useActionsStore } from '../hooks/use-actions-store';
-import { useEntityPageStore } from '../hooks/use-entity-page-store';
 import { ID } from '../id';
 import { Services } from '../services';
 import { EntityValue, Triple as ITriple, OmitStrict } from '../types';
 import { Triple } from '../utils/triple';
 import { getImagePath } from '../utils/utils';
 import { Value } from '../utils/value';
+import { useEntityPageStore } from './entity-page-store/entity-store';
 
 const markdownConverter = new Showdown.Converter();
 
