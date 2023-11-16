@@ -9,7 +9,6 @@ import { useMergedData } from '../hooks/use-merged-data';
 import { ID } from '../id';
 import { Merged } from '../merged';
 import { Services } from '../services';
-import { useActions } from '../state/actions-store/actions-store';
 import {
   Action,
   DeleteTripleAction,
