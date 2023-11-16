@@ -6,7 +6,7 @@ import HardBreak from '@tiptap/extension-hard-break';
 import Image from '@tiptap/extension-image';
 import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Editor, EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
+import { EditorContent, FloatingMenu, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 
 import * as React from 'react';
@@ -94,15 +94,19 @@ export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, place
   // Running onBlur directly through the hook executes it twice for some reason.
   // Doing it imperatively here correctly only executes once.
   React.useEffect(() => {
-    const onBlur = ({ editor }: {editor: Editor}) => {
+    function onBlur(params: { editor: TiptapEditor }) {
       // Responsible for converting all editor blocks to triples
       // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
-      updateEditorBlocks(editor);
+      updateEditorBlocks(params.editor);
+    }
+
+    // Tiptap doesn't export the needed type APIs for us to be able to make this typesafe
+    editor?.on('blur', onBlur as unknown as any);
+
+    return () => {
+      // Tiptap doesn't export the needed type APIs for us to be able to make this typesafe
+      editor?.off('blur', onBlur as unknown as any);
     };
-
-    editor?.on('blur', onBlur);
-
-    return () => editor?.off('blur', onBlur);
   }, [editor, updateEditorBlocks]);
 
   // @HACK: Janky but works for now.
