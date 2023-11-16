@@ -39,17 +39,17 @@ export type EntityActions = Record<EntityId, Record<AttributeId, ITriple>>;
 const atomWithAsyncStorage = (initialValue: ActionType[] = []) => {
   const baseAtom = atom<ActionType[]>(initialValue);
 
-  // baseAtom.onMount = setValue => {
-  //   (async () => {
-  //     const storedActions = await new Geo().actions.toArray();
-  //     setValue(storedActions);
-  //   })();
-  // };
+  baseAtom.onMount = setValue => {
+    (async () => {
+      const storedActions = await new Geo().actions.toArray();
+      setValue(storedActions);
+    })();
+  };
 
   return baseAtom;
 };
 
-const actionsAtom = atomWithAsyncStorage();
+export const actionsAtom = atomWithAsyncStorage();
 
 function getSpaceActions(allActions: ActionType[]) {
   const actions: SpaceActions = {};
@@ -164,13 +164,6 @@ const deleteActionsFromSpace = (spaceId: string, actionIdsToDelete: Array<string
 
   store.set(actionsAtom, nonDeletedActions);
 };
-
-// const unsub = store.sub(actionsAtom, async () => {
-//   const newActions = store.get(actionsAtom);
-
-//   await new Geo().actions.clear();
-//   new Geo().actions.bulkPut(Action.prepareActionsForPublishing(newActions));
-// });
 
 export function useActions(spaceId?: string) {
   const [allActions, setActions] = useAtom(actionsAtom);
