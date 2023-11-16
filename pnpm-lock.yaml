@@ -86,6 +86,7 @@ importers:
       connectkit: 1.5.1
       csv: ^6.3.3
       dayjs: ^1.11.9
+      dexie: ^3.2.4
       diff: ^5.1.0
       effect: 2.0.0-next.48
       eslint: ^8.21.0
@@ -172,6 +173,7 @@ importers:
       connectkit: 1.5.1_s5cz4qscxzb6zn2bfpscqwqh2q
       csv: 6.3.3
       dayjs: 1.11.9
+      dexie: 3.2.4
       diff: 5.1.0
       effect: 2.0.0-next.48
       framer-motion: 10.15.2_biqbaboplfbrettd7655fr4n2y
@@ -9225,6 +9227,11 @@ packages:
     transitivePeerDependencies:
       - supports-color
     dev: true
+
+  /dexie/3.2.4:
+    resolution: {integrity: sha512-VKoTQRSv7+RnffpOJ3Dh6ozknBqzWw/F3iqMdsZg958R0AS8AnY9x9d1lbwENr0gzeGJHXKcGhAMRaqys6SxqA==}
+    engines: {node: '>=6.0'}
+    dev: false
 
   /didyoumean/1.2.2:
     resolution: {integrity: sha512-gxtyfqMg7GKyhQmb056K7M3xszy/myH8w+B4RT+QXBQsvAOdc3XymqDDPHx1BgPgsdAA5SIifona89YtRATDzw==}

@@ -6,6 +6,7 @@ import React, { useTransition } from 'react';
 import { Environment } from '../environment';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { useMergedData } from '../hooks/use-merged-data';
+import { ID } from '../id';
 import { Merged } from '../merged';
 import { Services } from '../services';
 import { ActionsStore } from '../state/actions-store/actions-store';
@@ -280,6 +281,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
       }));
 
       const updateActions: EditTripleAction[] = triplesToUpdate.map(([newTriple, oldTriple]) => ({
+        id: ID.createEntityId(),
         type: 'editTriple',
         before: {
           ...oldTriple,

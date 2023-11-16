@@ -9,7 +9,6 @@ import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
-import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity } from '~/core/utils/entity';
 import { Value } from '~/core/utils/value';
 
@@ -50,32 +49,31 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
   const typeId = searchParams.typeId ?? null;
 
   return (
-    <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
-        <EditorProvider
-          id={props.id}
-          spaceId={props.spaceId}
-          initialBlockIdsTriple={props.blockIdsTriple}
-          initialBlockTriples={props.blockTriples}
-        >
-          <MoveEntityProvider>
-            <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
-            <EntityPageContentContainer>
-              <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
-              <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
-              <Spacer height={40} />
-              <Editor shouldHandleOwnSpacing />
-              <ToggleEntityPage {...props} filterId={filterId} filterValue={filterValue} typeId={typeId} />
-              <Spacer height={40} />
-              <Suspense fallback={<EntityReferencedByLoading />}>
-                <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
-              </Suspense>
-            </EntityPageContentContainer>
-            <MoveEntityReview />
-          </MoveEntityProvider>
-        </EditorProvider>
-      </EntityStoreProvider>
-    </TypesStoreServerContainer>
+    <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
+      <EditorProvider
+        id={props.id}
+        spaceId={props.spaceId}
+        initialBlockIdsTriple={props.blockIdsTriple}
+        initialBlockTriples={props.blockTriples}
+      >
+        <MoveEntityProvider>
+          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+          <EntityPageContentContainer>
+            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+            <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
+            <Spacer height={40} />
+            <Editor shouldHandleOwnSpacing />
+
+            <ToggleEntityPage {...props} filterId={filterId} filterValue={filterValue} typeId={typeId} />
+            <Spacer height={40} />
+            <Suspense fallback={<EntityReferencedByLoading />}>
+              <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
+            </Suspense>
+          </EntityPageContentContainer>
+          <MoveEntityReview />
+        </MoveEntityProvider>
+      </EditorProvider>
+    </EntityStoreProvider>
   );
 }
 

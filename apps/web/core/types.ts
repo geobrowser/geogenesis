@@ -106,7 +106,8 @@ export type EditTripleAction = {
   type: 'editTriple';
   before: DeleteTripleAction;
   after: CreateTripleAction;
-} & Publishable;
+} & Publishable &
+  Identifiable;
 
 // We associate an ID with actions locally so we can diff and merge them as they change locally.
 type Identifiable = {

@@ -52,6 +52,7 @@ export function useTypesStore(): {
   const { triples } = useLocalStore();
 
   const localForeignTypes: GeoType[] = React.useMemo(() => {
+    return [];
     if (!space) return [];
 
     const triplesFromSpaceActions = triples.filter(t => t.space === space.id);
@@ -102,6 +103,7 @@ export function useTypesStore(): {
   }, [space, triples]);
 
   const types: GeoType[] = React.useMemo(() => {
+    return initialTypes;
     if (!space) return [];
 
     const globalActions = actions[space.id] || [];

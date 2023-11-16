@@ -99,7 +99,11 @@ export default async function ProfileLayout({ children, params }: Props) {
   });
 
   if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
-    return <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>{children}</SpaceConfigProvider>;
+    return (
+      <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
+        <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>
+      </SpaceConfigProvider>
+    );
   }
 
   const profile = await getProfilePage(params.entityId, config.subgraph);

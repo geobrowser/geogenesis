@@ -37,7 +37,7 @@ interface Props {
   spaceId: string;
 }
 
-export function TableBlock({ spaceId }: Props) {
+export const TableBlock = React.memo(({ spaceId }: Props) => {
   const { setFilterState } = useTableBlock();
 
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
@@ -250,7 +250,7 @@ export function TableBlock({ spaceId }: Props) {
       </motion.div>
     </div>
   );
-}
+});
 
 const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
 
