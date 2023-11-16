@@ -3,8 +3,6 @@ import type { NextRequest } from 'next/server';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 
-export const runtime = 'edge';
-
 export default async function handler(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   let hash = searchParams.get('hash') ?? '';

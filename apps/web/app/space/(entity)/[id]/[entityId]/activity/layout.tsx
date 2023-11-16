@@ -5,8 +5,6 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { ActivitySpaceFilter } from '~/partials/profile/activity-space-filter';
 
-export const runtime = 'edge';
-
 interface Props {
   params: { id: string; entityId: string };
   children: React.ReactNode;

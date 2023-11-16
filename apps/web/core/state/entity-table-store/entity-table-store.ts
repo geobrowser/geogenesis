@@ -185,6 +185,7 @@ export class EntityTableStore implements IEntityTableStore {
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
+
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.unpublishedColumns$ = computed(() => {

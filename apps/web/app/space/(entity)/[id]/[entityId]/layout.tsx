@@ -31,8 +31,6 @@ interface Props {
   children: React.ReactNode;
 }
 
-export const runtime = 'edge';
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
   const entityId = decodeURIComponent(params.entityId);
