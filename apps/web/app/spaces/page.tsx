@@ -44,8 +44,6 @@ export const metadata: Metadata = {
   robots: 'follow, index',
 };
 
-export const runtime = 'edge';
-
 const sortByCreatedAtBlock = (a: Space, b: Space) =>
   parseInt(a.createdAtBlock, 10) < parseInt(b.createdAtBlock, 10) ? -1 : 1;
 

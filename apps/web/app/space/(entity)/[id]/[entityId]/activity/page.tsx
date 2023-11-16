@@ -14,8 +14,6 @@ import { Spacer } from '~/design-system/spacer';
 
 import Loading from './loading';
 
-export const runtime = 'edge';
-
 interface Props {
   params: { id: string; entityId: string };
   searchParams: {

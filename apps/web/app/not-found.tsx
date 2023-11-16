@@ -6,8 +6,6 @@ import { Button } from '~/design-system/button';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
-export const runtime = 'edge';
-
 export default function Custom404() {
   return (
     <div className="relative flex min-h-[75vh] flex-col items-center justify-center">
