@@ -2,19 +2,20 @@ import { A, G, pipe } from '@mobily/ts-belt';
 
 import { Subgraph } from '~/core/io';
 import { ActionsStore } from '~/core/state/actions-store/actions-store';
-import { LocalStore } from '~/core/state/local-store';
+import { LocalStore, useLocalStore } from '~/core/state/local-store';
 import { Column, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
 
 import { TableBlockSdk } from '../blocks-sdk';
+import { useActionsStore } from '../hooks/use-actions-store';
 import { fetchColumns } from '../io/fetch-columns';
 import { fetchRows } from '../io/fetch-rows';
 
 interface MergedDataSourceOptions {
-  store: ActionsStore;
-  localStore: LocalStore;
+  store: ReturnType<typeof useActionsStore>;
+  localStore: ReturnType<typeof useLocalStore>;
   subgraph: Subgraph.ISubgraph;
 }
 
@@ -48,8 +49,8 @@ interface IMergedDataSource
  * on the Merged class should be the same as the Network class.
  */
 export class Merged implements IMergedDataSource {
-  private store: ActionsStore;
-  private localStore: LocalStore;
+  private store: ReturnType<typeof useActionsStore>;
+  private localStore: ReturnType<typeof useLocalStore>;
   private subgraph: Subgraph.ISubgraph;
 
   constructor({ store, localStore, subgraph }: MergedDataSourceOptions) {
@@ -63,7 +64,7 @@ export class Merged implements IMergedDataSource {
   fetchTriples = async (options: Parameters<Subgraph.ISubgraph['fetchTriples']>[0]): Promise<ITriple[]> => {
     const networkTriples = await this.subgraph.fetchTriples(options);
 
-    const actions = options.space ? this.store.actions$.get()[options.space] : this.store.allActions$.get() ?? [];
+    const actions = options.space ? this.store.actions[options.space] : this.store.allActions;
 
     // Merge any local actions with the network triples
     const updatedTriples = Triple.fromActions(actions, networkTriples);
@@ -110,7 +111,7 @@ export class Merged implements IMergedDataSource {
     // this in our app code for local entities. This might mean that we render local entities that
     // don't map to the selected filter.
     const localEntities = pipe(
-      this.store.actions$.get(),
+      this.store.actions,
       actions => Entity.mergeActionsWithEntities(actions, networkEntities),
       A.filter(e => {
         if (!G.isString(e.name)) {
@@ -152,17 +153,17 @@ export class Merged implements IMergedDataSource {
     try {
       const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id, endpoint: options.endpoint });
 
-      const actionsForEntityId = Entity.actionsForEntityId(this.store.allActions$.get(), options.id);
+      const actionsForEntityId = Entity.actionsForEntityId(this.store.allActions, options.id);
 
       if (actionsForEntityId.length === 0) return maybeNetworkEntity;
 
       // If not networkEntity we need to just return the local entity
       if (!maybeNetworkEntity) {
-        return Entity.fromActions(this.store.allActions$.get(), options.id);
+        return Entity.fromActions(this.store.allActions, options.id);
       }
 
       // If the network entity exists, we need to merge the local actions with the network entity.
-      const entity = Entity.mergeActionsWithEntity(this.store.allActions$.get(), maybeNetworkEntity);
+      const entity = Entity.mergeActionsWithEntity(this.store.allActions, maybeNetworkEntity);
 
       if (!entity) {
         return null;
@@ -178,11 +179,7 @@ export class Merged implements IMergedDataSource {
   columns = async (options: Parameters<typeof fetchColumns>[0]) => {
     const serverColumns = await fetchColumns(options);
 
-    return EntityTable.columnsFromLocalChanges(
-      this.localStore.triples$.get(),
-      serverColumns,
-      options.params.typeIds?.[0]
-    );
+    return EntityTable.columnsFromLocalChanges(this.localStore.triples, serverColumns, options.params.typeIds?.[0]);
   };
 
   rows = async (options: Parameters<typeof fetchRows>[0], columns: Column[], selectedTypeEntityId?: string) => {
@@ -208,7 +205,7 @@ export class Merged implements IMergedDataSource {
      * needs to render the columnSchema.
      */
     const changedEntitiesIdsFromAnotherType = pipe(
-      this.localStore.entities$.get(),
+      this.localStore.entities,
       A.filter(e => e.types.some(t => t.id === selectedTypeEntityId)),
       A.map(t => t.id)
     );
@@ -248,7 +245,7 @@ export class Merged implements IMergedDataSource {
     const serverEntityTriples = serverRows.flatMap(t => t.triples);
 
     const entitiesCreatedOrChangedLocally = pipe(
-      this.store.actions$.get(),
+      this.store.actions,
       actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
       A.filter(e => e.types.some(t => t.id === selectedTypeEntityId)),
       A.filter(entity => {
