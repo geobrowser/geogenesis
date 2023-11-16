@@ -17,6 +17,7 @@ import { useActionsStore } from '../hooks/use-actions-store';
 import { ID } from '../id';
 import { Services } from '../services';
 import { EntityValue, Triple as ITriple, OmitStrict } from '../types';
+import { Action } from '../utils/action';
 import { Triple } from '../utils/triple';
 import { getImagePath } from '../utils/utils';
 import { Value } from '../utils/value';
@@ -37,16 +38,19 @@ const markdownConverter = new Showdown.Converter();
 export function useEditorStore() {
   const { id: entityId, spaceId, initialBlockIdsTriple, initialBlockTriples } = useEditorInstance();
   const { subgraph, config } = Services.useServices();
-  const { create, update, remove, actionsByEntityId, allActions } = useActionsStore();
+  const { create, update, remove, allActions } = useActionsStore();
   const { name } = useEntityPageStore();
 
   const blockIdsTriple = React.useMemo(() => {
-    const entityChanges = actionsByEntityId[entityId];
-    const blocksIdTriple: ITriple | undefined = entityChanges?.[SYSTEM_IDS.BLOCKS];
+    const entityChanges = Triple.fromActions(
+      Action.forEntityId(allActions, entityId),
+      initialBlockIdsTriple ? [initialBlockIdsTriple] : []
+    );
+    const blocksIdTriple: ITriple | undefined = entityChanges.find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
 
     // Favor the local version of the blockIdsTriple if it exists
     return blocksIdTriple ?? initialBlockIdsTriple ?? null;
-  }, [actionsByEntityId, entityId, initialBlockIdsTriple]);
+  }, [allActions, entityId, initialBlockIdsTriple]);
 
   const blockIds = React.useMemo(() => {
     return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];

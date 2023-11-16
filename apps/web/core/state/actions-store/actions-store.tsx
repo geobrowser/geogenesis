@@ -39,12 +39,12 @@ export type EntityActions = Record<EntityId, Record<AttributeId, ITriple>>;
 const atomWithAsyncStorage = (initialValue: ActionType[] = []) => {
   const baseAtom = atom<ActionType[]>(initialValue);
 
-  baseAtom.onMount = setValue => {
-    (async () => {
-      const storedActions = await new Geo().actions.toArray();
-      setValue(storedActions);
-    })();
-  };
+  // baseAtom.onMount = setValue => {
+  //   (async () => {
+  //     const storedActions = await new Geo().actions.toArray();
+  //     setValue(storedActions);
+  //   })();
+  // };
 
   return baseAtom;
 };
@@ -85,8 +85,9 @@ const create = (triple: ITriple) => {
     type: 'createTriple',
   };
 
+  console.log('create', { action, attribute: triple.attributeName, value: triple.value });
+
   const allActions = store.get(actionsAtom);
-  console.log('creating', { action, allActions });
   store.set(actionsAtom, [...allActions, action]);
 };
 
@@ -97,7 +98,6 @@ const remove = (triple: ITriple) => {
   };
 
   const allActions = store.get(actionsAtom);
-  console.log('deleting', { action, allActions });
   store.set(actionsAtom, [...allActions, action]);
 };
 
@@ -115,8 +115,9 @@ const update = (triple: ITriple, oldTriple: ITriple) => {
     },
   };
 
+  console.log('update', { action, attribute: triple.attributeName, value: triple.value });
+
   const allActions = store.get(actionsAtom);
-  console.log('updating', { action, allActions });
   store.set(actionsAtom, [...allActions, action]);
 };
 
@@ -168,12 +169,12 @@ const deleteActionsFromSpace = (spaceId: string, actionIdsToDelete: Array<string
   store.set(actionsAtom, nonDeletedActions);
 };
 
-const unsub = store.sub(actionsAtom, async () => {
-  const newActions = store.get(actionsAtom);
+// const unsub = store.sub(actionsAtom, async () => {
+//   const newActions = store.get(actionsAtom);
 
-  await new Geo().actions.clear();
-  new Geo().actions.bulkPut(Action.prepareActionsForPublishing(newActions));
-});
+//   await new Geo().actions.clear();
+//   new Geo().actions.bulkPut(Action.prepareActionsForPublishing(newActions));
+// });
 
 export function useActions(spaceId?: string) {
   const [allActions, setActions] = useAtom(actionsAtom);

@@ -6,7 +6,7 @@ import HardBreak from '@tiptap/extension-hard-break';
 import Image from '@tiptap/extension-image';
 import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
-import { EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
+import { Editor, EditorContent, FloatingMenu, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 
 import * as React from 'react';
@@ -79,19 +79,31 @@ export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, place
 
   const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
 
-  const editor = useEditor({
-    extensions,
-    editable: true,
-    content: editorJson,
-    onBlur({ editor }) {
+  const editor = useEditor(
+    {
+      extensions,
+      editable: true,
+      content: editorJson,
+      editorProps: {
+        transformPastedHTML: html => removeIdAttributes(html),
+      },
+    },
+    []
+  );
+
+  // Running onBlur directly through the hook executes it twice for some reason.
+  // Doing it imperatively here correctly only executes once.
+  React.useEffect(() => {
+    const onBlur = ({ editor }: {editor: Editor}) => {
       // Responsible for converting all editor blocks to triples
       // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
       updateEditorBlocks(editor);
-    },
-    editorProps: {
-      transformPastedHTML: html => removeIdAttributes(html),
-    },
-  });
+    };
+
+    editor?.on('blur', onBlur);
+
+    return () => editor?.off('blur', onBlur);
+  }, [editor, updateEditorBlocks]);
 
   // @HACK: Janky but works for now.
   //
