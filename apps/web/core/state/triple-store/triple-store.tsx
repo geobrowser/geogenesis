@@ -106,8 +106,6 @@ export class TripleStore implements ITripleStore {
     );
 
     this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
-
-    // @ts-expect-error legendstate btw
     this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
 
     this.triples$ = computed(() => {

@@ -187,7 +187,6 @@ export class EntityStore implements IEntityStore {
     });
 
     /* Transforms our block triples back into a TipTap-friendly JSON format */
-    // @ts-expect-error legendstate btw
     this.editorJson$ = computed(() => {
       const blockIds = this.blockIds$.get();
       const blockTriples = this.blockTriples$.get();
