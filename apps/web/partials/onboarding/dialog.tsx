@@ -129,6 +129,9 @@ export const OnboardingDialog = () => {
     }
   }
 
+  const onNext = onRunOnboardingWorkflow;
+  const onRetry = onRunOnboardingWorkflow;
+
   return (
     <Command.Dialog open={isOnboardingVisible} label="Onboarding profile">
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
@@ -149,13 +152,13 @@ export const OnboardingDialog = () => {
               {step === 'onboarding' && (
                 <>
                   <StepHeader step={step} onPrev={() => setStep('start')} />
-                  <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />
+                  <StepOnboarding onNext={onNext} address={address} />
                 </>
               )}
               {(step === 'completing' || step === 'completed') && (
                 <>
                   <StepHeader step={step} />
-                  <StepComplete workflowStep={workflowStep} onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />
+                  <StepComplete workflowStep={workflowStep} onRetry={onRetry} showRetry={showRetry} />
                 </>
               )}
             </ModalCard>
@@ -234,16 +237,15 @@ function StepStart({ onNext }: StepStartProps) {
           <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
             Create your Geo account
           </Text>
-          <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
-            We’ll get you set up with a public profile,
-            <br className="xl:hidden" />
+          <Text as="p" variant="body" className="mx-auto mt-2 px-8 text-center !text-base">
+            We’ll get you set up with a profile, <br className="xl:hidden" />
             personal space and activity feed.
           </Text>
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
         <div className="aspect-video rounded-lg bg-grey-02 shadow-lg">
-          <img src="/create.png" alt="" className="h-full w-full" />
+          <img src="/images/onboarding/0.png" alt="" className="h-full w-full" />
         </div>
         <p className="text-center text-footnoteMedium">
           Creating an account requires a small amount of{' '}
@@ -389,7 +391,7 @@ function StepComplete({ workflowStep: stage, onRetry, showRetry }: StepCompleteP
             {stage === 'done' ? `Welcome to GEO!` : `Creating Geo account`}
           </Text>
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center !text-base">
-            {complete[stageAsNumber[stage]]}
+            {complete[stageAsNumber[stage]].label}
           </Text>
           {stage !== 'done' && (
             <div className="mx-auto mt-2 w-1/3">
@@ -408,7 +410,7 @@ function StepComplete({ workflowStep: stage, onRetry, showRetry }: StepCompleteP
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
         <div className="aspect-video rounded-lg bg-grey-02 shadow-lg">
-          <img src="/creating.png" alt="" className="h-full w-full" />
+          <img src={complete[stageAsNumber[stage]].image} alt="" className="h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Link href={`/space/${spaceAddress}`} className="w-full" onClick={hideOnboarding}>
@@ -422,11 +424,14 @@ function StepComplete({ workflowStep: stage, onRetry, showRetry }: StepCompleteP
   );
 }
 
-const complete: Record<number, string> = {
-  1: `Creating your personal space`,
-  2: `Sign the transaction from your wallet`,
-  3: `Creating your personal space`,
-  4: `Browse content, vote on what matters, join spaces and contribute to spaces that interest you as an editor`,
+const complete: Record<number, { label: string; image: string }> = {
+  1: { label: `Setting up your profile and personal space`, image: `/images/onboarding/1.png` },
+  2: { label: `Sign the transaction from your wallet`, image: `/images/onboarding/2.png` },
+  3: { label: `Finalizing account creation`, image: `/images/onboarding/3.png` },
+  4: {
+    label: `Browse content, vote on what matters, join spaces and contribute to spaces that interest you as an editor`,
+    image: `/images/onboarding/3.png`,
+  },
 };
 
 type ProgressProps = {
@@ -461,7 +466,7 @@ const Indicator = ({ index, stage }: IndicatorProps) => {
           delay: index >= stage ? 1 : 0,
         }}
         animate={{ width }}
-        className={cx('absolute bottom-0 left-0 top-0 bg-black', index === stage && 'animate-pulse')}
+        className={cx('absolute bottom-0 left-0 top-0 bg-black', index === stage && 'animate-pulse-strong')}
       />
     </div>
   );
