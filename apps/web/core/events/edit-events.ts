@@ -11,7 +11,7 @@ import { groupBy } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
-import { ActionsStore } from '../state/actions-store/actions-store';
+import { useActionsStore } from '../hooks/use-actions-store';
 
 export type EditEvent =
   | {
@@ -173,9 +173,9 @@ export type EditEvent =
     };
 
 interface EditApi {
-  create: ActionsStore['create'];
-  update: ActionsStore['update'];
-  remove: ActionsStore['remove'];
+  create: ReturnType<typeof useActionsStore>['create'];
+  update: ReturnType<typeof useActionsStore>['update'];
+  remove: ReturnType<typeof useActionsStore>['remove'];
 }
 
 interface ListenerConfig {
