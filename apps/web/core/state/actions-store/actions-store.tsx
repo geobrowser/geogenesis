@@ -85,8 +85,6 @@ const create = (triple: ITriple) => {
     type: 'createTriple',
   };
 
-  console.log('create', { action, attribute: triple.attributeName, value: triple.value });
-
   const allActions = store.get(actionsAtom);
   store.set(actionsAtom, [...allActions, action]);
 };
@@ -114,8 +112,6 @@ const update = (triple: ITriple, oldTriple: ITriple) => {
       type: 'createTriple',
     },
   };
-
-  console.log('update', { action, attribute: triple.attributeName, value: triple.value });
 
   const allActions = store.get(actionsAtom);
   store.set(actionsAtom, [...allActions, action]);
