@@ -6,7 +6,7 @@ import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { fetchEntity } from '~/core/io/subgraph';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
-import { Entity, Space } from '~/core/types';
+import { Space } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
 
 import { Card } from '~/design-system/card';
