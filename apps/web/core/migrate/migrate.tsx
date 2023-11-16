@@ -9,7 +9,7 @@ import { useMergedData } from '../hooks/use-merged-data';
 import { ID } from '../id';
 import { Merged } from '../merged';
 import { Services } from '../services';
-import { ActionsStore } from '../state/actions-store/actions-store';
+import { useActions } from '../state/actions-store/actions-store';
 import {
   Action,
   DeleteTripleAction,
@@ -46,9 +46,9 @@ export type MigrateAction =
 
 interface MigrateHubConfig {
   actionsApi: {
-    create: ActionsStore['create'];
-    update: ActionsStore['update'];
-    remove: ActionsStore['remove'];
+    create: ReturnType<typeof useActionsStore>['create'];
+    update: ReturnType<typeof useActionsStore>['update'];
+    remove: ReturnType<typeof useActionsStore>['remove'];
   };
   queryClient: QueryClient;
   merged: Merged;
