@@ -1,8 +1,7 @@
 import { A, G, pipe } from '@mobily/ts-belt';
 
 import { Subgraph } from '~/core/io';
-import { ActionsStore } from '~/core/state/actions-store/actions-store';
-import { LocalStore, useLocalStore } from '~/core/state/local-store';
+import { useLocalStore } from '~/core/state/local-store';
 import { Column, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
