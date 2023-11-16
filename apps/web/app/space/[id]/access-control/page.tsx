@@ -13,8 +13,6 @@ import { Publish } from '~/core/io';
 
 type RoleType = 'EDITOR_ROLE' | 'ADMIN_ROLE' | 'EDITOR_CONTROLLER_ROLE';
 
-export const runtime = 'edge';
-
 export default function AccessControl() {
   const store = useSpaces();
   const params = useParams();

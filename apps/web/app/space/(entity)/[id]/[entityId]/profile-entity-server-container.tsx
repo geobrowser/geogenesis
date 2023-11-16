@@ -11,8 +11,6 @@ import {
 
 import { ProfilePageComponent } from './profile-entity-page';
 
-export const runtime = 'edge';
-
 interface Props {
   params: { id: string; entityId: string };
 }
