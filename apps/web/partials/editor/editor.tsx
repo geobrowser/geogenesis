@@ -135,7 +135,7 @@ export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, place
     // in a janky UX. We let the editor handle block ordering state while each block handles it's
     // own state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  }, [hydrated, editorJson]);
 
   // We are in edit mode and there is no content.
   if (!editable && blockIds.length === 0) return <span>{placeholder}</span>;
