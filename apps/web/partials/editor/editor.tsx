@@ -11,7 +11,6 @@ import StarterKit from '@tiptap/starter-kit';
 
 import * as React from 'react';
 
-import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -76,20 +75,18 @@ export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, place
   const { spaceId } = useEntityPageStore();
   const { editorJson, blockIds, updateEditorBlocks } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
+  const [hasUpdatedEditorJson, setHasUpdatedEditorJson] = React.useState(false);
 
   const extensions = React.useMemo(() => [...tiptapExtensions, createIdExtension(spaceId)], [spaceId]);
 
-  const editor = useEditor(
-    {
-      extensions,
-      editable: true,
-      content: editorJson,
-      editorProps: {
-        transformPastedHTML: html => removeIdAttributes(html),
-      },
+  const editor = useEditor({
+    extensions,
+    editable: true,
+    content: editorJson,
+    editorProps: {
+      transformPastedHTML: html => removeIdAttributes(html),
     },
-    []
-  );
+  });
 
   // Running onBlur directly through the hook executes it twice for some reason.
   // Doing it imperatively here correctly only executes once.
@@ -98,6 +95,7 @@ export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, place
       // Responsible for converting all editor blocks to triples
       // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
       updateEditorBlocks(params.editor);
+      setHasUpdatedEditorJson(true);
     }
 
     // Tiptap doesn't export the needed type APIs for us to be able to make this typesafe
@@ -109,24 +107,23 @@ export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, place
     };
   }, [editor, updateEditorBlocks]);
 
-  // @HACK: Janky but works for now.
-  //
-  // We only want to render the editor once the editorJson has been hydrated with local data.
-  // We shouldn't re-render the editor every time the editorJson changes as that would result
-  // in a janky UX. We let the editor handle block ordering state while each block handles it's
-  // own state.
-  //
-  // We do content hydration here instead of in useEditor as re-running useEditor will result
-  // in completely remounting the entire editor. This will cause all tables to re-fetch data
-  // and might result in some runtime DOM errors if the update happens out-of-sync with React.
-  const hydrated = useHydrated();
-
   React.useEffect(() => {
-    // The timeout is needed to workaround a react error in tiptap
-    // https://github.com/ueberdosis/tiptap/issues/3764#issuecomment-1546629928
-    setTimeout(() => {
-      editor?.commands.setContent(editorJson);
-    });
+    // We only update the editor with editorJson up until the first time we have made local edits.
+    // We don't want to re-render the editor every time content has changed.
+    //
+    // This is so we ensure we have the most up-to-date content from the local store when first
+    // mounting the editor, but after that we don't re-render the editor at all since state
+    // is already correctly represented internally by tiptap.
+    //
+    // Normally this isn't a problem in Tiptap, but since we have custom react block nodes we
+    // need to more granularly control when we re-render the editor to avoid janky re-rendering UX.
+    if (!hasUpdatedEditorJson) {
+      // The timeout is needed to workaround a react error in tiptap
+      // https://github.com/ueberdosis/tiptap/issues/3764#issuecomment-1546629928
+      setTimeout(() => {
+        editor?.commands.setContent(editorJson);
+      });
+    }
 
     // Commands is not memoized correctly by tiptap, so we need to disable the rule, else the
     // effect will run infinitely.
@@ -135,7 +132,7 @@ export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, place
     // in a janky UX. We let the editor handle block ordering state while each block handles it's
     // own state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, editorJson]);
+  }, [editorJson, hasUpdatedEditorJson]);
 
   // We are in edit mode and there is no content.
   if (!editable && blockIds.length === 0) return <span>{placeholder}</span>;
