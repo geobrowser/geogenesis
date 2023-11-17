@@ -17,7 +17,6 @@
     "@geogenesis/action-schema": "workspace:*",
     "@geogenesis/contracts": "workspace:*",
     "@geogenesis/ids": "workspace:*",
-    "@legendapp/state": "^1.11.3",
     "@liveblocks/client": "^1.0.0",
     "@liveblocks/react": "^1.0.0",
     "@mailchimp/mailchimp_marketing": "^3.0.80",

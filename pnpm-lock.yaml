@@ -22,7 +22,6 @@ importers:
       '@geogenesis/action-schema': workspace:*
       '@geogenesis/contracts': workspace:*
       '@geogenesis/ids': workspace:*
-      '@legendapp/state': ^1.11.3
       '@liveblocks/client': ^1.0.0
       '@liveblocks/react': ^1.0.0
       '@mailchimp/mailchimp_marketing': ^3.0.80
@@ -131,7 +130,6 @@ importers:
       '@geogenesis/action-schema': link:../../packages/action-schema
       '@geogenesis/contracts': link:../../packages/contracts
       '@geogenesis/ids': link:../../packages/ids
-      '@legendapp/state': 1.11.3_react@18.2.0
       '@liveblocks/client': 1.0.0
       '@liveblocks/react': 1.0.0_react@18.2.0
       '@mailchimp/mailchimp_marketing': 3.0.80
@@ -2142,14 +2140,6 @@ packages:
 
   /@ledgerhq/connect-kit-loader/1.1.0:
     resolution: {integrity: sha512-HUy12FEczoWY2FPubnsm1uOA8tkVWc0j90i47suThV3C9NL2xx69ZAIEU3Ytzs2bwLek9S1Q2S1VQJvA+3Ygkg==}
-    dev: false
-
-  /@legendapp/state/1.11.3_react@18.2.0:
-    resolution: {integrity: sha512-PxhugsvKbsG6gEgG+yCtO8rOrnu9uQrwmXal+P3rIAw1XYukpbxhfmwigVnyJkrbwg/49/tHQtSjLJbS4oN2Qg==}
-    dependencies:
-      use-sync-external-store: 1.2.0_react@18.2.0
-    transitivePeerDependencies:
-      - react
     dev: false
 
   /@lit-labs/ssr-dom-shim/1.1.1:
