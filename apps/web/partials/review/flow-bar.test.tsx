@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import React from 'react';
 
-import { options } from '~/core/environment/environment';
 import { MockNetworkData, Storage } from '~/core/io';
 import { Providers } from '~/core/providers';
 import { actionsAtom } from '~/core/state/actions-store/actions-store';

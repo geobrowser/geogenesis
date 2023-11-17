@@ -1,4 +1,3 @@
-import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { Action, CreateTripleAction, EditTripleAction, StringValue, Triple } from '~/core/types';
@@ -42,16 +41,12 @@ describe('MergeDataSource merges local triples with network triples', () => {
   it('merges local and network triples', async () => {
     const stubTriple = makeStubTriple('Alice');
 
-    const localStore = renderHook(() => useLocalStore());
-
     const changedLocalTriple: CreateTripleAction = {
       ...stubTriple,
       type: 'createTriple',
       entityName: 'Bob',
       value: { ...stubTriple.value, value: 'Bob' } as StringValue,
     };
-
-    localStore.rerender();
 
     const newAction: EditTripleAction = {
       id: ID.createEntityId(),
