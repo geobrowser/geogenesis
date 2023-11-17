@@ -247,7 +247,7 @@ function StepStart({ onNext }: StepStartProps) {
       <div className="absolute inset-x-4 bottom-4 space-y-4">
         <div className="aspect-video">
           <div className="-m-[16px] ">
-            <img src="/images/onboarding/0.png" alt="" className="inline-block h-full w-full" />
+            <img src="/images/onboarding/0.jpg" alt="" className="inline-block h-full w-full" />
           </div>
         </div>
         <p className="text-center text-footnoteMedium">
@@ -430,12 +430,12 @@ function StepComplete({ workflowStep: stage, onRetry, showRetry }: StepCompleteP
 }
 
 const complete: Record<number, { label: string; image: string }> = {
-  1: { label: `Setting up your profile and personal space`, image: `/images/onboarding/1.png` },
-  2: { label: `Sign the transaction from your wallet`, image: `/images/onboarding/2.png` },
-  3: { label: `Finalizing account creation`, image: `/images/onboarding/1.png` },
+  1: { label: `Setting up your profile and personal space`, image: `/images/onboarding/1.jpg` },
+  2: { label: `Sign the transaction from your wallet`, image: `/images/onboarding/2.jpg` },
+  3: { label: `Finalizing account creation`, image: `/images/onboarding/1.jpg` },
   4: {
     label: `Browse content, vote on what matters, join spaces and contribute to spaces that interest you as an editor`,
-    image: `/images/onboarding/3.png`,
+    image: `/images/onboarding/3.jpg`,
   },
 };
 
