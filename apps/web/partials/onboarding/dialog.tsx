@@ -38,6 +38,8 @@ const personalSpaceAtom = atomWithStorage<string>('onboardingPersonalSpaceAddres
 const personalProfileAtom = atomWithStorage<string>('onboardingPersonalProfileId', '');
 
 export const OnboardingDialog = () => {
+  const [showRetry, setShowRetry] = useState(false);
+
   const queryClient = useQueryClient();
   const { publish } = Services.useServices();
   const { address } = useAccount();
@@ -45,7 +47,6 @@ export const OnboardingDialog = () => {
 
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
-  const [showRetry, setShowRetry] = useState(false);
 
   const [step, setStep] = useAtom(stepAtom);
   const [workflowStep, setWorkflowStep] = useAtom(workflowAtom);
@@ -244,8 +245,10 @@ function StepStart({ onNext }: StepStartProps) {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="aspect-video rounded-lg bg-grey-02 shadow-lg">
-          <img src="/images/onboarding/0.png" alt="" className="h-full w-full" />
+        <div className="aspect-video">
+          <div className="-m-[16px] ">
+            <img src="/images/onboarding/0.png" alt="" className="inline-block h-full w-full" />
+          </div>
         </div>
         <p className="text-center text-footnoteMedium">
           Creating an account requires a small amount of{' '}
@@ -398,8 +401,8 @@ function StepComplete({ workflowStep: stage, onRetry, showRetry }: StepCompleteP
               <Progress stage={stageAsNumber[stage]} />
             </div>
           )}
-          {showRetry && (
-            <p className="text-center text-footnoteMedium">
+          {stage !== 'done' && showRetry && (
+            <p className="text-center text-smallButton">
               Your transaction failed{' '}
               <button onClick={onRetry} className="text-ctaPrimary">
                 Retry
@@ -409,8 +412,10 @@ function StepComplete({ workflowStep: stage, onRetry, showRetry }: StepCompleteP
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="aspect-video rounded-lg bg-grey-02 shadow-lg">
-          <img src={complete[stageAsNumber[stage]].image} alt="" className="h-full w-full" />
+        <div className="aspect-video">
+          <div className="-m-[16px] ">
+            <img src={complete[stageAsNumber[stage]].image} alt="" className="inline-block h-full w-full" />
+          </div>
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Link href={`/space/${spaceAddress}`} className="w-full" onClick={hideOnboarding}>
@@ -427,7 +432,7 @@ function StepComplete({ workflowStep: stage, onRetry, showRetry }: StepCompleteP
 const complete: Record<number, { label: string; image: string }> = {
   1: { label: `Setting up your profile and personal space`, image: `/images/onboarding/1.png` },
   2: { label: `Sign the transaction from your wallet`, image: `/images/onboarding/2.png` },
-  3: { label: `Finalizing account creation`, image: `/images/onboarding/3.png` },
+  3: { label: `Finalizing account creation`, image: `/images/onboarding/1.png` },
   4: {
     label: `Browse content, vote on what matters, join spaces and contribute to spaces that interest you as an editor`,
     image: `/images/onboarding/3.png`,
