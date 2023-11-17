@@ -27,6 +27,7 @@ export function useTableBlock() {
   const { entityId, selectedType, spaceId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
   const { subgraph, config } = Services.useServices();
+
   const merged = useMergedData();
   const { allActions, create, update } = useActionsStore();
 
@@ -103,7 +104,7 @@ export function useTableBlock() {
   }, [filterTriple, selectedType.entityId]);
 
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
-    queryKey: ['table-block-filter-value', filterString],
+    queryKey: ['table-block-filter-value', filterString, config.subgraph],
     queryFn: async () => {
       const filterState = TableBlockSdk.createFiltersFromGraphQLString(
         filterString,
@@ -116,8 +117,10 @@ export function useTableBlock() {
 
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
     // @TODO: ShownColumns changes should trigger a refetch
-    queryKey: ['table-block-columns', filterString, selectedType.entityId, entityId],
+    queryKey: ['table-block-columns', filterState, selectedType.entityId, entityId, config.subgraph],
     queryFn: async ({ signal }) => {
+      const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState ?? [], selectedType.entityId);
+
       const params: FetchRowsOptions['params'] = {
         endpoint: config.subgraph,
         query: '',
@@ -149,9 +152,11 @@ export function useTableBlock() {
   });
 
   const { data: rows, isLoading: isLoadingRows } = useQuery({
-    queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterString],
+    queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterState, config.subgraph],
     queryFn: async ({ signal }) => {
       if (!columns) return [];
+
+      const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState ?? [], selectedType.entityId);
 
       const params: FetchRowsOptions['params'] = {
         endpoint: config.subgraph,
