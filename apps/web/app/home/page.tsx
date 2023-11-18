@@ -1,3 +1,4 @@
+import { Effect, Either } from 'effect';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
 
@@ -5,6 +6,7 @@ import { Cookie } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { fetchOnchainProfile, fetchProfile } from '~/core/io/subgraph';
 import { fetchInterimMembershipRequests } from '~/core/io/subgraph/fetch-interim-membership-requests';
+import { graphql } from '~/core/io/subgraph/graphql';
 import { OnchainProfile, Profile, Space } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -77,34 +79,32 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
 const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
   if (!address) return [];
 
-  try {
-    const query = `{
-      spaces(where: {admins_: {id: "${address}"}}) {
+  const query = `{
+      spaces(where: {or: [{admins_: {id: "${address}"}}, {editorControllers_: {id: "${address}"}}]}) {
         id
       }
     }`;
 
-    const response = await fetch(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: query,
-      }),
-      cache: 'no-store',
-    });
+  const spacesEffect = graphql<{ spaces: { id: string }[] }>({
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph,
+    query,
+  });
 
-    const { data } = (await response.json()) as {
-      data: {
-        spaces: Space[];
-      };
-    };
+  const result = await Effect.runPromise(Effect.either(spacesEffect));
 
-    const spaces = data.spaces.map(space => space.id);
+  if (Either.isLeft(result)) {
+    const error = result.left;
 
-    return spaces;
-  } catch (error) {
-    return [];
+    switch (error._tag) {
+      case 'GraphqlRuntimeError':
+        console.error(`Encountered runtime graphql error in getSpacesWhereAdmin.`, error.message);
+        return [];
+
+      default:
+        console.error(`${error._tag}: Unable to fetch spaces where admin`);
+        return [];
+    }
   }
+
+  return result.right.spaces.map(space => space.id);
 };

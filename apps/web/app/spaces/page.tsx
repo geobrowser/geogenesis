@@ -1,10 +1,12 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
+
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { fetchEntity } from '~/core/io/subgraph';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
-import { Entity, Space } from '~/core/types';
+import { Space } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
 
 import { Card } from '~/design-system/card';
@@ -77,19 +79,25 @@ export default async function Spaces() {
     (s): s is Space & { spaceConfigEntityId: string } => s.spaceConfigEntityId !== null
   );
 
-  const spaceConfigToSpaceMap = new Map<string, string>();
+  const spaceConfigs = await Promise.all(
+    spacesWithSpaceConfigs.map(async space => {
+      const entity = await fetchEntity({ endpoint: config.subgraph, id: space.spaceConfigEntityId });
 
-  for (const space of spacesWithSpaceConfigs) {
-    if (space.spaceConfigEntityId) {
-      spaceConfigToSpaceMap.set(space.spaceConfigEntityId, space.id);
-    }
-  }
+      if (!entity) {
+        return {
+          id: space.id,
+          name: space.attributes[SYSTEM_IDS.NAME] ?? null,
+          image: space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null,
+        };
+      }
 
-  const spaceConfigs = (
-    await Promise.all(
-      spacesWithSpaceConfigs.map(space => fetchEntity({ endpoint: config.subgraph, id: space.spaceConfigEntityId }))
-    )
-  ).filter((c): c is Entity => c !== null);
+      return {
+        id: space.id,
+        name: EntityModule.name(entity.triples) ?? null,
+        image: EntityModule.cover(entity.triples) ?? null,
+      };
+    })
+  );
 
   return (
     <div className="flex flex-col">
@@ -97,12 +105,7 @@ export default async function Spaces() {
       <Spacer height={40} />
       <div className="grid grid-cols-3 gap-8 xl:items-center lg:grid-cols-2 sm:grid-cols-1">
         {spaceConfigs.map(config => (
-          <Card
-            key={config.id}
-            spaceId={spaceConfigToSpaceMap.get(config.id) ?? ''}
-            name={config.name ?? undefined}
-            image={EntityModule.cover(config.triples) ?? undefined}
-          />
+          <Card key={config.id} spaceId={config.id} name={config.name ?? undefined} image={config.image ?? undefined} />
         ))}
       </div>
       <Spacer height={100} />
