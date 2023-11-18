@@ -17,7 +17,7 @@ import { useAccount, useWalletClient } from 'wagmi';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
-import { getGeoPersonIdFromOnchainId, getImagePath } from '~/core/utils/utils';
+import { getGeoPersonIdFromOnchainId, getImagePath, sleep } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -30,12 +30,12 @@ import { Text } from '~/design-system/text';
 type Step = 'start' | 'onboarding' | 'completing' | 'completed';
 type PublishingStep = 'idle' | 'creating-spaces' | 'registering-profile' | 'creating-geo-profile-entity' | 'done';
 
-const nameAtom = atomWithStorage<string>('onboardingName', '');
-const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
-const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
-const workflowAtom = atomWithStorage<PublishingStep>('onboardingWorkflow', 'idle');
-const personalSpaceAtom = atomWithStorage<string>('onboardingPersonalSpaceAddress', '');
-const personalProfileAtom = atomWithStorage<string>('onboardingPersonalProfileId', '');
+export const nameAtom = atomWithStorage<string>('onboardingName', '');
+export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
+export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
+export const workflowAtom = atomWithStorage<PublishingStep>('onboardingWorkflow', 'idle');
+export const personalSpaceAtom = atomWithStorage<string>('onboardingPersonalSpaceAddress', '');
+export const personalProfileAtom = atomWithStorage<string>('onboardingPersonalProfileId', '');
 
 export const OnboardingDialog = () => {
   const [showRetry, setShowRetry] = useState(false);
@@ -120,6 +120,8 @@ export const OnboardingDialog = () => {
         });
 
         console.log('Profile and personal space created:', { profileEntityId, spaceAddress });
+
+        await sleep(3_000);
 
         setWorkflowStep('done');
         setStep('completed');

@@ -1,6 +1,7 @@
 'use client';
 
 import { ConnectKitButton, ConnectKitProvider, getDefaultConfig } from 'connectkit';
+import { useSetAtom } from 'jotai';
 import { createPublicClient, createWalletClient, http } from 'viem';
 
 import * as React from 'react';
@@ -19,6 +20,15 @@ import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { Wallet } from '~/design-system/icons/wallet';
 import { Spacer } from '~/design-system/spacer';
+
+import {
+  avatarAtom,
+  nameAtom,
+  personalProfileAtom,
+  personalSpaceAtom,
+  stepAtom,
+  workflowAtom,
+} from '~/partials/onboarding/dialog';
 
 import { Environment } from '../environment';
 
@@ -206,6 +216,22 @@ export function GeoConnectButton() {
   const { disconnect } = useDisconnect();
   const { connect } = useConnect();
 
+  const setName = useSetAtom(nameAtom);
+  const setAvatar = useSetAtom(avatarAtom);
+  const setStep = useSetAtom(stepAtom);
+  const setWorkflowStep = useSetAtom(workflowAtom);
+  const setPersonalSpaceAddress = useSetAtom(personalSpaceAtom);
+  const setProfileId = useSetAtom(personalProfileAtom);
+
+  const resetOnboarding = () => {
+    setName('');
+    setAvatar('');
+    setStep('start');
+    setWorkflowStep('idle');
+    setPersonalSpaceAddress('');
+    setProfileId('');
+  };
+
   return (
     <ConnectKitButton.Custom>
       {({ show, isConnected }) => {
@@ -216,13 +242,15 @@ export function GeoConnectButton() {
                 isTestEnv
                   ? () => {
                       console.log('Test environment detected: using mock wallet');
-
                       connect({
                         connector: mockConnector,
                         chainId: polygon.id,
                       });
                     }
-                  : show
+                  : () => {
+                      resetOnboarding();
+                      show?.();
+                    }
               }
               variant="secondary"
             >
@@ -235,7 +263,10 @@ export function GeoConnectButton() {
         return (
           // We're using an anonymous function for disconnect to appease the TS gods.
           <button
-            onClick={() => disconnect()}
+            onClick={() => {
+              resetOnboarding();
+              disconnect();
+            }}
             className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0"
           >
             <DisconnectWallet />
