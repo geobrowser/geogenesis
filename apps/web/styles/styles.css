@@ -92,3 +92,13 @@ textarea::placeholder {
 .ProseMirror img {
   @apply h-auto max-w-full;
 }
+
+/* Hide scrollbar utility class */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

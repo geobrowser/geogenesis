@@ -66,7 +66,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
           <Image
             objectFit="cover"
             layout="fill"
-            src={getImagePath(spaceImage ?? '') || 'https://via.placeholder.com/600x600/FF00FF/FFFFFF'}
+            src={getImagePath(spaceImage ?? '') || '/placeholder.png'}
             alt={`Cover image for ${spaceName}`}
           />
         </div>
