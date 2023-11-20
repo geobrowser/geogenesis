@@ -404,7 +404,7 @@ function StepComplete({ workflowStep: stage, onRetry, showRetry }: StepCompleteP
             </div>
           )}
           {stage !== 'done' && showRetry && (
-            <p className="text-center text-smallButton">
+            <p className=" mt-4 text-center text-smallButton">
               Your transaction failed{' '}
               <button onClick={onRetry} className="text-ctaPrimary">
                 Retry
