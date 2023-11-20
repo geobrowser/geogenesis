@@ -16,7 +16,7 @@ import { Action } from '~/core/utils/action';
 import { Triple } from '~/core/utils/triple';
 
 import { store } from '../jotai-provider';
-import { db, legacyDb } from './indexeddb';
+import { db } from './indexeddb';
 
 const atomWithAsyncStorage = (initialValue: ActionType[] = []) => {
   const baseAtom = atom<ActionType[]>(initialValue);
@@ -24,23 +24,6 @@ const atomWithAsyncStorage = (initialValue: ActionType[] = []) => {
   baseAtom.onMount = setValue => {
     (async () => {
       const storedActions = await db.actions.toArray();
-      const legacyStoredActions = await legacyDb.actionsStore.toArray();
-
-      if (legacyStoredActions.length > 0) {
-        const actions: ActionType[] = [];
-
-        for (let legacyActions of legacyStoredActions) {
-          const allSpaceActions = Object.values(legacyActions).flatMap(action => action);
-
-          for (let action of allSpaceActions) {
-            actions.push(action);
-          }
-        }
-
-        await legacyDb.actionsStore.clear();
-        setValue(actions);
-        return;
-      }
 
       setValue(storedActions);
     })();
