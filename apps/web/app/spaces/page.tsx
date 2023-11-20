@@ -105,13 +105,6 @@ export default async function Spaces() {
           <Card key={config.id} spaceId={config.id} name={config.name ?? undefined} image={config.image ?? undefined} />
         ))}
       </div>
-      <Spacer height={100} />
-      <div className="max-w-[830px] self-center text-center">
-        <h2 className="text-largeTitle">
-          Together we can change how society is organized, put power into the hands of those who’ve earned it, and
-          distribute resources and opportunity far and wide.
-        </h2>
-      </div>
     </div>
   );
 }
