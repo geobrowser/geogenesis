@@ -1,5 +1,3 @@
-import { configureObservablePersistence, persistObservable } from '@legendapp/state/persist';
-import { ObservablePersistIndexedDB } from '@legendapp/state/persist-plugins/indexeddb';
 import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
@@ -10,38 +8,40 @@ import {
   CreateTripleAction,
   DeleteTripleAction,
   EditTripleAction,
+  EntityActions,
   Triple as ITriple,
+  SpaceActions,
 } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Triple } from '~/core/utils/triple';
 
 import { store } from '../jotai-provider';
-import { Geo } from './indexeddb';
-
-configureObservablePersistence({
-  persistLocal: ObservablePersistIndexedDB,
-  persistLocalOptions: {
-    indexedDB: {
-      databaseName: 'Legend',
-      version: 1,
-      tableNames: ['actionsStore'],
-    },
-  },
-});
-
-export type SpaceId = string;
-export type SpaceActions = Record<SpaceId, ActionType[]>;
-
-export type EntityId = string;
-export type AttributeId = string;
-export type EntityActions = Record<EntityId, Record<AttributeId, ITriple>>;
+import { db, legacyDb } from './indexeddb';
 
 const atomWithAsyncStorage = (initialValue: ActionType[] = []) => {
   const baseAtom = atom<ActionType[]>(initialValue);
 
   baseAtom.onMount = setValue => {
     (async () => {
-      const storedActions = await new Geo().actions.toArray();
+      const storedActions = await db.actions.toArray();
+      const legacyStoredActions = await legacyDb.actionsStore.toArray();
+
+      if (legacyStoredActions.length > 0) {
+        const actions: ActionType[] = [];
+
+        for (let legacyActions of legacyStoredActions) {
+          const allSpaceActions = Object.values(legacyActions).flatMap(action => action);
+
+          for (let action of allSpaceActions) {
+            actions.push(action);
+          }
+        }
+
+        await legacyDb.actionsStore.clear();
+        setValue(actions);
+        return;
+      }
+
       setValue(storedActions);
     })();
   };

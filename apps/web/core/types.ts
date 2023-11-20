@@ -213,3 +213,10 @@ export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & { value: Entit
 export type TripleWithImageValue = OmitStrict<Triple, 'value'> & { value: ImageValue };
 export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: DateValue };
 export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: UrlValue };
+
+export type SpaceId = string;
+export type SpaceActions = Record<SpaceId, Action[]>;
+
+export type EntityId = string;
+export type AttributeId = string;
+export type EntityActions = Record<EntityId, Record<AttributeId, Triple>>;
