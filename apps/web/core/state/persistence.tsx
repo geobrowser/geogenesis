@@ -21,6 +21,8 @@ export const Persistence = () => {
       // https://dexie.org/docs/Tutorial/Best-Practices#5-use-transaction-scopes-whenever-you-plan-to-make-more-than-one-operation
       db.transaction('rw', db.actions, () => {
         db.actions.clear();
+        // Dexie docs recommend returning the last promise used in a transaction.
+        // We don't need to await the promises in a transaction, either.
         return db.actions.bulkPut(Action.prepareActionsForPublishing(newActions));
       });
     });
