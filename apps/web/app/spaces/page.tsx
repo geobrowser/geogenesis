@@ -12,9 +12,6 @@ import { Entity as EntityModule } from '~/core/utils/entity';
 import { Card } from '~/design-system/card';
 import { Spacer } from '~/design-system/spacer';
 
-import { OboardingCarousel } from '~/partials/spaces-page/carousel';
-import { Email } from '~/partials/spaces-page/email';
-
 export const metadata: Metadata = {
   title: 'Geo Genesis',
   themeColor: '#FBFBFB',
@@ -115,10 +112,6 @@ export default async function Spaces() {
           distribute resources and opportunity far and wide.
         </h2>
       </div>
-      <Spacer height={40} />
-      <OboardingCarousel />
-      <Spacer height={100} />
-      <Email />
     </div>
   );
 }
