@@ -65,7 +65,7 @@ export function useTableBlock() {
   // the data fetching.
   const { data: blockEntity, isLoading } = useQuery({
     // Refetch the entity if there have been local changes
-    queryKey: ['table-block-entity', entityId, actionsForEntityIdWithoutName],
+    queryKey: ['table-block-entity', entityId, actionsForEntityIdWithoutName, config.subgraph],
     queryFn: ({ signal }) => merged.fetchEntity({ id: entityId, endpoint: config.subgraph, signal }),
   });
 
