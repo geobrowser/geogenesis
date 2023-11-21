@@ -146,8 +146,8 @@ export async function makeNonprofitEffect(
         space: spaceAddress,
         value: {
           type: 'entity',
-          name: 'Nonprofit',
-          id: SYSTEM_IDS.PERSON_TYPE, // NONPROFIT_TYPE
+          name: 'Nonprofit Organization',
+          id: SYSTEM_IDS.NONPROFIT_TYPE, // NONPROFIT_TYPE
         },
       };
 
