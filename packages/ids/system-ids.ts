@@ -45,11 +45,35 @@ export const RELATION_VALUE_RELATIONSHIP_TYPE =
 /* Note that this is a temporary workaround for production MVP release. As such, this system ID isn't included in the bootstrap process.*/
 export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'
 
-// @TODO: Right now this Person is in the People space, but eventually it should be in the Root space
 export const PERSON_TYPE = 'af7ae93b-97d6-4aed-ad69-0c1d3da149a1'
 export const NONPROFIT_TYPE = 'b3b03c90-9b6d-487c-b2e2-a7d685f120eb'
 export const PROJECT_TYPE = 'cb9d261d-456b-4eaf-87e5-1e9faa441867'
+export const REGION_TYPE = '911a8e0a-52f2-4655-a0c6-d89cd161bb12'
+export const NONPROFIT_SERVICE_TYPE = '2edf4225-7937-41ba-b205-6ac91ab4aab4'
+export const TAG_TYPE = '3d31f766-b651-48af-a357-271343a773de'
+export const TOPIC_TYPE = '1d7f027e-415c-4f69-800e-460fde65feb9'
+export const GOAL_TYPE = 'f7191246-3dca-4e77-8a79-d9cdc9804127'
+export const CLAIM_TYPE = 'fa8e8e54-f742-4c00-b73c-05adee2b4545'
 
+export const SPEAKERS_ATTRIBUTE = '03597522-e1f2-423b-882d-330cfe89331d'
+export const RELEVANT_QUESTIONS_ATTRIBUTE =
+  'ee5648a5-d638-4780-9796-cd8605517545'
+export const SUPPORTING_ARGUMENTS_ATTRIBUTE =
+  'cd598fe8-8dc5-40fb-afc7-27d363aa2b31'
+export const BROADER_CLAIMS_ATTRIBUTE = '8db09ed2-1a66-408e-ab8d-8e8f931a09cf'
+export const SOURCES_ATTRIBUTE = '5b4e9b74-55f4-4e57-b0b3-58da71188191'
+export const QUOTES_ATTRIBUTE = '4ca754c9-a01a-4ef2-a5d6-597c58764529'
+export const SUBCLAIMS_ATTRIBUTE = '21d9fa3c-fecf-42bc-8f8e-9fcc6ae2b0cd'
+export const OPPOSING_ARGUMENTS_ATTRIBUTE =
+  '0c0a2a95-1928-4ec4-876d-cc04075b7927'
+export const BROADER_TOPICS_ATTRIBUTE = '9c2ef131-3a15-47e9-ac5d-0fce07e792a1'
+export const DEFINITIONS_ATTRIBUTE = '37ae1d79-b26e-4bf5-88cb-69087a992dc9'
+export const RELATED_TOPICS_ATTRIBUTE = '0db47aca-1ccf-4c9f-beb6-89519ebe9eed'
+export const SUBTOPICS_ATTRIBUTE = '21be6a84-3125-44a2-bb2e-3c23928ce4aa'
+export const TAGS_ATTRIBUTE = '90dcfc33-0cdb-4252-a7c3-f653d4f54e26'
+export const CLAIMS_FROM_ATTRIBUTE = '7fa816a3-cb70-4534-9348-88449869dc33'
+export const SUBGOALS_ATTRIBUTE = '377ac7e8-18ab-443c-bc26-29ff04745f99'
+export const BROADER_GOALS_ATTRIBUTE = '2bd0960f-5af9-4b0c-8939-20e9edf31ede'
 export const PERSON_ATTRIBUTE = '626e4ad5-61c3-49ae-af5e-3c80e53cf890'
 export const TOPICS_ATTRIBUTE = '5742a703-8b73-4eb6-b3df-4378c1b512c6'
 export const REGION_ATTRIBUTE = '5e4911b8-2093-411e-a445-bc2124d7f8e3'
