@@ -137,8 +137,8 @@ export async function makeNonprofitEffect(
         });
       }
 
-      // Add Types: Person to the profile entity
-      const typeTriple: OmitStrict<Triple, 'id'> = {
+      // Add Types: Nonprofit Organization and Project to the profile entity
+      const nonprofitTypeTriple: OmitStrict<Triple, 'id'> = {
         attributeId: SYSTEM_IDS.TYPES,
         attributeName: 'Types',
         entityId: profileId,
@@ -147,14 +147,33 @@ export async function makeNonprofitEffect(
         value: {
           type: 'entity',
           name: 'Nonprofit Organization',
-          id: SYSTEM_IDS.NONPROFIT_TYPE, // NONPROFIT_TYPE
+          id: SYSTEM_IDS.NONPROFIT_TYPE,
+        },
+      };
+
+      const projectTypeTriple: OmitStrict<Triple, 'id'> = {
+        attributeId: SYSTEM_IDS.TYPES,
+        attributeName: 'Types',
+        entityId: profileId,
+        entityName: username ?? '',
+        space: spaceAddress,
+        value: {
+          type: 'entity',
+          name: 'Project',
+          id: SYSTEM_IDS.PROJECT_TYPE,
         },
       };
 
       actions.push({
         type: 'createTriple',
-        id: ID.createTripleId(typeTriple),
-        ...typeTriple,
+        id: ID.createTripleId(nonprofitTypeTriple),
+        ...nonprofitTypeTriple,
+      });
+
+      actions.push({
+        type: 'createTriple',
+        id: ID.createTripleId(projectTypeTriple),
+        ...projectTypeTriple,
       });
 
       // Add triples for creating a space configuration entity
