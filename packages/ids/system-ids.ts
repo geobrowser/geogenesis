@@ -45,15 +45,24 @@ export const RELATION_VALUE_RELATIONSHIP_TYPE =
 /* Note that this is a temporary workaround for production MVP release. As such, this system ID isn't included in the bootstrap process.*/
 export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'
 
-export const PERSON_ATTRIBUTE = '626e4ad5-61c3-49ae-af5e-3c80e53cf890'
-
 // @TODO: Right now this Person is in the People space, but eventually it should be in the Root space
 export const PERSON_TYPE = 'af7ae93b-97d6-4aed-ad69-0c1d3da149a1'
-
 export const NONPROFIT_TYPE = 'b3b03c90-9b6d-487c-b2e2-a7d685f120eb'
+export const PROJECT_TYPE = 'cb9d261d-456b-4eaf-87e5-1e9faa441867'
 
+export const PERSON_ATTRIBUTE = '626e4ad5-61c3-49ae-af5e-3c80e53cf890'
+export const TOPICS_ATTRIBUTE = '5742a703-8b73-4eb6-b3df-4378c1b512c6'
+export const REGION_ATTRIBUTE = '5e4911b8-2093-411e-a445-bc2124d7f8e3'
+export const EMAIL_ATTRIBUTE = 'a89fcd10-81b3-43e4-8f77-0d9561a68acd'
+export const STREET_ADDRESS_ATTRIBUTE = 'c4b9a30a-92a9-4574-8f9b-31c41eb8bbd8'
+export const PHONE_NUMBER_ATTRIBUTE = 'cb361409-4695-4676-b62f-c2290613a430'
+export const NONPROFIT_ID_NUMBER_ATTRIBUTE =
+  'dcb87494-cb91-447b-9a04-625bd1acc804'
+export const GOALS_ATTRIBUTE = 'f9804f7c-0e2e-4658-a848-9aa65bbe411b'
+export const NONPROFIT_CATEGORIES_ATTRIBUTE =
+  'fca2a465-6426-40bb-8e7e-cf33742b5346'
+export const WEB_URL_ATTRIBUTE = 'e8010874-d330-4a4d-9907-62e89a19371a'
 export const AVATAR_ATTRIBUTE = '235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133'
-
 export const COVER_ATTRIBUTE = '34f53507-2e6b-42c5-a844-43981a77cfa2'
 
 /* Example Usage: SF_Config -> FOREIGN_TYPES -> Some_Entity */

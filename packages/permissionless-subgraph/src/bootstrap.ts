@@ -36,6 +36,16 @@ import {
   WEB_URL,
   WALLETS_ATTRIBUTE,
   NONPROFIT_TYPE,
+  PROJECT_TYPE,
+  TOPICS_ATTRIBUTE,
+  REGION_ATTRIBUTE,
+  EMAIL_ATTRIBUTE,
+  STREET_ADDRESS_ATTRIBUTE,
+  PHONE_NUMBER_ATTRIBUTE,
+  NONPROFIT_ID_NUMBER_ATTRIBUTE,
+  WEB_URL_ATTRIBUTE,
+  GOALS_ATTRIBUTE,
+  NONPROFIT_CATEGORIES_ATTRIBUTE,
 } from '@geogenesis/ids/system-ids'
 import { Address, BigInt, log } from '@graphprotocol/graph-ts'
 import {
@@ -74,6 +84,16 @@ const entities: string[] = [
   WEB_URL,
   PERSON_TYPE,
   NONPROFIT_TYPE,
+  PROJECT_TYPE,
+  TOPICS_ATTRIBUTE,
+  REGION_ATTRIBUTE,
+  EMAIL_ATTRIBUTE,
+  STREET_ADDRESS_ATTRIBUTE,
+  PHONE_NUMBER_ATTRIBUTE,
+  NONPROFIT_ID_NUMBER_ATTRIBUTE,
+  WEB_URL_ATTRIBUTE,
+  GOALS_ATTRIBUTE,
+  NONPROFIT_CATEGORIES_ATTRIBUTE,
 ]
 
 class Tuple<T, U> {
@@ -113,6 +133,46 @@ const names: Tuple<string, StringValue>[] = [
     _1: new StringValue(NONPROFIT_TYPE, 'Nonprofit Organization'),
   },
   {
+    _0: PROJECT_TYPE,
+    _1: new StringValue(PROJECT_TYPE, 'Project'),
+  },
+  {
+    _0: TOPICS_ATTRIBUTE,
+    _1: new StringValue(TOPICS_ATTRIBUTE, 'Topics'),
+  },
+  {
+    _0: REGION_ATTRIBUTE,
+    _1: new StringValue(REGION_ATTRIBUTE, 'Region'),
+  },
+  {
+    _0: EMAIL_ATTRIBUTE,
+    _1: new StringValue(EMAIL_ATTRIBUTE, 'Email'),
+  },
+  {
+    _0: STREET_ADDRESS_ATTRIBUTE,
+    _1: new StringValue(STREET_ADDRESS_ATTRIBUTE, 'Street address'),
+  },
+  {
+    _0: PHONE_NUMBER_ATTRIBUTE,
+    _1: new StringValue(PHONE_NUMBER_ATTRIBUTE, 'Phone number'),
+  },
+  {
+    _0: NONPROFIT_ID_NUMBER_ATTRIBUTE,
+    _1: new StringValue(NONPROFIT_ID_NUMBER_ATTRIBUTE, 'Nonprofit ID #'),
+  },
+  {
+    _0: WEB_URL_ATTRIBUTE,
+    _1: new StringValue(WEB_URL_ATTRIBUTE, 'Web URL'),
+  },
+  {
+    _0: GOALS_ATTRIBUTE,
+    _1: new StringValue(GOALS_ATTRIBUTE, 'Goals'),
+  },
+  {
+    _0: NONPROFIT_CATEGORIES_ATTRIBUTE,
+    _1: new StringValue(NONPROFIT_CATEGORIES_ATTRIBUTE, 'Nonprofit categories'),
+  },
+  {
     _0: MARKDOWN_CONTENT,
     _1: new StringValue(MARKDOWN_CONTENT, 'Markdown Content'),
   },
@@ -149,6 +209,15 @@ const attributes: Tuple<string, string>[] = [
   { _0: AVATAR_ATTRIBUTE, _1: IMAGE },
   { _0: COVER_ATTRIBUTE, _1: IMAGE },
   { _0: WALLETS_ATTRIBUTE, _1: RELATION },
+  { _0: TOPICS_ATTRIBUTE, _1: RELATION },
+  { _0: REGION_ATTRIBUTE, _1: RELATION },
+  { _0: EMAIL_ATTRIBUTE, _1: TEXT },
+  { _0: STREET_ADDRESS_ATTRIBUTE, _1: TEXT },
+  { _0: PHONE_NUMBER_ATTRIBUTE, _1: TEXT },
+  { _0: NONPROFIT_ID_NUMBER_ATTRIBUTE, _1: TEXT },
+  { _0: WEB_URL_ATTRIBUTE, _1: WEB_URL },
+  { _0: GOALS_ATTRIBUTE, _1: RELATION },
+  { _0: NONPROFIT_CATEGORIES_ATTRIBUTE, _1: RELATION },
 ]
 
 /* Multi-dimensional array of [TypeId, [Attributes]] */
@@ -165,7 +234,24 @@ const types: Tuple<string, string[]>[] = [
   { _0: TABLE_BLOCK, _1: [ROW_TYPE, PARENT_ENTITY] },
   { _0: TEXT_BLOCK, _1: [MARKDOWN_CONTENT, PARENT_ENTITY] },
   { _0: PERSON_TYPE, _1: [AVATAR_ATTRIBUTE, COVER_ATTRIBUTE] },
-  { _0: NONPROFIT_TYPE, _1: [AVATAR_ATTRIBUTE, COVER_ATTRIBUTE] },
+  {
+    _0: NONPROFIT_TYPE,
+    _1: [
+      TOPICS_ATTRIBUTE,
+      REGION_ATTRIBUTE,
+      EMAIL_ATTRIBUTE,
+      STREET_ADDRESS_ATTRIBUTE,
+      PHONE_NUMBER_ATTRIBUTE,
+      NONPROFIT_ID_NUMBER_ATTRIBUTE,
+      WEB_URL_ATTRIBUTE,
+      GOALS_ATTRIBUTE,
+      NONPROFIT_CATEGORIES_ATTRIBUTE,
+    ],
+  },
+  {
+    _0: PROJECT_TYPE,
+    _1: [AVATAR_ATTRIBUTE, COVER_ATTRIBUTE],
+  },
 ]
 
 export function bootstrapRootSpaceCoreTypes(
