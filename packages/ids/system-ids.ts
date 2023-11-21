@@ -50,6 +50,8 @@ export const PERSON_ATTRIBUTE = '626e4ad5-61c3-49ae-af5e-3c80e53cf890'
 // @TODO: Right now this Person is in the People space, but eventually it should be in the Root space
 export const PERSON_TYPE = 'af7ae93b-97d6-4aed-ad69-0c1d3da149a1'
 
+export const NONPROFIT_TYPE = 'b3b03c90-9b6d-487c-b2e2-a7d685f120eb'
+
 export const AVATAR_ATTRIBUTE = '235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133'
 
 export const COVER_ATTRIBUTE = '34f53507-2e6b-42c5-a844-43981a77cfa2'

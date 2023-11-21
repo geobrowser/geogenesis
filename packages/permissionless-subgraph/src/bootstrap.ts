@@ -35,6 +35,7 @@ import {
   DATE,
   WEB_URL,
   WALLETS_ATTRIBUTE,
+  NONPROFIT_TYPE,
 } from '@geogenesis/ids/system-ids'
 import { Address, BigInt, log } from '@graphprotocol/graph-ts'
 import {
@@ -72,6 +73,7 @@ const entities: string[] = [
   DATE,
   WEB_URL,
   PERSON_TYPE,
+  NONPROFIT_TYPE,
 ]
 
 class Tuple<T, U> {
@@ -106,6 +108,10 @@ const names: Tuple<string, StringValue>[] = [
   { _0: BLOCKS, _1: new StringValue(BLOCKS, 'Blocks') },
   { _0: PARENT_ENTITY, _1: new StringValue(PARENT_ENTITY, 'Parent Entity') },
   { _0: PERSON_TYPE, _1: new StringValue(PERSON_TYPE, 'Person') },
+  {
+    _0: NONPROFIT_TYPE,
+    _1: new StringValue(NONPROFIT_TYPE, 'Nonprofit Organization'),
+  },
   {
     _0: MARKDOWN_CONTENT,
     _1: new StringValue(MARKDOWN_CONTENT, 'Markdown Content'),
@@ -159,6 +165,7 @@ const types: Tuple<string, string[]>[] = [
   { _0: TABLE_BLOCK, _1: [ROW_TYPE, PARENT_ENTITY] },
   { _0: TEXT_BLOCK, _1: [MARKDOWN_CONTENT, PARENT_ENTITY] },
   { _0: PERSON_TYPE, _1: [AVATAR_ATTRIBUTE, COVER_ATTRIBUTE] },
+  { _0: NONPROFIT_TYPE, _1: [AVATAR_ATTRIBUTE, COVER_ATTRIBUTE] },
 ]
 
 export function bootstrapRootSpaceCoreTypes(
