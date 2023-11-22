@@ -6,7 +6,7 @@ import type { NextRequest } from 'next/server';
 // };
 
 const MARKETING_PAGE_URL = 'https://geo.framer.website/';
-const ENDING_HOMELESSNESS_PAGE_URL = 'https://geo.framer.website/Ending-Homelessness';
+const ENDING_HOMELESSNESS_PAGE_URL = 'https://geo.framer.website/ending-homelessness';
 const BLOG_URL = 'https://geo-blog.vercel.app';
 
 export function middleware(request: NextRequest) {
