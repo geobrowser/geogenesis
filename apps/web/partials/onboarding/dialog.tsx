@@ -34,12 +34,10 @@ export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 export const workflowAtom = atomWithStorage<PublishingStep>('onboardingWorkflow', 'idle');
-export const personalSpaceAtom = atomWithStorage<string>('onboardingPersonalSpaceAddress', '');
-export const personalProfileAtom = atomWithStorage<string>('onboardingPersonalProfileId', '');
+export const personalSpaceAtom = atomWithStorage<string>('onboardingSpaceAddress', '');
+export const personalProfileAtom = atomWithStorage<string>('onboardingProfileId', '');
 
 export const OnboardingDialog = () => {
-  const [showRetry, setShowRetry] = useState(false);
-
   const queryClient = useQueryClient();
   const { publish } = Services.useServices();
   const { address } = useAccount();
@@ -50,85 +48,106 @@ export const OnboardingDialog = () => {
 
   const [step, setStep] = useAtom(stepAtom);
   const [workflowStep, setWorkflowStep] = useAtom(workflowAtom);
-  const [spaceAddress, setPersonalSpaceAddress] = useAtom(personalSpaceAtom);
+  const [spaceAddress, setSpaceAddress] = useAtom(personalSpaceAtom);
   const [profileId, setProfileId] = useAtom(personalProfileAtom);
+
+  // Show retry if step is already at 'completing' on initial render
+  const [showRetry, setShowRetry] = useState(() => step === 'completing');
 
   const { isOnboardingVisible } = useOnboarding();
 
   if (!address) return null;
+
+  async function createSpaces() {
+    if (!address) return;
+
+    try {
+      const { spaceAddress } = await deploySpaceContract({
+        account: address,
+      });
+
+      setSpaceAddress(spaceAddress);
+
+      setWorkflowStep('registering-profile');
+
+      setTimeout(() => {
+        registerProfile();
+      }, 100);
+    } catch (error) {
+      setShowRetry(true);
+      console.error(error);
+    }
+  }
+
+  async function registerProfile() {
+    if (!address || !wallet) return;
+
+    try {
+      const profileId = await publish.registerGeoProfile(wallet, spaceAddress as `0x${string}`);
+
+      setProfileId(profileId);
+
+      // Update the query cache with the new profile while we wait for the profiles subgraph to
+      // index the new onchain profile.
+      queryClient.setQueryData(['onchain-profile', address], {
+        id: getGeoPersonIdFromOnchainId(address, profileId),
+        homeSpace: spaceAddress,
+        account: address,
+      });
+
+      setWorkflowStep('creating-geo-profile-entity');
+
+      setTimeout(() => {
+        createGeoProfileEntity();
+      }, 100);
+    } catch (error) {
+      setShowRetry(true);
+      console.error(error);
+    }
+  }
+
+  async function createGeoProfileEntity() {
+    if (!address) return;
+
+    try {
+      const { entityId: profileEntityId } = await createProfileEntity({
+        account: address,
+        spaceAddress: spaceAddress as `0x${string}`,
+        avatarUri: avatar || null,
+        username: name || null,
+        profileId: profileId,
+      });
+
+      console.log('Profile and personal space created:', { profileEntityId, spaceAddress });
+
+      await sleep(3_000);
+
+      setWorkflowStep('done');
+
+      setStep('completed');
+    } catch (error) {
+      setShowRetry(true);
+      console.error(error);
+    }
+  }
 
   async function onRunOnboardingWorkflow() {
     if (!address || !wallet) {
       return;
     }
 
-    let runSpaceAddress = spaceAddress;
-    let runProfileId = profileId;
+    setStep('completing');
 
-    if (workflowStep === 'idle') {
-      setStep('completing');
-      setWorkflowStep('creating-spaces');
-
-      try {
-        const { spaceAddress } = await deploySpaceContract({
-          account: address,
-        });
-
-        runSpaceAddress = spaceAddress;
-        setPersonalSpaceAddress(spaceAddress);
-
-        setWorkflowStep('registering-profile');
-      } catch (error) {
-        setShowRetry(true);
-        console.error(error);
-      }
-    }
-
-    if (workflowStep === 'idle' || workflowStep === 'registering-profile') {
-      try {
-        const profileId = await publish.registerGeoProfile(wallet, runSpaceAddress as `0x${string}`);
-        runProfileId = profileId;
-        setProfileId(profileId);
-
-        // Update the query cache with the new profile while we wait for the profiles subgraph to
-        // index the new onchain profile.
-        queryClient.setQueryData(['onchain-profile', address], {
-          id: getGeoPersonIdFromOnchainId(address, profileId),
-          homeSpace: runSpaceAddress,
-          account: address,
-        });
-
-        setWorkflowStep('creating-geo-profile-entity');
-      } catch (error) {
-        setShowRetry(true);
-        console.error(error);
-      }
-    }
-
-    if (
-      workflowStep === 'idle' ||
-      workflowStep === 'registering-profile' ||
-      workflowStep === 'creating-geo-profile-entity'
-    ) {
-      try {
-        const { entityId: profileEntityId } = await createProfileEntity({
-          account: address,
-          spaceAddress: spaceAddress as `0x${string}`,
-          avatarUri: avatar || null,
-          username: name || null,
-          profileId: runProfileId,
-        });
-
-        console.log('Profile and personal space created:', { profileEntityId, spaceAddress });
-
-        await sleep(3_000);
-
-        setWorkflowStep('done');
-        setStep('completed');
-      } catch (error) {
-        setShowRetry(true);
-        console.error(error);
-      }
+    switch (workflowStep) {
+      case 'idle':
+        setWorkflowStep('creating-spaces');
+        return createSpaces();
+      case 'creating-spaces':
+        return createSpaces();
+      case 'registering-profile':
+        return registerProfile();
+      case 'creating-geo-profile-entity':
+        return createGeoProfileEntity();
     }
   }
 
@@ -145,7 +164,7 @@ export const OnboardingDialog = () => {
             transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15 }}
             className="relative z-10 flex h-full w-full items-start justify-center"
           >
-            <ModalCard key="card">
+            <ModalCard key="card" childKey="card">
               {step === 'start' && (
                 <>
                   <StepHeader step={step} />
@@ -173,14 +192,14 @@ export const OnboardingDialog = () => {
 };
 
 type ModalCardProps = {
-  key: string;
+  childKey: string;
   children: React.ReactNode;
 };
 
-const ModalCard = ({ key, children }: ModalCardProps) => {
+const ModalCard = ({ childKey, children }: ModalCardProps) => {
   return (
     <motion.div
-      key={key}
+      key={childKey}
       initial={{ opacity: 0, bottom: -5 }}
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
@@ -380,6 +399,14 @@ const stageAsNumber = {
   done: 4,
 };
 
+const retryMessage: Record<PublishingStep, string> = {
+  'creating-spaces': 'Creating space failed',
+  'registering-profile': 'Registering profile failed',
+  'creating-geo-profile-entity': 'Creating Geo profile entity failed',
+  idle: '',
+  done: '',
+};
+
 function StepComplete({ workflowStep: stage, onRetry, showRetry }: StepCompleteProps) {
   const spaceAddress = useAtomValue(personalSpaceAtom);
   const { hideOnboarding } = useOnboarding();
@@ -405,7 +432,7 @@ function StepComplete({ workflowStep: stage, onRetry, showRetry }: StepCompleteP
           )}
           {stage !== 'done' && showRetry && (
             <p className=" mt-4 text-center text-smallButton">
-              Your transaction failed{' '}
+              {retryMessage[stage]}{' '}
               <button onClick={onRetry} className="text-ctaPrimary">
                 Retry
               </button>
