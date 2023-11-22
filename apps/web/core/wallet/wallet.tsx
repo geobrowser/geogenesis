@@ -21,14 +21,7 @@ import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { Wallet } from '~/design-system/icons/wallet';
 import { Spacer } from '~/design-system/spacer';
 
-import {
-  avatarAtom,
-  nameAtom,
-  personalProfileAtom,
-  personalSpaceAtom,
-  stepAtom,
-  workflowAtom,
-} from '~/partials/onboarding/dialog';
+import { avatarAtom, nameAtom, profileIdAtom, spaceAddressAtom, stepAtom } from '~/partials/onboarding/dialog';
 
 import { Environment } from '../environment';
 
@@ -218,18 +211,16 @@ export function GeoConnectButton() {
 
   const setName = useSetAtom(nameAtom);
   const setAvatar = useSetAtom(avatarAtom);
+  const setSpaceAddress = useSetAtom(spaceAddressAtom);
+  const setProfileId = useSetAtom(profileIdAtom);
   const setStep = useSetAtom(stepAtom);
-  const setWorkflowStep = useSetAtom(workflowAtom);
-  const setPersonalSpaceAddress = useSetAtom(personalSpaceAtom);
-  const setProfileId = useSetAtom(personalProfileAtom);
 
   const resetOnboarding = () => {
     setName('');
     setAvatar('');
-    setStep('start');
-    setWorkflowStep('idle');
-    setPersonalSpaceAddress('');
+    setSpaceAddress('');
     setProfileId('');
+    setStep('start');
   };
 
   return (
