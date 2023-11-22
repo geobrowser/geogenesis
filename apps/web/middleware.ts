@@ -14,8 +14,8 @@ export function middleware(request: NextRequest) {
   const pathname = new URL(url).pathname;
 
   if (pathname === '/') return NextResponse.rewrite(MARKETING_PAGE_URL);
-  if (pathname === '/ending-homelessness') return NextResponse.rewrite(ENDING_HOMELESSNESS_PAGE_URL);
-  if (pathname.startsWith('/blog')) return NextResponse.rewrite(`${BLOG_URL}${pathname}`);
+  if (pathname.toLowerCase() === '/ending-homelessness') return NextResponse.rewrite(ENDING_HOMELESSNESS_PAGE_URL);
+  if (pathname.toLowerCase().startsWith('/blog')) return NextResponse.rewrite(`${BLOG_URL}${pathname}`);
 
   return NextResponse.next();
 }
