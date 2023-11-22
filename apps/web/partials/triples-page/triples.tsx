@@ -1,22 +1,21 @@
 import * as React from 'react';
 
-import { useTriples } from '~/core/hooks/use-triples';
-import { Triple } from '~/core/types';
+import { useTriples } from '~/core/state/triple-store/triple-store';
 
 import { Spacer } from '~/design-system/spacer';
 import { PageContainer, PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
 
+import { TableBlockPlaceholder } from '../blocks/table/table-block';
 import { TripleInput } from './triple-input';
 import { TripleTable } from './triple-table';
 
 interface Props {
   spaceId: string;
-  initialTriples: Triple[];
 }
 
-export function Triples({ spaceId, initialTriples }: Props) {
+export function Triples({ spaceId }: Props) {
   const tripleStore = useTriples();
 
   return (
@@ -27,7 +26,18 @@ export function Triples({ spaceId, initialTriples }: Props) {
 
       <Spacer height={12} />
 
-      <TripleTable space={spaceId} triples={tripleStore.hydrated ? tripleStore.triples : initialTriples} />
+      {/*
+        Using a container to wrap the table to make styling borders around
+        the table easier. Otherwise we need to do some pseudoselector shenanigans
+        or use box-shadow instead of border.
+      */}
+      <div className="overflow-hidden rounded border border-grey-02 p-0">
+        {tripleStore.hydrated ? (
+          <TripleTable space={spaceId} triples={tripleStore.triples} />
+        ) : (
+          <TableBlockPlaceholder />
+        )}
+      </div>
 
       <Spacer height={12} />
 

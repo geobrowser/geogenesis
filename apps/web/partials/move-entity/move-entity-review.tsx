@@ -8,10 +8,10 @@ import * as React from 'react';
 
 import { useWalletClient } from 'wagmi';
 
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useMoveTriplesState } from '~/core/hooks/use-move-triples-state';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMoveEntity } from '~/core/state/move-entity-store';
 import { CreateTripleAction, DeleteTripleAction, ReviewState } from '~/core/types';
 import { getImagePath, sleepWithCallback } from '~/core/utils/utils';

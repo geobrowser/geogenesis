@@ -1,23 +1,17 @@
-import { Observable, ObservableComputed, computed, observable } from '@legendapp/state';
+'use client';
 
-import { Environment } from '~/core/environment';
-import { Subgraph } from '~/core/io';
+import { useQuery } from '@tanstack/react-query';
+import { atom, useAtom } from 'jotai';
+
+import * as React from 'react';
+
+import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { Services } from '~/core/services';
 import { FilterState, Triple as TripleType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
-import { makeOptionalComputed } from '~/core/utils/utils';
 
-import { ActionsStore } from '../actions-store/actions-store';
-
-interface ITripleStore {
-  triples$: ObservableComputed<TripleType[]>;
-  pageNumber$: Observable<number>;
-  hydrated$: Observable<boolean>;
-  query$: Observable<string>;
-  hasPreviousPage$: ObservableComputed<boolean>;
-  hasNextPage$: ObservableComputed<boolean>;
-  setQuery(query: string): void;
-  setPageNumber(page: number): void;
-}
+import { DEFAULT_PAGE_SIZE } from './constants';
+import { useTripleStoreInstance } from './triple-store-provider';
 
 export type InitialTripleStoreParams = {
   query: string;
@@ -25,121 +19,106 @@ export type InitialTripleStoreParams = {
   filterState: FilterState;
 };
 
-interface ITripleStoreConfig {
-  subgraph: Subgraph.ISubgraph;
-  config: Environment.AppConfig;
-  space: string;
-  ActionsStore: ActionsStore;
-  initialParams?: InitialTripleStoreParams;
-  pageSize?: number;
-}
-
-export const DEFAULT_PAGE_SIZE = 100;
-export const DEFAULT_INITIAL_PARAMS = {
-  query: '',
-  pageNumber: 0,
-  filterState: [],
-};
-
 export function initialFilterState(): FilterState {
   return [];
 }
 
-export class TripleStore implements ITripleStore {
-  triples$: ObservableComputed<TripleType[]> = observable([]);
-  pageNumber$: Observable<number>;
-  query$: Observable<string>;
-  filterState$: Observable<FilterState>;
-  hasPreviousPage$: ObservableComputed<boolean>;
-  hydrated$: Observable<boolean> = observable(false);
-  hasNextPage$: ObservableComputed<boolean>;
-  space: string;
-  ActionsStore: ActionsStore;
-  abortController: AbortController = new AbortController();
+const queryAtom = atom('');
+const pageNumberAtom = atom(0);
+const filterStateAtom = atom<FilterState>([]);
 
-  constructor({
-    subgraph,
-    config,
-    space,
-    ActionsStore,
-    initialParams = DEFAULT_INITIAL_PARAMS,
-    pageSize = DEFAULT_PAGE_SIZE,
-  }: ITripleStoreConfig) {
-    this.ActionsStore = ActionsStore;
-    this.pageNumber$ = observable(initialParams.pageNumber);
-    this.filterState$ = observable<FilterState>(
-      initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState
-    );
-    this.space = space;
-    this.query$ = observable(initialParams.query);
+export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number } = {}) {
+  const { subgraph, config } = Services.useServices();
+  const { initialParams, space } = useTripleStoreInstance();
+  const { actions } = useActionsStore();
+  const hydrated = React.useRef(false);
 
-    const networkData$ = makeOptionalComputed(
-      { triples: [], hasNextPage: false },
-      computed(async () => {
-        try {
-          this.abortController.abort();
-          this.abortController = new AbortController();
+  const [query, setQuery] = useAtom(queryAtom);
+  const [pageNumber, setPageNumber] = useAtom(pageNumberAtom);
+  const [filterState, setFilter] = useAtom(filterStateAtom);
 
-          const triples = await subgraph.fetchTriples({
-            endpoint: config.subgraph,
-            query: this.query$.get(),
-            space: this.space,
-            skip: this.pageNumber$.get() * pageSize,
-            first: pageSize + 1,
-            filter: this.filterState$.get(),
-            signal: this.abortController.signal,
+  React.useEffect(() => {
+    setQuery(initialParams.query);
+    setPageNumber(initialParams.pageNumber);
+
+    const initialFilter = initialParams.filterState.length === 0 ? initialFilterState() : initialParams.filterState;
+    setFilter(initialFilter);
+  }, [initialParams, setQuery, setPageNumber, setFilter]);
+
+  const { data: networkData, isLoading } = useQuery({
+    queryKey: ['triples', space, query, filterState, pageNumber, pageSize],
+    queryFn: async ({ signal }): Promise<{ triples: TripleType[]; hasNextPage: boolean }> => {
+      try {
+        const triples = await subgraph.fetchTriples({
+          endpoint: config.subgraph,
+          query: query,
+          space: space,
+          skip: pageNumber * pageSize,
+          first: pageSize + 1,
+          filter: filterState,
+          signal,
+        });
+
+        hydrated.current = true;
+        return { triples: triples.slice(0, pageSize), hasNextPage: triples.length > pageSize };
+      } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') {
+          return new Promise(() => {
+            //
           });
-
-          this.hydrated$.set(true);
-          return { triples: triples.slice(0, pageSize), hasNextPage: triples.length > pageSize };
-        } catch (e) {
-          if (e instanceof Error && e.name === 'AbortError') {
-            // eslint-disable-next-line @typescript-eslint/no-empty-function
-            return new Promise(() => {});
-          }
-
-          // TODO: Real error handling
-
-          return { triples: [], hasNextPage: false };
         }
-      })
-    );
 
-    this.hasPreviousPage$ = computed(() => this.pageNumber$.get() > 0);
-    this.hasNextPage$ = computed(() => networkData$.get().hasNextPage);
+        // TODO: Real error handling
+        return { triples: [], hasNextPage: false };
+      }
+    },
+  });
 
-    this.triples$ = computed(() => {
-      const { triples: networkTriples } = networkData$.get();
-      const actions = ActionsStore.actions$.get()[space] ?? [];
+  const triples = React.useMemo(() => {
+    const networkTriples = networkData?.triples ?? [];
+    const localActions = actions[space] ?? [];
 
-      // We want to merge any local actions with the network triples
-      const updatedTriples = Triple.fromActions(actions, networkTriples);
-      return Triple.withLocalNames(actions, updatedTriples);
+    // We want to merge any local actions with the network triples
+    const updatedTriples = Triple.fromActions(localActions, networkTriples);
+    return Triple.withLocalNames(localActions, updatedTriples);
+  }, [actions, networkData, space]);
+
+  const setNextPage = React.useCallback(() => {
+    setPageNumber(prev => prev + 1);
+  }, [setPageNumber]);
+
+  const setPreviousPage = React.useCallback(() => {
+    setPageNumber(prev => {
+      if (prev - 1 < 0) return 0;
+      return prev - 1;
     });
-  }
+  }, [setPageNumber]);
 
-  setQuery = (query: string) => {
-    this.query$.set(query);
-  };
+  const setFilterState = React.useCallback(
+    (newFilter: FilterState) => {
+      const newState = newFilter.length === 0 ? initialFilterState() : newFilter;
+      setPageNumber(0);
+      setFilter(newState);
+    },
+    [setFilter, setPageNumber]
+  );
 
-  setPageNumber = (pageNumber: number) => {
-    this.pageNumber$.set(pageNumber);
-  };
+  return {
+    triples,
 
-  setNextPage = () => {
-    // TODO: Bounds to the last page number
-    this.pageNumber$.set(this.pageNumber$.get() + 1);
-  };
+    query,
+    setQuery,
 
-  setPreviousPage = () => {
-    const previousPageNumber = this.pageNumber$.get() - 1;
-    if (previousPageNumber < 0) return;
-    this.pageNumber$.set(previousPageNumber);
-  };
+    hasNextPage: networkData?.hasNextPage ?? false,
+    hasPreviousPage: pageNumber > 0,
+    pageNumber,
+    setPageNumber,
+    setNextPage,
+    setPreviousPage,
 
-  setFilterState = (filter: FilterState) => {
-    const newState = filter.length === 0 ? initialFilterState() : filter;
-    this.setPageNumber(0);
-    this.filterState$.set(newState);
+    filterState,
+    setFilterState,
+
+    hydrated: !isLoading,
   };
 }

@@ -11,7 +11,7 @@ import { SpaceNavbar } from '~/partials/space-page/space-navbar';
 
 interface Props {
   space: Space;
-  spaceName?: string;
+  spaceName: string | null;
   spaceImage: string | null;
   initialSelectedType: Triple | null;
   initialTypes: Triple[];
@@ -34,12 +34,7 @@ export function Component(props: Props) {
           initialSelectedType={props.initialSelectedType}
           initialParams={props.initialParams}
         >
-          <EntityTableContainer
-            spaceId={props.space.id}
-            spaceName={props.spaceName}
-            initialColumns={props.initialColumns}
-            initialRows={props.initialRows}
-          />
+          <EntityTableContainer spaceId={props.space.id} spaceName={props.spaceName} />
         </EntityTableStoreProvider>
       </TypesStoreProvider>
     </div>

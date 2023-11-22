@@ -3,12 +3,11 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { Services } from '~/core/services';
+import { InitialTripleStoreParams } from './triple-store';
 
-import { useActionsStoreInstance } from '../actions-store/actions-store-provider';
-import { InitialTripleStoreParams, TripleStore } from './triple-store';
-
-const TripleStoreContext = createContext<TripleStore | undefined>(undefined);
+const TripleStoreContext = createContext<{ space: string; initialParams: InitialTripleStoreParams } | undefined>(
+  undefined
+);
 
 interface Props {
   space: string;
@@ -17,14 +16,14 @@ interface Props {
 }
 
 export function TripleStoreProvider({ space, children, initialParams }: Props) {
-  const { subgraph, config } = Services.useServices();
-  const ActionsStore = useActionsStoreInstance();
+  const value = useMemo(() => {
+    return {
+      space,
+      initialParams,
+    };
+  }, [space, initialParams]);
 
-  const store = useMemo(() => {
-    return new TripleStore({ subgraph, config, space, initialParams, ActionsStore });
-  }, [subgraph, config, space, ActionsStore, initialParams]);
-
-  return <TripleStoreContext.Provider value={store}>{children}</TripleStoreContext.Provider>;
+  return <TripleStoreContext.Provider value={value}>{children}</TripleStoreContext.Provider>;
 }
 
 export function useTripleStoreInstance() {

@@ -5,10 +5,10 @@ import { Suspense } from 'react';
 
 import { AppConfig, Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
+import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
-import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { Entity } from '~/core/utils/entity';
 import { Value } from '~/core/utils/value';
 
@@ -49,12 +49,10 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
   const typeId = searchParams.typeId ?? null;
 
   return (
-    <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider
+    <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
+      <EditorProvider
         id={props.id}
         spaceId={props.spaceId}
-        initialTriples={props.triples}
-        initialSchemaTriples={[]}
         initialBlockIdsTriple={props.blockIdsTriple}
         initialBlockTriples={props.blockTriples}
       >
@@ -73,8 +71,8 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
           </EntityPageContentContainer>
           <MoveEntityReview />
         </MoveEntityProvider>
-      </EntityStoreProvider>
-    </TypesStoreServerContainer>
+      </EditorProvider>
+    </EntityStoreProvider>
   );
 }
 

@@ -52,30 +52,23 @@ export const TableNode = Node.create({
 
 function TableNodeComponent({ node }: NodeViewRendererProps) {
   const { spaceId, typeId, id } = node.attrs;
-  const { types } = useTypesStore();
-
-  const selectedType = useMemo(() => {
-    return types.find(type => type.entityId === typeId);
-  }, [JSON.stringify(types), typeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <NodeViewWrapper>
       <div contentEditable="false">
-        <TableNodeChildren spaceId={spaceId} selectedType={selectedType} entityId={id} />
+        <TableNodeChildren spaceId={spaceId} entityId={id} typeId={typeId} />
       </div>
     </NodeViewWrapper>
   );
 }
 
-function TableNodeChildren({
-  spaceId,
-  selectedType,
-  entityId,
-}: {
-  spaceId: string;
-  selectedType?: GeoType;
-  entityId: string;
-}) {
+function TableNodeChildren({ spaceId, entityId, typeId }: { spaceId: string; entityId: string; typeId: string }) {
+  const { types } = useTypesStore();
+
+  const selectedType = useMemo(() => {
+    return types.find(type => type.entityId === typeId);
+  }, [JSON.stringify(types), typeId]);
+
   return (
     <ErrorBoundary
       fallback={

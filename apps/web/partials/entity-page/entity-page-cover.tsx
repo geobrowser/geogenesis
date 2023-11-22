@@ -5,7 +5,7 @@ import Image from 'next/legacy/image';
 
 import * as React from 'react';
 
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Entity } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
 

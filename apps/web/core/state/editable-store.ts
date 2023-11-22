@@ -1,15 +1,14 @@
 'use client';
 
-import { observable } from '@legendapp/state';
-import { useSelector } from '@legendapp/state/react';
+import { atom, useAtom } from 'jotai';
 
-export const editable$ = observable(false);
+export const editableAtom = atom(false);
 
 export const useEditable = () => {
-  const editable = useSelector(editable$);
+  const [editable, setEditable] = useAtom(editableAtom);
 
   return {
     editable,
-    setEditable: (value: boolean) => editable$.set(value),
+    setEditable,
   };
 };

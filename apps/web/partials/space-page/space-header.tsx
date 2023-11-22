@@ -26,7 +26,7 @@ import { HistoryPanel } from '../history/history-panel';
 
 interface Props {
   spaceId: string;
-  spaceName?: string;
+  spaceName: string | null;
   spaceImage: string | null;
 }
 

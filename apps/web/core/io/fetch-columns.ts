@@ -1,7 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
+
 import { Subgraph } from '.';
-import { DEFAULT_PAGE_SIZE } from '../state/triple-store/triple-store';
 import { Column } from '../types';
 
 interface FetchColumnsOptions {

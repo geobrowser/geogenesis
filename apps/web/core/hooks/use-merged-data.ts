@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import { Merged } from '../merged';
 import { Services } from '../services';
-import { useActionsStoreInstance } from '../state/actions-store/actions-store-provider';
-import { useLocalStoreInstance } from '../state/local-store';
+import { useLocalStore } from '../state/local-store';
+import { useActionsStore } from './use-actions-store';
 
 export function useMergedData() {
-  const store = useActionsStoreInstance();
-  const localStore = useLocalStoreInstance();
+  const store = useActionsStore();
+  const localStore = useLocalStore();
   const { subgraph } = Services.useServices();
 
   return React.useMemo(
