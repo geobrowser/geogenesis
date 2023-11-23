@@ -453,7 +453,7 @@ importers:
       '@geogenesis/data-uri': workspace:*
       '@geogenesis/ids': workspace:*
       '@graphprotocol/graph-cli': ^0.61.0
-      '@graphprotocol/graph-ts': ^0.27.0
+      '@graphprotocol/graph-ts': ^0.31.0
       as-base64: ^0.2.0
       assemblyscript-json: ^1.1.0
       babel-polyfill: ^6.26.0
@@ -470,7 +470,7 @@ importers:
       '@geogenesis/data-uri': link:../data-uri
       '@geogenesis/ids': link:../ids
       '@graphprotocol/graph-cli': 0.61.0_focinx34yhjvv5yb3w7guevkzq
-      '@graphprotocol/graph-ts': 0.27.0
+      '@graphprotocol/graph-ts': 0.31.0
       rimraf: 3.0.2
 
   packages/profile-subgraph:
@@ -2069,6 +2069,12 @@ packages:
 
   /@graphprotocol/graph-ts/0.27.0:
     resolution: {integrity: sha512-r1SPDIZVQiGMxcY8rhFSM0y7d/xAbQf5vHMWUf59js1KgoyWpM6P3tczZqmQd7JTmeyNsDGIPzd9FeaxllsU4w==}
+    dependencies:
+      assemblyscript: 0.19.10
+    dev: true
+
+  /@graphprotocol/graph-ts/0.31.0:
+    resolution: {integrity: sha512-xreRVM6ho2BtolyOh2flDkNoGZximybnzUnF53zJVp0+Ed0KnAlO1/KOCUYw06euVI9tk0c9nA2Z/D5SIQV2Rg==}
     dependencies:
       assemblyscript: 0.19.10
     dev: true
@@ -7033,6 +7039,7 @@ packages:
 
   /assemblyscript/0.19.10:
     resolution: {integrity: sha512-HavcUBXB3mBTRGJcpvaQjmnmaqKHBGREjSPNsIvnAk2f9dj78y4BkMaSSdvBQYWcDDzsHQjyUC8stICFkD1Odg==}
+    hasBin: true
     dependencies:
       binaryen: 101.0.0-nightly.20210723
       long: 4.0.0
@@ -7815,6 +7822,7 @@ packages:
 
   /binaryen/101.0.0-nightly.20210723:
     resolution: {integrity: sha512-eioJNqhHlkguVSbblHOtLqlhtC882SOEPKmNFZaDuz1hzQjolxZ+eu3/kaS10n3sGPONsIZsO7R9fR00UyhEUA==}
+    hasBin: true
     dev: true
 
   /binaryen/102.0.0-nightly.20211028:
