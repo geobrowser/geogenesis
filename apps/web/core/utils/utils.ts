@@ -1,17 +1,7 @@
-import { ObservableComputed, computed } from '@legendapp/state';
-
 import { DEFAULT_OPENGRAPH_DESCRIPTION, DEFAULT_OPENGRAPH_IMAGE, IPFS_GATEWAY_PATH } from '~/core/constants';
 import { Entity as IEntity } from '~/core/types';
 
 import { Entity } from './entity';
-
-export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
-  return computed(() => {
-    const data = observable.get() as T;
-    if (data === undefined) return initialValue;
-    return data;
-  });
-}
 
 export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
   return elements.flatMap((element, index) =>

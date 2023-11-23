@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { batch } from '@legendapp/state';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
@@ -47,41 +46,39 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
     const newEntityId = ID.createEntityId();
 
     // Create new entity with name and types
-    batch(() => {
-      create(
-        Triple.withId({
-          entityId: newEntityId,
-          attributeId: SYSTEM_IDS.NAME,
-          entityName: query,
-          attributeName: 'Name',
-          space: spaceId,
-          value: {
-            type: 'string',
-            id: ID.createValueId(),
-            value: query,
-          },
-        })
-      );
+    create(
+      Triple.withId({
+        entityId: newEntityId,
+        attributeId: SYSTEM_IDS.NAME,
+        entityName: query,
+        attributeName: 'Name',
+        space: spaceId,
+        value: {
+          type: 'string',
+          id: ID.createValueId(),
+          value: query,
+        },
+      })
+    );
 
-      if (allowedTypes) {
-        allowedTypes.forEach(type => {
-          create(
-            Triple.withId({
-              entityId: newEntityId,
-              attributeId: SYSTEM_IDS.TYPES,
-              entityName: query,
-              attributeName: 'Types',
-              space: spaceId,
-              value: {
-                type: 'entity',
-                id: type.typeId,
-                name: type.typeName,
-              },
-            })
-          );
-        });
-      }
-    });
+    if (allowedTypes) {
+      allowedTypes.forEach(type => {
+        create(
+          Triple.withId({
+            entityId: newEntityId,
+            attributeId: SYSTEM_IDS.TYPES,
+            entityName: query,
+            attributeName: 'Types',
+            space: spaceId,
+            value: {
+              type: 'entity',
+              id: type.typeId,
+              name: type.typeName,
+            },
+          })
+        );
+      });
+    }
 
     onDone({ id: newEntityId, name: query });
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);

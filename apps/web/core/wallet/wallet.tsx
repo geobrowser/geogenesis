@@ -13,6 +13,7 @@ import { InjectedConnector } from 'wagmi/connectors/injected';
 import { MetaMaskConnector } from 'wagmi/connectors/metaMask';
 import { MockConnector } from 'wagmi/connectors/mock';
 import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
+import { alchemyProvider } from 'wagmi/providers/alchemy';
 import { jsonRpcProvider } from 'wagmi/providers/jsonRpc';
 import { publicProvider } from 'wagmi/providers/public';
 
@@ -77,6 +78,7 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
         };
       },
     }),
+    alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY! }),
     // We need to use another provider if using a local chain
     ...(process.env.NEXT_PUBLIC_APP_ENV === 'development' ? [publicProvider()] : []),
   ]

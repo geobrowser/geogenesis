@@ -24,7 +24,7 @@ import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Action as ActionType, Entity as EntityType, Space, Triple } from '~/core/types';
+import type { Action as ActionType, Entity as EntityType, Space } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
@@ -381,11 +381,11 @@ const ChangedEntity = ({
 }: ChangedEntityProps) => {
   const { name, blocks = {}, attributes = {}, actions = [] } = change;
 
-  const { deleteActions } = useActionsStore(spaceId);
+  const { deleteActionsFromSpace } = useActionsStore();
 
   const handleDeleteActions = useCallback(() => {
-    deleteActions(spaceId, actions);
-  }, [spaceId, actions, deleteActions]);
+    deleteActionsFromSpace(spaceId, actions);
+  }, [spaceId, actions, deleteActionsFromSpace]);
 
   const blockIds = Object.keys(blocks);
   const attributeIds = Object.keys(attributes);
@@ -636,11 +636,11 @@ const ChangedAttribute = ({
 }: ChangedAttributeProps) => {
   const { actions = [] } = attribute;
 
-  const { deleteActions } = useActionsStore(spaceId);
+  const { deleteActionsFromSpace } = useActionsStore(spaceId);
 
   const handleDeleteActions = useCallback(() => {
-    deleteActions(spaceId, actions);
-  }, [spaceId, actions, deleteActions]);
+    deleteActionsFromSpace(spaceId, actions);
+  }, [spaceId, actions, deleteActionsFromSpace]);
 
   // Don't show page blocks
   if (attributeId === SYSTEM_IDS.BLOCKS) return null;

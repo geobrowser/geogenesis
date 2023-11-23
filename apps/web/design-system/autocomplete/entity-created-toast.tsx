@@ -21,7 +21,7 @@ export function EntityCreatedToast({ entityId, spaceId }: Props) {
 
   return (
     <div className="flex items-center gap-3">
-      <button onClick={() => setToast(false)}>
+      <button onClick={() => setToast(null)}>
         <Close />
       </button>
       <p className="text-button">New entity created</p>

@@ -5,34 +5,27 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { memo } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useEntityTable } from '~/core/hooks/use-entity-table';
 import { EntityOthersToast } from '~/core/presence/entity-others-toast';
 import { SpacePresenceProvider } from '~/core/presence/presence-provider';
 import { useEditable } from '~/core/state/editable-store';
-import { Column, Row } from '~/core/types';
+import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 
 import { Spacer } from '~/design-system/spacer';
 import { PageContainer, PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
 
+import { TableBlockPlaceholder } from '../blocks/table/table-block';
 import { EntityInput } from './entity-input';
 import { EntityTable } from './entity-table';
 
 interface Props {
   spaceId: string;
-  spaceName?: string;
-  initialRows?: Row[];
-  initialColumns?: Column[];
+  spaceName: string | null;
   showHeader?: boolean;
 }
 
-export const EntityTableContainer = memo(function EntityTableContainer({
-  spaceId,
-  initialColumns = [],
-  initialRows = [],
-  showHeader = true,
-}: Props) {
+export const EntityTableContainer = memo(function EntityTableContainer({ spaceId, showHeader = true }: Props) {
   const entityTableStore = useEntityTable();
   const { isEditor } = useAccessControl(spaceId);
   const { editable } = useEditable();
@@ -61,17 +54,17 @@ export const EntityTableContainer = memo(function EntityTableContainer({
         or use box-shadow instead of border.
       */}
         <div className="overflow-hidden rounded border border-grey-02 p-0">
-          <EntityTable
-            space={spaceId}
-            columns={entityTableStore.hydrated ? entityTableStore.columns : initialColumns}
-            rows={entityTableStore.hydrated ? entityTableStore.rows : initialRows}
-          />
+          {entityTableStore.hydrated ? (
+            <EntityTable space={spaceId} columns={entityTableStore.columns} rows={entityTableStore.rows} />
+          ) : (
+            <TableBlockPlaceholder />
+          )}
         </div>
         <Spacer height={12} />
         <PageNumberContainer>
           {entityTableStore.pageNumber > 1 && (
             <>
-              <PageNumber number={1} onClick={() => entityTableStore.setPageNumber(0)} />
+              <PageNumber number={1} onClick={() => entityTableStore.setPage(0)} />
               {entityTableStore.pageNumber > 2 ? (
                 <>
                   <Spacer width={16} />
@@ -87,7 +80,7 @@ export const EntityTableContainer = memo(function EntityTableContainer({
           )}
           {entityTableStore.hasPreviousPage && (
             <>
-              <PageNumber number={entityTableStore.pageNumber} onClick={entityTableStore.setPreviousPage} />
+              <PageNumber number={entityTableStore.pageNumber} onClick={() => entityTableStore.setPage('previous')} />
               <Spacer width={4} />
             </>
           )}
@@ -95,13 +88,16 @@ export const EntityTableContainer = memo(function EntityTableContainer({
           {entityTableStore.hasNextPage && (
             <>
               <Spacer width={4} />
-              <PageNumber number={entityTableStore.pageNumber + 2} onClick={entityTableStore.setNextPage} />
+              <PageNumber number={entityTableStore.pageNumber + 2} onClick={() => entityTableStore.setPage('next')} />
             </>
           )}
           <Spacer width={32} />
-          <PreviousButton isDisabled={!entityTableStore.hasPreviousPage} onClick={entityTableStore.setPreviousPage} />
+          <PreviousButton
+            isDisabled={!entityTableStore.hasPreviousPage}
+            onClick={() => entityTableStore.setPage('previous')}
+          />
           <Spacer width={12} />
-          <NextButton isDisabled={!entityTableStore.hasNextPage} onClick={entityTableStore.setNextPage} />
+          <NextButton isDisabled={!entityTableStore.hasNextPage} onClick={() => entityTableStore.setPage('next')} />
         </PageNumberContainer>
       </PageContainer>
       {isEditor && editable && (

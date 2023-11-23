@@ -1,5 +1,4 @@
-import { observable } from '@legendapp/state';
-import { useSelector } from '@legendapp/state/react';
+import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
@@ -7,11 +6,11 @@ import { useAccount } from 'wagmi';
 
 import { useGeoProfile } from './use-geo-profile';
 
-const isOnboardingVisible$ = observable(false);
+const isOnboardingVisibleAtom = atom(false);
 
 export function useOnboarding() {
   const { address } = useAccount();
-  const isOnboardingVisible = useSelector(isOnboardingVisible$);
+  const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const { profile, isFetched } = useGeoProfile(address);
 
   // Set the onboarding to visible the first time we fetch the
@@ -23,22 +22,22 @@ export function useOnboarding() {
   // onboarding again if they don't have a profile.
   React.useEffect(() => {
     if (address && isFetched && !profile) {
-      isOnboardingVisible$.set(true);
+      setIsOnboardingVisible(true);
     }
-  }, [isFetched, profile, address]);
+  }, [isFetched, profile, address, setIsOnboardingVisible]);
 
   useAccount({
-    onDisconnect: () => isOnboardingVisible$.set(false),
+    onDisconnect: () => setIsOnboardingVisible(false),
     onConnect({ address }) {
       if (address && isFetched && !profile) {
-        isOnboardingVisible$.set(true);
+        setIsOnboardingVisible(true);
       }
     },
   });
 
   const hideOnboarding = React.useCallback(() => {
-    isOnboardingVisible$.set(false);
-  }, []);
+    setIsOnboardingVisible(false);
+  }, [setIsOnboardingVisible]);
 
   return { isOnboardingVisible, hideOnboarding };
 }

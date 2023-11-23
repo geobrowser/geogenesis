@@ -2,7 +2,6 @@
 
 import { InitialTripleStoreParams } from '~/core/state/triple-store/triple-store';
 import { TripleStoreProvider } from '~/core/state/triple-store/triple-store-provider';
-import { Triple } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -12,13 +11,12 @@ import { Triples } from '~/partials/triples-page/triples';
 
 interface Props {
   spaceId: string;
-  spaceName?: string;
+  spaceName: string | null;
   spaceImage: string | null;
-  initialTriples: Triple[];
   initialParams: InitialTripleStoreParams;
 }
 
-export function Component({ spaceId, spaceImage, spaceName, initialTriples, initialParams }: Props) {
+export function Component({ spaceId, spaceImage, spaceName, initialParams }: Props) {
   return (
     <div>
       <SpaceHeader spaceId={spaceId} spaceImage={spaceImage} spaceName={spaceName} />
@@ -27,7 +25,7 @@ export function Component({ spaceId, spaceImage, spaceName, initialTriples, init
       <SpaceNavbar spaceId={spaceId} />
 
       <TripleStoreProvider space={spaceId} initialParams={initialParams}>
-        <Triples spaceId={spaceId} initialTriples={initialTriples} />
+        <Triples spaceId={spaceId} />
       </TripleStoreProvider>
     </div>
   );

@@ -1,12 +1,11 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { observable } from '@legendapp/state';
-import { useSelector } from '@legendapp/state/react';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
+import { atom, useAtom } from 'jotai';
 import Link from 'next/link';
 
 import * as React from 'react';
@@ -30,18 +29,18 @@ import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { Text } from '~/design-system/text';
 
-const isCreateProfileVisible$ = observable(false);
+const isCreateProfileVisibleAtom = atom(false);
 
 export function useCreateProfile() {
-  const isCreateProfileVisible = useSelector(isCreateProfileVisible$);
+  const [isCreateProfileVisible, setIsCreateProfileVisible] = useAtom(isCreateProfileVisibleAtom);
 
   const showCreateProfile = useCallback(() => {
-    isCreateProfileVisible$.set(true);
-  }, []);
+    setIsCreateProfileVisible(true);
+  }, [setIsCreateProfileVisible]);
 
   const hideCreateProfile = useCallback(() => {
-    isCreateProfileVisible$.set(false);
-  }, []);
+    setIsCreateProfileVisible(false);
+  }, [setIsCreateProfileVisible]);
 
   return {
     isCreateProfileVisible,

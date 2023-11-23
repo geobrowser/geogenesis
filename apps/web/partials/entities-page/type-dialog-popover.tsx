@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import { useState } from 'react';
 
-import { useEntityTable } from '~/core/hooks/use-entity-table';
+import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 import { GeoType } from '~/core/types';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -21,14 +21,14 @@ interface Props {
 }
 
 export function TypeDialogPopover({ inputContainerWidth, spaceId }: Props) {
-  const entityTableStore = useEntityTable();
+  const { selectedType, setSelectedType } = useEntityTable();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
   const handleSelect = (type: GeoType) => {
     setOpen(false);
-    entityTableStore.setSelectedType(type);
+    setSelectedType(type);
   };
 
   return (
@@ -38,7 +38,7 @@ export function TypeDialogPopover({ inputContainerWidth, spaceId }: Props) {
           className="flex w-[230px] flex-none items-center justify-between whitespace-pre rounded bg-white px-3 py-2 text-button text-text shadow-inner-grey-02 placeholder-shown:text-text hover:cursor-pointer hover:shadow-inner-text focus:shadow-inner-lg-text focus:outline-none"
           aria-label="type-filter-dropdown"
         >
-          {entityTableStore.selectedType?.entityName || 'No Types Found'}
+          {selectedType?.entityName || 'No Types Found'}
           <Spacer width={8} />
           <ChevronDownSmall color="ctaPrimary" />
         </button>

@@ -1,8 +1,6 @@
 'use client';
 
-import { useSelector } from '@legendapp/state/react';
-
-import { useActionsStoreInstance } from '../state/actions-store/actions-store-provider';
+import { useActions } from '../state/actions-store/actions-store';
 
 /**
  * Hook to consume state/effects from the global ActionsStore.
@@ -11,53 +9,5 @@ import { useActionsStoreInstance } from '../state/actions-store/actions-store-pr
  * on a dev route or the root /spaces page.
  */
 export function useActionsStore(spaceId?: string) {
-  const {
-    actions$,
-    allActions$,
-    allSpacesWithActions$,
-    actionsByEntityId$,
-    restore,
-    addActionsToSpaces,
-    clear,
-    create,
-    update,
-    remove,
-    deleteActions,
-  } = useActionsStoreInstance();
-  const actions = useSelector(actions$);
-  const allActions = useSelector(allActions$);
-  const allSpacesWithActions = useSelector(allSpacesWithActions$);
-  const actionsByEntityId = useSelector(actionsByEntityId$);
-
-  if (!spaceId) {
-    return {
-      actions,
-      actionsFromSpace: [],
-      allActions,
-      allSpacesWithActions,
-      actionsByEntityId,
-      restore,
-      addActionsToSpaces,
-      clear,
-      create,
-      update,
-      remove,
-      deleteActions,
-    };
-  }
-
-  return {
-    actions,
-    actionsFromSpace: actions[spaceId] ?? [],
-    allActions,
-    allSpacesWithActions,
-    actionsByEntityId,
-    addActionsToSpaces,
-    restore,
-    clear,
-    create,
-    update,
-    remove,
-    deleteActions,
-  };
+  return useActions(spaceId);
 }
