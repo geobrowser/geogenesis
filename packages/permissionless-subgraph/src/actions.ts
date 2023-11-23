@@ -25,6 +25,7 @@ import {
 } from '../generated/schema'
 import { Space as SpaceDataSource } from '../generated/templates'
 import { createTripleId } from './id'
+import { isValidUtf16String } from './is-valid-utf-16-string'
 
 export function handleSpaceAdded(
   spaceAddress: string,
@@ -222,7 +223,9 @@ export function handleCreateTripleAction(
     }
     triple.valueType = 'DATE'
     triple.valueId = dateValue.id
-    triple.stringValue = dateValue.value
+    triple.stringValue = isValidUtf16String(dateValue.value)
+      ? dateValue.value
+      : ''
     log.debug('Finished creating date value', [])
   }
 
@@ -233,7 +236,9 @@ export function handleCreateTripleAction(
     }
     triple.valueType = 'STRING'
     triple.valueId = stringValue.id
-    triple.stringValue = stringValue.value
+    triple.stringValue = isValidUtf16String(stringValue.value)
+      ? stringValue.value
+      : ''
 
     if (attribute.id == NAME) {
       entity.name = stringValue.value
@@ -258,7 +263,9 @@ export function handleCreateTripleAction(
     }
     triple.valueType = 'URL'
     triple.valueId = urlValue.id
-    triple.stringValue = urlValue.value
+    triple.stringValue = isValidUtf16String(urlValue.value)
+      ? urlValue.value
+      : ''
     log.debug('Finished creating url value', [])
   }
 
@@ -437,14 +444,14 @@ export function handleAction(
     let dValue: string | null = null
     if (dateValue != null) {
       valueId = dateValue.id
-      dValue = dateValue.value
+      dValue = isValidUtf16String(dateValue.value) ? dateValue.value : ''
     }
 
     let urlValue = value.asUrlValue()
     let uValue: string | null = null
     if (urlValue != null) {
       valueId = urlValue.id
-      uValue = urlValue.value
+      uValue = isValidUtf16String(urlValue.value) ? urlValue.value : ''
     }
 
     let entityValue = value.asEntityValue()
@@ -457,13 +464,13 @@ export function handleAction(
     let strValue: string | null = null
     if (stringValue != null) {
       valueId = stringValue.id
-      strValue = stringValue.value
+      strValue = isValidUtf16String(stringValue.value) ? stringValue.value : ''
     }
     let numberValue = value.asNumberValue()
     let numValue: string | null = null
     if (numberValue != null) {
       valueId = numberValue.id
-      numValue = numberValue.value
+      numValue = isValidUtf16String(numberValue.value) ? numberValue.value : ''
     }
     let action = getOrCreateAction(
       actionId,

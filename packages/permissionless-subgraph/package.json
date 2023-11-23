@@ -30,7 +30,7 @@
     "@geogenesis/contracts": "workspace:^0.1.0",
     "@geogenesis/data-uri": "workspace:*",
     "@geogenesis/ids": "workspace:*",
-    "@graphprotocol/graph-cli": "^0.55.0",
+    "@graphprotocol/graph-cli": "^0.61.0",
     "@graphprotocol/graph-ts": "^0.27.0",
     "rimraf": "^3.0.2"
   },
