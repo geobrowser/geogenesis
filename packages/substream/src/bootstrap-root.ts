@@ -1,5 +1,5 @@
-import * as db from "zapatos/db";
-import type * as s from "zapatos/schema";
+import * as db from 'zapatos/db'
+import type * as s from 'zapatos/schema'
 import {
   ATTRIBUTE,
   ATTRIBUTES,
@@ -35,9 +35,9 @@ import {
   VALUE_TYPE,
   WALLETS_ATTRIBUTE,
   WEB_URL,
-} from "./constants/systemIds.js";
-import { generateTripleId } from "./utils/id.js";
-import { pool } from "./utils/pool.js";
+} from './constants/system-ids.js'
+import { generateTripleId } from './utils/id.js'
+import { pool } from './utils/pool.js'
 
 const entities: string[] = [
   TYPES,
@@ -66,40 +66,40 @@ const entities: string[] = [
   DATE,
   WEB_URL,
   PERSON_TYPE,
-];
+]
 
 const names: Record<string, string> = {
-  [TYPES]: "Types",
-  [NAME]: "Name",
-  [ATTRIBUTE]: "Attribute",
-  [SPACE]: "Indexed Space",
-  [ATTRIBUTES]: "Attributes",
-  [SCHEMA_TYPE]: "Type",
-  [VALUE_TYPE]: "Value type",
-  [RELATION]: "Relation",
-  [TEXT]: "Text",
-  [IMAGE]: "Image",
-  [DATE]: "Date",
-  [WEB_URL]: "Web URL",
-  [IMAGE_ATTRIBUTE]: "Image",
-  [DESCRIPTION]: "Description",
-  [SPACE_CONFIGURATION]: "Space",
-  [FOREIGN_TYPES]: "Foreign Types",
-  [TABLE_BLOCK]: "Table Block",
-  [SHOWN_COLUMNS]: "Shown Columns",
-  [TEXT_BLOCK]: "Text Block",
-  [IMAGE_BLOCK]: "Image Block",
-  [BLOCKS]: "Blocks",
-  [PARENT_ENTITY]: "Parent Entity",
-  [PERSON_TYPE]: "Person",
-  [MARKDOWN_CONTENT]: "Markdown Content",
-  [ROW_TYPE]: "Row Type",
-  [AVATAR_ATTRIBUTE]: "Avatar",
-  [COVER_ATTRIBUTE]: "Cover",
-  [FILTER]: "Filter",
-  [WALLETS_ATTRIBUTE]: "Wallets",
-  [RELATION_VALUE_RELATIONSHIP_TYPE]: "Relation Value Types",
-};
+  [TYPES]: 'Types',
+  [NAME]: 'Name',
+  [ATTRIBUTE]: 'Attribute',
+  [SPACE]: 'Indexed Space',
+  [ATTRIBUTES]: 'Attributes',
+  [SCHEMA_TYPE]: 'Type',
+  [VALUE_TYPE]: 'Value type',
+  [RELATION]: 'Relation',
+  [TEXT]: 'Text',
+  [IMAGE]: 'Image',
+  [DATE]: 'Date',
+  [WEB_URL]: 'Web URL',
+  [IMAGE_ATTRIBUTE]: 'Image',
+  [DESCRIPTION]: 'Description',
+  [SPACE_CONFIGURATION]: 'Space',
+  [FOREIGN_TYPES]: 'Foreign Types',
+  [TABLE_BLOCK]: 'Table Block',
+  [SHOWN_COLUMNS]: 'Shown Columns',
+  [TEXT_BLOCK]: 'Text Block',
+  [IMAGE_BLOCK]: 'Image Block',
+  [BLOCKS]: 'Blocks',
+  [PARENT_ENTITY]: 'Parent Entity',
+  [PERSON_TYPE]: 'Person',
+  [MARKDOWN_CONTENT]: 'Markdown Content',
+  [ROW_TYPE]: 'Row Type',
+  [AVATAR_ATTRIBUTE]: 'Avatar',
+  [COVER_ATTRIBUTE]: 'Cover',
+  [FILTER]: 'Filter',
+  [WALLETS_ATTRIBUTE]: 'Wallets',
+  [RELATION_VALUE_RELATIONSHIP_TYPE]: 'Relation Value Types',
+}
 
 const attributes: Record<string, string> = {
   [TYPES]: RELATION,
@@ -119,7 +119,7 @@ const attributes: Record<string, string> = {
   [AVATAR_ATTRIBUTE]: IMAGE,
   [COVER_ATTRIBUTE]: IMAGE,
   [WALLETS_ATTRIBUTE]: RELATION,
-};
+}
 
 const types: Record<string, string[]> = {
   [TEXT]: [],
@@ -134,7 +134,7 @@ const types: Record<string, string[]> = {
   [TABLE_BLOCK]: [ROW_TYPE, PARENT_ENTITY],
   [TEXT_BLOCK]: [MARKDOWN_CONTENT, PARENT_ENTITY],
   [PERSON_TYPE]: [AVATAR_ATTRIBUTE, COVER_ATTRIBUTE],
-};
+}
 
 const geoEntities: s.geo_entities.Insertable[] = entities.map((entity) => ({
   id: entity,
@@ -144,7 +144,7 @@ const geoEntities: s.geo_entities.Insertable[] = entities.map((entity) => ({
   // attribute_value_type_id: attributes[entity],
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   created_at: ROOT_SPACE_CREATED_AT,
-}));
+}))
 
 const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
   ([id, name]) => ({
@@ -156,7 +156,7 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
     }),
     entity_id: id,
     attribute_id: NAME,
-    value_type: "string",
+    value_type: 'string',
     value_id: name,
     string_value: name,
     is_protected: true,
@@ -164,7 +164,7 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
     created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
     created_at: ROOT_SPACE_CREATED_AT,
   })
-);
+)
 
 const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
   .map(([id, entity_value_id]) => [
@@ -178,7 +178,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       }),
       entity_id: id,
       attribute_id: TYPES,
-      value_type: "entity",
+      value_type: 'entity',
       value_id: ATTRIBUTE,
       entity_value_id: ATTRIBUTE,
       is_protected: true,
@@ -196,7 +196,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       }),
       entity_id: id,
       attribute_id: VALUE_TYPE,
-      value_type: "entity",
+      value_type: 'entity',
       value_id: ATTRIBUTE,
       entity_value_id,
       is_protected: true,
@@ -205,7 +205,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       created_at: ROOT_SPACE_CREATED_AT,
     },
   ])
-  .flat();
+  .flat()
 
 const typeTriples: s.triples.Insertable[] = Object.entries(types)
   .map(([id, attributes]) => [
@@ -219,7 +219,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       }),
       entity_id: id,
       attribute_id: TYPES,
-      value_type: "entity",
+      value_type: 'entity',
       value_id: SCHEMA_TYPE,
       entity_value_id: SCHEMA_TYPE,
       is_protected: true,
@@ -237,7 +237,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       }),
       entity_id: id,
       attribute_id: ATTRIBUTES,
-      value_type: "entity",
+      value_type: 'entity',
       value_id: attribute,
       entity_value_id: attribute,
       is_protected: true,
@@ -246,38 +246,38 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       created_at: ROOT_SPACE_CREATED_AT,
     })),
   ])
-  .flat();
+  .flat()
 
 const space: s.spaces.Insertable = {
   id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
   is_root_space: true,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-};
+}
 
 const account: s.accounts.Insertable = {
   id: ROOT_SPACE_CREATED_BY_ID,
-};
+}
 
 const proposal: s.proposals.Insertable = {
-  id: "0",
+  id: '0',
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
   created_at: ROOT_SPACE_CREATED_AT,
   space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
-  status: "APPROVED",
-};
+  status: 'APPROVED',
+}
 
 export const bootstrapRoot = async () => {
   try {
-    await db.insert("spaces", space).run(pool);
-    await db.insert("accounts", account).run(pool);
-    await db.insert("geo_entities", geoEntities).run(pool);
-    await db.insert("triples", namesTriples).run(pool);
-    await db.insert("triples", typeTriples).run(pool);
-    await db.insert("triples", attributeTriples).run(pool);
-    await db.insert("proposals", proposal).run(pool);
+    await db.insert('spaces', space).run(pool)
+    await db.insert('accounts', account).run(pool)
+    await db.insert('geo_entities', geoEntities).run(pool)
+    await db.insert('triples', namesTriples).run(pool)
+    await db.insert('triples', typeTriples).run(pool)
+    await db.insert('triples', attributeTriples).run(pool)
+    await db.insert('proposals', proposal).run(pool)
   } catch (error) {
-    console.error("Error bootstrapping root:", error);
+    console.error('Error bootstrapping root:', error)
   }
-};
+}
