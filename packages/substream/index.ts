@@ -24,7 +24,9 @@ async function main() {
       await bootstrapRoot()
     }
 
-    let startBlockNumber = genesisStartBlockNum
+    let startBlockNumber = process.env.START_BLOCK
+      ? Number(process.env.START_BLOCK)
+      : genesisStartBlockNum
 
     if (options.fromCache) {
       console.log('populating geo data from cache')
