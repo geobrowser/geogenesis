@@ -1,7 +1,8 @@
 import { Command } from "commander";
 import { Effect } from "effect";
+import { populateFromCache } from "./src/populateCache.js";
 import { runStream } from "./src/runStream.js";
-import { resetDatabaseToGenesis } from "./src/utils/resetDatabaseToGenesis.js";
+import { resetPublicTablesToGenesis } from "./src/utils/resetPublicTablesToGenesis.js";
 
 async function main() {
   try {
@@ -15,20 +16,17 @@ async function main() {
 
     const options = program.opts();
 
-    console.log("Options: ", options);
-
     if (options.fromGenesis) {
-      await resetDatabaseToGenesis();
+      await resetPublicTablesToGenesis();
     }
 
     if (options.fromCache) {
-      // 1. reset database to genesis
-      // 2. populate with cached entries + roles
-      // 3. update the public.cursor to the cached.cursor
-      // 4. carry on streaming
+      await resetPublicTablesToGenesis();
+      const startBlockNum = await populateFromCache();
+      await Effect.runPromise(runStream(startBlockNum));
+    } else {
+      await Effect.runPromise(runStream());
     }
-
-    await Effect.runPromise(runStream());
   } catch (error) {
     console.error("An error occurred:", error);
   }

@@ -84,10 +84,10 @@ declare module 'zapatos/schema' {
     export interface Selectable {
       /**
       * **actions.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('actions_id_seq'::regclass)`
+      * - `text` in database
+      * - `NOT NULL`, no default
       */
-      id: number;
+      id: string;
       /**
       * **actions.action_type**
       * - `text` in database
@@ -154,14 +154,32 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       version_id: string;
+      /**
+      * **actions.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **actions.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+      /**
+      * **actions.cursor**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      cursor: string;
     }
     export interface JSONSelectable {
       /**
       * **actions.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('actions_id_seq'::regclass)`
+      * - `text` in database
+      * - `NOT NULL`, no default
       */
-      id: number;
+      id: string;
       /**
       * **actions.action_type**
       * - `text` in database
@@ -228,14 +246,32 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       version_id: string;
+      /**
+      * **actions.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **actions.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+      /**
+      * **actions.cursor**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      cursor: string;
     }
     export interface Whereable {
       /**
       * **actions.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('actions_id_seq'::regclass)`
+      * - `text` in database
+      * - `NOT NULL`, no default
       */
-      id?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **actions.action_type**
       * - `text` in database
@@ -302,14 +338,32 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **actions.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **actions.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **actions.cursor**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      cursor?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
       * **actions.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('actions_id_seq'::regclass)`
+      * - `text` in database
+      * - `NOT NULL`, no default
       */
-      id?: number | db.Parameter<number> | db.DefaultType | db.SQLFragment;
+      id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **actions.action_type**
       * - `text` in database
@@ -376,14 +430,32 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       version_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **actions.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **actions.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **actions.cursor**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      cursor: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
       * **actions.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('actions_id_seq'::regclass)`
+      * - `text` in database
+      * - `NOT NULL`, no default
       */
-      id?: number | db.Parameter<number> | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.DefaultType | db.SQLFragment>;
+      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **actions.action_type**
       * - `text` in database
@@ -450,6 +522,24 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **actions.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **actions.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **actions.cursor**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      cursor?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'actions_pkey';
     export type Column = keyof Selectable;
@@ -596,6 +686,36 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       description: string | null;
+      /**
+      * **geo_entities.created_by_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_by_id: string;
+      /**
+      * **geo_entities.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **geo_entities.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+      /**
+      * **geo_entities.updated_at**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      updated_at: number | null;
+      /**
+      * **geo_entities.updated_at_block**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      updated_at_block: number | null;
     }
     export interface JSONSelectable {
       /**
@@ -616,6 +736,36 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       description: string | null;
+      /**
+      * **geo_entities.created_by_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_by_id: string;
+      /**
+      * **geo_entities.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **geo_entities.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+      /**
+      * **geo_entities.updated_at**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      updated_at: number | null;
+      /**
+      * **geo_entities.updated_at_block**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      updated_at_block: number | null;
     }
     export interface Whereable {
       /**
@@ -636,6 +786,36 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       description?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **geo_entities.created_by_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **geo_entities.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **geo_entities.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **geo_entities.updated_at**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      updated_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **geo_entities.updated_at_block**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      updated_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -656,6 +836,36 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **geo_entities.created_by_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_by_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **geo_entities.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **geo_entities.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **geo_entities.updated_at**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      updated_at?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **geo_entities.updated_at_block**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      updated_at_block?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -676,6 +886,36 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **geo_entities.created_by_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **geo_entities.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **geo_entities.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **geo_entities.updated_at**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      updated_at?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **geo_entities.updated_at_block**
+      * - `int4` in database
+      * - Nullable, no default
+      */
+      updated_at_block?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment>;
     }
     export type UniqueIndex = 'geo_entities_pkey';
     export type Column = keyof Selectable;
@@ -709,6 +949,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       type_id: string;
+      /**
+      * **geo_entity_types.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **geo_entity_types.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
     }
     export interface JSONSelectable {
       /**
@@ -729,6 +981,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       type_id: string;
+      /**
+      * **geo_entity_types.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **geo_entity_types.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
     }
     export interface Whereable {
       /**
@@ -749,6 +1013,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       type_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **geo_entity_types.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **geo_entity_types.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -769,6 +1045,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       type_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **geo_entity_types.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **geo_entity_types.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -789,6 +1077,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       type_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **geo_entity_types.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **geo_entity_types.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'geo_entity_types_pkey' | 'geo_entity_types_unique_entity_type_pair';
     export type Column = keyof Selectable;
@@ -1378,6 +1678,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       proposal_id: string;
+      /**
+      * **proposed_versions.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string;
     }
     export interface JSONSelectable {
       /**
@@ -1428,6 +1734,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       proposal_id: string;
+      /**
+      * **proposed_versions.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string;
     }
     export interface Whereable {
       /**
@@ -1478,6 +1790,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposed_versions.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -1528,6 +1846,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       proposal_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposed_versions.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -1578,6 +1902,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposed_versions.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'proposed_versions_pkey';
     export type Column = keyof Selectable;
@@ -1605,6 +1935,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id: string;
+      /**
+      * **space_admins.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **space_admins.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
     }
     export interface JSONSelectable {
       /**
@@ -1619,6 +1961,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id: string;
+      /**
+      * **space_admins.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **space_admins.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
     }
     export interface Whereable {
       /**
@@ -1633,6 +1987,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_admins.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_admins.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -1647,6 +2013,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **space_admins.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **space_admins.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -1661,6 +2039,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **space_admins.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **space_admins.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'space_admins_unique_account_space_pair';
     export type Column = keyof Selectable;
@@ -1688,6 +2078,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id: string;
+      /**
+      * **space_editor_controllers.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **space_editor_controllers.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
     }
     export interface JSONSelectable {
       /**
@@ -1702,6 +2104,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id: string;
+      /**
+      * **space_editor_controllers.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **space_editor_controllers.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
     }
     export interface Whereable {
       /**
@@ -1716,6 +2130,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_editor_controllers.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_editor_controllers.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -1730,6 +2156,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **space_editor_controllers.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **space_editor_controllers.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -1744,6 +2182,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **space_editor_controllers.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **space_editor_controllers.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'space_editor_controllers_unique_account_space_pair';
     export type Column = keyof Selectable;
@@ -1771,6 +2221,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id: string;
+      /**
+      * **space_editors.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **space_editors.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
     }
     export interface JSONSelectable {
       /**
@@ -1785,6 +2247,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id: string;
+      /**
+      * **space_editors.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **space_editors.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
     }
     export interface Whereable {
       /**
@@ -1799,6 +2273,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_editors.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_editors.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -1813,6 +2299,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **space_editors.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **space_editors.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -1827,6 +2325,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       account_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **space_editors.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **space_editors.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'space_editors_unique_account_space_pair';
     export type Column = keyof Selectable;
@@ -2134,6 +2644,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       space_id: string;
+      /**
+      * **triples.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **triples.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
     }
     export interface JSONSelectable {
       /**
@@ -2202,6 +2724,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       space_id: string;
+      /**
+      * **triples.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **triples.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
     }
     export interface Whereable {
       /**
@@ -2270,6 +2804,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triples.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triples.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -2338,6 +2884,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       space_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **triples.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **triples.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -2406,6 +2964,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **triples.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **triples.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'triples_pkey';
     export type Column = keyof Selectable;
@@ -2469,6 +3039,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       entity_id: string;
+      /**
+      * **versions.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string;
     }
     export interface JSONSelectable {
       /**
@@ -2519,6 +3095,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       entity_id: string;
+      /**
+      * **versions.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string;
     }
     export interface Whereable {
       /**
@@ -2569,6 +3151,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **versions.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -2619,6 +3207,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       entity_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **versions.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -2669,6 +3263,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **versions.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'versions_pkey';
     export type Column = keyof Selectable;
@@ -2706,119 +3306,6 @@ declare module 'zapatos/schema' {
     /* (none) */
   
     /* --- tables --- */
-  
-    /**
-     * **cache.cursors**
-     * - Table in database
-     */
-    export namespace cursors {
-      export type Table = 'cache.cursors';
-      export interface Selectable {
-        /**
-        * **cache.cursors.id**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        id: number;
-        /**
-        * **cache.cursors.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        cursor: string;
-        /**
-        * **cache.cursors.block_number**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        block_number: number;
-      }
-      export interface JSONSelectable {
-        /**
-        * **cache.cursors.id**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        id: number;
-        /**
-        * **cache.cursors.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        cursor: string;
-        /**
-        * **cache.cursors.block_number**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        block_number: number;
-      }
-      export interface Whereable {
-        /**
-        * **cache.cursors.id**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        id?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
-        /**
-        * **cache.cursors.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        cursor?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-        /**
-        * **cache.cursors.block_number**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        block_number?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
-      }
-      export interface Insertable {
-        /**
-        * **cache.cursors.id**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        id: number | db.Parameter<number> | db.SQLFragment;
-        /**
-        * **cache.cursors.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        cursor: string | db.Parameter<string> | db.SQLFragment;
-        /**
-        * **cache.cursors.block_number**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        block_number: number | db.Parameter<number> | db.SQLFragment;
-      }
-      export interface Updatable {
-        /**
-        * **cache.cursors.id**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        id?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
-        /**
-        * **cache.cursors.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        cursor?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-        /**
-        * **cache.cursors.block_number**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        block_number?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
-      }
-      export type UniqueIndex = 'cursors_pkey';
-      export type Column = keyof Selectable;
-      export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-      export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
-      export type SQL = SQLExpression | SQLExpression[];
-    }
   
     /**
      * **cache.entries**
@@ -3037,11 +3524,17 @@ declare module 'zapatos/schema' {
         */
         type: string;
         /**
-        * **cache.roles.block_number**
+        * **cache.roles.created_at**
         * - `int4` in database
         * - `NOT NULL`, no default
         */
-        block_number: number;
+        created_at: number;
+        /**
+        * **cache.roles.created_at_block**
+        * - `int4` in database
+        * - `NOT NULL`, no default
+        */
+        created_at_block: number;
         /**
         * **cache.roles.cursor**
         * - `text` in database
@@ -3087,11 +3580,17 @@ declare module 'zapatos/schema' {
         */
         type: string;
         /**
-        * **cache.roles.block_number**
+        * **cache.roles.created_at**
         * - `int4` in database
         * - `NOT NULL`, no default
         */
-        block_number: number;
+        created_at: number;
+        /**
+        * **cache.roles.created_at_block**
+        * - `int4` in database
+        * - `NOT NULL`, no default
+        */
+        created_at_block: number;
         /**
         * **cache.roles.cursor**
         * - `text` in database
@@ -3137,11 +3636,17 @@ declare module 'zapatos/schema' {
         */
         type?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.roles.block_number**
+        * **cache.roles.created_at**
         * - `int4` in database
         * - `NOT NULL`, no default
         */
-        block_number?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+        created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+        /**
+        * **cache.roles.created_at_block**
+        * - `int4` in database
+        * - `NOT NULL`, no default
+        */
+        created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
         /**
         * **cache.roles.cursor**
         * - `text` in database
@@ -3187,11 +3692,17 @@ declare module 'zapatos/schema' {
         */
         type: string | db.Parameter<string> | db.SQLFragment;
         /**
-        * **cache.roles.block_number**
+        * **cache.roles.created_at**
         * - `int4` in database
         * - `NOT NULL`, no default
         */
-        block_number: number | db.Parameter<number> | db.SQLFragment;
+        created_at: number | db.Parameter<number> | db.SQLFragment;
+        /**
+        * **cache.roles.created_at_block**
+        * - `int4` in database
+        * - `NOT NULL`, no default
+        */
+        created_at_block: number | db.Parameter<number> | db.SQLFragment;
         /**
         * **cache.roles.cursor**
         * - `text` in database
@@ -3237,11 +3748,17 @@ declare module 'zapatos/schema' {
         */
         type?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
         /**
-        * **cache.roles.block_number**
+        * **cache.roles.created_at**
         * - `int4` in database
         * - `NOT NULL`, no default
         */
-        block_number?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+        created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+        /**
+        * **cache.roles.created_at_block**
+        * - `int4` in database
+        * - `NOT NULL`, no default
+        */
+        created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
         /**
         * **cache.roles.cursor**
         * - `text` in database
@@ -3258,20 +3775,20 @@ declare module 'zapatos/schema' {
   
     /* --- aggregate types --- */
   
-    export type Table = cursors.Table | entries.Table | roles.Table;
-    export type Selectable = cursors.Selectable | entries.Selectable | roles.Selectable;
-    export type JSONSelectable = cursors.JSONSelectable | entries.JSONSelectable | roles.JSONSelectable;
-    export type Whereable = cursors.Whereable | entries.Whereable | roles.Whereable;
-    export type Insertable = cursors.Insertable | entries.Insertable | roles.Insertable;
-    export type Updatable = cursors.Updatable | entries.Updatable | roles.Updatable;
-    export type UniqueIndex = cursors.UniqueIndex | entries.UniqueIndex | roles.UniqueIndex;
-    export type Column = cursors.Column | entries.Column | roles.Column;
+    export type Table = entries.Table | roles.Table;
+    export type Selectable = entries.Selectable | roles.Selectable;
+    export type JSONSelectable = entries.JSONSelectable | roles.JSONSelectable;
+    export type Whereable = entries.Whereable | roles.Whereable;
+    export type Insertable = entries.Insertable | roles.Insertable;
+    export type Updatable = entries.Updatable | roles.Updatable;
+    export type UniqueIndex = entries.UniqueIndex | roles.UniqueIndex;
+    export type Column = entries.Column | roles.Column;
   
-    export type AllBaseTables = [cursors.Table, entries.Table, roles.Table];
+    export type AllBaseTables = [entries.Table, roles.Table];
     export type AllForeignTables = [];
     export type AllViews = [];
     export type AllMaterializedViews = [];
-    export type AllTablesAndViews = [cursors.Table, entries.Table, roles.Table];
+    export type AllTablesAndViews = [entries.Table, roles.Table];
   }
 
 
@@ -3313,7 +3830,6 @@ declare module 'zapatos/schema' {
     "subspaces": subspaces.Selectable;
     "triples": triples.Selectable;
     "versions": versions.Selectable;
-    "cache.cursors": cache.cursors.Selectable;
     "cache.entries": cache.entries.Selectable;
     "cache.roles": cache.roles.Selectable;
   }[T];
@@ -3334,7 +3850,6 @@ declare module 'zapatos/schema' {
     "subspaces": subspaces.JSONSelectable;
     "triples": triples.JSONSelectable;
     "versions": versions.JSONSelectable;
-    "cache.cursors": cache.cursors.JSONSelectable;
     "cache.entries": cache.entries.JSONSelectable;
     "cache.roles": cache.roles.JSONSelectable;
   }[T];
@@ -3355,7 +3870,6 @@ declare module 'zapatos/schema' {
     "subspaces": subspaces.Whereable;
     "triples": triples.Whereable;
     "versions": versions.Whereable;
-    "cache.cursors": cache.cursors.Whereable;
     "cache.entries": cache.entries.Whereable;
     "cache.roles": cache.roles.Whereable;
   }[T];
@@ -3376,7 +3890,6 @@ declare module 'zapatos/schema' {
     "subspaces": subspaces.Insertable;
     "triples": triples.Insertable;
     "versions": versions.Insertable;
-    "cache.cursors": cache.cursors.Insertable;
     "cache.entries": cache.entries.Insertable;
     "cache.roles": cache.roles.Insertable;
   }[T];
@@ -3397,7 +3910,6 @@ declare module 'zapatos/schema' {
     "subspaces": subspaces.Updatable;
     "triples": triples.Updatable;
     "versions": versions.Updatable;
-    "cache.cursors": cache.cursors.Updatable;
     "cache.entries": cache.entries.Updatable;
     "cache.roles": cache.roles.Updatable;
   }[T];
@@ -3418,7 +3930,6 @@ declare module 'zapatos/schema' {
     "subspaces": subspaces.UniqueIndex;
     "triples": triples.UniqueIndex;
     "versions": versions.UniqueIndex;
-    "cache.cursors": cache.cursors.UniqueIndex;
     "cache.entries": cache.entries.UniqueIndex;
     "cache.roles": cache.roles.UniqueIndex;
   }[T];
@@ -3439,7 +3950,6 @@ declare module 'zapatos/schema' {
     "subspaces": subspaces.Column;
     "triples": triples.Column;
     "versions": versions.Column;
-    "cache.cursors": cache.cursors.Column;
     "cache.entries": cache.entries.Column;
     "cache.roles": cache.roles.Column;
   }[T];
@@ -3460,7 +3970,6 @@ declare module 'zapatos/schema' {
     "subspaces": subspaces.SQL;
     "triples": triples.SQL;
     "versions": versions.SQL;
-    "cache.cursors": cache.cursors.SQL;
     "cache.entries": cache.entries.SQL;
     "cache.roles": cache.roles.SQL;
   }[T];

@@ -14,11 +14,9 @@
         "prepublishOnly": "npm run build",
         "nukePublic": "ts-node ./src/utils/executeSql.ts ./src/sql/nukePublic.sql",
         "zapatos": "dotenv -e .env -- npx zapatos",
-        "fromGenesis": "dotenv -e .env -- node dist/index.js --from-genesis",
-        "start": "dotenv -e .env -- node dist/index.js"
+        "fromGenesis": "dotenv -e .env -- node dist/index.js --from-genesis"
     },
     "dependencies": {
-        "@connectrpc/connect": "^1.1.3",
         "@connectrpc/connect-node": "^1.1.3",
         "@effect/platform-node": "^0.31.9",
         "@effect/schema": "^0.48.4",
@@ -41,7 +39,6 @@
     "devDependencies": {
         "@tsconfig/recommended": "latest",
         "@types/node": "latest",
-        "@types/pg": "^8.10.9",
         "dotenv-cli": "^7.3.0",
         "esbuild": "^0.19.5",
         "typescript": "latest"

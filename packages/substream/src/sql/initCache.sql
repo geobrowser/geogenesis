@@ -1,4 +1,3 @@
--- Uncomment, run init-db.sql, and recommend line below if you need to update the schema
 -- DROP SCHEMA IF EXISTS cache CASCADE;
 CREATE SCHEMA IF NOT EXISTS cache;
 
@@ -22,7 +21,8 @@ CREATE TABLE IF NOT EXISTS cache.roles (
     sender text NOT NULL,
     space text NOT NULL,
     type text NOT NULL,
-    block_number integer NOT NULL,
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
     cursor text NOT NULL
 );
 
@@ -32,12 +32,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS unique_cached_roles ON cache.roles (
     sender,
     space,
     type,
-    block_number,
+    created_at_block,
     cursor
-);
-
-CREATE TABLE IF NOT EXISTS cache.cursors (
-    id integer PRIMARY KEY,
-    cursor text NOT NULL,
-    block_number integer NOT NULL
 );

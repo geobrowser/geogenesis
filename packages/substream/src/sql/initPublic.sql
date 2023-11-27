@@ -21,8 +21,12 @@ CREATE TABLE public.spaces (
 CREATE TABLE public.geo_entities (
     id text PRIMARY KEY,
     name character varying,
-    description character varying -- is_type boolean DEFAULT false,
-    -- is_attribute boolean DEFAULT false,
+    description character varying,
+    created_by_id text NOT NULL REFERENCES public.accounts(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    updated_at integer,
+    updated_at_block integer -- is_attribute boolean DEFAULT false,
     -- attribute_value_type_id text
 );
 
@@ -30,6 +34,8 @@ CREATE TABLE public.geo_entity_types (
     id serial PRIMARY KEY,
     entity_id text NOT NULL REFERENCES public.geo_entities(id),
     type_id text NOT NULL REFERENCES public.geo_entities(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
     CONSTRAINT geo_entity_types_unique_entity_type_pair UNIQUE (entity_id, type_id)
 );
 
@@ -67,24 +73,31 @@ CREATE TABLE public.proposed_versions (
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     entity_id text NOT NULL REFERENCES public.geo_entities(id),
-    proposal_id text NOT NULL REFERENCES public.proposals(id)
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
+    space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
 CREATE TABLE public.space_admins (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
     CONSTRAINT space_admins_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
 CREATE TABLE public.space_editors (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
     CONSTRAINT space_editors_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
 CREATE TABLE public.space_editor_controllers (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
     CONSTRAINT space_editor_controllers_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
@@ -114,7 +127,9 @@ CREATE TABLE public.triples (
     array_value text,
     entity_value_id text REFERENCES public.geo_entities(id),
     is_protected boolean NOT NULL,
-    space_id text NOT NULL REFERENCES public.spaces(id)
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL
 );
 
 CREATE TABLE public.versions (
@@ -124,12 +139,13 @@ CREATE TABLE public.versions (
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
-    proposed_version_id text NOT NULL REFERENCES public.proposed_versions(id) NOT NULL,
-    entity_id text NOT NULL REFERENCES public.geo_entities(id)
+    proposed_version_id text NOT NULL REFERENCES public.proposed_versions(id),
+    entity_id text NOT NULL REFERENCES public.geo_entities(id),
+    space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
 CREATE TABLE public.actions (
-    id serial PRIMARY KEY,
+    id text PRIMARY KEY NOT NULL,
     action_type text NOT NULL,
     entity_id text REFERENCES public.geo_entities(id) NOT NULL,
     attribute_id text REFERENCES public.geo_entities(id) NOT NULL,
@@ -140,7 +156,10 @@ CREATE TABLE public.actions (
     entity_value text REFERENCES public.geo_entities(id),
     array_value text [],
     proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
-    version_id text REFERENCES public.versions(id) NOT NULL
+    version_id text REFERENCES public.versions(id) NOT NULL,
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    cursor text NOT NULL
 );
 
 -- 

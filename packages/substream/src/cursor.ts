@@ -7,29 +7,10 @@ export const readCursor = async () => {
   return cursor?.cursor;
 };
 
-export const readCacheCursor = async () => {
-  const cursor = await db.selectOne("cache.cursors", { id: 0 }).run(pool);
-  console.log("Using cache cursor with start block:", cursor?.block_number);
-  return cursor?.cursor;
-};
-
 export const writeCursor = async (cursor: string, block_number: number) => {
   try {
     await db.upsert("cursors", { id: 0, cursor, block_number }, "id").run(pool);
   } catch (error) {
     console.error("Error writing cursor:", error);
-  }
-};
-
-export const writeCacheCursor = async (
-  cursor: string,
-  block_number: number
-) => {
-  try {
-    await db
-      .upsert("cache.cursors", { id: 0, cursor, block_number }, "id")
-      .run(pool);
-  } catch (error) {
-    console.error("Error writing cache cursor:", error);
   }
 };

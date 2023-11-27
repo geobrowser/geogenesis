@@ -1,22 +1,71 @@
 import * as db from "zapatos/db";
 import type * as s from "zapatos/schema";
-import { readCacheCursor } from "./cursor";
+import { genesisStartBlockNum } from "./constants/constants";
 import { populateWithFullEntries } from "./populateEntries";
+import { handleRoleGranted, handleRoleRevoked } from "./populateRoles";
 import { pool } from "./utils/pool";
-import { FullEntry, RoleChange } from "./zod";
+import { FullEntry, RoleChange, ZodRoleChange } from "./zod";
 
 export const populateFromCache = async () => {
-  const cachedEntries = await readCacheEntries();
-  const cachedRoles = await readCacheRoles();
-  const cachedCursor = await readCacheCursor();
+  try {
+    const cachedEntries = await readCacheEntries();
+    console.log("Cached entries:", cachedEntries.length);
+    const cachedRoles = await readCacheRoles();
+    console.log("Cached roles:", cachedRoles.length);
 
-  for (const cachedEntry of cachedEntries) {
-    await populateWithFullEntries({
-      fullEntries: cachedEntry.data as any, // TODO: Zod typecheck this JSON
-      blockNumber: cachedEntry.block_number,
-      timestamp: cachedEntry.timestamp,
-      cursor: cachedEntry.cursor,
-    });
+    let blockNumber = genesisStartBlockNum;
+
+    for (let i = 0; i < cachedEntries.length; i++) {
+      console.log(`Processing cachedEntry at index: ${i}`);
+      await populateWithFullEntries({
+        fullEntries: cachedEntries[i].data as any, // TODO: Zod typecheck this JSON
+        blockNumber: cachedEntries[i].block_number,
+        timestamp: cachedEntries[i].timestamp,
+        cursor: cachedEntries[i].cursor,
+      });
+
+      blockNumber = cachedEntries[i].block_number;
+    }
+    for (let i = 0; i < cachedRoles.length; i++) {
+      console.log(`Processing cachedRole at index: ${i}`);
+      const cachedRole = cachedRoles[i];
+      const roleChange = ZodRoleChange.safeParse({
+        role: cachedRole.role,
+        space: cachedRole.space,
+        account: cachedRole.account,
+        sender: cachedRole.sender,
+      });
+
+      if (!roleChange.success) {
+        console.error("Failed to parse cached role change");
+        console.error(roleChange);
+        console.error(roleChange.error);
+        continue;
+      }
+
+      if (cachedRole.type === "GRANTED") {
+        await handleRoleGranted({
+          roleGranted: roleChange.data,
+          blockNumber: cachedRole.created_at_block,
+          timestamp: cachedRole.created_at,
+          cursor: cachedRole.cursor,
+        });
+      } else if (cachedRole.type === "REVOKED") {
+        await handleRoleRevoked({
+          roleRevoked: roleChange.data,
+          blockNumber: cachedRole.created_at_block,
+          cursor: cachedRole.cursor,
+          timestamp: cachedRole.created_at,
+        });
+      }
+
+      if (cachedRole.created_at_block > blockNumber) {
+        blockNumber = cachedRole.created_at_block;
+      }
+    }
+    return blockNumber;
+  } catch (error) {
+    console.error("Error in populateFromCache:", error);
   }
 };
 
@@ -31,18 +80,22 @@ export const upsertCachedEntries = async ({
   cursor: string;
   timestamp: number;
 }) => {
-  const cachedEntry: s.cache.entries.Insertable = {
-    block_number: blockNumber,
-    cursor,
-    data: JSON.stringify(fullEntries),
-    timestamp,
-  };
+  try {
+    const cachedEntry: s.cache.entries.Insertable = {
+      block_number: blockNumber,
+      cursor,
+      data: JSON.stringify(fullEntries),
+      timestamp,
+    };
 
-  await db
-    .upsert("cache.entries", cachedEntry, ["cursor"], {
-      updateColumns: db.doNothing,
-    })
-    .run(pool);
+    await db
+      .upsert("cache.entries", cachedEntry, ["cursor"], {
+        updateColumns: db.doNothing,
+      })
+      .run(pool);
+  } catch (error) {
+    console.error("Error upserting cached entry:", error);
+  }
 };
 
 export const upsertCachedRoles = async ({
@@ -50,32 +103,47 @@ export const upsertCachedRoles = async ({
   blockNumber,
   cursor,
   type,
+  timestamp,
 }: {
   roleChange: RoleChange;
+  timestamp: number;
   blockNumber: number;
   cursor: string;
   type: "GRANTED" | "REVOKED";
 }) => {
-  const cachedRole: s.cache.roles.Insertable = {
-    block_number: blockNumber,
-    role: roleChange.role,
-    space: roleChange.space,
-    account: roleChange.account,
-    cursor,
-    sender: roleChange.sender,
-    type,
-  };
+  try {
+    const cachedRole: s.cache.roles.Insertable = {
+      created_at: timestamp,
+      created_at_block: blockNumber,
+      role: roleChange.role,
+      space: roleChange.space,
+      account: roleChange.account,
+      cursor,
+      sender: roleChange.sender,
+      type,
+    };
 
-  await db
-    .upsert(
-      "cache.roles",
-      cachedRole,
-      ["role", "account", "sender", "space", "type", "block_number", "cursor"],
-      {
-        updateColumns: db.doNothing,
-      }
-    )
-    .run(pool);
+    await db
+      .upsert(
+        "cache.roles",
+        cachedRole,
+        [
+          "role",
+          "account",
+          "sender",
+          "space",
+          "type",
+          "created_at_block",
+          "cursor",
+        ],
+        {
+          updateColumns: db.doNothing,
+        }
+      )
+      .run(pool);
+  } catch (error) {
+    console.error("Error upserting cached role:", error);
+  }
 };
 
 export const readCacheEntries = async () => {

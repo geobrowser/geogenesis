@@ -18,7 +18,7 @@ export const ZodAction = z.object({
     .object({
       type: z.enum(["number", "string", "entity", "image", "date", "url"]),
       id: z.string(),
-      value: z.string().nullable(),
+      value: z.string().nullish(),
     })
     .refine((data) => data.id || data.value, {
       message: "Either id or value must be provided",

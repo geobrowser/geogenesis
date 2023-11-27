@@ -6,10 +6,12 @@ import { RoleChange } from "./zod";
 export const handleRoleGranted = async ({
   roleGranted,
   blockNumber,
+  timestamp,
   cursor,
 }: {
   roleGranted: RoleChange;
   blockNumber: number;
+  timestamp: number;
   cursor: string;
 }) => {
   try {
@@ -25,28 +27,50 @@ export const handleRoleGranted = async ({
       blockNumber,
       cursor,
       type: "GRANTED",
+      timestamp,
     });
 
     if (isAdminRole) {
       await db
-        .insert("space_admins", {
-          space_id: roleGranted.space,
-          account_id: roleGranted.account,
-        })
+        .upsert(
+          "space_admins",
+          {
+            space_id: roleGranted.space,
+            account_id: roleGranted.account,
+            created_at: timestamp,
+            created_at_block: blockNumber,
+          },
+          ["space_id", "account_id"],
+          { updateColumns: db.doNothing }
+        )
         .run(pool);
     } else if (isMemberRole) {
       await db
-        .insert("space_editors", {
-          space_id: roleGranted.space,
-          account_id: roleGranted.account,
-        })
+        .upsert(
+          "space_editors",
+          {
+            space_id: roleGranted.space,
+            account_id: roleGranted.account,
+            created_at: timestamp,
+            created_at_block: blockNumber,
+          },
+          ["space_id", "account_id"],
+          { updateColumns: db.doNothing }
+        )
         .run(pool);
     } else if (isModeratorRole) {
       await db
-        .insert("space_editor_controllers", {
-          space_id: roleGranted.space,
-          account_id: roleGranted.account,
-        })
+        .upsert(
+          "space_editor_controllers",
+          {
+            space_id: roleGranted.space,
+            account_id: roleGranted.account,
+            created_at: timestamp,
+            created_at_block: blockNumber,
+          },
+          ["space_id", "account_id"],
+          { updateColumns: db.doNothing }
+        )
         .run(pool);
     }
   } catch (error) {
@@ -57,10 +81,12 @@ export const handleRoleGranted = async ({
 export const handleRoleRevoked = async ({
   roleRevoked,
   blockNumber,
+  timestamp,
   cursor,
 }: {
   roleRevoked: RoleChange;
   blockNumber: number;
+  timestamp: number;
   cursor: string;
 }) => {
   try {
@@ -74,6 +100,7 @@ export const handleRoleRevoked = async ({
     upsertCachedRoles({
       roleChange: roleRevoked,
       blockNumber,
+      timestamp,
       cursor,
       type: "REVOKED",
     });
