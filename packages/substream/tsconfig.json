@@ -10,7 +10,8 @@
     "esModuleInterop": true,
     "declarationMap": true,
     "strictNullChecks": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "skipLibCheck": true
   },
   "include": ["index.ts", "src/**/*"]
 }

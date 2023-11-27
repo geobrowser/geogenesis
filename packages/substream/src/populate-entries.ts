@@ -336,6 +336,7 @@ export const toProposals = ({
       const proposalId = generateProposalId({ entryIdx, cursor })
       return {
         id: proposalId,
+        name: fullEntry.uriData.name,
         created_at_block: blockNumber,
         created_by_id: fullEntry.author,
         space_id: fullEntry.space,

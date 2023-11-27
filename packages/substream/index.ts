@@ -24,6 +24,7 @@ async function main() {
     let startBlockNumber = genesisStartBlockNum
 
     if (options.fromCache) {
+      console.log('populating geo data from cache')
       await resetPublicTablesToGenesis()
       startBlockNumber = await populateFromCache()
     }

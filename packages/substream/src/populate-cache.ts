@@ -166,7 +166,9 @@ export const upsertCachedRoles = async ({
 
 export const readCacheEntries = async () => {
   const cachedEntries = await db
-    .select('cache.entries', db.all, { order: { by: 'id', direction: 'ASC' } })
+    .select('cache.entries', db.all, {
+      order: { by: 'block_number', direction: 'ASC' },
+    })
     .run(pool)
 
   return cachedEntries
@@ -174,7 +176,9 @@ export const readCacheEntries = async () => {
 
 export const readCacheRoles = async () => {
   const cachedEntries = await db
-    .select('cache.roles', db.all, { order: { by: 'id', direction: 'ASC' } })
+    .select('cache.roles', db.all, {
+      order: { by: 'created_at_block', direction: 'ASC' },
+    })
     .run(pool)
 
   return cachedEntries
