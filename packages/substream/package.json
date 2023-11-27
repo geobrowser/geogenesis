@@ -1,5 +1,5 @@
 {
-  "name": "geo-substreams-sink",
+  "name": "@geogenesis/substream",
   "version": "0.0.1",
   "description": "Geo Substreams Sink",
   "exports": "./dist/index.js",
