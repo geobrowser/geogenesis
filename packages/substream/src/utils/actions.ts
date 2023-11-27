@@ -13,13 +13,8 @@ export async function actionsFromURI(uri: string) {
   }
 }
 
-export function isValidAction(action: any): action is Action {
-  const parsedAction = ZodAction.safeParse(action)
-  if (parsedAction.success) {
-    return true
-  } else {
-    return false
-  }
+export function isValidAction(action: Action): action is Action {
+  return ZodAction.safeParse(action).success
 }
 
 export const actionTypeCheck = (action: Action) => {

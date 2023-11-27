@@ -13,5 +13,5 @@
     "sourceMap": true,
     "skipLibCheck": true
   },
-  "include": ["index.ts", "src/**/*"]
+  "include": ["index.ts", "src/**/*", "schema.d.ts"]
 }

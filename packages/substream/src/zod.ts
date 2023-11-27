@@ -33,11 +33,13 @@ export const ZodUriData = z.object({
   version: z.string(),
   actions: z.array(ZodAction), // Parsing immediately after receiving data
 })
+
 export type UriData = z.infer<typeof ZodUriData>
 
 export const ZodFullEntry = ZodEntry.extend({
   uriData: ZodUriData,
 })
+
 export type FullEntry = z.infer<typeof ZodFullEntry>
 
 export const ZodRoleChange = z.object({
@@ -47,6 +49,7 @@ export const ZodRoleChange = z.object({
   sender: z.string(),
   space: z.string(),
 })
+
 export type RoleChange = z.infer<typeof ZodRoleChange>
 
 export const ZodEntryStreamResponse = z.object({

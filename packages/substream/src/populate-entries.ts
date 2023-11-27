@@ -138,9 +138,9 @@ export const populateWithFullEntries = async ({
     )
     console.log('TriplesDatabaseTuples Count', triplesDatabaseTuples.length)
 
-    for (const [tupleType, triple] of triplesDatabaseTuples) {
-      const isCreateTriple = tupleType === TripleAction.Create
-      const isDeleteTriple = tupleType === TripleAction.Delete
+    for (const [actionType, triple] of triplesDatabaseTuples) {
+      const isCreateTriple = actionType === TripleAction.Create
+      const isDeleteTriple = actionType === TripleAction.Delete
       const isAddType = triple.attribute_id === TYPES && isCreateTriple
       const isDeleteType = triple.attribute_id === TYPES && isDeleteTriple
 
@@ -166,7 +166,9 @@ export const populateWithFullEntries = async ({
             { updateColumns: db.doNothing }
           )
           .run(pool)
-      } else if (isDeleteType) {
+      }
+
+      if (isDeleteType) {
         console.log(
           'Deleting type',
           triple.value_id,
