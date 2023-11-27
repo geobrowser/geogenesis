@@ -1,0 +1,13 @@
+node_modules
+Cargo.lock
+target
+*-linux
+*-macos
+*-win.exe
+dist
+*.log
+data
+build
+*.lock
+!example.js
+.env
