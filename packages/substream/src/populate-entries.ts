@@ -105,6 +105,9 @@ export const populateWithFullEntries = async ({
       cursor,
     })
     console.log('Proposals Count', proposals.length)
+    await upsertChunked('proposals', proposals, 'id', {
+      updateColumns: db.doNothing,
+    })
 
     const proposed_versions: s.proposed_versions.Insertable[] =
       toProposedVersions({
