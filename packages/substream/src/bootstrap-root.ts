@@ -160,7 +160,7 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
     entity_id: id,
     attribute_id: NAME,
     value_type: 'string',
-    value_id: name,
+    value_id: id,
     string_value: name,
     is_protected: true,
     space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,

@@ -4,6 +4,7 @@ import { populateFromCache } from './src/populate-cache.js'
 import { getStreamEffect } from './src/run-stream.js'
 import { resetPublicTablesToGenesis } from './src/utils/reset-public-tables-to-genesis.js'
 import { genesisStartBlockNum } from './src/constants/constants.js'
+import { bootstrapRoot } from './src/bootstrap-root.js'
 
 async function main() {
   try {
@@ -19,6 +20,8 @@ async function main() {
 
     if (options.fromGenesis) {
       await resetPublicTablesToGenesis()
+      console.log('bootstrapping system entities')
+      await bootstrapRoot()
     }
 
     let startBlockNumber = genesisStartBlockNum
@@ -26,6 +29,8 @@ async function main() {
     if (options.fromCache) {
       console.log('populating geo data from cache')
       await resetPublicTablesToGenesis()
+      console.log('bootstrapping system entities')
+      await bootstrapRoot()
       startBlockNumber = await populateFromCache()
     }
 
