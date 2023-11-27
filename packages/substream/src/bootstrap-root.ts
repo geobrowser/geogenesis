@@ -142,8 +142,11 @@ const geoEntities: s.geo_entities.Insertable[] = entities.map((entity) => ({
   // is_attribute: attributes[entity] ? true : false,
   // is_type: types[entity] ? true : false,
   // attribute_value_type_id: attributes[entity],
+  created_by_id: ROOT_SPACE_CREATED_BY_ID,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   created_at: ROOT_SPACE_CREATED_AT,
+  updated_at: ROOT_SPACE_CREATED_AT,
+  updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
 }))
 
 const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
