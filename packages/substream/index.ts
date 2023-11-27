@@ -1,8 +1,9 @@
 import { Command } from 'commander'
 import { Effect } from 'effect'
 import { populateFromCache } from './src/populate-cache.js'
-import { runStream } from './src/run-stream.js'
+import { getStreamEffect } from './src/run-stream.js'
 import { resetPublicTablesToGenesis } from './src/utils/reset-public-tables-to-genesis.js'
+import { genesisStartBlockNum } from './src/constants/constants.js'
 
 async function main() {
   try {
@@ -20,13 +21,14 @@ async function main() {
       await resetPublicTablesToGenesis()
     }
 
+    let startBlockNumber = genesisStartBlockNum
+
     if (options.fromCache) {
       await resetPublicTablesToGenesis()
-      const startBlockNum = await populateFromCache()
-      await Effect.runPromise(runStream(startBlockNum))
-    } else {
-      await Effect.runPromise(runStream())
+      startBlockNumber = await populateFromCache()
     }
+
+    await Effect.runPromise(getStreamEffect(startBlockNumber))
   } catch (error) {
     console.error('An error occurred:', error)
   }

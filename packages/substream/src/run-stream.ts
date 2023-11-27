@@ -23,7 +23,7 @@ export class InvalidPackageError extends Data.TaggedClass(
   readonly message: string
 }> {}
 
-export function runStream(startBlockNum?: number) {
+export function getStreamEffect(startBlockNum?: number) {
   const program = Effect.gen(function* (_) {
     const substreamsEndpoint = process.env.SUBSTREAMS_ENDPOINT
     invariant(substreamsEndpoint, 'SUBSTREAMS_ENDPOINT is required')
