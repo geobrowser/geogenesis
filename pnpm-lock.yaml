@@ -540,12 +540,13 @@ importers:
       '@connectrpc/connect-node': ^1.1.3
       '@effect/platform-node': ^0.31.9
       '@effect/schema': ^0.48.4
-      '@substreams/core': ^0.6.2
-      '@substreams/manifest': ^0.5.1
-      '@substreams/node': ^0.3.0
+      '@substreams/core': ^0.8.0
+      '@substreams/manifest': ^0.7.0
+      '@substreams/node': ^0.4.3
       '@substreams/sink': ^0.6.0
       '@tsconfig/recommended': latest
       '@types/node': latest
+      '@types/pg': ^8.10.9
       commander: latest
       dotenv: latest
       dotenv-cli: ^7.3.0
@@ -566,9 +567,9 @@ importers:
       '@connectrpc/connect-node': 1.1.3_rabf2hmdfizgo3zlfs6bmsltoi
       '@effect/platform-node': 0.31.9_ahljyljorygtkwayn2ohjn67ui
       '@effect/schema': 0.48.4_rquq5squbjzsx4lxgpih2idvli
-      '@substreams/core': 0.6.2_rabf2hmdfizgo3zlfs6bmsltoi
-      '@substreams/manifest': 0.5.1_oajrmmbqwqbmh5q2wowor3efr4
-      '@substreams/node': 0.3.0
+      '@substreams/core': 0.8.0_rabf2hmdfizgo3zlfs6bmsltoi
+      '@substreams/manifest': 0.7.0_oajrmmbqwqbmh5q2wowor3efr4
+      '@substreams/node': 0.4.3
       '@substreams/sink': 0.6.0_7u2smfe62ftvk6e3q4ynnrpvyq
       commander: 11.1.0
       dotenv: 16.3.1
@@ -584,6 +585,7 @@ importers:
     devDependencies:
       '@tsconfig/recommended': 1.0.3
       '@types/node': 20.10.0
+      '@types/pg': 8.10.9
       dotenv-cli: 7.3.0
       esbuild: 0.19.8
       typescript: 5.3.2
@@ -1159,36 +1161,6 @@ packages:
       '@bufbuild/buf-linux-x64': 1.28.1
       '@bufbuild/buf-win32-arm64': 1.28.1
       '@bufbuild/buf-win32-x64': 1.28.1
-    dev: false
-
-  /@bufbuild/connect-node/0.13.0_@bufbuild+protobuf@1.4.2:
-    resolution: {integrity: sha512-l9tYVWTD9qdVr3PD8iTLmJZoWQY4bYl4UXIyKqvNuqoaAm3pZZvrQXrz0ptS5NRWTVUKPV9DZp6Wbbch5/u55Q==}
-    engines: {node: '>=16.0.0'}
-    deprecated: Connect has moved to its own org @connectrpc and has a stable v1. Run `npx @connectrpc/connect-migrate@latest` to update. See https://github.com/connectrpc/connect-es/releases/tag/v0.13.1 for details.
-    peerDependencies:
-      '@bufbuild/protobuf': ^1.2.1
-    dependencies:
-      '@bufbuild/connect': 0.13.0_@bufbuild+protobuf@1.4.2
-      '@bufbuild/protobuf': 1.4.2
-      headers-polyfill: 3.3.0
-    dev: false
-
-  /@bufbuild/connect/0.12.0_@bufbuild+protobuf@1.4.2:
-    resolution: {integrity: sha512-rYn3Akp7teOkvqxguLbf6QKizH37Yeo33lseV+JHDZC19CsAV9wrrZM17Sa+LNEBj/hrYtQF7EIcllgGxhv9aw==}
-    deprecated: Connect has moved to its own org @connectrpc and has a stable v1. Run `npx @connectrpc/connect-migrate@latest` to update. See https://github.com/connectrpc/connect-es/releases/tag/v0.13.1 for details.
-    peerDependencies:
-      '@bufbuild/protobuf': ^1.2.1
-    dependencies:
-      '@bufbuild/protobuf': 1.4.2
-    dev: false
-
-  /@bufbuild/connect/0.13.0_@bufbuild+protobuf@1.4.2:
-    resolution: {integrity: sha512-eZSMbVLyUFtXiZNORgCEvv580xKZeYQdMOWj2i/nxOcpXQcrEzTMTA7SZzWv4k4gveWCOSRoWmYDeOhfWXJv0g==}
-    deprecated: Connect has moved to its own org @connectrpc and has a stable v1. Run `npx @connectrpc/connect-migrate@latest` to update. See https://github.com/connectrpc/connect-es/releases/tag/v0.13.1 for details.
-    peerDependencies:
-      '@bufbuild/protobuf': ^1.2.1
-    dependencies:
-      '@bufbuild/protobuf': 1.4.2
     dev: false
 
   /@bufbuild/protobuf/1.4.2:
@@ -4915,17 +4887,10 @@ packages:
       '@stablelib/wipe': 1.0.1
     dev: false
 
-  /@substreams/core/0.1.19:
-    resolution: {integrity: sha512-GEEkhJb1XUkBvlRzlA7JOXJnS5XmKO4C6ZPz2djxKkRr98EEWH2C1EGCiK/vBYt2trsOVnq/fYizaqRl6vXW5Q==}
-    dependencies:
-      '@bufbuild/connect': 0.12.0_@bufbuild+protobuf@1.4.2
-      '@bufbuild/protobuf': 1.4.2
-    dev: false
-
-  /@substreams/core/0.6.2_rabf2hmdfizgo3zlfs6bmsltoi:
-    resolution: {integrity: sha512-YvaWPGleSDCbBUR06fKFIOZ37ttNXjQR86dioGkdM2SdBhT5kAjSWN5/GyD1mCeWStMRXjJZIF/qqS/NitIquQ==}
+  /@substreams/core/0.7.0_rabf2hmdfizgo3zlfs6bmsltoi:
+    resolution: {integrity: sha512-SJ70pbIRWNdp17Ld1QbGJpQ2ohvYUBKiAkOKnODeqLCDmc/xKs66nxJCIzQOvIxqLXVRU3QiBwm6NQB3CKrP0A==}
     peerDependencies:
-      '@bufbuild/protobuf': ^1.4.1
+      '@bufbuild/protobuf': ^1.4.2
       '@connectrpc/connect': ^1.1.3
     dependencies:
       '@bufbuild/protobuf': 1.4.2
@@ -4942,33 +4907,33 @@ packages:
       '@connectrpc/connect': 1.1.3_@bufbuild+protobuf@1.4.2
     dev: false
 
-  /@substreams/manifest/0.5.1_oajrmmbqwqbmh5q2wowor3efr4:
-    resolution: {integrity: sha512-M14qceuGUjqQRtLqFzpMI2ZCkBC10n7bREN+uhSFNN+S5IKDUzBVGPe6KYE1or+UI704VpbDvjLX5B3lsTLFjQ==}
+  /@substreams/manifest/0.7.0_oajrmmbqwqbmh5q2wowor3efr4:
+    resolution: {integrity: sha512-pCYd/O7hIi2DylVqeXX9Z7AQiHmJwwnvW/ZOdvi4VGreHSuBcQIL0MxB5OlJ4OFpvLSkh8qp2yZ5nGbzS1TjQQ==}
     peerDependencies:
-      '@bufbuild/buf': ^1.27.2
-      '@bufbuild/protobuf': ^1.4.1
-      '@effect/schema': ^0.46.3
-      effect: ^2.0.0-next.52
-      yaml: ^2.3.3
+      '@bufbuild/buf': ^1.28.0
+      '@bufbuild/protobuf': ^1.4.2
+      '@effect/schema': ^0.48.4
+      effect: 2.0.0-next.55
+      yaml: ^2.3.4
     dependencies:
       '@bufbuild/buf': 1.28.1
       '@bufbuild/protobuf': 1.4.2
       '@effect/schema': 0.48.4_rquq5squbjzsx4lxgpih2idvli
-      '@substreams/core': 0.6.2_rabf2hmdfizgo3zlfs6bmsltoi
+      '@substreams/core': 0.8.0_rabf2hmdfizgo3zlfs6bmsltoi
       effect: 2.0.0-next.56
       yaml: 2.3.4
     transitivePeerDependencies:
       - '@connectrpc/connect'
     dev: false
 
-  /@substreams/node/0.3.0:
-    resolution: {integrity: sha512-vefRR40IESJbxOyx4OlWia0+lJM+sbOft+kOyF0yZd02dDfFta9y4wItYBKVrlFdeHlRUlx6w7PdiykjsVW9qA==}
-    engines: {node: '>=16'}
+  /@substreams/node/0.4.3:
+    resolution: {integrity: sha512-XpzXg4QhNgqTXjXB/OfuBwfp8REgPC9arpPFQ4vNS0toia6BZjOLirB42txl7DLo053FIaEDqPsKaR7D2Cmv0g==}
+    engines: {node: '>=18'}
     dependencies:
-      '@bufbuild/connect': 0.13.0_@bufbuild+protobuf@1.4.2
-      '@bufbuild/connect-node': 0.13.0_@bufbuild+protobuf@1.4.2
       '@bufbuild/protobuf': 1.4.2
-      '@substreams/core': 0.1.19
+      '@connectrpc/connect': 1.1.3_@bufbuild+protobuf@1.4.2
+      '@connectrpc/connect-node': 1.1.3_rabf2hmdfizgo3zlfs6bmsltoi
+      '@substreams/core': 0.7.0_rabf2hmdfizgo3zlfs6bmsltoi
       eventemitter3: 5.0.1
     dev: false
 
@@ -5882,7 +5847,6 @@ packages:
     resolution: {integrity: sha512-D0WfRmU9TQ8I9PFx9Yc+EBHw+vSpIub4IDvQivcp26PtPrdMGAq5SDcpXEo/epqa/DXotVpekHiLNTg3iaKXBQ==}
     dependencies:
       undici-types: 5.26.5
-    dev: true
 
   /@types/node/8.10.66:
     resolution: {integrity: sha512-tktOkFUA4kXx2hhhrB8bIFb5TbwzS4uOhKEmwiD+NoiL0qtP2OQ9mFldbgD4dV1djrlBYP6eBuQZiWjuHUpqFw==}
@@ -5914,10 +5878,9 @@ packages:
   /@types/pg/8.10.9:
     resolution: {integrity: sha512-UksbANNE/f8w0wOMxVKKIrLCbEMV+oM1uKejmwXr39olg4xqcfBDbXxObJAt6XxHbDa4XTKOlUEcEltXDX+XLQ==}
     dependencies:
-      '@types/node': 17.0.45
+      '@types/node': 20.10.0
       pg-protocol: 1.6.0
       pg-types: 4.0.1
-    dev: false
 
   /@types/pluralize/0.0.29:
     resolution: {integrity: sha512-BYOID+l2Aco2nBik+iYS4SZX0Lf20KPILP5RGmM1IgzdwNdTs0eebiFriOPcej1sX9mLnSoiNte5zcFxssgpGA==}
@@ -13827,10 +13790,6 @@ packages:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
     dev: true
 
-  /headers-polyfill/3.3.0:
-    resolution: {integrity: sha512-5e57etwBpNcDc0b6KCVWEh/Ro063OxPvzVimUdM0/tsYM/T7Hfy3kknIGj78SFTOhNd8AZY41U8mOHoO4LzmIQ==}
-    dev: false
-
   /heap/0.2.6:
     resolution: {integrity: sha512-MzzWcnfB1e4EG2vHi3dXHoBupmuXNZzx6pY6HldVS55JKKBoq3xOyzfSaZRkJp37HIhEYC78knabHff3zc4dQQ==}
     dev: true
@@ -16737,7 +16696,6 @@ packages:
 
   /obuf/1.1.2:
     resolution: {integrity: sha512-PX1wu0AmAdPqOL1mWhqmlOd8kOIZQwGZw6rh7uby9fTc5lhaOWFLX3I6R1hrF9k3zUY40e6igsLGkDXK92LJNg==}
-    dev: false
 
   /on-exit-leak-free/0.2.0:
     resolution: {integrity: sha512-dqaz3u44QbRXQooZLTUKU41ZrzYrcvLISVgbrzbyCMxpmSLJvZ3ZamIJIZ29P6OhZIkNIQKosdeM6t1LYbA9hg==}
@@ -17200,12 +17158,10 @@ packages:
   /pg-int8/1.0.1:
     resolution: {integrity: sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==}
     engines: {node: '>=4.0.0'}
-    dev: false
 
   /pg-numeric/1.0.2:
     resolution: {integrity: sha512-BM/Thnrw5jm2kKLE5uJkXqqExRUY/toLHda65XgFTBTFYZyopbKjBe29Ii3RbkvlsMoFwD+tHeGaCjjv0gHlyw==}
     engines: {node: '>=4'}
-    dev: false
 
   /pg-pool/3.6.1_pg@8.11.3:
     resolution: {integrity: sha512-jizsIzhkIitxCGfPRzJn1ZdcosIt3pz9Sh3V01fm1vZnbnCMgmGl5wvGGdNN2EL9Rmb0EcFoCkixH4Pu+sP9Og==}
@@ -17217,7 +17173,6 @@ packages:
 
   /pg-protocol/1.6.0:
     resolution: {integrity: sha512-M+PDm637OY5WM307051+bsDia5Xej6d9IR4GwJse1qA1DIhiKlksvrneZOYQq42OM+spubpcNYEo2FcKQrDk+Q==}
-    dev: false
 
   /pg-sql2/4.14.0_pg@8.11.3:
     resolution: {integrity: sha512-CnKj0LE3jJaP5GWHhcQ5PFxISY44fqQ3TKmMD0k14VrYAcc/CI2ErYXEnnA6klbgXB8F+Lo1/erPSYnoibGFZw==}
@@ -17256,7 +17211,6 @@ packages:
       postgres-date: 2.0.1
       postgres-interval: 3.0.0
       postgres-range: 1.1.3
-    dev: false
 
   /pg/8.11.3:
     resolution: {integrity: sha512-+9iuvG8QfaaUrrph+kpF24cXkH1YOOUeArRNYIxq1viYHZagBxrTno7cecY1Fa44tJeZvaoG+Djpkc3JwehN5g==}
@@ -17573,7 +17527,6 @@ packages:
   /postgres-array/3.0.2:
     resolution: {integrity: sha512-6faShkdFugNQCLwucjPcY5ARoW1SlbnrZjmGl0IrrqewpvxvhSLHimCVzqeuULCbG0fQv7Dtk1yDbG3xv7Veog==}
     engines: {node: '>=12'}
-    dev: false
 
   /postgres-bytea/1.0.0:
     resolution: {integrity: sha512-xy3pmLuQqRBZBXDULy7KbaitYqLcmxigw14Q5sj8QBVLqEwXfeybIKVWiqAXTlcvdvb0+xkOtDbfQMOf4lST1w==}
@@ -17585,7 +17538,6 @@ packages:
     engines: {node: '>= 6'}
     dependencies:
       obuf: 1.1.2
-    dev: false
 
   /postgres-date/1.0.7:
     resolution: {integrity: sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q==}
@@ -17595,7 +17547,6 @@ packages:
   /postgres-date/2.0.1:
     resolution: {integrity: sha512-YtMKdsDt5Ojv1wQRvUhnyDJNSr2dGIC96mQVKz7xufp07nfuFONzdaowrMHjlAzY6GDLd4f+LUHHAAM1h4MdUw==}
     engines: {node: '>=12'}
-    dev: false
 
   /postgres-interval/1.2.0:
     resolution: {integrity: sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==}
@@ -17607,11 +17558,9 @@ packages:
   /postgres-interval/3.0.0:
     resolution: {integrity: sha512-BSNDnbyZCXSxgA+1f5UU2GmwhoI0aU5yMxRGO8CdFEcY2BQF9xm/7MqKnYoM1nJDk8nONNWDk9WeSmePFhQdlw==}
     engines: {node: '>=12'}
-    dev: false
 
   /postgres-range/1.1.3:
     resolution: {integrity: sha512-VdlZoocy5lCP0c/t66xAfclglEapXPCIVhqqJRncYpvbCgImF0w67aPKfbqUMr72tO2k5q0TdTZwCLjPTI6C9g==}
-    dev: false
 
   /postinstall-postinstall/2.1.0:
     resolution: {integrity: sha512-7hQX6ZlZXIoRiWNrbMQaLzUUfH+sSx39u8EJ9HYuDc1kLo9IXKWjM5RSquZN1ad5GnH8CGFM78fsAAQi3OKEEQ==}
@@ -21135,7 +21084,6 @@ packages:
 
   /undici-types/5.26.5:
     resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
-    dev: true
 
   /undici/5.22.1:
     resolution: {integrity: sha512-Ji2IJhFXZY0x/0tVBXeQwgPlLWw13GVzpsWPQ3rV50IFMMof2I55PZZxtm4P6iNq+L5znYN9nSTAq0ZyE6lSJw==}
