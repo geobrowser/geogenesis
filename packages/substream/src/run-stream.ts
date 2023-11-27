@@ -10,11 +10,11 @@ import { genesisStartBlockNum } from './constants/constants'
 import { readCursor, writeCursor } from './cursor'
 import { populateWithEntries } from './populate-entries'
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles'
-import { createSink, createStream } from './substreams.js/sink/src'
+// import { createSink, createStream } from './substreams.js/sink/src'
 import { invariant } from './utils/invariant'
 import { logger } from './utils/logger'
 import { ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod'
-// import * as MessageStorage from "./messages.js";
+import { createSink, createStream } from '@substreams/sink'
 
 export class InvalidPackageError extends Data.TaggedClass(
   'InvalidPackageError'
@@ -116,6 +116,7 @@ export function getStreamEffect(startBlockNum?: number) {
               entryResponse.data.entries.length,
               ' entries'
             )
+
             const entries = entryResponse.data.entries
             entriesQueue = entriesQueue.then(() =>
               populateWithEntries({
