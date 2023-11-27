@@ -48,7 +48,7 @@ export function App({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Navbar onSearchClick={() => setOpen(true)} />
-      <OnboardingDialog />
+
       <CreateProfileDialog />
       <Dialog
         open={open}
@@ -63,6 +63,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <Main>{children}</Main>
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
+        <OnboardingDialog />
         <Toast />
         <FlowBar />
         <Review />
