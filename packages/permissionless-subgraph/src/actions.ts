@@ -114,6 +114,7 @@ export function createProposedVersion(
     proposal.proposedVersions = proposal.proposedVersions.concat([versionId])
     proposal.save()
   }
+
   return version
 }
 
@@ -166,6 +167,7 @@ export function createVersion(
     version.createdAtBlock = createdAtBlock
     version.save()
   }
+
   return version
 }
 
@@ -217,26 +219,21 @@ export function handleCreateTripleAction(
   const dateValue = fact.value.asDateValue()
   if (dateValue) {
     log.debug('Creating date value', [])
-    if (attribute.id == TYPES) {
-      addEntityTypeId(entity, dateValue.value)
-    }
     triple.valueType = 'DATE'
     triple.valueId = dateValue.id
-    triple.stringValue = dateValue.value
+    triple.stringValue = decodeURIComponent(dateValue.value)
     log.debug('Finished creating date value', [])
   }
 
   const stringValue = fact.value.asStringValue()
   if (stringValue) {
-    if (attribute.id == TYPES) {
-      addEntityTypeId(entity, stringValue.id)
-    }
+    log.debug('Creating string value', [stringValue.value])
     triple.valueType = 'STRING'
     triple.valueId = stringValue.id
-    triple.stringValue = stringValue.value
+    triple.stringValue = decodeURIComponent(stringValue.value)
 
     if (attribute.id == NAME) {
-      entity.name = stringValue.value
+      entity.name = decodeURIComponent(stringValue.value)
       entity.save()
     }
 
@@ -246,19 +243,21 @@ export function handleCreateTripleAction(
     )
 
     if (attribute.id == SPACE) {
-      handleSpaceAdded(stringValue.value, false, createdAtBlock, fact.entityId)
+      handleSpaceAdded(
+        decodeURIComponent(stringValue.value),
+        false,
+        createdAtBlock,
+        fact.entityId
+      )
     }
   }
 
   const urlValue = fact.value.asUrlValue()
   if (urlValue) {
     log.debug('Creating url value', [])
-    if (attribute.id == TYPES) {
-      addEntityTypeId(entity, urlValue.value)
-    }
     triple.valueType = 'URL'
     triple.valueId = urlValue.id
-    triple.stringValue = urlValue.value
+    triple.stringValue = decodeURIComponent(urlValue.value)
     log.debug('Finished creating url value', [])
   }
 
@@ -266,7 +265,7 @@ export function handleCreateTripleAction(
   if (imageValue) {
     triple.valueType = 'IMAGE'
     triple.valueId = imageValue.id
-    triple.stringValue = imageValue.value
+    triple.stringValue = decodeURIComponent(imageValue.value)
 
     log.debug(
       `space: ${space}, entityId: ${entity.id}, attributeId: ${attribute.id}, value: ${imageValue.value}`,
@@ -276,9 +275,6 @@ export function handleCreateTripleAction(
 
   const numberValue = fact.value.asNumberValue()
   if (numberValue) {
-    if (attribute.id == TYPES) {
-      addEntityTypeId(entity, numberValue.id)
-    }
     triple.valueType = 'NUMBER'
     triple.valueId = numberValue.id
     triple.numberValue = BigDecimal.fromString(numberValue.value)
@@ -437,14 +433,14 @@ export function handleAction(
     let dValue: string | null = null
     if (dateValue != null) {
       valueId = dateValue.id
-      dValue = dateValue.value
+      dValue = decodeURIComponent(dateValue.value) ? dateValue.value : ''
     }
 
     let urlValue = value.asUrlValue()
     let uValue: string | null = null
     if (urlValue != null) {
       valueId = urlValue.id
-      uValue = urlValue.value
+      uValue = decodeURIComponent(urlValue.value)
     }
 
     let entityValue = value.asEntityValue()
@@ -457,13 +453,13 @@ export function handleAction(
     let strValue: string | null = null
     if (stringValue != null) {
       valueId = stringValue.id
-      strValue = stringValue.value
+      strValue = decodeURIComponent(stringValue.value)
     }
     let numberValue = value.asNumberValue()
     let numValue: string | null = null
     if (numberValue != null) {
       valueId = numberValue.id
-      numValue = numberValue.value
+      numValue = decodeURIComponent(numberValue.value)
     }
     let action = getOrCreateAction(
       actionId,
