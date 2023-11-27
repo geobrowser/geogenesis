@@ -41,7 +41,7 @@ export function SpacePresenceProvider({ children, entityId, spaceId }: Props) {
 
   return (
     <ErrorBoundary
-      fallback={null}
+      fallback={<></>}
       onError={e => console.error(`Error in SpacePresenceProvider, entityId: ${entityId} spaceId: ${spaceId} ` + e)}
     >
       <EntityPresenceContext.RoomProvider
@@ -63,7 +63,7 @@ export function EntityPresenceProvider({ children, entityId, spaceId }: Props) {
 
   return (
     <ErrorBoundary
-      fallback={null}
+      fallback={<></>}
       onError={e => console.error(`Error in EntityPresenceProvider, entityId: ${entityId} spaceId: ${spaceId} ` + e)}
     >
       <EntityPresenceContext.RoomProvider

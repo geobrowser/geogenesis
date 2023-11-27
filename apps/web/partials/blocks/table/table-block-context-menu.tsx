@@ -1,11 +1,10 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { observable } from '@legendapp/state';
-import { useSelector } from '@legendapp/state/react';
 import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
+import { atom, useAtom } from 'jotai';
 import Image from 'next/legacy/image';
 import Link from 'next/link';
 import pluralize from 'pluralize';
@@ -55,7 +54,7 @@ import { TableBlockSchemaConfigurationDialog } from './table-block-schema-config
 // We keep track of the attributes in local state in order to quickly render
 // the changes the user has made to the schema. Otherwise there will be loading
 // states for several actions which will make the UI feel slow.
-const optimisticAttributes$ = observable<IEntity[]>([]);
+const optimisticAttributesAtom = atom<IEntity[]>([]);
 
 function useOptimisticAttributes({
   entityId,
@@ -66,6 +65,7 @@ function useOptimisticAttributes({
   entityName: string | null;
   spaceId: string;
 }) {
+  const [optimisticAttributes, setOptimisticAttributes] = useAtom(optimisticAttributesAtom);
   const merged = useMergedData();
   const { config } = Services.useServices();
   const { create, remove } = useActionsStore();
@@ -87,11 +87,10 @@ function useOptimisticAttributes({
       })
     );
 
-    optimisticAttributes$.set([...optimisticAttributes$.get(), attribute]);
+    setOptimisticAttributes([...optimisticAttributes, attribute]);
   };
 
   const onUpdateAttribute = (attribute: IEntity) => {
-    const optimisticAttributes = optimisticAttributes$.get();
     const remappedOptimisticAttributes = optimisticAttributes.map(a => {
       if (a.id === attribute.id) {
         return attribute;
@@ -100,7 +99,7 @@ function useOptimisticAttributes({
       return a;
     });
 
-    optimisticAttributes$.set(remappedOptimisticAttributes);
+    setOptimisticAttributes(remappedOptimisticAttributes);
   };
 
   const onRemoveAttribute = (attribute: IEntity, nameTriple?: ITriple) => {
@@ -123,7 +122,7 @@ function useOptimisticAttributes({
       })
     );
 
-    optimisticAttributes$.set(optimisticAttributes$.get().filter(a => a.id !== attribute.id));
+    setOptimisticAttributes(optimisticAttributes.filter(a => a.id !== attribute.id));
   };
 
   const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: IEntity) => {
@@ -217,10 +216,8 @@ function useOptimisticAttributes({
   // Update the modal state with the initial data for the attributes. We update this modal state optimistically
   // when users add or remove attributes.
   React.useEffect(() => {
-    optimisticAttributes$.set(data ?? []);
-  }, [data]);
-
-  const optimisticAttributes = useSelector<IEntity[]>(optimisticAttributes$);
+    setOptimisticAttributes(data ?? []);
+  }, [data, setOptimisticAttributes]);
 
   return {
     optimisticAttributes,

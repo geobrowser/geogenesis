@@ -189,7 +189,7 @@ export function unpublishedChanges(actions: Action[]) {
  * - intermediate actions between the actions first and last state
  * - any actions that don't perform meaningful changes
  */
-export function prepareActionsForPublishing(actions: Action[]) {
+export function prepareActionsForPublishing(actions: Action[]): Action[] {
   return pipe(actions, unpublishedChanges, squashChanges);
 }
 

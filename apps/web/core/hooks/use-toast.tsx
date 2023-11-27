@@ -1,19 +1,14 @@
 'use client';
 
-import { observable } from '@legendapp/state';
-import { useSelector } from '@legendapp/state/react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
-const toast$ = observable<React.ReactNode | null>(null);
+const toastAtom = atom<React.ReactElement | null>(null);
 
 export function useToast() {
-  const toast = useSelector(toast$);
-
-  const setToast = React.useCallback((newToast: React.ReactNode | null) => {
-    toast$.set(newToast);
-  }, []);
+  const [toast, setToast] = useAtom(toastAtom);
 
   React.useEffect(() => {
     if (toast) {

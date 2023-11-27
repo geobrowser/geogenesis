@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { setSecondarySubgraphAsMain } from '~/core/services/services';
+import { useSecondarySubgraph } from '~/core/services/services';
 
 interface Props {
   children: React.ReactNode;
@@ -10,9 +10,11 @@ interface Props {
 }
 
 export function SpaceConfigProvider({ children, usePermissionlessSubgraph }: Props) {
+  const setSecondarySubgraphAsMain = useSecondarySubgraph();
+
   React.useEffect(() => {
     setSecondarySubgraphAsMain(usePermissionlessSubgraph);
-  }, [usePermissionlessSubgraph]);
+  }, [usePermissionlessSubgraph, setSecondarySubgraphAsMain]);
 
   return <>{children}</>;
 }

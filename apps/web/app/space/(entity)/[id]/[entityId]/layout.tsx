@@ -7,8 +7,9 @@ import { Metadata } from 'next';
 import { Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
+import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/triple-store';
+import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -23,6 +24,8 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
+
+import { SpaceConfigProvider } from '~/app/space/[id]/space-config-provider';
 
 const TABS = ['Overview', 'Activity'] as const;
 
@@ -94,51 +97,57 @@ export default async function ProfileLayout({ children, params }: Props) {
   });
 
   if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
-    return <>{children}</>;
+    return (
+      <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
+        <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>
+      </SpaceConfigProvider>
+    );
   }
 
   const profile = await getProfilePage(params.entityId, config.subgraph);
 
   return (
-    <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider
-        id={params.entityId}
-        spaceId={params.id}
-        initialTriples={profile.triples}
-        initialSchemaTriples={[]}
-        initialBlockIdsTriple={profile.blockIdsTriple}
-        initialBlockTriples={profile.blockTriples}
-      >
-        <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-        <EntityPageContentContainer>
-          <EditableHeading
+    <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
+      <TypesStoreServerContainer spaceId={params.id}>
+        <EntityStoreProvider id={params.entityId} spaceId={params.id} initialTriples={profile.triples}>
+          <EditorProvider
+            id={profile.id}
             spaceId={params.id}
-            entityId={params.entityId}
-            name={profile.name ?? params.entityId}
-            triples={profile.triples}
-          />
-          <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
+            initialBlockIdsTriple={profile.blockIdsTriple}
+            initialBlockTriples={profile.blockTriples}
+          >
+            <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+            <EntityPageContentContainer>
+              <EditableHeading
+                spaceId={params.id}
+                entityId={params.entityId}
+                name={profile.name ?? params.entityId}
+                triples={profile.triples}
+              />
+              <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
 
-          <Spacer height={40} />
-          <TabGroup
-            tabs={TABS.map(label => {
-              const href =
-                label === 'Overview'
-                  ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
-                  : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
-              return {
-                href,
-                label,
-              };
-            })}
-          />
+              <Spacer height={40} />
+              <TabGroup
+                tabs={TABS.map(label => {
+                  const href =
+                    label === 'Overview'
+                      ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
+                      : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
+                  return {
+                    href,
+                    label,
+                  };
+                })}
+              />
 
-          <Spacer height={20} />
+              <Spacer height={20} />
 
-          {children}
-        </EntityPageContentContainer>
-      </EntityStoreProvider>
-    </TypesStoreServerContainer>
+              {children}
+            </EntityPageContentContainer>
+          </EditorProvider>
+        </EntityStoreProvider>
+      </TypesStoreServerContainer>
+    </SpaceConfigProvider>
   );
 }
 

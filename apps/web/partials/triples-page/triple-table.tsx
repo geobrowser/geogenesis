@@ -8,7 +8,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 
-import { memo, useState } from 'react';
+import { useState } from 'react';
 
 import { Triple, Value } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -92,7 +92,7 @@ interface Props {
   space: string;
 }
 
-export const TripleTable = memo(function TripleTable({ triples, space }: Props) {
+export const TripleTable = ({ space, triples }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({
@@ -117,7 +117,7 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
   });
 
   return (
-    <div className="overflow-hidden rounded border border-b-0 border-grey-02 xl:overflow-x-scroll">
+    <div className="overflow-hidden rounded xl:overflow-x-scroll">
       <Table cellSpacing={0} cellPadding={0} className="relative -inset-px">
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
@@ -166,4 +166,4 @@ export const TripleTable = memo(function TripleTable({ triples, space }: Props) 
       </Table>
     </div>
   );
-});
+};

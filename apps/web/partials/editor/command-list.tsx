@@ -6,7 +6,7 @@ import cx from 'classnames';
 import * as React from 'react';
 import { ReactNode, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { GeoType, Triple } from '~/core/types';
 
 import { Text } from '~/design-system/text';

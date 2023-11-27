@@ -5,9 +5,9 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { EntityType } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Entity } from '~/core/utils/entity';

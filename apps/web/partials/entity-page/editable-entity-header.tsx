@@ -5,8 +5,8 @@ import * as React from 'react';
 import { useEditEvents } from '~/core/events/edit-events';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useEntityPageStore } from '~/core/hooks/use-entity-page-store';
 import { useEditable } from '~/core/state/editable-store';
+import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
@@ -26,10 +26,10 @@ export function EditableHeading({
   name: string | null;
   triples: Triple[];
 }) {
-  const { triples: localTriples, update, create, remove } = useEntityPageStore();
+  const { triples: localTriples } = useEntityPageStore();
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(spaceId);
-  const { actionsFromSpace } = useActionsStore(spaceId);
+  const { actionsFromSpace, create, update, remove } = useActionsStore(spaceId);
 
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
 
