@@ -1,7 +1,7 @@
 import { Command } from 'commander'
 import { Effect } from 'effect'
 import { populateFromCache } from './src/populate-cache.js'
-import { runStream } from './src/runStream.js'
+import { runStream } from './src/run-stream.js'
 import { resetPublicTablesToGenesis } from './src/utils/reset-public-tables-to-genesis.js'
 
 async function main() {
