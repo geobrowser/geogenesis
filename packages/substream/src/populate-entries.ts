@@ -28,8 +28,10 @@ export const populateWithEntries = async ({
 
     for (let i = 0; i < entries.length; i++) {
       console.log('\nProcessing entry', i + 1, 'of', entries.length, 'entries')
+
       // First check if the general response conforms to what we expect
       const uriResponse = ZodUriData.safeParse(uriResponses[i])
+
       if (uriResponse.success) {
         // Then check if the actions conform to what we expect
         console.log('Original Action Count: ', uriResponse.data.actions.length)
@@ -45,6 +47,7 @@ export const populateWithEntries = async ({
         console.error(uriResponse.error)
       }
     }
+
     await populateWithFullEntries({
       fullEntries,
       blockNumber,

@@ -82,7 +82,7 @@ export function getStreamEffect(startBlockNum?: number) {
         Effect.gen(function* (_) {
           const cursor = message.cursor
           const blockNumber = Number(message.clock?.number.toString())
-          const timestamp = Number(message.clock?.timestamp?.seconds)
+          const timestamp = Number(message.clock?.timestamp?.seconds.toString())
 
           if (blockNumber % 1000 === 0) {
             console.log(`@ Block ${blockNumber}`)
@@ -96,14 +96,17 @@ export function getStreamEffect(startBlockNum?: number) {
           )
 
           const mapOutput = message.output?.mapOutput
+
           if (!mapOutput || mapOutput?.value?.byteLength === 0) {
             return
           }
+
           const unpackedOutput = mapOutput.unpack(registry)
           if (!unpackedOutput) {
             console.error('Failed to unpack substream message', mapOutput)
             return
           }
+
           const jsonOutput = unpackedOutput.toJson({ typeRegistry: registry })
 
           const entryResponse = ZodEntryStreamResponse.safeParse(jsonOutput)
@@ -126,14 +129,18 @@ export function getStreamEffect(startBlockNum?: number) {
                 timestamp,
               })
             )
-          } else if (roleChangeResponse.success) {
+          }
+
+          if (roleChangeResponse.success) {
             console.log(
               'Processing ',
               roleChangeResponse.data.roleChanges.length,
               ' role changes'
             )
-            roleChangeResponse.data.roleChanges.map((roleChange) => {
+
+            for (const roleChange of roleChangeResponse.data.roleChanges) {
               const { granted, revoked } = roleChange
+
               if (granted) {
                 handleRoleGranted({
                   roleGranted: granted,
@@ -141,7 +148,9 @@ export function getStreamEffect(startBlockNum?: number) {
                   cursor,
                   timestamp,
                 })
-              } else if (revoked) {
+              }
+
+              if (revoked) {
                 handleRoleRevoked({
                   roleRevoked: revoked,
                   blockNumber,
@@ -149,8 +158,10 @@ export function getStreamEffect(startBlockNum?: number) {
                   timestamp,
                 })
               }
-            })
-          } else {
+            }
+          }
+
+          if (!entryResponse.success && !roleChangeResponse.success) {
             console.error('Failed to parse substream message', unpackedOutput)
           }
         }),
