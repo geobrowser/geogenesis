@@ -11,8 +11,12 @@ export type Entry = z.infer<typeof ZodEntry>
 
 export const ZodAction = z.object({
   type: z.enum(['createTriple', 'deleteTriple']),
-  entityId: z.string(),
-  attributeId: z.string(),
+  entityId: z.string().refine((data) => data !== '', {
+    message: 'Entity id cannot be an empty string',
+  }),
+  attributeId: z.string().refine((data) => data !== '', {
+    message: 'Attribute id cannot be an empty string',
+  }),
   entityName: z.string().nullish(),
   value: z
     .object({
@@ -31,7 +35,10 @@ export const ZodUriData = z.object({
   name: z.string().optional(),
   type: z.string(),
   version: z.string(),
-  actions: z.array(ZodAction), // Parsing immediately after receiving data
+  // We filter valid actions later one-by-one. We avoid filtering all actions
+  // here as it would invalidate the entire array of actions instead of granularly.
+  // @TODO: Is there a way to validate the entire array and filter invalid actions?
+  actions: z.array(z.any()),
 })
 
 export type UriData = z.infer<typeof ZodUriData>

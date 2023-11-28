@@ -45,7 +45,9 @@ export const populateWithEntries = async ({
             'Original Action Count: ',
             uriResponse.data.actions.length
           )
+
           const actions = uriResponse.data.actions.filter(isValidAction)
+
           console.log('Valid Actions:', actions.length)
           fullEntries.push({
             ...entry,
@@ -110,6 +112,12 @@ export const populateWithFullEntries = async ({
     console.log('Geo Entities Count', geoEntities.length)
     await upsertChunked('geo_entities', geoEntities, 'id', {
       updateColumns: ['name', 'description', 'updated_at', 'updated_at_block'],
+      noNullUpdateColumns: [
+        'name',
+        'description',
+        'updated_at',
+        'updated_at_block',
+      ],
     })
 
     const proposals: s.proposals.Insertable[] = toProposals({
@@ -141,7 +149,8 @@ export const populateWithFullEntries = async ({
       updateColumns: db.doNothing,
     })
 
-    // /* Todo: How are duplicate triples being handled in Geo? I know it's possible, but if the triple ID is defined, what does that entail */
+    // @TODO: How are duplicate triples being handled in Geo? I know it's possible, but if
+    // the triple ID is defined, what does that entail
     const triplesDatabaseTuples: TripleDatabaseTuple[] = toTripleDatabaseTuples(
       fullEntries,
       timestamp,
@@ -156,10 +165,10 @@ export const populateWithFullEntries = async ({
       const isDeleteType = triple.attribute_id === TYPES && isDeleteTriple
 
       if (isCreateTriple) {
-        await db
-          .upsert('triples', triple, 'id', { updateColumns: db.doNothing })
-          .run(pool)
-      } else {
+        await db.upsert('triples', triple, 'id').run(pool)
+      }
+
+      if (isDeleteTriple) {
         await db.deletes('triples', { id: triple.id }).run(pool)
       }
 
@@ -213,6 +222,7 @@ export const populateWithFullEntries = async ({
 interface ToAccountArgs {
   fullEntries: Entry[]
 }
+
 export const toAccounts = ({ fullEntries }: ToAccountArgs) => {
   const accounts: s.accounts.Insertable[] = []
   const author = fullEntries[0]?.author
@@ -298,10 +308,10 @@ export const toGeoEntities = ({
   timestamp,
   blockNumber,
 }: toGeoEntitiesArgs) => {
-  const entitiesMap: Record<string, s.geo_entities.Insertable> = {}
+  const entitiesMap = new Map<string, s.geo_entities.Insertable>()
 
   fullEntries.forEach((fullEntry) => {
-    fullEntry.uriData.actions.map((action) => {
+    fullEntry.uriData.actions.forEach((action) => {
       const {
         isNameCreateAction,
         isNameDeleteAction,
@@ -309,35 +319,54 @@ export const toGeoEntities = ({
         isDescriptionDeleteAction,
       } = actionTypeCheck(action)
 
-      const currentName = entitiesMap[action.entityId]?.name
-      const currentDescription = entitiesMap[action.entityId]?.description
+      const previouslyFoundName = entitiesMap.get(action.entityId)?.name
+      const previouslyFoundDescription = entitiesMap.get(
+        action.entityId
+      )?.description
+      let newName = previouslyFoundName
+      let newDescription = previouslyFoundDescription
 
-      const updatedName = isNameCreateAction
-        ? action.value.value
-        : isNameDeleteAction
-        ? null
-        : currentName
+      if (isNameDeleteAction) {
+        newName = null
+      }
 
-      const updatedDescription = isDescriptionCreateAction
-        ? action.value.value
-        : isDescriptionDeleteAction
-        ? null
-        : currentDescription
+      if (isNameCreateAction) {
+        newName = action.value.value
+      }
 
-      entitiesMap[action.entityId] = {
+      if (isDescriptionDeleteAction) {
+        newDescription = null
+      }
+
+      if (isDescriptionCreateAction) {
+        newDescription = action.value.value
+      }
+
+      // const updatedName = isNameCreateAction
+      //   ? action.value.value
+      //   : isNameDeleteAction
+      //   ? null
+      //   : previouslyFoundName
+      // const updatedDescription = isDescriptionCreateAction
+      //   ? action.value.value
+      //   : isDescriptionDeleteAction
+      //   ? null
+      //   : previouslyFoundDescription
+
+      entitiesMap.set(action.entityId, {
         id: action.entityId,
-        name: updatedName,
-        description: updatedDescription,
+        name: newName,
+        description: newDescription,
         created_at: timestamp,
         created_at_block: blockNumber,
         updated_at: timestamp,
         updated_at_block: blockNumber,
         created_by_id: fullEntry.author,
-      }
+      })
     })
   })
 
-  return Object.values(entitiesMap)
+  return [...entitiesMap.values()]
 }
 
 interface toProposalsArgs {
