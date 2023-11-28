@@ -195,6 +195,7 @@ export async function populateWithFullEntries({
     console.log('Versions: ', versions.length)
 
     await Promise.all([
+      // @TODO: Can we batch these into a single upsert?
       upsertChunked('accounts', accounts, 'id', {
         updateColumns: db.doNothing,
       }),
