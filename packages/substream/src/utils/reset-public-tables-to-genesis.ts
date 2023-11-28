@@ -1,6 +1,6 @@
 import { runSqlFile } from './run-sql-file.js'
 
-export const resetPublicTablesToGenesis = async () => {
+export async function resetPublicTablesToGenesis() {
   try {
     await runSqlFile('./src/sql/clearPublicTables.sql')
   } catch (err) {

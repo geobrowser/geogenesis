@@ -47,7 +47,11 @@ export const ZodFullEntry = ZodEntry.extend({
   uriData: ZodUriData,
 })
 
-export type FullEntry = z.infer<typeof ZodFullEntry>
+export type FullEntry = z.infer<typeof ZodFullEntry> & {
+  // Set the real Action type. We only use z.any() in ZodUriData to avoid
+  // rejecting the entire array of actions if one of them is invalid.
+  uriData: UriData & { actions: Action[] }
+}
 
 export const ZodRoleChange = z.object({
   id: z.string(),

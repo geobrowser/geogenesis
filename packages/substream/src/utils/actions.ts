@@ -17,7 +17,7 @@ export function isValidAction(action: Action): action is Action {
   return ZodAction.safeParse(action).success
 }
 
-export const actionTypeCheck = (action: Action) => {
+export function actionTypeCheck(action: Action) {
   const isCreateTriple = action.type === 'createTriple'
   const isDeleteTriple = action.type === 'deleteTriple'
   const isNameAttribute = action.attributeId === NAME

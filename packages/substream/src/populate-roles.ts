@@ -3,7 +3,7 @@ import { upsertCachedRoles } from './populate-cache'
 import { pool } from './utils/pool'
 import { type RoleChange } from './zod'
 
-export const handleRoleGranted = async ({
+export async function handleRoleGranted({
   roleGranted,
   blockNumber,
   timestamp,
@@ -13,7 +13,7 @@ export const handleRoleGranted = async ({
   blockNumber: number
   timestamp: number
   cursor: string
-}) => {
+}) {
   try {
     const role = roleGranted.role
     const isAdminRole = role === 'ADMIN'
@@ -78,7 +78,7 @@ export const handleRoleGranted = async ({
   }
 }
 
-export const handleRoleRevoked = async ({
+export async function handleRoleRevoked({
   roleRevoked,
   blockNumber,
   timestamp,
@@ -88,7 +88,7 @@ export const handleRoleRevoked = async ({
   blockNumber: number
   timestamp: number
   cursor: string
-}) => {
+}) {
   try {
     const role = roleRevoked.role
     const isAdminRole = role === 'ADMIN'

@@ -3,7 +3,7 @@ import { Effect } from 'effect'
 import { populateFromCache } from './src/populate-cache.js'
 import { getStreamEffect } from './src/run-stream.js'
 import { resetPublicTablesToGenesis } from './src/utils/reset-public-tables-to-genesis.js'
-import { genesisStartBlockNum } from './src/constants/constants.js'
+import { START_BLOCK } from './src/constants/constants.js'
 import { bootstrapRoot } from './src/bootstrap-root.js'
 
 async function main() {
@@ -26,7 +26,7 @@ async function main() {
 
     let startBlockNumber = process.env.START_BLOCK
       ? Number(process.env.START_BLOCK)
-      : genesisStartBlockNum
+      : START_BLOCK
 
     if (options.fromCache) {
       console.log('populating geo data from cache')

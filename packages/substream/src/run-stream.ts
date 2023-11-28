@@ -6,7 +6,7 @@ import {
 } from '@substreams/core'
 import { readPackageFromFile } from '@substreams/manifest'
 import { Data, Effect, Stream } from 'effect'
-import { genesisStartBlockNum } from './constants/constants'
+import { MANIFEST, START_BLOCK } from './constants/constants'
 import { readCursor, writeCursor } from './cursor'
 import { populateWithEntries } from './populate-entries'
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles'
@@ -35,15 +35,14 @@ export function getStreamEffect(startBlockNum?: number) {
     logger.enable('pretty')
     logger.info('Logging enabled')
 
-    const manifest = './geo-substream.spkg'
-    const substreamPackage = readPackageFromFile(manifest)
+    const substreamPackage = readPackageFromFile(MANIFEST)
 
     logger.info('Substream package downloaded')
 
     const { token } = yield* _(
       Effect.tryPromise({
         try: () => authIssue(substreamsApiKey, authIssueUrl),
-        catch: () => new Error(`Could not read package at path ${manifest}`),
+        catch: () => new Error(`Could not read package at path ${MANIFEST}`),
       })
     )
 
@@ -71,7 +70,7 @@ export function getStreamEffect(startBlockNum?: number) {
       substreamPackage,
       outputModule,
       startCursor: startBlockNum ? undefined : startCursor,
-      startBlockNum: startBlockNum || genesisStartBlockNum,
+      startBlockNum: startBlockNum || START_BLOCK,
       productionMode,
     })
 

@@ -271,7 +271,7 @@ const proposal: s.proposals.Insertable = {
   status: 'APPROVED',
 }
 
-export const bootstrapRoot = async () => {
+export async function bootstrapRoot() {
   try {
     await db.insert('spaces', space).run(pool)
     await db.insert('accounts', account).run(pool)

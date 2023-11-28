@@ -1,12 +1,12 @@
 import * as db from 'zapatos/db'
 import type * as s from 'zapatos/schema'
-import { genesisStartBlockNum } from './constants/constants'
+import { START_BLOCK } from './constants/constants'
 import { populateWithFullEntries } from './populate-entries'
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles'
 import { pool } from './utils/pool'
 import { type FullEntry, type RoleChange, ZodRoleChange } from './zod'
 
-export const populateFromCache = async () => {
+export async function populateFromCache() {
   try {
     const [cachedEntries, cachedRoles] = await Promise.all([
       readCacheEntries(),
@@ -16,7 +16,7 @@ export const populateFromCache = async () => {
     console.log('Cached entries:', cachedEntries.length)
     console.log('Cached roles:', cachedRoles.length)
 
-    let blockNumber = genesisStartBlockNum
+    let blockNumber = START_BLOCK
 
     for (let cachedEntry of cachedEntries) {
       console.log(
@@ -83,11 +83,11 @@ export const populateFromCache = async () => {
     return blockNumber
   } catch (error) {
     console.error('Error in populateFromCache:', error)
-    return genesisStartBlockNum
+    return START_BLOCK
   }
 }
 
-export const upsertCachedEntries = async ({
+export async function upsertCachedEntries({
   fullEntries,
   blockNumber,
   cursor,
@@ -97,7 +97,7 @@ export const upsertCachedEntries = async ({
   blockNumber: number
   cursor: string
   timestamp: number
-}) => {
+}) {
   try {
     const cachedEntry: s.cache.entries.Insertable = {
       block_number: blockNumber,
@@ -116,7 +116,7 @@ export const upsertCachedEntries = async ({
   }
 }
 
-export const upsertCachedRoles = async ({
+export async function upsertCachedRoles({
   roleChange,
   blockNumber,
   cursor,
@@ -128,23 +128,21 @@ export const upsertCachedRoles = async ({
   blockNumber: number
   cursor: string
   type: 'GRANTED' | 'REVOKED'
-}) => {
+}) {
   try {
-    const cachedRole: s.cache.roles.Insertable = {
-      created_at: timestamp,
-      created_at_block: blockNumber,
-      role: roleChange.role,
-      space: roleChange.space,
-      account: roleChange.account,
-      cursor,
-      sender: roleChange.sender,
-      type,
-    }
-
     await db
       .upsert(
         'cache.roles',
-        cachedRole,
+        {
+          created_at: timestamp,
+          created_at_block: blockNumber,
+          role: roleChange.role,
+          space: roleChange.space,
+          account: roleChange.account,
+          cursor,
+          sender: roleChange.sender,
+          type,
+        },
         [
           'role',
           'account',
@@ -174,7 +172,7 @@ export const readCacheEntries = async () => {
   return cachedEntries
 }
 
-export const readCacheRoles = async () => {
+export async function readCacheRoles() {
   const cachedEntries = await db
     .select('cache.roles', db.all, {
       order: { by: 'created_at_block', direction: 'ASC' },

@@ -13,7 +13,7 @@ export interface StreamData {
   cursor: string
 }
 
-export type TripleDatabaseTuple = [TripleAction, s.triples.Insertable]
+export type TripleWithActionTuple = [TripleAction, s.triples.Insertable]
 
 export interface CreateTripleActionSchema {
   type: 'createTriple'
