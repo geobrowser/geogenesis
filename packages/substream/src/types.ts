@@ -1,5 +1,5 @@
 import type * as s from 'zapatos/schema'
-import { Entry } from './zod'
+import { type Entry } from './zod'
 
 export enum TripleAction {
   Create = 'createTriple',

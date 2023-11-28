@@ -1,7 +1,7 @@
 import * as db from 'zapatos/db'
 import { upsertCachedRoles } from './populate-cache'
 import { pool } from './utils/pool'
-import { RoleChange } from './zod'
+import { type RoleChange } from './zod'
 
 export const handleRoleGranted = async ({
   roleGranted,

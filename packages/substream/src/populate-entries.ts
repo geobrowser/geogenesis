@@ -2,7 +2,11 @@ import * as db from 'zapatos/db'
 import type * as s from 'zapatos/schema'
 import { TYPES } from './constants/system-ids'
 import { upsertCachedEntries } from './populate-cache'
-import { StreamData, TripleAction, TripleDatabaseTuple } from './types'
+import {
+  type StreamData,
+  TripleAction,
+  type TripleDatabaseTuple,
+} from './types'
 import { actionTypeCheck, actionsFromURI, isValidAction } from './utils/actions'
 import { upsertChunked } from './utils/db'
 import {
@@ -12,7 +16,7 @@ import {
   generateVersionId,
 } from './utils/id'
 import { pool } from './utils/pool'
-import { Entry, ZodUriData, type FullEntry } from './zod'
+import { type Entry, ZodUriData, type FullEntry } from './zod'
 
 export const populateWithEntries = async ({
   entries,
@@ -32,19 +36,26 @@ export const populateWithEntries = async ({
       // First check if the general response conforms to what we expect
       const uriResponse = ZodUriData.safeParse(uriResponses[i])
 
-      if (uriResponse.success) {
-        // Then check if the actions conform to what we expect
-        console.log('Original Action Count: ', uriResponse.data.actions.length)
-        const actions = uriResponse.data.actions.filter(isValidAction)
-        console.log('Valid Actions:', actions.length)
-        fullEntries.push({
-          ...entries[i],
-          uriData: { ...uriResponse.data, actions },
-        })
-      } else {
-        console.error('Failed to parse URI data: ', uriResponse)
-        console.error('URI used: ', entries[i].uri)
-        console.error(uriResponse.error)
+      const entry = entries[i]
+
+      if (entry) {
+        if (uriResponse.success) {
+          // Then check if the actions conform to what we expect
+          console.log(
+            'Original Action Count: ',
+            uriResponse.data.actions.length
+          )
+          const actions = uriResponse.data.actions.filter(isValidAction)
+          console.log('Valid Actions:', actions.length)
+          fullEntries.push({
+            ...entry,
+            uriData: { ...uriResponse.data, actions },
+          })
+        } else {
+          console.error('Failed to parse URI data: ', uriResponse)
+          console.error('URI used: ', entry.uri)
+          console.error(uriResponse.error)
+        }
       }
     }
 
@@ -204,12 +215,14 @@ interface ToAccountArgs {
 }
 export const toAccounts = ({ fullEntries }: ToAccountArgs) => {
   const accounts: s.accounts.Insertable[] = []
-  const author = fullEntries[0].author
+  const author = fullEntries[0]?.author
+
   if (author) {
     accounts.push({
       id: author,
     })
   }
+
   return accounts
 }
 

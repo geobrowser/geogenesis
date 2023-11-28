@@ -4,7 +4,7 @@ import { genesisStartBlockNum } from './constants/constants'
 import { populateWithFullEntries } from './populate-entries'
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles'
 import { pool } from './utils/pool'
-import { FullEntry, RoleChange, ZodRoleChange } from './zod'
+import { type FullEntry, type RoleChange, ZodRoleChange } from './zod'
 
 export const populateFromCache = async () => {
   try {

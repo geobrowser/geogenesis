@@ -4,7 +4,7 @@ import { ipfsFetch } from './ipfs.js'
 
 export async function actionsFromURI(uri: string) {
   if (uri.startsWith('data:application/json;base64,')) {
-    const base64 = uri.split(',')[1]
+    const base64 = uri.split(',')[1]! // we can cast with bang because we know a base64 string will always have a second element
     const decoded = JSON.parse(Buffer.from(base64, 'base64').toString('utf8'))
     return decoded
   } else if (uri.startsWith('ipfs://')) {

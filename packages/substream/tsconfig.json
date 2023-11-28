@@ -1,17 +1,44 @@
 {
   "extends": "@tsconfig/recommended/tsconfig.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "module": "CommonJS",
-    "moduleResolution": "node",
-    "target": "ES2022",
-    "resolveJsonModule": true,
-    "declaration": true,
+    /* Basic Options */
     "esModuleInterop": true,
-    "declarationMap": true,
-    "strictNullChecks": true,
-    "sourceMap": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "target": "ES2022",
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+
+    /* Strictness Options */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+
+    /* Module resolution when transpiling with TypeScript */
+    // "moduleResolution": "NodeNext",
+    // "module": "NodeNext",
+    // "outDir": "dist",
+    // "sourceMap": true,
+
+    /* 
+      Module resolution when not transpiling with TypeScript.
+      We're currently using esbuild so we use the following options.
+    */
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "noEmit": true,
+
+    /* Lib when not targeting the browser */
+    "lib": ["ES2022"]
+
+    /* Lib when targeting the browser */
+    // "lib": ["ES2022", "DOM", "DOM.Iterable"]
+
+    /* When building a library */
+    // "declaration": true,
+
+    /* When building a library in a monorepo */
+    // "composite": true,
+    // "declarationMap": true,
   },
   "include": ["index.ts", "src/**/*", "schema.d.ts"]
 }
