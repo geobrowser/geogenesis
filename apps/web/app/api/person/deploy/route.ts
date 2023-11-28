@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 
 import { slog } from '~/core/utils/utils';
 
-import { makeDeployEffect } from './make-deploy-effect';
+import { makePersonEffect } from './make-person-effect';
 
 export const maxDuration = 180;
 
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     message: `Setting up profile and contracts for user: ${{ userAccount }}`,
   });
 
-  const deployment = makeDeployEffect(requestId, { account: userAccount });
+  const deployment = makePersonEffect(requestId, { account: userAccount });
   const maybeDeployment = await Effect.runPromise(Effect.either(deployment));
 
   if (Either.isLeft(maybeDeployment)) {

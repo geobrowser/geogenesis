@@ -57,7 +57,7 @@ interface UserConfig {
  * When a user makes a new profile there are several steps we need to complete
  * to register their profile and set up their space.
  */
-export function makeDeployEffect(requestId: string, { account: userAccount }: UserConfig) {
+export function makePersonEffect(requestId: string, { account: userAccount }: UserConfig) {
   const account = privateKeyToAccount(process.env.GEO_PK as `0x${string}`);
 
   const client = createWalletClient({
