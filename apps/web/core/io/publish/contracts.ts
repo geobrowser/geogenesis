@@ -6,21 +6,25 @@ export async function deploySpaceContract({ account }: { account: string }): Pro
   return await spaceContractDeploymentResponse.json();
 }
 
+export type AccountType = 'person' | 'company' | 'nonprofit';
+
 export async function createProfileEntity({
   spaceAddress,
   profileId,
   account,
   username,
   avatarUri,
+  accountType,
 }: {
   spaceAddress: `0x${string}`;
   profileId: string;
   account: string;
   username: string | null;
   avatarUri: string | null;
+  accountType: AccountType;
 }): Promise<{ spaceAddress: string; entityId: string }> {
   const url = new URL(
-    `/api/profile/deploy?userAddress=${account}&spaceAddress=${spaceAddress}&profileId=${profileId}`,
+    `/api/${accountType}/deploy?userAddress=${account}&spaceAddress=${spaceAddress}&profileId=${profileId}`,
     window.location.href
   );
 

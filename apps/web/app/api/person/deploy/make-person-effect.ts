@@ -67,7 +67,7 @@ interface UserConfig {
  * Additionally, it grants the new user each role in the space and removes the deployer from
  * each role.
  */
-export async function makeProfileEffect(
+export async function makePersonEffect(
   requestId: string,
   { account: userAccount, username, avatarUri, spaceAddress, profileId }: UserConfig
 ) {

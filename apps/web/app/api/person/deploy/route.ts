@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid';
 
 import { getGeoPersonIdFromOnchainId, slog } from '~/core/utils/utils';
 
-import { makeProfileEffect } from './make-profile-effect';
+import { makePersonEffect } from './make-person-effect';
 
 export const maxDuration = 180;
 
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 
   const geoEntityIdFromOnchainId = getGeoPersonIdFromOnchainId(userAddress, profileId);
 
-  const createProfileEffect = await makeProfileEffect(requestId, {
+  const createProfileEffect = await makePersonEffect(requestId, {
     account: userAddress as `0x${string}`,
     username,
     avatarUri,

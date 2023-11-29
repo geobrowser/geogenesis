@@ -15,7 +15,7 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
 
 import { useOnboarding } from '~/core/hooks/use-onboarding';
-import { createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
+import { type AccountType, createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
 import { getGeoPersonIdFromOnchainId, getImagePath, sleep } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
@@ -25,8 +25,10 @@ import { Close } from '~/design-system/icons/close';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
+import { RadioGroup } from '~/design-system/radio-group';
 import { Text } from '~/design-system/text';
 
+export const accountTypeAtom = atomWithStorage<AccountType | null>('onboardingAccountType', null);
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceAddressAtom = atomWithStorage<string>('onboardingSpaceAddress', '');
@@ -34,6 +36,7 @@ export const profileIdAtom = atomWithStorage<string>('onboardingProfileId', '');
 
 type Step =
   | 'start'
+  | 'select-type'
   | 'onboarding'
   | 'creating-spaces'
   | 'registering-profile'
@@ -57,6 +60,7 @@ export const OnboardingDialog = () => {
   const { publish } = Services.useServices();
   const queryClient = useQueryClient();
 
+  const accountType = useAtomValue(accountTypeAtom);
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
   const [spaceAddress, setSpaceAddress] = useAtom(spaceAddressAtom);
@@ -69,8 +73,8 @@ export const OnboardingDialog = () => {
 
   if (!address) return null;
 
-  async function createSpaces() {
-    if (!address) return;
+  async function createSpaces(accountType: AccountType) {
+    if (!address || !accountType) return;
 
     try {
       const { spaceAddress } = await deploySpaceContract({
@@ -86,7 +90,7 @@ export const OnboardingDialog = () => {
       setStep('registering-profile');
 
       setTimeout(() => {
-        registerProfile(spaceAddress);
+        registerProfile(spaceAddress, accountType);
       }, 100);
     } catch (error) {
       setShowRetry(true);
@@ -94,8 +98,8 @@ export const OnboardingDialog = () => {
     }
   }
 
-  async function registerProfile(spaceAddress: `0x${string}`) {
-    if (!address || !wallet) return;
+  async function registerProfile(spaceAddress: `0x${string}`, accountType: AccountType) {
+    if (!address || !wallet || !accountType) return;
 
     try {
       const profileId = await publish.registerGeoProfile(wallet, spaceAddress);
@@ -117,7 +121,7 @@ export const OnboardingDialog = () => {
       setStep('creating-geo-profile-entity');
 
       setTimeout(() => {
-        createGeoProfileEntity(spaceAddress, profileId);
+        createGeoProfileEntity(spaceAddress, profileId, accountType);
       }, 100);
     } catch (error) {
       setShowRetry(true);
@@ -125,8 +129,8 @@ export const OnboardingDialog = () => {
     }
   }
 
-  async function createGeoProfileEntity(spaceAddress: `0x${string}`, profileId: string) {
-    if (!address) return;
+  async function createGeoProfileEntity(spaceAddress: `0x${string}`, profileId: string, accountType: AccountType) {
+    if (!address || !accountType) return;
 
     try {
       const { entityId: profileEntityId } = await createProfileEntity({
@@ -135,6 +139,7 @@ export const OnboardingDialog = () => {
         avatarUri: avatar || null,
         username: name || null,
         profileId: profileId,
+        accountType,
       });
 
       if (!profileEntityId) {
@@ -153,7 +158,7 @@ export const OnboardingDialog = () => {
   }
 
   async function onRunOnboardingWorkflow() {
-    if (!address || !wallet) return;
+    if (!address || !wallet || !accountType) return;
 
     setShowRetry(false);
 
@@ -161,16 +166,16 @@ export const OnboardingDialog = () => {
       case 'onboarding':
         setStep('creating-spaces');
         await sleep(100);
-        createSpaces();
+        createSpaces(accountType);
         break;
       case 'creating-spaces':
-        createSpaces();
+        createSpaces(accountType);
         break;
       case 'registering-profile':
-        registerProfile(spaceAddress as `0x${string}`);
+        registerProfile(spaceAddress as `0x${string}`, accountType);
         break;
       case 'creating-geo-profile-entity':
-        createGeoProfileEntity(spaceAddress as `0x${string}`, profileId);
+        createGeoProfileEntity(spaceAddress as `0x${string}`, profileId, accountType);
         break;
     }
   }
@@ -188,6 +193,7 @@ export const OnboardingDialog = () => {
             <ModalCard childKey="card">
               <StepHeader />
               {step === 'start' && <StepStart />}
+              {step === 'select-type' && <StepSelectType />}
               {step === 'onboarding' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
               {workflowSteps.includes(step) && <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />}
             </ModalCard>
@@ -223,12 +229,31 @@ const StepHeader = () => {
 
   const [step, setStep] = useAtom(stepAtom);
 
+  const showBack = step === 'select-type' || step === 'onboarding';
+
+  const handleBack = () => {
+    switch (step) {
+      case 'select-type':
+        setStep('start');
+        break;
+      case 'onboarding':
+        setStep('select-type');
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
     <div className="relative z-20 flex items-center justify-between pb-2">
       <div className="rotate-180">
-        {step === 'onboarding' && <SquareButton icon={<RightArrowLongSmall />} onClick={() => setStep('start')} />}
+        {showBack && (
+          <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="!border-none !bg-transparent" />
+        )}
       </div>
-      {!workflowSteps.includes(step) && <SquareButton icon={<Close />} onClick={hideOnboarding} />}
+      {!workflowSteps.includes(step) && (
+        <SquareButton icon={<Close />} onClick={hideOnboarding} className="!border-none !bg-transparent" />
+      )}
     </div>
   );
 };
@@ -286,8 +311,44 @@ function StepStart() {
             Polygon MATIC
           </a>
         </p>
-        <Button onClick={() => setStep('onboarding')} className="w-full">
+        <Button onClick={() => setStep('select-type')} className="w-full">
           Start
+        </Button>
+      </div>
+    </>
+  );
+}
+
+function StepSelectType() {
+  const [accountType, setAccountType] = useAtom(accountTypeAtom);
+  const setStep = useSetAtom(stepAtom);
+
+  const options = [
+    { image: '/images/onboarding/person.png', label: 'Person', value: 'person' },
+    // @TODO restore once company spaces are ready
+    // { image: '/images/onboarding/company.png', label: 'Company', value: 'company', disabled: true },
+    { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
+  ];
+
+  return (
+    <>
+      <StepContents childKey="account-type">
+        <div className="w-full">
+          <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
+            Select the account type
+          </Text>
+        </div>
+        <div className="mt-8">
+          <RadioGroup
+            value={accountType ?? ''}
+            onValueChange={setAccountType as (value: string) => void}
+            options={options}
+          />
+        </div>
+      </StepContents>
+      <div className="absolute inset-x-4 bottom-4 space-y-4">
+        <Button onClick={() => setStep('onboarding')} disabled={accountType === null} className="w-full">
+          Continue
         </Button>
       </div>
     </>
@@ -299,7 +360,14 @@ type StepOnboardingProps = {
   address: string;
 };
 
+const placeholderMessage: Record<AccountType, string> = {
+  person: 'Your name',
+  company: 'Company name',
+  nonprofit: 'Nonprofit name',
+};
+
 function StepOnboarding({ onNext, address }: StepOnboardingProps) {
+  const accountType = useAtomValue(accountTypeAtom);
   const [name, setName] = useAtom(nameAtom);
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
@@ -330,7 +398,7 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
         <div className="flex w-full justify-center">
           <div className="inline-block pb-4">
             <input
-              placeholder="Your name..."
+              placeholder={placeholderMessage[accountType as AccountType]}
               className="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
               value={name}
               onChange={({ currentTarget: { value } }) => setName(value)}
@@ -397,6 +465,7 @@ type StepCompleteProps = {
 
 const stepNumber: Record<Step, number> = {
   start: 0,
+  'select-type': 0,
   onboarding: 0,
   'creating-spaces': 1,
   'registering-profile': 2,
@@ -406,6 +475,7 @@ const stepNumber: Record<Step, number> = {
 
 const retryMessage: Record<Step, string> = {
   start: '',
+  'select-type': '',
   onboarding: '',
   'creating-spaces': 'Space creation failed',
   'registering-profile': 'Profile registration failed',
@@ -413,9 +483,16 @@ const retryMessage: Record<Step, string> = {
   completed: '',
 };
 
+const completeMessage: Record<AccountType, string> = {
+  person: 'Go to my personal space',
+  company: 'Go to my company space',
+  nonprofit: 'Go to my nonprofit space',
+};
+
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
   const { hideOnboarding } = useOnboarding();
 
+  const accountType = useAtomValue(accountTypeAtom);
   const spaceAddress = useAtomValue(spaceAddressAtom);
   const step = useAtomValue(stepAtom);
 
@@ -457,7 +534,7 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Link href={`/space/${spaceAddress}`} className="w-full" onClick={hideOnboarding}>
             <Button className="w-full" disabled={step !== 'completed'}>
-              Go to my personal space
+              {completeMessage[accountType as AccountType]}
             </Button>
           </Link>
         </div>

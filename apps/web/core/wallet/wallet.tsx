@@ -22,7 +22,14 @@ import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { Wallet } from '~/design-system/icons/wallet';
 import { Spacer } from '~/design-system/spacer';
 
-import { avatarAtom, nameAtom, profileIdAtom, spaceAddressAtom, stepAtom } from '~/partials/onboarding/dialog';
+import {
+  accountTypeAtom,
+  avatarAtom,
+  nameAtom,
+  profileIdAtom,
+  spaceAddressAtom,
+  stepAtom,
+} from '~/partials/onboarding/dialog';
 
 import { Environment } from '../environment';
 
@@ -211,6 +218,7 @@ export function GeoConnectButton() {
   const { disconnect } = useDisconnect();
   const { connect } = useConnect();
 
+  const setAccountType = useSetAtom(accountTypeAtom);
   const setName = useSetAtom(nameAtom);
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceAddress = useSetAtom(spaceAddressAtom);
@@ -218,6 +226,7 @@ export function GeoConnectButton() {
   const setStep = useSetAtom(stepAtom);
 
   const resetOnboarding = () => {
+    setAccountType(null);
     setName('');
     setAvatar('');
     setSpaceAddress('');
