@@ -12,6 +12,7 @@ import {
   type OmitStrict,
   type TripleWithActionTuple,
 } from './types'
+import { getValue } from './utils/get-value'
 
 interface EntriesWithMetadata {
   fullEntries: FullEntry[]
@@ -37,7 +38,12 @@ export function mapActions({
   return fullEntries.flatMap((fullEntry, entryIndex) => {
     return fullEntry.uriData.actions.map((action) => {
       const string_value =
-        action.value.type === 'string' ? action.value.value : null
+        action.value.type === 'string' ||
+        action.value.type === 'image' ||
+        action.value.type === 'url' ||
+        action.value.type === 'date'
+          ? action.value.value
+          : null
       const entity_value =
         action.value.type === 'entity' ? action.value.id : null
 
@@ -224,7 +230,13 @@ export function mapTriplesWithActionType(
       })
 
       const entity_value_id = value_type === 'entity' ? value_id : null
-      const string_value = value_type === 'string' ? action.value.value : null
+      const string_value =
+        value_type === 'string' ||
+        value_type === 'image' ||
+        value_type === 'date' ||
+        value_type === 'url'
+          ? action.value.value
+          : null
 
       const tupleType =
         action_type === 'deleteTriple'

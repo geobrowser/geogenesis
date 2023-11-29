@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { OmitStrict } from './types'
 
 export const ZodEntry = z.object({
   id: z.string(),
@@ -27,7 +28,7 @@ export const ZodAction = z.object({
     .refine((data) => data.id || data.value, {
       message: 'Either id or value must be provided',
     }),
-  // @TODO: Validate values for each value type
+  // @TODO: Validate value type union for each value type
 })
 
 export type Action = z.infer<typeof ZodAction>
@@ -48,10 +49,10 @@ export const ZodFullEntry = ZodEntry.extend({
   uriData: ZodUriData,
 })
 
-export type FullEntry = z.infer<typeof ZodFullEntry> & {
+export interface FullEntry extends z.infer<typeof ZodFullEntry> {
   // Set the real Action type. We only use z.any() in ZodUriData to avoid
   // rejecting the entire array of actions if one of them is invalid.
-  uriData: UriData & { actions: Action[] }
+  uriData: OmitStrict<UriData, 'actions'> & { actions: Action[] }
 }
 
 export const ZodRoleChange = z.object({
