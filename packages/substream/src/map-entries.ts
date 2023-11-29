@@ -98,6 +98,7 @@ export function mapEntities({
     for (const action of fullEntry.uriData.actions) {
       entitiesMap.set(action.entityId, {
         id: action.entityId,
+        // We don't set name or description until we process triples later.
         created_at: timestamp,
         created_at_block: blockNumber,
         updated_at: timestamp,

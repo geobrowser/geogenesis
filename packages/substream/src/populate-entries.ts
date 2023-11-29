@@ -160,75 +160,97 @@ export async function populateWithFullEntries({
       }
 
       if (isNameCreateAction) {
-        await db.upsert(
-          'geo_entities',
-          {
-            id: triple.entity_id,
-            name: triple.string_value,
-            created_by_id: accounts[0]!.id,
-            created_at: timestamp,
-            created_at_block: blockNumber,
-          },
-          'id',
-          {
-            updateColumns: ['name'],
-            noNullUpdateColumns: ['description'],
-          }
-        )
+        await db
+          .upsert(
+            'geo_entities',
+            {
+              id: triple.entity_id,
+              name: triple.string_value,
+              created_by_id: accounts[0]!.id,
+              created_at: timestamp,
+              created_at_block: blockNumber,
+              updated_at: timestamp,
+              updated_at_block: blockNumber,
+            },
+            'id',
+            {
+              updateColumns: [
+                'name',
+                'description',
+                'updated_at',
+                'updated_at_block',
+                'created_by_id',
+              ],
+              noNullUpdateColumns: ['description'],
+            }
+          )
+          .run(pool)
       }
 
       if (isNameDeleteAction) {
-        await db.upsert(
-          'geo_entities',
-          {
-            id: triple.entity_id,
-            name: null,
-            created_by_id: accounts[0]!.id,
-            created_at: timestamp,
-            created_at_block: blockNumber,
-          },
-          'id',
-          {
-            updateColumns: ['name'],
-            noNullUpdateColumns: ['description'],
-          }
-        )
+        await db
+          .upsert(
+            'geo_entities',
+            {
+              id: triple.entity_id,
+              name: null,
+              created_by_id: accounts[0]!.id,
+              created_at: timestamp,
+              created_at_block: blockNumber,
+              updated_at: timestamp,
+              updated_at_block: blockNumber,
+            },
+            'id',
+            {
+              updateColumns: ['name'],
+              noNullUpdateColumns: ['description'],
+            }
+          )
+          .run(pool)
       }
 
       if (isDescriptionCreateAction) {
-        await db.upsert(
-          'geo_entities',
-          {
-            id: triple.entity_id,
-            description: triple.string_value,
-            created_by_id: accounts[0]!.id,
-            created_at: timestamp,
-            created_at_block: blockNumber,
-          },
-          'id',
-          {
-            updateColumns: ['description'],
-            noNullUpdateColumns: ['name'],
-          }
-        )
+        await db
+          .upsert(
+            'geo_entities',
+            {
+              id: triple.entity_id,
+              description: triple.string_value,
+              created_by_id: accounts[0]!.id,
+              created_at: timestamp,
+              created_at_block: blockNumber,
+              updated_at: timestamp,
+              updated_at_block: blockNumber,
+            },
+            'id',
+            {
+              updateColumns: ['description'],
+              noNullUpdateColumns: ['name'],
+            }
+          )
+          .run(pool)
       }
 
       if (isDescriptionDeleteAction) {
-        await db.upsert(
-          'geo_entities',
-          {
-            id: triple.entity_id,
-            description: null,
-            created_by_id: accounts[0]!.id,
-            created_at: timestamp,
-            created_at_block: blockNumber,
-          },
-          'id',
-          {
-            updateColumns: ['description'],
-            noNullUpdateColumns: ['name'],
-          }
-        )
+        await db
+          .upsert(
+            'geo_entities',
+            {
+              id: triple.entity_id,
+              description: null,
+              created_by_id: accounts[0]!.id,
+              created_at: timestamp,
+              created_at_block: blockNumber,
+              updated_at: timestamp,
+              updated_at_block: blockNumber,
+            },
+            'id',
+            {
+              updateColumns: ['description'],
+              noNullUpdateColumns: ['name'],
+            }
+          )
+          .run(pool)
       }
 
       if (isAddType) {
