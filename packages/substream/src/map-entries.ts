@@ -6,7 +6,7 @@ import {
   generateTripleId,
   generateVersionId,
 } from './utils/id'
-import { actionTypeCheck } from './utils/actions'
+import { getActionTypes } from './utils/actions'
 import {
   TripleAction,
   type OmitStrict,
@@ -97,7 +97,7 @@ export function mapEntities({
         isNameDeleteAction,
         isDescriptionCreateAction,
         isDescriptionDeleteAction,
-      } = actionTypeCheck(action)
+      } = getActionTypes(action)
 
       // When iterating through all of the actions for a proposal, we might
       // interact a changed name in one of the actions. If so, we need to track

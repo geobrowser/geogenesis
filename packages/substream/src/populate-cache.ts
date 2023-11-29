@@ -21,7 +21,7 @@ export async function populateFromCache() {
     for (let cachedEntry of cachedEntries) {
       console.log(
         `Processing cachedEntry at block: ${JSON.stringify({
-          entry: cachedEntry.block_number,
+          entry: cachedEntry.block_number.toString(),
         })}`
       )
 

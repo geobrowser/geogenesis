@@ -1,9 +1,7 @@
 import * as db from 'zapatos/db'
 import type * as Schema from 'zapatos/schema'
 import { TYPES } from './constants/system-ids'
-import { upsertCachedEntries } from './populate-cache'
-import { type StreamData, TripleAction } from './types'
-import { actionTypeCheck, actionsFromURI, isValidAction } from './utils/actions'
+import { TripleAction } from './types'
 import { upsertChunked } from './utils/db'
 
 import { pool } from './utils/pool'
@@ -19,60 +17,6 @@ import {
   mapVersions,
 } from './map-entries'
 
-export async function populateWithEntries({
-  entries,
-  blockNumber,
-  timestamp,
-  cursor,
-}: StreamData) {
-  try {
-    const fullEntries: FullEntry[] = []
-    const uriResponses = await Promise.all(
-      entries.map((entry) => actionsFromURI(entry.uri))
-    )
-
-    for (let i = 0; i < entries.length; i++) {
-      console.log('\nProcessing entry', i + 1, 'of', entries.length, 'entries')
-
-      // First check if the general response conforms to what we expect
-      const uriResponse = ZodUriData.safeParse(uriResponses[i])
-
-      const entry = entries[i]
-
-      if (entry) {
-        if (uriResponse.success) {
-          // Then check if the actions conform to what we expect
-          console.log(
-            'Original Action Count: ',
-            uriResponse.data.actions.length
-          )
-
-          const actions = uriResponse.data.actions.filter(isValidAction)
-
-          console.log('Valid Actions:', actions.length)
-          fullEntries.push({
-            ...entry,
-            uriData: { ...uriResponse.data, actions },
-          })
-        } else {
-          console.error('Failed to parse URI data: ', uriResponse)
-          console.error('URI used: ', entry.uri)
-          console.error(uriResponse.error)
-        }
-      }
-    }
-
-    await populateWithFullEntries({
-      fullEntries,
-      blockNumber,
-      timestamp,
-      cursor,
-    })
-  } catch (error) {
-    console.error(`Error populating entries: ${error} at block ${blockNumber}`)
-  }
-}
-
 export async function populateWithFullEntries({
   fullEntries,
   blockNumber,
@@ -85,9 +29,6 @@ export async function populateWithFullEntries({
   cursor: string
 }) {
   try {
-    // Upsert the full entries into the cache
-    await upsertCachedEntries({ fullEntries, blockNumber, cursor, timestamp })
-
     const accounts = mapAccounts(fullEntries[0]?.author)
 
     const actions: Schema.actions.Insertable[] = mapActions({
@@ -131,11 +72,25 @@ export async function populateWithFullEntries({
       blockNumber
     )
 
+    const tripleTransactions: {
+      actionType: TripleAction
+      isAddType: boolean
+      isDeleteType: boolean
+      triple: Schema.triples.Insertable
+    }[] = []
+
     for (const [actionType, triple] of triplesDatabaseTuples) {
       const isCreateTriple = actionType === TripleAction.Create
       const isDeleteTriple = actionType === TripleAction.Delete
       const isAddType = triple.attribute_id === TYPES && isCreateTriple
       const isDeleteType = triple.attribute_id === TYPES && isDeleteTriple
+
+      tripleTransactions.push({
+        actionType,
+        isAddType,
+        isDeleteType,
+        triple,
+      })
 
       if (isCreateTriple) {
         await db.upsert('triples', triple, 'id').run(pool)
@@ -230,6 +185,6 @@ export async function populateWithFullEntries({
       }),
     ])
   } catch (error) {
-    console.error(`Error populating entries: ${error} at block ${blockNumber}`)
+    console.error(`Error populating entries: ${error}`)
   }
 }

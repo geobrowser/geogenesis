@@ -6,13 +6,6 @@ export enum TripleAction {
   Delete = 'deleteTriple',
 }
 
-export interface StreamData {
-  entries: Entry[]
-  blockNumber: number
-  timestamp: number
-  cursor: string
-}
-
 export type TripleWithActionTuple = [TripleAction, s.triples.Insertable]
 
 export interface CreateTripleActionSchema {

@@ -27,6 +27,7 @@ export const ZodAction = z.object({
     .refine((data) => data.id || data.value, {
       message: 'Either id or value must be provided',
     }),
+  // @TODO: Validate values for each value type
 })
 
 export type Action = z.infer<typeof ZodAction>

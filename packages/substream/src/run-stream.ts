@@ -8,13 +8,20 @@ import { readPackageFromFile } from '@substreams/manifest'
 import { Data, Effect, Stream } from 'effect'
 import { MANIFEST, START_BLOCK } from './constants/constants'
 import { readCursor, writeCursor } from './cursor'
-import { populateWithEntries } from './populate-entries'
+import { populateWithFullEntries } from './populate-entries'
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles'
 // import { createSink, createStream } from './substreams.js/sink/src'
 import { invariant } from './utils/invariant'
 import { logger } from './utils/logger'
-import { ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod'
+import {
+  ZodEntryStreamResponse,
+  ZodRoleChangeStreamResponse,
+  type FullEntry,
+} from './zod'
 import { createSink, createStream } from '@substreams/sink'
+import { fetchIpfsContent } from './utils/actions'
+import { upsertCachedEntries } from './populate-cache'
+import { parseValidFullEntries } from './parse-valid-full-entries'
 
 export class InvalidPackageError extends Data.TaggedClass(
   'InvalidPackageError'
@@ -120,14 +127,58 @@ export function getStreamEffect(startBlockNum?: number) {
             )
 
             const entries = entryResponse.data.entries
-            entriesQueue = entriesQueue.then(() =>
-              populateWithEntries({
-                entries,
+            const validFullEntries = yield* _(
+              Effect.tryPromise({
+                try: async () => {
+                  const maybeResponses: (FullEntry | null)[] =
+                    await Promise.all(
+                      entries.map(async (entry) => {
+                        const ipfsContent = await fetchIpfsContent(entry.uri)
+                        if (!ipfsContent) {
+                          return null
+                        }
+                        return {
+                          ...entry,
+                          uriData: ipfsContent,
+                        }
+                      })
+                    )
+                  const nonValidatedFullEntries = maybeResponses.filter(
+                    (response): response is FullEntry => response !== null
+                  )
+                  return parseValidFullEntries(nonValidatedFullEntries)
+                },
+                catch: () =>
+                  new Error(
+                    `Could not parse actions from URI for entries in block`
+                  ),
+              })
+            )
+
+            yield* _(
+              Effect.tryPromise({
+                try: () =>
+                  upsertCachedEntries({
+                    fullEntries: validFullEntries,
+                    blockNumber,
+                    cursor,
+                    timestamp,
+                  }),
+                catch: () =>
+                  new Error(`Could not upsert cached entries in block`),
+              })
+            )
+
+            // @TODO: This should write all of the actions we need to take to an Effect.Queue
+            // The Effect.Queue will process each action in a separate process
+            entriesQueue = entriesQueue.then(() => {
+              return populateWithFullEntries({
+                fullEntries: validFullEntries,
                 blockNumber,
                 cursor,
                 timestamp,
               })
-            )
+            })
           }
 
           if (roleChangeResponse.success) {

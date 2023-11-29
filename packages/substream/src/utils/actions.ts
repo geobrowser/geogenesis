@@ -1,23 +1,35 @@
 import { DESCRIPTION, NAME, TYPES } from '../constants/system-ids.js'
-import { ZodAction, type Action } from '../zod.js'
+import { ZodAction, type Action, type UriData } from '../zod.js'
 import { ipfsFetch } from './ipfs.js'
 
-export async function actionsFromURI(uri: string) {
+export async function fetchIpfsContent(uri: string): Promise<UriData | null> {
   if (uri.startsWith('data:application/json;base64,')) {
     const base64 = uri.split(',')[1]! // we can cast with bang because we know a base64 string will always have a second element
     const decoded = JSON.parse(Buffer.from(base64, 'base64').toString('utf8'))
     return decoded
-  } else if (uri.startsWith('ipfs://')) {
+  }
+
+  if (uri.startsWith('ipfs://')) {
     const fetched = await ipfsFetch(uri)
     return fetched
   }
+
+  return null
 }
 
 export function isValidAction(action: Action): action is Action {
   return ZodAction.safeParse(action).success
 }
 
-export function actionTypeCheck(action: Action) {
+type ActionTypes = {
+  isNameCreateAction: boolean
+  isNameDeleteAction: boolean
+  isDescriptionCreateAction: boolean
+  isDescriptionDeleteAction: boolean
+  isTypeTriple: boolean
+}
+
+export function getActionTypes(action: Action): ActionTypes {
   const isCreateTriple = action.type === 'createTriple'
   const isDeleteTriple = action.type === 'deleteTriple'
   const isNameAttribute = action.attributeId === NAME
