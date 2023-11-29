@@ -1,5 +1,5 @@
 export async function deploySpaceContract({ account }: { account: string }): Promise<{ spaceAddress: `0x${string}` }> {
-  const url = new URL(`/api/deploy/deploy?userAddress=${account}`, window.location.href);
+  const url = new URL(`/api/contracts/deploy?userAddress=${account}`, window.location.href);
 
   // @TODO: Error and success handling with Effect
   const spaceContractDeploymentResponse = await fetch(url);
