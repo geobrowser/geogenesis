@@ -8,12 +8,12 @@ Released under the MIT licence: see LICENCE file
 */
 
 declare module 'zapatos/schema' {
-
   import type * as db from 'zapatos/db';
 
   // got a type error on schemaVersionCanary below? update by running `npx zapatos`
-  export interface schemaVersionCanary extends db.SchemaVersionCanary { version: 104 }
-
+  export interface schemaVersionCanary extends db.SchemaVersionCanary {
+    version: 104;
+  }
 
   /* === schema: public === */
 
@@ -30,48 +30,64 @@ declare module 'zapatos/schema' {
     export type Table = 'accounts';
     export interface Selectable {
       /**
-      * **accounts.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **accounts.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
     }
     export interface JSONSelectable {
       /**
-      * **accounts.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **accounts.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
     }
     export interface Whereable {
       /**
-      * **accounts.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **accounts.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **accounts.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **accounts.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **accounts.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **accounts.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'accounts_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -83,468 +99,622 @@ declare module 'zapatos/schema' {
     export type Table = 'actions';
     export interface Selectable {
       /**
-      * **actions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **actions.action_type**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.action_type**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       action_type: string;
       /**
-      * **actions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string;
       /**
-      * **actions.attribute_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.attribute_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       attribute_id: string;
       /**
-      * **actions.value_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.value_type**
+       * - `text` in database
+       * - Nullable, no default
+       */
       value_type: string | null;
       /**
-      * **actions.value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.value_id**
+       * - `text` in database
+       * - Nullable, no default
+       */
       value_id: string | null;
       /**
-      * **actions.number_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.number_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       number_value: string | null;
       /**
-      * **actions.string_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.string_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       string_value: string | null;
       /**
-      * **actions.entity_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.entity_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       entity_value: string | null;
       /**
-      * **actions.array_value**
-      * - `_text` in database
-      * - Nullable, no default
-      */
+       * **actions.array_value**
+       * - `_text` in database
+       * - Nullable, no default
+       */
       array_value: string[] | null;
       /**
-      * **actions.proposed_version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.proposed_version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       proposed_version_id: string;
       /**
-      * **actions.version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       version_id: string;
       /**
-      * **actions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **actions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **actions.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.cursor**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       cursor: string;
     }
     export interface JSONSelectable {
       /**
-      * **actions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **actions.action_type**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.action_type**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       action_type: string;
       /**
-      * **actions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string;
       /**
-      * **actions.attribute_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.attribute_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       attribute_id: string;
       /**
-      * **actions.value_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.value_type**
+       * - `text` in database
+       * - Nullable, no default
+       */
       value_type: string | null;
       /**
-      * **actions.value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.value_id**
+       * - `text` in database
+       * - Nullable, no default
+       */
       value_id: string | null;
       /**
-      * **actions.number_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.number_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       number_value: string | null;
       /**
-      * **actions.string_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.string_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       string_value: string | null;
       /**
-      * **actions.entity_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.entity_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       entity_value: string | null;
       /**
-      * **actions.array_value**
-      * - `_text` in database
-      * - Nullable, no default
-      */
+       * **actions.array_value**
+       * - `_text` in database
+       * - Nullable, no default
+       */
       array_value: string[] | null;
       /**
-      * **actions.proposed_version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.proposed_version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       proposed_version_id: string;
       /**
-      * **actions.version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       version_id: string;
       /**
-      * **actions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **actions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **actions.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.cursor**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       cursor: string;
     }
     export interface Whereable {
       /**
-      * **actions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.action_type**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      action_type?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.action_type**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      action_type?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      entity_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.attribute_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.attribute_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      attribute_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.value_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      value_type?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.value_type**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      value_type?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.value_id**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      value_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.number_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      number_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.number_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      number_value?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.string_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      string_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.string_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      string_value?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.entity_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      entity_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.entity_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      entity_value?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.array_value**
-      * - `_text` in database
-      * - Nullable, no default
-      */
-      array_value?: string[] | db.Parameter<string[]> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string[] | db.Parameter<string[]> | db.SQLFragment | db.ParentColumn>;
+       * **actions.array_value**
+       * - `_text` in database
+       * - Nullable, no default
+       */
+      array_value?:
+        | string[]
+        | db.Parameter<string[]>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string[] | db.Parameter<string[]> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.proposed_version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.proposed_version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      proposed_version_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      version_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **actions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **actions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      cursor?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **actions.cursor**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      cursor?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **actions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **actions.action_type**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.action_type**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       action_type: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **actions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **actions.attribute_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.attribute_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       attribute_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **actions.value_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.value_type**
+       * - `text` in database
+       * - Nullable, no default
+       */
       value_type?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **actions.value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.value_id**
+       * - `text` in database
+       * - Nullable, no default
+       */
       value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **actions.number_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.number_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       number_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **actions.string_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.string_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       string_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **actions.entity_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **actions.entity_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       entity_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **actions.array_value**
-      * - `_text` in database
-      * - Nullable, no default
-      */
+       * **actions.array_value**
+       * - `_text` in database
+       * - Nullable, no default
+       */
       array_value?: string[] | db.Parameter<string[]> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **actions.proposed_version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.proposed_version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       proposed_version_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **actions.version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       version_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **actions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **actions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **actions.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **actions.cursor**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       cursor: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **actions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **actions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **actions.action_type**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      action_type?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **actions.action_type**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      action_type?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **actions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **actions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      entity_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **actions.attribute_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **actions.attribute_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      attribute_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **actions.value_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      value_type?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **actions.value_type**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      value_type?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **actions.value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **actions.value_id**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      value_id?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **actions.number_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      number_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **actions.number_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      number_value?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **actions.string_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      string_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **actions.string_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      string_value?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **actions.entity_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      entity_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **actions.entity_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      entity_value?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **actions.array_value**
-      * - `_text` in database
-      * - Nullable, no default
-      */
-      array_value?: string[] | db.Parameter<string[]> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string[] | db.Parameter<string[]> | null | db.DefaultType | db.SQLFragment>;
+       * **actions.array_value**
+       * - `_text` in database
+       * - Nullable, no default
+       */
+      array_value?:
+        | string[]
+        | db.Parameter<string[]>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string[] | db.Parameter<string[]> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **actions.proposed_version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **actions.proposed_version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      proposed_version_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **actions.version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **actions.version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      version_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **actions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **actions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **actions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **actions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **actions.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      cursor?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **actions.cursor**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      cursor?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'actions_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -556,108 +726,142 @@ declare module 'zapatos/schema' {
     export type Table = 'cursors';
     export interface Selectable {
       /**
-      * **cursors.id**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **cursors.id**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       id: number;
       /**
-      * **cursors.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **cursors.cursor**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       cursor: string;
       /**
-      * **cursors.block_number**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **cursors.block_number**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       block_number: number;
     }
     export interface JSONSelectable {
       /**
-      * **cursors.id**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **cursors.id**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       id: number;
       /**
-      * **cursors.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **cursors.cursor**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       cursor: string;
       /**
-      * **cursors.block_number**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **cursors.block_number**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       block_number: number;
     }
     export interface Whereable {
       /**
-      * **cursors.id**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      id?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **cursors.id**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **cursors.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      cursor?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **cursors.cursor**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      cursor?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **cursors.block_number**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      block_number?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **cursors.block_number**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      block_number?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **cursors.id**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **cursors.id**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       id: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **cursors.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **cursors.cursor**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       cursor: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **cursors.block_number**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **cursors.block_number**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       block_number: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **cursors.id**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      id?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **cursors.id**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **cursors.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      cursor?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **cursors.cursor**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      cursor?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **cursors.block_number**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      block_number?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **cursors.block_number**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      block_number?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'cursors_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -669,258 +873,345 @@ declare module 'zapatos/schema' {
     export type Table = 'geo_entities';
     export interface Selectable {
       /**
-      * **geo_entities.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **geo_entities.name**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.name**
+       * - `varchar` in database
+       * - Nullable, no default
+       */
       name: string | null;
       /**
-      * **geo_entities.description**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.description**
+       * - `varchar` in database
+       * - Nullable, no default
+       */
       description: string | null;
       /**
-      * **geo_entities.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string;
       /**
-      * **geo_entities.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **geo_entities.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **geo_entities.updated_at**
-      * - `int4` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.updated_at**
+       * - `int4` in database
+       * - Nullable, no default
+       */
       updated_at: number | null;
       /**
-      * **geo_entities.updated_at_block**
-      * - `int4` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.updated_at_block**
+       * - `int4` in database
+       * - Nullable, no default
+       */
       updated_at_block: number | null;
     }
     export interface JSONSelectable {
       /**
-      * **geo_entities.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **geo_entities.name**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.name**
+       * - `varchar` in database
+       * - Nullable, no default
+       */
       name: string | null;
       /**
-      * **geo_entities.description**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.description**
+       * - `varchar` in database
+       * - Nullable, no default
+       */
       description: string | null;
       /**
-      * **geo_entities.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string;
       /**
-      * **geo_entities.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **geo_entities.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **geo_entities.updated_at**
-      * - `int4` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.updated_at**
+       * - `int4` in database
+       * - Nullable, no default
+       */
       updated_at: number | null;
       /**
-      * **geo_entities.updated_at_block**
-      * - `int4` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.updated_at_block**
+       * - `int4` in database
+       * - Nullable, no default
+       */
       updated_at_block: number | null;
     }
     export interface Whereable {
       /**
-      * **geo_entities.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entities.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entities.name**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entities.name**
+       * - `varchar` in database
+       * - Nullable, no default
+       */
+      name?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entities.description**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entities.description**
+       * - `varchar` in database
+       * - Nullable, no default
+       */
+      description?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entities.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entities.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_by_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entities.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entities.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entities.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entities.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entities.updated_at**
-      * - `int4` in database
-      * - Nullable, no default
-      */
-      updated_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entities.updated_at**
+       * - `int4` in database
+       * - Nullable, no default
+       */
+      updated_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entities.updated_at_block**
-      * - `int4` in database
-      * - Nullable, no default
-      */
-      updated_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entities.updated_at_block**
+       * - `int4` in database
+       * - Nullable, no default
+       */
+      updated_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **geo_entities.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **geo_entities.name**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.name**
+       * - `varchar` in database
+       * - Nullable, no default
+       */
       name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **geo_entities.description**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.description**
+       * - `varchar` in database
+       * - Nullable, no default
+       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **geo_entities.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **geo_entities.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **geo_entities.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entities.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **geo_entities.updated_at**
-      * - `int4` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.updated_at**
+       * - `int4` in database
+       * - Nullable, no default
+       */
       updated_at?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **geo_entities.updated_at_block**
-      * - `int4` in database
-      * - Nullable, no default
-      */
+       * **geo_entities.updated_at_block**
+       * - `int4` in database
+       * - Nullable, no default
+       */
       updated_at_block?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **geo_entities.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **geo_entities.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **geo_entities.name**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **geo_entities.name**
+       * - `varchar` in database
+       * - Nullable, no default
+       */
+      name?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **geo_entities.description**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **geo_entities.description**
+       * - `varchar` in database
+       * - Nullable, no default
+       */
+      description?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **geo_entities.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **geo_entities.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_by_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **geo_entities.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **geo_entities.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **geo_entities.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **geo_entities.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **geo_entities.updated_at**
-      * - `int4` in database
-      * - Nullable, no default
-      */
-      updated_at?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment>;
+       * **geo_entities.updated_at**
+       * - `int4` in database
+       * - Nullable, no default
+       */
+      updated_at?:
+        | number
+        | db.Parameter<number>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **geo_entities.updated_at_block**
-      * - `int4` in database
-      * - Nullable, no default
-      */
-      updated_at_block?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment>;
+       * **geo_entities.updated_at_block**
+       * - `int4` in database
+       * - Nullable, no default
+       */
+      updated_at_block?:
+        | number
+        | db.Parameter<number>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment>;
     }
     export type UniqueIndex = 'geo_entities_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -932,168 +1223,221 @@ declare module 'zapatos/schema' {
     export type Table = 'geo_entity_types';
     export interface Selectable {
       /**
-      * **geo_entity_types.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('geo_entity_types_id_seq'::regclass)`
-      */
+       * **geo_entity_types.id**
+       * - `int4` in database
+       * - `NOT NULL`, default: `nextval('geo_entity_types_id_seq'::regclass)`
+       */
       id: number;
       /**
-      * **geo_entity_types.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string;
       /**
-      * **geo_entity_types.type_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.type_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       type_id: string;
       /**
-      * **geo_entity_types.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **geo_entity_types.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
     }
     export interface JSONSelectable {
       /**
-      * **geo_entity_types.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('geo_entity_types_id_seq'::regclass)`
-      */
+       * **geo_entity_types.id**
+       * - `int4` in database
+       * - `NOT NULL`, default: `nextval('geo_entity_types_id_seq'::regclass)`
+       */
       id: number;
       /**
-      * **geo_entity_types.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string;
       /**
-      * **geo_entity_types.type_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.type_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       type_id: string;
       /**
-      * **geo_entity_types.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **geo_entity_types.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
     }
     export interface Whereable {
       /**
-      * **geo_entity_types.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('geo_entity_types_id_seq'::regclass)`
-      */
-      id?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entity_types.id**
+       * - `int4` in database
+       * - `NOT NULL`, default: `nextval('geo_entity_types_id_seq'::regclass)`
+       */
+      id?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entity_types.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entity_types.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      entity_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entity_types.type_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      type_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entity_types.type_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      type_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entity_types.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entity_types.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **geo_entity_types.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **geo_entity_types.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **geo_entity_types.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('geo_entity_types_id_seq'::regclass)`
-      */
+       * **geo_entity_types.id**
+       * - `int4` in database
+       * - `NOT NULL`, default: `nextval('geo_entity_types_id_seq'::regclass)`
+       */
       id?: number | db.Parameter<number> | db.DefaultType | db.SQLFragment;
       /**
-      * **geo_entity_types.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **geo_entity_types.type_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.type_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       type_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **geo_entity_types.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **geo_entity_types.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **geo_entity_types.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **geo_entity_types.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('geo_entity_types_id_seq'::regclass)`
-      */
-      id?: number | db.Parameter<number> | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.DefaultType | db.SQLFragment>;
+       * **geo_entity_types.id**
+       * - `int4` in database
+       * - `NOT NULL`, default: `nextval('geo_entity_types_id_seq'::regclass)`
+       */
+      id?:
+        | number
+        | db.Parameter<number>
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.DefaultType | db.SQLFragment>;
       /**
-      * **geo_entity_types.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **geo_entity_types.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      entity_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **geo_entity_types.type_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      type_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **geo_entity_types.type_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      type_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **geo_entity_types.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **geo_entity_types.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **geo_entity_types.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **geo_entity_types.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'geo_entity_types_pkey' | 'geo_entity_types_unique_entity_type_pair';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -1105,258 +1449,343 @@ declare module 'zapatos/schema' {
     export type Table = 'log_entries';
     export interface Selectable {
       /**
-      * **log_entries.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **log_entries.created_at_block**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.created_at_block**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: string;
       /**
-      * **log_entries.uri**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.uri**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       uri: string;
       /**
-      * **log_entries.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string;
       /**
-      * **log_entries.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **log_entries.mime_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **log_entries.mime_type**
+       * - `text` in database
+       * - Nullable, no default
+       */
       mime_type: string | null;
       /**
-      * **log_entries.decoded**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **log_entries.decoded**
+       * - `text` in database
+       * - Nullable, no default
+       */
       decoded: string | null;
       /**
-      * **log_entries.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **log_entries.json**
+       * - `text` in database
+       * - Nullable, no default
+       */
       json: string | null;
     }
     export interface JSONSelectable {
       /**
-      * **log_entries.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **log_entries.created_at_block**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.created_at_block**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: string;
       /**
-      * **log_entries.uri**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.uri**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       uri: string;
       /**
-      * **log_entries.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string;
       /**
-      * **log_entries.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **log_entries.mime_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **log_entries.mime_type**
+       * - `text` in database
+       * - Nullable, no default
+       */
       mime_type: string | null;
       /**
-      * **log_entries.decoded**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **log_entries.decoded**
+       * - `text` in database
+       * - Nullable, no default
+       */
       decoded: string | null;
       /**
-      * **log_entries.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **log_entries.json**
+       * - `text` in database
+       * - Nullable, no default
+       */
       json: string | null;
     }
     export interface Whereable {
       /**
-      * **log_entries.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **log_entries.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **log_entries.created_at_block**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **log_entries.created_at_block**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **log_entries.uri**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      uri?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **log_entries.uri**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      uri?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **log_entries.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **log_entries.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_by_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **log_entries.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **log_entries.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **log_entries.mime_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      mime_type?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **log_entries.mime_type**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      mime_type?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **log_entries.decoded**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      decoded?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **log_entries.decoded**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      decoded?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **log_entries.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **log_entries.json**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      json?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **log_entries.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **log_entries.created_at_block**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.created_at_block**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **log_entries.uri**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.uri**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       uri: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **log_entries.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **log_entries.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **log_entries.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **log_entries.mime_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **log_entries.mime_type**
+       * - `text` in database
+       * - Nullable, no default
+       */
       mime_type?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **log_entries.decoded**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **log_entries.decoded**
+       * - `text` in database
+       * - Nullable, no default
+       */
       decoded?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **log_entries.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **log_entries.json**
+       * - `text` in database
+       * - Nullable, no default
+       */
       json?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **log_entries.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **log_entries.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **log_entries.created_at_block**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **log_entries.created_at_block**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **log_entries.uri**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      uri?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **log_entries.uri**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      uri?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **log_entries.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **log_entries.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_by_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **log_entries.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **log_entries.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **log_entries.mime_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      mime_type?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **log_entries.mime_type**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      mime_type?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **log_entries.decoded**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      decoded?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **log_entries.decoded**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      decoded?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **log_entries.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **log_entries.json**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      json?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
     }
     export type UniqueIndex = 'log_entries_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -1368,258 +1797,341 @@ declare module 'zapatos/schema' {
     export type Table = 'proposals';
     export interface Selectable {
       /**
-      * **proposals.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **proposals.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **proposals.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposals.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
       name: string | null;
       /**
-      * **proposals.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposals.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
       description: string | null;
       /**
-      * **proposals.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **proposals.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **proposals.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string;
       /**
-      * **proposals.status**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.status**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       status: string;
     }
     export interface JSONSelectable {
       /**
-      * **proposals.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **proposals.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **proposals.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposals.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
       name: string | null;
       /**
-      * **proposals.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposals.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
       description: string | null;
       /**
-      * **proposals.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **proposals.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **proposals.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string;
       /**
-      * **proposals.status**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.status**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       status: string;
     }
     export interface Whereable {
       /**
-      * **proposals.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposals.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposals.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposals.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposals.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposals.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      name?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposals.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposals.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      description?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposals.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **proposals.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposals.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **proposals.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposals.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposals.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_by_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposals.status**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      status?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposals.status**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      status?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **proposals.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **proposals.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **proposals.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposals.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
       name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **proposals.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposals.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **proposals.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **proposals.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **proposals.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **proposals.status**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposals.status**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       status: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **proposals.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **proposals.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **proposals.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **proposals.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **proposals.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **proposals.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      name?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **proposals.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **proposals.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      description?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **proposals.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **proposals.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **proposals.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **proposals.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **proposals.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **proposals.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_by_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **proposals.status**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      status?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **proposals.status**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      status?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'proposals_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -1631,288 +2143,380 @@ declare module 'zapatos/schema' {
     export type Table = 'proposed_versions';
     export interface Selectable {
       /**
-      * **proposed_versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **proposed_versions.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposed_versions.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
       name: string | null;
       /**
-      * **proposed_versions.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposed_versions.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
       description: string | null;
       /**
-      * **proposed_versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **proposed_versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **proposed_versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string;
       /**
-      * **proposed_versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string;
       /**
-      * **proposed_versions.proposal_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.proposal_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       proposal_id: string;
       /**
-      * **proposed_versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
     }
     export interface JSONSelectable {
       /**
-      * **proposed_versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **proposed_versions.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposed_versions.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
       name: string | null;
       /**
-      * **proposed_versions.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposed_versions.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
       description: string | null;
       /**
-      * **proposed_versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **proposed_versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **proposed_versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string;
       /**
-      * **proposed_versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string;
       /**
-      * **proposed_versions.proposal_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.proposal_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       proposal_id: string;
       /**
-      * **proposed_versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
     }
     export interface Whereable {
       /**
-      * **proposed_versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposed_versions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposed_versions.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposed_versions.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      name?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposed_versions.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposed_versions.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      description?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposed_versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **proposed_versions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposed_versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **proposed_versions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposed_versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposed_versions.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_by_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposed_versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposed_versions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      entity_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposed_versions.proposal_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposed_versions.proposal_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      proposal_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposed_versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **proposed_versions.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **proposed_versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **proposed_versions.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposed_versions.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
       name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **proposed_versions.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **proposed_versions.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **proposed_versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **proposed_versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **proposed_versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **proposed_versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **proposed_versions.proposal_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.proposal_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       proposal_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **proposed_versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **proposed_versions.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **proposed_versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **proposed_versions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **proposed_versions.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **proposed_versions.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      name?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **proposed_versions.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **proposed_versions.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      description?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **proposed_versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **proposed_versions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **proposed_versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **proposed_versions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **proposed_versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **proposed_versions.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_by_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **proposed_versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **proposed_versions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      entity_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **proposed_versions.proposal_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **proposed_versions.proposal_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      proposal_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **proposed_versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **proposed_versions.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'proposed_versions_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -1924,138 +2528,181 @@ declare module 'zapatos/schema' {
     export type Table = 'space_admins';
     export interface Selectable {
       /**
-      * **space_admins.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **space_admins.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       account_id: string;
       /**
-      * **space_admins.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **space_admins.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
     }
     export interface JSONSelectable {
       /**
-      * **space_admins.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **space_admins.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       account_id: string;
       /**
-      * **space_admins.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **space_admins.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
     }
     export interface Whereable {
       /**
-      * **space_admins.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **space_admins.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **space_admins.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **space_admins.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      account_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **space_admins.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **space_admins.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **space_admins.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **space_admins.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **space_admins.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **space_admins.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       account_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **space_admins.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **space_admins.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_admins.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **space_admins.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **space_admins.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **space_admins.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **space_admins.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      account_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **space_admins.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **space_admins.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **space_admins.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **space_admins.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'space_admins_unique_account_space_pair';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -2067,138 +2714,181 @@ declare module 'zapatos/schema' {
     export type Table = 'space_editor_controllers';
     export interface Selectable {
       /**
-      * **space_editor_controllers.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **space_editor_controllers.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       account_id: string;
       /**
-      * **space_editor_controllers.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **space_editor_controllers.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
     }
     export interface JSONSelectable {
       /**
-      * **space_editor_controllers.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **space_editor_controllers.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       account_id: string;
       /**
-      * **space_editor_controllers.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **space_editor_controllers.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
     }
     export interface Whereable {
       /**
-      * **space_editor_controllers.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **space_editor_controllers.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **space_editor_controllers.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **space_editor_controllers.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      account_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **space_editor_controllers.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **space_editor_controllers.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **space_editor_controllers.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **space_editor_controllers.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **space_editor_controllers.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **space_editor_controllers.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       account_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **space_editor_controllers.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **space_editor_controllers.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editor_controllers.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **space_editor_controllers.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **space_editor_controllers.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **space_editor_controllers.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **space_editor_controllers.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      account_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **space_editor_controllers.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **space_editor_controllers.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **space_editor_controllers.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **space_editor_controllers.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'space_editor_controllers_unique_account_space_pair';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -2210,138 +2900,181 @@ declare module 'zapatos/schema' {
     export type Table = 'space_editors';
     export interface Selectable {
       /**
-      * **space_editors.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **space_editors.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       account_id: string;
       /**
-      * **space_editors.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **space_editors.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
     }
     export interface JSONSelectable {
       /**
-      * **space_editors.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **space_editors.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       account_id: string;
       /**
-      * **space_editors.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **space_editors.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
     }
     export interface Whereable {
       /**
-      * **space_editors.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **space_editors.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **space_editors.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **space_editors.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      account_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **space_editors.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **space_editors.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **space_editors.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **space_editors.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **space_editors.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **space_editors.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       account_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **space_editors.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **space_editors.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **space_editors.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **space_editors.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **space_editors.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **space_editors.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **space_editors.account_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      account_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **space_editors.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **space_editors.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **space_editors.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **space_editors.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'space_editors_unique_account_space_pair';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -2353,108 +3086,142 @@ declare module 'zapatos/schema' {
     export type Table = 'spaces';
     export interface Selectable {
       /**
-      * **spaces.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **spaces.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **spaces.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **spaces.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **spaces.is_root_space**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
+       * **spaces.is_root_space**
+       * - `bool` in database
+       * - `NOT NULL`, no default
+       */
       is_root_space: boolean;
     }
     export interface JSONSelectable {
       /**
-      * **spaces.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **spaces.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **spaces.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **spaces.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **spaces.is_root_space**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
+       * **spaces.is_root_space**
+       * - `bool` in database
+       * - `NOT NULL`, no default
+       */
       is_root_space: boolean;
     }
     export interface Whereable {
       /**
-      * **spaces.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **spaces.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **spaces.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **spaces.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **spaces.is_root_space**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_root_space?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
+       * **spaces.is_root_space**
+       * - `bool` in database
+       * - `NOT NULL`, no default
+       */
+      is_root_space?:
+        | boolean
+        | db.Parameter<boolean>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **spaces.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **spaces.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **spaces.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **spaces.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **spaces.is_root_space**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
+       * **spaces.is_root_space**
+       * - `bool` in database
+       * - `NOT NULL`, no default
+       */
       is_root_space: boolean | db.Parameter<boolean> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **spaces.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **spaces.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **spaces.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **spaces.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **spaces.is_root_space**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_root_space?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
+       * **spaces.is_root_space**
+       * - `bool` in database
+       * - `NOT NULL`, no default
+       */
+      is_root_space?:
+        | boolean
+        | db.Parameter<boolean>
+        | db.SQLFragment
+        | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
     }
     export type UniqueIndex = 'spaces_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -2466,108 +3233,142 @@ declare module 'zapatos/schema' {
     export type Table = 'subspaces';
     export interface Selectable {
       /**
-      * **subspaces.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **subspaces.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **subspaces.parent_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **subspaces.parent_space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       parent_space_id: string;
       /**
-      * **subspaces.child_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **subspaces.child_space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       child_space_id: string;
     }
     export interface JSONSelectable {
       /**
-      * **subspaces.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **subspaces.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **subspaces.parent_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **subspaces.parent_space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       parent_space_id: string;
       /**
-      * **subspaces.child_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **subspaces.child_space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       child_space_id: string;
     }
     export interface Whereable {
       /**
-      * **subspaces.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **subspaces.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **subspaces.parent_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      parent_space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **subspaces.parent_space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      parent_space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **subspaces.child_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      child_space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **subspaces.child_space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      child_space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **subspaces.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **subspaces.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **subspaces.parent_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **subspaces.parent_space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       parent_space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **subspaces.child_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **subspaces.child_space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       child_space_id: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **subspaces.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **subspaces.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **subspaces.parent_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      parent_space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **subspaces.parent_space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      parent_space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **subspaces.child_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      child_space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **subspaces.child_space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      child_space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'subspaces_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -2579,408 +3380,540 @@ declare module 'zapatos/schema' {
     export type Table = 'triples';
     export interface Selectable {
       /**
-      * **triples.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **triples.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string;
       /**
-      * **triples.attribute_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.attribute_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       attribute_id: string;
       /**
-      * **triples.value_type**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.value_type**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       value_type: string;
       /**
-      * **triples.value_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.value_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       value_id: string;
       /**
-      * **triples.number_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.number_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       number_value: string | null;
       /**
-      * **triples.string_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.string_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       string_value: string | null;
       /**
-      * **triples.array_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.array_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       array_value: string | null;
       /**
-      * **triples.entity_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.entity_value_id**
+       * - `text` in database
+       * - Nullable, no default
+       */
       entity_value_id: string | null;
       /**
-      * **triples.is_protected**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.is_protected**
+       * - `bool` in database
+       * - `NOT NULL`, no default
+       */
       is_protected: boolean;
       /**
-      * **triples.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **triples.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **triples.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
     }
     export interface JSONSelectable {
       /**
-      * **triples.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **triples.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string;
       /**
-      * **triples.attribute_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.attribute_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       attribute_id: string;
       /**
-      * **triples.value_type**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.value_type**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       value_type: string;
       /**
-      * **triples.value_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.value_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       value_id: string;
       /**
-      * **triples.number_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.number_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       number_value: string | null;
       /**
-      * **triples.string_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.string_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       string_value: string | null;
       /**
-      * **triples.array_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.array_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       array_value: string | null;
       /**
-      * **triples.entity_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.entity_value_id**
+       * - `text` in database
+       * - Nullable, no default
+       */
       entity_value_id: string | null;
       /**
-      * **triples.is_protected**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.is_protected**
+       * - `bool` in database
+       * - `NOT NULL`, no default
+       */
       is_protected: boolean;
       /**
-      * **triples.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
       /**
-      * **triples.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **triples.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
     }
     export interface Whereable {
       /**
-      * **triples.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **triples.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **triples.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      entity_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.attribute_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **triples.attribute_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      attribute_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.value_type**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      value_type?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **triples.value_type**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      value_type?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.value_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **triples.value_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      value_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.number_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      number_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **triples.number_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      number_value?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.string_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      string_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **triples.string_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      string_value?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.array_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      array_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **triples.array_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      array_value?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.entity_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      entity_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **triples.entity_value_id**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      entity_value_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.is_protected**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_protected?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
+       * **triples.is_protected**
+       * - `bool` in database
+       * - `NOT NULL`, no default
+       */
+      is_protected?:
+        | boolean
+        | db.Parameter<boolean>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **triples.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **triples.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **triples.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **triples.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **triples.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **triples.attribute_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.attribute_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       attribute_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **triples.value_type**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.value_type**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       value_type: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **triples.value_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.value_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       value_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **triples.number_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.number_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       number_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **triples.string_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.string_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       string_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **triples.array_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.array_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
       array_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **triples.entity_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **triples.entity_value_id**
+       * - `text` in database
+       * - Nullable, no default
+       */
       entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **triples.is_protected**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.is_protected**
+       * - `bool` in database
+       * - `NOT NULL`, no default
+       */
       is_protected: boolean | db.Parameter<boolean> | db.SQLFragment;
       /**
-      * **triples.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **triples.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **triples.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **triples.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **triples.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **triples.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **triples.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **triples.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      entity_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **triples.attribute_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **triples.attribute_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      attribute_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **triples.value_type**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      value_type?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **triples.value_type**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      value_type?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **triples.value_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      value_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **triples.value_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      value_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **triples.number_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      number_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **triples.number_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      number_value?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **triples.string_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      string_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **triples.string_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      string_value?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **triples.array_value**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      array_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **triples.array_value**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      array_value?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **triples.entity_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **triples.entity_value_id**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      entity_value_id?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **triples.is_protected**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_protected?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
+       * **triples.is_protected**
+       * - `bool` in database
+       * - `NOT NULL`, no default
+       */
+      is_protected?:
+        | boolean
+        | db.Parameter<boolean>
+        | db.SQLFragment
+        | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
       /**
-      * **triples.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **triples.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **triples.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **triples.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **triples.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **triples.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'triples_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
@@ -2992,321 +3925,562 @@ declare module 'zapatos/schema' {
     export type Table = 'versions';
     export interface Selectable {
       /**
-      * **versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **versions.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **versions.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
       name: string | null;
       /**
-      * **versions.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **versions.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
       description: string | null;
       /**
-      * **versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string;
       /**
-      * **versions.proposed_version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.proposed_version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       proposed_version_id: string;
       /**
-      * **versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string;
       /**
-      * **versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
     }
     export interface JSONSelectable {
       /**
-      * **versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string;
       /**
-      * **versions.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **versions.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
       name: string | null;
       /**
-      * **versions.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **versions.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
       description: string | null;
       /**
-      * **versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number;
       /**
-      * **versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number;
       /**
-      * **versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string;
       /**
-      * **versions.proposed_version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.proposed_version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       proposed_version_id: string;
       /**
-      * **versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string;
       /**
-      * **versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string;
     }
     export interface Whereable {
       /**
-      * **versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **versions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **versions.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **versions.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      name?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **versions.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **versions.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      description?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **versions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+       * **versions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **versions.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_by_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **versions.proposed_version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **versions.proposed_version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      proposed_version_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **versions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      entity_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+       * **versions.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.ParentColumn
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
-      * **versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **versions.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **versions.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
       name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **versions.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
+       * **versions.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       created_by_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **versions.proposed_version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.proposed_version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       proposed_version_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       entity_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
+       * **versions.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
       space_id: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
-      * **versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **versions.id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **versions.name**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **versions.name**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      name?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **versions.description**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+       * **versions.description**
+       * - `text` in database
+       * - Nullable, no default
+       */
+      description?:
+        | string
+        | db.Parameter<string>
+        | null
+        | db.DefaultType
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
-      * **versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **versions.created_at**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+       * **versions.created_at_block**
+       * - `int4` in database
+       * - `NOT NULL`, no default
+       */
+      created_at_block?:
+        | number
+        | db.Parameter<number>
+        | db.SQLFragment
+        | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **versions.created_by_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      created_by_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **versions.proposed_version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **versions.proposed_version_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      proposed_version_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **versions.entity_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      entity_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+       * **versions.space_id**
+       * - `text` in database
+       * - `NOT NULL`, no default
+       */
+      space_id?:
+        | string
+        | db.Parameter<string>
+        | db.SQLFragment
+        | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'versions_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQLExpression =
+      | Table
+      | db.ColumnNames<Updatable | (keyof Updatable)[]>
+      | db.ColumnValues<Updatable>
+      | Whereable
+      | Column
+      | db.ParentColumn
+      | db.GenericSQLExpression;
     export type SQL = SQLExpression | SQLExpression[];
   }
 
   /* --- aggregate types --- */
 
-  export namespace public {  
-    export type Table = accounts.Table | actions.Table | cursors.Table | geo_entities.Table | geo_entity_types.Table | log_entries.Table | proposals.Table | proposed_versions.Table | space_admins.Table | space_editor_controllers.Table | space_editors.Table | spaces.Table | subspaces.Table | triples.Table | versions.Table;
-    export type Selectable = accounts.Selectable | actions.Selectable | cursors.Selectable | geo_entities.Selectable | geo_entity_types.Selectable | log_entries.Selectable | proposals.Selectable | proposed_versions.Selectable | space_admins.Selectable | space_editor_controllers.Selectable | space_editors.Selectable | spaces.Selectable | subspaces.Selectable | triples.Selectable | versions.Selectable;
-    export type JSONSelectable = accounts.JSONSelectable | actions.JSONSelectable | cursors.JSONSelectable | geo_entities.JSONSelectable | geo_entity_types.JSONSelectable | log_entries.JSONSelectable | proposals.JSONSelectable | proposed_versions.JSONSelectable | space_admins.JSONSelectable | space_editor_controllers.JSONSelectable | space_editors.JSONSelectable | spaces.JSONSelectable | subspaces.JSONSelectable | triples.JSONSelectable | versions.JSONSelectable;
-    export type Whereable = accounts.Whereable | actions.Whereable | cursors.Whereable | geo_entities.Whereable | geo_entity_types.Whereable | log_entries.Whereable | proposals.Whereable | proposed_versions.Whereable | space_admins.Whereable | space_editor_controllers.Whereable | space_editors.Whereable | spaces.Whereable | subspaces.Whereable | triples.Whereable | versions.Whereable;
-    export type Insertable = accounts.Insertable | actions.Insertable | cursors.Insertable | geo_entities.Insertable | geo_entity_types.Insertable | log_entries.Insertable | proposals.Insertable | proposed_versions.Insertable | space_admins.Insertable | space_editor_controllers.Insertable | space_editors.Insertable | spaces.Insertable | subspaces.Insertable | triples.Insertable | versions.Insertable;
-    export type Updatable = accounts.Updatable | actions.Updatable | cursors.Updatable | geo_entities.Updatable | geo_entity_types.Updatable | log_entries.Updatable | proposals.Updatable | proposed_versions.Updatable | space_admins.Updatable | space_editor_controllers.Updatable | space_editors.Updatable | spaces.Updatable | subspaces.Updatable | triples.Updatable | versions.Updatable;
-    export type UniqueIndex = accounts.UniqueIndex | actions.UniqueIndex | cursors.UniqueIndex | geo_entities.UniqueIndex | geo_entity_types.UniqueIndex | log_entries.UniqueIndex | proposals.UniqueIndex | proposed_versions.UniqueIndex | space_admins.UniqueIndex | space_editor_controllers.UniqueIndex | space_editors.UniqueIndex | spaces.UniqueIndex | subspaces.UniqueIndex | triples.UniqueIndex | versions.UniqueIndex;
-    export type Column = accounts.Column | actions.Column | cursors.Column | geo_entities.Column | geo_entity_types.Column | log_entries.Column | proposals.Column | proposed_versions.Column | space_admins.Column | space_editor_controllers.Column | space_editors.Column | spaces.Column | subspaces.Column | triples.Column | versions.Column;
-  
-    export type AllBaseTables = [accounts.Table, actions.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, proposals.Table, proposed_versions.Table, space_admins.Table, space_editor_controllers.Table, space_editors.Table, spaces.Table, subspaces.Table, triples.Table, versions.Table];
+  export namespace public {
+    export type Table =
+      | accounts.Table
+      | actions.Table
+      | cursors.Table
+      | geo_entities.Table
+      | geo_entity_types.Table
+      | log_entries.Table
+      | proposals.Table
+      | proposed_versions.Table
+      | space_admins.Table
+      | space_editor_controllers.Table
+      | space_editors.Table
+      | spaces.Table
+      | subspaces.Table
+      | triples.Table
+      | versions.Table;
+    export type Selectable =
+      | accounts.Selectable
+      | actions.Selectable
+      | cursors.Selectable
+      | geo_entities.Selectable
+      | geo_entity_types.Selectable
+      | log_entries.Selectable
+      | proposals.Selectable
+      | proposed_versions.Selectable
+      | space_admins.Selectable
+      | space_editor_controllers.Selectable
+      | space_editors.Selectable
+      | spaces.Selectable
+      | subspaces.Selectable
+      | triples.Selectable
+      | versions.Selectable;
+    export type JSONSelectable =
+      | accounts.JSONSelectable
+      | actions.JSONSelectable
+      | cursors.JSONSelectable
+      | geo_entities.JSONSelectable
+      | geo_entity_types.JSONSelectable
+      | log_entries.JSONSelectable
+      | proposals.JSONSelectable
+      | proposed_versions.JSONSelectable
+      | space_admins.JSONSelectable
+      | space_editor_controllers.JSONSelectable
+      | space_editors.JSONSelectable
+      | spaces.JSONSelectable
+      | subspaces.JSONSelectable
+      | triples.JSONSelectable
+      | versions.JSONSelectable;
+    export type Whereable =
+      | accounts.Whereable
+      | actions.Whereable
+      | cursors.Whereable
+      | geo_entities.Whereable
+      | geo_entity_types.Whereable
+      | log_entries.Whereable
+      | proposals.Whereable
+      | proposed_versions.Whereable
+      | space_admins.Whereable
+      | space_editor_controllers.Whereable
+      | space_editors.Whereable
+      | spaces.Whereable
+      | subspaces.Whereable
+      | triples.Whereable
+      | versions.Whereable;
+    export type Insertable =
+      | accounts.Insertable
+      | actions.Insertable
+      | cursors.Insertable
+      | geo_entities.Insertable
+      | geo_entity_types.Insertable
+      | log_entries.Insertable
+      | proposals.Insertable
+      | proposed_versions.Insertable
+      | space_admins.Insertable
+      | space_editor_controllers.Insertable
+      | space_editors.Insertable
+      | spaces.Insertable
+      | subspaces.Insertable
+      | triples.Insertable
+      | versions.Insertable;
+    export type Updatable =
+      | accounts.Updatable
+      | actions.Updatable
+      | cursors.Updatable
+      | geo_entities.Updatable
+      | geo_entity_types.Updatable
+      | log_entries.Updatable
+      | proposals.Updatable
+      | proposed_versions.Updatable
+      | space_admins.Updatable
+      | space_editor_controllers.Updatable
+      | space_editors.Updatable
+      | spaces.Updatable
+      | subspaces.Updatable
+      | triples.Updatable
+      | versions.Updatable;
+    export type UniqueIndex =
+      | accounts.UniqueIndex
+      | actions.UniqueIndex
+      | cursors.UniqueIndex
+      | geo_entities.UniqueIndex
+      | geo_entity_types.UniqueIndex
+      | log_entries.UniqueIndex
+      | proposals.UniqueIndex
+      | proposed_versions.UniqueIndex
+      | space_admins.UniqueIndex
+      | space_editor_controllers.UniqueIndex
+      | space_editors.UniqueIndex
+      | spaces.UniqueIndex
+      | subspaces.UniqueIndex
+      | triples.UniqueIndex
+      | versions.UniqueIndex;
+    export type Column =
+      | accounts.Column
+      | actions.Column
+      | cursors.Column
+      | geo_entities.Column
+      | geo_entity_types.Column
+      | log_entries.Column
+      | proposals.Column
+      | proposed_versions.Column
+      | space_admins.Column
+      | space_editor_controllers.Column
+      | space_editors.Column
+      | spaces.Column
+      | subspaces.Column
+      | triples.Column
+      | versions.Column;
+
+    export type AllBaseTables = [
+      accounts.Table,
+      actions.Table,
+      cursors.Table,
+      geo_entities.Table,
+      geo_entity_types.Table,
+      log_entries.Table,
+      proposals.Table,
+      proposed_versions.Table,
+      space_admins.Table,
+      space_editor_controllers.Table,
+      space_editors.Table,
+      spaces.Table,
+      subspaces.Table,
+      triples.Table,
+      versions.Table,
+    ];
     export type AllForeignTables = [];
     export type AllViews = [];
     export type AllMaterializedViews = [];
-    export type AllTablesAndViews = [accounts.Table, actions.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, proposals.Table, proposed_versions.Table, space_admins.Table, space_editor_controllers.Table, space_editors.Table, spaces.Table, subspaces.Table, triples.Table, versions.Table];
+    export type AllTablesAndViews = [
+      accounts.Table,
+      actions.Table,
+      cursors.Table,
+      geo_entities.Table,
+      geo_entity_types.Table,
+      log_entries.Table,
+      proposals.Table,
+      proposed_versions.Table,
+      space_admins.Table,
+      space_editor_controllers.Table,
+      space_editors.Table,
+      spaces.Table,
+      subspaces.Table,
+      triples.Table,
+      versions.Table,
+    ];
   }
-
-
 
   /* === schema: cache === */
 
   export namespace cache {
-  
     /* --- enums --- */
     /* (none) */
-  
+
     /* --- tables --- */
-  
+
     /**
      * **cache.entries**
      * - Table in database
@@ -3315,171 +4489,224 @@ declare module 'zapatos/schema' {
       export type Table = 'cache.entries';
       export interface Selectable {
         /**
-        * **cache.entries.id**
-        * - `int4` in database
-        * - `NOT NULL`, default: `nextval('cache.entries_id_seq'::regclass)`
-        */
+         * **cache.entries.id**
+         * - `int4` in database
+         * - `NOT NULL`, default: `nextval('cache.entries_id_seq'::regclass)`
+         */
         id: number;
         /**
-        * **cache.entries.block_number**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.block_number**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         block_number: number;
         /**
-        * **cache.entries.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.cursor**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         cursor: string;
         /**
-        * **cache.entries.timestamp**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.timestamp**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         timestamp: number;
         /**
-        * **cache.entries.data**
-        * - `jsonb` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.data**
+         * - `jsonb` in database
+         * - `NOT NULL`, no default
+         */
         data: db.JSONValue;
       }
       export interface JSONSelectable {
         /**
-        * **cache.entries.id**
-        * - `int4` in database
-        * - `NOT NULL`, default: `nextval('cache.entries_id_seq'::regclass)`
-        */
+         * **cache.entries.id**
+         * - `int4` in database
+         * - `NOT NULL`, default: `nextval('cache.entries_id_seq'::regclass)`
+         */
         id: number;
         /**
-        * **cache.entries.block_number**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.block_number**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         block_number: number;
         /**
-        * **cache.entries.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.cursor**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         cursor: string;
         /**
-        * **cache.entries.timestamp**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.timestamp**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         timestamp: number;
         /**
-        * **cache.entries.data**
-        * - `jsonb` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.data**
+         * - `jsonb` in database
+         * - `NOT NULL`, no default
+         */
         data: db.JSONValue;
       }
       export interface Whereable {
         /**
-        * **cache.entries.id**
-        * - `int4` in database
-        * - `NOT NULL`, default: `nextval('cache.entries_id_seq'::regclass)`
-        */
-        id?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+         * **cache.entries.id**
+         * - `int4` in database
+         * - `NOT NULL`, default: `nextval('cache.entries_id_seq'::regclass)`
+         */
+        id?:
+          | number
+          | db.Parameter<number>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.entries.block_number**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        block_number?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+         * **cache.entries.block_number**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
+        block_number?:
+          | number
+          | db.Parameter<number>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.entries.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        cursor?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+         * **cache.entries.cursor**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        cursor?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.entries.timestamp**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        timestamp?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+         * **cache.entries.timestamp**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
+        timestamp?:
+          | number
+          | db.Parameter<number>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.entries.data**
-        * - `jsonb` in database
-        * - `NOT NULL`, no default
-        */
-        data?: db.JSONValue | db.Parameter<db.JSONValue> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, db.JSONValue | db.Parameter<db.JSONValue> | db.SQLFragment | db.ParentColumn>;
+         * **cache.entries.data**
+         * - `jsonb` in database
+         * - `NOT NULL`, no default
+         */
+        data?:
+          | db.JSONValue
+          | db.Parameter<db.JSONValue>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, db.JSONValue | db.Parameter<db.JSONValue> | db.SQLFragment | db.ParentColumn>;
       }
       export interface Insertable {
         /**
-        * **cache.entries.id**
-        * - `int4` in database
-        * - `NOT NULL`, default: `nextval('cache.entries_id_seq'::regclass)`
-        */
+         * **cache.entries.id**
+         * - `int4` in database
+         * - `NOT NULL`, default: `nextval('cache.entries_id_seq'::regclass)`
+         */
         id?: number | db.Parameter<number> | db.DefaultType | db.SQLFragment;
         /**
-        * **cache.entries.block_number**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.block_number**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         block_number: number | db.Parameter<number> | db.SQLFragment;
         /**
-        * **cache.entries.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.cursor**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         cursor: string | db.Parameter<string> | db.SQLFragment;
         /**
-        * **cache.entries.timestamp**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.timestamp**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         timestamp: number | db.Parameter<number> | db.SQLFragment;
         /**
-        * **cache.entries.data**
-        * - `jsonb` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.entries.data**
+         * - `jsonb` in database
+         * - `NOT NULL`, no default
+         */
         data: db.JSONValue | db.Parameter<db.JSONValue> | db.SQLFragment;
       }
       export interface Updatable {
         /**
-        * **cache.entries.id**
-        * - `int4` in database
-        * - `NOT NULL`, default: `nextval('cache.entries_id_seq'::regclass)`
-        */
-        id?: number | db.Parameter<number> | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.DefaultType | db.SQLFragment>;
+         * **cache.entries.id**
+         * - `int4` in database
+         * - `NOT NULL`, default: `nextval('cache.entries_id_seq'::regclass)`
+         */
+        id?:
+          | number
+          | db.Parameter<number>
+          | db.DefaultType
+          | db.SQLFragment
+          | db.SQLFragment<any, number | db.Parameter<number> | db.DefaultType | db.SQLFragment>;
         /**
-        * **cache.entries.block_number**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        block_number?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+         * **cache.entries.block_number**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
+        block_number?:
+          | number
+          | db.Parameter<number>
+          | db.SQLFragment
+          | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
         /**
-        * **cache.entries.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        cursor?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+         * **cache.entries.cursor**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        cursor?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
         /**
-        * **cache.entries.timestamp**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        timestamp?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+         * **cache.entries.timestamp**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
+        timestamp?:
+          | number
+          | db.Parameter<number>
+          | db.SQLFragment
+          | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
         /**
-        * **cache.entries.data**
-        * - `jsonb` in database
-        * - `NOT NULL`, no default
-        */
-        data?: db.JSONValue | db.Parameter<db.JSONValue> | db.SQLFragment | db.SQLFragment<any, db.JSONValue | db.Parameter<db.JSONValue> | db.SQLFragment>;
+         * **cache.entries.data**
+         * - `jsonb` in database
+         * - `NOT NULL`, no default
+         */
+        data?:
+          | db.JSONValue
+          | db.Parameter<db.JSONValue>
+          | db.SQLFragment
+          | db.SQLFragment<any, db.JSONValue | db.Parameter<db.JSONValue> | db.SQLFragment>;
       }
       export type UniqueIndex = 'entries_pkey' | 'unique_cached_entries';
       export type Column = keyof Selectable;
       export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-      export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+      export type SQLExpression =
+        | Table
+        | db.ColumnNames<Updatable | (keyof Updatable)[]>
+        | db.ColumnValues<Updatable>
+        | Whereable
+        | Column
+        | db.ParentColumn
+        | db.GenericSQLExpression;
       export type SQL = SQLExpression | SQLExpression[];
     }
-  
+
     /**
      * **cache.roles**
      * - Table in database
@@ -3488,293 +4715,382 @@ declare module 'zapatos/schema' {
       export type Table = 'cache.roles';
       export interface Selectable {
         /**
-        * **cache.roles.id**
-        * - `int4` in database
-        * - `NOT NULL`, default: `nextval('cache.roles_id_seq'::regclass)`
-        */
+         * **cache.roles.id**
+         * - `int4` in database
+         * - `NOT NULL`, default: `nextval('cache.roles_id_seq'::regclass)`
+         */
         id: number;
         /**
-        * **cache.roles.role**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.role**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         role: string;
         /**
-        * **cache.roles.account**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.account**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         account: string;
         /**
-        * **cache.roles.sender**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.sender**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         sender: string;
         /**
-        * **cache.roles.space**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.space**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         space: string;
         /**
-        * **cache.roles.type**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.type**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         type: string;
         /**
-        * **cache.roles.created_at**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.created_at**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         created_at: number;
         /**
-        * **cache.roles.created_at_block**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.created_at_block**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         created_at_block: number;
         /**
-        * **cache.roles.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.cursor**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         cursor: string;
       }
       export interface JSONSelectable {
         /**
-        * **cache.roles.id**
-        * - `int4` in database
-        * - `NOT NULL`, default: `nextval('cache.roles_id_seq'::regclass)`
-        */
+         * **cache.roles.id**
+         * - `int4` in database
+         * - `NOT NULL`, default: `nextval('cache.roles_id_seq'::regclass)`
+         */
         id: number;
         /**
-        * **cache.roles.role**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.role**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         role: string;
         /**
-        * **cache.roles.account**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.account**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         account: string;
         /**
-        * **cache.roles.sender**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.sender**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         sender: string;
         /**
-        * **cache.roles.space**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.space**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         space: string;
         /**
-        * **cache.roles.type**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.type**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         type: string;
         /**
-        * **cache.roles.created_at**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.created_at**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         created_at: number;
         /**
-        * **cache.roles.created_at_block**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.created_at_block**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         created_at_block: number;
         /**
-        * **cache.roles.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.cursor**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         cursor: string;
       }
       export interface Whereable {
         /**
-        * **cache.roles.id**
-        * - `int4` in database
-        * - `NOT NULL`, default: `nextval('cache.roles_id_seq'::regclass)`
-        */
-        id?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+         * **cache.roles.id**
+         * - `int4` in database
+         * - `NOT NULL`, default: `nextval('cache.roles_id_seq'::regclass)`
+         */
+        id?:
+          | number
+          | db.Parameter<number>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.roles.role**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        role?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+         * **cache.roles.role**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        role?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.roles.account**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        account?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+         * **cache.roles.account**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        account?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.roles.sender**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        sender?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+         * **cache.roles.sender**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        sender?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.roles.space**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        space?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+         * **cache.roles.space**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        space?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.roles.type**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        type?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+         * **cache.roles.type**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        type?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.roles.created_at**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+         * **cache.roles.created_at**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
+        created_at?:
+          | number
+          | db.Parameter<number>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.roles.created_at_block**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+         * **cache.roles.created_at_block**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
+        created_at_block?:
+          | number
+          | db.Parameter<number>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
         /**
-        * **cache.roles.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        cursor?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+         * **cache.roles.cursor**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        cursor?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.ParentColumn
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       }
       export interface Insertable {
         /**
-        * **cache.roles.id**
-        * - `int4` in database
-        * - `NOT NULL`, default: `nextval('cache.roles_id_seq'::regclass)`
-        */
+         * **cache.roles.id**
+         * - `int4` in database
+         * - `NOT NULL`, default: `nextval('cache.roles_id_seq'::regclass)`
+         */
         id?: number | db.Parameter<number> | db.DefaultType | db.SQLFragment;
         /**
-        * **cache.roles.role**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.role**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         role: string | db.Parameter<string> | db.SQLFragment;
         /**
-        * **cache.roles.account**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.account**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         account: string | db.Parameter<string> | db.SQLFragment;
         /**
-        * **cache.roles.sender**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.sender**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         sender: string | db.Parameter<string> | db.SQLFragment;
         /**
-        * **cache.roles.space**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.space**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         space: string | db.Parameter<string> | db.SQLFragment;
         /**
-        * **cache.roles.type**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.type**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         type: string | db.Parameter<string> | db.SQLFragment;
         /**
-        * **cache.roles.created_at**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.created_at**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         created_at: number | db.Parameter<number> | db.SQLFragment;
         /**
-        * **cache.roles.created_at_block**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.created_at_block**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
         created_at_block: number | db.Parameter<number> | db.SQLFragment;
         /**
-        * **cache.roles.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
+         * **cache.roles.cursor**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
         cursor: string | db.Parameter<string> | db.SQLFragment;
       }
       export interface Updatable {
         /**
-        * **cache.roles.id**
-        * - `int4` in database
-        * - `NOT NULL`, default: `nextval('cache.roles_id_seq'::regclass)`
-        */
-        id?: number | db.Parameter<number> | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.DefaultType | db.SQLFragment>;
+         * **cache.roles.id**
+         * - `int4` in database
+         * - `NOT NULL`, default: `nextval('cache.roles_id_seq'::regclass)`
+         */
+        id?:
+          | number
+          | db.Parameter<number>
+          | db.DefaultType
+          | db.SQLFragment
+          | db.SQLFragment<any, number | db.Parameter<number> | db.DefaultType | db.SQLFragment>;
         /**
-        * **cache.roles.role**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        role?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+         * **cache.roles.role**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        role?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
         /**
-        * **cache.roles.account**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        account?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+         * **cache.roles.account**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        account?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
         /**
-        * **cache.roles.sender**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        sender?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+         * **cache.roles.sender**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        sender?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
         /**
-        * **cache.roles.space**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        space?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+         * **cache.roles.space**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        space?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
         /**
-        * **cache.roles.type**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        type?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+         * **cache.roles.type**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        type?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
         /**
-        * **cache.roles.created_at**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+         * **cache.roles.created_at**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
+        created_at?:
+          | number
+          | db.Parameter<number>
+          | db.SQLFragment
+          | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
         /**
-        * **cache.roles.created_at_block**
-        * - `int4` in database
-        * - `NOT NULL`, no default
-        */
-        created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+         * **cache.roles.created_at_block**
+         * - `int4` in database
+         * - `NOT NULL`, no default
+         */
+        created_at_block?:
+          | number
+          | db.Parameter<number>
+          | db.SQLFragment
+          | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
         /**
-        * **cache.roles.cursor**
-        * - `text` in database
-        * - `NOT NULL`, no default
-        */
-        cursor?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+         * **cache.roles.cursor**
+         * - `text` in database
+         * - `NOT NULL`, no default
+         */
+        cursor?:
+          | string
+          | db.Parameter<string>
+          | db.SQLFragment
+          | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       }
       export type UniqueIndex = 'roles_pkey' | 'unique_cached_roles';
       export type Column = keyof Selectable;
       export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-      export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+      export type SQLExpression =
+        | Table
+        | db.ColumnNames<Updatable | (keyof Updatable)[]>
+        | db.ColumnValues<Updatable>
+        | Whereable
+        | Column
+        | db.ParentColumn
+        | db.GenericSQLExpression;
       export type SQL = SQLExpression | SQLExpression[];
     }
-  
+
     /* --- aggregate types --- */
-  
+
     export type Table = entries.Table | roles.Table;
     export type Selectable = entries.Selectable | roles.Selectable;
     export type JSONSelectable = entries.JSONSelectable | roles.JSONSelectable;
@@ -3783,14 +5099,13 @@ declare module 'zapatos/schema' {
     export type Updatable = entries.Updatable | roles.Updatable;
     export type UniqueIndex = entries.UniqueIndex | roles.UniqueIndex;
     export type Column = entries.Column | roles.Column;
-  
+
     export type AllBaseTables = [entries.Table, roles.Table];
     export type AllForeignTables = [];
     export type AllViews = [];
     export type AllMaterializedViews = [];
     export type AllTablesAndViews = [entries.Table, roles.Table];
   }
-
 
   /* === global aggregate types === */
 
@@ -3811,167 +5126,165 @@ declare module 'zapatos/schema' {
   export type AllMaterializedViews = [...public.AllMaterializedViews, ...cache.AllMaterializedViews];
   export type AllTablesAndViews = [...public.AllTablesAndViews, ...cache.AllTablesAndViews];
 
-
   /* === lookups === */
 
   export type SelectableForTable<T extends Table> = {
-    "accounts": accounts.Selectable;
-    "actions": actions.Selectable;
-    "cursors": cursors.Selectable;
-    "geo_entities": geo_entities.Selectable;
-    "geo_entity_types": geo_entity_types.Selectable;
-    "log_entries": log_entries.Selectable;
-    "proposals": proposals.Selectable;
-    "proposed_versions": proposed_versions.Selectable;
-    "space_admins": space_admins.Selectable;
-    "space_editor_controllers": space_editor_controllers.Selectable;
-    "space_editors": space_editors.Selectable;
-    "spaces": spaces.Selectable;
-    "subspaces": subspaces.Selectable;
-    "triples": triples.Selectable;
-    "versions": versions.Selectable;
-    "cache.entries": cache.entries.Selectable;
-    "cache.roles": cache.roles.Selectable;
+    accounts: accounts.Selectable;
+    actions: actions.Selectable;
+    cursors: cursors.Selectable;
+    geo_entities: geo_entities.Selectable;
+    geo_entity_types: geo_entity_types.Selectable;
+    log_entries: log_entries.Selectable;
+    proposals: proposals.Selectable;
+    proposed_versions: proposed_versions.Selectable;
+    space_admins: space_admins.Selectable;
+    space_editor_controllers: space_editor_controllers.Selectable;
+    space_editors: space_editors.Selectable;
+    spaces: spaces.Selectable;
+    subspaces: subspaces.Selectable;
+    triples: triples.Selectable;
+    versions: versions.Selectable;
+    'cache.entries': cache.entries.Selectable;
+    'cache.roles': cache.roles.Selectable;
   }[T];
 
   export type JSONSelectableForTable<T extends Table> = {
-    "accounts": accounts.JSONSelectable;
-    "actions": actions.JSONSelectable;
-    "cursors": cursors.JSONSelectable;
-    "geo_entities": geo_entities.JSONSelectable;
-    "geo_entity_types": geo_entity_types.JSONSelectable;
-    "log_entries": log_entries.JSONSelectable;
-    "proposals": proposals.JSONSelectable;
-    "proposed_versions": proposed_versions.JSONSelectable;
-    "space_admins": space_admins.JSONSelectable;
-    "space_editor_controllers": space_editor_controllers.JSONSelectable;
-    "space_editors": space_editors.JSONSelectable;
-    "spaces": spaces.JSONSelectable;
-    "subspaces": subspaces.JSONSelectable;
-    "triples": triples.JSONSelectable;
-    "versions": versions.JSONSelectable;
-    "cache.entries": cache.entries.JSONSelectable;
-    "cache.roles": cache.roles.JSONSelectable;
+    accounts: accounts.JSONSelectable;
+    actions: actions.JSONSelectable;
+    cursors: cursors.JSONSelectable;
+    geo_entities: geo_entities.JSONSelectable;
+    geo_entity_types: geo_entity_types.JSONSelectable;
+    log_entries: log_entries.JSONSelectable;
+    proposals: proposals.JSONSelectable;
+    proposed_versions: proposed_versions.JSONSelectable;
+    space_admins: space_admins.JSONSelectable;
+    space_editor_controllers: space_editor_controllers.JSONSelectable;
+    space_editors: space_editors.JSONSelectable;
+    spaces: spaces.JSONSelectable;
+    subspaces: subspaces.JSONSelectable;
+    triples: triples.JSONSelectable;
+    versions: versions.JSONSelectable;
+    'cache.entries': cache.entries.JSONSelectable;
+    'cache.roles': cache.roles.JSONSelectable;
   }[T];
 
   export type WhereableForTable<T extends Table> = {
-    "accounts": accounts.Whereable;
-    "actions": actions.Whereable;
-    "cursors": cursors.Whereable;
-    "geo_entities": geo_entities.Whereable;
-    "geo_entity_types": geo_entity_types.Whereable;
-    "log_entries": log_entries.Whereable;
-    "proposals": proposals.Whereable;
-    "proposed_versions": proposed_versions.Whereable;
-    "space_admins": space_admins.Whereable;
-    "space_editor_controllers": space_editor_controllers.Whereable;
-    "space_editors": space_editors.Whereable;
-    "spaces": spaces.Whereable;
-    "subspaces": subspaces.Whereable;
-    "triples": triples.Whereable;
-    "versions": versions.Whereable;
-    "cache.entries": cache.entries.Whereable;
-    "cache.roles": cache.roles.Whereable;
+    accounts: accounts.Whereable;
+    actions: actions.Whereable;
+    cursors: cursors.Whereable;
+    geo_entities: geo_entities.Whereable;
+    geo_entity_types: geo_entity_types.Whereable;
+    log_entries: log_entries.Whereable;
+    proposals: proposals.Whereable;
+    proposed_versions: proposed_versions.Whereable;
+    space_admins: space_admins.Whereable;
+    space_editor_controllers: space_editor_controllers.Whereable;
+    space_editors: space_editors.Whereable;
+    spaces: spaces.Whereable;
+    subspaces: subspaces.Whereable;
+    triples: triples.Whereable;
+    versions: versions.Whereable;
+    'cache.entries': cache.entries.Whereable;
+    'cache.roles': cache.roles.Whereable;
   }[T];
 
   export type InsertableForTable<T extends Table> = {
-    "accounts": accounts.Insertable;
-    "actions": actions.Insertable;
-    "cursors": cursors.Insertable;
-    "geo_entities": geo_entities.Insertable;
-    "geo_entity_types": geo_entity_types.Insertable;
-    "log_entries": log_entries.Insertable;
-    "proposals": proposals.Insertable;
-    "proposed_versions": proposed_versions.Insertable;
-    "space_admins": space_admins.Insertable;
-    "space_editor_controllers": space_editor_controllers.Insertable;
-    "space_editors": space_editors.Insertable;
-    "spaces": spaces.Insertable;
-    "subspaces": subspaces.Insertable;
-    "triples": triples.Insertable;
-    "versions": versions.Insertable;
-    "cache.entries": cache.entries.Insertable;
-    "cache.roles": cache.roles.Insertable;
+    accounts: accounts.Insertable;
+    actions: actions.Insertable;
+    cursors: cursors.Insertable;
+    geo_entities: geo_entities.Insertable;
+    geo_entity_types: geo_entity_types.Insertable;
+    log_entries: log_entries.Insertable;
+    proposals: proposals.Insertable;
+    proposed_versions: proposed_versions.Insertable;
+    space_admins: space_admins.Insertable;
+    space_editor_controllers: space_editor_controllers.Insertable;
+    space_editors: space_editors.Insertable;
+    spaces: spaces.Insertable;
+    subspaces: subspaces.Insertable;
+    triples: triples.Insertable;
+    versions: versions.Insertable;
+    'cache.entries': cache.entries.Insertable;
+    'cache.roles': cache.roles.Insertable;
   }[T];
 
   export type UpdatableForTable<T extends Table> = {
-    "accounts": accounts.Updatable;
-    "actions": actions.Updatable;
-    "cursors": cursors.Updatable;
-    "geo_entities": geo_entities.Updatable;
-    "geo_entity_types": geo_entity_types.Updatable;
-    "log_entries": log_entries.Updatable;
-    "proposals": proposals.Updatable;
-    "proposed_versions": proposed_versions.Updatable;
-    "space_admins": space_admins.Updatable;
-    "space_editor_controllers": space_editor_controllers.Updatable;
-    "space_editors": space_editors.Updatable;
-    "spaces": spaces.Updatable;
-    "subspaces": subspaces.Updatable;
-    "triples": triples.Updatable;
-    "versions": versions.Updatable;
-    "cache.entries": cache.entries.Updatable;
-    "cache.roles": cache.roles.Updatable;
+    accounts: accounts.Updatable;
+    actions: actions.Updatable;
+    cursors: cursors.Updatable;
+    geo_entities: geo_entities.Updatable;
+    geo_entity_types: geo_entity_types.Updatable;
+    log_entries: log_entries.Updatable;
+    proposals: proposals.Updatable;
+    proposed_versions: proposed_versions.Updatable;
+    space_admins: space_admins.Updatable;
+    space_editor_controllers: space_editor_controllers.Updatable;
+    space_editors: space_editors.Updatable;
+    spaces: spaces.Updatable;
+    subspaces: subspaces.Updatable;
+    triples: triples.Updatable;
+    versions: versions.Updatable;
+    'cache.entries': cache.entries.Updatable;
+    'cache.roles': cache.roles.Updatable;
   }[T];
 
   export type UniqueIndexForTable<T extends Table> = {
-    "accounts": accounts.UniqueIndex;
-    "actions": actions.UniqueIndex;
-    "cursors": cursors.UniqueIndex;
-    "geo_entities": geo_entities.UniqueIndex;
-    "geo_entity_types": geo_entity_types.UniqueIndex;
-    "log_entries": log_entries.UniqueIndex;
-    "proposals": proposals.UniqueIndex;
-    "proposed_versions": proposed_versions.UniqueIndex;
-    "space_admins": space_admins.UniqueIndex;
-    "space_editor_controllers": space_editor_controllers.UniqueIndex;
-    "space_editors": space_editors.UniqueIndex;
-    "spaces": spaces.UniqueIndex;
-    "subspaces": subspaces.UniqueIndex;
-    "triples": triples.UniqueIndex;
-    "versions": versions.UniqueIndex;
-    "cache.entries": cache.entries.UniqueIndex;
-    "cache.roles": cache.roles.UniqueIndex;
+    accounts: accounts.UniqueIndex;
+    actions: actions.UniqueIndex;
+    cursors: cursors.UniqueIndex;
+    geo_entities: geo_entities.UniqueIndex;
+    geo_entity_types: geo_entity_types.UniqueIndex;
+    log_entries: log_entries.UniqueIndex;
+    proposals: proposals.UniqueIndex;
+    proposed_versions: proposed_versions.UniqueIndex;
+    space_admins: space_admins.UniqueIndex;
+    space_editor_controllers: space_editor_controllers.UniqueIndex;
+    space_editors: space_editors.UniqueIndex;
+    spaces: spaces.UniqueIndex;
+    subspaces: subspaces.UniqueIndex;
+    triples: triples.UniqueIndex;
+    versions: versions.UniqueIndex;
+    'cache.entries': cache.entries.UniqueIndex;
+    'cache.roles': cache.roles.UniqueIndex;
   }[T];
 
   export type ColumnForTable<T extends Table> = {
-    "accounts": accounts.Column;
-    "actions": actions.Column;
-    "cursors": cursors.Column;
-    "geo_entities": geo_entities.Column;
-    "geo_entity_types": geo_entity_types.Column;
-    "log_entries": log_entries.Column;
-    "proposals": proposals.Column;
-    "proposed_versions": proposed_versions.Column;
-    "space_admins": space_admins.Column;
-    "space_editor_controllers": space_editor_controllers.Column;
-    "space_editors": space_editors.Column;
-    "spaces": spaces.Column;
-    "subspaces": subspaces.Column;
-    "triples": triples.Column;
-    "versions": versions.Column;
-    "cache.entries": cache.entries.Column;
-    "cache.roles": cache.roles.Column;
+    accounts: accounts.Column;
+    actions: actions.Column;
+    cursors: cursors.Column;
+    geo_entities: geo_entities.Column;
+    geo_entity_types: geo_entity_types.Column;
+    log_entries: log_entries.Column;
+    proposals: proposals.Column;
+    proposed_versions: proposed_versions.Column;
+    space_admins: space_admins.Column;
+    space_editor_controllers: space_editor_controllers.Column;
+    space_editors: space_editors.Column;
+    spaces: spaces.Column;
+    subspaces: subspaces.Column;
+    triples: triples.Column;
+    versions: versions.Column;
+    'cache.entries': cache.entries.Column;
+    'cache.roles': cache.roles.Column;
   }[T];
 
   export type SQLForTable<T extends Table> = {
-    "accounts": accounts.SQL;
-    "actions": actions.SQL;
-    "cursors": cursors.SQL;
-    "geo_entities": geo_entities.SQL;
-    "geo_entity_types": geo_entity_types.SQL;
-    "log_entries": log_entries.SQL;
-    "proposals": proposals.SQL;
-    "proposed_versions": proposed_versions.SQL;
-    "space_admins": space_admins.SQL;
-    "space_editor_controllers": space_editor_controllers.SQL;
-    "space_editors": space_editors.SQL;
-    "spaces": spaces.SQL;
-    "subspaces": subspaces.SQL;
-    "triples": triples.SQL;
-    "versions": versions.SQL;
-    "cache.entries": cache.entries.SQL;
-    "cache.roles": cache.roles.SQL;
+    accounts: accounts.SQL;
+    actions: actions.SQL;
+    cursors: cursors.SQL;
+    geo_entities: geo_entities.SQL;
+    geo_entity_types: geo_entity_types.SQL;
+    log_entries: log_entries.SQL;
+    proposals: proposals.SQL;
+    proposed_versions: proposed_versions.SQL;
+    space_admins: space_admins.SQL;
+    space_editor_controllers: space_editor_controllers.SQL;
+    space_editors: space_editors.SQL;
+    spaces: spaces.SQL;
+    subspaces: subspaces.SQL;
+    triples: triples.SQL;
+    versions: versions.SQL;
+    'cache.entries': cache.entries.SQL;
+    'cache.roles': cache.roles.SQL;
   }[T];
-
 }

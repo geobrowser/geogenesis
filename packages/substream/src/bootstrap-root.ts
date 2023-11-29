@@ -1,5 +1,6 @@
-import * as db from 'zapatos/db'
-import type * as s from 'zapatos/schema'
+import * as db from 'zapatos/db';
+import type * as s from 'zapatos/schema';
+
 import {
   ATTRIBUTE,
   ATTRIBUTES,
@@ -35,9 +36,9 @@ import {
   VALUE_TYPE,
   WALLETS_ATTRIBUTE,
   WEB_URL,
-} from './constants/system-ids.js'
-import { generateTripleId } from './utils/id.js'
-import { pool } from './utils/pool.js'
+} from './constants/system-ids.js';
+import { generateTripleId } from './utils/id.js';
+import { pool } from './utils/pool.js';
 
 const entities: string[] = [
   TYPES,
@@ -66,7 +67,7 @@ const entities: string[] = [
   DATE,
   WEB_URL,
   PERSON_TYPE,
-]
+];
 
 const names: Record<string, string> = {
   [TYPES]: 'Types',
@@ -99,7 +100,7 @@ const names: Record<string, string> = {
   [FILTER]: 'Filter',
   [WALLETS_ATTRIBUTE]: 'Wallets',
   [RELATION_VALUE_RELATIONSHIP_TYPE]: 'Relation Value Types',
-}
+};
 
 const attributes: Record<string, string> = {
   [TYPES]: RELATION,
@@ -119,7 +120,7 @@ const attributes: Record<string, string> = {
   [AVATAR_ATTRIBUTE]: IMAGE,
   [COVER_ATTRIBUTE]: IMAGE,
   [WALLETS_ATTRIBUTE]: RELATION,
-}
+};
 
 const types: Record<string, string[]> = {
   [TEXT]: [],
@@ -134,9 +135,9 @@ const types: Record<string, string[]> = {
   [TABLE_BLOCK]: [ROW_TYPE, PARENT_ENTITY],
   [TEXT_BLOCK]: [MARKDOWN_CONTENT, PARENT_ENTITY],
   [PERSON_TYPE]: [AVATAR_ATTRIBUTE, COVER_ATTRIBUTE],
-}
+};
 
-const geoEntities: s.geo_entities.Insertable[] = entities.map((entity) => ({
+const geoEntities: s.geo_entities.Insertable[] = entities.map(entity => ({
   id: entity,
   name: names[entity],
   // is_attribute: attributes[entity] ? true : false,
@@ -147,27 +148,25 @@ const geoEntities: s.geo_entities.Insertable[] = entities.map((entity) => ({
   created_at: ROOT_SPACE_CREATED_AT,
   updated_at: ROOT_SPACE_CREATED_AT,
   updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-}))
+}));
 
-const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
-  ([id, name]) => ({
-    id: generateTripleId({
-      space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
-      entity_id: id,
-      attribute_id: NAME,
-      value_id: name,
-    }),
+const namesTriples: s.triples.Insertable[] = Object.entries(names).map(([id, name]) => ({
+  id: generateTripleId({
+    space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
     entity_id: id,
     attribute_id: NAME,
-    value_type: 'string',
-    value_id: id,
-    string_value: name,
-    is_protected: true,
-    space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
-    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-    created_at: ROOT_SPACE_CREATED_AT,
-  })
-)
+    value_id: name,
+  }),
+  entity_id: id,
+  attribute_id: NAME,
+  value_type: 'string',
+  value_id: id,
+  string_value: name,
+  is_protected: true,
+  space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+  created_at: ROOT_SPACE_CREATED_AT,
+}));
 
 const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
   .map(([id, entity_value_id]) => [
@@ -208,7 +207,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       created_at: ROOT_SPACE_CREATED_AT,
     },
   ])
-  .flat()
+  .flat();
 
 const typeTriples: s.triples.Insertable[] = Object.entries(types)
   .map(([id, attributes]) => [
@@ -231,7 +230,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       created_at: ROOT_SPACE_CREATED_AT,
     },
     /* Giving these entities an attribute of attribute */
-    ...attributes.map((attribute) => ({
+    ...attributes.map(attribute => ({
       id: generateTripleId({
         space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
         entity_id: id,
@@ -249,17 +248,17 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       created_at: ROOT_SPACE_CREATED_AT,
     })),
   ])
-  .flat()
+  .flat();
 
 const space: s.spaces.Insertable = {
   id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
   is_root_space: true,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-}
+};
 
 const account: s.accounts.Insertable = {
   id: ROOT_SPACE_CREATED_BY_ID,
-}
+};
 
 const proposal: s.proposals.Insertable = {
   id: '0',
@@ -269,18 +268,18 @@ const proposal: s.proposals.Insertable = {
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
   status: 'APPROVED',
-}
+};
 
 export async function bootstrapRoot() {
   try {
-    await db.insert('spaces', space).run(pool)
-    await db.insert('accounts', account).run(pool)
-    await db.insert('geo_entities', geoEntities).run(pool)
-    await db.insert('triples', namesTriples).run(pool)
-    await db.insert('triples', typeTriples).run(pool)
-    await db.insert('triples', attributeTriples).run(pool)
-    await db.insert('proposals', proposal).run(pool)
+    await db.insert('spaces', space).run(pool);
+    await db.insert('accounts', account).run(pool);
+    await db.insert('geo_entities', geoEntities).run(pool);
+    await db.insert('triples', namesTriples).run(pool);
+    await db.insert('triples', typeTriples).run(pool);
+    await db.insert('triples', attributeTriples).run(pool);
+    await db.insert('proposals', proposal).run(pool);
   } catch (error) {
-    console.error('Error bootstrapping root:', error)
+    console.error('Error bootstrapping root:', error);
   }
 }

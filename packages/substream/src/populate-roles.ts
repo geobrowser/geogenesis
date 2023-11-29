@@ -1,7 +1,8 @@
-import * as db from 'zapatos/db'
-import { upsertCachedRoles } from './populate-cache'
-import { pool } from './utils/pool'
-import { type RoleChange } from './zod'
+import * as db from 'zapatos/db';
+
+import { upsertCachedRoles } from './populate-cache';
+import { pool } from './utils/pool';
+import { type RoleChange } from './zod';
 
 export async function handleRoleGranted({
   roleGranted,
@@ -9,18 +10,18 @@ export async function handleRoleGranted({
   timestamp,
   cursor,
 }: {
-  roleGranted: RoleChange
-  blockNumber: number
-  timestamp: number
-  cursor: string
+  roleGranted: RoleChange;
+  blockNumber: number;
+  timestamp: number;
+  cursor: string;
 }) {
   try {
-    const role = roleGranted.role
-    const isAdminRole = role === 'ADMIN'
-    const isMemberRole = role === 'MEMBER'
-    const isModeratorRole = role === 'MODERATOR'
+    const role = roleGranted.role;
+    const isAdminRole = role === 'ADMIN';
+    const isMemberRole = role === 'MEMBER';
+    const isModeratorRole = role === 'MODERATOR';
 
-    console.log('Handling role granted:', roleGranted)
+    console.log('Handling role granted:', roleGranted);
 
     upsertCachedRoles({
       roleChange: roleGranted,
@@ -28,7 +29,7 @@ export async function handleRoleGranted({
       cursor,
       type: 'GRANTED',
       timestamp,
-    })
+    });
 
     if (isAdminRole) {
       await db
@@ -43,7 +44,7 @@ export async function handleRoleGranted({
           ['space_id', 'account_id'],
           { updateColumns: db.doNothing }
         )
-        .run(pool)
+        .run(pool);
     } else if (isMemberRole) {
       await db
         .upsert(
@@ -57,7 +58,7 @@ export async function handleRoleGranted({
           ['space_id', 'account_id'],
           { updateColumns: db.doNothing }
         )
-        .run(pool)
+        .run(pool);
     } else if (isModeratorRole) {
       await db
         .upsert(
@@ -71,10 +72,10 @@ export async function handleRoleGranted({
           ['space_id', 'account_id'],
           { updateColumns: db.doNothing }
         )
-        .run(pool)
+        .run(pool);
     }
   } catch (error) {
-    console.error('Error handling role granted:', error)
+    console.error('Error handling role granted:', error);
   }
 }
 
@@ -84,18 +85,18 @@ export async function handleRoleRevoked({
   timestamp,
   cursor,
 }: {
-  roleRevoked: RoleChange
-  blockNumber: number
-  timestamp: number
-  cursor: string
+  roleRevoked: RoleChange;
+  blockNumber: number;
+  timestamp: number;
+  cursor: string;
 }) {
   try {
-    const role = roleRevoked.role
-    const isAdminRole = role === 'ADMIN'
-    const isMemberRole = role === 'MEMBER'
-    const isModeratorRole = role === 'MODERATOR'
+    const role = roleRevoked.role;
+    const isAdminRole = role === 'ADMIN';
+    const isMemberRole = role === 'MEMBER';
+    const isModeratorRole = role === 'MODERATOR';
 
-    console.log('Handling role revoked:', roleRevoked)
+    console.log('Handling role revoked:', roleRevoked);
 
     upsertCachedRoles({
       roleChange: roleRevoked,
@@ -103,7 +104,7 @@ export async function handleRoleRevoked({
       timestamp,
       cursor,
       type: 'REVOKED',
-    })
+    });
 
     if (isAdminRole) {
       await db
@@ -111,25 +112,25 @@ export async function handleRoleRevoked({
           space_id: roleRevoked.space,
           account_id: roleRevoked.account,
         })
-        .run(pool)
+        .run(pool);
     } else if (isMemberRole) {
       await db
         .deletes('space_editors', {
           space_id: roleRevoked.space,
           account_id: roleRevoked.account,
         })
-        .run(pool)
+        .run(pool);
     } else if (isModeratorRole) {
       await db
         .deletes('space_editor_controllers', {
           space_id: roleRevoked.space,
           account_id: roleRevoked.account,
         })
-        .run(pool)
+        .run(pool);
     } else {
-      console.error('Unknown revoked role:', role)
+      console.error('Unknown revoked role:', role);
     }
   } catch (error) {
-    console.error('Error handling role revoked:', error)
+    console.error('Error handling role revoked:', error);
   }
 }

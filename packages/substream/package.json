@@ -46,11 +46,20 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@trivago/prettier-plugin-sort-imports": "^4.2.0",
     "@tsconfig/recommended": "latest",
     "@types/node": "latest",
     "@types/pg": "^8.10.9",
+    "@typescript-eslint/eslint-plugin": "^5.46.0",
+    "@typescript-eslint/parser": "^5.46.0",
     "dotenv-cli": "^7.3.0",
     "esbuild": "^0.19.5",
+    "eslint": "^8.21.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-import-resolver-typescript": "^3.5.2",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-prettier": "^4.0.0",
+    "prettier": "^3.0.3",
     "typescript": "latest"
   }
 }
