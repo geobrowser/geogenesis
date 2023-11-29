@@ -59,20 +59,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: entityName ?? 'New entity',
       description: description ?? undefined,
       url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
-      images: [
-        {
-          url: openGraphImageUrl,
-        },
-      ],
+      images: openGraphImageUrl
+        ? [
+            {
+              url: openGraphImageUrl,
+            },
+          ]
+        : undefined,
     },
     twitter: {
       card: 'summary_large_image',
       description: description ?? undefined,
-      images: [
-        {
-          url: openGraphImageUrl,
-        },
-      ],
+      images: openGraphImageUrl
+        ? [
+            {
+              url: openGraphImageUrl,
+            },
+          ]
+        : undefined,
     },
   };
 }
