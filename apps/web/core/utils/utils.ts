@@ -155,7 +155,7 @@ export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
   const serverCoverUrl = Entity.cover(entity?.triples);
   const imageUrl = serverAvatarUrl || serverCoverUrl || '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entity.description(entity?.triples ?? []) || DEFAULT_OPENGRAPH_DESCRIPTION;
+  const description = Entity.description(entity?.triples ?? []);
 
   return {
     entityName,
