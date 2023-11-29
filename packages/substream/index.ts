@@ -5,6 +5,7 @@ import { getStreamEffect } from './src/run-stream.js'
 import { resetPublicTablesToGenesis } from './src/utils/reset-public-tables-to-genesis.js'
 import { START_BLOCK } from './src/constants/constants.js'
 import { bootstrapRoot } from './src/bootstrap-root.js'
+import { populateFromCache } from './src/populate-cache.js'
 
 async function main() {
   try {
@@ -28,13 +29,13 @@ async function main() {
       ? Number(process.env.START_BLOCK)
       : START_BLOCK
 
-    // if (options.fromCache) {
-    //   console.log('populating geo data from cache')
-    //   await resetPublicTablesToGenesis()
-    //   console.log('bootstrapping system entities')
-    //   await bootstrapRoot()
-    //   startBlockNumber = await populateFromCache()
-    // }
+    if (options.fromCache) {
+      console.log('populating geo data from cache')
+      await resetPublicTablesToGenesis()
+      console.log('bootstrapping system entities')
+      await bootstrapRoot()
+      startBlockNumber = await populateFromCache()
+    }
 
     await Effect.runPromise(getStreamEffect(startBlockNumber))
   } catch (error) {

@@ -1,6 +1,6 @@
 import * as db from 'zapatos/db'
 import type * as Schema from 'zapatos/schema'
-import { TYPES } from './constants/system-ids'
+import { DESCRIPTION, NAME, TYPES } from './constants/system-ids'
 import { TripleAction } from './types'
 import { upsertChunked } from './utils/db'
 
@@ -64,6 +64,53 @@ export async function populateWithFullEntries({
       blockNumber
     )
 
+    const versions: Schema.versions.Insertable[] = mapVersions({
+      fullEntries,
+      blockNumber,
+      timestamp,
+      cursor,
+    })
+
+    await Promise.all([
+      // @TODO: Can we batch these into a single upsert?
+      upsertChunked('accounts', accounts, 'id', {
+        updateColumns: db.doNothing,
+      }),
+      upsertChunked('actions', actions, 'id', {
+        updateColumns: db.doNothing,
+      }),
+      // We update the name and description for an entity when mapping
+      // through triples.
+      upsertChunked('geo_entities', geoEntities, 'id', {
+        updateColumns: [
+          'name',
+          'description',
+          'updated_at',
+          'updated_at_block',
+          'created_by_id',
+        ],
+        noNullUpdateColumns: [
+          'name',
+          'description',
+          'updated_at',
+          'updated_at_block',
+          'created_by_id',
+        ],
+      }),
+      upsertChunked('proposals', proposals, 'id', {
+        updateColumns: db.doNothing,
+      }),
+      upsertChunked('proposed_versions', proposed_versions, 'id', {
+        updateColumns: db.doNothing,
+      }),
+      upsertChunked('spaces', spaces, 'id', {
+        updateColumns: db.doNothing,
+      }),
+      upsertChunked('versions', versions, 'id', {
+        updateColumns: db.doNothing,
+      }),
+    ])
+
     // @TODO: How are duplicate triples being handled in Geo? I know it's possible, but if
     // the triple ID is defined, what does that entail
     const triplesDatabaseTuples = mapTriplesWithActionType(
@@ -84,6 +131,18 @@ export async function populateWithFullEntries({
       const isDeleteTriple = actionType === TripleAction.Delete
       const isAddType = triple.attribute_id === TYPES && isCreateTriple
       const isDeleteType = triple.attribute_id === TYPES && isDeleteTriple
+      const isNameAttribute = triple.attribute_id === NAME
+      const isDescriptionAttribute = triple.attribute_id === DESCRIPTION
+      const isStringValueType = triple.value_type === 'string'
+
+      const isNameCreateAction =
+        isCreateTriple && isNameAttribute && isStringValueType
+      const isNameDeleteAction =
+        isDeleteTriple && isNameAttribute && isStringValueType
+      const isDescriptionCreateAction =
+        isCreateTriple && isDescriptionAttribute && isStringValueType
+      const isDescriptionDeleteAction =
+        isDeleteTriple && isDescriptionAttribute && isStringValueType
 
       tripleTransactions.push({
         actionType,
@@ -98,6 +157,78 @@ export async function populateWithFullEntries({
 
       if (isDeleteTriple) {
         await db.deletes('triples', { id: triple.id }).run(pool)
+      }
+
+      if (isNameCreateAction) {
+        await db.upsert(
+          'geo_entities',
+          {
+            id: triple.entity_id,
+            name: triple.string_value,
+            created_by_id: accounts[0]!.id,
+            created_at: timestamp,
+            created_at_block: blockNumber,
+          },
+          'id',
+          {
+            updateColumns: ['name'],
+            noNullUpdateColumns: ['description'],
+          }
+        )
+      }
+
+      if (isNameDeleteAction) {
+        await db.upsert(
+          'geo_entities',
+          {
+            id: triple.entity_id,
+            name: null,
+            created_by_id: accounts[0]!.id,
+            created_at: timestamp,
+            created_at_block: blockNumber,
+          },
+          'id',
+          {
+            updateColumns: ['name'],
+            noNullUpdateColumns: ['description'],
+          }
+        )
+      }
+
+      if (isDescriptionCreateAction) {
+        await db.upsert(
+          'geo_entities',
+          {
+            id: triple.entity_id,
+            description: triple.string_value,
+            created_by_id: accounts[0]!.id,
+            created_at: timestamp,
+            created_at_block: blockNumber,
+          },
+          'id',
+          {
+            updateColumns: ['description'],
+            noNullUpdateColumns: ['name'],
+          }
+        )
+      }
+
+      if (isDescriptionDeleteAction) {
+        await db.upsert(
+          'geo_entities',
+          {
+            id: triple.entity_id,
+            description: null,
+            created_by_id: accounts[0]!.id,
+            created_at: timestamp,
+            created_at_block: blockNumber,
+          },
+          'id',
+          {
+            updateColumns: ['description'],
+            noNullUpdateColumns: ['name'],
+          }
+        )
       }
 
       if (isAddType) {
@@ -132,13 +263,6 @@ export async function populateWithFullEntries({
       }
     }
 
-    const versions: Schema.versions.Insertable[] = mapVersions({
-      fullEntries,
-      blockNumber,
-      timestamp,
-      cursor,
-    })
-
     console.log('------ UPSERTING ENTRIES ------')
     console.log('Accounts: ', accounts.length)
     console.log('Actions: ', actions.length)
@@ -148,42 +272,6 @@ export async function populateWithFullEntries({
     console.log('Spaces: ', spaces.length)
     console.log('Triples: ', triplesDatabaseTuples.length)
     console.log('Versions: ', versions.length)
-
-    await Promise.all([
-      // @TODO: Can we batch these into a single upsert?
-      upsertChunked('accounts', accounts, 'id', {
-        updateColumns: db.doNothing,
-      }),
-      upsertChunked('actions', actions, 'id', {
-        updateColumns: db.doNothing,
-      }),
-      upsertChunked('geo_entities', geoEntities, 'id', {
-        updateColumns: [
-          'name',
-          'description',
-          'updated_at',
-          'updated_at_block',
-        ],
-        noNullUpdateColumns: [
-          'name',
-          'description',
-          'updated_at',
-          'updated_at_block',
-        ],
-      }),
-      upsertChunked('proposals', proposals, 'id', {
-        updateColumns: db.doNothing,
-      }),
-      upsertChunked('proposed_versions', proposed_versions, 'id', {
-        updateColumns: db.doNothing,
-      }),
-      upsertChunked('spaces', spaces, 'id', {
-        updateColumns: db.doNothing,
-      }),
-      upsertChunked('versions', versions, 'id', {
-        updateColumns: db.doNothing,
-      }),
-    ])
   } catch (error) {
     console.error(`Error populating entries: ${error}`)
   }

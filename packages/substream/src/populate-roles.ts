@@ -22,13 +22,13 @@ export async function handleRoleGranted({
 
     console.log('Handling role granted:', roleGranted)
 
-    // upsertCachedRoles({
-    //   roleChange: roleGranted,
-    //   blockNumber,
-    //   cursor,
-    //   type: 'GRANTED',
-    //   timestamp,
-    // })
+    upsertCachedRoles({
+      roleChange: roleGranted,
+      blockNumber,
+      cursor,
+      type: 'GRANTED',
+      timestamp,
+    })
 
     if (isAdminRole) {
       await db
@@ -97,13 +97,13 @@ export async function handleRoleRevoked({
 
     console.log('Handling role revoked:', roleRevoked)
 
-    // upsertCachedRoles({
-    //   roleChange: roleRevoked,
-    //   blockNumber,
-    //   timestamp,
-    //   cursor,
-    //   type: 'REVOKED',
-    // })
+    upsertCachedRoles({
+      roleChange: roleRevoked,
+      blockNumber,
+      timestamp,
+      cursor,
+      type: 'REVOKED',
+    })
 
     if (isAdminRole) {
       await db

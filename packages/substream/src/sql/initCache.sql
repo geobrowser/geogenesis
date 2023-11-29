@@ -1,3 +1,5 @@
+-- If you want to update the cache schema, make sure to uncomment the next line
+-- In the future we'll make this more ergonomic
 -- DROP SCHEMA IF EXISTS cache CASCADE;
 CREATE SCHEMA IF NOT EXISTS cache;
 

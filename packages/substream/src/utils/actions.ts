@@ -20,31 +20,3 @@ export async function fetchIpfsContent(uri: string): Promise<UriData | null> {
 export function isValidAction(action: Action): action is Action {
   return ZodAction.safeParse(action).success
 }
-
-type ActionTypes = {
-  isNameCreateAction: boolean
-  isNameDeleteAction: boolean
-  isDescriptionCreateAction: boolean
-  isDescriptionDeleteAction: boolean
-  isTypeTriple: boolean
-}
-
-export function getActionTypes(action: Action): ActionTypes {
-  const isCreateTriple = action.type === 'createTriple'
-  const isDeleteTriple = action.type === 'deleteTriple'
-  const isNameAttribute = action.attributeId === NAME
-  const isDescriptionAttribute = action.attributeId === DESCRIPTION
-  const isStringValueType = action.value.type === 'string'
-  const isTypeTriple =
-    action.attributeId === TYPES && action.value.type === 'entity'
-
-  return {
-    isNameCreateAction: isCreateTriple && isNameAttribute && isStringValueType,
-    isNameDeleteAction: isDeleteTriple && isNameAttribute && isStringValueType,
-    isDescriptionCreateAction:
-      isCreateTriple && isDescriptionAttribute && isStringValueType,
-    isDescriptionDeleteAction:
-      isDeleteTriple && isDescriptionAttribute && isStringValueType,
-    isTypeTriple,
-  }
-}

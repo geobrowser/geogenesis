@@ -6,13 +6,11 @@ import {
   generateTripleId,
   generateVersionId,
 } from './utils/id'
-import { getActionTypes } from './utils/actions'
 import {
   TripleAction,
   type OmitStrict,
   type TripleWithActionTuple,
 } from './types'
-import { getValue } from './utils/get-value'
 
 interface EntriesWithMetadata {
   fullEntries: FullEntry[]
@@ -98,45 +96,8 @@ export function mapEntities({
 
   for (const fullEntry of fullEntries) {
     for (const action of fullEntry.uriData.actions) {
-      const {
-        isNameCreateAction,
-        isNameDeleteAction,
-        isDescriptionCreateAction,
-        isDescriptionDeleteAction,
-      } = getActionTypes(action)
-
-      // When iterating through all of the actions for a proposal, we might
-      // interact a changed name in one of the actions. If so, we need to track
-      // it throughout the entirety of iterating through actions to make sure we
-      // correctly upsert/remove it later.
-      const previouslyFoundName = entitiesMap.get(action.entityId)?.name
-      const previouslyFoundDescription = entitiesMap.get(
-        action.entityId
-      )?.description
-
-      let newName = previouslyFoundName
-      let newDescription = previouslyFoundDescription
-
-      if (isNameDeleteAction) {
-        newName = null
-      }
-
-      if (isNameCreateAction) {
-        newName = action.value.value
-      }
-
-      if (isDescriptionDeleteAction) {
-        newDescription = null
-      }
-
-      if (isDescriptionCreateAction) {
-        newDescription = action.value.value
-      }
-
       entitiesMap.set(action.entityId, {
         id: action.entityId,
-        name: newName,
-        description: newDescription,
         created_at: timestamp,
         created_at_block: blockNumber,
         updated_at: timestamp,
