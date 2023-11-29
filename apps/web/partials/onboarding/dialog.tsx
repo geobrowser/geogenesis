@@ -79,7 +79,6 @@ export const OnboardingDialog = () => {
     try {
       const { spaceAddress } = await deploySpaceContract({
         account: address,
-        accountType,
       });
 
       if (!spaceAddress) {
@@ -91,7 +90,7 @@ export const OnboardingDialog = () => {
       setStep('registering-profile');
 
       setTimeout(() => {
-        registerProfile(spaceAddress);
+        registerProfile(spaceAddress, accountType);
       }, 100);
     } catch (error) {
       setShowRetry(true);
@@ -99,8 +98,8 @@ export const OnboardingDialog = () => {
     }
   }
 
-  async function registerProfile(spaceAddress: `0x${string}`) {
-    if (!address || !wallet) return;
+  async function registerProfile(spaceAddress: `0x${string}`, accountType: AccountType) {
+    if (!address || !wallet || !accountType) return;
 
     try {
       const profileId = await publish.registerGeoProfile(wallet, spaceAddress);
@@ -122,7 +121,7 @@ export const OnboardingDialog = () => {
       setStep('creating-geo-profile-entity');
 
       setTimeout(() => {
-        createGeoProfileEntity(spaceAddress, profileId);
+        createGeoProfileEntity(spaceAddress, profileId, accountType);
       }, 100);
     } catch (error) {
       setShowRetry(true);
@@ -130,8 +129,8 @@ export const OnboardingDialog = () => {
     }
   }
 
-  async function createGeoProfileEntity(spaceAddress: `0x${string}`, profileId: string) {
-    if (!address) return;
+  async function createGeoProfileEntity(spaceAddress: `0x${string}`, profileId: string, accountType: AccountType) {
+    if (!address || !accountType) return;
 
     try {
       const { entityId: profileEntityId } = await createProfileEntity({
@@ -140,6 +139,7 @@ export const OnboardingDialog = () => {
         avatarUri: avatar || null,
         username: name || null,
         profileId: profileId,
+        accountType,
       });
 
       if (!profileEntityId) {
@@ -172,10 +172,10 @@ export const OnboardingDialog = () => {
         createSpaces(accountType);
         break;
       case 'registering-profile':
-        registerProfile(spaceAddress as `0x${string}`);
+        registerProfile(spaceAddress as `0x${string}`, accountType);
         break;
       case 'creating-geo-profile-entity':
-        createGeoProfileEntity(spaceAddress as `0x${string}`, profileId);
+        createGeoProfileEntity(spaceAddress as `0x${string}`, profileId, accountType);
         break;
     }
   }
@@ -234,9 +234,11 @@ const StepHeader = () => {
   const handleBack = () => {
     switch (step) {
       case 'select-type':
-        return setStep('start');
+        setStep('start');
+        break;
       case 'onboarding':
-        return setStep('select-type');
+        setStep('select-type');
+        break;
       default:
         break;
     }
@@ -481,9 +483,16 @@ const retryMessage: Record<Step, string> = {
   completed: '',
 };
 
+const completeMessage: Record<AccountType, string> = {
+  person: 'Go to my personal space',
+  company: 'Go to my company space',
+  nonprofit: 'Go to my nonprofit space',
+};
+
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
   const { hideOnboarding } = useOnboarding();
 
+  const accountType = useAtomValue(accountTypeAtom);
   const spaceAddress = useAtomValue(spaceAddressAtom);
   const step = useAtomValue(stepAtom);
 
@@ -525,7 +534,7 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Link href={`/space/${spaceAddress}`} className="w-full" onClick={hideOnboarding}>
             <Button className="w-full" disabled={step !== 'completed'}>
-              Go to my personal space
+              {completeMessage[accountType as AccountType]}
             </Button>
           </Link>
         </div>

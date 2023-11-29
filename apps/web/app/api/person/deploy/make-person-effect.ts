@@ -1,63 +1,76 @@
 import { SpaceArtifact } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import BeaconProxy from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol/BeaconProxy.json';
-// import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
 import * as Effect from 'effect/Effect';
 import * as Schedule from 'effect/Schedule';
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { polygon } from 'viem/chains';
 
+import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
-import { OmitStrict, Triple } from '~/core/types';
+import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
 import { slog } from '~/core/utils/utils';
 
 import { makeProposalServer } from '../../make-proposal-server';
 
-class ProxyBeaconInitializeFailedError extends Error {
-  readonly _tag = 'ProxyBeaconInitializeFailedError';
+type Role = {
+  role: string;
+  binary: string;
+};
+
+const ROLES: Role[] = [
+  {
+    role: 'EDITOR_ROLE',
+    binary: EDITOR_ROLE_BINARY,
+  },
+  {
+    role: 'EDITOR_CONTROLLER_ROLE',
+    binary: EDITOR_CONTROLLER_ROLE_BINARY,
+  },
+  {
+    role: 'ADMIN_ROLE',
+    binary: ADMIN_ROLE_BINARY,
+  },
+];
+
+class GrantRoleError extends Error {
+  readonly _tag = 'GrantAdminRole';
 }
 
-class ProxyBeaconConfigureRolesFailedError extends Error {
-  readonly _tag = 'ProxyBeaconConfigureRolesFailedError';
+class RenounceRoleError extends Error {
+  readonly _tag = 'RenounceRoleError';
 }
 
-class ProxyBeaconDeploymentFailedError extends Error {
-  readonly _tag = 'ProxyBeaconDeploymentFailedError';
-}
-
-class SpaceProxyContractAddressNullError extends Error {
-  readonly _tag = 'SpaceProxyContractAddressNullError';
-}
-
-class AddToSpaceRegistryError extends Error {
-  readonly _tag = 'AddToSpaceRegistryError';
+class CreateProfileGeoEntityFailedError extends Error {
+  readonly _tag = 'CreateProfileGeoEntityFailedError';
 }
 
 interface UserConfig {
+  profileId: string;
   account: `0x${string}`;
+  username: string | null;
+  avatarUri: string | null;
+  spaceAddress: string;
 }
 
 /**
- * Geo's Space contracts are upgradeable using the Upgradeable Beacon pattern.
+ * This function creates the off-chain profile entity representing the new user in the Geo knowledge
+ * graph and makes sure that it is correctly associated with the on-chain profile.
  *
- * A Beacon contract stores the implementation for a set of upgradeable contracts.
- * Deploying a new instance of a contract using the Beacon pattern will create a
- * Beacon Proxy which points to the Beacon contract. The Beacon Proxy will then
- * delegate all calls to the implementation contract stored in the Beacon contract.
+ * Profiles in Geo are comprised of two elements:
+ * 1. The on-chain profile with an identifier and home space address
+ * 2. The off-chain profile entity in the Geo knowledge graph. This has the same id as the
+ *    on-chain id and has arbitrary metadata in the form of triples.
  *
- * We have already deployed the implementation contract and the Beacon contract.
- *
- * ----------------    ----------    ---------------------------
- *   Beacon Proxy   ->   Beacon   ->   Implementation Contract    <--- Calls are delegated to this contract
- * ----------------    ----------    ---------------------------
- *
- * When a user makes a new profile there are several steps we need to complete
- * to register their profile and set up their space.
+ * Additionally, it grants the new user each role in the space and removes the deployer from
+ * each role.
  */
-export function makePersonEffect(requestId: string, { account: userAccount }: UserConfig) {
+export async function makePersonEffect(
+  requestId: string,
+  { account: userAccount, username, avatarUri, spaceAddress, profileId }: UserConfig
+) {
   const account = privateKeyToAccount(process.env.GEO_PK as `0x${string}`);
 
   const client = createWalletClient({
@@ -73,244 +86,256 @@ export function makePersonEffect(requestId: string, { account: userAccount }: Us
     // transport: http(Environment.options.testnet.rpc, { batch: true }),
   });
 
-  // Deploy the proxy contract representing the user's space.
-  const deployEffect = Effect.tryPromise({
+  // Create the profile entity representing the new user and space configuration for this space
+  // in the Geo knowledge graph.
+  //
+  // The id for this entity is the same as the on-chain profile id.
+  const profileEffect = Effect.tryPromise({
     try: async () => {
-      const proxyTxHash = await client.deployContract({
-        abi: BeaconProxy.abi,
-        bytecode: BeaconProxy.bytecode as `0x${string}`,
-        // We are deploying a permissioned space to a permissionless registry.
-        // Make sure we're pointing to the correct beacon to represent the
-        // implementation of the personal space and not the implementation
-        // of the registry.
-        args: [SYSTEM_IDS.PERMISSIONED_SPACE_BEACON_ADDRESS, ''],
-        account,
-      });
-      slog({ requestId, message: `Space proxy hash: ${proxyTxHash}`, account: userAccount });
+      const actions: CreateTripleAction[] = [];
 
-      const proxyDeployTxReceipt = await publicClient.waitForTransactionReceipt({ hash: proxyTxHash });
+      // Add triples for a Person entity
+      if (username) {
+        const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
+          entityId: profileId,
+          entityName: username ?? '',
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
+          space: spaceAddress,
+          value: {
+            type: 'string',
+            value: username,
+            id: ID.createValueId(),
+          },
+        };
+
+        actions.push({
+          type: 'createTriple',
+          id: ID.createTripleId(nameTripleWithoutId),
+          ...nameTripleWithoutId,
+        });
+      }
+
+      if (avatarUri) {
+        const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
+          entityId: profileId,
+          entityName: username ?? '',
+          attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+          attributeName: 'Avatar',
+          space: spaceAddress,
+          value: {
+            type: 'image',
+            value: avatarUri,
+            id: ID.createValueId(),
+          },
+        };
+
+        actions.push({
+          type: 'createTriple',
+          id: ID.createTripleId(avatarTripleWithoutId),
+          ...avatarTripleWithoutId,
+        });
+      }
+
+      // Add Types: Person to the profile entity
+      const typeTriple: OmitStrict<Triple, 'id'> = {
+        attributeId: SYSTEM_IDS.TYPES,
+        attributeName: 'Types',
+        entityId: profileId,
+        entityName: username ?? '',
+        space: spaceAddress,
+        value: {
+          type: 'entity',
+          name: 'Person',
+          id: SYSTEM_IDS.PERSON_TYPE,
+        },
+      };
+
+      actions.push({
+        type: 'createTriple',
+        id: ID.createTripleId(typeTriple),
+        ...typeTriple,
+      });
+
+      // Add triples for creating a space configuration entity
+      const spaceConfigurationId = ID.createEntityId();
+
+      // Add types: Space to the space configuration entity
+      const spaceTriple: OmitStrict<Triple, 'id'> = {
+        attributeId: SYSTEM_IDS.TYPES,
+        attributeName: 'Types',
+        entityId: spaceConfigurationId,
+        entityName: `${username ?? userAccount}'s Space`,
+        space: spaceAddress,
+        value: {
+          type: 'entity',
+          name: 'Space',
+          id: SYSTEM_IDS.SPACE_CONFIGURATION,
+        },
+      };
+
+      actions.push({
+        type: 'createTriple',
+        id: ID.createTripleId(spaceTriple),
+        ...spaceTriple,
+      });
+
+      const spaceNameTriple: OmitStrict<Triple, 'id'> = {
+        attributeId: SYSTEM_IDS.NAME,
+        attributeName: 'Name',
+        entityId: spaceConfigurationId,
+        entityName: `${username ?? userAccount}'s Space`,
+        space: spaceAddress,
+        value: {
+          type: 'string',
+          value: `${username ?? userAccount}'s Space`,
+          id: ID.createValueId(),
+        },
+      };
+
+      actions.push({
+        type: 'createTriple',
+        id: ID.createTripleId(spaceNameTriple),
+        ...spaceNameTriple,
+      });
+
       slog({
         requestId,
-        message: `Space proxy contract deployed at: ${proxyDeployTxReceipt.contractAddress}`,
+        message: `Adding profile to space ${spaceAddress}`,
         account: userAccount,
       });
 
-      return proxyDeployTxReceipt;
+      const proposalEffect = await makeProposalServer({
+        actions,
+        name: `Creating profile for ${userAccount}`,
+        space: spaceAddress,
+        storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
+        account,
+        wallet: client,
+        publicClient,
+      });
+
+      await Effect.runPromise(proposalEffect);
+
+      slog({
+        requestId,
+        message: `Successfully added profile to space ${spaceAddress}`,
+        account: userAccount,
+      });
     },
     catch: error => {
       slog({
         level: 'error',
         requestId,
-        message: `Space proxy deployment failed: ${(error as Error).message}`,
+        message: `Creating Geo entity Profile in space address ${spaceAddress} failed: ${(error as Error).message}`,
         account: userAccount,
       });
-      return new ProxyBeaconDeploymentFailedError();
+      return new CreateProfileGeoEntityFailedError();
     },
   });
 
-  // Space contracts need to be initialized after they are deployed.
-  const createInitializeEffect = (contractAddress: `0x${string}`) =>
-    Effect.tryPromise({
+  // Grant each role to the new user
+  const createGrantRoleEffect = (role: Role) => {
+    return Effect.tryPromise({
       try: async () => {
-        const simulateInitializeResult = await publicClient.simulateContract({
+        const simulateGrantRoleResult = await publicClient.simulateContract({
           abi: SpaceArtifact.abi,
-          address: contractAddress as `0x${string}`,
-          functionName: 'initialize',
+          address: spaceAddress as `0x${string}`,
+          functionName: 'grantRole',
           account,
+          args: [role.binary, userAccount],
         });
 
-        const simulateInitializeHash = await client.writeContract(simulateInitializeResult.request);
-        slog({ requestId, message: `Initialize hash: ${simulateInitializeHash}`, account: userAccount });
-
-        const initializeTxResult = await publicClient.waitForTransactionReceipt({ hash: simulateInitializeHash });
+        const grantRoleSimulateHash = await client.writeContract(simulateGrantRoleResult.request);
         slog({
           requestId,
-          message: `Initialize contract for ${contractAddress}: ${initializeTxResult.transactionHash}`,
+          message: `Grant ${role.role} role hash: ${grantRoleSimulateHash}`,
           account: userAccount,
         });
 
-        return initializeTxResult;
+        const grantRoleTxHash = await publicClient.waitForTransactionReceipt({
+          hash: grantRoleSimulateHash,
+        });
+        slog({
+          requestId,
+          message: `Granted ${role.role} role for ${spaceAddress}: ${grantRoleTxHash.transactionHash}`,
+          account: userAccount,
+        });
+
+        return grantRoleSimulateHash;
       },
       catch: error => {
         slog({
           level: 'error',
           requestId,
-          message: `Space contract initialization failed: ${(error as Error).message}`,
+          message: `Granting ${role.role} role failed: ${(error as Error).message}`,
           account: userAccount,
         });
-        return new ProxyBeaconInitializeFailedError();
+        return new GrantRoleError();
       },
     });
+  };
 
-  // Logic for registering the proxy contract address in the permissionless registry.
-  // We add the contract address to the space registry as a Geo Entity with a specific "Indexed Space"
-  // type. This triggers the permissionless subgraph to create a dynamic data source for this address
-  // and begin indexing events from this address.
-  //
-  // @TODO: With substreams we won't need to add the contract address to the registry since substreams
-  // map over every block.
-  const createRegisterSpaceEffect = (contractAddress: `0x${string}`) =>
-    Effect.tryPromise({
+  // Renounce each role from the deployer
+  const createRenounceRoleEffect = (role: Role) => {
+    return Effect.tryPromise({
       try: async () => {
-        const spaceAddressTripleWithoutId: OmitStrict<Triple, 'id'> = {
-          entityId: ID.createEntityId(),
-          entityName: `${userAccount}'s Space`,
-          attributeId: SYSTEM_IDS.SPACE,
-          attributeName: 'Space',
-          space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
-          value: {
-            type: 'string',
-            value: contractAddress as string,
-            id: ID.createValueId(),
-          },
-        };
-
-        const spaceNameTripleWithoutId: OmitStrict<Triple, 'id'> = {
-          entityId: ID.createEntityId(),
-          entityName: `${userAccount}'s Space`,
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
-          value: {
-            type: 'string',
-            value: `${userAccount}'s Space`,
-            id: ID.createValueId(),
-          },
-        };
-
-        slog({
-          requestId,
-          message: `Adding space ${contractAddress} for ${userAccount} to space registry at ${SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS}`,
-          account: userAccount,
-        });
-
-        const proposalEffect = await makeProposalServer({
-          actions: [
-            {
-              type: 'createTriple',
-              id: ID.createTripleId(spaceAddressTripleWithoutId),
-              ...spaceAddressTripleWithoutId,
-            },
-            {
-              type: 'createTriple',
-              id: ID.createTripleId(spaceNameTripleWithoutId),
-              ...spaceNameTripleWithoutId,
-            },
-          ],
-          name: `Adding space ${contractAddress} for ${userAccount} to space registry`,
-          space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
-          storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
-          account,
-          wallet: client,
-          publicClient,
-        });
-
-        await Effect.runPromise(proposalEffect);
-
-        slog({
-          requestId,
-          message: `Successfully added space ${contractAddress} to space registry`,
-          account: userAccount,
-        });
-      },
-      catch: error => {
-        slog({
-          level: 'error',
-          requestId,
-          message: `Adding space ${contractAddress} to space registry failed: ${(error as Error).message}`,
-          account: userAccount,
-        });
-        return new AddToSpaceRegistryError();
-      },
-    });
-
-  // Logic for configuring roles in the proxy contract. We need to configure the roles after adding
-  // to the registry. This is because the indexer will not pick up events that happen before the indexer starts
-  // indexing a dynamic data source. `configureRoles` emits events for configuring the initial roles for the space
-  // so we need to make sure the indexer starts indexing this space _after_ the role events are emitted.
-  //
-  // @TODO: With substreams this shouldn't matter since substreams map every block, not just a specific address
-  // at a specific block number, so this specific ordering shouldn't matter.
-  const createConfigureRolesEffect = (contractAddress: `0x${string}`) =>
-    Effect.tryPromise({
-      try: async () => {
-        const simulateConfigureRolesResult = await publicClient.simulateContract({
+        const simulateRenounceRoleResult = await publicClient.simulateContract({
           abi: SpaceArtifact.abi,
-          address: contractAddress as `0x${string}`,
-          functionName: 'configureRoles',
+          address: spaceAddress as `0x${string}`,
+          functionName: 'renounceRole',
           account,
+          args: [role.binary, account.address],
         });
 
-        const configureRolesSimulateHash = await client.writeContract(simulateConfigureRolesResult.request);
-        slog({ requestId, message: `Configure roles hash: ${configureRolesSimulateHash}`, account: userAccount });
-
-        const configureRolesTxResult = await publicClient.waitForTransactionReceipt({
-          hash: configureRolesSimulateHash,
-        });
+        const grantRoleSimulateHash = await client.writeContract(simulateRenounceRoleResult.request);
         slog({
           requestId,
-          message: `Configure roles for ${contractAddress}: ${configureRolesTxResult.transactionHash}`,
+          message: `Renounce ${role.role} role hash: ${grantRoleSimulateHash}`,
           account: userAccount,
         });
 
-        return configureRolesTxResult;
+        const renounceRoleTxResult = await publicClient.waitForTransactionReceipt({
+          hash: grantRoleSimulateHash,
+        });
+        slog({
+          requestId,
+          message: `Renounced ${role.role} role for Geo deployer ${spaceAddress}: ${renounceRoleTxResult.transactionHash}`,
+          account: userAccount,
+        });
+
+        return renounceRoleTxResult;
       },
       catch: error => {
         slog({
           level: 'error',
           requestId,
-          message: `Space contract role configuration failed: ${(error as Error).message}`,
+          message: `Renouncing ${role.role} role failed: ${(error as Error).message}`,
           account: userAccount,
         });
-        return new ProxyBeaconConfigureRolesFailedError();
+        return new RenounceRoleError();
       },
     });
+  };
 
-  // Execute all the lazily created functions for executing the deployment logic.
-  // 1. Deploy the proxy contract
-  // 2. Initialize the proxy contract
-  // 3. Add the proxy contract to the permissionless space registry
-  // 4. Configure roles in the proxy contract
-  //
-  // We retry each step with an exponential backoff in case of failure, especially as the
-  // RPC nodes we use have rate-limiting that is hard to predict.
-  const deploymentEffect = Effect.gen(function* (unwrap) {
-    // Deploy proxy contract
-    const deployProxyEffect = Effect.retry(deployEffect, Schedule.exponential('1 seconds'));
-    const deployProxyResult = yield* unwrap(deployProxyEffect);
+  const onboardEffect = Effect.gen(function* (unwrap) {
+    // Add geo profile entity to new space
+    yield* unwrap(Effect.retry(profileEffect, Schedule.exponential('1 seconds')));
 
-    if (deployProxyResult.contractAddress === null) {
-      return yield* unwrap(Effect.fail(new SpaceProxyContractAddressNullError()));
+    // @TODO: Batch?
+    // Configure roles in proxy contract
+    for (const role of ROLES) {
+      const grantRoleEffect = createGrantRoleEffect(role);
+      yield* unwrap(Effect.retry(grantRoleEffect, Schedule.exponential('1 seconds')));
     }
 
-    // Initialize proxy contract
-    const initializeEffect = Effect.retry(
-      createInitializeEffect(deployProxyResult.contractAddress),
-      Schedule.exponential('1 seconds')
-    );
-    yield* unwrap(initializeEffect);
-
-    // Add the new space to the permissionless space registry
-    const registerSpaceEffect = Effect.retry(
-      createRegisterSpaceEffect(deployProxyResult.contractAddress),
-      Schedule.exponential('1 seconds')
-    );
-    yield* unwrap(registerSpaceEffect);
-
-    // Configure roles in proxy contract. We need to configure the roles after adding to the registry.
-    // This is because the indexer will not pick up events that happen before the indexer starts indexing
-    // a dynamic data source.
-    //
-    // @TODO: With substreams this shouldn't matter since we index every block, not just a specific address
-    // at a specific block number.
-    const configureRolesEffect = Effect.retry(
-      createConfigureRolesEffect(deployProxyResult.contractAddress),
-      Schedule.exponential('1 seconds')
-    );
-    yield* unwrap(configureRolesEffect);
-
-    return deployProxyResult;
+    // @TODO Batch?
+    // Renounce deployer roles in proxy contract
+    for (const role of ROLES) {
+      const renounceRoleEffect = createRenounceRoleEffect(role);
+      yield* unwrap(Effect.retry(renounceRoleEffect, Schedule.exponential('1 seconds')));
+    }
   });
 
-  return deploymentEffect;
+  return onboardEffect;
 }

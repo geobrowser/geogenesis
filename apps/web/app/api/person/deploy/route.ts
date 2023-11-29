@@ -1,9 +1,8 @@
-// import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { slog } from '~/core/utils/utils';
+import { getGeoPersonIdFromOnchainId, slog } from '~/core/utils/utils';
 
 import { makePersonEffect } from './make-person-effect';
 
@@ -13,70 +12,81 @@ export async function GET(request: Request) {
   const requestId = uuid();
   const { searchParams } = new URL(request.url);
 
-  const userAccount = searchParams.get('userAddress') as `0x${string}` | null;
+  const userAddress = searchParams.get('userAddress') as `0x${string}` | null;
 
-  if (userAccount === null) {
+  if (userAddress === null) {
     return new Response(JSON.stringify({ error: 'Missing user address', reason: 'Missing user address' }), {
       status: 400,
     });
   }
 
-  slog({
-    requestId,
-    account: userAccount,
-    message: `Setting up profile and contracts for user: ${{ userAccount }}`,
+  const username = searchParams.get('username');
+  const avatarUri = searchParams.get('avatarUri');
+  const spaceAddress = searchParams.get('spaceAddress');
+  const profileId = searchParams.get('profileId');
+
+  if (!spaceAddress) {
+    return new Response(JSON.stringify({ error: 'Missing space address', reason: 'Missing space address' }), {
+      status: 400,
+      statusText: 'Missing space address',
+    });
+  }
+
+  if (!userAddress) {
+    return new Response(JSON.stringify({ error: 'Missing user address', reason: 'Missing user address' }), {
+      status: 400,
+    });
+  }
+
+  if (!profileId) {
+    return new Response(JSON.stringify({ error: 'Missing profile ID', reason: 'Missing profile ID' }), {
+      status: 400,
+    });
+  }
+
+  const geoEntityIdFromOnchainId = getGeoPersonIdFromOnchainId(userAddress, profileId);
+
+  const createProfileEffect = await makePersonEffect(requestId, {
+    account: userAddress as `0x${string}`,
+    username,
+    avatarUri,
+    spaceAddress,
+    profileId: geoEntityIdFromOnchainId,
   });
 
-  const deployment = makePersonEffect(requestId, { account: userAccount });
-  const maybeDeployment = await Effect.runPromise(Effect.either(deployment));
+  const profileEffect = await Effect.runPromise(Effect.either(createProfileEffect));
 
-  if (Either.isLeft(maybeDeployment)) {
-    const error = maybeDeployment.left;
+  if (Either.isLeft(profileEffect)) {
+    const error = profileEffect.left;
 
     switch (error._tag) {
-      case 'ProxyBeaconDeploymentFailedError':
-        return new Response(JSON.stringify({ error: 'Deployment error', reason: 'Proxy Beacon failed to deploy' }), {
-          status: 500,
-          statusText: error.message,
-        });
-      case 'SpaceProxyContractAddressNullError':
-        slog({
-          level: 'error',
-          requestId,
-          message: `Space proxy deployment failed for unknown reason`,
-          account: userAccount,
-        });
-        return new Response(JSON.stringify({ error: 'Deployment error', reason: 'Deployed space has null address' }), {
-          status: 500,
-          statusText: 'Unknown error',
-        });
-      case 'ProxyBeaconInitializeFailedError':
+      case 'CreateProfileGeoEntityFailedError':
         return new Response(
           JSON.stringify({
-            error: 'Contract could not be initialized',
-            reason: `Could not initialize space contract for user: ${userAccount}`,
+            error: 'Profile creation failed',
+            reason: `Could not create profile for user: ${userAddress}`,
           }),
           {
             status: 500,
             statusText: error.message,
           }
         );
-      case 'ProxyBeaconConfigureRolesFailedError':
+      case 'GrantAdminRole':
         return new Response(
           JSON.stringify({
-            error: 'Contract could not be configured',
-            reason: `Could not configure contract roles for user: ${userAccount}`,
+            error: 'Profile creation failed',
+            reason: `Could not grant admin role for user: ${userAddress}`,
           }),
           {
             status: 500,
             statusText: error.message,
           }
         );
-      case 'AddToSpaceRegistryError':
+      case 'RenounceRoleError':
         return new Response(
           JSON.stringify({
-            error: 'Could not add contract to space registry',
-            reason: `Could not add space to space registry for user: ${userAccount}`,
+            error: 'Profile creation failed',
+            reason: `Could not renounce deployer roles for user: ${userAddress}`,
           }),
           {
             status: 500,
@@ -86,8 +96,8 @@ export async function GET(request: Request) {
       default:
         return new Response(
           JSON.stringify({
-            error: 'Unable to deploy contract for unknown reasons',
-            reason: 'Could not deploy space contract. Please try again.',
+            error: 'Unable to create profile for unknown reasons',
+            reason: 'Could not create profile. Please try again.',
           }),
           {
             status: 500,
@@ -97,13 +107,11 @@ export async function GET(request: Request) {
     }
   }
 
-  const proxyDeployTxReceipt = maybeDeployment.right;
-
   slog({
     requestId,
-    message: `Space deployment and Geo registration successful: ${proxyDeployTxReceipt.contractAddress}`,
-    account: userAccount,
+    message: `Profile creation and role setup complete for space ${spaceAddress}. New entity id set up at ${geoEntityIdFromOnchainId}`,
+    account: userAddress,
   });
 
-  return new Response(JSON.stringify({ spaceAddress: proxyDeployTxReceipt.contractAddress }), { status: 200 });
+  return new Response(JSON.stringify({ spaceAddress, entityId: geoEntityIdFromOnchainId }), { status: 200 });
 }
