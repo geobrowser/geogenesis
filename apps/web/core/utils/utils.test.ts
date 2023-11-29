@@ -106,7 +106,7 @@ describe('getOpenGraphImageUrl', () => {
   });
 
   it('an empty string returns the default OG image', () => {
-    expect(getOpenGraphImageUrl('')).toBe('https://www.geobrowser.io/static/geo-social-image-v2.png');
+    expect(getOpenGraphImageUrl('')).toBe(null);
   });
 });
 

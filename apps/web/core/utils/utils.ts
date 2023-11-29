@@ -1,4 +1,4 @@
-import { DEFAULT_OPENGRAPH_DESCRIPTION, DEFAULT_OPENGRAPH_IMAGE, IPFS_GATEWAY_PATH } from '~/core/constants';
+import { IPFS_GATEWAY_PATH } from '~/core/constants';
 import { Entity as IEntity } from '~/core/types';
 
 import { Entity } from './entity';
@@ -146,7 +146,7 @@ export const getOpenGraphImageUrl = (value: string) => {
     return `https://www.geobrowser.io/preview/${value}.png`;
   }
 
-  return DEFAULT_OPENGRAPH_IMAGE;
+  return null;
 };
 
 export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
@@ -155,7 +155,7 @@ export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
   const serverCoverUrl = Entity.cover(entity?.triples);
   const imageUrl = serverAvatarUrl || serverCoverUrl || '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entity.description(entity?.triples ?? []) || DEFAULT_OPENGRAPH_DESCRIPTION;
+  const description = Entity.description(entity?.triples ?? []);
 
   return {
     entityName,
