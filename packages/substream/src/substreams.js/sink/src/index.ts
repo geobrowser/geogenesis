@@ -4,13 +4,13 @@ export {
   BlockScopedDataSinkError,
   BlockUndoSignalSinkError,
   type CreateSinkOptions,
-} from "./sink.js";
+} from './sink.js';
 export {
   createStream,
   FatalStreamError,
   RetryableStreamError,
   type StreamError,
   type CreateStreamOptions,
-} from "./stream.js";
+} from './stream.js';
 
-export * as Metrics from "./metrics.js";
+export * as Metrics from './metrics.js';

@@ -1,43 +1,22 @@
-import { DESCRIPTION, NAME, TYPES } from '../constants/system-ids.js'
-import { ZodAction, type Action } from '../zod.js'
-import { ipfsFetch } from './ipfs.js'
+import { DESCRIPTION, NAME, TYPES } from '../constants/system-ids.js';
+import { type Action, type UriData, ZodAction } from '../zod.js';
+import { ipfsFetch } from './ipfs.js';
 
-export async function actionsFromURI(uri: string) {
+export async function fetchIpfsContent(uri: string): Promise<UriData | null> {
   if (uri.startsWith('data:application/json;base64,')) {
-    const base64 = uri.split(',')[1]
-    const decoded = JSON.parse(Buffer.from(base64, 'base64').toString('utf8'))
-    return decoded
-  } else if (uri.startsWith('ipfs://')) {
-    const fetched = await ipfsFetch(uri)
-    return fetched
+    const base64 = uri.split(',')[1]!; // we can cast with bang because we know a base64 string will always have a second element
+    const decoded = JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
+    return decoded;
   }
+
+  if (uri.startsWith('ipfs://')) {
+    const fetched = await ipfsFetch(uri);
+    return fetched;
+  }
+
+  return null;
 }
 
-export function isValidAction(action: any): action is Action {
-  const parsedAction = ZodAction.safeParse(action)
-  if (parsedAction.success) {
-    return true
-  } else {
-    return false
-  }
-}
-
-export const actionTypeCheck = (action: Action) => {
-  const isCreateTriple = action.type === 'createTriple'
-  const isDeleteTriple = action.type === 'deleteTriple'
-  const isNameAttribute = action.attributeId === NAME
-  const isDescriptionAttribute = action.attributeId === DESCRIPTION
-  const isStringValueType = action.value.type === 'string'
-  const isTypeTriple =
-    action.attributeId === TYPES && action.value.type === 'entity'
-
-  return {
-    isNameCreateAction: isCreateTriple && isNameAttribute && isStringValueType,
-    isNameDeleteAction: isDeleteTriple && isNameAttribute && isStringValueType,
-    isDescriptionCreateAction:
-      isCreateTriple && isDescriptionAttribute && isStringValueType,
-    isDescriptionDeleteAction:
-      isDeleteTriple && isDescriptionAttribute && isStringValueType,
-    isTypeTriple,
-  }
+export function isValidAction(action: Action): action is Action {
+  return ZodAction.safeParse(action).success;
 }

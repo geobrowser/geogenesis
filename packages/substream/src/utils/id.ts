@@ -1,4 +1,4 @@
-export const generateTripleId = ({
+export function generateTripleId({
   space_id,
   entity_id,
   attribute_id,
@@ -8,10 +8,11 @@ export const generateTripleId = ({
   entity_id: string;
   attribute_id: string;
   value_id: string;
-}) =>
-  `${space_id.toLowerCase()}:${entity_id.toLowerCase()}:${attribute_id.toLowerCase()}:${value_id.toLowerCase()}`;
+}): string {
+  return `${space_id}:${entity_id}:${attribute_id}:${value_id}`;
+}
 
-export const generateActionId = ({
+export function generateActionId({
   space_id,
   entity_id,
   attribute_id,
@@ -23,23 +24,22 @@ export const generateActionId = ({
   attribute_id: string;
   value_id: string;
   cursor: string;
-}) =>
-  `${space_id.toLowerCase()}:${entity_id.toLowerCase()}:${attribute_id.toLowerCase()}:${value_id.toLowerCase()}:${cursor.toLowerCase()}}`;
+}): string {
+  return `${space_id}:${entity_id}:${attribute_id}:${value_id}:${cursor}}`;
+}
 
-export const generateProposalId = ({
-  entryIdx,
-  cursor,
-}: {
-  entryIdx: number;
-  cursor: string;
-}) => `${entryIdx}:${cursor}`;
+export function generateProposalId({ entryIndex, cursor }: { entryIndex: number; cursor: string }): string {
+  return `${entryIndex}:${cursor}`;
+}
 
-export const generateVersionId = ({
-  entryIdx,
+export function generateVersionId({
+  entryIndex,
   entityId,
   cursor,
 }: {
-  entryIdx: number;
+  entryIndex: number;
   entityId: string;
   cursor: string;
-}) => `${entryIdx}:${entityId}:${cursor}`;
+}): string {
+  return `${entryIndex}:${entityId}:${cursor}`;
+}

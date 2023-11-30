@@ -1,18 +1,18 @@
-import { Code, ConnectError, type Transport, createPromiseClient } from "@connectrpc/connect";
-import { createRequest } from "@substreams/core";
-import { type Module, type Package, type Response, Stream as StreamService } from "@substreams/core/proto";
-import { Data, Duration, Effect, Metric, Option, Predicate, Ref, Schedule, Sink, Stream } from "effect";
+import { Code, ConnectError, type Transport, createPromiseClient } from '@connectrpc/connect';
+import { createRequest } from '@substreams/core';
+import { type Module, type Package, type Response, Stream as StreamService } from '@substreams/core/proto';
+import { Data, Duration, Effect, Metric, Option, Predicate, Ref, Schedule, Sink, Stream } from 'effect';
 
-import * as Metrics from "./metrics.js";
+import * as Metrics from './metrics.js';
 
 export type StreamError = RetryableStreamError | FatalStreamError;
 
-export class RetryableStreamError extends Data.TaggedClass("RetryableStreamError")<{
+export class RetryableStreamError extends Data.TaggedClass('RetryableStreamError')<{
   readonly message: string;
   readonly cause: unknown;
 }> {}
 
-export class FatalStreamError extends Data.TaggedClass("FatalStreamError")<{
+export class FatalStreamError extends Data.TaggedClass('FatalStreamError')<{
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -91,7 +91,7 @@ export function createStream({
         const { case: kind, value: message } = response.message;
 
         switch (kind) {
-          case "blockScopedData": {
+          case 'blockScopedData': {
             yield* _(Metric.increment(Metrics.DataMessageCount));
             yield* _(Metric.incrementBy(Metrics.DataMessageSizeBytes, size));
 
@@ -106,13 +106,13 @@ export function createStream({
             return;
           }
 
-          case "blockUndoSignal": {
+          case 'blockUndoSignal': {
             yield* _(Metric.increment(Metrics.UndoMessageCount));
             yield* _(Metric.incrementBy(Metrics.UndoMessageSizeBytes, size));
             return;
           }
 
-          case "progress": {
+          case 'progress': {
             yield* _(Metric.increment(Metrics.ProgressMessageCount));
             yield* _(Metric.incrementBy(Metrics.ProgressMessageSizeBytes, size));
 
@@ -134,13 +134,13 @@ export function createStream({
 
             for (const [i, block] of latestEndBlockPerStage) {
               // TODO: Add support for bigint metrics to effect-ts.
-              const metric = Metric.tagged(Metrics.ProgressMessageLastBlock, "stage", `stage-${i}`);
+              const metric = Metric.tagged(Metrics.ProgressMessageLastBlock, 'stage', `stage-${i}`);
               yield* _(Metric.set(metric, Number(block)));
             }
 
             for (const [i, jobs] of jobsPerStage) {
               // TODO: Add support for bigint metrics to effect-ts.
-              const metric = Metric.tagged(Metrics.ProgressMessageRunningJobs, "stage", `stage-${i}`);
+              const metric = Metric.tagged(Metrics.ProgressMessageRunningJobs, 'stage', `stage-${i}`);
               yield* _(Metric.set(metric, Number(jobs)));
             }
 
@@ -153,12 +153,12 @@ export function createStream({
                 // The last stage in production is a mapper. There may be "completed ranges" below the one that includes our start block.
                 if (productionMode && i === message.stages.length - 1) {
                   if (startBlock <= range.startBlock && range.endBlock >= startBlock) {
-                    const metric = Metric.tagged(Metrics.ProgressMessageLastContiguousBlock, "stage", `stage-${i}`);
+                    const metric = Metric.tagged(Metrics.ProgressMessageLastContiguousBlock, 'stage', `stage-${i}`);
                     yield* _(Metric.set(metric, Number(range.endBlock)));
                   }
                 } else {
                   if (j === 0) {
-                    const metric = Metric.tagged(Metrics.ProgressMessageLastContiguousBlock, "stage", `stage-${i}`);
+                    const metric = Metric.tagged(Metrics.ProgressMessageLastContiguousBlock, 'stage', `stage-${i}`);
                     yield* _(Metric.set(metric, Number(range.endBlock)));
                   }
                 }
@@ -173,7 +173,7 @@ export function createStream({
             return;
           }
 
-          case "session": {
+          case 'session': {
             const session = JSON.stringify({
               max_parallel_workers: String(message.maxParallelWorkers),
               resolved_start_block: String(message.resolvedStartBlock),
@@ -185,37 +185,37 @@ export function createStream({
             return;
           }
 
-          case "debugSnapshotComplete":
-          case "debugSnapshotData": {
-            yield* _(Effect.logWarning("Received debug snapshot message, there is no reason to receive those here"));
+          case 'debugSnapshotComplete':
+          case 'debugSnapshotData': {
+            yield* _(Effect.logWarning('Received debug snapshot message, there is no reason to receive those here'));
             return;
           }
 
-          case "fatalError": {
+          case 'fatalError': {
             yield* _(
               Effect.fail(
                 new FatalStreamError({
-                  message: "Received fatal error message from the backend",
+                  message: 'Received fatal error message from the backend',
                   cause: message,
-                }),
-              ),
+                })
+              )
             );
             return;
           }
 
           default: {
-            yield* _(Effect.logWarning("Received unknown message type"));
+            yield* _(Effect.logWarning('Received unknown message type'));
             yield* _(Metric.increment(Metrics.UnknownMessageCount));
             yield* _(Metric.incrementBy(Metrics.UnknownMessageSizeBytes, size));
             return;
           }
         }
-      }),
+      })
     );
 
     const aquire = Ref.get(currentCursor).pipe(
-      Effect.map((startCursor) => Option.getOrUndefined(startCursor)),
-      Effect.map((startCursor) => {
+      Effect.map(startCursor => Option.getOrUndefined(startCursor)),
+      Effect.map(startCursor => {
         const client = createPromiseClient(StreamService, connectTransport);
         const request = createRequest({
           substreamPackage,
@@ -227,7 +227,7 @@ export function createStream({
         });
 
         const controller = new AbortController();
-        const stream = Stream.fromAsyncIterable(client.blocks(request, { signal: controller.signal }), (cause) => {
+        const stream = Stream.fromAsyncIterable(client.blocks(request, { signal: controller.signal }), cause => {
           if (cause instanceof ConnectError) {
             // TODO: Cover all possible connect protocol error code cases.
             if (
@@ -243,33 +243,33 @@ export function createStream({
           }
 
           return new RetryableStreamError({
-            message: "Stream failed with retryable error",
+            message: 'Stream failed with retryable error',
             cause,
           });
         });
 
         return { controller, stream };
-      }),
+      })
     );
 
     const stream = Stream.acquireRelease(aquire, (scope, exit) => Effect.sync(() => scope.controller.abort(exit))).pipe(
-      Stream.flatMap((scope) => scope.stream),
+      Stream.flatMap(scope => scope.stream),
       Stream.tapSink(metrics),
-      Stream.tap((response) => {
-        if (response.message.case === "blockScopedData") {
+      Stream.tap(response => {
+        if (response.message.case === 'blockScopedData') {
           return Ref.set(currentCursor, Option.some(response.message.value.cursor));
-        } else if (response.message.case === "blockUndoSignal") {
+        } else if (response.message.case === 'blockUndoSignal') {
           return Ref.set(currentCursor, Option.some(response.message.value.lastValidCursor));
         }
 
         return Effect.unit;
       }),
-      Stream.tapError((error) =>
+      Stream.tapError(error =>
         Effect.all([
           Metric.increment(Metrics.SubstreamsErrorCount),
-          Effect.logWarning(`Encountered an error while streaming: ${String(error)}}`),
-        ]),
-      ),
+          Effect.logWarning(`Encountered an error while streaming: ${String(error.cause)}}`),
+        ])
+      )
     );
 
     return stream.pipe(
@@ -284,11 +284,11 @@ export function createStream({
           // Retry for the specified maximum duration.
           Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(maxRetrySeconds ?? 300))),
           // Retry only on retryable errors.
-          Schedule.whileInput(Predicate.isTagged("RetryableStreamError")),
+          Schedule.whileInput(Predicate.isTagged('RetryableStreamError')),
           // TODO: There seems to be a bug with type inference here for the `Schedule` input.
-          Schedule.tapInput(() => Effect.logWarning("Retrying after retryable stream error")),
-        ),
-      ),
+          Schedule.tapInput(() => Effect.logWarning('Retrying after retryable stream error'))
+        )
+      )
     );
   });
 

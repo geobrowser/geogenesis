@@ -1,28 +1,20 @@
-import type * as s from "zapatos/schema";
-import { Entry } from "./zod";
+import type * as s from 'zapatos/schema';
 
 export enum TripleAction {
-  Create = "createTriple",
-  Delete = "deleteTriple",
+  Create = 'createTriple',
+  Delete = 'deleteTriple',
 }
 
-export interface StreamData {
-  entries: Entry[];
-  blockNumber: number;
-  timestamp: number;
-  cursor: string;
-}
-
-export type TripleDatabaseTuple = [TripleAction, s.triples.Insertable];
+export type TripleWithActionTuple = [TripleAction, s.triples.Insertable];
 
 export interface CreateTripleActionSchema {
-  type: "createTriple";
+  type: 'createTriple';
   entityId: string;
   attributeId: string;
   value: Value;
 }
 export interface DeleteTripleActionSchema {
-  type: "deleteTriple";
+  type: 'deleteTriple';
   entityId: string;
   attributeId: string;
   value: Value;
@@ -31,57 +23,45 @@ export interface DeleteTripleActionSchema {
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type TripleValueType =
-  | "number"
-  | "string"
-  | "entity"
-  | "image"
-  | "date"
-  | "url";
+export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date' | 'url';
 
 export type NumberValue = {
-  type: "number";
+  type: 'number';
   id: string;
   value: string;
 };
 
 export type StringValue = {
-  type: "string";
+  type: 'string';
   id: string;
   value: string;
 };
 
 export type EntityValue = {
-  type: "entity";
+  type: 'entity';
   id: string;
   name: string | null;
 };
 
 export type ImageValue = {
-  type: "image";
+  type: 'image';
   id: string;
   value: string;
 };
 
 export type DateValue = {
-  type: "date";
+  type: 'date';
   id: string;
   value: string;
 };
 
 export type UrlValue = {
-  type: "url";
+  type: 'url';
   id: string;
   value: string;
 };
 
-export type Value =
-  | NumberValue
-  | StringValue
-  | EntityValue
-  | ImageValue
-  | DateValue
-  | UrlValue;
+export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue | UrlValue;
 
 export type Triple = {
   id: string;
@@ -111,23 +91,23 @@ export type Account = {
 };
 
 export type ReviewState =
-  | "idle"
-  | "reviewing"
-  | "publishing-ipfs"
-  | "signing-wallet"
-  | "publishing-contract"
-  | "publish-complete"
-  | "publish-error";
+  | 'idle'
+  | 'reviewing'
+  | 'publishing-ipfs'
+  | 'signing-wallet'
+  | 'publishing-contract'
+  | 'publish-complete'
+  | 'publish-error';
 
 export type FilterField =
-  | "entity-id"
-  | "entity-name"
-  | "attribute-id"
-  | "attribute-name"
-  | "value"
-  | "linked-to"
-  | "starts-with"
-  | "not-space-id";
+  | 'entity-id'
+  | 'entity-name'
+  | 'attribute-id'
+  | 'attribute-name'
+  | 'value'
+  | 'linked-to'
+  | 'starts-with'
+  | 'not-space-id';
 
 export type FilterClause = {
   field: FilterField;
@@ -136,17 +116,11 @@ export type FilterClause = {
 
 export type FilterState = FilterClause[];
 
-export type CreateTripleAction = CreateTripleActionSchema &
-  Identifiable &
-  Triple &
-  Publishable;
-export type DeleteTripleAction = DeleteTripleActionSchema &
-  Identifiable &
-  Triple &
-  Publishable;
+export type CreateTripleAction = CreateTripleActionSchema & Identifiable & Triple & Publishable;
+export type DeleteTripleAction = DeleteTripleActionSchema & Identifiable & Triple & Publishable;
 
 export type EditTripleAction = {
-  type: "editTriple";
+  type: 'editTriple';
   before: DeleteTripleAction;
   after: CreateTripleAction;
 } & Publishable;
@@ -240,7 +214,7 @@ export type OnchainProfile = {
   account: string;
 };
 
-export type AppEnv = "development" | "testnet" | "production";
+export type AppEnv = 'development' | 'testnet' | 'production';
 
 export type RelationValueType = {
   typeId: string;
@@ -248,23 +222,20 @@ export type RelationValueType = {
   spaceIdOfAttribute: string;
 };
 
-export type RelationValueTypesByAttributeId = Record<
-  string,
-  Array<RelationValueType>
->;
+export type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
 
-export type TripleWithStringValue = OmitStrict<Triple, "value"> & {
+export type TripleWithStringValue = OmitStrict<Triple, 'value'> & {
   value: StringValue;
 };
-export type TripleWithEntityValue = OmitStrict<Triple, "value"> & {
+export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & {
   value: EntityValue;
 };
-export type TripleWithImageValue = OmitStrict<Triple, "value"> & {
+export type TripleWithImageValue = OmitStrict<Triple, 'value'> & {
   value: ImageValue;
 };
-export type TripleWithDateValue = OmitStrict<Triple, "value"> & {
+export type TripleWithDateValue = OmitStrict<Triple, 'value'> & {
   value: DateValue;
 };
-export type TripleWithUrlValue = OmitStrict<Triple, "value"> & {
+export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & {
   value: UrlValue;
 };

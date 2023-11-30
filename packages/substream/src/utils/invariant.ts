@@ -1,4 +1,4 @@
-export function invariant(condition: any, message: string): asserts condition {
+export function invariant<T>(condition: T, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
   }
