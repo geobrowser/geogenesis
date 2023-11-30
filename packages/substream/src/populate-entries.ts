@@ -15,7 +15,7 @@ import {
 import { TripleAction } from './types';
 import { upsertChunked } from './utils/db';
 import { pool } from './utils/pool';
-import { type FullEntry, ZodUriData } from './zod';
+import { type FullEntry } from './zod';
 
 export async function populateWithFullEntries({
   fullEntries,

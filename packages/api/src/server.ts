@@ -1,11 +1,12 @@
 import PgOrderByRelatedPlugin from '@graphile-contrib/pg-order-by-related';
 import PgSimplifyInflectorPlugin from '@graphile-contrib/pg-simplify-inflector';
+import dotenv from 'dotenv';
 import http from 'node:http';
 import https from 'node:https';
 import { postgraphile } from 'postgraphile';
 import ConnectionFilterPlugin from 'postgraphile-plugin-connection-filter';
 
-require('dotenv').config();
+dotenv.config();
 
 const postgraphileMiddleware = postgraphile(process.env.DATABASE_URL, 'public', {
   watchPg: true,

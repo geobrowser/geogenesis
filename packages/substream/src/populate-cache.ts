@@ -16,7 +16,7 @@ export async function populateFromCache() {
 
     let blockNumber = START_BLOCK;
 
-    for (let cachedEntry of cachedEntries) {
+    for (const cachedEntry of cachedEntries) {
       console.log(
         `Processing cachedEntry at block: ${JSON.stringify({
           entry: cachedEntry.block_number.toString(),
@@ -33,7 +33,7 @@ export async function populateFromCache() {
       blockNumber = cachedEntry.block_number;
     }
 
-    for (let cachedRole of cachedRoles) {
+    for (const cachedRole of cachedRoles) {
       console.log(
         `Processing cachedRole at block, ${JSON.stringify({
           blockNumber: cachedRole.created_at_block,
