@@ -1,7 +1,7 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Data, Effect, Stream } from 'effect';
+import { Data, Effect, Either, Stream } from 'effect';
 
 import { MANIFEST, START_BLOCK } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
@@ -12,9 +12,9 @@ import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { createSink, createStream } from './substreams.js/sink/src';
 // import { createSink, createStream } from './substreams.js/sink/src'
 import { invariant } from './utils/invariant';
-import { getFetchIpfsContentEffect } from './utils/ipfs';
+import { getEntryWithIpfsContent } from './utils/ipfs';
 import { logger } from './utils/logger';
-import { type FullEntry, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
+import { type FullEntry, type UriData, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
 
 export class InvalidPackageError extends Data.TaggedClass('InvalidPackageError')<{
   readonly cause: unknown;
@@ -99,6 +99,8 @@ export function getStreamEffect(startBlockNum?: number) {
           }
 
           const unpackedOutput = mapOutput.unpack(registry);
+
+          // @TODO: Error handling with effect
           if (!unpackedOutput) {
             console.error('Failed to unpack substream message', mapOutput);
             return;
@@ -113,34 +115,21 @@ export function getStreamEffect(startBlockNum?: number) {
             console.log('Processing ', entryResponse.data.entries.length, ' entries');
 
             const entries = entryResponse.data.entries;
-            const validFullEntries = yield* _(
-              Effect.tryPromise({
-                try: async () => {
-                  const maybeResponses: (FullEntry | null)[] = await Promise.all(
-                    entries.map(async entry => {
-                      // @TODO: Error handling and Effect all the way up
-                      const ipfsContent = await Effect.runPromise(getFetchIpfsContentEffect(entry.uri));
 
-                      if (!ipfsContent) {
-                        return null;
-                      }
-
-                      return {
-                        ...entry,
-                        uriData: ipfsContent,
-                      };
-                    })
-                  );
-
-                  const nonValidatedFullEntries = maybeResponses.filter(
-                    (response): response is FullEntry => response !== null
-                  );
-
-                  return parseValidFullEntries(nonValidatedFullEntries);
-                },
-                catch: () => new Error(`Could not parse actions from URI for entries in block`),
-              })
+            const maybeEntriesWithIpfsContent: (FullEntry | null)[] = yield* _(
+              Effect.all(
+                entries.map(entry => getEntryWithIpfsContent(entry)),
+                {
+                  concurrency: 20,
+                }
+              )
             );
+
+            const nonValidatedFullEntries = maybeEntriesWithIpfsContent.filter(
+              (maybeFullEntry): maybeFullEntry is FullEntry => maybeFullEntry !== null
+            );
+
+            const validFullEntries = parseValidFullEntries(nonValidatedFullEntries);
 
             yield* _(
               Effect.tryPromise({
@@ -151,7 +140,7 @@ export function getStreamEffect(startBlockNum?: number) {
                     cursor,
                     timestamp,
                   }),
-                catch: () => new Error(`Could not upsert cached entries in block`),
+                catch: () => new Error(`Could not upsert cached entries in block ${blockNumber}`),
               })
             );
 

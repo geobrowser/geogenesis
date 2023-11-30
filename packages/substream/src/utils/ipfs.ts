@@ -1,7 +1,7 @@
-import { Effect, Schedule } from 'effect';
+import { Effect, Either, Schedule } from 'effect';
 
 import { IPFS_GATEWAY } from '../constants/constants.js';
-import type { UriData } from '../zod.js';
+import type { Entry, FullEntry, UriData } from '../zod.js';
 
 class UnableToParseBase64Error extends Error {
   _tag: 'UnableToParseBase64Error' = 'UnableToParseBase64Error';
@@ -15,7 +15,7 @@ class UnableToParseJsonError extends Error {
   _tag: 'UnableToParseJsonError' = 'UnableToParseJsonError';
 }
 
-export function getFetchIpfsContentEffect(
+function getFetchIpfsContentEffect(
   uri: string
 ): Effect.Effect<
   never,
@@ -24,10 +24,19 @@ export function getFetchIpfsContentEffect(
 > {
   return Effect.gen(function* (unwrap) {
     if (uri.startsWith('data:application/json;base64,')) {
-      const base64 = uri.split(',')[1]!; // we can cast with bang because we know a base64 string will always have a second element
+      const base64 = uri.split(',')[1];
+
+      if (!base64) {
+        return null;
+      }
+
       const decoded = Effect.try({
-        try: () => JSON.parse(Buffer.from(base64, 'base64').toString('utf8')) as UriData,
-        catch: () => new UnableToParseBase64Error("Can't parse base64 string"),
+        try: () => {
+          return JSON.parse(Buffer.from(base64, 'base64').toString('utf8')) as UriData;
+        },
+        catch: error => {
+          return new UnableToParseBase64Error(`Unable to parse base64 string ${uri}. ${String(error)}`);
+        },
       });
 
       return yield* unwrap(decoded);
@@ -42,7 +51,7 @@ export function getFetchIpfsContentEffect(
           return await fetch(url);
         },
         catch: error => {
-          return new FailedFetchingIpfsContentError("Can't fetch IPFS content");
+          return new FailedFetchingIpfsContentError(`Failed fetching IPFS content from uri ${uri}. ${String(error)}`);
         },
       });
 
@@ -54,12 +63,53 @@ export function getFetchIpfsContentEffect(
           try: async () => {
             return (await response.json()) as UriData;
           },
-          // @TODO: Specific error
-          catch: () => new UnableToParseJsonError("Can't parse response"),
+          catch: error =>
+            new UnableToParseJsonError(`Unable to parse JSON when reading content from uri ${uri}. ${String(error)}`),
         })
       );
     }
 
+    // We only support IPFS URIs or base64 encoded content with the above format
     return null;
+  });
+}
+
+export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<never, never, FullEntry | null> {
+  return Effect.gen(function* (unwrap) {
+    const fetchIpfsContentEffect = getFetchIpfsContentEffect(entry.uri);
+
+    const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
+
+    if (Either.isLeft(maybeIpfsContent)) {
+      const error = maybeIpfsContent.left;
+
+      switch (error._tag) {
+        case 'UnableToParseBase64Error':
+          console.error(`Unable to parse base64 string ${entry.uri}`, error);
+          break;
+        case 'FailedFetchingIpfsContentError':
+          console.error(`Failed fetching IPFS content from uri ${entry.uri}`, error);
+          break;
+        case 'UnableToParseJsonError':
+          console.error(`Unable to parse JSON when reading content from uri ${entry.uri}`, error);
+          break;
+        default:
+          console.error(`Unknown error when fetching IPFS content for uri ${entry.uri}`, error);
+          break;
+      }
+
+      return null;
+    }
+
+    const ipfsContent = maybeIpfsContent.right;
+
+    if (!ipfsContent) {
+      return null;
+    }
+
+    return {
+      ...entry,
+      uriData: ipfsContent,
+    };
   });
 }

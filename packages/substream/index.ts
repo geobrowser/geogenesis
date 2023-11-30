@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import dotenv from 'dotenv';
 import { Effect } from 'effect';
 
 import { bootstrapRoot } from './src/bootstrap-root.js';
@@ -6,6 +7,8 @@ import { START_BLOCK } from './src/constants/constants.js';
 import { populateFromCache } from './src/populate-cache.js';
 import { getStreamEffect } from './src/run-stream.js';
 import { resetPublicTablesToGenesis } from './src/utils/reset-public-tables-to-genesis.js';
+
+dotenv.config();
 
 async function main() {
   try {
