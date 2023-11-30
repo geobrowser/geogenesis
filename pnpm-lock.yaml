@@ -1163,6 +1163,10 @@ packages:
     resolution: {integrity: sha512-JyEH8Z+OD5Sc2opSg86qMHn1EM1Sa+zj/Tc0ovxdwk56ByVNONJSabuCUbLQp+eKN3rWNfrho0X+3SEqEPXIow==}
     dev: false
 
+  /@bufbuild/protobuf/1.5.0:
+    resolution: {integrity: sha512-0Jg+B7Vl8YGCi7c3iZ8/38iTbZrwdU7or6QZlsA9lhSrhumaXOTMsGO8gqwDuus/THEkTiY3Uxn+PEJwgsLt0w==}
+    dev: false
+
   /@chainsafe/as-sha256/0.3.1:
     resolution: {integrity: sha512-hldFFYuf49ed7DAakWVXSJODuq3pzJEguD8tQ7h+sGkM18vja+OFoJI9krnGmgzyuZC2ETX0NOIcCTy31v2Mtg==}
     dev: true
@@ -1222,6 +1226,18 @@ packages:
       - utf-8-validate
     dev: false
 
+  /@connectrpc/connect-node/1.1.3_7p7whtrmx2paf2t74n47vfuolq:
+    resolution: {integrity: sha512-oq7Uk8XlLzC2+eHaxZTX189dhujD0/tK9plizxofsFHUnLquMSmzQQ2GzvTv4u6U05eZYc/crySmf86Sqpi1bA==}
+    engines: {node: '>=16.0.0'}
+    peerDependencies:
+      '@bufbuild/protobuf': ^1.3.3
+      '@connectrpc/connect': 1.1.3
+    dependencies:
+      '@bufbuild/protobuf': 1.5.0
+      '@connectrpc/connect': 1.1.3_@bufbuild+protobuf@1.5.0
+      undici: 5.28.1
+    dev: false
+
   /@connectrpc/connect-node/1.1.3_rabf2hmdfizgo3zlfs6bmsltoi:
     resolution: {integrity: sha512-oq7Uk8XlLzC2+eHaxZTX189dhujD0/tK9plizxofsFHUnLquMSmzQQ2GzvTv4u6U05eZYc/crySmf86Sqpi1bA==}
     engines: {node: '>=16.0.0'}
@@ -1240,6 +1256,14 @@ packages:
       '@bufbuild/protobuf': ^1.3.3
     dependencies:
       '@bufbuild/protobuf': 1.4.2
+    dev: false
+
+  /@connectrpc/connect/1.1.3_@bufbuild+protobuf@1.5.0:
+    resolution: {integrity: sha512-AXkbsLQe2Nm7VuoN5nqp05GEb9mPa/f5oFzDqTbHME4i8TghTrlY03uefbhuAq4wjsnfDnmuxHZvn6ndlgXmbg==}
+    peerDependencies:
+      '@bufbuild/protobuf': ^1.3.3
+    dependencies:
+      '@bufbuild/protobuf': 1.5.0
     dev: false
 
   /@cspotcode/source-map-support/0.8.1:
@@ -4962,14 +4986,14 @@ packages:
       '@stablelib/wipe': 1.0.1
     dev: false
 
-  /@substreams/core/0.7.0_rabf2hmdfizgo3zlfs6bmsltoi:
+  /@substreams/core/0.7.0_7p7whtrmx2paf2t74n47vfuolq:
     resolution: {integrity: sha512-SJ70pbIRWNdp17Ld1QbGJpQ2ohvYUBKiAkOKnODeqLCDmc/xKs66nxJCIzQOvIxqLXVRU3QiBwm6NQB3CKrP0A==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.4.2
       '@connectrpc/connect': ^1.1.3
     dependencies:
-      '@bufbuild/protobuf': 1.4.2
-      '@connectrpc/connect': 1.1.3_@bufbuild+protobuf@1.4.2
+      '@bufbuild/protobuf': 1.5.0
+      '@connectrpc/connect': 1.1.3_@bufbuild+protobuf@1.5.0
     dev: false
 
   /@substreams/core/0.8.0_rabf2hmdfizgo3zlfs6bmsltoi:
@@ -5005,10 +5029,10 @@ packages:
     resolution: {integrity: sha512-XpzXg4QhNgqTXjXB/OfuBwfp8REgPC9arpPFQ4vNS0toia6BZjOLirB42txl7DLo053FIaEDqPsKaR7D2Cmv0g==}
     engines: {node: '>=18'}
     dependencies:
-      '@bufbuild/protobuf': 1.4.2
-      '@connectrpc/connect': 1.1.3_@bufbuild+protobuf@1.4.2
-      '@connectrpc/connect-node': 1.1.3_rabf2hmdfizgo3zlfs6bmsltoi
-      '@substreams/core': 0.7.0_rabf2hmdfizgo3zlfs6bmsltoi
+      '@bufbuild/protobuf': 1.5.0
+      '@connectrpc/connect': 1.1.3_@bufbuild+protobuf@1.5.0
+      '@connectrpc/connect-node': 1.1.3_7p7whtrmx2paf2t74n47vfuolq
+      '@substreams/core': 0.7.0_7p7whtrmx2paf2t74n47vfuolq
       eventemitter3: 5.0.1
     dev: false
 
@@ -20714,6 +20738,7 @@ packages:
   /typescript/5.3.2:
     resolution: {integrity: sha512-6l+RyNy7oAHDfxC4FzSJcz9vnjTKxrLpDG5M2Vu4SHRVNg6xzqZp6LYSR9zjqQTu8DU/f5xwxUdADOkbrIX2gQ==}
     engines: {node: '>=14.17'}
+    hasBin: true
 
   /typeson-registry/1.0.0-alpha.39:
     resolution: {integrity: sha512-NeGDEquhw+yfwNhguLPcZ9Oj0fzbADiX4R0WxvoY8nGhy98IbzQy1sezjoEFWOywOboj/DWehI+/aUlRVrJnnw==}
