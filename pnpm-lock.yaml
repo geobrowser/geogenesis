@@ -32,6 +32,7 @@ importers:
       '@radix-ui/react-dialog': ^1.0.4
       '@radix-ui/react-dropdown-menu': ^2.0.5
       '@radix-ui/react-popover': ^1.0.6
+      '@radix-ui/react-radio-group': ^1.1.3
       '@radix-ui/react-select': ^1.2.2
       '@radix-ui/react-tabs': ^1.0.4
       '@radix-ui/react-use-rect': ^1.0.1
@@ -77,7 +78,7 @@ importers:
       '@vitest/ui': ^0.25.6
       '@wagmi/core': ^1.4.3
       autoprefixer: ^10.4.13
-      boring-avatars: ^1.7.0
+      boring-avatars: ^1.10.1
       class-variance-authority: ^0.4.0
       classnames: ^2.3.2
       cmdk: ^0.1.21
@@ -137,6 +138,7 @@ importers:
       '@radix-ui/react-dialog': 1.0.4_niceheoxzop6u6jvjqp6k2hesq
       '@radix-ui/react-dropdown-menu': 2.0.5_niceheoxzop6u6jvjqp6k2hesq
       '@radix-ui/react-popover': 1.0.6_niceheoxzop6u6jvjqp6k2hesq
+      '@radix-ui/react-radio-group': 1.1.3_niceheoxzop6u6jvjqp6k2hesq
       '@radix-ui/react-select': 1.2.2_niceheoxzop6u6jvjqp6k2hesq
       '@radix-ui/react-tabs': 1.0.4_niceheoxzop6u6jvjqp6k2hesq
       '@radix-ui/react-use-rect': 1.0.1_o5ysialsahsznabqayk7pree4e
@@ -162,7 +164,7 @@ importers:
       '@vercel/analytics': 0.1.6_react@18.2.0
       '@vercel/og': 0.5.4
       '@wagmi/core': 1.4.3_zqvb3lj4paonteqkgqlayb523m
-      boring-avatars: 1.7.0
+      boring-avatars: 1.10.1
       class-variance-authority: 0.4.0_typescript@5.1.6
       classnames: 2.3.2
       cmdk: 0.1.21_ew3x2u2ugx4vldoypxrzsnu5mm
@@ -4294,6 +4296,36 @@ packages:
     dependencies:
       '@babel/runtime': 7.22.6
       '@radix-ui/react-slot': 1.0.2_o5ysialsahsznabqayk7pree4e
+      '@types/react': 18.2.33
+      '@types/react-dom': 18.2.14
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+    dev: false
+
+  /@radix-ui/react-radio-group/1.1.3_niceheoxzop6u6jvjqp6k2hesq:
+    resolution: {integrity: sha512-x+yELayyefNeKeTx4fjK6j99Fs6c4qKm3aY38G3swQVTN6xMpsrbigC0uHs2L//g8q4qR7qOcww8430jJmi2ag==}
+    peerDependencies:
+      '@types/react': '*'
+      '@types/react-dom': '*'
+      react: ^16.8 || ^17.0 || ^18.0
+      react-dom: ^16.8 || ^17.0 || ^18.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      '@types/react-dom':
+        optional: true
+    dependencies:
+      '@babel/runtime': 7.22.6
+      '@radix-ui/primitive': 1.0.1
+      '@radix-ui/react-compose-refs': 1.0.1_o5ysialsahsznabqayk7pree4e
+      '@radix-ui/react-context': 1.0.1_o5ysialsahsznabqayk7pree4e
+      '@radix-ui/react-direction': 1.0.1_o5ysialsahsznabqayk7pree4e
+      '@radix-ui/react-presence': 1.0.1_niceheoxzop6u6jvjqp6k2hesq
+      '@radix-ui/react-primitive': 1.0.3_niceheoxzop6u6jvjqp6k2hesq
+      '@radix-ui/react-roving-focus': 1.0.4_niceheoxzop6u6jvjqp6k2hesq
+      '@radix-ui/react-use-controllable-state': 1.0.1_o5ysialsahsznabqayk7pree4e
+      '@radix-ui/react-use-previous': 1.0.1_o5ysialsahsznabqayk7pree4e
+      '@radix-ui/react-use-size': 1.0.1_o5ysialsahsznabqayk7pree4e
       '@types/react': 18.2.33
       '@types/react-dom': 18.2.14
       react: 18.2.0
@@ -8633,8 +8665,8 @@ packages:
     transitivePeerDependencies:
       - supports-color
 
-  /boring-avatars/1.7.0:
-    resolution: {integrity: sha512-ZNHd8J7C/V0IjQMGQowLJ5rScEFU23WxePigH6rqKcT2Esf0qhYvYxw8s9i3srmlfCnCV00ddBjaoGey1eNOfA==}
+  /boring-avatars/1.10.1:
+    resolution: {integrity: sha512-WcgHDeLrazCR03CDPEvCchLsUecZAZvs4F6FnMiGlTEjyQQf15Q5TRl4EUaAQ1dacvhPq7lC9EOTWkCojQ6few==}
     dev: false
 
   /borsh/0.7.0:
