@@ -31,7 +31,6 @@ export function Providers({ children, onConnectionChange }: Props) {
           </Services.Provider>
         </WalletProvider>
       </JotaiProvider>
-
       <ReactQueryDevtools initialIsOpen={false} />
     </ReactQueryProvider>
   );
