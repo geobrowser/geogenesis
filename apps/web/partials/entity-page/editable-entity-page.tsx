@@ -3,6 +3,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import * as React from 'react';
+import { useEffect, useState } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
@@ -81,36 +82,44 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 
-  const [hasSetType, setHasSetType] = React.useState(false);
-  const [hasSetFilter, setHasSetFilter] = React.useState(false);
+  const [hasSetType, setHasSetType] = useState(false);
+  const [hasSetFilter, setHasSetFilter] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (hasSetType) return;
 
     const setTypeTriple = async () => {
-      const typeEntity = await subgraph.fetchEntity({ endpoint: config.subgraph, id: typeId ?? '' });
+      if (typeId) {
+        const typeEntity = await subgraph.fetchEntity({ endpoint: config.subgraph, id: typeId ?? '' });
 
-      if (typeEntity) {
+        if (typeEntity) {
+          send({
+            type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
+            payload: {
+              attributeId: 'type',
+              attributeName: 'Types',
+              entityId: typeEntity.id,
+              entityName: typeEntity.name || '',
+            },
+          });
+        }
+      } else if (name === '') {
         send({
-          type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
+          type: 'CREATE_ENTITY_TRIPLE',
           payload: {
             attributeId: 'type',
             attributeName: 'Types',
-            entityId: typeEntity.id,
-            entityName: typeEntity.name || '',
           },
         });
       }
     };
 
-    if (typeId) {
-      setTypeTriple();
-    }
+    setTypeTriple();
 
     setHasSetType(true);
-  }, [hasSetType, send, typeId, config, subgraph]);
+  }, [hasSetType, send, typeId, config, subgraph, name]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!hasSetType) return;
     if (hasSetFilter) return;
 
