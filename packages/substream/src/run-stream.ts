@@ -10,9 +10,9 @@ import { upsertCachedEntries } from './populate-cache';
 import { populateWithFullEntries } from './populate-entries';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { createSink, createStream } from './substreams.js/sink/src';
-import { fetchIpfsContent } from './utils/actions';
 // import { createSink, createStream } from './substreams.js/sink/src'
 import { invariant } from './utils/invariant';
+import { getFetchIpfsContentEffect } from './utils/ipfs';
 import { logger } from './utils/logger';
 import { type FullEntry, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
 
@@ -118,19 +118,24 @@ export function getStreamEffect(startBlockNum?: number) {
                 try: async () => {
                   const maybeResponses: (FullEntry | null)[] = await Promise.all(
                     entries.map(async entry => {
-                      const ipfsContent = await fetchIpfsContent(entry.uri);
+                      // @TODO: Error handling and Effect all the way up
+                      const ipfsContent = await Effect.runPromise(getFetchIpfsContentEffect(entry.uri));
+
                       if (!ipfsContent) {
                         return null;
                       }
+
                       return {
                         ...entry,
                         uriData: ipfsContent,
                       };
                     })
                   );
+
                   const nonValidatedFullEntries = maybeResponses.filter(
                     (response): response is FullEntry => response !== null
                   );
+
                   return parseValidFullEntries(nonValidatedFullEntries);
                 },
                 catch: () => new Error(`Could not parse actions from URI for entries in block`),
