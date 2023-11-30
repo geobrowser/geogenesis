@@ -267,7 +267,7 @@ export function createStream({
       Stream.tapError(error =>
         Effect.all([
           Metric.increment(Metrics.SubstreamsErrorCount),
-          Effect.logWarning(`Encountered an error while streaming: ${String(error)}}`),
+          Effect.logWarning(`Encountered an error while streaming: ${String(error.cause)}}`),
         ])
       )
     );

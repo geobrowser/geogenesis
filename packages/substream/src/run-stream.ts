@@ -1,7 +1,6 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { createSink, createStream } from '@substreams/sink';
 import { Data, Effect, Stream } from 'effect';
 
 import { MANIFEST, START_BLOCK } from './constants/constants';
@@ -10,6 +9,7 @@ import { parseValidFullEntries } from './parse-valid-full-entries';
 import { upsertCachedEntries } from './populate-cache';
 import { populateWithFullEntries } from './populate-entries';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import { createSink, createStream } from './substreams.js/sink/src';
 import { fetchIpfsContent } from './utils/actions';
 // import { createSink, createStream } from './substreams.js/sink/src'
 import { invariant } from './utils/invariant';

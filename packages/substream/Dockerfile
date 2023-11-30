@@ -15,11 +15,11 @@ RUN pnpm run build
 
 FROM base
 COPY --from=build /app/dist /app/dist
-COPY --from=build /app/package.json /app/package.json
-COPY --from=build /app/pnpm-lock.yaml /app/pnpm-lock.yaml
 COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/package.json /app/package.json
+COPY --from=build /app/src/sql /app/src/sql
 
-EXPOSE 3000
 # TODO: Figure out how to set up schema for DB as part of
 # postgres setup
+# CMD [ "pnpm", "start:from-genesis" ]
 CMD [ "pnpm", "start" ]
