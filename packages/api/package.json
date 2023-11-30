@@ -15,7 +15,9 @@
     "dotenv": "^16.3.1",
     "postgraphile": "^4.14.0",
     "postgraphile-plugin-connection-filter": "^2.3.0",
-    "typescript": "^5.3.2",
+    "typescript": "^5.3.2"
+  },
+  "devDependencies": {
     "eslint": "^8.21.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-import-resolver-typescript": "^3.5.2",
