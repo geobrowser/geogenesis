@@ -10,11 +10,10 @@ import { upsertCachedEntries } from './populate-cache';
 import { populateWithFullEntries } from './populate-entries';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { createSink, createStream } from './substreams.js/sink/src';
-// import { createSink, createStream } from './substreams.js/sink/src'
 import { invariant } from './utils/invariant';
 import { getEntryWithIpfsContent } from './utils/ipfs';
 import { logger } from './utils/logger';
-import { type FullEntry, type UriData, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
+import { type FullEntry, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
 
 export class InvalidPackageError extends Data.TaggedClass('InvalidPackageError')<{
   readonly cause: unknown;
