@@ -1,7 +1,5 @@
 import type * as s from 'zapatos/schema';
 
-import { type Entry } from './zod';
-
 export enum TripleAction {
   Create = 'createTriple',
   Delete = 'deleteTriple',
