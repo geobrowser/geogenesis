@@ -157,6 +157,13 @@ export type EditEvent =
       };
     }
   | {
+      type: 'CREATE_ENTITY_TRIPLE';
+      payload: {
+        attributeId: string;
+        attributeName: string;
+      };
+    }
+  | {
       type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE';
       payload: {
         entityId: string;
@@ -490,6 +497,25 @@ const listener =
               type: 'image',
               id: ID.createValueId(),
               value: Value.toImageValue(imageSrc),
+            },
+          })
+        );
+      }
+      case 'CREATE_ENTITY_TRIPLE': {
+        const { attributeId, attributeName } = event.payload;
+
+        return create(
+          Triple.withId({
+            space: context.spaceId,
+            entityId: context.entityId,
+            entityName: context.entityName,
+            attributeId: attributeId,
+            attributeName: attributeName,
+            placeholder: false,
+            value: {
+              type: 'entity',
+              id: '',
+              name: '',
             },
           })
         );
