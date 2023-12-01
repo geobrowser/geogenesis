@@ -21,14 +21,20 @@ async function main() {
     const reset = await pipe(resetPublicTablesToGenesis(), Effect.either, Effect.runPromise);
 
     if (Either.isLeft(reset)) {
-      console.error('Could not reset public tables to genesis:', reset.left);
+      console.error('Could not reset public tables to genesis');
+      console.error('Message: ', reset.left.message);
+      console.error('Cause: ', reset.left.cause);
+      console.error('Stack: ', reset.left.stack);
       process.exit(1);
     }
 
     const bootstrap = await pipe(bootstrapRoot(), Effect.either, Effect.runPromise);
 
     if (Either.isLeft(bootstrap)) {
-      console.error('Could not bootstrap root:', bootstrap.left);
+      console.error('Could not bootstrap root:');
+      console.error('Message: ', bootstrap.left.message);
+      console.error('Cause: ', bootstrap.left.cause);
+      console.error('Stack: ', bootstrap.left.stack);
       process.exit(1);
     }
   }
@@ -40,7 +46,10 @@ async function main() {
     const reset = await pipe(resetPublicTablesToGenesis(), Effect.either, Effect.runPromise);
 
     if (Either.isLeft(reset)) {
-      console.error('Could not reset public tables to genesis:', reset.left);
+      console.error('Could not reset public tables to genesis');
+      console.error('Message: ', reset.left.message);
+      console.error('Cause: ', reset.left.cause);
+      console.error('Stack: ', reset.left.stack);
       process.exit(1);
     }
 
@@ -48,7 +57,10 @@ async function main() {
     const bootstrap = await pipe(bootstrapRoot(), Effect.either, Effect.runPromise);
 
     if (Either.isLeft(bootstrap)) {
-      console.error('Could not bootstrap root:', bootstrap.left);
+      console.error('Could not bootstrap root:');
+      console.error('Message: ', bootstrap.left.message);
+      console.error('Cause: ', bootstrap.left.cause);
+      console.error('Stack: ', bootstrap.left.stack);
       process.exit(1);
     }
 

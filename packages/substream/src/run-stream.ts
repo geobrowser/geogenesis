@@ -50,7 +50,7 @@ export function getStreamEffect(startBlockNum?: number) {
     const { token } = yield* _(
       Effect.tryPromise({
         try: () => authIssue(substreamsApiKey, authIssueUrl),
-        catch: () => new InvalidPackageError(`Could not read package at path ${MANIFEST}`),
+        catch: error => new InvalidPackageError(`Could not read package at path ${MANIFEST} ${String(error)}`),
       })
     );
 
@@ -60,7 +60,7 @@ export function getStreamEffect(startBlockNum?: number) {
     const startCursor = yield* _(
       Effect.tryPromise({
         try: () => readCursor(),
-        catch: () => new CouldNotReadCursorError(`Could not read cursor`),
+        catch: error => new CouldNotReadCursorError(String(error)),
       })
     );
 
@@ -154,8 +154,10 @@ export function getStreamEffect(startBlockNum?: number) {
                     cursor,
                     timestamp,
                   }),
-                catch: () =>
-                  new CouldNotWriteCachedEntryError(`Could not upsert cached entries in block ${blockNumber}`),
+                catch: error =>
+                  new CouldNotWriteCachedEntryError(
+                    `Could not upsert cached entries in block ${blockNumber} ${String(error)}}`
+                  ),
               })
             );
 
@@ -207,7 +209,7 @@ export function getStreamEffect(startBlockNum?: number) {
           yield* _(
             Effect.tryPromise({
               try: () => writeCursor(message.lastValidCursor, blockNumber),
-              catch: () => new CouldNotWriteCursorError(`Could not write cursor`),
+              catch: error => new CouldNotWriteCursorError(String(error)),
             })
           );
         }),

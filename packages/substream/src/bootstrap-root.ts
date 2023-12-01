@@ -288,6 +288,6 @@ export function bootstrapRoot() {
         db.insert('proposals', proposal).run(pool),
       ]);
     },
-    catch: () => new BootstrapRootError(`Could not bootstrap root`),
+    catch: error => new BootstrapRootError(String(error)),
   });
 }

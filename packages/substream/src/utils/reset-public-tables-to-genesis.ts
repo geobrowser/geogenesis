@@ -8,7 +8,9 @@ export class ResetPublicTablesToGenesisError extends Error {
 
 export function resetPublicTablesToGenesis() {
   return Effect.tryPromise({
-    try: () => runSqlFile('./src/sql/clearPublicTables.sql'),
-    catch: () => new ResetPublicTablesToGenesisError(`Could not reset public tables to genesis`),
+    try: async () => {
+      await runSqlFile('./src/sql/clearPublicTables.sql');
+    },
+    catch: error => new ResetPublicTablesToGenesisError(String(error)),
   });
 }
