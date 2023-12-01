@@ -77,6 +77,9 @@ async function main() {
       case 'RetryableStreamError':
         console.error('A retryable stream error occurred and the substream did not recover:', error);
         break;
+      default:
+        console.error('An unknown error occurred:', error);
+        break;
     }
 
     process.exit(1);
