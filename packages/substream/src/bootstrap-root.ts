@@ -277,8 +277,8 @@ export class BootstrapRootError extends Error {
 
 export function bootstrapRoot() {
   return Effect.tryPromise({
-    try: () =>
-      Promise.all([
+    try: async () => {
+      await Promise.all([
         db.insert('spaces', space).run(pool),
         db.insert('accounts', account).run(pool),
         db.insert('geo_entities', geoEntities).run(pool),
@@ -286,7 +286,8 @@ export function bootstrapRoot() {
         db.insert('triples', typeTriples).run(pool),
         db.insert('triples', attributeTriples).run(pool),
         db.insert('proposals', proposal).run(pool),
-      ]),
+      ]);
+    },
     catch: () => new BootstrapRootError(`Could not bootstrap root`),
   });
 }
