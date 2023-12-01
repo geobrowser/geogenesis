@@ -17,7 +17,7 @@ async function main() {
   const options = program.opts();
 
   if (options.fromGenesis) {
-    console.log('bootstrapping system entities');
+    console.log('Resetting public tables to genesis');
     const reset = await pipe(resetPublicTablesToGenesis(), Effect.either, Effect.runPromise);
 
     if (Either.isLeft(reset)) {
@@ -36,7 +36,7 @@ async function main() {
   let startBlockNumber = process.env.START_BLOCK ? Number(process.env.START_BLOCK) : START_BLOCK;
 
   if (options.fromCache) {
-    console.log('bootstrapping system entities');
+    console.log('Resetting public tables to genesis');
     const reset = await pipe(resetPublicTablesToGenesis(), Effect.either, Effect.runPromise);
 
     if (Either.isLeft(reset)) {
@@ -44,7 +44,7 @@ async function main() {
       process.exit(1);
     }
 
-    console.log('bootstrapping system entities');
+    console.log('Bootstrapping system entities');
     const bootstrap = await pipe(bootstrapRoot(), Effect.either, Effect.runPromise);
 
     if (Either.isLeft(bootstrap)) {
@@ -52,7 +52,7 @@ async function main() {
       process.exit(1);
     }
 
-    console.log('populating geo data from cache');
+    console.log('Populating geo data from cache');
     startBlockNumber = await populateFromCache();
   }
 
