@@ -563,6 +563,7 @@ function EntityAttributes({
                   entityValueIds={entityValueTriples
                     .filter(triple => triple.attributeId === attributeId)
                     .map(triple => triple.value.id)}
+                  attributeId={attributeId}
                 />
               )}
               <div className="absolute right-0 top-6 flex items-center gap-1">
