@@ -1,7 +1,7 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Data, Effect, Either, Stream } from 'effect';
+import { Effect, Stream } from 'effect';
 
 import { MANIFEST, START_BLOCK } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
@@ -15,10 +15,21 @@ import { getEntryWithIpfsContent } from './utils/ipfs';
 import { logger } from './utils/logger';
 import { type FullEntry, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
 
-export class InvalidPackageError extends Data.TaggedClass('InvalidPackageError')<{
-  readonly cause: unknown;
-  readonly message: string;
-}> {}
+export class InvalidPackageError extends Error {
+  _tag: 'InvalidPackageError' = 'InvalidPackageError';
+}
+
+export class CouldNotWriteCursorError extends Error {
+  _tag: 'CouldNotWriteCursorError' = 'CouldNotWriteCursorError';
+}
+
+export class CouldNotReadCursorError extends Error {
+  _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
+}
+
+export class CouldNotWriteCachedEntryError extends Error {
+  _tag: 'CouldNotWriteCachedEntryError' = 'CouldNotWriteCachedEntryError';
+}
 
 export function getStreamEffect(startBlockNum?: number) {
   const program = Effect.gen(function* (_) {
@@ -39,18 +50,17 @@ export function getStreamEffect(startBlockNum?: number) {
     const { token } = yield* _(
       Effect.tryPromise({
         try: () => authIssue(substreamsApiKey, authIssueUrl),
-        catch: () => new Error(`Could not read package at path ${MANIFEST}`),
+        catch: () => new InvalidPackageError(`Could not read package at path ${MANIFEST}`),
       })
     );
 
     const outputModule = 'geo_out';
     const productionMode = true;
-    // const finalBlocksOnly = true; TODO - why doesn't createStream accept this option?
 
     const startCursor = yield* _(
       Effect.tryPromise({
         try: () => readCursor(),
-        catch: () => new Error(`Could not read cursor`),
+        catch: () => new CouldNotReadCursorError(`Could not read cursor`),
       })
     );
 
@@ -62,13 +72,18 @@ export function getStreamEffect(startBlockNum?: number) {
       interceptors: [createAuthInterceptor(token)],
     });
 
+    console.log('cursor', startCursor);
+
     const stream = createStream({
       connectTransport: transport,
       substreamPackage,
       outputModule,
-      startCursor: startBlockNum ? undefined : startCursor,
-      startBlockNum: startBlockNum || START_BLOCK,
       productionMode,
+      // @TODO: Move cursor and block number up to top level.
+      // This will let us pass either the start block _or_ the start cursor
+      // but not both.
+      startCursor: startCursor ? startCursor : undefined,
+      startBlockNum: startCursor ? undefined : startBlockNum ?? START_BLOCK,
     });
 
     let entriesQueue = Promise.resolve();
@@ -87,7 +102,7 @@ export function getStreamEffect(startBlockNum?: number) {
           yield* _(
             Effect.tryPromise({
               try: () => writeCursor(cursor, blockNumber),
-              catch: () => new Error(`Could not write cursor`),
+              catch: () => new CouldNotWriteCursorError(),
             })
           );
 
@@ -139,7 +154,8 @@ export function getStreamEffect(startBlockNum?: number) {
                     cursor,
                     timestamp,
                   }),
-                catch: () => new Error(`Could not upsert cached entries in block ${blockNumber}`),
+                catch: () =>
+                  new CouldNotWriteCachedEntryError(`Could not upsert cached entries in block ${blockNumber}`),
               })
             );
 
@@ -191,7 +207,7 @@ export function getStreamEffect(startBlockNum?: number) {
           yield* _(
             Effect.tryPromise({
               try: () => writeCursor(message.lastValidCursor, blockNumber),
-              catch: () => new Error(`Could not write cursor`),
+              catch: () => new CouldNotWriteCursorError(`Could not write cursor`),
             })
           );
         }),

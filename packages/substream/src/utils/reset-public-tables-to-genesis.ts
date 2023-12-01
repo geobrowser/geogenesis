@@ -1,9 +1,14 @@
+import { Effect } from 'effect';
+
 import { runSqlFile } from './run-sql-file.js';
 
-export async function resetPublicTablesToGenesis() {
-  try {
-    await runSqlFile('./src/sql/clearPublicTables.sql');
-  } catch (err) {
-    console.error('Error resetting database:', err);
-  }
+export class ResetPublicTablesToGenesisError extends Error {
+  _tag: 'ResetPublicTablesToGenesisError' = 'ResetPublicTablesToGenesisError';
+}
+
+export function resetPublicTablesToGenesis() {
+  return Effect.tryPromise({
+    try: () => runSqlFile('./src/sql/clearPublicTables.sql'),
+    catch: () => new ResetPublicTablesToGenesisError(`Could not reset public tables to genesis`),
+  });
 }
