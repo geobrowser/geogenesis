@@ -27,40 +27,35 @@ export async function ProfileEntityServerContainer({ params }: Props) {
     };
   }
 
-  const personTriples = await Subgraph.fetchTriples({
-    query: '',
-    space: params.id,
-    filter: [{ field: 'entity-id', value: params.entityId }],
-    endpoint: config.subgraph,
-    skip: 0,
-    first: 100,
-  });
+  const person = await Subgraph.fetchEntity({ id: params.entityId, endpoint: config.subgraph });
 
-  if (personTriples.length === 0) {
-    <ProfilePageComponent
-      id={params.entityId}
-      triples={personTriples}
-      spaceId={params.id}
-      referencedByComponent={
-        <React.Suspense fallback={<EntityReferencedByLoading />}>
-          <EntityReferencedByServerContainer entityId={params.entityId} name={null} spaceId={params.id} />
-        </React.Suspense>
-      }
-    />;
+  // @TODO: Real error handling
+  if (!person) {
+    return {
+      id: params.entityId,
+      name: null,
+      avatarUrl: null,
+      coverUrl: null,
+      triples: [],
+      types: [],
+      description: null,
+    };
   }
+
+  const profile = {
+    ...person,
+    avatarUrl: Entity.avatar(person.triples),
+    coverUrl: Entity.cover(person.triples),
+  };
 
   return (
     <ProfilePageComponent
       id={params.entityId}
-      triples={personTriples}
+      triples={profile.triples}
       spaceId={params.id}
       referencedByComponent={
         <React.Suspense fallback={<EntityReferencedByLoading />}>
-          <EntityReferencedByServerContainer
-            entityId={params.entityId}
-            name={Entity.name(personTriples)}
-            spaceId={params.id}
-          />
+          <EntityReferencedByServerContainer entityId={person.id} name={person.name} spaceId={params.id} />
         </React.Suspense>
       }
     />
