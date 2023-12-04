@@ -1,7 +1,7 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Data, Effect, Stream } from 'effect';
+import { Effect, Stream } from 'effect';
 
 import { MANIFEST, START_BLOCK } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
@@ -10,16 +10,26 @@ import { upsertCachedEntries } from './populate-cache';
 import { populateWithFullEntries } from './populate-entries';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { createSink, createStream } from './substreams.js/sink/src';
-import { fetchIpfsContent } from './utils/actions';
-// import { createSink, createStream } from './substreams.js/sink/src'
 import { invariant } from './utils/invariant';
+import { getEntryWithIpfsContent } from './utils/ipfs';
 import { logger } from './utils/logger';
 import { type FullEntry, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
 
-export class InvalidPackageError extends Data.TaggedClass('InvalidPackageError')<{
-  readonly cause: unknown;
-  readonly message: string;
-}> {}
+export class InvalidPackageError extends Error {
+  _tag: 'InvalidPackageError' = 'InvalidPackageError';
+}
+
+export class CouldNotWriteCursorError extends Error {
+  _tag: 'CouldNotWriteCursorError' = 'CouldNotWriteCursorError';
+}
+
+export class CouldNotReadCursorError extends Error {
+  _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
+}
+
+export class CouldNotWriteCachedEntryError extends Error {
+  _tag: 'CouldNotWriteCachedEntryError' = 'CouldNotWriteCachedEntryError';
+}
 
 export function getStreamEffect(startBlockNum?: number) {
   const program = Effect.gen(function* (_) {
@@ -40,18 +50,17 @@ export function getStreamEffect(startBlockNum?: number) {
     const { token } = yield* _(
       Effect.tryPromise({
         try: () => authIssue(substreamsApiKey, authIssueUrl),
-        catch: () => new Error(`Could not read package at path ${MANIFEST}`),
+        catch: error => new InvalidPackageError(`Could not read package at path ${MANIFEST} ${String(error)}`),
       })
     );
 
     const outputModule = 'geo_out';
     const productionMode = true;
-    // const finalBlocksOnly = true; TODO - why doesn't createStream accept this option?
 
     const startCursor = yield* _(
       Effect.tryPromise({
         try: () => readCursor(),
-        catch: () => new Error(`Could not read cursor`),
+        catch: error => new CouldNotReadCursorError(String(error)),
       })
     );
 
@@ -63,13 +72,18 @@ export function getStreamEffect(startBlockNum?: number) {
       interceptors: [createAuthInterceptor(token)],
     });
 
+    console.log('cursor', startCursor);
+
     const stream = createStream({
       connectTransport: transport,
       substreamPackage,
       outputModule,
-      startCursor: startBlockNum ? undefined : startCursor,
-      startBlockNum: startBlockNum || START_BLOCK,
       productionMode,
+      // @TODO: Move cursor and block number up to top level.
+      // This will let us pass either the start block _or_ the start cursor
+      // but not both.
+      startCursor: startCursor ? startCursor : undefined,
+      startBlockNum: startCursor ? undefined : startBlockNum ?? START_BLOCK,
     });
 
     let entriesQueue = Promise.resolve();
@@ -88,7 +102,7 @@ export function getStreamEffect(startBlockNum?: number) {
           yield* _(
             Effect.tryPromise({
               try: () => writeCursor(cursor, blockNumber),
-              catch: () => new Error(`Could not write cursor`),
+              catch: () => new CouldNotWriteCursorError(),
             })
           );
 
@@ -99,6 +113,8 @@ export function getStreamEffect(startBlockNum?: number) {
           }
 
           const unpackedOutput = mapOutput.unpack(registry);
+
+          // @TODO: Error handling with effect
           if (!unpackedOutput) {
             console.error('Failed to unpack substream message', mapOutput);
             return;
@@ -113,29 +129,21 @@ export function getStreamEffect(startBlockNum?: number) {
             console.log('Processing ', entryResponse.data.entries.length, ' entries');
 
             const entries = entryResponse.data.entries;
-            const validFullEntries = yield* _(
-              Effect.tryPromise({
-                try: async () => {
-                  const maybeResponses: (FullEntry | null)[] = await Promise.all(
-                    entries.map(async entry => {
-                      const ipfsContent = await fetchIpfsContent(entry.uri);
-                      if (!ipfsContent) {
-                        return null;
-                      }
-                      return {
-                        ...entry,
-                        uriData: ipfsContent,
-                      };
-                    })
-                  );
-                  const nonValidatedFullEntries = maybeResponses.filter(
-                    (response): response is FullEntry => response !== null
-                  );
-                  return parseValidFullEntries(nonValidatedFullEntries);
-                },
-                catch: () => new Error(`Could not parse actions from URI for entries in block`),
-              })
+
+            const maybeEntriesWithIpfsContent: (FullEntry | null)[] = yield* _(
+              Effect.all(
+                entries.map(entry => getEntryWithIpfsContent(entry)),
+                {
+                  concurrency: 20,
+                }
+              )
             );
+
+            const nonValidatedFullEntries = maybeEntriesWithIpfsContent.filter(
+              (maybeFullEntry): maybeFullEntry is FullEntry => maybeFullEntry !== null
+            );
+
+            const validFullEntries = parseValidFullEntries(nonValidatedFullEntries);
 
             yield* _(
               Effect.tryPromise({
@@ -146,7 +154,10 @@ export function getStreamEffect(startBlockNum?: number) {
                     cursor,
                     timestamp,
                   }),
-                catch: () => new Error(`Could not upsert cached entries in block`),
+                catch: error =>
+                  new CouldNotWriteCachedEntryError(
+                    `Could not upsert cached entries in block ${blockNumber} ${String(error)}}`
+                  ),
               })
             );
 
@@ -198,7 +209,7 @@ export function getStreamEffect(startBlockNum?: number) {
           yield* _(
             Effect.tryPromise({
               try: () => writeCursor(message.lastValidCursor, blockNumber),
-              catch: () => new Error(`Could not write cursor`),
+              catch: error => new CouldNotWriteCursorError(String(error)),
             })
           );
         }),

@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as s from 'zapatos/schema';
 
@@ -270,16 +271,23 @@ const proposal: s.proposals.Insertable = {
   status: 'APPROVED',
 };
 
-export async function bootstrapRoot() {
-  try {
-    await db.insert('spaces', space).run(pool);
-    await db.insert('accounts', account).run(pool);
-    await db.insert('geo_entities', geoEntities).run(pool);
-    await db.insert('triples', namesTriples).run(pool);
-    await db.insert('triples', typeTriples).run(pool);
-    await db.insert('triples', attributeTriples).run(pool);
-    await db.insert('proposals', proposal).run(pool);
-  } catch (error) {
-    console.error('Error bootstrapping root:', error);
-  }
+export class BootstrapRootError extends Error {
+  _tag: 'BootstrapRootError' = 'BootstrapRootError';
+}
+
+export function bootstrapRoot() {
+  return Effect.tryPromise({
+    try: async () => {
+      await Promise.all([
+        db.insert('spaces', space).run(pool),
+        db.insert('accounts', account).run(pool),
+        db.insert('geo_entities', geoEntities).run(pool),
+        db.insert('triples', namesTriples).run(pool),
+        db.insert('triples', typeTriples).run(pool),
+        db.insert('triples', attributeTriples).run(pool),
+        db.insert('proposals', proposal).run(pool),
+      ]);
+    },
+    catch: error => new BootstrapRootError(String(error)),
+  });
 }

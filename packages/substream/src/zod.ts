@@ -20,6 +20,7 @@ export const ZodAction = z.object({
     message: 'Attribute id cannot be an empty string',
   }),
   entityName: z.string().nullish(),
+  // @TODO: Value should be a union of objects
   value: z
     .object({
       type: z.enum(['number', 'string', 'entity', 'image', 'date', 'url']),
