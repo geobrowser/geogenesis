@@ -16,7 +16,6 @@ interface GetFetchTriplesQueryOptions {
 
 const getFetchTriplesQuery = ({ where, skip, first }: GetFetchTriplesQueryOptions) => `query {
   triples(filter: {${where}}, first: ${first}, offset: ${skip}) {
-    totalCount
     nodes {
       id
       attribute {
