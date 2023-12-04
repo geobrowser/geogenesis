@@ -206,10 +206,3 @@ ALTER TABLE
 
 ALTER TABLE
     public.space_editor_controllers DISABLE TRIGGER ALL;
-
--- 
--- Create Indexes for Speedy Querying
--- 
-CREATE INDEX idx_entity_attribute ON public.triples(entity_id, attribute_id);
-
-CREATE INDEX idx_entity_attribute_value_id ON public.triples(entity_id, attribute_id, value_id);
