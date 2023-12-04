@@ -8,24 +8,29 @@ import { Space } from '~/core/types';
 
 import { fetchTriples } from './fetch-triples';
 import { graphql } from './graphql';
-import { NetworkSpace } from './network-local-mapping';
 
 const getFetchSpaceQuery = (id: string) => `query {
   space(id: "${id}") {
     id
     isRootSpace
-    admins {
-      id
+    spaceAdmins {
+      nodes {
+        accountId
+      }
     }
-    editors {
-      id
+    spaceEditors {
+      nodes {
+        accountId
+      }
     }
-    editorControllers {
-      id
+    spaceEditorControllers {
+      nodes {
+        accountId
+      }
     }
-    entity {
-      id
-      entityOf {
+    createdAtBlock
+    triples {
+      nodes {
         id
         stringValue
         attribute {
@@ -33,7 +38,6 @@ const getFetchSpaceQuery = (id: string) => `query {
         }
       }
     }
-    createdAtBlock
   }
 }`;
 
@@ -44,7 +48,15 @@ export interface FetchSpaceOptions {
 }
 
 type NetworkResult = {
-  space: NetworkSpace | null;
+  space: {
+    id: string;
+    isRootSpace: boolean;
+    triples: { nodes: { id: string; stringValue: string; attribute: { id: string } }[] };
+    spaceAdmins: { nodes: { accountId: string }[] };
+    spaceEditors: { nodes: { accountId: string }[] };
+    spaceEditorControllers: { nodes: { accountId: string }[] };
+    createdAtBlock: string;
+  } | null;
 };
 
 export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | null> {
@@ -53,7 +65,8 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   const spaceConfigTriples = await fetchTriples({
     endpoint: options.endpoint,
     query: '',
-    first: 1000,
+    first: 1,
+    space: options.id,
     skip: 0,
     filter: [
       { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
@@ -117,7 +130,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   const networkSpace = result.space;
 
   const attributes = Object.fromEntries(
-    networkSpace.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
+    networkSpace.triples.nodes.map(triple => [triple.attribute.id, triple.stringValue]) || []
   );
 
   if (networkSpace.isRootSpace) {
@@ -128,10 +141,10 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   return {
     id: networkSpace.id,
     isRootSpace: networkSpace.isRootSpace,
-    admins: networkSpace.admins.map(account => account.id),
-    editorControllers: networkSpace.editorControllers.map(account => account.id),
-    editors: networkSpace.editors.map(account => account.id),
-    entityId: networkSpace.entity?.id || '',
+    admins: networkSpace.spaceAdmins.nodes.map(account => account.accountId),
+    editorControllers: networkSpace.spaceEditorControllers.nodes.map(account => account.accountId),
+    editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
+    entityId: networkSpace?.id || '',
     attributes,
     spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === networkSpace.id)?.entityId || null,
     createdAtBlock: networkSpace.createdAtBlock,
