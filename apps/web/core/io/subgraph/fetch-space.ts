@@ -3,7 +3,6 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { ROOT_SPACE_IMAGE } from '~/core/constants';
 import { Space } from '~/core/types';
 
 import { fetchTriples } from './fetch-triples';
