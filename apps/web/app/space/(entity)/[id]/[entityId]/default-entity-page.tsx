@@ -9,6 +9,7 @@ import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
+import { Entity as EntityType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Value } from '~/core/utils/value';
 
@@ -86,7 +87,22 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
     };
   }
 
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+  const entityTriples = await Subgraph.fetchTriples({
+    endpoint: config.subgraph,
+    filter: [{ field: 'entity-id', value: entityId }],
+    space: spaceId,
+    query: '',
+    skip: 0,
+    first: 100,
+  });
+
+  const entity: EntityType = {
+    id: entityId,
+    name: Entity.name(entityTriples),
+    description: Entity.description(entityTriples),
+    types: Entity.types(entityTriples),
+    triples: entityTriples,
+  };
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
