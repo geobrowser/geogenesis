@@ -1,8 +1,9 @@
+import { redirect } from 'next/navigation';
+
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
-import { Entity } from '~/core/utils/entity';
 
 import {
   EntityReferencedByLoading,
@@ -31,27 +32,37 @@ export async function ProfileEntityServerContainer({ params }: Props) {
 
   // @TODO: Real error handling
   if (!person) {
-    return {
-      id: params.entityId,
-      name: null,
-      avatarUrl: null,
-      coverUrl: null,
-      triples: [],
-      types: [],
-      description: null,
-    };
+    return (
+      <ProfilePageComponent
+        id={params.entityId}
+        triples={[]}
+        spaceId={params.id}
+        referencedByComponent={
+          <React.Suspense fallback={<EntityReferencedByLoading />}>
+            <EntityReferencedByServerContainer entityId={params.entityId} name={null} spaceId={params.id} />
+          </React.Suspense>
+        }
+      />
+    );
   }
 
-  const profile = {
-    ...person,
-    avatarUrl: Entity.avatar(person.triples),
-    coverUrl: Entity.cover(person.triples),
-  };
+  // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
+  // the space for the entity we are rendering, so we need to redirect to the correct space.
+  // Once we have cross-space entity data we won't redirect and will instead only show the data
+  // from the current space for the selected entity.
+  if (person?.nameTripleSpace) {
+    if (params.id !== person?.nameTripleSpace) {
+      console.log(
+        `Redirecting from incorrect space ${params.id} to correct space ${person?.nameTripleSpace} for entity ${params.entityId}`
+      );
+      return redirect(`/space/${person?.nameTripleSpace}/${encodeURIComponent(params.entityId)}`);
+    }
+  }
 
   return (
     <ProfilePageComponent
       id={params.entityId}
-      triples={profile.triples}
+      triples={person.triples}
       spaceId={params.id}
       referencedByComponent={
         <React.Suspense fallback={<EntityReferencedByLoading />}>
