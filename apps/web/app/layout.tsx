@@ -16,10 +16,6 @@ import { App } from './entry';
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.ENV_URL ?? 'https://geobrowser.io'),
   title: 'Geo Genesis',
-  themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#FBFBFB' },
-    { media: '(prefers-color-scheme: light)', color: '#FBFBFB' },
-  ],
   description: "Browse and organize the world's public knowledge and information in a decentralized way.",
   manifest: '/static/site.webmanifest',
   icons: {

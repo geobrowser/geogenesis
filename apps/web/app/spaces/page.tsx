@@ -14,7 +14,6 @@ import { Spacer } from '~/design-system/spacer';
 
 export const metadata: Metadata = {
   title: 'Geo Genesis',
-  themeColor: '#FBFBFB',
   description: "Browse and organize the world's public knowledge and information in a decentralized way.",
   twitter: {
     card: 'summary_large_image',
