@@ -11,9 +11,16 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
-import { Entity as EntityType, Triple as TripleType } from '~/core/types';
+import {
+  DateValue,
+  Entity as EntityType,
+  EntityValue,
+  StringValue,
+  Triple as TripleType,
+  UrlValue,
+} from '~/core/types';
 import { Triple } from '~/core/utils/triple';
-import { GeoDate } from '~/core/utils/utils';
+import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
 
 import { Accordion } from '~/design-system/accordion';
 import { EntitySearchAutocomplete } from '~/design-system/autocomplete/entity-search-autocomplete';
@@ -35,7 +42,9 @@ type Props = {
   spaceId: string;
 };
 
-type SupportedValueType = 'string' | 'date' | 'url';
+type SupportedValueType = 'string' | 'date' | 'url' | 'entity';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type UnsupportedValueType = 'number' | 'image';
 
 type EntityAttributesType = Record<string, { index: number; type: SupportedValueType; name: string }>;
 
@@ -49,6 +58,7 @@ export const Component = ({ spaceId }: Props) => {
   const { supportedAttributes, unsupportedAttributes } = useMemo(() => getAttributes(entityType), [entityType]);
 
   const [entityNameIndex, setEntityNameIndex] = useState<number | undefined>(undefined);
+  const [entityIdIndex, setEntityIdIndex] = useState<number | undefined>(undefined);
   const [entityAttributes, setEntityAttributes] = useState<EntityAttributesType>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -104,8 +114,8 @@ export const Component = ({ spaceId }: Props) => {
     const [, ...entities] = records;
 
     const generateActions = () => {
-      entities.forEach(entity => {
-        const newEntityId = ID.createEntityId();
+      entities.slice(0, 10).forEach(entity => {
+        const newEntityId = entityIdIndex ? entity[entityIdIndex] : ID.createEntityId();
 
         if (!entityNameIndex || !entityType) return;
 
@@ -166,10 +176,25 @@ export const Component = ({ spaceId }: Props) => {
                 attributeId,
                 attributeName: entityAttributes[attributeId]?.name ?? '',
                 value: {
-                  type: 'date' as SupportedValueType,
+                  type: 'date',
                   id: ID.createValueId(),
                   value: dateValue,
-                },
+                } as DateValue,
+              })
+            );
+          } else if (entityAttributes[attributeId]?.type === 'entity') {
+            create(
+              Triple.withId({
+                space: spaceId,
+                entityId: newEntityId,
+                entityName: entity[entityNameIndex],
+                attributeId,
+                attributeName: entityAttributes[attributeId]?.name ?? '',
+                value: {
+                  type: 'entity',
+                  id: entity[entityAttributes[attributeId].index],
+                  name: '',
+                } as EntityValue,
               })
             );
           } else {
@@ -181,10 +206,10 @@ export const Component = ({ spaceId }: Props) => {
                 attributeId,
                 attributeName: entityAttributes[attributeId]?.name ?? '',
                 value: {
-                  type: (entityAttributes[attributeId]?.type ?? 'string') as SupportedValueType,
+                  type: entityAttributes[attributeId]?.type ?? 'string',
                   id: ID.createValueId(),
                   value: entity[entityAttributes[attributeId].index],
-                },
+                } as StringValue | UrlValue,
               })
             );
           }
@@ -193,7 +218,7 @@ export const Component = ({ spaceId }: Props) => {
     };
 
     generateActions();
-  }, [create, spaceId, records, entityNameIndex, entityType, entityAttributes]);
+  }, [create, spaceId, records, entityNameIndex, entityIdIndex, entityType, entityAttributes]);
 
   const isGenerationReady = !!entityType?.id && records.length > 0 && typeof entityNameIndex === 'number';
 
@@ -308,11 +333,42 @@ export const Component = ({ spaceId }: Props) => {
                   />
                 </div>
               </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="text-metadataMedium">Entity ID</div>
+                  <div className="text-footnoteMedium">Optional (advanced)</div>
+                </div>
+                <div className="mt-2 flex items-center gap-1">
+                  <Select
+                    value={entityIdIndex?.toString() ?? ''}
+                    onChange={(value: string) => {
+                      if (value) {
+                        setEntityIdIndex(parseInt(value, 10));
+                      } else {
+                        setEntityIdIndex(undefined);
+                      }
+                    }}
+                    placeholder="Select column..."
+                    options={[
+                      { value: '', label: 'Select column...' },
+                      ...headers.map((header: string, index: number) => {
+                        return {
+                          value: index.toString(),
+                          label: `${header} (e.g., ${examples[index].substring(0, 16)})`,
+                          disabled: !uuidValidateV4(examples[index]),
+                        };
+                      }),
+                    ]}
+                    className="max-w-full overflow-clip"
+                    position="popper"
+                  />
+                </div>
+              </div>
               {supportedAttributes.map((attribute: TripleType) => (
                 <div key={attribute.id}>
                   <div className="flex items-center justify-between">
                     <div className="text-metadataMedium">
-                      {attribute.value.type === 'entity' && attribute.value.name}
+                      {attribute.value.type === 'entity' ? attribute.value.name : null}
                     </div>
                     <div className="text-footnoteMedium">Optional</div>
                   </div>
@@ -339,11 +395,17 @@ export const Component = ({ spaceId }: Props) => {
                         setEntityAttributes(newEntityAttributes);
                       }}
                       options={[
-                        { value: 'string', label: 'Text', render: <Text /> },
-                        { value: 'date', label: 'Date', render: <Date /> },
-                        { value: 'url', label: 'Web URL', render: <Url /> },
-                        { value: 'image', label: 'Image', render: <Image />, disabled: true },
-                        { value: 'relation', label: 'Relation', render: <Relation />, disabled: true },
+                        { value: 'string', label: 'Text', render: <Text />, className: `items-center` },
+                        { value: 'date', label: 'Date', render: <Date />, className: `items-center` },
+                        { value: 'url', label: 'Web URL', render: <Url />, className: `items-center` },
+                        {
+                          value: 'image',
+                          label: 'Image',
+                          render: <Image />,
+                          disabled: true,
+                          className: `items-center`,
+                        },
+                        { value: 'relation', label: 'Relation', render: <Relation />, className: `items-center` },
                       ]}
                       className="!flex-[0]"
                       position="popper"
@@ -402,11 +464,17 @@ export const Component = ({ spaceId }: Props) => {
                           value={entityAttributes?.[attribute.id]?.type ?? 'string'}
                           onChange={() => null}
                           options={[
-                            { value: 'string', label: 'Text', render: <Text /> },
-                            { value: 'date', label: 'Date', render: <Date /> },
-                            { value: 'url', label: 'Web URL', render: <Url /> },
-                            { value: 'image', label: 'Image', render: <Image />, disabled: true },
-                            { value: 'relation', label: 'Relation', render: <Relation />, disabled: true },
+                            { value: 'string', label: 'Text', render: <Text />, className: `items-center` },
+                            { value: 'date', label: 'Date', render: <Date />, className: `items-center` },
+                            { value: 'url', label: 'Web URL', render: <Url />, className: `items-center` },
+                            {
+                              value: 'image',
+                              label: 'Image',
+                              render: <Image />,
+                              disabled: true,
+                              className: `items-center`,
+                            },
+                            { value: 'relation', label: 'Relation', render: <Relation />, className: `items-center` },
                           ]}
                           className="!flex-[0]"
                           disabled

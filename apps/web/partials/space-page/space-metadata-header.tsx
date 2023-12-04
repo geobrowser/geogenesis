@@ -2,10 +2,10 @@
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
 
+import { usePathSegments } from '~/core/hooks/use-path-segments';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
@@ -19,6 +19,8 @@ import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
+import { CsvImport } from '~/design-system/icons/csv-import';
+import { Eye } from '~/design-system/icons/eye';
 import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
@@ -34,8 +36,6 @@ interface SpacePageMetadataHeaderProps {
 export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePageMetadataHeaderProps) {
   const isEditing = useUserIsEditing(spaceId);
   const [open, onOpenChange] = React.useState(false);
-
-  const pathname = usePathname();
 
   const { subgraph, config } = Services.useServices();
 
@@ -63,6 +63,9 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
   const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
 
   const showMore = !isOnePage && !isLastPage;
+
+  const pathSegments = usePathSegments();
+  const basePath = `/${pathSegments.slice(0, 2).join('/')}`;
 
   return (
     <div className="flex items-center justify-between text-text">
@@ -119,14 +122,28 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
           onOpenChange={onOpenChange}
           align="end"
           trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
-          className="max-w-[5.8rem] whitespace-nowrap"
+          className="max-w-[10rem] whitespace-nowrap"
         >
           <Link
-            href={`${pathname}/entities`}
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
+            href={`${basePath}/entities`}
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
           >
+            <div className="flex-shrink-0">
+              <Eye />
+            </div>
             <Text variant="button" className="hover:!text-text">
               View data
+            </Text>
+          </Link>
+          <Link
+            href={`${basePath}/import`}
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
+          >
+            <div className="flex-shrink-0">
+              <CsvImport />
+            </div>
+            <Text variant="button" className="hover:!text-text">
+              Import CSV data
             </Text>
           </Link>
         </Menu>

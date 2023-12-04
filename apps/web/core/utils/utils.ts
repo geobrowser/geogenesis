@@ -1,3 +1,6 @@
+import { version as uuidVersion } from 'uuid';
+import { validate as uuidValidate } from 'uuid';
+
 import { IPFS_GATEWAY_PATH } from '~/core/constants';
 import { Entity as IEntity } from '~/core/types';
 
@@ -244,3 +247,9 @@ export function getGeoPersonIdFromOnchainId(address: `0x${string}`, onchainId: s
 }
 
 export const sleep = (delay: number) => new Promise(resolve => setTimeout(resolve, delay));
+
+export const uuidValidateV4 = (uuid: string) => {
+  if (!uuid) return false;
+
+  return uuidValidate(uuid) && uuidVersion(uuid) === 4;
+};
