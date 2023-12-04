@@ -7,7 +7,7 @@ import { Environment } from '~/core/environment';
 import { fetchOnchainProfile, fetchProfile } from '~/core/io/subgraph';
 import { fetchInterimMembershipRequests } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { OnchainProfile, Profile, Space } from '~/core/types';
+import { OnchainProfile, Profile } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
