@@ -29,15 +29,6 @@ const getFetchSpaceQuery = (id: string) => `query {
       }
     }
     createdAtBlock
-    triples {
-      nodes {
-        id
-        stringValue
-        attribute {
-          id
-        }
-      }
-    }
   }
 }`;
 
@@ -51,7 +42,6 @@ type NetworkResult = {
   space: {
     id: string;
     isRootSpace: boolean;
-    triples: { nodes: { id: string; stringValue: string; attribute: { id: string } }[] };
     spaceAdmins: { nodes: { accountId: string }[] };
     spaceEditors: { nodes: { accountId: string }[] };
     spaceEditorControllers: { nodes: { accountId: string }[] };
@@ -129,15 +119,6 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
 
   const networkSpace = result.space;
 
-  const attributes = Object.fromEntries(
-    networkSpace.triples.nodes.map(triple => [triple.attribute.id, triple.stringValue]) || []
-  );
-
-  if (networkSpace.isRootSpace) {
-    attributes.name = 'Root';
-    attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] = ROOT_SPACE_IMAGE;
-  }
-
   return {
     id: networkSpace.id,
     isRootSpace: networkSpace.isRootSpace,
@@ -145,7 +126,8 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     editorControllers: networkSpace.spaceEditorControllers.nodes.map(account => account.accountId),
     editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
     entityId: networkSpace?.id || '',
-    attributes,
+    // @TODO: Map the name and image of a space from the space configuration
+    attributes: {},
     spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === networkSpace.id)?.entityId || null,
     createdAtBlock: networkSpace.createdAtBlock,
   };
