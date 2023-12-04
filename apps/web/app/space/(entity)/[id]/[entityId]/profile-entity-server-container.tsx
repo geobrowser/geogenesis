@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import { Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
-import { Entity } from '~/core/utils/entity';
 
 import {
   EntityReferencedByLoading,
@@ -49,12 +48,14 @@ export async function ProfileEntityServerContainer({ params }: Props) {
 
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
   // the space for the entity we are rendering, so we need to redirect to the correct space.
+  // Once we have cross-space entity data we won't redirect and will instead only show the data
+  // from the current space for the selected entity.
   if (person?.nameTripleSpace) {
     if (params.id !== person?.nameTripleSpace) {
       console.log(
         `Redirecting from incorrect space ${params.id} to correct space ${person?.nameTripleSpace} for entity ${params.entityId}`
       );
-      return redirect(`/space/${person?.nameTripleSpace}/${params.entityId}`);
+      return redirect(`/space/${person?.nameTripleSpace}/${encodeURIComponent(params.entityId)}`);
     }
   }
 
