@@ -2,11 +2,12 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
 import { Entity as IEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { NetworkEntity, fromNetworkTriples } from './network-local-mapping';
+import { NetworkEntity, SubstreamNetworkEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntityQuery(id: string, blockNumber?: number) {
   const blockNumberQuery = blockNumber ? `, block: {number: ${JSON.stringify(blockNumber)}}` : ``;
@@ -15,26 +16,28 @@ function getFetchEntityQuery(id: string, blockNumber?: number) {
     geoEntity(id: ${JSON.stringify(id)}${blockNumberQuery}) {
       id,
       name
-      entityOf {
-        id
-        stringValue
-        valueId
-        valueType
-        numberValue
-        space {
+      triplesByEntityId {
+        nodes {
           id
-        }
-        entityValue {
-          id
-          name
-        }
-        attribute {
-          id
-          name
-        }
-        entity {
-          id
-          name
+          stringValue
+          valueId
+          valueType
+          numberValue
+          space {
+            id
+          }
+          entityValue {
+            id
+            name
+          }
+          attribute {
+            id
+            name
+          }
+          entity {
+            id
+            name
+          }
         }
       }
     }
@@ -49,14 +52,14 @@ export interface FetchEntityOptions {
 }
 
 interface NetworkResult {
-  geoEntity: NetworkEntity | null;
+  geoEntity: SubstreamNetworkEntity | null;
 }
 
 export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity | null> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: options.endpoint,
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
     query: getFetchEntityQuery(options.id, options.blockNumber),
     signal: options.signal,
   });
@@ -107,7 +110,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
     return null;
   }
 
-  const triples = fromNetworkTriples(entity.entityOf);
+  const triples = fromNetworkTriples(entity.triplesByEntityId.nodes);
   const nameTriple = Entity.nameTriple(triples);
 
   return {

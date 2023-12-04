@@ -52,6 +52,10 @@ export type NetworkEntity = Entity & {
   entityOf: ({ space: Space } & NetworkTriple)[];
 };
 
+export type SubstreamNetworkEntity = Entity & {
+  triplesByEntityId: { nodes: NetworkTriple[] };
+};
+
 export type NetworkProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> & {
   actions: NetworkAction[];
 
@@ -155,26 +159,41 @@ function networkTripleHasEmptyAttribute(networkTriple: NetworkTriple | NetworkAc
 }
 
 export function fromNetworkTriples(networkTriples: NetworkTriple[]): Triple[] {
-  return networkTriples
-    .map(networkTriple => {
-      // There's an edge-case bug where the value can be null even though it should be an object.
-      // Right now we're not doing any triple validation, but once we do we will no longer be indexing
-      // empty triples.
-      if (networkTripleHasEmptyValue(networkTriple) || networkTripleHasEmptyAttribute(networkTriple)) {
-        return null;
-      }
+  return (
+    networkTriples
+      // @TODO: Remove this once we have correct types for substreams triples value types.
+      // Right now they are set as lowercase in the substream db, but uppercase in the subgraph.
+      .map(
+        networkTriple =>
+          ({
+            ...networkTriple,
+            valueType: networkTriple.valueType.toUpperCase() as NetworkValue['valueType'],
+          }) as NetworkTriple
+      )
+      .map(networkTriple => {
+        // There's an edge-case bug where the value can be null even though it should be an object.
+        // Right now we're not doing any triple validation, but once we do we will no longer be indexing
+        // empty triples.
+        if (networkTripleHasEmptyValue(networkTriple) || networkTripleHasEmptyAttribute(networkTriple)) {
+          return null;
+        }
 
-      return {
-        id: networkTriple.id,
-        entityId: networkTriple.entity.id,
-        entityName: networkTriple.entity.name,
-        attributeId: networkTriple.attribute.id,
-        attributeName: networkTriple.attribute.name,
-        value: extractValue(networkTriple),
-        space: networkTriple.space.id,
-      };
-    })
-    .flatMap(triple => (triple ? [triple] : []));
+        return {
+          id: networkTriple.id,
+          entityId: networkTriple.entity.id,
+          entityName: networkTriple.entity.name,
+          attributeId: networkTriple.attribute.id,
+          attributeName: networkTriple.attribute.name,
+          value: extractValue(networkTriple),
+          space: networkTriple.space.id,
+        };
+      })
+      .flatMap(triple => (triple ? [triple] : []))
+  );
+}
+
+export function fromSubstreamsTriples(networkTriples: NetworkTriple[]): Triple[] {
+  return [];
 }
 
 export function fromNetworkActions(networkActions: NetworkAction[], spaceId: string): Action[] {
