@@ -114,7 +114,7 @@ export const Component = ({ spaceId }: Props) => {
     const [, ...entities] = records;
 
     const generateActions = () => {
-      entities.slice(0, 10).forEach(entity => {
+      entities.forEach(entity => {
         const newEntityId = entityIdIndex ? entity[entityIdIndex] : ID.createEntityId();
 
         if (!entityNameIndex || !entityType) return;
