@@ -117,14 +117,6 @@ export async function fetchSpaces(options: FetchSpacesOptions) {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  // console.log(
-  //   'configs',
-  //   spaceConfigTriples.map(t => ({
-  //     space: t.space,
-  //     entityId: t.entityId,
-  //   }))
-  // );
-
   const spaces = result.spaces.nodes.map((space): Space => {
     const configEntityId = spaceConfigTriples.find(triple => triple.space === space.id)?.entityId;
 
