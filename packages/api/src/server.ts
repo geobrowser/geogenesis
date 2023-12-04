@@ -19,8 +19,10 @@ const postgraphileMiddleware = postgraphile(process.env.DATABASE_URL, 'public', 
 });
 
 const app = express();
-app.use(postgraphileMiddleware);
 app.use(cors());
+app.use(express.json());
+app.options('*', cors());
+app.use(postgraphileMiddleware);
 
 const PORT = process.env.PORT || 5001;
 
