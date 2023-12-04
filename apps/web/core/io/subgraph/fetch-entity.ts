@@ -7,7 +7,7 @@ import { Entity as IEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { NetworkEntity, SubstreamNetworkEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamNetworkEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntityQuery(id: string, blockNumber?: number) {
   const blockNumberQuery = blockNumber ? `, block: {number: ${JSON.stringify(blockNumber)}}` : ``;
