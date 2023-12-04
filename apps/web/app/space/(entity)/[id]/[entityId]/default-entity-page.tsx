@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { AppConfig, Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
@@ -77,15 +77,6 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
 }
 
 const getData = async (spaceId: string, entityId: string, config: AppConfig) => {
-  const { isPermissionlessSpace, space } = await API.space(spaceId);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
   const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
 
   // Redirect from space configuration page to space page
@@ -131,7 +122,6 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
     name: entity?.name ?? null,
     description: Entity.description(entity?.triples ?? []),
     spaceId,
-    space,
     serverAvatarUrl,
     serverCoverUrl,
 
