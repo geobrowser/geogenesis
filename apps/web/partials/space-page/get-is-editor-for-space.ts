@@ -7,12 +7,6 @@ export async function getIsEditorForSpace(spaceId: string, connectedAddress?: st
     throw new Error("Space doesn't exist");
   }
 
-  console.log('connected address', {
-    connectedAddress,
-    admins: space.admins,
-    editors: space.editors,
-    isEditor: space.editors.includes(connectedAddress ?? ''),
-  });
-
-  return connectedAddress ? space.editors.includes(connectedAddress) : false;
+  // @HACK to get around incorrect checksum addresses in substream
+  return connectedAddress ? space.editors.map(e => e.toLowerCase()).includes(connectedAddress?.toLowerCase()) : false;
 }
