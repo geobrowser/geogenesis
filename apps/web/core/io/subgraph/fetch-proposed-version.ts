@@ -112,7 +112,7 @@ export async function fetchProposedVersion({
     return null;
   }
 
-  const maybeProfile = await fetchProfile({ address: proposedVersion.createdBy.id, endpoint });
+  const maybeProfile = await fetchProfile({ address: proposedVersion.createdBy.id });
 
   return {
     ...proposedVersion,

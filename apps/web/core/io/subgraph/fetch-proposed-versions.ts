@@ -114,9 +114,7 @@ export async function fetchProposedVersions({
 
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfiles = await Promise.all(
-    result.proposedVersions.map(v => fetchProfile({ address: v.createdBy.id, endpoint }))
-  );
+  const maybeProfiles = await Promise.all(result.proposedVersions.map(v => fetchProfile({ address: v.createdBy.id })));
 
   // Create a map of wallet address -> profile so we can look it up when creating the application
   // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile

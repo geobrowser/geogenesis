@@ -3,51 +3,55 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { fetchEntity } from './fetch-entity';
 import { fetchProfilePermissionless } from './fetch-profile-permissionless';
 import { graphql } from './graphql';
-import { NetworkEntity } from './network-local-mapping';
+import { SubstreamNetworkEntity } from './network-local-mapping';
 
 export interface FetchProfileOptions {
-  endpoint: string;
   address: string;
   signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
-  geoEntities: NetworkEntity[];
+  geoEntities: { nodes: SubstreamNetworkEntity[] };
 }
 
 // We fetch for geoEntities -> name because the id of the wallet entity might not be the
 // same as the actual wallet address.
 function getFetchProfileQuery(address: string) {
   return `query {
-    geoEntities(where: {name_starts_with_nocase: ${JSON.stringify(address)}}, first: 1) {
-      id
-      name
-      entityOf {
+    geoEntities(filter: {name: {startsWithInsensitive: ${JSON.stringify(address)}}}, first: 1) {
+      nodes {
         id
-        stringValue
-        valueId
-        valueType
-        numberValue
-        space {
-          id
-        }
-        entityValue {
-          id
-          name
-        }
-        attribute {
-          id
-          name
-        }
-        entity {
-          id
-          name
+        name
+        triplesByEntityId {
+          nodes {
+            id
+            stringValue
+            valueId
+            valueType
+            numberValue
+            space {
+              id
+            }
+            entityValue {
+              id
+              name
+            }
+            attribute {
+              id
+              name
+            }
+            entity {
+              id
+              name
+            }
+          }
         }
       }
     }
@@ -63,6 +67,7 @@ function getFetchProfileQuery(address: string) {
 // Eventually this will all be indexed in the subgraph and we will be able to query for a Profile directly.
 export async function fetchProfile(options: FetchProfileOptions): Promise<[string, Profile] | null> {
   const queryId = uuid();
+  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const maybePermissionlessProfile = await fetchProfilePermissionless({
     address: options.address,
@@ -73,7 +78,7 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
   }
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
-    endpoint: options.endpoint,
+    endpoint,
     query: getFetchProfileQuery(options.address),
     signal: options?.signal,
   });
@@ -92,9 +97,9 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProfile. queryId: ${queryId} endpoint: ${
-              options.endpoint
-            } address: ${options.address}
+            `Encountered runtime graphql error in fetchProfile. queryId: ${queryId} endpoint: ${endpoint} address: ${
+              options.address
+            }
             
             queryString: ${getFetchProfileQuery(options.address)}
             `,
@@ -102,15 +107,15 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
           );
 
           return {
-            geoEntities: [],
+            geoEntities: { nodes: [] },
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${options.endpoint} address: ${options.address}`
+            `${error._tag}: Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${endpoint} address: ${options.address}`
           );
 
           return {
-            geoEntities: [],
+            geoEntities: { nodes: [] },
           };
       }
     }
@@ -120,7 +125,7 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
 
   const walletsResult = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const walletEntities = walletsResult.geoEntities;
+  const walletEntities = walletsResult.geoEntities.nodes;
 
   // @TEMP: We need to fetch the actual Person entity related to Wallet to access the triple with
   // the avatar attribute. If we were indexing Profiles in the subgraph we wouldn't have to do this.

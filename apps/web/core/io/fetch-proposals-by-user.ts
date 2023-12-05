@@ -129,7 +129,6 @@ export async function fetchProposalsByUser({
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
   const profile = await fetchProfile({
-    endpoint,
     address: userId,
   });
 

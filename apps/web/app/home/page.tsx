@@ -23,7 +23,7 @@ export default async function PersonalHomePage() {
 
   const [spaces, person, profile] = await Promise.all([
     getSpacesWhereAdmin(connectedAddress),
-    connectedAddress ? fetchProfile({ address: connectedAddress, endpoint: config.subgraph }) : null,
+    connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
     connectedAddress ? fetchOnchainProfile({ address: connectedAddress }) : null,
   ]);
 

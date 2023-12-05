@@ -116,7 +116,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
-  const maybeProfile = await fetchProfile({ address: proposal.createdBy.id, endpoint: options.endpoint });
+  const maybeProfile = await fetchProfile({ address: proposal.createdBy.id });
 
   return {
     ...proposal,

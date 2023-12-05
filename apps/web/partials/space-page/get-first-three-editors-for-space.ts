@@ -1,4 +1,4 @@
-import { Environment } from '~/core/environment';
+import '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { OmitStrict, Profile } from '~/core/types';
 
@@ -8,16 +8,7 @@ type EditorsForSpace = {
 };
 
 export async function getFirstThreeEditorsForSpace(spaceId: string): Promise<EditorsForSpace> {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace, space } = await API.space(spaceId);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
+  const { space } = await API.space(spaceId);
 
   if (!space) {
     throw new Error("Space doesn't exist");
@@ -26,7 +17,7 @@ export async function getFirstThreeEditorsForSpace(spaceId: string): Promise<Edi
   // For now we use editors for both editors and members until we have the new membership
   // model in place.
   const maybeEditorsProfiles = await Promise.all(
-    space.editors.slice(0, 3).map(editor => Subgraph.fetchProfile({ endpoint: config.subgraph, address: editor }))
+    space.editors.slice(0, 3).map(editor => Subgraph.fetchProfile({ address: editor }))
   );
 
   const firstThreeEditors = maybeEditorsProfiles.map((profile, i) => {

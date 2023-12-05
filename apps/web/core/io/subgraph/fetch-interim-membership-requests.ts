@@ -3,7 +3,6 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { Environment } from '~/core/environment';
 import { Profile, Space } from '~/core/types';
 
 import { Subgraph } from '..';
@@ -52,7 +51,6 @@ export async function fetchInterimMembershipRequests({
   signal,
 }: FetchProposalsOptions): Promise<MembershipRequestWithProfile[]> {
   const queryId = uuid();
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
@@ -102,7 +100,6 @@ export async function fetchInterimMembershipRequests({
     Promise.all(
       result.membershipRequests.map(request =>
         Subgraph.fetchProfile({
-          endpoint: config.subgraph,
           address: request.requestor,
         })
       )
