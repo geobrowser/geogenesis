@@ -412,18 +412,15 @@ const getEntitiesFromActions = async (actions: ActionType[], subgraph: Subgraph.
   return entities;
 };
 
-export async function fromVersion(
-  versionId: string,
-  previousVersionId: string,
-  subgraph: Subgraph.ISubgraph,
-  config: Environment.AppConfig
-) {
+export async function fromVersion(versionId: string, previousVersionId: string, subgraph: Subgraph.ISubgraph) {
   const changes: Record<EntityId, Changeset> = {};
 
   const [selectedVersion, previousVersion] = await Promise.all([
-    subgraph.fetchProposedVersion({ id: versionId, endpoint: config.subgraph }),
-    subgraph.fetchProposedVersion({ id: previousVersionId, endpoint: config.subgraph }),
+    subgraph.fetchProposedVersion({ id: versionId }),
+    subgraph.fetchProposedVersion({ id: previousVersionId }),
   ]);
+
+  console.log('versions', { selectedVersion, previousVersion });
 
   const versions = {
     selected: selectedVersion,

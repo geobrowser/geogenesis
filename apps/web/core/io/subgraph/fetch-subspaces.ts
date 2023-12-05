@@ -4,7 +4,6 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { graphql } from './graphql';
-import { NetworkEntity } from './network-local-mapping';
 
 const getFetchSubspacesQuery = (entityId: string) => `query {
   geoEntities(

@@ -24,7 +24,7 @@ export const options: Record<AppEnv, AppConfig> = {
     permissionlessSubgraph: '',
     membershipSubgraph: '',
     profileSubgraph: '',
-    api: 'https://steep-hook-production.up.railway.app/graphql',
+    api: 'http://localhost:5001/graphql',
   },
   testnet: {
     chainId: '80001',
@@ -34,7 +34,7 @@ export const options: Record<AppEnv, AppConfig> = {
     permissionlessSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-permissionless-mumbai',
     membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-mumbai',
     profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry-mumbai',
-    api: 'https://steep-hook-production.up.railway.app/graphql',
+    api: 'http://localhost:5001/graphql',
   },
   production: {
     chainId: '137',
@@ -44,7 +44,7 @@ export const options: Record<AppEnv, AppConfig> = {
     permissionlessSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-permissionless',
     membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-workshop',
     profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry',
-    api: 'https://steep-hook-production.up.railway.app/graphql',
+    api: 'http://localhost:5001/graphql',
   },
 };
 

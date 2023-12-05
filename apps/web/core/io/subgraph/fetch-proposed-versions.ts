@@ -2,50 +2,48 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
+import { ProposedVersion } from '~/core/types';
+
 import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { NetworkProposedVersion, fromNetworkActions } from './network-local-mapping';
+import { NetworkProposedVersion, SubstreamProposedVersion, fromNetworkActions } from './network-local-mapping';
 
 const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
-  proposedVersions(where: {entity: ${JSON.stringify(
+  proposedVersions(filter: {entityId: {equalTo: ${JSON.stringify(
     entityId
-  )}}, orderBy: createdAt, orderDirection: desc, first: 10, skip: ${skip}) {
-    id
-    name
-    createdAt
-    createdAtBlock
-    createdBy {
-      id
-    }
-    actions {
-      actionType
-      id
-      attribute {
-        id
-        name
-      }
-      entity {
-        id
-        name
-      }
-      entityValue {
-        id
-        name
-      }
-      numberValue
-      stringValue
-      valueType
-      valueId
-    }
-    entity {
+  )}}}, orderBy: CREATED_AT_DESC, first: 10, offset: ${skip}) {
+    nodes {
       id
       name
+      createdAt
+      createdAtBlock
+      createdById
+      spaceId
+      actions {
+        nodes {
+          actionType
+          id
+          attribute {
+            id
+            name
+          }
+          entity {
+            id
+            name
+          }
+          entityValue
+          numberValue
+          stringValue
+          valueType
+          valueId
+        }
+      }
     }
   }
 }`;
 
 export interface FetchProposedVersionsOptions {
-  endpoint: string;
   entityId: string;
   spaceId: string;
   page?: number;
@@ -53,20 +51,20 @@ export interface FetchProposedVersionsOptions {
 }
 
 interface NetworkResult {
-  proposedVersions: NetworkProposedVersion[];
+  proposedVersions: { nodes: SubstreamProposedVersion[] };
 }
 
 export async function fetchProposedVersions({
-  endpoint,
   entityId,
   spaceId,
   signal,
   page = 0,
-}: FetchProposedVersionsOptions) {
+}: FetchProposedVersionsOptions): Promise<ProposedVersion[]> {
   const queryId = uuid();
+  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: endpoint,
+    endpoint,
     query: getProposedVersionsQuery(entityId, page * 10),
     signal,
   });
@@ -93,7 +91,7 @@ export async function fetchProposedVersions({
           );
 
           return {
-            proposedVersions: [],
+            proposedVersions: { nodes: [] },
           };
 
         default:
@@ -102,7 +100,7 @@ export async function fetchProposedVersions({
           );
 
           return {
-            proposedVersions: [],
+            proposedVersions: { nodes: [] },
           };
       }
     }
@@ -111,22 +109,25 @@ export async function fetchProposedVersions({
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const proposedVersions = result.proposedVersions.nodes;
 
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfiles = await Promise.all(result.proposedVersions.map(v => fetchProfile({ address: v.createdBy.id })));
+  const maybeProfiles = await Promise.all(proposedVersions.map(v => fetchProfile({ address: v.createdById })));
 
   // Create a map of wallet address -> profile so we can look it up when creating the application
-  // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile
+  // ProposedVersions data structure. ProposedVersions have a `createdById` field that should map to the Profile
   // of the user who created the ProposedVersion.
   const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
 
-  return result.proposedVersions.map(v => {
+  return proposedVersions.map(v => {
     return {
       ...v,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profiles[v.createdBy.id] ?? v.createdBy,
-      actions: fromNetworkActions(v.actions, spaceId),
+      createdBy: profiles[v.createdById] ?? {
+        id: v.createdById,
+      },
+      actions: fromNetworkActions(v.actions.nodes, spaceId),
     };
   });
 }

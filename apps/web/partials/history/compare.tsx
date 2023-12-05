@@ -80,12 +80,14 @@ const Versions = () => {
   }
 
   if (data === undefined) {
+    console.log('data is undefined');
     return <div className="text-metadataMedium">No versions found.</div>;
   }
 
   const { changes, versions } = data;
 
   if (!versions.selected) {
+    console.log('No selected version');
     return <div className="text-metadataMedium">No versions found.</div>;
   }
 
@@ -767,10 +769,10 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
 };
 
 const useChangesFromVersions = (selectedVersion: string, previousVersion: string) => {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${selectedVersion}-changes-from-${previousVersion}`],
-    queryFn: async () => Change.fromVersion(selectedVersion, previousVersion, subgraph, config),
+    queryFn: async () => Change.fromVersion(selectedVersion, previousVersion, subgraph),
   });
 
   // Typescript thinks is an array

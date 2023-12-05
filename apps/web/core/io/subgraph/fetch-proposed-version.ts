@@ -2,11 +2,12 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
 import { ProposedVersion } from '~/core/types';
 
 import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { NetworkProposedVersion } from './network-local-mapping';
+import { SubstreamProposedVersion, fromNetworkActions } from './network-local-mapping';
 
 export const getProposedVersionQuery = (id: string) => `query {
   proposedVersion(id: ${JSON.stringify(id)}) {
@@ -14,55 +15,48 @@ export const getProposedVersionQuery = (id: string) => `query {
     name
     createdAt
     createdAtBlock
-    createdBy {
-      id
-    }
+    createdById
+    spaceId
     actions {
-      actionType
-      id
-      attribute {
+      nodes {
+        actionType
         id
-        name
+        attribute {
+          id
+          name
+        }
+        entity {
+          id
+          name
+        }
+        entityValue
+        numberValue
+        stringValue
+        valueType
+        valueId
       }
-      entity {
-        id
-        name
-      }
-      entityValue {
-        id
-        name
-      }
-      numberValue
-      stringValue
-      valueType
-      valueId
-    }
-    entity {
-      id
-      name
     }
   }
 }`;
 
 export interface FetchProposedVersionOptions {
-  endpoint: string;
   id: string;
   signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
-  proposedVersion: NetworkProposedVersion | null;
+  proposedVersion: SubstreamProposedVersion | null;
 }
 
 export async function fetchProposedVersion({
-  endpoint,
   id,
   signal,
 }: FetchProposedVersionOptions): Promise<ProposedVersion | null> {
   const queryId = uuid();
+  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: endpoint,
+    endpoint,
     query: getProposedVersionQuery(id),
     signal,
   });
@@ -112,19 +106,20 @@ export async function fetchProposedVersion({
     return null;
   }
 
-  const maybeProfile = await fetchProfile({ address: proposedVersion.createdBy.id });
+  const maybeProfile = await fetchProfile({ address: proposedVersion.createdById });
 
   return {
     ...proposedVersion,
+    actions: fromNetworkActions(proposedVersion.actions.nodes, proposedVersion.spaceId),
     createdBy:
       maybeProfile !== null
         ? maybeProfile[1]
         : {
-            id: proposedVersion.createdBy.id,
+            id: proposedVersion.createdById,
             name: null,
             avatarUrl: null,
             coverUrl: null,
-            address: proposedVersion.createdBy.id as `0x${string}`,
+            address: proposedVersion.createdById as `0x${string}`,
             profileLink: null,
           },
   };

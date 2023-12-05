@@ -29,7 +29,7 @@ interface EntityPageMetadataHeaderProps {
 }
 
 export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: EntityPageMetadataHeaderProps) {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const {
     data: versions,
     isFetching,
@@ -37,8 +37,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`entity-versions-for-entityId-${id}`],
-    queryFn: async ({ pageParam = 0 }) =>
-      subgraph.fetchProposedVersions({ entityId: id, spaceId, page: pageParam, endpoint: config.subgraph }),
+    queryFn: async ({ pageParam = 0 }) => subgraph.fetchProposedVersions({ entityId: id, spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 

@@ -176,6 +176,7 @@ export type ProposedVersion = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
+  spaceId: string;
   actions: Action[];
   entity: {
     id: string;
