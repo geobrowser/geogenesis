@@ -2,7 +2,6 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import * as React from 'react';
 
-import { Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 import { Entity } from '~/core/utils/entity';
@@ -25,23 +24,13 @@ export default async function TriplesPage({ params, searchParams }: Props) {
 
 const getData = async ({ params, searchParams }: Props) => {
   const spaceId = params.id;
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { space, isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
+  const { space } = await API.space(params.id);
 
   const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);
 
   const configEntity = space?.spaceConfigEntityId
     ? await Subgraph.fetchEntity({
         id: space?.spaceConfigEntityId,
-        endpoint: config.subgraph,
       })
     : null;
 

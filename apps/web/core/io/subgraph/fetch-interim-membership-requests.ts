@@ -109,7 +109,7 @@ export async function fetchInterimMembershipRequests({
     ),
     Promise.all(
       result.membershipRequests.map(async request => {
-        const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: request.space });
+        const space = await Subgraph.fetchSpace({ id: request.space });
 
         if (!space) {
           return null;

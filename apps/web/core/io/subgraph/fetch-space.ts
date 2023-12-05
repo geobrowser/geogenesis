@@ -3,6 +3,7 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
 import { Space } from '~/core/types';
 
 import { fetchTriples } from './fetch-triples';
@@ -32,9 +33,7 @@ const getFetchSpaceQuery = (id: string) => `query {
 }`;
 
 export interface FetchSpaceOptions {
-  endpoint: string;
   id: string;
-  signal?: AbortController['signal'];
 }
 
 type NetworkResult = {
@@ -50,9 +49,9 @@ type NetworkResult = {
 
 export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | null> {
   const queryId = uuid();
+  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const spaceConfigTriples = await fetchTriples({
-    endpoint: options.endpoint,
     query: '',
     first: 1,
     space: options.id,
@@ -64,9 +63,8 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   });
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: options.endpoint,
+    endpoint,
     query: getFetchSpaceQuery(options.id),
-    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -83,9 +81,9 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchSpace. queryId: ${queryId} spaceId: ${options.id} endpoint: ${
-              options.endpoint
-            }
+            `Encountered runtime graphql error in fetchSpace. queryId: ${queryId} spaceId: ${
+              options.id
+            } endpoint: ${endpoint}
             
             queryString: ${getFetchSpaceQuery(options.id)}
             `,
@@ -98,7 +96,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch space, queryId: ${queryId} spaceId: ${options.id} endpoint: ${options.endpoint}`
+            `${error._tag}: Unable to fetch space, queryId: ${queryId} spaceId: ${options.id} endpoint: ${endpoint}`
           );
 
           return {

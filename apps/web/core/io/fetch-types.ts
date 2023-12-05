@@ -6,13 +6,11 @@ import { ISubgraph } from './subgraph';
 export const fetchSpaceTypeTriples = async (
   fetchTriples: ISubgraph['fetchTriples'],
   spaceId: string,
-  endpoint: string,
   pageSize = 1000
 ) => {
   /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
 
   const triples = await fetchTriples({
-    endpoint,
     query: '',
     space: spaceId,
     skip: 0,
@@ -32,7 +30,6 @@ export const fetchSpaceTypeTriples = async (
 export const fetchForeignTypeTriples = async (
   fetchTriples: ISubgraph['fetchTriples'],
   space: Space,
-  endpoint: string,
   pageSize = 1000
 ) => {
   if (!space.spaceConfigEntityId) {
@@ -40,7 +37,6 @@ export const fetchForeignTypeTriples = async (
   }
 
   const foreignTypesFromSpaceConfig = await fetchTriples({
-    endpoint,
     query: '',
     space: space.id,
     skip: 0,
@@ -56,7 +52,6 @@ export const fetchForeignTypeTriples = async (
   const foreignTypes = await Promise.all(
     foreignTypesIds.map(entityId =>
       fetchTriples({
-        endpoint,
         query: '',
         skip: 0,
         first: pageSize,

@@ -90,7 +90,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
     const setTypeTriple = async () => {
       if (typeId) {
-        const typeEntity = await subgraph.fetchEntity({ endpoint: config.subgraph, id: typeId ?? '' });
+        const typeEntity = await subgraph.fetchEntity({ id: typeId ?? '' });
 
         if (typeEntity) {
           send({
@@ -125,8 +125,8 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
     const setFilterTriple = async () => {
       const [idEntity, valueEntity] = await Promise.all([
-        subgraph.fetchEntity({ endpoint: config.subgraph, id: filterId ?? '' }),
-        subgraph.fetchEntity({ endpoint: config.subgraph, id: filterValue ?? '' }),
+        subgraph.fetchEntity({ id: filterId ?? '' }),
+        subgraph.fetchEntity({ id: filterValue ?? '' }),
       ]);
 
       if (filterId && filterValue && idEntity && valueEntity) {

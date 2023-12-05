@@ -43,7 +43,6 @@ const getFetchTriplesQuery = ({ where, skip, first }: GetFetchTriplesQueryOption
 }`;
 
 export interface FetchTriplesOptions {
-  endpoint: string;
   query: string;
   space?: string;
   skip: number;

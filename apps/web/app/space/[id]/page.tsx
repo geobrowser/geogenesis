@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { AppConfig, Environment } from '~/core/environment';
+import { Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { fetchSubspaces } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
@@ -26,16 +26,8 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const { isPermissionlessSpace, space } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
+  const { space } = await API.space(params.id);
 
   const entityId = space?.spaceConfigEntityId;
 
@@ -44,7 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return redirect(`/space/${spaceId}/entities`);
   }
 
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+  const entity = await Subgraph.fetchEntity({ id: entityId });
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
   return {
@@ -77,18 +69,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function SpacePage({ params }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const props = await getData(params.id, config);
+  const props = await getData(params.id);
 
   return (
     <>
@@ -130,15 +111,8 @@ const SubspacesContainer = async ({ entityId }: SubspacesContainerProps) => {
   return <Subspaces subspaces={subspaces} />;
 };
 
-const getData = async (spaceId: string, config: AppConfig) => {
-  const { isPermissionlessSpace, space } = await API.space(spaceId);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
+const getData = async (spaceId: string) => {
+  const { space } = await API.space(spaceId);
 
   const entityId = space?.spaceConfigEntityId;
 
@@ -147,7 +121,7 @@ const getData = async (spaceId: string, config: AppConfig) => {
     redirect(`/space/${spaceId}/entities`);
   }
 
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+  const entity = await Subgraph.fetchEntity({ id: entityId });
 
   // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
   // fetching the space for the entity we are rendering, so we need to redirect to the correct space.

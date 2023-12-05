@@ -62,7 +62,6 @@ const getData = async ({
   const configEntity = space?.spaceConfigEntityId
     ? await Subgraph.fetchEntity({
         id: space?.spaceConfigEntityId,
-        endpoint: config.subgraph,
       })
     : null;
 
@@ -72,10 +71,9 @@ const getData = async ({
     : space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
   const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
-    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
-    fetchForeignTypeTriples(Subgraph.fetchTriples, space, config.subgraph),
+    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId),
+    fetchForeignTypeTriples(Subgraph.fetchTriples, space),
     Subgraph.fetchTriples({
-      endpoint: config.subgraph,
       query: '',
       skip: 0,
       first: DEFAULT_PAGE_SIZE,

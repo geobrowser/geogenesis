@@ -45,7 +45,6 @@ function getFetchEntityQuery(id: string, blockNumber?: number) {
 }
 
 export interface FetchEntityOptions {
-  endpoint: string;
   id: string;
   blockNumber?: number;
   signal?: AbortController['signal'];
@@ -57,9 +56,10 @@ interface NetworkResult {
 
 export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity | null> {
   const queryId = uuid();
+  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint,
     query: getFetchEntityQuery(options.id, options.blockNumber),
     signal: options.signal,
   });
@@ -78,7 +78,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${options.endpoint} id: ${
+            `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${endpoint} id: ${
               options.id
             } blockNumber: ${options.blockNumber}
 
@@ -92,7 +92,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${options.endpoint} id: ${options.id} blockNumber: ${options.blockNumber}`
+            `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${endpoint} id: ${options.id} blockNumber: ${options.blockNumber}`
           );
           return {
             geoEntity: null,

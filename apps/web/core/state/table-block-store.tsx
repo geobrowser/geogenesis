@@ -66,7 +66,7 @@ export function useTableBlock() {
   const { data: blockEntity, isLoading } = useQuery({
     // Refetch the entity if there have been local changes
     queryKey: ['table-block-entity', entityId, actionsForEntityIdWithoutName, config.subgraph],
-    queryFn: ({ signal }) => merged.fetchEntity({ id: entityId, endpoint: config.subgraph, signal }),
+    queryFn: ({ signal }) => merged.fetchEntity({ id: entityId, signal }),
   });
 
   // We track the name triple separately from the normal `blockEntities.triples`
@@ -108,7 +108,7 @@ export function useTableBlock() {
     queryFn: async () => {
       const filterState = TableBlockSdk.createFiltersFromGraphQLString(
         filterString,
-        async id => await merged.fetchEntity({ id, endpoint: config.subgraph })
+        async id => await merged.fetchEntity({ id })
       );
 
       return filterState;
@@ -196,7 +196,7 @@ export function useTableBlock() {
 
       // Make sure we merge any unpublished entities
       const maybeRelationAttributeTypes = await Promise.all(
-        columns.map(t => t.id).map(attributeId => merged.fetchEntity({ id: attributeId, endpoint: config.subgraph }))
+        columns.map(t => t.id).map(attributeId => merged.fetchEntity({ id: attributeId }))
       );
 
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));

@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 
 import { Suspense } from 'react';
 
-import { AppConfig, Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -36,9 +35,7 @@ interface Props {
 }
 
 export default async function DefaultEntityPage({ params, searchParams }: Props) {
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const props = await getData(params.id, params.entityId, config);
+  const props = await getData(params.id, params.entityId);
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
@@ -76,8 +73,8 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
   );
 }
 
-const getData = async (spaceId: string, entityId: string, config: AppConfig) => {
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+const getData = async (spaceId: string, entityId: string) => {
+  const entity = await Subgraph.fetchEntity({ id: entityId });
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
@@ -106,7 +103,6 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
     await Promise.all(
       blockIds.map(blockId => {
         return Subgraph.fetchTriples({
-          endpoint: config.subgraph,
           query: '',
           skip: 0,
           first: DEFAULT_PAGE_SIZE,

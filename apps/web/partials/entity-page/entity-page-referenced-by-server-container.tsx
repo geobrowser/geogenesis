@@ -36,7 +36,7 @@ export async function EntityReferencedByServerContainer({ entityId, name, spaceI
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
-    Subgraph.fetchSpaces({ endpoint: config.subgraph }),
+    Subgraph.fetchSpaces(),
   ]);
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {

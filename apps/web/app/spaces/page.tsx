@@ -3,7 +3,6 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
-import { Environment } from '~/core/environment';
 import { fetchEntity } from '~/core/io/subgraph';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
 import { Space } from '~/core/types';
@@ -66,9 +65,7 @@ const HIDDEN_SPACES: Array<string> = [
 export const revalidate = 60; // 1 minute
 
 export default async function Spaces() {
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const spaces = await fetchSpaces({ endpoint: config.subgraph });
+  const spaces = await fetchSpaces();
   const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
 
   const spacesWithSpaceConfigs = filteredAndSortedSpaces.filter(
@@ -77,7 +74,7 @@ export default async function Spaces() {
 
   const spaceConfigs = await Promise.all(
     spacesWithSpaceConfigs.map(async space => {
-      const entity = await fetchEntity({ endpoint: config.subgraph, id: space.spaceConfigEntityId });
+      const entity = await fetchEntity({ id: space.spaceConfigEntityId });
 
       if (!entity) {
         return {

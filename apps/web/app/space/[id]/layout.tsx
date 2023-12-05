@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
-import { AppConfig, Environment } from '~/core/environment';
 import { API, Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -32,19 +31,8 @@ interface Props {
 }
 
 export default async function Layout({ children, params }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
   const { isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const props = await getData(params.id, config);
-
+  const props = await getData(params.id);
   const coverUrl = Entity.cover(props.triples);
 
   return (
@@ -104,15 +92,8 @@ function MembersSkeleton() {
   );
 }
 
-const getData = async (spaceId: string, config: AppConfig) => {
-  const { isPermissionlessSpace, space } = await API.space(spaceId);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
+const getData = async (spaceId: string) => {
+  const { space } = await API.space(spaceId);
 
   const entityId = space?.spaceConfigEntityId;
 
@@ -121,7 +102,7 @@ const getData = async (spaceId: string, config: AppConfig) => {
     redirect(`/space/${spaceId}/entities`);
   }
 
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+  const entity = await Subgraph.fetchEntity({ id: entityId });
 
   // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
   // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
@@ -141,7 +122,6 @@ const getData = async (spaceId: string, config: AppConfig) => {
     await Promise.all(
       blockIds.map(blockId => {
         return Subgraph.fetchTriples({
-          endpoint: config.subgraph,
           query: '',
           skip: 0,
           first: DEFAULT_PAGE_SIZE,

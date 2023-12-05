@@ -49,9 +49,7 @@ async function ActivityList({ params, searchParams }: Props) {
         fetchProfile: Subgraph.fetchProfile,
       },
     }),
-    Subgraph.fetchSpaces({
-      endpoint: config.subgraph,
-    }),
+    Subgraph.fetchSpaces(),
   ]);
 
   if (proposals.length === 0) return <p className="pt-1 text-body text-grey-04">There is no information here yet.</p>;

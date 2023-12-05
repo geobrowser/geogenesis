@@ -49,13 +49,14 @@ type MigrateHubType = {
 function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }) {
   const { setIsMergeReviewOpen, entityIdOne, entityIdTwo } = useMergeEntity();
 
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
+
   function useEntityById(entityId: string) {
     const { data: entityTwoData } = useQuery({
       queryKey: ['entity-merge-review', entityIdTwo],
       queryFn: async () => {
         if (!entityId) return null;
-        return await subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+        return await subgraph.fetchEntity({ id: entityId });
       },
     });
     return entityTwoData?.triples ?? [];

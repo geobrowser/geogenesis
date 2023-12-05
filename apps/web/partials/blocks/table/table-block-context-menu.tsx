@@ -18,7 +18,6 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useMigrateHub } from '~/core/migrate/migrate';
-import { Services } from '~/core/services';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -67,7 +66,6 @@ function useOptimisticAttributes({
 }) {
   const [optimisticAttributes, setOptimisticAttributes] = useAtom(optimisticAttributesAtom);
   const merged = useMergedData();
-  const { config } = Services.useServices();
   const { create, remove } = useActionsStore();
   const migrateHub = useMigrateHub();
 
@@ -188,7 +186,6 @@ function useOptimisticAttributes({
     queryFn: async () => {
       // Fetch the triples representing the Attributes for the type
       const attributeTriples = await merged.fetchTriples({
-        endpoint: config.subgraph,
         query: '',
         first: 100,
         skip: 0,
@@ -206,7 +203,7 @@ function useOptimisticAttributes({
 
       // Fetch the the entities for each of the Attribute in the type
       const maybeAttributeEntities = await Promise.all(
-        attributeTriples.map(t => merged.fetchEntity({ id: t.value.id, endpoint: config.subgraph }))
+        attributeTriples.map(t => merged.fetchEntity({ id: t.value.id }))
       );
 
       return maybeAttributeEntities.filter(Entity.isNonNull);

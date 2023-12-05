@@ -45,7 +45,6 @@ export function NavbarSpaceMetadata() {
 
       const spaceConfig = await subgraph.fetchEntity({
         id: space.spaceConfigEntityId,
-        endpoint: config.subgraph,
         signal,
       });
 

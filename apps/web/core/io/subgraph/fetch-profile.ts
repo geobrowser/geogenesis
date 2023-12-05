@@ -124,9 +124,7 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
 
   // @TEMP: We need to fetch the actual Person entity related to Wallet to access the triple with
   // the avatar attribute. If we were indexing Profiles in the subgraph we wouldn't have to do this.
-  const maybeWallets = await Promise.all(
-    walletEntities.map(e => fetchEntity({ id: e.id, endpoint: options.endpoint }))
-  );
+  const maybeWallets = await Promise.all(walletEntities.map(e => fetchEntity({ id: e.id })));
   const wallets = maybeWallets.flatMap(entity => (entity ? [entity] : []));
 
   // We take the first wallet for a given address since there should only be one while in closed alpha.
@@ -145,7 +143,7 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<[strin
     return null;
   }
 
-  const maybePerson = await fetchEntity({ id: personEntityId, endpoint: options.endpoint });
+  const maybePerson = await fetchEntity({ id: personEntityId });
 
   const coverTriple = maybePerson?.triples.find(t => t.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE);
   const coverUrl = coverTriple?.value.type === 'image' ? coverTriple.value.value : null;

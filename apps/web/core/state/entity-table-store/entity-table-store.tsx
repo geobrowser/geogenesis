@@ -145,7 +145,7 @@ export function useEntityTable() {
 
       // Make sure we merge any unpublished entities
       const maybeRelationAttributeTypes = await Promise.all(
-        columns.map(t => t.id).map(attributeId => merged.fetchEntity({ id: attributeId, endpoint: config.subgraph }))
+        columns.map(t => t.id).map(attributeId => merged.fetchEntity({ id: attributeId }))
       );
 
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));

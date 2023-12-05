@@ -82,7 +82,6 @@ const ReviewChanges = () => {
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', allSpacesWithActions],
     queryFn: async () => {
-      const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
       const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => API.space(s)));
       const spaces = maybeSpaces.filter(
         (s): s is GatewaySpaceWithEntityConfig => s.space !== null && s.space.spaceConfigEntityId !== null
@@ -98,7 +97,6 @@ const ReviewChanges = () => {
         await Promise.all(
           spaces.map(space =>
             subgraph.fetchEntity({
-              endpoint: space.isPermissionlessSpace ? config.permissionlessSubgraph : config.subgraph,
               id: space.space.spaceConfigEntityId,
             })
           )
@@ -970,10 +968,10 @@ const labelClassNames = `text-footnote text-grey-04`;
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
 const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: ['changes', spaceId, actions],
-    queryFn: async () => Change.fromActions(Action.prepareActionsForPublishing(actions), subgraph, config),
+    queryFn: async () => Change.fromActions(Action.prepareActionsForPublishing(actions), subgraph),
   });
 
   return [data, isLoading] as const;
@@ -1029,12 +1027,6 @@ function parseMarkdown(markdownString: string) {
   markdownContent = markdownContent.trim();
 
   return { markdownType, markdownContent };
-}
-
-function getSpaceImage(spaces: Space[], spaceId: string): string {
-  return getImagePath(
-    spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '/placeholder.png'
-  );
 }
 
 type TableFiltersProps = {
@@ -1097,10 +1089,7 @@ const useFilters = (rawFilter: string) => {
 };
 
 const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph, config: Environment.AppConfig) => {
-  const filters = await createFiltersFromGraphQLString(
-    rawFilter,
-    async id => await subgraph.fetchEntity({ id, endpoint: config.subgraph })
-  );
+  const filters = await createFiltersFromGraphQLString(rawFilter, async id => await subgraph.fetchEntity({ id }));
   const serverColumns = await fetchColumns({
     params: { skip: 0, first: 0, filter: '', endpoint: config.subgraph },
     api: {

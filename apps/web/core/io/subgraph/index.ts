@@ -9,7 +9,6 @@ export { fetchEntity } from './fetch-entity';
 export type { FetchEntityOptions } from './fetch-entity';
 
 export { fetchSpaces } from './fetch-spaces';
-export type { FetchSpacesOptions } from './fetch-spaces';
 export { fetchSpace } from './fetch-space';
 export type { FetchSpaceOptions } from './fetch-space';
 

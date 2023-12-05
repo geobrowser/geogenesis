@@ -34,11 +34,6 @@ const getFetchSpacesQuery = () => `query {
   }
 }`;
 
-export interface FetchSpacesOptions {
-  endpoint: string;
-  signal?: AbortController['signal'];
-}
-
 interface NetworkResult {
   spaces: {
     nodes: {
@@ -52,12 +47,11 @@ interface NetworkResult {
   };
 }
 
-export async function fetchSpaces(options: FetchSpacesOptions) {
+export async function fetchSpaces() {
   const queryId = uuid();
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const spaceConfigTriples = await fetchTriples({
-    endpoint,
     query: '',
     first: 200,
     skip: 0,
@@ -71,7 +65,6 @@ export async function fetchSpaces(options: FetchSpacesOptions) {
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
     query: getFetchSpacesQuery(),
-    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -88,7 +81,7 @@ export async function fetchSpaces(options: FetchSpacesOptions) {
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${options.endpoint}
+            `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${endpoint}
             
             queryString: ${getFetchSpacesQuery()}
             `,
@@ -102,7 +95,7 @@ export async function fetchSpaces(options: FetchSpacesOptions) {
           };
 
         default:
-          console.error(`${error._tag}: Unable to fetch spaces, queryId: ${queryId} endpoint: ${options.endpoint}`);
+          console.error(`${error._tag}: Unable to fetch spaces, queryId: ${queryId} endpoint: ${endpoint}`);
 
           return {
             spaces: {

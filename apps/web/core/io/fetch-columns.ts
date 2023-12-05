@@ -23,7 +23,6 @@ export async function fetchColumns({ params, api, signal }: FetchColumnsOptions)
   }
 
   const columnsTriples = await api.fetchTriples({
-    endpoint: params.endpoint,
     query: '',
     signal,
     first: DEFAULT_PAGE_SIZE,
@@ -38,7 +37,7 @@ export async function fetchColumns({ params, api, signal }: FetchColumnsOptions)
 
   // This will return null if the entity we're fetching does not exist remotely
   const maybeRelatedColumnTriples = await Promise.all(
-    columnsTriples.map(triple => api.fetchEntity({ id: triple.value.id, endpoint: params.endpoint }))
+    columnsTriples.map(triple => api.fetchEntity({ id: triple.value.id }))
   );
 
   const relatedColumnTriples = maybeRelatedColumnTriples.flatMap(entity => (entity ? [entity] : []));

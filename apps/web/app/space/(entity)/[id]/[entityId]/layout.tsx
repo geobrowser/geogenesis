@@ -38,18 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
   const entityId = decodeURIComponent(params.entityId);
 
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+  const entity = await Subgraph.fetchEntity({ id: entityId });
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
   return {
@@ -168,13 +157,13 @@ async function getProfilePage(
   }
 > {
   const [person, referencesPerson, spaces] = await Promise.all([
-    Subgraph.fetchEntity({ id: entityId, endpoint }),
+    Subgraph.fetchEntity({ id: entityId }),
     Subgraph.fetchEntities({
       endpoint,
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
-    Subgraph.fetchSpaces({ endpoint }),
+    Subgraph.fetchSpaces(),
   ]);
 
   // @TODO: Real error handling
@@ -218,7 +207,6 @@ async function getProfilePage(
     await Promise.all(
       blockIds.map(blockId => {
         return Subgraph.fetchTriples({
-          endpoint,
           query: '',
           skip: 0,
           first: DEFAULT_PAGE_SIZE,

@@ -28,7 +28,7 @@ const pageNumberAtom = atom(0);
 const filterStateAtom = atom<FilterState>([]);
 
 export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number } = {}) {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { initialParams, space } = useTripleStoreInstance();
   const { actions } = useActionsStore();
   const hydrated = React.useRef(false);
@@ -50,7 +50,6 @@ export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number
     queryFn: async ({ signal }): Promise<{ triples: TripleType[]; hasNextPage: boolean }> => {
       try {
         const triples = await subgraph.fetchTriples({
-          endpoint: config.subgraph,
           query: query,
           space: space,
           skip: pageNumber * pageSize,
