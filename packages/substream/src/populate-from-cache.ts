@@ -1,31 +1,36 @@
 import * as db from 'zapatos/db';
-import type * as s from 'zapatos/schema';
+import type * as Schema from 'zapatos/schema';
 
 import { START_BLOCK } from './constants/constants';
 import { populateWithFullEntries } from './populate-entries';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import type { Roles } from './types';
 import { pool } from './utils/pool';
 import { type FullEntry, type RoleChange, ZodRoleChange } from './zod';
 
 export async function populateFromCache() {
   try {
-    let isDone = false;
     let id = 1;
     let tries = 0;
     let blockNumber = START_BLOCK;
 
-    while (!isDone) {
-      console.log('processing id ', id);
-      const maybeCachedEntry = await db.selectOne('cache.entries', { id }).run(pool);
+    while (tries < 100) {
+      console.log(`Processing cache id ${id}`);
+
+      // Cached entry are data entries resulting from proposals. Cached roles are
+      // processed later.
+      const maybeCachedEntry: Schema.cache.entries.Selectable | undefined = await db
+        .selectOne('cache.entries', { id })
+        .run(pool);
 
       if (maybeCachedEntry) {
         tries = 0;
-        console.log(
-          `Processing cachedEntry at block: ${JSON.stringify({
-            entry: maybeCachedEntry.block_number.toString(),
-          })}`
-        );
 
+        console.log(`Processing cached entry at block: ${maybeCachedEntry.block_number}`);
+
+        // All entries in the cache are the valid full entries. We validate all data during
+        // streaming and only write to the cache the final parsed and validated data. So we
+        // don't need to re-validate here.
         await populateWithFullEntries({
           fullEntries: maybeCachedEntry.data as any, // TODO: Zod typecheck this JSON
           blockNumber: maybeCachedEntry.block_number,
@@ -33,23 +38,26 @@ export async function populateFromCache() {
           cursor: maybeCachedEntry.cursor,
         });
 
-        blockNumber = maybeCachedEntry.block_number;
+        if (maybeCachedEntry.block_number > blockNumber) {
+          blockNumber = maybeCachedEntry.block_number;
+        }
       }
 
-      const maybeCachedRole = await db.selectOne('cache.roles', { id }).run(pool);
+      const maybeCachedRole: Schema.cache.roles.Selectable | undefined = await db
+        .selectOne('cache.roles', { id })
+        .run(pool);
 
-      // Increment the id to check the next cached row. If neither maybeCachedEntry nor maybeCachedRole
-      // exists at the next id we know we've reached the end of the cache
+      // Increment the id to check the next cached row in the next tick. If an id for either
+      // maybeCachedEntry or maybeCachedRole exists in the look-ahead window we will continue
+      // processing.
       id = id + 1;
 
-      if (!maybeCachedEntry && !maybeCachedRole && tries > 10) {
-        console.log('Ending cache processing. Found final cache.');
-        isDone = true;
-        break;
-      }
-
       if (!maybeCachedEntry && !maybeCachedRole) {
-        console.log('incrementing id to try again');
+        console.log('Checking ahead in cache for next entry');
+        // Tries is a way to "look-ahead" in the cache to see if there are any more cache entries.
+        //
+        // ids in the cache are incremental, but there may be missing ids (@baiirun why?). We use
+        // a look-ahead to check future ids for potential cache entries.
         tries = tries + 1;
         continue;
       }
@@ -57,42 +65,31 @@ export async function populateFromCache() {
       if (maybeCachedRole) {
         tries = 0;
 
-        console.log(
-          `Processing cachedRole at block, ${JSON.stringify({
-            blockNumber: maybeCachedRole.created_at_block,
-            maybeCachedRole,
-          })}`
-        );
-
-        const roleChange = ZodRoleChange.safeParse({
-          role: maybeCachedRole.role,
-          space: maybeCachedRole.space,
-          account: maybeCachedRole.account,
-          sender: maybeCachedRole.sender,
-        });
-
-        if (!roleChange.success) {
-          console.error('Failed to parse cached role change');
-          console.error(roleChange);
-          console.error(roleChange.error);
-          continue;
-        }
+        console.log(`Processing cached role at block ${maybeCachedRole.created_at_block}`);
 
         switch (maybeCachedRole.type) {
           case 'GRANTED':
             await handleRoleGranted({
-              roleGranted: roleChange.data,
+              roleGranted: {
+                account: maybeCachedRole.account,
+                id: maybeCachedRole.id.toString(),
+                role: maybeCachedRole.role as Roles,
+                sender: maybeCachedRole.sender,
+                space: maybeCachedRole.space,
+              },
               blockNumber: maybeCachedRole.created_at_block,
               timestamp: maybeCachedRole.created_at,
-              cursor: maybeCachedRole.cursor,
             });
             break;
           case 'REVOKED':
             await handleRoleRevoked({
-              roleRevoked: roleChange.data,
-              blockNumber: maybeCachedRole.created_at_block,
-              cursor: maybeCachedRole.cursor,
-              timestamp: maybeCachedRole.created_at,
+              roleRevoked: {
+                account: maybeCachedRole.account,
+                id: maybeCachedRole.id.toString(),
+                role: maybeCachedRole.role as Roles,
+                sender: maybeCachedRole.sender,
+                space: maybeCachedRole.space,
+              },
             });
         }
 
@@ -102,6 +99,7 @@ export async function populateFromCache() {
       }
     }
 
+    console.log('Cache processing complete');
     return blockNumber;
   } catch (error) {
     console.error('Error in populateFromCache:', error);
@@ -121,7 +119,7 @@ export async function upsertCachedEntries({
   timestamp: number;
 }) {
   try {
-    const cachedEntry: s.cache.entries.Insertable = {
+    const cachedEntry: Schema.cache.entries.Insertable = {
       block_number: blockNumber,
       cursor,
       data: JSON.stringify(fullEntries),

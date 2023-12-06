@@ -1,5 +1,9 @@
 import type * as s from 'zapatos/schema';
 
+// The names of the roles don't match 1:1 with the existing model
+// as the substream package uses the below naming convention instead.
+export type Roles = 'MEMBER' | 'MODERATOR' | 'ADMIN';
+
 export enum TripleAction {
   Create = 'createTriple',
   Delete = 'deleteTriple',
