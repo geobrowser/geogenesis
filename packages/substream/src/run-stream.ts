@@ -6,8 +6,8 @@ import { Effect, Stream } from 'effect';
 import { MANIFEST, START_BLOCK } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
 import { parseValidFullEntries } from './parse-valid-full-entries';
-import { upsertCachedEntries } from './populate-cache';
 import { populateWithFullEntries } from './populate-entries';
+import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { createSink, createStream } from './substreams.js/sink/src';
 import { invariant } from './utils/invariant';
@@ -29,6 +29,10 @@ export class CouldNotReadCursorError extends Error {
 
 export class CouldNotWriteCachedEntryError extends Error {
   _tag: 'CouldNotWriteCachedEntryError' = 'CouldNotWriteCachedEntryError';
+}
+
+export class CouldNotWriteCachedRoleError extends Error {
+  _tag: 'CouldNotWriteCachedRoleError' = 'CouldNotWriteCachedRoleError';
 }
 
 export function getStreamEffect(startBlockNum?: number) {
@@ -180,20 +184,50 @@ export function getStreamEffect(startBlockNum?: number) {
               const { granted, revoked } = roleChange;
 
               if (granted) {
+                yield* _(
+                  Effect.tryPromise({
+                    try: () =>
+                      upsertCachedRoles({
+                        roleChange: granted,
+                        blockNumber,
+                        cursor,
+                        type: 'GRANTED',
+                        timestamp,
+                      }),
+                    catch: error =>
+                      new CouldNotWriteCachedRoleError(
+                        `Could not upsert cached granted role in block ${blockNumber} ${String(error)}}`
+                      ),
+                  })
+                );
+
                 handleRoleGranted({
                   roleGranted: granted,
                   blockNumber,
-                  cursor,
                   timestamp,
                 });
               }
 
               if (revoked) {
+                yield* _(
+                  Effect.tryPromise({
+                    try: () =>
+                      upsertCachedRoles({
+                        roleChange: revoked,
+                        blockNumber,
+                        cursor,
+                        type: 'REVOKED',
+                        timestamp,
+                      }),
+                    catch: error =>
+                      new CouldNotWriteCachedRoleError(
+                        `Could not upsert cached revoked role in block ${blockNumber} ${String(error)}}`
+                      ),
+                  })
+                );
+
                 handleRoleRevoked({
                   roleRevoked: revoked,
-                  blockNumber,
-                  cursor,
-                  timestamp,
                 });
               }
             }
