@@ -9,72 +9,96 @@ import { type FullEntry, type RoleChange, ZodRoleChange } from './zod';
 
 export async function populateFromCache() {
   try {
-    const [cachedEntries, cachedRoles] = await Promise.all([readCacheEntries(), readCacheRoles()]);
-
-    console.log('Cached entries:', cachedEntries.length);
-    console.log('Cached roles:', cachedRoles.length);
-
+    let isDone = false;
+    let id = 1;
+    let tries = 0;
     let blockNumber = START_BLOCK;
 
-    for (const cachedEntry of cachedEntries) {
-      console.log(
-        `Processing cachedEntry at block: ${JSON.stringify({
-          entry: cachedEntry.block_number.toString(),
-        })}`
-      );
+    while (!isDone) {
+      console.log('processing id ', id);
+      const maybeCachedEntry = await db.selectOne('cache.entries', { id }).run(pool);
 
-      await populateWithFullEntries({
-        fullEntries: cachedEntry.data as any, // TODO: Zod typecheck this JSON
-        blockNumber: cachedEntry.block_number,
-        timestamp: cachedEntry.timestamp,
-        cursor: cachedEntry.cursor,
-      });
+      if (maybeCachedEntry) {
+        tries = 0;
+        console.log(
+          `Processing cachedEntry at block: ${JSON.stringify({
+            entry: maybeCachedEntry.block_number.toString(),
+          })}`
+        );
 
-      blockNumber = cachedEntry.block_number;
-    }
+        await populateWithFullEntries({
+          fullEntries: maybeCachedEntry.data as any, // TODO: Zod typecheck this JSON
+          blockNumber: maybeCachedEntry.block_number,
+          timestamp: maybeCachedEntry.timestamp,
+          cursor: maybeCachedEntry.cursor,
+        });
 
-    for (const cachedRole of cachedRoles) {
-      console.log(
-        `Processing cachedRole at block, ${JSON.stringify({
-          blockNumber: cachedRole.created_at_block,
-          cachedRole,
-        })}`
-      );
+        blockNumber = maybeCachedEntry.block_number;
+      }
 
-      const roleChange = ZodRoleChange.safeParse({
-        role: cachedRole.role,
-        space: cachedRole.space,
-        account: cachedRole.account,
-        sender: cachedRole.sender,
-      });
+      const maybeCachedRole = await db.selectOne('cache.roles', { id }).run(pool);
 
-      if (!roleChange.success) {
-        console.error('Failed to parse cached role change');
-        console.error(roleChange);
-        console.error(roleChange.error);
+      // Increment the id to check the next cached row. If neither maybeCachedEntry nor maybeCachedRole
+      // exists at the next id we know we've reached the end of the cache
+      id = id + 1;
+
+      if (!maybeCachedEntry && !maybeCachedRole && tries > 10) {
+        console.log('Ending cache processing. Found final cache.');
+        isDone = true;
+        break;
+      }
+
+      if (!maybeCachedEntry && !maybeCachedRole) {
+        console.log('incrementing id to try again');
+        tries = tries + 1;
         continue;
       }
 
-      switch (cachedRole.type) {
-        case 'GRANTED':
-          await handleRoleGranted({
-            roleGranted: roleChange.data,
-            blockNumber: cachedRole.created_at_block,
-            timestamp: cachedRole.created_at,
-            cursor: cachedRole.cursor,
-          });
-          break;
-        case 'REVOKED':
-          await handleRoleRevoked({
-            roleRevoked: roleChange.data,
-            blockNumber: cachedRole.created_at_block,
-            cursor: cachedRole.cursor,
-            timestamp: cachedRole.created_at,
-          });
-      }
+      if (maybeCachedRole) {
+        tries = 0;
 
-      if (cachedRole.created_at_block > blockNumber) {
-        blockNumber = cachedRole.created_at_block;
+        console.log(
+          `Processing cachedRole at block, ${JSON.stringify({
+            blockNumber: maybeCachedRole.created_at_block,
+            maybeCachedRole,
+          })}`
+        );
+
+        const roleChange = ZodRoleChange.safeParse({
+          role: maybeCachedRole.role,
+          space: maybeCachedRole.space,
+          account: maybeCachedRole.account,
+          sender: maybeCachedRole.sender,
+        });
+
+        if (!roleChange.success) {
+          console.error('Failed to parse cached role change');
+          console.error(roleChange);
+          console.error(roleChange.error);
+          continue;
+        }
+
+        switch (maybeCachedRole.type) {
+          case 'GRANTED':
+            await handleRoleGranted({
+              roleGranted: roleChange.data,
+              blockNumber: maybeCachedRole.created_at_block,
+              timestamp: maybeCachedRole.created_at,
+              cursor: maybeCachedRole.cursor,
+            });
+            break;
+          case 'REVOKED':
+            await handleRoleRevoked({
+              roleRevoked: roleChange.data,
+              blockNumber: maybeCachedRole.created_at_block,
+              cursor: maybeCachedRole.cursor,
+              timestamp: maybeCachedRole.created_at,
+            });
+        }
+
+        if (maybeCachedRole.created_at_block > blockNumber) {
+          blockNumber = maybeCachedRole.created_at_block;
+        }
       }
     }
 
@@ -152,15 +176,13 @@ export async function upsertCachedRoles({
   }
 }
 
-export const readCacheEntries = async () => {
-  const cachedEntries = await db
+export async function streamCacheEntries() {
+  return await db
     .select('cache.entries', db.all, {
       order: { by: 'block_number', direction: 'ASC' },
     })
     .run(pool);
-
-  return cachedEntries;
-};
+}
 
 export async function readCacheRoles() {
   const cachedEntries = await db
