@@ -95,8 +95,6 @@ export async function populateWithFullEntries({
       }),
     ]);
 
-    // @TODO: How are duplicate triples being handled in Geo? I know it's possible, but if
-    // the triple ID is defined, what does that entail
     const triplesDatabaseTuples = mapTriplesWithActionType(fullEntries, timestamp, blockNumber);
 
     const tripleTransactions: {
@@ -131,9 +129,11 @@ export async function populateWithFullEntries({
         await db.upsert('triples', triple, 'id').run(pool);
       }
 
-      if (isDeleteTriple) {
-        await db.deletes('triples', { id: triple.id }).run(pool);
-      }
+      // We don't delete triples. Instead we store all triples ever created over time. We need
+      // to track these so we can look at historical state for entities.
+      // if (isDeleteTriple) {
+      //   await db.deletes('triples', { id: triple.id }).run(pool);
+      // }
 
       if (isNameCreateAction) {
         await db
@@ -250,6 +250,52 @@ export async function populateWithFullEntries({
       }
     }
 
+    const triplesGroupedByEntityId = triplesDatabaseTuples.reduce((acc, [actionType, triple]) => {
+      if (!acc.has(triple.entity_id as string)) {
+        acc.set(triple.entity_id as string, []);
+      }
+
+      if (actionType === TripleAction.Create) {
+        acc.get(triple.entity_id as string)!.push(triple);
+      }
+
+      return acc;
+    }, new Map<string, Schema.triples.Insertable[]>());
+
+    const tripleVersions: Schema.triple_versions.Insertable[] = versions
+      .map(version => {
+        const triplesForEntity = triplesGroupedByEntityId.get(version.entity_id as string);
+
+        if (triplesForEntity) {
+          const tripleIds = triplesForEntity.map(triple => triple.id);
+
+          return tripleIds.map(triple_id => ({
+            version_id: version.id,
+            triple_id,
+          }));
+        }
+
+        return null;
+      })
+      .filter((tripleVersions): tripleVersions is Schema.triple_versions.Insertable[] => tripleVersions !== null)
+      .flat();
+
+    const uniqueTripleVersionsMap = tripleVersions.reduce((acc, tripleVersion) => {
+      const key = `${tripleVersion.version_id}-${tripleVersion.triple_id}`;
+
+      if (!acc.has(key)) {
+        acc.set(key, tripleVersion);
+      }
+
+      return acc;
+    }, new Map<string, Schema.triple_versions.Insertable>());
+
+    const uniqueTripleVersionsMapValues = Array.from(uniqueTripleVersionsMap.values());
+
+    // @TODO: Fetch all triples for an entityid and add them to the triples_versions table.
+    // If a triple was deleted as part of this proposal we can remove it from the table.
+    db.insert('triple_versions', uniqueTripleVersionsMapValues).run(pool);
+
     console.log('------ UPSERTING ENTRIES ------');
     console.log('Accounts: ', accounts.length);
     console.log('Actions: ', actions.length);
@@ -259,6 +305,7 @@ export async function populateWithFullEntries({
     console.log('Spaces: ', spaces.length);
     console.log('Triples: ', triplesDatabaseTuples.length);
     console.log('Versions: ', versions.length);
+    console.log('TripleVersions: ', tripleVersions.length);
   } catch (error) {
     console.error(`Error populating entries: ${error}`);
   }
