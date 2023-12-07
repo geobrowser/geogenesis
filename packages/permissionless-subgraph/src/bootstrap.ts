@@ -68,6 +68,10 @@ import {
   SUPPORTING_ARGUMENTS_ATTRIBUTE,
   RELEVANT_QUESTIONS_ATTRIBUTE,
   SPEAKERS_ATTRIBUTE,
+  COMPANY_TYPE,
+  MISSION_ATTRIBUTE,
+  VISION_ATTRIBUTE,
+  VALUES_ATTRIBUTE,
 } from '@geogenesis/ids/system-ids'
 import { Address, BigInt, log } from '@graphprotocol/graph-ts'
 import {
@@ -138,6 +142,10 @@ const entities: string[] = [
   SUPPORTING_ARGUMENTS_ATTRIBUTE,
   RELEVANT_QUESTIONS_ATTRIBUTE,
   SPEAKERS_ATTRIBUTE,
+  COMPANY_TYPE,
+  MISSION_ATTRIBUTE,
+  VISION_ATTRIBUTE,
+  VALUES_ATTRIBUTE,
 ]
 
 class Tuple<T, U> {
@@ -177,6 +185,7 @@ const names: Tuple<string, StringValue>[] = [
   { _0: GOAL_TYPE, _1: new StringValue(GOAL_TYPE, 'Goal') },
   { _0: TOPIC_TYPE, _1: new StringValue(TOPIC_TYPE, 'Topic') },
   { _0: CLAIM_TYPE, _1: new StringValue(CLAIM_TYPE, 'Claim') },
+  { _0: COMPANY_TYPE, _1: new StringValue(COMPANY_TYPE, 'Company') },
   {
     _0: NONPROFIT_SERVICE_TYPE,
     _1: new StringValue(PERSON_TYPE, 'Nonprofit service'),
@@ -216,6 +225,18 @@ const names: Tuple<string, StringValue>[] = [
   {
     _0: WEB_URL_ATTRIBUTE,
     _1: new StringValue(WEB_URL_ATTRIBUTE, 'Web URL'),
+  },
+  {
+    _0: MISSION_ATTRIBUTE,
+    _1: new StringValue(MISSION_ATTRIBUTE, 'Mission'),
+  },
+  {
+    _0: VISION_ATTRIBUTE,
+    _1: new StringValue(VISION_ATTRIBUTE, 'Vision'),
+  },
+  {
+    _0: VALUES_ATTRIBUTE,
+    _1: new StringValue(VALUES_ATTRIBUTE, 'Values'),
   },
   {
     _0: GOALS_ATTRIBUTE,
@@ -351,6 +372,9 @@ const attributes: Tuple<string, string>[] = [
   { _0: SUPPORTING_ARGUMENTS_ATTRIBUTE, _1: RELATION },
   { _0: RELEVANT_QUESTIONS_ATTRIBUTE, _1: RELATION },
   { _0: SPEAKERS_ATTRIBUTE, _1: RELATION },
+  { _0: MISSION_ATTRIBUTE, _1: RELATION },
+  { _0: VISION_ATTRIBUTE, _1: RELATION },
+  { _0: VALUES_ATTRIBUTE, _1: RELATION },
 ]
 
 /* Multi-dimensional array of [TypeId, [Attributes]] */
@@ -370,6 +394,10 @@ const types: Tuple<string, string[]>[] = [
   { _0: NONPROFIT_SERVICE_TYPE, _1: [AVATAR_ATTRIBUTE, COVER_ATTRIBUTE] },
   { _0: REGION_TYPE, _1: [] },
   { _0: TAG_TYPE, _1: [] },
+  {
+    _0: COMPANY_TYPE,
+    _1: [MISSION_ATTRIBUTE, VISION_ATTRIBUTE, VALUES_ATTRIBUTE],
+  },
   {
     _0: CLAIM_TYPE,
     _1: [
