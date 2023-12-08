@@ -99,7 +99,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   });
 
   const typeId = type.entityId;
-  const filters =
+  const filters: Array<[string, string]> =
     filterState && filterState.length > 0 ? filterState.map(filter => [filter.columnId, filter.value]) : [];
 
   return (
@@ -160,7 +160,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           <TableBlockContextMenu />
 
           {isEditing && (
-            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters as Array<[string, string]>)}>
+            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters)}>
               <Create />
             </Link>
           )}
