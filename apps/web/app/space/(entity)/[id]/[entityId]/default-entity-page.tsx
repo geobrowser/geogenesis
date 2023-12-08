@@ -30,10 +30,11 @@ interface Props {
   params: { id: string; entityId: string };
   searchParams: {
     typeId?: string;
-    filterId?: string;
-    filterValue?: string;
+    filters?: string;
   };
 }
+
+const EMPTY_ARRAY_AS_ENCODED_URI = '%5B%5D';
 
 export default async function DefaultEntityPage({ params, searchParams }: Props) {
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
@@ -44,9 +45,10 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
   const types = Entity.types(props.triples);
 
-  const filterId = searchParams.filterId ?? null;
-  const filterValue = searchParams.filterValue ?? null;
   const typeId = searchParams.typeId ?? null;
+
+  const encodedFilters = searchParams.filters ?? EMPTY_ARRAY_AS_ENCODED_URI;
+  const filters = JSON.parse(decodeURI(encodedFilters));
 
   return (
     <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
@@ -63,7 +65,7 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
             <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
             <Spacer height={40} />
             <Editor shouldHandleOwnSpacing />
-            <ToggleEntityPage {...props} filterId={filterId} filterValue={filterValue} typeId={typeId} />
+            <ToggleEntityPage {...props} typeId={typeId} filters={filters} />
             <Spacer height={40} />
             <Suspense fallback={<EntityReferencedByLoading />}>
               <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />

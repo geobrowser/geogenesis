@@ -17,17 +17,20 @@ export const NavUtils = {
     spaceId: string,
     newEntityId: string,
     typeId?: string | null,
-    filterId?: string | null,
-    filterValue?: string | null
+    filters?: Array<[string, string]> | null
   ) => {
-    if (typeId && filterId && filterValue) {
+    if (typeId && filters) {
       return decodeURIComponent(
-        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`
+        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filters=${encodeURI(JSON.stringify(filters))}`
       );
     }
 
     if (typeId) {
       return decodeURIComponent(`/space/${spaceId}/${newEntityId}?typeId=${typeId}`);
+    }
+
+    if (filters) {
+      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?filters=${encodeURI(JSON.stringify(filters))}`);
     }
 
     return decodeURIComponent(`/space/${spaceId}/${newEntityId}`);

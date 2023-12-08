@@ -11,8 +11,7 @@ interface Props {
   params: { id: string; entityId: string };
   searchParams: {
     typeId?: string;
-    filterId?: string;
-    filterValue?: string;
+    filters?: string;
   };
 }
 
