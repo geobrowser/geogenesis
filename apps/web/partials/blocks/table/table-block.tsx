@@ -1,4 +1,3 @@
-/* eslint-disable react/display-name */
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
@@ -34,16 +33,11 @@ import { TableBlockEditableTitle } from './table-block-editable-title';
 import { TableBlockFilterPill } from './table-block-filter-pill';
 import { TableBlockTable } from './table-block-table';
 
-/* eslint-disable react/display-name */
-
-/* eslint-disable react/display-name */
-
-/* eslint-disable react/display-name */
-
 interface Props {
   spaceId: string;
 }
 
+// eslint-disable-next-line react/display-name
 export const TableBlock = React.memo(({ spaceId }: Props) => {
   const { setFilterState } = useTableBlock();
 
@@ -166,7 +160,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           <TableBlockContextMenu />
 
           {isEditing && (
-            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters)}>
+            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters as Array<[string, string]>)}>
               <Create />
             </Link>
           )}
