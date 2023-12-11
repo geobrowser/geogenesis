@@ -77,6 +77,7 @@ const ReviewChanges = () => {
   const { state } = useStatusBar();
 
   const { allSpacesWithActions } = useActionsStore();
+
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
 
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
@@ -134,9 +135,9 @@ const ReviewChanges = () => {
       state.reviewState !== 'publishing-contract'
     ) {
       setIsReviewOpen(false);
-      return;
+    } else {
+      setActiveSpace(allSpacesWithActions[0] ?? '');
     }
-    setActiveSpace(allSpacesWithActions[0] ?? '');
   }, [allSpacesWithActions, setActiveSpace, setIsReviewOpen, state.reviewState]);
 
   // Options for space selector dropdown
@@ -1029,12 +1030,6 @@ function parseMarkdown(markdownString: string) {
   markdownContent = markdownContent.trim();
 
   return { markdownType, markdownContent };
-}
-
-function getSpaceImage(spaces: Space[], spaceId: string): string {
-  return getImagePath(
-    spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '/placeholder.png'
-  );
 }
 
 type TableFiltersProps = {
