@@ -1,3 +1,4 @@
+import { Effect, Schedule } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
@@ -12,7 +13,7 @@ import {
   mapTriplesWithActionType,
   mapVersions,
 } from './map-entries';
-import { TripleAction } from './types';
+import { TripleAction, type TripleWithActionTuple } from './types';
 import { upsertChunked } from './utils/db';
 import { pool } from './utils/pool';
 import { type FullEntry } from './zod';
@@ -28,7 +29,7 @@ export async function populateWithFullEntries({
   timestamp: number;
   cursor: string;
 }) {
-  try {
+  const populateEffect = Effect.gen(function* (awaited) {
     const accounts = mapAccounts(fullEntries[0]?.author);
 
     const actions: Schema.actions.Insertable[] = mapActions({
@@ -67,42 +68,77 @@ export async function populateWithFullEntries({
       cursor,
     });
 
-    await Promise.all([
-      // @TODO: Can we batch these into a single upsert?
-      upsertChunked('accounts', accounts, 'id', {
-        updateColumns: db.doNothing,
-      }),
-      upsertChunked('actions', actions, 'id', {
-        updateColumns: db.doNothing,
-      }),
-      // We update the name and description for an entity when mapping
-      // through triples.
-      upsertChunked('geo_entities', geoEntities, 'id', {
-        updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
-        noNullUpdateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
-      }),
-      upsertChunked('proposals', proposals, 'id', {
-        updateColumns: db.doNothing,
-      }),
-      upsertChunked('proposed_versions', proposed_versions, 'id', {
-        updateColumns: db.doNothing,
-      }),
-      upsertChunked('spaces', spaces, 'id', {
-        updateColumns: db.doNothing,
-      }),
-      upsertChunked('versions', versions, 'id', {
-        updateColumns: db.doNothing,
-      }),
-    ]);
+    const triplesForVersionsEffect = Effect.gen(function* (awaited) {
+      const triplesForVersions = yield* awaited(
+        Effect.all(
+          versions.map(version => {
+            return Effect.gen(function* (awaited) {
+              const triplesForEntityId: Schema.triples.Insertable[] = yield* awaited(
+                Effect.tryPromise({
+                  try: () => db.select('triples', { entity_id: version.entity_id }).run(pool),
+                  catch: error =>
+                    new Error(
+                      `Failed to fetch triples for entity id ${version.entity_id}. ${(error as Error).message}`
+                    ),
+                })
+              );
+
+              return triplesForEntityId.map(triple => ({
+                version_id: version.id as string,
+                triple_id: triple.id as string,
+              }));
+            });
+          }),
+          {
+            concurrency: 10,
+          }
+        )
+      );
+
+      return triplesForVersions.flat() as Schema.triple_versions.Insertable[];
+    });
+
+    const existingTripleVersions: Schema.triple_versions.Insertable[] = yield* awaited(
+      Effect.retry(triplesForVersionsEffect, Schedule.exponential(100).pipe(Schedule.jittered))
+    );
+
+    yield* awaited(
+      Effect.tryPromise({
+        try: async () => {
+          await Promise.all([
+            // @TODO: Can we batch these into a single upsert?
+            upsertChunked('accounts', accounts, 'id', {
+              updateColumns: db.doNothing,
+            }),
+            upsertChunked('actions', actions, 'id', {
+              updateColumns: db.doNothing,
+            }),
+            // We update the name and description for an entity when mapping
+            // through triples.
+            upsertChunked('geo_entities', geoEntities, 'id', {
+              updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
+              noNullUpdateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
+            }),
+            upsertChunked('proposals', proposals, 'id', {
+              updateColumns: db.doNothing,
+            }),
+            upsertChunked('proposed_versions', proposed_versions, 'id', {
+              updateColumns: db.doNothing,
+            }),
+            upsertChunked('spaces', spaces, 'id', {
+              updateColumns: db.doNothing,
+            }),
+            upsertChunked('versions', versions, 'id', {
+              updateColumns: db.doNothing,
+            }),
+            db.upsert('triple_versions', existingTripleVersions, ['triple_id', 'version_id']).run(pool),
+          ]);
+        },
+        catch: () => new Error('Failed to insert triple'),
+      })
+    );
 
     const triplesDatabaseTuples = mapTriplesWithActionType(fullEntries, timestamp, blockNumber);
-
-    const tripleTransactions: {
-      actionType: TripleAction;
-      isAddType: boolean;
-      isDeleteType: boolean;
-      triple: Schema.triples.Insertable;
-    }[] = [];
 
     for (const [actionType, triple] of triplesDatabaseTuples) {
       const isCreateTriple = actionType === TripleAction.Create;
@@ -118,195 +154,221 @@ export async function populateWithFullEntries({
       const isDescriptionCreateAction = isCreateTriple && isDescriptionAttribute && isStringValueType;
       const isDescriptionDeleteAction = isDeleteTriple && isDescriptionAttribute && isStringValueType;
 
-      tripleTransactions.push({
-        actionType,
-        isAddType,
-        isDeleteType,
-        triple,
-      });
+      // Insert all new triples and existing triples into the new triple_versions join table.
+      //
+      // A Version should include all triples that were added as part of this proposal, and also all
+      // triples that exist in previous versions of the entity. In the next step we delete all
+      // triples that were deleted as part of this proposal to ensure they aren't included in the new version.
+      const version = versions.find(v => v.entity_id === triple.entity_id);
 
-      if (isCreateTriple) {
-        await db.upsert('triples', triple, 'id').run(pool);
+      if (isCreateTriple && version) {
+        const insertTripleEffect = Effect.tryPromise({
+          try: async () => {
+            await db.upsert('triples', triple, 'id').run(pool);
+          },
+          catch: () => new Error('Failed to insert triple'),
+        });
+
+        const insertTripleVersionEffect = Effect.tryPromise({
+          try: async () => {
+            // @TODO: Batch
+            await db
+              .upsert(
+                'triple_versions',
+                { version_id: version.id, triple_id: triple.id },
+                ['triple_id', 'version_id'],
+                {
+                  updateColumns: ['triple_id', 'version_id'],
+                }
+              )
+              .run(pool);
+          },
+          catch: () => new Error('Failed to insert triple'),
+        });
+
+        yield* awaited(Effect.retry(insertTripleEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(Effect.retry(insertTripleVersionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
       // We don't delete triples. Instead we store all triples ever created over time. We need
-      // to track these so we can look at historical state for entities.
-      // if (isDeleteTriple) {
-      //   await db.deletes('triples', { id: triple.id }).run(pool);
-      // }
+      // to track these so we can look at historical state for entities. We do remove them from
+      // any new versions.
+      if (isDeleteTriple && version) {
+        const deleteEffect = Effect.tryPromise({
+          try: async () => {
+            const deleted = await db
+              .deletes(
+                'triple_versions',
+                { version_id: version.id, triple_id: triple.id },
+                { returning: ['triple_id', 'version_id'] }
+              )
+              .run(pool);
+
+            if (triple.entity_id === '0x206d1f64bb177e2732479186Ee5502D7202509D0–4') {
+              console.log('Deleting now stale triple version for nate', deleted, triple, actionType);
+            }
+          },
+          catch: () => new Error('Failed to insert triple'),
+        });
+
+        yield* awaited(Effect.retry(deleteEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+      }
 
       if (isNameCreateAction) {
-        await db
-          .upsert(
-            'geo_entities',
-            {
-              id: triple.entity_id,
-              name: triple.string_value,
-              created_by_id: accounts[0]!.id,
-              created_at: timestamp,
-              created_at_block: blockNumber,
-              updated_at: timestamp,
-              updated_at_block: blockNumber,
-            },
-            'id',
-            {
-              updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
-              noNullUpdateColumns: ['description'],
-            }
-          )
-          .run(pool);
+        const insertNameEffect = Effect.tryPromise({
+          try: async () => {
+            await db
+              .upsert(
+                'geo_entities',
+                {
+                  id: triple.entity_id,
+                  name: triple.string_value,
+                  created_by_id: accounts[0]!.id,
+                  created_at: timestamp,
+                  created_at_block: blockNumber,
+                  updated_at: timestamp,
+                  updated_at_block: blockNumber,
+                },
+                'id',
+                {
+                  updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
+                  noNullUpdateColumns: ['description'],
+                }
+              )
+              .run(pool);
+          },
+          catch: () => new Error('Failed to insert triple'),
+        });
+
+        yield* awaited(Effect.retry(insertNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
       if (isNameDeleteAction) {
-        await db
-          .upsert(
-            'geo_entities',
-            {
-              id: triple.entity_id,
-              name: null,
-              created_by_id: accounts[0]!.id,
-              created_at: timestamp,
-              created_at_block: blockNumber,
-              updated_at: timestamp,
-              updated_at_block: blockNumber,
-            },
-            'id',
-            {
-              updateColumns: ['name'],
-              noNullUpdateColumns: ['description'],
-            }
-          )
-          .run(pool);
+        const deleteNameEffect = Effect.tryPromise({
+          try: async () => {
+            await db
+              .upsert(
+                'geo_entities',
+                {
+                  id: triple.entity_id,
+                  name: null,
+                  created_by_id: accounts[0]!.id,
+                  created_at: timestamp,
+                  created_at_block: blockNumber,
+                  updated_at: timestamp,
+                  updated_at_block: blockNumber,
+                },
+                'id',
+                {
+                  updateColumns: ['name'],
+                  noNullUpdateColumns: ['description'],
+                }
+              )
+              .run(pool);
+          },
+          catch: () => new Error('Failed to insert triple'),
+        });
+
+        yield* awaited(Effect.retry(deleteNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
       if (isDescriptionCreateAction) {
-        await db
-          .upsert(
-            'geo_entities',
-            {
-              id: triple.entity_id,
-              description: triple.string_value,
-              created_by_id: accounts[0]!.id,
-              created_at: timestamp,
-              created_at_block: blockNumber,
-              updated_at: timestamp,
-              updated_at_block: blockNumber,
-            },
-            'id',
-            {
-              updateColumns: ['description'],
-              noNullUpdateColumns: ['name'],
-            }
-          )
-          .run(pool);
+        const insertDescriptionEffect = Effect.tryPromise({
+          try: async () => {
+            await db
+              .upsert(
+                'geo_entities',
+                {
+                  id: triple.entity_id,
+                  description: triple.string_value,
+                  created_by_id: accounts[0]!.id,
+                  created_at: timestamp,
+                  created_at_block: blockNumber,
+                  updated_at: timestamp,
+                  updated_at_block: blockNumber,
+                },
+                'id',
+                {
+                  updateColumns: ['description'],
+                  noNullUpdateColumns: ['name'],
+                }
+              )
+              .run(pool);
+          },
+          catch: () => new Error('Failed to insert triple'),
+        });
+
+        yield* awaited(Effect.retry(insertDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
       if (isDescriptionDeleteAction) {
-        await db
-          .upsert(
-            'geo_entities',
-            {
-              id: triple.entity_id,
-              description: null,
-              created_by_id: accounts[0]!.id,
-              created_at: timestamp,
-              created_at_block: blockNumber,
-              updated_at: timestamp,
-              updated_at_block: blockNumber,
-            },
-            'id',
-            {
-              updateColumns: ['description'],
-              noNullUpdateColumns: ['name'],
-            }
-          )
-          .run(pool);
+        const deleteDescriptionEffect = Effect.tryPromise({
+          try: async () => {
+            await db
+              .upsert(
+                'geo_entities',
+                {
+                  id: triple.entity_id,
+                  description: null,
+                  created_by_id: accounts[0]!.id,
+                  created_at: timestamp,
+                  created_at_block: blockNumber,
+                  updated_at: timestamp,
+                  updated_at_block: blockNumber,
+                },
+                'id',
+                {
+                  updateColumns: ['description'],
+                  noNullUpdateColumns: ['name'],
+                }
+              )
+              .run(pool);
+          },
+          catch: () => new Error('Failed to insert triple'),
+        });
+
+        yield* awaited(Effect.retry(deleteDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
       if (isAddType) {
-        await db
-          .upsert(
-            'geo_entity_types',
-            {
-              entity_id: triple.entity_id,
-              type_id: triple.value_id,
-              created_at: timestamp,
-              created_at_block: blockNumber,
-            },
-            ['entity_id', 'type_id'],
-            { updateColumns: db.doNothing }
-          )
-          .run(pool);
+        const insertTypeEffect = Effect.tryPromise({
+          try: async () => {
+            await db
+              .upsert(
+                'geo_entity_types',
+                {
+                  entity_id: triple.entity_id,
+                  type_id: triple.value_id,
+                  created_at: timestamp,
+                  created_at_block: blockNumber,
+                },
+                ['entity_id', 'type_id'],
+                { updateColumns: db.doNothing }
+              )
+              .run(pool);
+          },
+          catch: () => new Error('Failed to insert triple'),
+        });
+
+        yield* awaited(Effect.retry(insertTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
       if (isDeleteType) {
-        console.log('Deleting type', triple.value_id, 'to entity', triple.entity_id);
-        await db
-          .deletes('geo_entity_types', {
-            entity_id: triple.entity_id,
-            type_id: triple.value_id,
-          })
-          .run(pool);
+        const deleteTypeEffect = Effect.tryPromise({
+          try: async () => {
+            await db
+              .deletes('geo_entity_types', {
+                entity_id: triple.entity_id,
+                type_id: triple.value_id,
+              })
+              .run(pool);
+          },
+          catch: () => new Error('Failed to delete type'),
+        });
+        yield* awaited(Effect.retry(deleteTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
     }
+  });
 
-    const triplesGroupedByEntityId = triplesDatabaseTuples.reduce((acc, [actionType, triple]) => {
-      if (!acc.has(triple.entity_id as string)) {
-        acc.set(triple.entity_id as string, []);
-      }
-
-      if (actionType === TripleAction.Create) {
-        acc.get(triple.entity_id as string)!.push(triple);
-      }
-
-      return acc;
-    }, new Map<string, Schema.triples.Insertable[]>());
-
-    const tripleVersions: Schema.triple_versions.Insertable[] = versions
-      .map(version => {
-        const triplesForEntity = triplesGroupedByEntityId.get(version.entity_id as string);
-
-        if (triplesForEntity) {
-          const tripleIds = triplesForEntity.map(triple => triple.id);
-
-          return tripleIds.map(triple_id => ({
-            version_id: version.id,
-            triple_id,
-          }));
-        }
-
-        return null;
-      })
-      .filter((tripleVersions): tripleVersions is Schema.triple_versions.Insertable[] => tripleVersions !== null)
-      .flat();
-
-    const uniqueTripleVersionsMap = tripleVersions.reduce((acc, tripleVersion) => {
-      const key = `${tripleVersion.version_id}-${tripleVersion.triple_id}`;
-
-      if (!acc.has(key)) {
-        acc.set(key, tripleVersion);
-      }
-
-      return acc;
-    }, new Map<string, Schema.triple_versions.Insertable>());
-
-    const uniqueTripleVersionsMapValues = Array.from(uniqueTripleVersionsMap.values());
-
-    // @TODO: Fetch all triples for an entityid and add them to the triples_versions table.
-    // If a triple was deleted as part of this proposal we can remove it from the table.
-    db.insert('triple_versions', uniqueTripleVersionsMapValues).run(pool);
-
-    console.log('------ UPSERTING ENTRIES ------');
-    console.log('Accounts: ', accounts.length);
-    console.log('Actions: ', actions.length);
-    console.log('Entities: ', geoEntities.length);
-    console.log('Proposals: ', proposals.length);
-    console.log('Proposed Versions: ', proposed_versions.length);
-    console.log('Spaces: ', spaces.length);
-    console.log('Triples: ', triplesDatabaseTuples.length);
-    console.log('Versions: ', versions.length);
-    console.log('TripleVersions: ', tripleVersions.length);
-  } catch (error) {
-    console.error(`Error populating entries: ${error}`);
-  }
+  return await Effect.runPromise(populateEffect);
 }

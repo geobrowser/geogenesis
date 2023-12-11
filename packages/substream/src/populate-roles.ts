@@ -19,8 +19,6 @@ export async function handleRoleGranted({
     const isMemberRole = role === 'MEMBER';
     const isModeratorRole = role === 'MODERATOR';
 
-    console.log('Handling role granted:', roleGranted);
-
     if (isAdminRole) {
       await db
         .upsert(
@@ -75,8 +73,6 @@ export async function handleRoleRevoked({ roleRevoked }: { roleRevoked: RoleChan
     const isAdminRole = role === 'ADMIN';
     const isMemberRole = role === 'MEMBER';
     const isModeratorRole = role === 'MODERATOR';
-
-    console.log('Handling role revoked:', roleRevoked);
 
     if (isAdminRole) {
       await db
