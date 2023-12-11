@@ -73,9 +73,23 @@ export async function populateWithFullEntries({
         Effect.all(
           versions.map(version => {
             return Effect.gen(function* (awaited) {
-              const triplesForEntityId: Schema.triples.Insertable[] = yield* awaited(
+              const previousTripleVersions = yield* awaited(
                 Effect.tryPromise({
-                  try: () => db.select('triples', { entity_id: version.entity_id }).run(pool),
+                  try: async () => {
+                    const latestVersionForEntityId = await db
+                      .selectOne(
+                        'versions',
+                        { entity_id: version.entity_id },
+                        { order: { by: 'created_at', direction: 'DESC' } }
+                      )
+                      .run(pool);
+
+                    if (!latestVersionForEntityId) {
+                      return [];
+                    }
+
+                    return await db.select('triple_versions', { version_id: latestVersionForEntityId?.id }).run(pool);
+                  },
                   catch: error =>
                     new Error(
                       `Failed to fetch triples for entity id ${version.entity_id}. ${(error as Error).message}`
@@ -83,10 +97,13 @@ export async function populateWithFullEntries({
                 })
               );
 
-              return triplesForEntityId.map(triple => ({
-                version_id: version.id as string,
-                triple_id: triple.id as string,
-              }));
+              // Take the triples from the last version and add them to the new version
+              return previousTripleVersions.map(tripleVersion => {
+                return {
+                  triple_id: tripleVersion.triple_id,
+                  version_id: version.id,
+                };
+              });
             });
           }),
           {
@@ -134,7 +151,7 @@ export async function populateWithFullEntries({
             db.upsert('triple_versions', existingTripleVersions, ['triple_id', 'version_id']).run(pool),
           ]);
         },
-        catch: () => new Error('Failed to insert triple'),
+        catch: error => new Error(`Failed to insert bulk entries. ${(error as Error).message}`),
       })
     );
 
@@ -171,7 +188,6 @@ export async function populateWithFullEntries({
 
         const insertTripleVersionEffect = Effect.tryPromise({
           try: async () => {
-            // @TODO: Batch
             await db
               .upsert(
                 'triple_versions',
@@ -208,7 +224,8 @@ export async function populateWithFullEntries({
               console.log('Deleting now stale triple version for nate', deleted, triple, actionType);
             }
           },
-          catch: () => new Error('Failed to insert triple'),
+          catch: error =>
+            new Error(`Failed to delete triple ${triple.id} from version ${version.id}}. ${(error as Error).message}`),
         });
 
         yield* awaited(Effect.retry(deleteEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
