@@ -156,7 +156,8 @@ export function useActions(spaceId?: string) {
   }, [allActions]);
 
   const allSpacesWithActions = React.useMemo(() => {
-    return Object.keys(actions);
+    // Only return spaces where at least one action has not been published
+    return Object.keys(actions).filter(spaceId => !actions[spaceId].every(action => action.hasBeenPublished));
   }, [actions]);
 
   const actionsByEntityId = React.useMemo(() => {
