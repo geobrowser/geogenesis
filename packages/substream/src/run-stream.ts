@@ -99,6 +99,11 @@ export function getStreamEffect(startBlockNum?: number) {
           const blockNumber = Number(message.clock?.number.toString());
           const timestamp = Number(message.clock?.timestamp?.seconds.toString());
 
+          // Skipping a massive block for now
+          if (message.clock?.number.toString() === '36472865') {
+            return;
+          }
+
           if (blockNumber % 1000 === 0) {
             console.log(`@ Block ${blockNumber}`);
           }

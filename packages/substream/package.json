@@ -10,7 +10,7 @@
   ],
   "license": "MIT OR Apache-2.0",
   "scripts": {
-    "build": "esbuild index.ts --bundle --outfile=dist/index.js --bundle --platform=node",
+    "build": "tsc --noEmit && esbuild index.ts --bundle --outfile=dist/index.js --bundle --platform=node",
     "prepublishOnly": "npm run build",
     "nuke-public": "tsx ./src/utils/executeSql.ts ./src/sql/nukePublic.sql",
     "zapatos": "pnpm dotenv -e .env -- npx zapatos",
