@@ -68,6 +68,13 @@ export async function populateWithFullEntries({
       cursor,
     });
 
+    // Fetch all existing triples into the new triple_versions join table. A new version of an entity
+    // should include all of the triples that were included in the previous entity, minus any triples
+    // that were deleted as part of a proposal.
+    //
+    // This fetches all of the triples that were included in the previous version of an entity. Later
+    // on we process all triples that were added and removed as part of this proposal and remove
+    // deleted triples from the new version.
     const triplesForVersionsEffect = Effect.gen(function* (awaited) {
       const triplesForVersions = yield* awaited(
         Effect.all(
@@ -107,7 +114,7 @@ export async function populateWithFullEntries({
             });
           }),
           {
-            concurrency: 10,
+            concurrency: 75,
           }
         )
       );
