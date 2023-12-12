@@ -30,6 +30,10 @@ export class CouldNotWriteCachedRoleError extends Error {
   _tag: 'CouldNotWriteCachedRoleError' = 'CouldNotWriteCachedRoleError';
 }
 
+export class InvalidStreamConfigurationError extends Error {
+  _tag: 'InvalidStreamConfigurationError' = 'InvalidStreamConfigurationError';
+}
+
 interface StreamConfig {
   startBlockNumber?: number;
   startCursor?: string;
@@ -37,7 +41,10 @@ interface StreamConfig {
 
 export function runStream({ startBlockNumber, startCursor }: StreamConfig = {}) {
   const program = Effect.gen(function* (_) {
-    invariant(startBlockNumber || startCursor, 'Either startBlockNumber or startCursor is required');
+    if (!startBlockNumber && !startCursor) {
+      yield* _(Effect.fail(new InvalidStreamConfigurationError('Either startBlockNumber or startCursor is required')));
+    }
+
     const substreamsEndpoint = process.env.SUBSTREAMS_ENDPOINT;
     invariant(substreamsEndpoint, 'SUBSTREAMS_ENDPOINT is required');
     const substreamsApiKey = process.env.SUBSTREAMS_API_KEY;
@@ -55,9 +62,6 @@ export function runStream({ startBlockNumber, startCursor }: StreamConfig = {}) 
       })
     );
 
-    const outputModule = 'geo_out';
-    const productionMode = true;
-
     const registry = createRegistry(substreamPackage);
 
     const transport = createGrpcTransport({
@@ -69,13 +73,13 @@ export function runStream({ startBlockNumber, startCursor }: StreamConfig = {}) 
     const stream = createStream({
       connectTransport: transport,
       substreamPackage,
-      outputModule,
-      productionMode,
-      // @TODO: Move cursor and block number up to top level.
-      // This will let us pass either the start block _or_ the start cursor
-      // but not both.
+      outputModule: 'geo_out',
+      productionMode: true,
+      // The caller determines which block or cursor to start from based on
+      // error handling, CLI flags, cache state, etc. We default to cursor
+      // if it exists or start from the passed in block if not.
       startCursor: startCursor ? startCursor : undefined,
-      startBlockNum: startCursor ? undefined : startBlockNumber ?? START_BLOCK,
+      startBlockNum: startCursor ? undefined : startBlockNumber,
       // The stream will retry recoverable errors for 10 minutes
       // internally. This has no effect on unrecoverable errors.
       maxRetrySeconds: 600, // 10 minutes.

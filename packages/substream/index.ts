@@ -119,6 +119,15 @@ async function main() {
       case 'RetryableStreamError':
         console.error('A retryable stream error occurred and the substream did not recover:', error);
         break;
+      case 'InvalidStreamConfigurationError':
+        console.error(
+          'The stream was passed an invalid configuration. Either startBlockNumber or startCursor needs to be passed. ',
+          error
+        );
+        break;
+      case 'CouldNotReadCursorError':
+        console.error('Could not read cursor:', error);
+        break;
       default:
         console.error('An unknown error occurred:', error);
         break;
