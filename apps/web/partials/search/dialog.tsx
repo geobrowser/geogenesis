@@ -2,10 +2,12 @@ import { A } from '@mobily/ts-belt';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
+import Link from 'next/link';
 
 import { useGlobalSearch } from '~/core/hooks/use-global-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Entity } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
@@ -75,16 +77,19 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
                   transition={{ delay: 0.02 * i }}
                   key={result.id}
                 >
-                  <Command.Item onSelect={() => onDone(result)} className="aria-selected:bg-grey-01">
-                    <ResultContent
-                      onClick={() => {
-                        // The on-click is being handled by the ResultItem here. This is so we can
-                        // have the keyboard navigation work as expected with the cmdk lib.
-                      }}
-                      result={result}
-                      spaces={spaces}
-                    />
-                  </Command.Item>
+                  {/* It's safe to cast nameTripleSpace since we only render entities that have a name triple */}
+                  <Link href={NavUtils.toEntity(result.nameTripleSpace!, result.id)} onClick={() => onDone(result)}>
+                    <Command.Item className="aria-selected:bg-grey-01">
+                      <ResultContent
+                        onClick={() => {
+                          // The on-click is being handled by the ResultItem here. This is so we can
+                          // have the keyboard navigation work as expected with the cmdk lib.
+                        }}
+                        result={result}
+                        spaces={spaces}
+                      />
+                    </Command.Item>
+                  </Link>
                 </motion.div>
               ))}
             </ResultsList>
