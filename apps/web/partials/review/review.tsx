@@ -77,6 +77,7 @@ const ReviewChanges = () => {
   const { state } = useStatusBar();
 
   const { allSpacesWithActions } = useActionsStore();
+
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
 
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
@@ -132,9 +133,9 @@ const ReviewChanges = () => {
       state.reviewState !== 'publishing-contract'
     ) {
       setIsReviewOpen(false);
-      return;
+    } else {
+      setActiveSpace(allSpacesWithActions[0] ?? '');
     }
-    setActiveSpace(allSpacesWithActions[0] ?? '');
   }, [allSpacesWithActions, setActiveSpace, setIsReviewOpen, state.reviewState]);
 
   // Options for space selector dropdown

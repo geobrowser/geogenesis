@@ -325,8 +325,7 @@ function StepSelectType() {
 
   const options = [
     { image: '/images/onboarding/person.png', label: 'Person', value: 'person' },
-    // @TODO restore once company spaces are ready
-    // { image: '/images/onboarding/company.png', label: 'Company', value: 'company', disabled: true },
+    { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
     { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
   ];
 

@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { Cookie } from '~/core/cookie';
 import { Environment } from '~/core/environment';
+import { fetchProposalCountByUser } from '~/core/io/fetch-proposal-count-by-user';
 import { fetchOnchainProfile, fetchProfile } from '~/core/io/subgraph';
 import { fetchInterimMembershipRequests } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { graphql } from '~/core/io/subgraph/graphql';
@@ -21,10 +22,16 @@ export default async function PersonalHomePage() {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const [spaces, person, profile] = await Promise.all([
+  const [spaces, person, profile, proposalsCount] = await Promise.all([
     getSpacesWhereAdmin(connectedAddress),
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
     connectedAddress ? fetchOnchainProfile({ address: connectedAddress }) : null,
+    connectedAddress
+      ? fetchProposalCountByUser({
+          endpoint: config.subgraph,
+          userId: connectedAddress,
+        })
+      : null,
   ]);
 
   const membershipRequestsBySpace = await Promise.all(
@@ -32,6 +39,8 @@ export default async function PersonalHomePage() {
   );
 
   const membershipRequests = membershipRequestsBySpace.flat().sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
+
+  const acceptedProposalsCount = proposalsCount ?? 0;
 
   return (
     <Component
@@ -44,6 +53,7 @@ export default async function PersonalHomePage() {
       }
       activeProposals={[]}
       membershipRequests={membershipRequests}
+      acceptedProposalsCount={acceptedProposalsCount}
     />
   );
 }

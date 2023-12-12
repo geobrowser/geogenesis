@@ -222,6 +222,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               .map(triple => triple.value.id)}
             allowedTypes={typesToFilter}
             spaceId={space}
+            attributeId={attributeId}
           />
         </>
       )}
@@ -233,6 +234,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           onDone={result => createEntityTripleWithValue(attributeId, result)}
           itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
           allowedTypes={typesToFilter}
+          attributeId={attributeId}
         />
       )}
 

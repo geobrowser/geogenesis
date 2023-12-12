@@ -22,11 +22,13 @@ CREATE TABLE public.geo_entities (
     id text PRIMARY KEY,
     name character varying,
     description character varying,
+    -- latest_version_id text REFERENCES public.versions(id),
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     updated_at integer,
-    updated_at_block integer -- is_attribute boolean DEFAULT false,
+    updated_at_block integer 
+    -- is_attribute boolean DEFAULT false,
     -- attribute_value_type_id text
 );
 
@@ -162,6 +164,12 @@ CREATE TABLE public.actions (
     cursor text NOT NULL
 );
 
+CREATE TABLE public.triple_versions (
+    PRIMARY KEY (triple_id, version_id),
+    triple_id text NOT NULL REFERENCES public.triples(id),
+    version_id text NOT NULL REFERENCES public.versions(id)
+);
+
 -- 
 -- Disable Foreign Key Constraints to allow for bulk loading + unordered inserts
 -- 
@@ -206,3 +214,6 @@ ALTER TABLE
 
 ALTER TABLE
     public.space_editor_controllers DISABLE TRIGGER ALL;
+
+ALTER TABLE
+    public.triple_versions DISABLE TRIGGER ALL;

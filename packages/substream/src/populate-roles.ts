@@ -1,6 +1,6 @@
 import * as db from 'zapatos/db';
 
-import { upsertCachedRoles } from './populate-cache';
+import { upsertCachedRoles } from './populate-from-cache';
 import { pool } from './utils/pool';
 import { type RoleChange } from './zod';
 
@@ -8,28 +8,16 @@ export async function handleRoleGranted({
   roleGranted,
   blockNumber,
   timestamp,
-  cursor,
 }: {
   roleGranted: RoleChange;
   blockNumber: number;
   timestamp: number;
-  cursor: string;
 }) {
   try {
     const role = roleGranted.role;
     const isAdminRole = role === 'ADMIN';
     const isMemberRole = role === 'MEMBER';
     const isModeratorRole = role === 'MODERATOR';
-
-    console.log('Handling role granted:', roleGranted);
-
-    upsertCachedRoles({
-      roleChange: roleGranted,
-      blockNumber,
-      cursor,
-      type: 'GRANTED',
-      timestamp,
-    });
 
     if (isAdminRole) {
       await db
@@ -79,32 +67,12 @@ export async function handleRoleGranted({
   }
 }
 
-export async function handleRoleRevoked({
-  roleRevoked,
-  blockNumber,
-  timestamp,
-  cursor,
-}: {
-  roleRevoked: RoleChange;
-  blockNumber: number;
-  timestamp: number;
-  cursor: string;
-}) {
+export async function handleRoleRevoked({ roleRevoked }: { roleRevoked: RoleChange }) {
   try {
     const role = roleRevoked.role;
     const isAdminRole = role === 'ADMIN';
     const isMemberRole = role === 'MEMBER';
     const isModeratorRole = role === 'MODERATOR';
-
-    console.log('Handling role revoked:', roleRevoked);
-
-    upsertCachedRoles({
-      roleChange: roleRevoked,
-      blockNumber,
-      timestamp,
-      cursor,
-      type: 'REVOKED',
-    });
 
     if (isAdminRole) {
       await db

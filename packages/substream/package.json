@@ -10,12 +10,12 @@
   ],
   "license": "MIT OR Apache-2.0",
   "scripts": {
-    "build": "esbuild index.ts --bundle --outfile=dist/index.js --bundle --platform=node",
+    "build": "tsc --noEmit && esbuild index.ts --bundle --outfile=dist/index.js --bundle --platform=node",
     "prepublishOnly": "npm run build",
     "nuke-public": "tsx ./src/utils/executeSql.ts ./src/sql/nukePublic.sql",
     "zapatos": "pnpm dotenv -e .env -- npx zapatos",
     "start:from-genesis": "pnpm dotenv -e .env -- node dist/index.js --from-genesis",
-    "start:from-genesis-with-cache": "pnpm dotenv -e .env -- node dist/index.js --from-cache",
+    "start:from-genesis-with-cache": "pnpm dotenv -e .env -- node dist/index.js --from-cache --from-genesis",
     "start": "pnpm dotenv -e .env -- node dist/index.js",
     "initialize": "./src/sql/initAll.sh && pnpm zapatos"
   },
@@ -39,7 +39,6 @@
     "pg": "^8.7.3",
     "pg-cursor": "^2.10.3",
     "prom-client": "latest",
-    "tslog": "latest",
     "tsx": "^4.6.0",
     "yaml": "^2.3.4",
     "zapatos": "^6.2.0",

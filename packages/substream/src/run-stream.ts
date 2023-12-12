@@ -1,18 +1,17 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Effect, Stream } from 'effect';
+import { Duration, Effect, Schedule, Stream } from 'effect';
 
 import { MANIFEST, START_BLOCK } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
 import { parseValidFullEntries } from './parse-valid-full-entries';
-import { upsertCachedEntries } from './populate-cache';
 import { populateWithFullEntries } from './populate-entries';
+import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { createSink, createStream } from './substreams.js/sink/src';
 import { invariant } from './utils/invariant';
 import { getEntryWithIpfsContent } from './utils/ipfs';
-import { logger } from './utils/logger';
 import { type FullEntry, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
 
 export class InvalidPackageError extends Error {
@@ -23,16 +22,39 @@ export class CouldNotWriteCursorError extends Error {
   _tag: 'CouldNotWriteCursorError' = 'CouldNotWriteCursorError';
 }
 
-export class CouldNotReadCursorError extends Error {
-  _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
-}
-
 export class CouldNotWriteCachedEntryError extends Error {
   _tag: 'CouldNotWriteCachedEntryError' = 'CouldNotWriteCachedEntryError';
 }
 
-export function getStreamEffect(startBlockNum?: number) {
+export class CouldNotWriteCachedRoleError extends Error {
+  _tag: 'CouldNotWriteCachedRoleError' = 'CouldNotWriteCachedRoleError';
+}
+
+export class InvalidStreamConfigurationError extends Error {
+  _tag: 'InvalidStreamConfigurationError' = 'InvalidStreamConfigurationError';
+}
+
+export class CouldNotReadCursorError extends Error {
+  _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
+}
+
+interface StreamConfig {
+  startBlockNumber?: number;
+}
+
+export function runStream({ startBlockNumber }: StreamConfig = {}) {
   const program = Effect.gen(function* (_) {
+    const startCursor = yield* _(
+      Effect.tryPromise({
+        try: () => readCursor(),
+        catch: error => new CouldNotReadCursorError(String(error)),
+      })
+    );
+
+    if (!startBlockNumber && !startCursor) {
+      yield* _(Effect.fail(new InvalidStreamConfigurationError('Either startBlockNumber or startCursor is required')));
+    }
+
     const substreamsEndpoint = process.env.SUBSTREAMS_ENDPOINT;
     invariant(substreamsEndpoint, 'SUBSTREAMS_ENDPOINT is required');
     const substreamsApiKey = process.env.SUBSTREAMS_API_KEY;
@@ -40,27 +62,13 @@ export function getStreamEffect(startBlockNum?: number) {
     const authIssueUrl = process.env.AUTH_ISSUE_URL;
     invariant(authIssueUrl, 'AUTH_ISSUE_URL is required');
 
-    logger.enable('pretty');
-    logger.info('Logging enabled');
-
     const substreamPackage = readPackageFromFile(MANIFEST);
-
-    logger.info('Substream package downloaded');
+    console.info('Substream package downloaded');
 
     const { token } = yield* _(
       Effect.tryPromise({
         try: () => authIssue(substreamsApiKey, authIssueUrl),
         catch: error => new InvalidPackageError(`Could not read package at path ${MANIFEST} ${String(error)}`),
-      })
-    );
-
-    const outputModule = 'geo_out';
-    const productionMode = true;
-
-    const startCursor = yield* _(
-      Effect.tryPromise({
-        try: () => readCursor(),
-        catch: error => new CouldNotReadCursorError(String(error)),
       })
     );
 
@@ -72,28 +80,34 @@ export function getStreamEffect(startBlockNum?: number) {
       interceptors: [createAuthInterceptor(token)],
     });
 
-    console.log('cursor', startCursor);
-
     const stream = createStream({
       connectTransport: transport,
       substreamPackage,
-      outputModule,
-      productionMode,
-      // @TODO: Move cursor and block number up to top level.
-      // This will let us pass either the start block _or_ the start cursor
-      // but not both.
+      outputModule: 'geo_out',
+      productionMode: true,
+      // The caller determines which block or cursor to start from based on
+      // error handling, CLI flags, cache state, etc. We default to cursor
+      // if it exists or start from the passed in block if not.
       startCursor: startCursor ? startCursor : undefined,
-      startBlockNum: startCursor ? undefined : startBlockNum ?? START_BLOCK,
+      startBlockNum: startCursor ? undefined : startBlockNumber,
+      // The stream will retry recoverable errors for 10 minutes
+      // internally. This has no effect on unrecoverable errors.
+      maxRetrySeconds: 600, // 10 minutes.
     });
 
     let entriesQueue = Promise.resolve();
 
     const sink = createSink({
-      handleBlockScopedData: message =>
-        Effect.gen(function* (_) {
+      handleBlockScopedData: message => {
+        return Effect.gen(function* (_) {
           const cursor = message.cursor;
           const blockNumber = Number(message.clock?.number.toString());
           const timestamp = Number(message.clock?.timestamp?.seconds.toString());
+
+          // Skipping a massive block for now
+          if (message.clock?.number.toString() === '36472865') {
+            return;
+          }
 
           if (blockNumber % 1000 === 0) {
             console.log(`@ Block ${blockNumber}`);
@@ -180,20 +194,50 @@ export function getStreamEffect(startBlockNum?: number) {
               const { granted, revoked } = roleChange;
 
               if (granted) {
+                yield* _(
+                  Effect.tryPromise({
+                    try: () =>
+                      upsertCachedRoles({
+                        roleChange: granted,
+                        blockNumber,
+                        cursor,
+                        type: 'GRANTED',
+                        timestamp,
+                      }),
+                    catch: error =>
+                      new CouldNotWriteCachedRoleError(
+                        `Could not upsert cached granted role in block ${blockNumber} ${String(error)}}`
+                      ),
+                  })
+                );
+
                 handleRoleGranted({
                   roleGranted: granted,
                   blockNumber,
-                  cursor,
                   timestamp,
                 });
               }
 
               if (revoked) {
+                yield* _(
+                  Effect.tryPromise({
+                    try: () =>
+                      upsertCachedRoles({
+                        roleChange: revoked,
+                        blockNumber,
+                        cursor,
+                        type: 'REVOKED',
+                        timestamp,
+                      }),
+                    catch: error =>
+                      new CouldNotWriteCachedRoleError(
+                        `Could not upsert cached revoked role in block ${blockNumber} ${String(error)}}`
+                      ),
+                  })
+                );
+
                 handleRoleRevoked({
                   roleRevoked: revoked,
-                  blockNumber,
-                  cursor,
-                  timestamp,
                 });
               }
             }
@@ -202,9 +246,11 @@ export function getStreamEffect(startBlockNum?: number) {
           if (!entryResponse.success && !roleChangeResponse.success) {
             console.error('Failed to parse substream message', unpackedOutput);
           }
-        }),
-      handleBlockUndoSignal: message =>
-        Effect.gen(function* (_) {
+        });
+      },
+
+      handleBlockUndoSignal: message => {
+        return Effect.gen(function* (_) {
           const blockNumber = Number(message.lastValidBlock?.number.toString());
           yield* _(
             Effect.tryPromise({
@@ -212,10 +258,13 @@ export function getStreamEffect(startBlockNum?: number) {
               catch: error => new CouldNotWriteCursorError(String(error)),
             })
           );
-        }),
+        });
+      },
     });
 
-    return yield* _(Stream.run(stream, sink));
+    const runStream = Stream.run(stream, sink);
+
+    return yield* _(runStream);
   });
 
   return program;
