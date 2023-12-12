@@ -4,9 +4,10 @@ import pluralize from 'pluralize';
 
 import { Cookie } from '~/core/cookie';
 import { Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
+import { isPermissionlessSpace } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -22,9 +23,9 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const { isPermissionlessSpace } = await API.space(spaceId);
+  const isPermissionless = isPermissionlessSpace(spaceId);
 
-  if (isPermissionlessSpace) {
+  if (isPermissionless) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

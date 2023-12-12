@@ -5,7 +5,7 @@ import * as React from 'react';
 import type { Metadata } from 'next';
 
 import { Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { fetchSubspaces } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
@@ -27,8 +27,7 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
 
-  const { space } = await API.space(params.id);
-
+  const space = await Subgraph.fetchSpace({ id: spaceId });
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {
@@ -112,8 +111,7 @@ const SubspacesContainer = async ({ entityId }: SubspacesContainerProps) => {
 };
 
 const getData = async (spaceId: string) => {
-  const { space } = await API.space(spaceId);
-
+  const space = await Subgraph.fetchSpace({ id: spaceId });
   const entityId = space?.spaceConfigEntityId;
 
   if (!entityId) {

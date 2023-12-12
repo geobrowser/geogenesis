@@ -220,7 +220,10 @@ export function fromNetworkTriples(networkTriples: NetworkTriple[]): Triple[] {
   );
 }
 
-export function fromNetworkActions(networkActions: SubstreamNetworkAction[], spaceId: string): Action[] {
+export function fromNetworkActions(
+  networkActions: SubstreamNetworkAction[] | NetworkAction[],
+  spaceId: string
+): Action[] {
   try {
     const newActions = networkActions
       // @TODO: Remove this once we have correct types for substreams triples value types.

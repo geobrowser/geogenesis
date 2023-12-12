@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import * as React from 'react';
 
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 import { Entity } from '~/core/utils/entity';
 
@@ -24,8 +24,7 @@ export default async function TriplesPage({ params, searchParams }: Props) {
 
 const getData = async ({ params, searchParams }: Props) => {
   const spaceId = params.id;
-  const { space } = await API.space(params.id);
-
+  const space = await Subgraph.fetchSpace({ id: spaceId });
   const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);
 
   const configEntity = space?.spaceConfigEntityId

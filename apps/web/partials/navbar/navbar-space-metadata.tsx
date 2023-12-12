@@ -4,10 +4,9 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 
-import { API } from '~/core/io';
 import { Services } from '~/core/services';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, isPermissionlessSpace } from '~/core/utils/utils';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 
@@ -24,11 +23,12 @@ export function NavbarSpaceMetadata() {
     queryKey: ['space', spaceId, config.subgraph],
     queryFn: async ({ signal }) => {
       if (!spaceId) return null;
-      const { space, isPermissionlessSpace } = await API.space(spaceId);
+      const space = await subgraph.fetchSpace({ id: spaceId });
+      const isPermissionless = isPermissionlessSpace(spaceId);
 
       if (!space) return null;
 
-      if (isPermissionlessSpace) {
+      if (isPermissionless) {
         config = {
           ...config,
           subgraph: config.permissionlessSubgraph,

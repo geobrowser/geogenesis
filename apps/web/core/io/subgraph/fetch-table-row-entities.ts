@@ -113,7 +113,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  return result.geoEntities.map(result => {
+  const idk = result.geoEntities.map(result => {
     const triples = fromNetworkTriples(result.entityOf);
     const nameTriple = Entity.nameTriple(triples);
 
@@ -126,4 +126,12 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
       triples,
     };
   });
+
+  console.log('idk', {
+    idk,
+    query: getFetchTableRowsQuery(options.filter, options.first, options.skip),
+    endpoint: options.endpoint,
+  });
+
+  return idk;
 }

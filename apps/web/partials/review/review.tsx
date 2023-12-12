@@ -18,7 +18,7 @@ import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { Environment } from '~/core/environment';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
@@ -66,11 +66,8 @@ type Proposal = {
 type EntityId = string;
 
 type GatewaySpaceWithEntityConfig = {
-  space: {
-    spaceConfigEntityId: string;
-  } & Space;
-  isPermissionlessSpace: boolean;
-};
+  spaceConfigEntityId: string;
+} & Space;
 
 const ReviewChanges = () => {
   const { subgraph } = Services.useServices();
@@ -83,22 +80,22 @@ const ReviewChanges = () => {
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', allSpacesWithActions],
     queryFn: async () => {
-      const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => API.space(s)));
+      const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => subgraph.fetchSpace({ id: s })));
       const spaces = maybeSpaces.filter(
-        (s): s is GatewaySpaceWithEntityConfig => s.space !== null && s.space.spaceConfigEntityId !== null
+        (s): s is GatewaySpaceWithEntityConfig => s !== null && s.spaceConfigEntityId !== null
       );
 
       const spaceConfigToSpaceMap = new Map<string, string>();
 
       for (const space of spaces) {
-        spaceConfigToSpaceMap.set(space.space.spaceConfigEntityId, space.space.id);
+        spaceConfigToSpaceMap.set(space.spaceConfigEntityId, space.id);
       }
 
       const spaceConfigs = (
         await Promise.all(
           spaces.map(space =>
             subgraph.fetchEntity({
-              id: space.space.spaceConfigEntityId,
+              id: space.spaceConfigEntityId,
             })
           )
         )

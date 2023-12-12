@@ -439,8 +439,8 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
   }
 
   const [selectedEntity, previousEntity] = await Promise.all([
-    subgraph.fetchEntity({ id: entityId, blockNumber: selectedBlock }),
-    subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock }),
+    subgraph.fetchEntity({ id: entityId }),
+    subgraph.fetchEntity({ id: entityId }),
   ]);
 
   const selectedEntityBlockIdsTriple = selectedEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
@@ -455,15 +455,9 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
 
   const [maybeRemoteSelectedEntityBlocks, maybeRemotePreviousEntityBlocks, maybeAdditionalRemotePreviousEntityBlocks] =
     await Promise.all([
-      Promise.all(
-        selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId, blockNumber: selectedBlock }))
-      ),
-      Promise.all(
-        selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock }))
-      ),
-      Promise.all(
-        previousEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock }))
-      ),
+      Promise.all(selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
+      Promise.all(selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
+      Promise.all(previousEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
     ]);
 
   if (selectedEntity) {
@@ -663,8 +657,8 @@ export async function fromProposal(
 
   for (const entityId of entityIds) {
     const [selectedEntity, previousEntity] = await Promise.all([
-      subgraph.fetchEntity({ id: entityId, blockNumber: selectedBlock }),
-      subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock }),
+      subgraph.fetchEntity({ id: entityId }),
+      subgraph.fetchEntity({ id: entityId }),
     ]);
 
     const selectedEntityBlockIdsTriple = selectedEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
@@ -682,17 +676,9 @@ export async function fromProposal(
       maybeRemotePreviousEntityBlocks,
       maybeAdditionalRemotePreviousEntityBlocks,
     ] = await Promise.all([
-      Promise.all(
-        selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId, blockNumber: selectedBlock }))
-      ),
-      Promise.all(
-        selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock }))
-      ),
-      Promise.all(
-        previousEntityBlockIds.map(previousEntityId =>
-          subgraph.fetchEntity({ id: previousEntityId, blockNumber: previousBlock })
-        )
-      ),
+      Promise.all(selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
+      Promise.all(selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
+      Promise.all(previousEntityBlockIds.map(previousEntityId => subgraph.fetchEntity({ id: previousEntityId }))),
     ]);
 
     if (selectedEntity && !selectedEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {

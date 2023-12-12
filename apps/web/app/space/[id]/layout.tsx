@@ -3,13 +3,13 @@ import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, isPermissionlessSpace } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -31,12 +31,11 @@ interface Props {
 }
 
 export default async function Layout({ children, params }: Props) {
-  const { isPermissionlessSpace } = await API.space(params.id);
   const props = await getData(params.id);
   const coverUrl = Entity.cover(props.triples);
 
   return (
-    <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
+    <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace(params.id)}>
       <TypesStoreServerContainer spaceId={params.id}>
         <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
           <EditorProvider
@@ -93,7 +92,7 @@ function MembersSkeleton() {
 }
 
 const getData = async (spaceId: string) => {
-  const { space } = await API.space(spaceId);
+  const space = await Subgraph.fetchSpace({ id: spaceId });
 
   const entityId = space?.spaceConfigEntityId;
 

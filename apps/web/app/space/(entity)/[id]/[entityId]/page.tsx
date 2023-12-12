@@ -1,8 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Environment } from '~/core/environment';
-import { API } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
+import { isPermissionlessSpace } from '~/core/utils/utils';
 
 import DefaultEntityPage from './default-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
@@ -18,9 +18,9 @@ interface Props {
 export default async function EntityTemplateStrategy({ params, searchParams }: Props) {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const { isPermissionlessSpace } = await API.space(params.id);
+  const isPermissionless = isPermissionlessSpace(params.id);
 
-  if (isPermissionlessSpace) {
+  if (isPermissionless) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

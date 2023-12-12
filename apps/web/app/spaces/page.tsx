@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Metadata } from 'next';
 
-import { DEFAULT_OPENGRAPH_IMAGE } from '~/core/constants';
+import { DEFAULT_OPENGRAPH_IMAGE, PUBLIC_SPACES } from '~/core/constants';
 import { fetchEntity } from '~/core/io/subgraph';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
 import { Space } from '~/core/types';
@@ -46,21 +46,7 @@ const sortByCreatedAtBlock = (a: Space, b: Space) =>
 
 // @HACK: Right now we hide some spaces from the front page. There's no way to remove
 // Spaces from the Subgraph store yet.
-const filterHiddenSpaces = (space: Space) => !HIDDEN_SPACES.includes(space.id);
-
-// Right now there is no way to remove Spaces from the Space Registry and Subgraph store.
-// Temporarily we just filter some Spaces when we fetch Spaces.
-const HIDDEN_SPACES: Array<string> = [
-  '0x276187Ac0D3a61EAAf3D5Af443dA932EFba7A661', // Abundant Housing in San Francisco
-  '0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD', // Transitional Housing in San Francisco
-  '0xEC07c19743179f1AC904Fee97a1A99310e500aB6', // End Homelessness in San Francisco
-  '0x1b7a66284C31A8D11a790ec79916c425Ef6E7886', // The Graph
-  '0x5402D2C23d9495F6632bAf6EA828D1893e870484', // Recovery in San Francisco
-  '0x759Cc61Ea01ae5A510C7cAA7e79581c07d2A80C3', // Mentorship in San Francisco
-  '0xdFDD5Fe53F804717509416baEBd1807Bd769D40D', // Street outreach in San Francisco
-  '0x668356E8e22B11B389B136BB3A3a5afE388c6C5c', // Workforce development in San Francisco
-  '0x2C423d74eEC59867b16693Ec2870292b302729ec', // Web3 economics
-];
+const filterHiddenSpaces = (space: Space) => PUBLIC_SPACES.map(s => s.toLowerCase()).includes(space.id.toLowerCase());
 
 export const revalidate = 60; // 1 minute
 

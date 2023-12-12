@@ -4,8 +4,8 @@ import * as Either from 'effect/Either';
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
-import { API } from '~/core/io';
 import { graphql } from '~/core/io/subgraph/graphql';
+import { isPermissionlessSpace } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -73,9 +73,9 @@ interface NetworkResult {
 async function getProposalsCount({ params }: Props) {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const { isPermissionlessSpace } = await API.space(params.id);
+  const isPermissionless = isPermissionlessSpace(params.id);
 
-  if (isPermissionlessSpace) {
+  if (isPermissionless) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

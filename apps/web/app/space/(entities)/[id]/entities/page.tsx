@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { AppConfig, Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
@@ -13,6 +13,7 @@ import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { Space } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
+import { isPermissionlessSpace } from '~/core/utils/utils';
 
 import { Component } from './component';
 
@@ -30,9 +31,10 @@ export default async function EntitiesPage({ params, searchParams }: Props) {
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const { isPermissionlessSpace, space } = await API.space(spaceId);
+  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const isPermissionless = isPermissionlessSpace(spaceId);
 
-  if (isPermissionlessSpace) {
+  if (isPermissionless) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,

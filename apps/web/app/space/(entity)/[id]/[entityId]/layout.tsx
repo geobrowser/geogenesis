@@ -5,7 +5,7 @@ import * as React from 'react';
 import { Metadata } from 'next';
 
 import { Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -13,7 +13,7 @@ import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
+import { NavUtils, getOpenGraphMetadataForEntity, isPermissionlessSpace } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
@@ -75,9 +75,9 @@ export default async function ProfileLayout({ children, params }: Props) {
 
   params.entityId = decodeURIComponent(params.entityId);
 
-  const { isPermissionlessSpace } = await API.space(params.id);
+  const isPermissionless = isPermissionlessSpace(params.id);
 
-  if (isPermissionlessSpace) {
+  if (isPermissionless) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,
@@ -91,16 +91,17 @@ export default async function ProfileLayout({ children, params }: Props) {
 
   if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
     return (
-      <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
+      <SpaceConfigProvider usePermissionlessSubgraph={isPermissionless}>
+        {' '}
         <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>
       </SpaceConfigProvider>
     );
   }
 
-  const profile = await getProfilePage(params.entityId, config.subgraph);
+  const profile = await getProfilePage(params.entityId);
 
   return (
-    <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
+    <SpaceConfigProvider usePermissionlessSubgraph={isPermissionless}>
       <TypesStoreServerContainer spaceId={params.id}>
         <EntityStoreProvider id={params.entityId} spaceId={params.id} initialTriples={profile.triples}>
           <EditorProvider
@@ -144,10 +145,7 @@ export default async function ProfileLayout({ children, params }: Props) {
   );
 }
 
-async function getProfilePage(
-  entityId: string,
-  endpoint: string
-): Promise<
+async function getProfilePage(entityId: string): Promise<
   IEntity & {
     avatarUrl: string | null;
     coverUrl: string | null;

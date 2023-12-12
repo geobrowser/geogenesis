@@ -1,5 +1,5 @@
 import '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { OmitStrict, Profile } from '~/core/types';
 
 type EditorsForSpace = {
@@ -8,7 +8,7 @@ type EditorsForSpace = {
 };
 
 export async function getFirstThreeEditorsForSpace(spaceId: string): Promise<EditorsForSpace> {
-  const { space } = await API.space(spaceId);
+  const space = await Subgraph.fetchSpace({ id: spaceId });
 
   if (!space) {
     throw new Error("Space doesn't exist");

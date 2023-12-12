@@ -1,7 +1,7 @@
-import { API } from '~/core/io';
+import { Subgraph } from '~/core/io';
 
 export async function getIsEditorForSpace(spaceId: string, connectedAddress?: string): Promise<boolean> {
-  const { space } = await API.space(spaceId);
+  const space = await Subgraph.fetchSpace({ id: spaceId });
 
   if (!space) {
     throw new Error("Space doesn't exist");

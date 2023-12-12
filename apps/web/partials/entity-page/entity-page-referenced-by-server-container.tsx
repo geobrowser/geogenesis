@@ -1,9 +1,9 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/utils/entity';
-import { getRandomArrayItem } from '~/core/utils/utils';
+import { getRandomArrayItem, isPermissionlessSpace } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
@@ -21,9 +21,9 @@ interface Props {
 export async function EntityReferencedByServerContainer({ entityId, name, spaceId }: Props) {
   let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const { isPermissionlessSpace } = await API.space(spaceId);
+  const isPermissionless = isPermissionlessSpace(spaceId);
 
-  if (isPermissionlessSpace) {
+  if (isPermissionless) {
     config = {
       ...config,
       subgraph: config.permissionlessSubgraph,
