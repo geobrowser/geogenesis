@@ -15,6 +15,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { useToast } from '~/core/hooks/use-toast';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useMigrateHub } from '~/core/migrate/migrate';
@@ -26,6 +27,7 @@ import { Triple } from '~/core/utils/triple';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { ValueTypeId, valueTypeNames, valueTypes } from '~/core/value-types';
 
+import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
 import { ResultContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -338,7 +340,11 @@ const resultsListActionBarStyles = cva(
 );
 
 function AddAttribute() {
+  const [, setToast] = useToast();
+  const { create } = useActionsStore();
+
   const { type } = useTableBlock();
+  const spaceId = type.space;
 
   const autocomplete = useAutocomplete({
     allowedTypes: [SYSTEM_IDS.ATTRIBUTE],
@@ -355,6 +361,43 @@ function AddAttribute() {
   const onSelect = (result: IEntity) => {
     autocomplete.onQueryChange('');
     onAddAttribute(result);
+  };
+
+  const onCreateNewAttribute = () => {
+    const newEntityId = ID.createEntityId();
+
+    // Create new entity with name and type
+    create(
+      Triple.withId({
+        entityId: newEntityId,
+        attributeId: SYSTEM_IDS.NAME,
+        entityName: autocomplete.query,
+        attributeName: 'Name',
+        space: spaceId,
+        value: {
+          type: 'string',
+          id: ID.createValueId(),
+          value: autocomplete.query,
+        },
+      })
+    );
+
+    create(
+      Triple.withId({
+        entityId: newEntityId,
+        attributeId: SYSTEM_IDS.TYPES,
+        entityName: autocomplete.query,
+        attributeName: 'Types',
+        space: spaceId,
+        value: {
+          type: 'entity',
+          id: SYSTEM_IDS.ATTRIBUTE,
+          name: 'Attribute',
+        },
+      })
+    );
+
+    setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
   return (
@@ -419,7 +462,7 @@ function AddAttribute() {
                   )}
                 </AnimatePresence>
                 <div className="flex items-baseline gap-3">
-                  <TextButton>Create new attribute</TextButton>
+                  <TextButton onClick={onCreateNewAttribute}>Create new attribute</TextButton>
                 </div>
               </div>
             </ResizableContainer>
