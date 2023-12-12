@@ -496,6 +496,7 @@ function EntityAttributes({
                 itemIds={entityValueTriples
                   .filter(triple => triple.attributeId === attributeId)
                   .map(triple => triple.value.id)}
+                attributeId={attributeId}
               />
             </div>
           );
@@ -569,6 +570,7 @@ function EntityAttributes({
                 onDone={result => linkAttribute(attributeId, result)}
                 itemIds={attributeIds}
                 allowedTypes={relationTypes}
+                attributeId={attributeId}
               />
             ) : (
               <Text as="p" variant="bodySemibold">
