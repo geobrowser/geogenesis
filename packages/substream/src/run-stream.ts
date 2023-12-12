@@ -1,7 +1,7 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Effect, Stream } from 'effect';
+import { Duration, Effect, Schedule, Stream } from 'effect';
 
 import { MANIFEST, START_BLOCK } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
@@ -12,7 +12,6 @@ import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { createSink, createStream } from './substreams.js/sink/src';
 import { invariant } from './utils/invariant';
 import { getEntryWithIpfsContent } from './utils/ipfs';
-import { logger } from './utils/logger';
 import { type FullEntry, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
 
 export class InvalidPackageError extends Error {
@@ -23,10 +22,6 @@ export class CouldNotWriteCursorError extends Error {
   _tag: 'CouldNotWriteCursorError' = 'CouldNotWriteCursorError';
 }
 
-export class CouldNotReadCursorError extends Error {
-  _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
-}
-
 export class CouldNotWriteCachedEntryError extends Error {
   _tag: 'CouldNotWriteCachedEntryError' = 'CouldNotWriteCachedEntryError';
 }
@@ -35,8 +30,14 @@ export class CouldNotWriteCachedRoleError extends Error {
   _tag: 'CouldNotWriteCachedRoleError' = 'CouldNotWriteCachedRoleError';
 }
 
-export function getStreamEffect(startBlockNum?: number) {
+interface StreamConfig {
+  startBlockNumber?: number;
+  startCursor?: string;
+}
+
+export function runStream({ startBlockNumber, startCursor }: StreamConfig = {}) {
   const program = Effect.gen(function* (_) {
+    invariant(startBlockNumber || startCursor, 'Either startBlockNumber or startCursor is required');
     const substreamsEndpoint = process.env.SUBSTREAMS_ENDPOINT;
     invariant(substreamsEndpoint, 'SUBSTREAMS_ENDPOINT is required');
     const substreamsApiKey = process.env.SUBSTREAMS_API_KEY;
@@ -44,12 +45,8 @@ export function getStreamEffect(startBlockNum?: number) {
     const authIssueUrl = process.env.AUTH_ISSUE_URL;
     invariant(authIssueUrl, 'AUTH_ISSUE_URL is required');
 
-    logger.enable('pretty');
-    logger.info('Logging enabled');
-
     const substreamPackage = readPackageFromFile(MANIFEST);
-
-    logger.info('Substream package downloaded');
+    console.info('Substream package downloaded');
 
     const { token } = yield* _(
       Effect.tryPromise({
@@ -61,13 +58,6 @@ export function getStreamEffect(startBlockNum?: number) {
     const outputModule = 'geo_out';
     const productionMode = true;
 
-    const startCursor = yield* _(
-      Effect.tryPromise({
-        try: () => readCursor(),
-        catch: error => new CouldNotReadCursorError(String(error)),
-      })
-    );
-
     const registry = createRegistry(substreamPackage);
 
     const transport = createGrpcTransport({
@@ -75,8 +65,6 @@ export function getStreamEffect(startBlockNum?: number) {
       httpVersion: '2',
       interceptors: [createAuthInterceptor(token)],
     });
-
-    console.log('cursor', startCursor);
 
     const stream = createStream({
       connectTransport: transport,
@@ -87,14 +75,17 @@ export function getStreamEffect(startBlockNum?: number) {
       // This will let us pass either the start block _or_ the start cursor
       // but not both.
       startCursor: startCursor ? startCursor : undefined,
-      startBlockNum: startCursor ? undefined : startBlockNum ?? START_BLOCK,
+      startBlockNum: startCursor ? undefined : startBlockNumber ?? START_BLOCK,
+      // The stream will retry recoverable errors for 10 minutes
+      // internally. This has no effect on unrecoverable errors.
+      maxRetrySeconds: 600, // 10 minutes.
     });
 
     let entriesQueue = Promise.resolve();
 
     const sink = createSink({
-      handleBlockScopedData: message =>
-        Effect.gen(function* (_) {
+      handleBlockScopedData: message => {
+        return Effect.gen(function* (_) {
           const cursor = message.cursor;
           const blockNumber = Number(message.clock?.number.toString());
           const timestamp = Number(message.clock?.timestamp?.seconds.toString());
@@ -241,9 +232,11 @@ export function getStreamEffect(startBlockNum?: number) {
           if (!entryResponse.success && !roleChangeResponse.success) {
             console.error('Failed to parse substream message', unpackedOutput);
           }
-        }),
-      handleBlockUndoSignal: message =>
-        Effect.gen(function* (_) {
+        });
+      },
+
+      handleBlockUndoSignal: message => {
+        return Effect.gen(function* (_) {
           const blockNumber = Number(message.lastValidBlock?.number.toString());
           yield* _(
             Effect.tryPromise({
@@ -251,10 +244,30 @@ export function getStreamEffect(startBlockNum?: number) {
               catch: error => new CouldNotWriteCursorError(String(error)),
             })
           );
-        }),
+        });
+      },
     });
 
-    return yield* _(Stream.run(stream, sink));
+    const runStream = Stream.run(stream, sink);
+
+    // @TODO: Restart the stream if it fails from the latest cursor. Not sure if the best place
+    // for this is here or in the root. Likely the root since we want to lift reading the cursor
+    // there anyway.
+    //
+    // 1. Lift cursor reading to root
+    // 2. Pass either cursor or block number to getStreamEffect
+    const runStreamRetryable = Effect.retry(
+      runStream,
+      // Retry jittered exponential with base of 100ms for up to 10 minutes.
+      Schedule.exponential(100).pipe(
+        Schedule.jittered,
+        Schedule.compose(Schedule.elapsed),
+        // Retry for 10 minutes.
+        Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(600)))
+      )
+    );
+
+    return yield* _(runStreamRetryable);
   });
 
   return program;

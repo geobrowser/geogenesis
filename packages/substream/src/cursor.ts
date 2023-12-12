@@ -4,7 +4,6 @@ import { pool } from './utils/pool';
 
 export async function readCursor() {
   const cursor = await db.selectOne('cursors', { id: 0 }).run(pool);
-  console.log('Using cursor with start block:', cursor?.block_number);
   return cursor?.cursor;
 }
 
