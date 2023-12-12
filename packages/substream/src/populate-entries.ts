@@ -187,15 +187,13 @@ export async function populateWithFullEntries({
 
       if (isCreateTriple && version) {
         const insertTripleEffect = Effect.tryPromise({
-          try: async () => {
-            await db.upsert('triples', triple, 'id').run(pool);
-          },
+          try: () => db.upsert('triples', triple, 'id').run(pool),
           catch: () => new Error('Failed to insert triple'),
         });
 
         const insertTripleVersionEffect = Effect.tryPromise({
-          try: async () => {
-            await db
+          try: () =>
+            db
               .upsert(
                 'triple_versions',
                 { version_id: version.id, triple_id: triple.id },
@@ -204,8 +202,7 @@ export async function populateWithFullEntries({
                   updateColumns: ['triple_id', 'version_id'],
                 }
               )
-              .run(pool);
-          },
+              .run(pool),
           catch: () => new Error('Failed to insert triple'),
         });
 
@@ -218,19 +215,14 @@ export async function populateWithFullEntries({
       // any new versions.
       if (isDeleteTriple && version) {
         const deleteEffect = Effect.tryPromise({
-          try: async () => {
-            const deleted = await db
+          try: () =>
+            db
               .deletes(
                 'triple_versions',
                 { version_id: version.id, triple_id: triple.id },
                 { returning: ['triple_id', 'version_id'] }
               )
-              .run(pool);
-
-            if (triple.entity_id === '0x206d1f64bb177e2732479186Ee5502D7202509D0–4') {
-              console.log('Deleting now stale triple version for nate', deleted, triple, actionType);
-            }
-          },
+              .run(pool),
           catch: error =>
             new Error(`Failed to delete triple ${triple.id} from version ${version.id}}. ${(error as Error).message}`),
         });
@@ -240,8 +232,8 @@ export async function populateWithFullEntries({
 
       if (isNameCreateAction) {
         const insertNameEffect = Effect.tryPromise({
-          try: async () => {
-            await db
+          try: () =>
+            db
               .upsert(
                 'geo_entities',
                 {
@@ -259,9 +251,8 @@ export async function populateWithFullEntries({
                   noNullUpdateColumns: ['description'],
                 }
               )
-              .run(pool);
-          },
-          catch: () => new Error('Failed to insert triple'),
+              .run(pool),
+          catch: () => new Error('Failed to create name'),
         });
 
         yield* awaited(Effect.retry(insertNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -269,8 +260,8 @@ export async function populateWithFullEntries({
 
       if (isNameDeleteAction) {
         const deleteNameEffect = Effect.tryPromise({
-          try: async () => {
-            await db
+          try: () =>
+            db
               .upsert(
                 'geo_entities',
                 {
@@ -288,9 +279,8 @@ export async function populateWithFullEntries({
                   noNullUpdateColumns: ['description'],
                 }
               )
-              .run(pool);
-          },
-          catch: () => new Error('Failed to insert triple'),
+              .run(pool),
+          catch: () => new Error('Failed to delete name'),
         });
 
         yield* awaited(Effect.retry(deleteNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -298,8 +288,8 @@ export async function populateWithFullEntries({
 
       if (isDescriptionCreateAction) {
         const insertDescriptionEffect = Effect.tryPromise({
-          try: async () => {
-            await db
+          try: () =>
+            db
               .upsert(
                 'geo_entities',
                 {
@@ -317,9 +307,8 @@ export async function populateWithFullEntries({
                   noNullUpdateColumns: ['name'],
                 }
               )
-              .run(pool);
-          },
-          catch: () => new Error('Failed to insert triple'),
+              .run(pool),
+          catch: () => new Error('Failed to create description'),
         });
 
         yield* awaited(Effect.retry(insertDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -327,8 +316,8 @@ export async function populateWithFullEntries({
 
       if (isDescriptionDeleteAction) {
         const deleteDescriptionEffect = Effect.tryPromise({
-          try: async () => {
-            await db
+          try: () =>
+            db
               .upsert(
                 'geo_entities',
                 {
@@ -346,9 +335,8 @@ export async function populateWithFullEntries({
                   noNullUpdateColumns: ['name'],
                 }
               )
-              .run(pool);
-          },
-          catch: () => new Error('Failed to insert triple'),
+              .run(pool),
+          catch: () => new Error('Failed to delete description'),
         });
 
         yield* awaited(Effect.retry(deleteDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -356,8 +344,8 @@ export async function populateWithFullEntries({
 
       if (isAddType) {
         const insertTypeEffect = Effect.tryPromise({
-          try: async () => {
-            await db
+          try: () =>
+            db
               .upsert(
                 'geo_entity_types',
                 {
@@ -369,9 +357,8 @@ export async function populateWithFullEntries({
                 ['entity_id', 'type_id'],
                 { updateColumns: db.doNothing }
               )
-              .run(pool);
-          },
-          catch: () => new Error('Failed to insert triple'),
+              .run(pool),
+          catch: () => new Error('Failed to create type'),
         });
 
         yield* awaited(Effect.retry(insertTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -379,16 +366,16 @@ export async function populateWithFullEntries({
 
       if (isDeleteType) {
         const deleteTypeEffect = Effect.tryPromise({
-          try: async () => {
-            await db
+          try: () =>
+            db
               .deletes('geo_entity_types', {
                 entity_id: triple.entity_id,
                 type_id: triple.value_id,
               })
-              .run(pool);
-          },
+              .run(pool),
           catch: () => new Error('Failed to delete type'),
         });
+
         yield* awaited(Effect.retry(deleteTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
     }

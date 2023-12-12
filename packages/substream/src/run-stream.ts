@@ -34,13 +34,23 @@ export class InvalidStreamConfigurationError extends Error {
   _tag: 'InvalidStreamConfigurationError' = 'InvalidStreamConfigurationError';
 }
 
-interface StreamConfig {
-  startBlockNumber?: number;
-  startCursor?: string;
+export class CouldNotReadCursorError extends Error {
+  _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
 }
 
-export function runStream({ startBlockNumber, startCursor }: StreamConfig = {}) {
+interface StreamConfig {
+  startBlockNumber?: number;
+}
+
+export function runStream({ startBlockNumber }: StreamConfig = {}) {
   const program = Effect.gen(function* (_) {
+    const startCursor = yield* _(
+      Effect.tryPromise({
+        try: () => readCursor(),
+        catch: error => new CouldNotReadCursorError(String(error)),
+      })
+    );
+
     if (!startBlockNumber && !startCursor) {
       yield* _(Effect.fail(new InvalidStreamConfigurationError('Either startBlockNumber or startCursor is required')));
     }
@@ -254,24 +264,7 @@ export function runStream({ startBlockNumber, startCursor }: StreamConfig = {}) 
 
     const runStream = Stream.run(stream, sink);
 
-    // @TODO: Restart the stream if it fails from the latest cursor. Not sure if the best place
-    // for this is here or in the root. Likely the root since we want to lift reading the cursor
-    // there anyway.
-    //
-    // 1. Lift cursor reading to root
-    // 2. Pass either cursor or block number to getStreamEffect
-    const runStreamRetryable = Effect.retry(
-      runStream,
-      // Retry jittered exponential with base of 100ms for up to 10 minutes.
-      Schedule.exponential(100).pipe(
-        Schedule.jittered,
-        Schedule.compose(Schedule.elapsed),
-        // Retry for 10 minutes.
-        Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(600)))
-      )
-    );
-
-    return yield* _(runStreamRetryable);
+    return yield* _(runStream);
   });
 
   return program;

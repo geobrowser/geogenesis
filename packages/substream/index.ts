@@ -1,18 +1,52 @@
 import { Command } from 'commander';
 import dotenv from 'dotenv';
-import { Effect, Either, pipe } from 'effect';
+import { Duration, Effect, Either, Predicate, Schedule, pipe } from 'effect';
 
 import { bootstrapRoot } from './src/bootstrap-root.js';
 import { START_BLOCK } from './src/constants/constants.js';
-import { readCursor } from './src/cursor.js';
 import { populateFromCache } from './src/populate-from-cache.js';
 import { runStream } from './src/run-stream.js';
 import { resetPublicTablesToGenesis } from './src/utils/reset-public-tables-to-genesis.js';
 
 dotenv.config();
 
-export class CouldNotReadCursorError extends Error {
-  _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
+/**
+ * Start from cache and genesis
+ *   Use startBlockNumber from cache. Fallback if not available because of errors in cache.
+ * Start from cache
+ *   Use startBlockNumber from cache. Fallback if not available because of errors in cache.
+ * Start from genesis
+ *   Use startBlockNumber from genesis.
+ *
+ * Neither from cache nor genesis
+ *   Use cursor. Fall back to genesis start block if not available.
+ */
+function configureStream(blockNumber: number | null, options: any) {
+  let startBlockNumber: number | null = blockNumber;
+
+  return Effect.gen(function* (_) {
+    // if (options.block) {
+    //   startBlockNumber = Number(options.block);
+    // }
+
+    if (options.fromGenesis && options.fromCache) {
+      console.info(`Starting stream at block ${startBlockNumber} after populating data from cache.`);
+    }
+
+    if (options.fromGenesis && !options.fromCache) {
+      console.info(`Starting stream from Geo's genesis block ${START_BLOCK}.`);
+      startBlockNumber = START_BLOCK;
+    }
+
+    // We're starting at the most recently indexed segment of a block without any flags
+    // i.e., `substream start`
+    if (!startBlockNumber) {
+      console.info(`Starting stream from latest stored cursor`);
+      return yield* _(runStream());
+    }
+
+    yield* _(runStream({ startBlockNumber: startBlockNumber ?? START_BLOCK }));
+  });
 }
 
 async function main() {
@@ -57,50 +91,46 @@ async function main() {
     console.info(`Cache processing complete at block ${startBlockNumber}`);
   }
 
-  /**
-   * Start from cache and genesis
-   *   Use startBlockNumber from cache. Fallback if not available because of errors in cache.
-   * Start from cache
-   *   Use startBlockNumber from cache. Fallback if not available because of errors in cache.
-   * Start from genesis
-   *   Use startBlockNumber from genesis.
-   *
-   * Neither from cache nor genesis
-   *   Use cursor. Fall back to genesis start block if not available.
-   */
-  const configureStream = Effect.gen(function* (_) {
-    const startCursor = yield* _(
-      Effect.tryPromise({
-        try: () => readCursor(),
-        catch: error => new CouldNotReadCursorError(String(error)),
-      })
-    );
+  const configureStream = Effect.retry(
+    Effect.gen(function* (_) {
+      // if (options.block) {
+      //   startBlockNumber = Number(options.block);
+      // }
 
-    // if (options.block) {
-    //   startBlockNumber = Number(options.block);
-    // }
+      if (options.fromGenesis && options.fromCache) {
+        console.info(`Starting stream at block ${startBlockNumber} after populating data from cache.`);
+      }
 
-    if (options.fromGenesis && options.fromCache) {
-      console.info(`Starting stream at block ${startBlockNumber} after populating data from cache.`);
-    }
+      if (options.fromGenesis && !options.fromCache) {
+        console.info(`Starting stream from Geo's genesis block ${START_BLOCK}.`);
+        startBlockNumber = START_BLOCK;
+      }
 
-    if (options.fromGenesis && !options.fromCache) {
-      console.info(`Starting stream from Geo's genesis block ${START_BLOCK}.`);
-      startBlockNumber = START_BLOCK;
-    }
+      // We're starting at the most recently indexed segment of a block without any flags
+      // i.e., `substream start`
+      if (!startBlockNumber) {
+        console.info(`Starting stream from latest stored cursor`);
+        return yield* _(runStream());
+      }
 
-    // We're starting at the most recently indexed segment of a block without any flags
-    // i.e., `substream start`
-    if (!startBlockNumber && startCursor) {
-      console.info(`Starting stream at latest stored cursor ${startCursor}.`);
-      return yield* _(runStream({ startCursor }));
-    }
+      yield* _(runStream({ startBlockNumber: startBlockNumber ?? START_BLOCK }));
+    }),
+    // Retry jittered exponential with base of 100ms for up to 10 minutes.
+    Schedule.exponential(100).pipe(
+      Schedule.jittered,
+      Schedule.compose(Schedule.elapsed),
+      // Retry for 10 minutes.
+      Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(600)))
+    )
+  );
 
-    // We didn't find a cursor or we're starting from genesis. In the future
-    // you'll also be able to start from a specific block number.
-    yield* _(runStream({ startBlockNumber: startBlockNumber ?? START_BLOCK }));
-  });
-
+  // Retry the stream for ~10 minutes. If it fails during indexing we will restart
+  // from the last indexed cursor. The cursor is read inside `runStream` so that
+  // retries will try and read from the latest cursor state if available.
+  //
+  // If there is no cursor for some reason it will run using the passed in start
+  // block number. If neither the block number or cursor is available then it will
+  // throw an error.
   const stream = await pipe(configureStream, Effect.either, Effect.runPromise);
 
   if (Either.isLeft(stream)) {
