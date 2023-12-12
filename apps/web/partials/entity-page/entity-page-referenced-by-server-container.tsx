@@ -32,7 +32,6 @@ export async function EntityReferencedByServerContainer({ entityId, name, spaceI
 
   const [related, spaces] = await Promise.all([
     Subgraph.fetchEntities({
-      endpoint: config.subgraph,
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),

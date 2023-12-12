@@ -159,7 +159,6 @@ async function getProfilePage(
   const [person, referencesPerson, spaces] = await Promise.all([
     Subgraph.fetchEntity({ id: entityId }),
     Subgraph.fetchEntities({
-      endpoint,
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),

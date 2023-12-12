@@ -33,11 +33,11 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
         Effect.tryPromise({
           try: () =>
             merged.fetchEntities({
-              endpoint: config.subgraph,
               query,
               signal,
               filter: filter ?? [],
               typeIds: allowedTypes,
+              first: 10,
             }),
           catch: () => new Subgraph.Errors.AbortError(),
         })
