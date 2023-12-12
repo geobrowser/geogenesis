@@ -10,10 +10,8 @@ import { graphql } from './graphql';
 import { SubstreamNetworkEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntityQuery(id: string, blockNumber?: number) {
-  const blockNumberQuery = blockNumber ? `, block: {number: ${JSON.stringify(blockNumber)}}` : ``;
-
   return `query {
-    geoEntity(id: ${JSON.stringify(id)}${blockNumberQuery}) {
+    geoEntity(id: ${JSON.stringify(id)}) {
       id,
       name
       versionsByEntityId(orderBy: CREATED_AT_DESC, first: 1) {
@@ -52,7 +50,6 @@ function getFetchEntityQuery(id: string, blockNumber?: number) {
 
 export interface FetchEntityOptions {
   id: string;
-  blockNumber?: number;
   signal?: AbortController['signal'];
 }
 
@@ -66,7 +63,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchEntityQuery(options.id, options.blockNumber),
+    query: getFetchEntityQuery(options.id),
     signal: options.signal,
   });
 
@@ -86,9 +83,9 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
           console.error(
             `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${endpoint} id: ${
               options.id
-            } blockNumber: ${options.blockNumber}
+            }
 
-            queryString: ${getFetchEntityQuery(options.id, options.blockNumber)}
+            queryString: ${getFetchEntityQuery(options.id)}
             `,
             error.message
           );
@@ -98,7 +95,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${endpoint} id: ${options.id} blockNumber: ${options.blockNumber}`
+            `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${endpoint} id: ${options.id}`
           );
           return {
             geoEntity: null,
