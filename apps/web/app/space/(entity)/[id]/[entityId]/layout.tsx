@@ -76,8 +76,6 @@ export default async function ProfileLayout({ children, params }: Props) {
     id: decodedId,
   });
 
-  console.log('types', { types, id: decodedId });
-
   if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
     return (
       <SpaceConfigProvider spaceId={params.id}>

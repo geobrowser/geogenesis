@@ -20,8 +20,6 @@ export default async function EntityTemplateStrategy({ params, searchParams }: P
     id: decodedId,
   });
 
-  console.log('types', types);
-
   if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
     return <ProfileEntityServerContainer params={params} />;
   }
