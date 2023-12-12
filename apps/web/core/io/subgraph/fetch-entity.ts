@@ -16,28 +16,34 @@ function getFetchEntityQuery(id: string, blockNumber?: number) {
     geoEntity(id: ${JSON.stringify(id)}${blockNumberQuery}) {
       id,
       name
-      triplesByEntityId {
+      versionsByEntityId(orderBy: CREATED_AT_DESC, first: 1) {
         nodes {
-          id
-          stringValue
-          valueId
-          valueType
-          numberValue
-          space {
-            id
-          }
-          entityValue {
-            id
-            name
-          }
-          attribute {
-            id
-            name
-          }
-          entity {
-            id
-            name
-          }
+         tripleVersions {
+            nodes {
+              triple {
+                id
+                stringValue
+                valueId
+                valueType
+                numberValue
+                space {
+                  id
+                }
+                entityValue {
+                  id
+                  name
+                }
+                attribute {
+                  id
+                  name
+                }
+                entity {
+                  id
+                  name
+                }
+              }
+            }
+          } 
         }
       }
     }
@@ -110,7 +116,11 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
     return null;
   }
 
-  const triples = fromNetworkTriples(entity.triplesByEntityId.nodes);
+  if (entity.versionsByEntityId.nodes.length === 0) {
+    return null;
+  }
+
+  const triples = fromNetworkTriples(entity.versionsByEntityId.nodes[0].tripleVersions.nodes.map(n => n.triple));
   const nameTriple = Entity.nameTriple(triples);
 
   return {
