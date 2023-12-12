@@ -343,8 +343,7 @@ function AddAttribute() {
   const [, setToast] = useToast();
   const { create } = useActionsStore();
 
-  const { type } = useTableBlock();
-  const spaceId = type.space;
+  const { type, spaceId } = useTableBlock();
 
   const autocomplete = useAutocomplete({
     allowedTypes: [SYSTEM_IDS.ATTRIBUTE],
