@@ -1,6 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/utils/entity';
 import { getRandomArrayItem, isPermissionlessSpace } from '~/core/utils/utils';
@@ -19,17 +18,6 @@ interface Props {
 }
 
 export async function EntityReferencedByServerContainer({ entityId, name, spaceId }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const isPermissionless = isPermissionlessSpace(spaceId);
-
-  if (isPermissionless) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
   const [related, spaces] = await Promise.all([
     Subgraph.fetchEntities({
       query: '',
