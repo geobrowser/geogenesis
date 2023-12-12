@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
-import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { EditorProvider } from '~/core/state/editor-store';
@@ -13,7 +12,7 @@ import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils, getOpenGraphMetadataForEntity, isPermissionlessSpace } from '~/core/utils/utils';
+import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
@@ -71,39 +70,28 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProfileLayout({ children, params }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  params.entityId = decodeURIComponent(params.entityId);
-
-  const isPermissionless = isPermissionlessSpace(params.id);
-
-  if (isPermissionless) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
+  const decodedId = decodeURIComponent(params.entityId);
 
   const types = await fetchEntityType({
-    endpoint: config.subgraph,
-    id: params.entityId,
+    id: decodedId,
   });
+
+  console.log('types', { types, id: decodedId });
 
   if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
     return (
-      <SpaceConfigProvider usePermissionlessSubgraph={isPermissionless}>
-        {' '}
+      <SpaceConfigProvider spaceId={params.id}>
         <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>
       </SpaceConfigProvider>
     );
   }
 
-  const profile = await getProfilePage(params.entityId);
+  const profile = await getProfilePage(decodedId);
 
   return (
-    <SpaceConfigProvider usePermissionlessSubgraph={isPermissionless}>
+    <SpaceConfigProvider spaceId={params.id}>
       <TypesStoreServerContainer spaceId={params.id}>
-        <EntityStoreProvider id={params.entityId} spaceId={params.id} initialTriples={profile.triples}>
+        <EntityStoreProvider id={decodedId} spaceId={params.id} initialTriples={profile.triples}>
           <EditorProvider
             id={profile.id}
             spaceId={params.id}
@@ -114,8 +102,8 @@ export default async function ProfileLayout({ children, params }: Props) {
             <EntityPageContentContainer>
               <EditableHeading
                 spaceId={params.id}
-                entityId={params.entityId}
-                name={profile.name ?? params.entityId}
+                entityId={decodedId}
+                name={profile.name ?? decodedId}
                 triples={profile.triples}
               />
               <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
@@ -125,8 +113,8 @@ export default async function ProfileLayout({ children, params }: Props) {
                 tabs={TABS.map(label => {
                   const href =
                     label === 'Overview'
-                      ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
-                      : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
+                      ? decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}`)
+                      : decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}/${label.toLowerCase()}`);
                   return {
                     href,
                     label,

@@ -9,7 +9,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils, isPermissionlessSpace } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -26,7 +26,7 @@ import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-he
 import { SpaceConfigProvider } from './space-config-provider';
 
 interface Props {
-  params: { id: string; entityId?: string };
+  params: { id: string };
   children: React.ReactNode;
 }
 
@@ -35,7 +35,7 @@ export default async function Layout({ children, params }: Props) {
   const coverUrl = Entity.cover(props.triples);
 
   return (
-    <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace(params.id)}>
+    <SpaceConfigProvider spaceId={params.id}>
       <TypesStoreServerContainer spaceId={params.id}>
         <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
           <EditorProvider

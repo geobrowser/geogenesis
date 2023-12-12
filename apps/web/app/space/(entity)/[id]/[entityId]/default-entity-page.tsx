@@ -36,7 +36,8 @@ interface Props {
 const EMPTY_ARRAY_AS_ENCODED_URI = '%5B%5D';
 
 export default async function DefaultEntityPage({ params, searchParams }: Props) {
-  const props = await getData(params.id, params.entityId);
+  const decodedId = decodeURIComponent(params.entityId);
+  const props = await getData(params.id, decodedId);
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
