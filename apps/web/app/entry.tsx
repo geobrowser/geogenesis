@@ -50,7 +50,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <Dialog
         open={open}
         onOpenChange={setOpen}
-        onDone={result => {
+        onDone={() => {
           setOpen(false);
         }}
       />
