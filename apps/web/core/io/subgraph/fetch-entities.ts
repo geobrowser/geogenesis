@@ -3,12 +3,13 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
 import { Entity as IEntity } from '~/core/types';
 import { FilterField, FilterState } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { NetworkEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamNetworkEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntitiesQuery(
   query: string | undefined,
@@ -18,89 +19,62 @@ function getFetchEntitiesQuery(
   skip = 0
 ) {
   const typeIdsString =
-    typeIds && typeIds.length > 0 ? `typeIds_contains_nocase: [${typeIds?.map(t => `"${t}"`).join(', ')}]` : '';
+    typeIds && typeIds.length > 0
+      ? `geoEntityTypesByEntityId: { some: { typeId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } }`
+      : '';
 
-  const constructedWhere = {
-    start: `{name_starts_with_nocase: ${JSON.stringify(query)}, entityOf_: {${entityOfWhere}}, ${typeIdsString}}`,
-    contain: `{name_contains_nocase: ${JSON.stringify(query)}, entityOf_: {${entityOfWhere}}, ${typeIdsString}}`,
-  };
-
-  // If there are multiple TypeIds we need to build an OR query for each one. Each query in the OR
-  // filter will contain the `query` and `entityOfWhere` params. We need to do this because there is
-  // no where filter like "typeIds_contains_any_nocase."
-  if (typeIds && typeIds.length > 1) {
-    const whereStartsWithMultipleTypeIds = [];
-    const whereContainsMultipleTypeIds = [];
-
-    for (const id of typeIds) {
-      whereStartsWithMultipleTypeIds.push(
-        `typeIds_contains_nocase: ["${id}"], name_starts_with_nocase: ${JSON.stringify(
-          query
-        )}, entityOf_: {${entityOfWhere}}`
-      );
-
-      whereContainsMultipleTypeIds.push(
-        `typeIds_contains_nocase: ["${id}"], name_contains_nocase: ${JSON.stringify(
-          query
-        )}, entityOf_: {${entityOfWhere}}`
-      );
-    }
-
-    const multiFilterStartsWithQuery = whereStartsWithMultipleTypeIds.map(f => `{${f}}`).join(', ');
-
-    constructedWhere.start = `{or: [${multiFilterStartsWithQuery}]}`;
-  }
+  const constructedWhere =
+    entityOfWhere !== ''
+      ? `{ name: { startsWithInsensitive: ${JSON.stringify(query)} }
+        versionsByEntityId: {
+          some: {
+            tripleVersions: {
+              some: {
+                triple: {
+                  ${entityOfWhere}
+                }
+              }
+            }
+          }
+        }
+        ${typeIdsString}
+      }`
+      : `{name: {startsWithInsensitive: ${JSON.stringify(query)}} ${typeIdsString} }`;
 
   return `query {
-    startEntities: geoEntities(where: ${constructedWhere.start}, first: ${first}, skip: ${skip}, orderBy: name) {
-      id,
-      name
-      entityOf {
+    geoEntities(filter: ${constructedWhere} first: ${first} offset: ${skip} orderBy: NAME_ASC) {
+      nodes {
         id
-        stringValue
-        valueId
-        valueType
-        numberValue
-        space {
-          id
-        }
-        entityValue {
-          id
-          name
-        }
-        attribute {
-          id
-          name
-        }
-        entity {
-          id
-          name
-        }
-      }
-    }
-    containEntities: geoEntities(where: ${constructedWhere.contain}, first: ${first}, skip: ${skip}, orderBy: name) {
-      id,
-      name,
-      entityOf {
-        id
-        stringValue
-        valueId
-        valueType
-        numberValue
-        space {
-          id
-        }
-        entityValue {
-          id
-          name
-        }
-        attribute {
-          id
-          name
-        }
-        entity {
-          id
-          name
+        name
+        versionsByEntityId(orderBy: CREATED_AT_DESC, first: 1) {
+          nodes {
+           tripleVersions {
+              nodes {
+                triple {
+                  id
+                  stringValue
+                  valueId
+                  valueType
+                  numberValue
+                  space {
+                    id
+                  }
+                  entityValue {
+                    id
+                    name
+                  }
+                  attribute {
+                    id
+                    name
+                  }
+                  entity {
+                    id
+                    name
+                  }
+                }
+              }
+            } 
+          }
         }
       }
     }
@@ -108,7 +82,6 @@ function getFetchEntitiesQuery(
 }
 
 export interface FetchEntitiesOptions {
-  endpoint: string;
   query?: string;
   typeIds?: string[];
   first?: number;
@@ -118,12 +91,12 @@ export interface FetchEntitiesOptions {
 }
 
 interface NetworkResult {
-  startEntities: NetworkEntity[];
-  containEntities: NetworkEntity[];
+  geoEntities: { nodes: SubstreamNetworkEntity[] };
 }
 
 export async function fetchEntities(options: FetchEntitiesOptions) {
   const queryId = uuid();
+  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const fieldFilters = Object.fromEntries(options.filter.map(clause => [clause.field, clause.value])) as Record<
     FilterField,
@@ -133,18 +106,18 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
   const entityOfWhere = [
     fieldFilters['entity-id'] && `id: ${JSON.stringify(fieldFilters['entity-id'])}`,
     fieldFilters['attribute-name'] &&
-      `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
-    fieldFilters['attribute-id'] && `entityOf_: {attribute: ${JSON.stringify(fieldFilters['attribute-id'])}}`,
+      `attribute: { name: {startsWithInsensitive: ${JSON.stringify(fieldFilters['attribute-name'])}} }`,
+    fieldFilters['attribute-id'] && `attribute: { id: {equalTo: ${JSON.stringify(fieldFilters['attribute-id'])}} }`,
 
     // Until we have OR we can't search for name_contains OR value string contains
-    fieldFilters.value && `entityValue_: {name_contains_nocase: ${JSON.stringify(fieldFilters.value)}}`,
-    fieldFilters['linked-to'] && `valueId: ${JSON.stringify(fieldFilters['linked-to'])}`,
+    fieldFilters.value && `entityValue: {name: {startsWithInsensitive: ${JSON.stringify(fieldFilters.value)}}}`,
+    fieldFilters['linked-to'] && `entityValueId: {equalTo: ${JSON.stringify(fieldFilters['linked-to'])}}`,
   ]
     .filter(Boolean)
     .join(' ');
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: options.endpoint,
+    endpoint,
     query: getFetchEntitiesQuery(options.query, entityOfWhere, options.typeIds, options.first, options.skip),
     signal: options?.signal,
   });
@@ -163,33 +136,27 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchEntities. queryId: ${queryId} endpoint: ${
-              options.endpoint
-            } query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}
-
-          queryString: ${getFetchEntitiesQuery(
-            options.query,
-            entityOfWhere,
-            options.typeIds,
-            options.first,
-            options.skip
-          )}
+            `Encountered runtime graphql error in fetchEntities. queryId: ${queryId} ryString: ${getFetchEntitiesQuery(
+              options.query,
+              entityOfWhere,
+              options.typeIds,
+              options.first,
+              options.skip
+            )}
           `,
             error.message
           );
 
           return {
-            startEntities: [],
-            containEntities: [],
+            geoEntities: { nodes: [] },
           };
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch entities, queryId: ${queryId} endpoint: ${options.endpoint} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
+            `${error._tag}: Unable to fetch entities, queryId: ${queryId}query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
           );
           return {
-            startEntities: [],
-            containEntities: [],
+            geoEntities: { nodes: [] },
           };
       }
     }
@@ -197,12 +164,25 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
     return resultOrError.right;
   });
 
-  const { startEntities, containEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const { geoEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const sortedResults = sortSearchResultsByRelevance(startEntities, containEntities);
+  const sortedResults = sortSearchResultsByRelevance(geoEntities.nodes);
 
   const sortedResultsWithTypesAndDescription: IEntity[] = sortedResults.map(result => {
-    const triples = fromNetworkTriples(result.entityOf);
+    // If there is no latest version just return an empty entity.
+    if (result.versionsByEntityId.nodes.length === 0) {
+      return {
+        id: result.id,
+        name: result.name,
+        description: null,
+        nameTripleSpace: undefined,
+        types: [],
+        triples: [],
+      };
+    }
+
+    const networkTriples = result.versionsByEntityId.nodes.map(n => n.tripleVersions.nodes.map(n => n.triple)).flat();
+    const triples = fromNetworkTriples(networkTriples);
     const nameTriple = Entity.nameTriple(triples);
 
     return {
@@ -248,14 +228,6 @@ const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
   return a.length - b.length;
 };
 
-function sortSearchResultsByRelevance(startEntities: NetworkEntity[], containEntities: NetworkEntity[]) {
-  // TODO: This is where it's breaking
-  const startEntityIds = startEntities.map(entity => entity.id);
-
-  const primaryResults = startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
-  const secondaryResults = containEntities
-    .filter(entity => !startEntityIds.includes(entity.id))
-    .sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
-
-  return [...primaryResults, ...secondaryResults];
+function sortSearchResultsByRelevance(startEntities: SubstreamNetworkEntity[]) {
+  return startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
 }
