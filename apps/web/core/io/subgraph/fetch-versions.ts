@@ -106,7 +106,7 @@ export async function fetchVersions({ entityId, spaceId, signal, page = 0 }: Fet
           console.error(
             `Encountered runtime graphql error in fetchVersions. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
             
-            queryString: ${getVersionsQuery(entityId, page * 10)}
+            queryString: ${getVersionsQuery(entityId, page * 5)}
             `,
             error.message
           );
