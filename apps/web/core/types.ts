@@ -169,6 +169,22 @@ export type Proposal = {
   space: string;
 };
 
+export type Version = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  createdBy: Profile;
+  createdAt: number;
+  createdAtBlock: string;
+  spaceId: string;
+  actions: Action[];
+  triples: Triple[];
+  entity: {
+    id: string;
+    name: string;
+  };
+};
+
 export type ProposedVersion = {
   id: string;
   name: string | null;

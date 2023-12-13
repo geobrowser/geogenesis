@@ -3,16 +3,16 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { ProposedVersion } from '~/core/types';
+import { Version } from '~/core/types';
 
 import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { NetworkProposedVersion, SubstreamProposedVersion, fromNetworkActions } from './network-local-mapping';
+import { SubstreamVersion, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
 
-const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
-  proposedVersions(filter: {entityId: {equalTo: ${JSON.stringify(
+const getVersionsQuery = (entityId: string, skip: number) => `query {
+  versions(filter: {entityId: {equalTo: ${JSON.stringify(
     entityId
-  )}}}, orderBy: CREATED_AT_DESC, first: 10, offset: ${skip}) {
+  )}}}, orderBy: CREATED_AT_DESC, first: 5, offset: ${skip}) {
     nodes {
       id
       name
@@ -22,8 +22,8 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
       spaceId
       actions {
         nodes {
-          actionType
           id
+          actionType
           attribute {
             id
             name
@@ -39,11 +39,37 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
           valueId
         }
       }
+      tripleVersions {
+        nodes {
+          triple {
+            id
+            attribute {
+              id
+              name
+            }
+            entity {
+              id
+              name
+            }
+            entityValue {
+              id
+              name
+            }
+            numberValue
+            stringValue
+            valueType
+            valueId
+            space {
+              id
+            }
+          }
+        }
+      }
     }
   }
 }`;
 
-export interface FetchProposedVersionsOptions {
+export interface FetchVersionsOptions {
   entityId: string;
   spaceId: string;
   page?: number;
@@ -51,21 +77,16 @@ export interface FetchProposedVersionsOptions {
 }
 
 interface NetworkResult {
-  proposedVersions: { nodes: SubstreamProposedVersion[] };
+  versions: { nodes: SubstreamVersion[] };
 }
 
-export async function fetchProposedVersions({
-  entityId,
-  spaceId,
-  signal,
-  page = 0,
-}: FetchProposedVersionsOptions): Promise<ProposedVersion[]> {
+export async function fetchVersions({ entityId, spaceId, signal, page = 0 }: FetchVersionsOptions): Promise<Version[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getProposedVersionsQuery(entityId, page * 10),
+    query: getVersionsQuery(entityId, page * 5),
     signal,
   });
 
@@ -83,24 +104,24 @@ export async function fetchProposedVersions({
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
+            `Encountered runtime graphql error in fetchVersions. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
             
-            queryString: ${getProposedVersionsQuery(entityId, page * 10)}
+            queryString: ${getVersionsQuery(entityId, page * 10)}
             `,
             error.message
           );
 
           return {
-            proposedVersions: { nodes: [] },
+            versions: { nodes: [] },
           };
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch proposedVersions. queryId: ${queryId} entityId: ${entityId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`
+            `${error._tag}: Unable to fetch fetchVersions. queryId: ${queryId} entityId: ${entityId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`
           );
 
           return {
-            proposedVersions: { nodes: [] },
+            versions: { nodes: [] },
           };
       }
     }
@@ -109,30 +130,28 @@ export async function fetchProposedVersions({
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposedVersions = result.proposedVersions.nodes;
+  const versions = result.versions.nodes;
 
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfiles = await Promise.all(proposedVersions.map(v => fetchProfile({ address: v.createdById })));
+  const maybeProfiles = await Promise.all(versions.map(v => fetchProfile({ address: v.createdById })));
 
   // Create a map of wallet address -> profile so we can look it up when creating the application
   // ProposedVersions data structure. ProposedVersions have a `createdById` field that should map to the Profile
   // of the user who created the ProposedVersion.
   const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
 
-  return proposedVersions.map(v => {
+  return versions.map(v => {
+    const networkTriples = v.tripleVersions.nodes.map(n => n.triple);
+
     return {
       ...v,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
       createdBy: profiles[v.createdById] ?? {
         id: v.createdById,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: v.createdById as `0x${string}`,
-        profileLink: null,
       },
       actions: fromNetworkActions(v.actions.nodes, spaceId),
+      triples: fromNetworkTriples(networkTriples),
     };
   });
 }
