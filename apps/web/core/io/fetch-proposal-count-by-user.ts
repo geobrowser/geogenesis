@@ -8,7 +8,7 @@ const getFetchUserProposalCountQuery = (createdBy: string) => {
   const where = [`createdBy_starts_with_nocase: ${JSON.stringify(createdBy)}`];
 
   return `query {
-    proposals(first: 1000, where: {${where}}, orderBy: createdAt, orderDirection: desc {
+    proposals(first: 1000, where: {${where}}, orderBy: createdAt, orderDirection: desc) {
       id
       status
     }
