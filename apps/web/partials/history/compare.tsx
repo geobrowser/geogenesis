@@ -770,10 +770,12 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
 
 const useChangesFromVersions = (selectedVersion: string, previousVersion: string) => {
   const { subgraph } = Services.useServices();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: [`${selectedVersion}-changes-from-${previousVersion}`],
-    queryFn: async () => Change.fromVersion(selectedVersion, previousVersion, subgraph),
+    queryFn: () => Change.fromVersion(selectedVersion, previousVersion, subgraph),
   });
+
+  console.log('error', error);
 
   // Typescript thinks is an array
   return [data, isLoading] as const;

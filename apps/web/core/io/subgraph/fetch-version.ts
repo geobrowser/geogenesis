@@ -9,17 +9,18 @@ import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
 import { SubstreamVersion, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
 
-const getVersionsQuery = (entityId: string, skip: number) => `query {
-  versions(filter: {entityId: {equalTo: ${JSON.stringify(
-    entityId
-  )}}}, orderBy: CREATED_AT_DESC, first: 5, offset: ${skip}) {
-    nodes {
+const getVersionsQuery = (versionId: string) => `query {
+  version(id: ${JSON.stringify(versionId)}) {
       id
       name
       createdAt
       createdAtBlock
       createdById
       spaceId
+      entity {
+        id
+        name
+      }
       actions {
         nodes {
           id
@@ -65,28 +66,26 @@ const getVersionsQuery = (entityId: string, skip: number) => `query {
           }
         }
       }
-    }
   }
 }`;
 
 export interface FetchVersionsOptions {
-  entityId: string;
-  spaceId: string;
+  versionId: string;
   page?: number;
   signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
-  versions: { nodes: SubstreamVersion[] };
+  version: SubstreamVersion | null;
 }
 
-export async function fetchVersions({ entityId, spaceId, signal, page = 0 }: FetchVersionsOptions): Promise<Version[]> {
+export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersionsOptions): Promise<Version | null> {
   const queryId = uuid();
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getVersionsQuery(entityId, page * 5),
+    query: getVersionsQuery(versionId),
     signal,
   });
 
@@ -104,24 +103,24 @@ export async function fetchVersions({ entityId, spaceId, signal, page = 0 }: Fet
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchVersions. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
+            `Encountered runtime graphql error in fetchVersion. queryId: ${queryId} versionId: ${versionId} endpoint: ${endpoint} page: ${page}
             
-            queryString: ${getVersionsQuery(entityId, page * 5)}
+            queryString: ${getVersionsQuery(versionId)}
             `,
             error.message
           );
 
           return {
-            versions: { nodes: [] },
+            version: null,
           };
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch fetchVersions. queryId: ${queryId} entityId: ${entityId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`
+            `${error._tag}: Unable to fetch fetchVersion. queryId: ${queryId} versionId: ${versionId} endpoint: ${endpoint} page: ${page}`
           );
 
           return {
-            versions: { nodes: [] },
+            version: null,
           };
       }
     }
@@ -130,33 +129,32 @@ export async function fetchVersions({ entityId, spaceId, signal, page = 0 }: Fet
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const versions = result.versions.nodes;
+  const version = result.version;
+
+  if (!version) {
+    return null;
+  }
 
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfiles = await Promise.all(versions.map(v => fetchProfile({ address: v.createdById })));
+  const maybeProfile = await fetchProfile({ address: version.createdById });
+  const networkTriples = version.tripleVersions.nodes.map(n => n.triple);
+  const spaceId = version.spaceId;
 
-  // Create a map of wallet address -> profile so we can look it up when creating the application
-  // ProposedVersions data structure. ProposedVersions have a `createdById` field that should map to the Profile
-  // of the user who created the ProposedVersion.
-  const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
-
-  return versions.map(v => {
-    const networkTriples = v.tripleVersions.nodes.map(n => n.triple);
-
-    return {
-      ...v,
-      // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profiles[v.createdById] ?? {
-        id: v.createdById,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: v.createdById as `0x${string}`,
-        profileLink: null,
-      },
-      actions: fromNetworkActions(v.actions.nodes, spaceId),
-      triples: fromNetworkTriples(networkTriples),
-    };
-  });
+  return {
+    ...version,
+    // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
+    createdBy: maybeProfile
+      ? maybeProfile[1]
+      : {
+          id: version.createdById,
+          name: null,
+          avatarUrl: null,
+          coverUrl: null,
+          address: version.createdById as `0x${string}`,
+          profileLink: null,
+        },
+    actions: fromNetworkActions(version.actions.nodes, spaceId),
+    triples: fromNetworkTriples(networkTriples),
+  };
 }

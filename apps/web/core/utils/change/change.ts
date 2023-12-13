@@ -2,6 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io/';
+import { fetchVersion } from '~/core/io/subgraph/fetch-version';
 import type {
   Action as ActionType,
   Entity as EntityType,
@@ -416,8 +417,8 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
   const changes: Record<EntityId, Changeset> = {};
 
   const [selectedVersion, previousVersion] = await Promise.all([
-    subgraph.fetchProposedVersion({ id: versionId }),
-    subgraph.fetchProposedVersion({ id: previousVersionId }),
+    fetchVersion({ versionId: versionId }),
+    fetchVersion({ versionId: previousVersionId }),
   ]);
 
   console.log('versions', { selectedVersion, previousVersion });
@@ -438,17 +439,12 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
     previousBlock = selectedBlock - 1;
   }
 
-  const [selectedEntity, previousEntity] = await Promise.all([
-    subgraph.fetchEntity({ id: entityId }),
-    subgraph.fetchEntity({ id: entityId }),
-  ]);
-
-  const selectedEntityBlockIdsTriple = selectedEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+  const selectedEntityBlockIdsTriple = selectedVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
   const selectedEntityBlockIds: string[] = selectedEntityBlockIdsTriple
     ? JSON.parse(Value.stringValue(selectedEntityBlockIdsTriple) || '[]')
     : [];
 
-  const previousEntityBlockIdsTriple = previousEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+  const previousEntityBlockIdsTriple = previousVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
   const previousEntityBlockIds: string[] = previousEntityBlockIdsTriple
     ? JSON.parse(Value.stringValue(previousEntityBlockIdsTriple) || '[]')
     : [];
@@ -460,12 +456,12 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
       Promise.all(previousEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
     ]);
 
-  if (selectedEntity) {
+  if (selectedVersion) {
     changes[entityId] = {
-      name: selectedEntity.name ?? '',
+      name: previousVersion?.name ?? '',
     };
 
-    selectedEntity.triples.map(triple => {
+    selectedVersion.triples.map(triple => {
       switch (triple.value.type) {
         case 'entity': {
           changes[entityId] = {
@@ -506,8 +502,8 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
     });
   }
 
-  if (previousEntity) {
-    previousEntity.triples.map(triple => {
+  if (previousVersion) {
+    previousVersion.triples.map(triple => {
       switch (triple.value.type) {
         case 'entity': {
           changes[entityId] = {
