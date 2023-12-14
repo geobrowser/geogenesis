@@ -3,12 +3,14 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io/';
 import { fetchVersion } from '~/core/io/subgraph/fetch-version';
+import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
 import type {
   Action as ActionType,
   Entity as EntityType,
   ProposedVersion,
   Triple as TripleType,
   TripleValueType,
+  Version,
 } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Entity } from '~/core/utils/entity';
@@ -421,8 +423,6 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
     fetchVersion({ versionId: previousVersionId }),
   ]);
 
-  console.log('versions', { selectedVersion, previousVersion });
-
   const versions = {
     selected: selectedVersion,
     previous: previousVersion,
@@ -613,51 +613,37 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
     previous: previousProposal,
   };
 
-  let selectedBlock = 0;
-  let previousBlock = 0;
   const entitySet = new Set<EntityId>();
 
   if (selectedProposal) {
-    selectedBlock = parseInt(selectedProposal.createdAtBlock, 10);
-    previousBlock = selectedBlock - 1;
-
-    selectedProposal.proposedVersions.forEach((proposedVersion: ProposedVersion) => {
-      proposedVersion.actions.forEach(action => {
-        switch (action.type) {
-          case 'createTriple':
-            entitySet.add(action.entityId);
-            break;
-
-          case 'deleteTriple':
-            entitySet.add(action.entityId);
-            break;
-
-          // This should never trigger since all network actions are only create/delete
-          case 'editTriple':
-            console.error(
-              `editTriple found in subgraph action: proposalId: ${selectedProposal.id} entityId: ${action.after.entityId}`
-            );
-            entitySet.add(action.after.entityId);
-            break;
-        }
-      });
-    });
+    selectedProposal.proposedVersions.forEach(proposedVersion => entitySet.add(proposedVersion.entity.id));
   }
 
   const entityIds = [...entitySet.values()];
 
   for (const entityId of entityIds) {
-    const [selectedEntity, previousEntity] = await Promise.all([
-      subgraph.fetchEntity({ id: entityId }),
-      subgraph.fetchEntity({ id: entityId }),
+    // Fetch the entity versions that correlate with the selected and previous proposals
+    // There's no way to fetch a specific version by proposal id so we need to fetch all
+    // versions by proposal id and select the first one. There should only ever be one
+    // version for an entity for a proposal.
+    const [maybeSelectedVersions, maybePreviousVersions] = await Promise.all([
+      selectedProposal ? fetchVersions({ entityId: entityId, proposalId: selectedProposal.id }) : [],
+      previousProposal ? fetchVersions({ entityId: entityId, proposalId: previousProposal.id }) : [],
     ]);
 
-    const selectedEntityBlockIdsTriple = selectedEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+    const selectedVersion: Version | undefined = maybeSelectedVersions[0];
+    const previousVersion: Version | undefined = maybePreviousVersions[0];
+
+    console.log('versions', { selectedVersion, previousVersion });
+
+    const selectedEntityBlockIdsTriple =
+      selectedVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
     const selectedEntityBlockIds: string[] = selectedEntityBlockIdsTriple
       ? JSON.parse(Value.stringValue(selectedEntityBlockIdsTriple) || '[]')
       : [];
 
-    const previousEntityBlockIdsTriple = previousEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+    const previousEntityBlockIdsTriple =
+      previousVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
     const previousEntityBlockIds: string[] = previousEntityBlockIdsTriple
       ? JSON.parse(Value.stringValue(previousEntityBlockIdsTriple) || '[]')
       : [];
@@ -672,12 +658,12 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
       Promise.all(previousEntityBlockIds.map(previousEntityId => subgraph.fetchEntity({ id: previousEntityId }))),
     ]);
 
-    if (selectedEntity && !selectedEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
+    if (selectedVersion && !selectedVersion.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
       changes[entityId] = {
-        name: selectedEntity.name ?? '',
+        name: selectedVersion.entity.name ?? '',
       };
 
-      selectedEntity.triples.map(triple => {
+      selectedVersion.triples.map(triple => {
         switch (triple.value.type) {
           case 'entity': {
             changes[entityId] = {
@@ -718,8 +704,8 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
       });
     }
 
-    if (previousEntity && !previousEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
-      previousEntity.triples.map(triple => {
+    if (previousVersion && !previousVersion.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
+      previousVersion.triples.map(triple => {
         switch (triple.value.type) {
           case 'entity': {
             changes[entityId] = {

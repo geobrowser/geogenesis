@@ -33,11 +33,10 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
     data: versions,
     isFetching,
     isFetchingNextPage,
-    error,
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`entity-versions-for-entityId-${id}`],
-    queryFn: ({ signal, pageParam = 0 }) => fetchVersions({ entityId: id, spaceId, page: pageParam, signal }),
+    queryFn: ({ signal, pageParam = 0 }) => fetchVersions({ entityId: id, page: pageParam, signal }),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 

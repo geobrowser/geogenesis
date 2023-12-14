@@ -9,40 +9,31 @@ import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
 import { SubstreamVersion, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
 
-const getVersionsQuery = (entityId: string, skip: number) => `query {
-  versions(filter: {entityId: {equalTo: ${JSON.stringify(
-    entityId
-  )}}}, orderBy: CREATED_AT_DESC, first: 5, offset: ${skip}) {
-    nodes {
-      id
-      name
-      createdAt
-      createdAtBlock
-      createdById
-      spaceId
-      actions {
-        nodes {
+const getVersionsQuery = (entityId: string, offset: number, proposalId?: string) => {
+  const filter = [
+    `entityId: { equalTo: ${JSON.stringify(entityId)} }`,
+    proposalId && `proposedVersion: { proposalId: { equalTo: ${JSON.stringify(proposalId)} } }`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return `query {
+    versions(filter: {${filter}}, orderBy: CREATED_AT_DESC, first: 5, offset: ${offset}) {
+      nodes {
+        id
+        name
+        createdAt
+        createdAtBlock
+        createdById
+        spaceId
+        entity {
           id
-          actionType
-          attribute {
-            id
-            name
-          }
-          entity {
-            id
-            name
-          }
-          entityValue
-          numberValue
-          stringValue
-          valueType
-          valueId
+          name
         }
-      }
-      tripleVersions {
-        nodes {
-          triple {
+        actions {
+          nodes {
             id
+            actionType
             attribute {
               id
               name
@@ -51,27 +42,47 @@ const getVersionsQuery = (entityId: string, skip: number) => `query {
               id
               name
             }
-            entityValue {
-              id
-              name
-            }
+            entityValue
             numberValue
             stringValue
             valueType
             valueId
-            space {
+          }
+        }
+        tripleVersions {
+          nodes {
+            triple {
               id
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+              entityValue {
+                id
+                name
+              }
+              numberValue
+              stringValue
+              valueType
+              valueId
+              space {
+                id
+              }
             }
           }
         }
       }
     }
-  }
-}`;
+  }`;
+};
 
 export interface FetchVersionsOptions {
   entityId: string;
-  spaceId: string;
+  proposalId?: string;
   page?: number;
   signal?: AbortController['signal'];
 }
@@ -80,13 +91,18 @@ interface NetworkResult {
   versions: { nodes: SubstreamVersion[] };
 }
 
-export async function fetchVersions({ entityId, spaceId, signal, page = 0 }: FetchVersionsOptions): Promise<Version[]> {
+export async function fetchVersions({
+  entityId,
+  signal,
+  proposalId,
+  page = 0,
+}: FetchVersionsOptions): Promise<Version[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getVersionsQuery(entityId, page * 5),
+    query: getVersionsQuery(entityId, page * 5, proposalId),
     signal,
   });
 
@@ -104,9 +120,9 @@ export async function fetchVersions({ entityId, spaceId, signal, page = 0 }: Fet
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchVersions. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
+            `Encountered runtime graphql error in fetchVersions. queryId: ${queryId} endpoint: ${endpoint} page: ${page}
             
-            queryString: ${getVersionsQuery(entityId, page * 5)}
+            queryString: ${getVersionsQuery(entityId, page * 5, proposalId)}
             `,
             error.message
           );
@@ -117,7 +133,7 @@ export async function fetchVersions({ entityId, spaceId, signal, page = 0 }: Fet
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch fetchVersions. queryId: ${queryId} entityId: ${entityId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}`
+            `${error._tag}: Unable to fetch fetchVersions. queryId: ${queryId} entityId: ${entityId} endpoint: ${endpoint} page: ${page}`
           );
 
           return {
@@ -155,7 +171,7 @@ export async function fetchVersions({ entityId, spaceId, signal, page = 0 }: Fet
         address: v.createdById as `0x${string}`,
         profileLink: null,
       },
-      actions: fromNetworkActions(v.actions.nodes, spaceId),
+      actions: fromNetworkActions(v.actions.nodes, v.spaceId),
       triples: fromNetworkTriples(networkTriples),
     };
   });

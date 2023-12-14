@@ -69,7 +69,7 @@ const getVersionsQuery = (versionId: string) => `query {
   }
 }`;
 
-export interface FetchVersionsOptions {
+export interface FetchVersionOptions {
   versionId: string;
   page?: number;
   signal?: AbortController['signal'];
@@ -79,7 +79,7 @@ interface NetworkResult {
   version: SubstreamVersion | null;
 }
 
-export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersionsOptions): Promise<Version | null> {
+export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersionOptions): Promise<Version | null> {
   const queryId = uuid();
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
