@@ -118,13 +118,6 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
     .filter(Boolean)
     .join(' ');
 
-  if (options.spaceId) {
-    console.log(
-      'query',
-      getFetchEntitiesQuery(options.query, entityOfWhere, options.typeIds, options.first, options.skip)
-    );
-  }
-
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
     query: getFetchEntitiesQuery(options.query, entityOfWhere, options.typeIds, options.first, options.skip),

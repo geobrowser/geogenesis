@@ -107,10 +107,8 @@ export async function fetchSpaces() {
         first: 1,
         spaceId: s.id,
         skip: 0,
-        filter: [
-          { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-          { field: 'linked-to', value: SYSTEM_IDS.SPACE_CONFIGURATION },
-        ],
+        typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
+        filter: [],
       });
 
       const spaceConfig: Entity | undefined = configs[0];
@@ -131,7 +129,6 @@ export async function fetchSpaces() {
       admins: space.spaceAdmins.nodes.map(account => account.accountId),
       editorControllers: space.spaceEditorControllers.nodes.map(account => account.accountId),
       editors: space.spaceEditors.nodes.map(account => account.accountId),
-      entityId: space.id || '',
       attributes: {},
       spaceConfig: config ?? null,
       createdAtBlock: space.createdAtBlock,

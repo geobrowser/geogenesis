@@ -64,7 +64,6 @@ export type Space = {
   editorControllers: string[];
   admins: string[];
   attributes: Dictionary<string, string>;
-  entityId: string;
   spaceConfig: Entity | null;
   createdAtBlock: string;
 };

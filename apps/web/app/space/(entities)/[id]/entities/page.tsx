@@ -70,18 +70,20 @@ const getData = async ({
   const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
     fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId),
     fetchForeignTypeTriples(Subgraph.fetchTriples, space),
-    Subgraph.fetchTriples({
-      query: '',
-      skip: 0,
-      first: DEFAULT_PAGE_SIZE,
-      filter: [
-        { field: 'entity-id', value: space.entityId ?? '' },
-        {
-          field: 'attribute-id',
-          value: SYSTEM_IDS.DEFAULT_TYPE,
-        },
-      ],
-    }),
+    space.spaceConfig
+      ? Subgraph.fetchTriples({
+          query: '',
+          skip: 0,
+          first: DEFAULT_PAGE_SIZE,
+          filter: [
+            { field: 'entity-id', value: space.spaceConfig.id },
+            {
+              field: 'attribute-id',
+              value: SYSTEM_IDS.DEFAULT_TYPE,
+            },
+          ],
+        })
+      : [],
   ]);
 
   // This can be empty if there are no types in the Space

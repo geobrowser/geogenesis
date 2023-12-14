@@ -124,7 +124,6 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     admins: networkSpace.spaceAdmins.nodes.map(account => account.accountId),
     editorControllers: networkSpace.spaceEditorControllers.nodes.map(account => account.accountId),
     editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
-    entityId: networkSpace?.id || '',
     // @TODO: Map the name and image of a space from the space configuration
     attributes: {},
     spaceConfig: spaceConfig ?? null,
