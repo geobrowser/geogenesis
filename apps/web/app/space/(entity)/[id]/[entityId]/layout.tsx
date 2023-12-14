@@ -189,15 +189,10 @@ async function getProfilePage(entityId: string): Promise<
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
-        return Subgraph.fetchTriples({
-          query: '',
-          skip: 0,
-          first: DEFAULT_PAGE_SIZE,
-          filter: [{ field: 'entity-id', value: blockId }],
-        });
+        return Subgraph.fetchEntity({ id: blockId });
       })
     )
-  ).flatMap(triples => triples);
+  ).flatMap(entity => entity?.triples ?? []);
 
   return {
     ...person,
