@@ -7,7 +7,7 @@ import { ProposedVersion } from '~/core/types';
 
 import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { NetworkProposedVersion, SubstreamProposedVersion, fromNetworkActions } from './network-local-mapping';
+import { SubstreamProposedVersion, fromNetworkActions } from './network-local-mapping';
 
 const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
   proposedVersions(filter: {entityId: {equalTo: ${JSON.stringify(

@@ -55,8 +55,6 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
 
   const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
 
-  console.log('proposals', { proposals, error });
-
   const isLastPage =
     proposals?.pages &&
     proposals.pages.length > 1 &&

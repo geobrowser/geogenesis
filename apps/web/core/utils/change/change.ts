@@ -600,17 +600,12 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
   return { changes, versions };
 }
 
-export async function fromProposal(
-  proposalId: string,
-  previousProposalId: string,
-  subgraph: Subgraph.ISubgraph,
-  config: Environment.AppConfig
-) {
+export async function fromProposal(proposalId: string, previousProposalId: string, subgraph: Subgraph.ISubgraph) {
   const changes: Record<EntityId, Changeset> = {};
 
   const [selectedProposal, previousProposal] = await Promise.all([
-    subgraph.fetchProposal({ id: proposalId, endpoint: config.subgraph }),
-    subgraph.fetchProposal({ id: previousProposalId, endpoint: config.subgraph }),
+    subgraph.fetchProposal({ id: proposalId }),
+    subgraph.fetchProposal({ id: previousProposalId }),
   ]);
 
   const proposals = {

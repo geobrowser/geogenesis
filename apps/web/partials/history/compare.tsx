@@ -782,10 +782,10 @@ const useChangesFromVersions = (selectedVersion: string, previousVersion: string
 };
 
 const useChangesFromProposals = (selectedProposal: string, previousProposal: string) => {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${selectedProposal}-changes-from-${previousProposal}`],
-    queryFn: async () => Change.fromProposal(selectedProposal, previousProposal, subgraph, config),
+    queryFn: () => Change.fromProposal(selectedProposal, previousProposal, subgraph),
   });
 
   return [data, isLoading] as const;
@@ -896,7 +896,7 @@ const useFilters = (rawFilter: string) => {
   const { subgraph, config } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${rawFilter}`],
-    queryFn: async () => getFilters(rawFilter, subgraph, config),
+    queryFn: () => getFilters(rawFilter, subgraph, config),
   });
 
   return [data, isLoading] as const;
