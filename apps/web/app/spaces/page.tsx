@@ -5,7 +5,7 @@ import { Metadata } from 'next';
 import { DEFAULT_OPENGRAPH_IMAGE, PUBLIC_SPACES } from '~/core/constants';
 import { fetchEntity } from '~/core/io/subgraph';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
-import { Space } from '~/core/types';
+import { Entity, Space } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
 
 import { Card } from '~/design-system/card';
@@ -46,7 +46,7 @@ const sortByCreatedAtBlock = (a: Space, b: Space) =>
 
 // @HACK: Right now we hide some spaces from the front page. There's no way to remove
 // Spaces from the Subgraph store yet.
-const filterHiddenSpaces = (space: Space) => PUBLIC_SPACES.map(s => s.toLowerCase()).includes(space.id.toLowerCase());
+const filterHiddenSpaces = (space: Space) => PUBLIC_SPACES.includes(space.id.toLowerCase());
 
 export const revalidate = 60; // 1 minute
 
@@ -55,13 +55,12 @@ export default async function Spaces() {
   const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
 
   const spacesWithSpaceConfigs = filteredAndSortedSpaces.filter(
-    (s): s is Space & { spaceConfigEntityId: string } => s.spaceConfigEntityId !== null
+    (s): s is Space & { spaceConfig: Entity } => s.spaceConfig !== null
   );
 
   const spaceConfigs = await Promise.all(
     spacesWithSpaceConfigs.map(async space => {
-      const entity = await fetchEntity({ id: space.spaceConfigEntityId });
-
+      const entity = space.spaceConfig;
       if (!entity) {
         return {
           id: space.id,

@@ -60,12 +60,7 @@ const getData = async ({
   }
 
   const spaceId = space.id;
-
-  const configEntity = space?.spaceConfigEntityId
-    ? await Subgraph.fetchEntity({
-        id: space?.spaceConfigEntityId,
-      })
-    : null;
+  const configEntity = space?.spaceConfig;
 
   const spaceName = configEntity ? configEntity.name : space?.attributes[SYSTEM_IDS.NAME];
   const spaceImage = configEntity

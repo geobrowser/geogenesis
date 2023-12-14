@@ -35,18 +35,7 @@ export function NavbarSpaceMetadata() {
         };
       }
 
-      if (!space.spaceConfigEntityId) {
-        return {
-          name: space.attributes[SYSTEM_IDS.NAME] ?? space.id,
-          img: space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE],
-          href: NavUtils.toSpace(space.id),
-        };
-      }
-
-      const spaceConfig = await subgraph.fetchEntity({
-        id: space.spaceConfigEntityId,
-        signal,
-      });
+      const spaceConfig = space.spaceConfig;
 
       if (!spaceConfig) {
         return {

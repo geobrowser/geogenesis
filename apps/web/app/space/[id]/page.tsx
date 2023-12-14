@@ -28,14 +28,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
 
   const space = await Subgraph.fetchSpace({ id: spaceId });
-  const entityId = space?.spaceConfigEntityId;
+  const entity = space?.spaceConfig;
 
-  if (!entityId) {
+  if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
-    return redirect(`/space/${spaceId}/entities`);
+    redirect(`/space/${spaceId}/entities`);
   }
 
-  const entity = await Subgraph.fetchEntity({ id: entityId });
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
   return {
@@ -44,7 +43,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: entityName ?? spaceId,
       description: description ?? undefined,
-      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
+      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entity.id)}`,
       images: openGraphImageUrl
         ? [
             {
@@ -112,28 +111,26 @@ const SubspacesContainer = async ({ entityId }: SubspacesContainerProps) => {
 
 const getData = async (spaceId: string) => {
   const space = await Subgraph.fetchSpace({ id: spaceId });
-  const entityId = space?.spaceConfigEntityId;
+  const entity = space?.spaceConfig;
 
-  if (!entityId) {
+  if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
     redirect(`/space/${spaceId}/entities`);
   }
-
-  const entity = await Subgraph.fetchEntity({ id: entityId });
 
   // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
   // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
   if (entity?.nameTripleSpace) {
     if (spaceId !== entity?.nameTripleSpace) {
       console.log('Redirecting to space from space configuration entity', entity?.nameTripleSpace);
-      redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
+      redirect(`/space/${entity?.nameTripleSpace}/${entity.id}`);
     }
   }
 
   return {
     name: entity?.name ?? null,
     triples: entity?.triples ?? [],
-    id: entityId,
+    id: entity.id,
     spaceId,
   };
 };

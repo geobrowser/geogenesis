@@ -94,21 +94,19 @@ function MembersSkeleton() {
 const getData = async (spaceId: string) => {
   const space = await Subgraph.fetchSpace({ id: spaceId });
 
-  const entityId = space?.spaceConfigEntityId;
+  const entity = space?.spaceConfig;
 
-  if (!entityId) {
+  if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
     redirect(`/space/${spaceId}/entities`);
   }
-
-  const entity = await Subgraph.fetchEntity({ id: entityId });
 
   // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
   // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
   if (entity?.nameTripleSpace) {
     if (spaceId !== entity?.nameTripleSpace) {
       console.log('Redirecting to space from space configuration entity', entity?.nameTripleSpace);
-      redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
+      redirect(`/space/${entity?.nameTripleSpace}/${entity.id}`);
     }
   }
 
@@ -127,7 +125,7 @@ const getData = async (spaceId: string) => {
 
   return {
     triples: entity?.triples ?? [],
-    id: entityId,
+    id: entity.id,
     name: entity?.name ?? spaceName ?? '',
     description: Entity.description(entity?.triples ?? []),
     spaceId,

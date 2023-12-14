@@ -26,12 +26,7 @@ const getData = async ({ params, searchParams }: Props) => {
   const spaceId = params.id;
   const space = await Subgraph.fetchSpace({ id: spaceId });
   const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);
-
-  const configEntity = space?.spaceConfigEntityId
-    ? await Subgraph.fetchEntity({
-        id: space?.spaceConfigEntityId,
-      })
-    : null;
+  const configEntity = space?.spaceConfig;
 
   const spaceName = configEntity ? configEntity.name : space?.attributes[SYSTEM_IDS.NAME];
   const spaceImage = configEntity

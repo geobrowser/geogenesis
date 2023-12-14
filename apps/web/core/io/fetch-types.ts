@@ -32,7 +32,7 @@ export const fetchForeignTypeTriples = async (
   space: Space,
   pageSize = 1000
 ) => {
-  if (!space.spaceConfigEntityId) {
+  if (!space.spaceConfig) {
     return [];
   }
 
@@ -42,7 +42,7 @@ export const fetchForeignTypeTriples = async (
     skip: 0,
     first: pageSize,
     filter: [
-      { field: 'entity-id', value: space.spaceConfigEntityId },
+      { field: 'entity-id', value: space.spaceConfig?.id },
       { field: 'attribute-id', value: SYSTEM_IDS.FOREIGN_TYPES },
     ],
   });

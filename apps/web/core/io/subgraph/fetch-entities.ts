@@ -84,6 +84,7 @@ function getFetchEntitiesQuery(
 export interface FetchEntitiesOptions {
   query?: string;
   typeIds?: string[];
+  spaceId?: string;
   first?: number;
   skip?: number;
   filter: FilterState;
@@ -104,6 +105,7 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
   >;
 
   const entityOfWhere = [
+    options.spaceId && `spaceId: { equalTo: ${JSON.stringify(options.spaceId)} }`,
     fieldFilters['entity-id'] && `id: ${JSON.stringify(fieldFilters['entity-id'])}`,
     fieldFilters['attribute-name'] &&
       `attribute: { name: {startsWithInsensitive: ${JSON.stringify(fieldFilters['attribute-name'])}} }`,
@@ -115,6 +117,13 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
   ]
     .filter(Boolean)
     .join(' ');
+
+  if (options.spaceId) {
+    console.log(
+      'query',
+      getFetchEntitiesQuery(options.query, entityOfWhere, options.typeIds, options.first, options.skip)
+    );
+  }
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,

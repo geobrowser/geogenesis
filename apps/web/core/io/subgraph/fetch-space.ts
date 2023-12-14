@@ -4,8 +4,9 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Space } from '~/core/types';
+import { Entity, Space } from '~/core/types';
 
+import { fetchEntities } from './fetch-entities';
 import { fetchTriples } from './fetch-triples';
 import { graphql } from './graphql';
 
@@ -51,10 +52,10 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   const queryId = uuid();
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
-  const spaceConfigTriples = await fetchTriples({
+  const spaceConfigs = await fetchEntities({
     query: '',
     first: 1,
-    space: options.id,
+    spaceId: options.id,
     skip: 0,
     filter: [
       { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
@@ -115,6 +116,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   }
 
   const networkSpace = result.space;
+  const spaceConfig: Entity | undefined = spaceConfigs[0];
 
   return {
     id: networkSpace.id,
@@ -125,7 +127,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     entityId: networkSpace?.id || '',
     // @TODO: Map the name and image of a space from the space configuration
     attributes: {},
-    spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === networkSpace.id)?.entityId || null,
+    spaceConfig: spaceConfig ?? null,
     createdAtBlock: networkSpace.createdAtBlock,
   };
 }

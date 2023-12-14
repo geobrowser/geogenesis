@@ -4,8 +4,9 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Space } from '~/core/types';
+import { Entity, Space } from '~/core/types';
 
+import { fetchEntities } from './fetch-entities';
 import { fetchTriples } from './fetch-triples';
 import { graphql } from './graphql';
 
@@ -50,17 +51,6 @@ interface NetworkResult {
 export async function fetchSpaces() {
   const queryId = uuid();
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
-
-  const spaceConfigTriples = await fetchTriples({
-    query: '',
-    first: 200,
-    skip: 0,
-    filter: [
-      // Fetch triples where types is Space Configuration
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-      { field: 'linked-to', value: SYSTEM_IDS.SPACE_CONFIGURATION },
-    ],
-  });
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
@@ -110,8 +100,30 @@ export async function fetchSpaces() {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
+  const spaceConfigs = await Promise.all(
+    result.spaces.nodes.map(async s => {
+      const configs = await fetchEntities({
+        query: '',
+        first: 1,
+        spaceId: s.id,
+        skip: 0,
+        filter: [
+          { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
+          { field: 'linked-to', value: SYSTEM_IDS.SPACE_CONFIGURATION },
+        ],
+      });
+
+      const spaceConfig: Entity | undefined = configs[0];
+
+      return {
+        spaceId: s.id,
+        config: spaceConfig,
+      };
+    })
+  );
+
   const spaces = result.spaces.nodes.map((space): Space => {
-    const configEntityId = spaceConfigTriples.find(triple => triple.space === space.id)?.entityId;
+    const config = spaceConfigs.find(config => config.spaceId === space.id)?.config;
 
     return {
       id: space.id,
@@ -119,9 +131,9 @@ export async function fetchSpaces() {
       admins: space.spaceAdmins.nodes.map(account => account.accountId),
       editorControllers: space.spaceEditorControllers.nodes.map(account => account.accountId),
       editors: space.spaceEditors.nodes.map(account => account.accountId),
-      entityId: configEntityId || '',
+      entityId: space.id || '',
       attributes: {},
-      spaceConfigEntityId: configEntityId || null,
+      spaceConfig: config ?? null,
       createdAtBlock: space.createdAtBlock,
     };
   });

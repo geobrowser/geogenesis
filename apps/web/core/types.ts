@@ -65,7 +65,7 @@ export type Space = {
   admins: string[];
   attributes: Dictionary<string, string>;
   entityId: string;
-  spaceConfigEntityId: string | null;
+  spaceConfig: Entity | null;
   createdAtBlock: string;
 };
 

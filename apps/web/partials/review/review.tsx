@@ -72,9 +72,7 @@ type GatewaySpaceWithEntityConfig = {
 const ReviewChanges = () => {
   const { subgraph } = Services.useServices();
   const { state } = useStatusBar();
-
   const { allSpacesWithActions } = useActionsStore();
-
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
 
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
@@ -82,40 +80,22 @@ const ReviewChanges = () => {
     queryFn: async () => {
       const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => subgraph.fetchSpace({ id: s })));
       const spaces = maybeSpaces.filter(
-        (s): s is GatewaySpaceWithEntityConfig => s !== null && s.spaceConfigEntityId !== null
+        (s): s is Space & { spaceConfig: EntityType } => s !== null && s.spaceConfig !== null
       );
-
-      const spaceConfigToSpaceMap = new Map<string, string>();
-
-      for (const space of spaces) {
-        spaceConfigToSpaceMap.set(space.spaceConfigEntityId, space.id);
-      }
-
-      const spaceConfigs = (
-        await Promise.all(
-          spaces.map(space =>
-            subgraph.fetchEntity({
-              id: space.spaceConfigEntityId,
-            })
-          )
-        )
-      ).filter((c): c is EntityType => c !== null);
 
       const spacesMap = new Map<string, { id: string; name: string | null; image: string | null }>();
 
-      for (const config of spaceConfigs) {
-        const id = spaceConfigToSpaceMap.get(config.id);
+      for (const space of spaces) {
+        const id = space.id;
+        const config = space.spaceConfig;
+        const maybeImageHash = Entity.cover(config.triples) ?? Entity.avatar(config.triples);
+        const image = maybeImageHash ? getImagePath(maybeImageHash) : null;
 
-        if (id) {
-          const maybeImageHash = Entity.cover(config.triples) ?? Entity.avatar(config.triples);
-          const image = maybeImageHash ? getImagePath(maybeImageHash) : null;
-
-          spacesMap.set(id, {
-            id,
-            name: config.name,
-            image,
-          });
-        }
+        spacesMap.set(id, {
+          id,
+          name: config.name,
+          image,
+        });
       }
 
       return spacesMap;
