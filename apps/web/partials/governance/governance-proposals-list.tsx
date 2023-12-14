@@ -3,11 +3,9 @@ import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import { Cookie } from '~/core/cookie';
-import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
-import { isPermissionlessSpace } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -21,19 +19,9 @@ interface Props {
 
 export async function GovernanceProposalsList({ spaceId }: Props) {
   const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const isPermissionless = isPermissionlessSpace(spaceId);
-
-  if (isPermissionless) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
 
   const [proposals, isEditor] = await Promise.all([
-    Subgraph.fetchProposals({ spaceId, first: 5, endpoint: config.subgraph }),
+    Subgraph.fetchProposals({ spaceId, first: 5 }),
     getIsEditorForSpace(spaceId, connectedAddress),
   ]);
 

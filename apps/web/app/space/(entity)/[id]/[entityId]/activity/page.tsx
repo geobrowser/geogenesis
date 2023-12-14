@@ -3,7 +3,6 @@ import Image from 'next/legacy/image';
 
 import { Suspense } from 'react';
 
-import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { Action as IAction } from '~/core/types';
@@ -33,8 +32,6 @@ export default async function ActivityPage({ searchParams, params }: Props) {
 }
 
 async function ActivityList({ params, searchParams }: Props) {
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
   const id = decodeURIComponent(params.entityId);
   // Alternatively we can fetch the on-chain profile from the id and use
   // the address associated with the on-chain profile. But this works.
@@ -42,7 +39,6 @@ async function ActivityList({ params, searchParams }: Props) {
 
   const [proposals, spaces] = await Promise.all([
     fetchProposalsByUser({
-      endpoint: config.subgraph,
       userId: address,
       spaceId: searchParams.spaceId,
       api: {

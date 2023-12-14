@@ -97,6 +97,18 @@ export type NetworkProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> & 
   };
 };
 
+export type SubstreamProposal = {
+  id: string;
+  createdById: string;
+  createdAt: number;
+  createdAtBlock: string;
+  name: string | null;
+  description: string | null;
+  spaceId: string;
+  status: 'APPROVED';
+  proposedVersions: { nodes: SubstreamProposedVersion[] };
+};
+
 export type NetworkProposal = {
   id: string;
   createdBy: {
