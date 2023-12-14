@@ -1,68 +1,30 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { Space } from '../types';
-import { ISubgraph } from './subgraph';
+import { Entity, Space, Triple } from '../types';
+import { ISubgraph, fetchEntities, fetchEntity } from './subgraph';
 
-export const fetchSpaceTypeTriples = async (
-  fetchTriples: ISubgraph['fetchTriples'],
-  spaceId: string,
-  pageSize = 1000
-) => {
-  /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
-
-  const triples = await fetchTriples({
-    query: '',
-    space: spaceId,
-    skip: 0,
-    first: pageSize,
-    filter: [
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-      {
-        field: 'linked-to',
-        value: SYSTEM_IDS.SCHEMA_TYPE,
-      },
-    ],
+export async function fetchSpaceTypeTriples(spaceId: string): Promise<Triple[]> {
+  const entities = await fetchEntities({
+    spaceId: spaceId,
+    typeIds: [SYSTEM_IDS.TYPES],
+    filter: [],
   });
 
-  return triples;
-};
+  // Map the fetched entity to get any first triple.
+  const typeTriples = entities.map(e => e.triples.find(t => t)).filter((t): t is Triple => t !== null);
 
-export const fetchForeignTypeTriples = async (
-  fetchTriples: ISubgraph['fetchTriples'],
-  space: Space,
-  pageSize = 1000
-) => {
+  return typeTriples;
+}
+
+export async function fetchForeignTypeTriples(space: Space): Promise<Triple[]> {
   if (!space.spaceConfig) {
     return [];
   }
 
-  const foreignTypesFromSpaceConfig = await fetchTriples({
-    query: '',
-    space: space.id,
-    skip: 0,
-    first: pageSize,
-    filter: [
-      { field: 'entity-id', value: space.spaceConfig?.id },
-      { field: 'attribute-id', value: SYSTEM_IDS.FOREIGN_TYPES },
-    ],
-  });
-
+  const foreignTypesFromSpaceConfig = space.spaceConfig.triples.filter(t => t.attributeId === SYSTEM_IDS.FOREIGN_TYPES);
   const foreignTypesIds = foreignTypesFromSpaceConfig.map(triple => triple.value.id);
 
-  const foreignTypes = await Promise.all(
-    foreignTypesIds.map(entityId =>
-      fetchTriples({
-        query: '',
-        skip: 0,
-        first: pageSize,
-        filter: [
-          { field: 'entity-id', value: entityId },
-          { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-          { field: 'linked-to', value: SYSTEM_IDS.SCHEMA_TYPE },
-        ],
-      })
-    )
-  );
-
-  return foreignTypes.flatMap(triples => triples);
-};
+  const maybeForeignTypes = await Promise.all(foreignTypesIds.map(entityId => fetchEntity({ id: entityId })));
+  const foreignTypes = maybeForeignTypes.filter((type): type is Entity => type !== null);
+  return foreignTypes.map(e => e.triples.find(t => t)).filter((t): t is Triple => t !== null);
+}

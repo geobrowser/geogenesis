@@ -14,8 +14,8 @@ export async function TypesStoreServerContainer({ spaceId, children }: Props) {
   const space = await Subgraph.fetchSpace({ id: spaceId });
 
   const [types, foreignTypes] = await Promise.all([
-    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId),
-    space ? fetchForeignTypeTriples(Subgraph.fetchTriples, space) : [],
+    fetchSpaceTypeTriples(spaceId),
+    space ? fetchForeignTypeTriples(space) : [],
   ]);
 
   return (

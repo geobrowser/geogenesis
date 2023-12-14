@@ -120,7 +120,7 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchEntitiesQuery(options.query, entityOfWhere, options.typeIds, options.first, options.skip),
+    query: getFetchEntitiesQuery(options.query ?? '', entityOfWhere, options.typeIds, options.first, options.skip),
     signal: options?.signal,
   });
 

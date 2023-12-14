@@ -52,17 +52,6 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   const queryId = uuid();
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
-  const spaceConfigs = await fetchEntities({
-    query: '',
-    first: 1,
-    spaceId: options.id,
-    skip: 0,
-    filter: [
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-      { field: 'linked-to', value: SYSTEM_IDS.SPACE_CONFIGURATION },
-    ],
-  });
-
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
     query: getFetchSpaceQuery(options.id),
@@ -116,6 +105,16 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   }
 
   const networkSpace = result.space;
+
+  const spaceConfigs = await fetchEntities({
+    query: '',
+    first: 1,
+    spaceId: options.id,
+    skip: 0,
+    typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
+    filter: [],
+  });
+
   const spaceConfig: Entity | undefined = spaceConfigs[0];
 
   return {

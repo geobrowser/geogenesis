@@ -29,18 +29,9 @@ interface Props {
 export default async function EntitiesPage({ params, searchParams }: Props) {
   const spaceId = params.id;
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const space = await Subgraph.fetchSpace({ id: spaceId });
-  const isPermissionless = isPermissionlessSpace(spaceId);
-
-  if (isPermissionless) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
   const props = await getData({ space, config, initialParams });
 
   return <Component {...props} />;
@@ -67,29 +58,14 @@ const getData = async ({
     ? Entity.cover(configEntity.triples) ?? Entity.avatar(configEntity.triples)
     : space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
 
-  const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
-    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId),
-    fetchForeignTypeTriples(Subgraph.fetchTriples, space),
-    space.spaceConfig
-      ? Subgraph.fetchTriples({
-          query: '',
-          skip: 0,
-          first: DEFAULT_PAGE_SIZE,
-          filter: [
-            { field: 'entity-id', value: space.spaceConfig.id },
-            {
-              field: 'attribute-id',
-              value: SYSTEM_IDS.DEFAULT_TYPE,
-            },
-          ],
-        })
-      : [],
+  const [initialSpaceTypes, initialForeignTypes] = await Promise.all([
+    fetchSpaceTypeTriples(spaceId),
+    fetchForeignTypeTriples(space),
   ]);
 
   // This can be empty if there are no types in the Space
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
-
-  const defaultTypeId = defaultTypeTriples[0]?.value.id;
+  const defaultTypeId = configEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.DEFAULT_TYPE)?.value.id;
 
   const initialSelectedType =
     initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
