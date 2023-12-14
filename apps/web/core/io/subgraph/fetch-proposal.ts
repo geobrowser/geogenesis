@@ -11,46 +11,43 @@ import { SubstreamProposal, fromNetworkActions } from './network-local-mapping';
 
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
-    nodes {
-      id
-      name
-      spaceId
-      createdAtBlock
-      createdById
-      createdAt
-      status
-      proposedVersions {
-        nodes {
+    id
+    name
+    spaceId
+    createdAtBlock
+    createdById
+    createdAt
+    status
+    proposedVersions {
+      nodes {
+        id
+        name
+        createdById
+        entity {
           id
           name
-          createdById
-          entity {
+        }
+        actions {
+          nodes {
             id
-            name
-          }
-          actions {
-            nodes {
+            actionType
+            attribute {
               id
-              actionType
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue
-              numberValue
-              stringValue
-              valueType
-              valueId
+              name
             }
+            entity {
+              id
+              name
+            }
+            entityValue
+            numberValue
+            stringValue
+            valueType
+            valueId
           }
         }
       }
     }
-  }
   }
 }`;
 
