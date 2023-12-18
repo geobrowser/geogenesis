@@ -131,7 +131,8 @@ CREATE TABLE public.triples (
     is_protected boolean NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
     created_at integer NOT NULL,
-    created_at_block integer NOT NULL
+    created_at_block integer NOT NULL,
+    is_stale boolean NOT NULL
 );
 
 CREATE TABLE public.versions (
