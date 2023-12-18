@@ -46,8 +46,9 @@ export type NetworkEntity = Entity & {
   entityOf: ({ space: Space } & NetworkTriple)[];
 };
 
-export type SubstreamNetworkEntity = Entity & {
-  versionsByEntityId: { nodes: { tripleVersions: { nodes: { triple: NetworkTriple }[] } }[] };
+export type SubstreamNetworkEntity = OmitStrict<Entity, 'triples'> & {
+  // versionsByEntityId: { nodes: { tripleVersions: { nodes: { triple: NetworkTriple }[] } }[] };
+  triplesByEntityId: { nodes: NetworkTriple[] };
 };
 
 export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> & {

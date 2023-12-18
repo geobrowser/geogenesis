@@ -26,15 +26,9 @@ function getFetchEntitiesQuery(
   const constructedWhere =
     entityOfWhere !== ''
       ? `{ name: { startsWithInsensitive: ${JSON.stringify(query)} }
-        versionsByEntityId: {
+        triplesByEntityId: {
           some: {
-            tripleVersions: {
-              some: {
-                triple: {
-                  ${entityOfWhere}
-                }
-              }
-            }
+            ${entityOfWhere}
           }
         }
         ${typeIdsString}
@@ -46,34 +40,29 @@ function getFetchEntitiesQuery(
       nodes {
         id
         name
-        versionsByEntityId(orderBy: CREATED_AT_DESC, first: 1) {
+        triplesByEntityId(filter: {isStale: {equalTo: false}}) {
           nodes {
-           tripleVersions {
-              nodes {
-                triple {
-                  id
-                  stringValue
-                  valueId
-                  valueType
-                  numberValue
-                  space {
-                    id
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                }
-              }
-            } 
+            id
+            attribute {
+              id
+              name
+            }
+            entity {
+              id
+              name
+            }
+            entityValue {
+              id
+              name
+            }
+            numberValue
+            stringValue
+            valueType
+            valueId
+            isProtected
+            space {
+              id
+            }
           }
         }
       }
@@ -171,8 +160,10 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
   const sortedResults = sortSearchResultsByRelevance(geoEntities.nodes);
 
   const sortedResultsWithTypesAndDescription: IEntity[] = sortedResults.map(result => {
+    const networkTriples = result.triplesByEntityId.nodes;
+
     // If there is no latest version just return an empty entity.
-    if (result.versionsByEntityId.nodes.length === 0) {
+    if (networkTriples.length === 0) {
       return {
         id: result.id,
         name: result.name,
@@ -183,7 +174,6 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
       };
     }
 
-    const networkTriples = result.versionsByEntityId.nodes.map(n => n.tripleVersions.nodes.map(n => n.triple)).flat();
     const triples = fromNetworkTriples(networkTriples);
     const nameTriple = Entity.nameTriple(triples);
 
