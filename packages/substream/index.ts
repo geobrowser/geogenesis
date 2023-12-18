@@ -97,6 +97,8 @@ async function main() {
       //   startBlockNumber = Number(options.block);
       // }
 
+      let shouldUseCursor = true;
+
       if (options.fromGenesis && options.fromCache) {
         console.info(`Starting stream at block ${startBlockNumber} after populating data from cache.`);
       }
@@ -104,6 +106,7 @@ async function main() {
       if (options.fromGenesis && !options.fromCache) {
         console.info(`Starting stream from Geo's genesis block ${START_BLOCK}.`);
         startBlockNumber = START_BLOCK;
+        shouldUseCursor = false;
       }
 
       // We're starting at the most recently indexed segment of a block without any flags
@@ -113,7 +116,7 @@ async function main() {
         return yield* _(runStream());
       }
 
-      yield* _(runStream({ startBlockNumber: startBlockNumber ?? START_BLOCK }));
+      yield* _(runStream({ startBlockNumber: startBlockNumber ?? START_BLOCK, shouldUseCursor }));
     }),
     // Retry jittered exponential with base of 100ms for up to 10 minutes.
     Schedule.exponential(100).pipe(

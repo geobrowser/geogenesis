@@ -40,9 +40,10 @@ export class CouldNotReadCursorError extends Error {
 
 interface StreamConfig {
   startBlockNumber?: number;
+  shouldUseCursor?: boolean;
 }
 
-export function runStream({ startBlockNumber }: StreamConfig = {}) {
+export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig = {}) {
   const program = Effect.gen(function* (_) {
     const startCursor = yield* _(
       Effect.tryPromise({
@@ -88,8 +89,8 @@ export function runStream({ startBlockNumber }: StreamConfig = {}) {
       // The caller determines which block or cursor to start from based on
       // error handling, CLI flags, cache state, etc. We default to cursor
       // if it exists or start from the passed in block if not.
-      startCursor: startCursor ? startCursor : undefined,
-      startBlockNum: startCursor ? undefined : startBlockNumber,
+      startCursor: shouldUseCursor ? startCursor : undefined,
+      startBlockNum: shouldUseCursor ? undefined : startBlockNumber,
       // The stream will retry recoverable errors for 10 minutes
       // internally. This has no effect on unrecoverable errors.
       maxRetrySeconds: 600, // 10 minutes.
