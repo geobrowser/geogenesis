@@ -88,7 +88,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       return {
         ...f,
         columnName: 'Space',
-        value: spaces.find(s => s.id === f.value)?.attributes[SYSTEM_IDS.NAME] ?? f.value,
+        value: spaces.find(s => s.id === f.value)?.spaceConfig?.name ?? f.value,
       };
     }
 

@@ -29,8 +29,8 @@ export async function EntityReferencedByServerContainer({ entityId, name, spaceI
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
     const space = spaces.find(s => s.id === spaceId);
-    const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+    const spaceName = space?.spaceConfig?.name ?? null;
+    const spaceImage = Entity.cover(space?.spaceConfig?.triples) ?? null;
 
     return {
       id: e.id,

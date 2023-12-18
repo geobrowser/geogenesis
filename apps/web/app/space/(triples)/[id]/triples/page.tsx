@@ -1,7 +1,6 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-
 import * as React from 'react';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 import { Entity } from '~/core/utils/entity';
@@ -28,10 +27,8 @@ const getData = async ({ params, searchParams }: Props) => {
   const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);
   const configEntity = space?.spaceConfig;
 
-  const spaceName = configEntity ? configEntity.name : space?.attributes[SYSTEM_IDS.NAME];
-  const spaceImage = configEntity
-    ? Entity.cover(configEntity.triples) ?? Entity.avatar(configEntity.triples)
-    : space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+  const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
+  const spaceImage = configEntity ? Entity.cover(configEntity.triples) : PLACEHOLDER_SPACE_IMAGE;
 
   return {
     spaceId,

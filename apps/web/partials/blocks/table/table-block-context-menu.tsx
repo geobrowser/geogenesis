@@ -242,6 +242,8 @@ export function TableBlockContextMenu() {
     }
   };
 
+  const spaceImage = Entity.cover(space?.spaceConfig?.triples) ?? null;
+
   return (
     <Menu
       // using modal will prevent the menu from closing when opening up another dialog or popover
@@ -278,11 +280,7 @@ export function TableBlockContextMenu() {
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <Image
-                      layout="fill"
-                      objectFit="cover"
-                      src={getImagePath(space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '')}
-                    />
+                    <Image layout="fill" objectFit="cover" src={getImagePath(spaceImage ?? '')} />
                   </div>
                   <h1 className="text-mediumTitle">{type.entityName}</h1>
                 </div>

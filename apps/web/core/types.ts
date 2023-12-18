@@ -57,14 +57,17 @@ export type Triple = {
   placeholder?: boolean;
 };
 
+export type SpaceConfigEntity = Entity & {
+  image: string | null;
+};
+
 export type Space = {
   id: string;
   isRootSpace: boolean;
   editors: string[];
   editorControllers: string[];
   admins: string[];
-  attributes: Dictionary<string, string>;
-  spaceConfig: Entity | null;
+  spaceConfig: SpaceConfigEntity | null;
   createdAtBlock: string;
 };
 

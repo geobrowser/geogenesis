@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 import * as React from 'react';
 
-import { ZERO_WIDTH_SPACE } from '~/core/constants';
+import { PLACEHOLDER_SPACE_IMAGE, ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
@@ -65,7 +65,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
           <Image
             objectFit="cover"
             layout="fill"
-            src={getImagePath(spaceImage ?? '') || '/placeholder.png'}
+            src={getImagePath(spaceImage ?? '') || PLACEHOLDER_SPACE_IMAGE}
             alt={`Cover image for ${spaceName}`}
           />
         </div>

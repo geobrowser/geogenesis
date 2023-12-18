@@ -1,5 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE, PUBLIC_SPACES } from '~/core/constants';
@@ -57,24 +55,23 @@ export default async function Spaces() {
     (s): s is Space & { spaceConfig: Entity } => s.spaceConfig !== null
   );
 
-  const spaceConfigs = await Promise.all(
-    spacesWithSpaceConfigs.map(async space => {
-      const entity = space.spaceConfig;
-      if (!entity) {
-        return {
-          id: space.id,
-          name: space.attributes[SYSTEM_IDS.NAME] ?? null,
-          image: space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null,
-        };
-      }
+  const spaceConfigs = spacesWithSpaceConfigs.map(space => {
+    const entity = space.spaceConfig;
 
+    if (!entity) {
       return {
         id: space.id,
-        name: EntityModule.name(entity.triples) ?? null,
-        image: EntityModule.cover(entity.triples) ?? null,
+        name: null,
+        image: null,
       };
-    })
-  );
+    }
+
+    return {
+      id: space.id,
+      name: EntityModule.name(entity.triples) ?? null,
+      image: EntityModule.cover(entity.triples) ?? null,
+    };
+  });
 
   return (
     <div className="flex flex-col">

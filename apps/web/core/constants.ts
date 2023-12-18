@@ -13,6 +13,8 @@ export const ROOT_SPACE_IMAGE =
 
 export const DEFAULT_OPENGRAPH_IMAGE = 'https://www.geobrowser.io/static/geo-social-image-v2.png';
 
+export const PLACEHOLDER_SPACE_IMAGE = '/placeholder.png';
+
 export const DEFAULT_OPENGRAPH_DESCRIPTION =
   "Browse and organize the world's public knowledge and information in a decentralized way.";
 

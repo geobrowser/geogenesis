@@ -1,6 +1,5 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { cva } from 'class-variance-authority';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
@@ -11,6 +10,7 @@ import { useCallback, useState } from 'react';
 
 import { useWalletClient } from 'wagmi';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Publish } from '~/core/io';
 import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
@@ -388,9 +388,7 @@ const JoinSpaces = () => {
 
         if (!space) return null;
 
-        const spaceImage = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]
-          ? getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])
-          : '/placeholder.png';
+        const spaceImage = space.spaceConfig?.image ? getImagePath(space.spaceConfig?.image) : PLACEHOLDER_SPACE_IMAGE;
 
         return (
           <Link
@@ -401,7 +399,7 @@ const JoinSpaces = () => {
             <span className="relative h-3 w-3 overflow-hidden rounded-sm">
               <img src={spaceImage} className="absolute inset-0 h-full w-full object-cover object-center" alt="" />
             </span>
-            <span>{space.attributes.name}</span>
+            <span>{space.spaceConfig?.name ?? space.id}</span>
           </Link>
         );
       })}

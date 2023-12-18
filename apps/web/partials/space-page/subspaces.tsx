@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Entity as EntityType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -30,7 +31,7 @@ export const Subspaces = ({ subspaces }: SubspacesProps) => {
           if (!space) return null;
 
           const href = `/space/${space.id}`;
-          const image = Entity.cover(subspace.triples) ?? '/placeholder.png';
+          const image = Entity.cover(subspace.triples) ?? PLACEHOLDER_SPACE_IMAGE;
 
           return (
             <Link key={index} href={href} className="group">

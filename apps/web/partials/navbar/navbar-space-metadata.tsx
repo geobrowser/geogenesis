@@ -39,8 +39,8 @@ export function NavbarSpaceMetadata() {
 
       if (!spaceConfig) {
         return {
-          name: space.attributes[SYSTEM_IDS.NAME] ?? space.id,
-          img: space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE],
+          name: space.spaceConfig?.name ?? space.id,
+          img: space.spaceConfig?.image ?? null,
           href: NavUtils.toSpace(space.id),
         };
       }

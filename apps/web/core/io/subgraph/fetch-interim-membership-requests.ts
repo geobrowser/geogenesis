@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -135,10 +134,13 @@ export async function fetchInterimMembershipRequests({
     const profile = memberAddressToProfilesMap.get(request.requestor);
     const space = requestIdToSpaceMap.get(request.id);
 
+    const name = space?.spaceConfig?.name ?? request.space;
+    const image = space?.spaceConfig?.image ?? null;
+
     const spaceMetadata = {
       id: space?.id ?? request.space,
-      name: space?.attributes.name ?? request.space,
-      image: space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null,
+      name,
+      image,
     };
 
     return {

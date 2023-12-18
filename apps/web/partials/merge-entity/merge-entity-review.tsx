@@ -159,6 +159,11 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
     setSelectedEntityKeys(newSelectedKeys);
   }
 
+  const spaceNameOne = spaceEntityOne?.spaceConfig?.name ?? null;
+  const spaceNameTwo = spaceEntityTwo?.spaceConfig?.name ?? null;
+  const spaceImageOne = spaceEntityOne?.spaceConfig?.image ?? null;
+  const spaceImageTwo = spaceEntityTwo?.spaceConfig?.image ?? null;
+
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
@@ -218,16 +223,12 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
                       {entityOneTriples[0]?.entityName ?? entityIdOne}
                     </Text>
                     <div className="flex flex-row items-center gap-2 pb-6 ">
-                      {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
+                      {spaceImageOne !== null && (
                         <div className="relative h-[16px] w-[16px] overflow-hidden rounded-xs">
-                          <Image
-                            src={getImagePath(spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
-                            layout="fill"
-                            objectFit="cover"
-                          />
+                          <Image src={getImagePath(spaceImageOne)} layout="fill" objectFit="cover" />
                         </div>
                       )}
-                      <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
+                      <Text variant="metadata">{spaceNameOne}</Text>
                     </div>
                     <MergeEntityReviewPage
                       entityId={entityIdOne}
@@ -243,16 +244,12 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
                       {entityTwoTriples[0]?.entityName ?? entityIdTwo}
                     </Text>
                     <div className="flex flex-row items-center gap-2 pb-6 ">
-                      {spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
+                      {spaceImageTwo !== null && (
                         <div className="relative h-[16px] w-[16px] overflow-hidden rounded-xs">
-                          <Image
-                            src={getImagePath(spaceEntityTwo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
-                            layout="fill"
-                            objectFit="cover"
-                          />
+                          <Image src={getImagePath(spaceImageTwo)} layout="fill" objectFit="cover" />
                         </div>
                       )}
-                      <Text variant="metadata">{spaceEntityTwo?.attributes[SYSTEM_IDS.NAME]}</Text>
+                      <Text variant="metadata">{spaceNameTwo}</Text>
                     </div>
                     <MergeEntityReviewPage
                       entityId={entityIdTwo}
@@ -272,16 +269,12 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
                       {mergedEntityTriples[0]?.entityName ?? mergedEntityId}
                     </Text>
                     <div className="flex flex-row items-center gap-2 pb-6">
-                      {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
+                      {spaceImageOne !== null && (
                         <div className="relative h-[16px] w-[16px] overflow-hidden rounded-xs">
-                          <Image
-                            src={getImagePath(spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
-                            layout="fill"
-                            objectFit="cover"
-                          />
+                          <Image src={getImagePath(spaceImageOne)} layout="fill" objectFit="cover" />
                         </div>
                       )}
-                      <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
+                      <Text variant="metadata">{spaceNameOne}</Text>
                     </div>
                     <MergeEntityPreviewPage entityId={mergedEntityId} triples={mergedEntityTriples} />
                   </div>
@@ -292,16 +285,12 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
             <>
               <div className="mb-8 flex flex-col rounded border border-grey-02 px-5 py-4">
                 <div className="flex flex-row items-center gap-2 pb-3">
-                  {spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] !== undefined && (
+                  {spaceImageOne !== null && (
                     <div className="relative h-[16px] w-[16px] overflow-hidden rounded-xs">
-                      <Image
-                        src={getImagePath(spaceEntityOne?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
-                        layout="fill"
-                        objectFit="cover"
-                      />
+                      <Image src={getImagePath(spaceImageOne)} layout="fill" objectFit="cover" />
                     </div>
                   )}
-                  <Text variant="metadata">{spaceEntityOne?.attributes[SYSTEM_IDS.NAME]}</Text>
+                  <Text variant="metadata">{spaceNameOne}</Text>
                 </div>
                 <div className="flex flex-col gap-1">
                   <div className="flex flex-row items-center gap-3 bg-bg">

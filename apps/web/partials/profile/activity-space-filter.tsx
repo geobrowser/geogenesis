@@ -26,7 +26,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const selectedSpaceId = params?.get('spaceId');
 
   const initialSpace = spaces.find(space => space.id === selectedSpaceId);
-  const initialName = initialSpace?.attributes[SYSTEM_IDS.NAME];
+  const initialName = initialSpace?.spaceConfig?.name;
 
   const [open, onOpenChange] = React.useState(false);
   const [name, setName] = React.useState('All');
@@ -40,9 +40,9 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
   const spacesWithAll = [
     {
       id: 'all',
-      attributes: {
+      spaceConfig: {
         name: 'All',
-        [SYSTEM_IDS.IMAGE_ATTRIBUTE]: ALL_SPACES_IMAGE,
+        image: ALL_SPACES_IMAGE,
       },
     },
     ...spaces,
@@ -50,7 +50,7 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
 
   const onSelect = (spaceIdToFilter: string) => {
     onOpenChange(false);
-    setName(spacesWithAll.find(space => space.id === spaceIdToFilter)?.attributes[SYSTEM_IDS.NAME] ?? 'All');
+    setName(spacesWithAll.find(space => space.id === spaceIdToFilter)?.spaceConfig?.name ?? 'All');
   };
 
   return (
@@ -73,12 +73,12 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
           key={space.id}
           className="flex w-full gap-2 bg-white p-3 text-button text-grey-04 transition-colors duration-75 hover:bg-bg hover:text-text"
         >
-          {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
+          {space.spaceConfig?.image && (
             <div className="relative mt-[4.5px] h-3 w-3 overflow-hidden rounded-xs">
-              <Image src={getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])} layout="fill" objectFit="cover" />
+              <Image src={getImagePath(space.spaceConfig.image)} layout="fill" objectFit="cover" />
             </div>
           )}
-          {space.attributes[SYSTEM_IDS.NAME]}
+          {space.spaceConfig?.name}
         </Link>
       ))}
     </Menu>

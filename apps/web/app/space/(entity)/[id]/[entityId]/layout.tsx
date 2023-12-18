@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { EditorProvider } from '~/core/state/editor-store';
@@ -167,8 +168,9 @@ async function getProfilePage(entityId: string): Promise<
   const referencedByEntities: ReferencedByEntity[] = referencesPerson.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
     const space = spaces.find(s => s.id === spaceId);
-    const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+    const configEntity = space?.spaceConfig;
+    const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
+    const spaceImage = configEntity ? Entity.cover(configEntity.triples) : PLACEHOLDER_SPACE_IMAGE;
 
     return {
       id: e.id,

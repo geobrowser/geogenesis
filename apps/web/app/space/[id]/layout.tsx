@@ -109,7 +109,7 @@ const getData = async (spaceId: string) => {
     }
   }
 
-  const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
+  const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
 
   const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
   const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];

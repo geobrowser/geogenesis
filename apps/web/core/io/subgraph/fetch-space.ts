@@ -4,10 +4,10 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity, Space } from '~/core/types';
+import { Entity, Space, SpaceConfigEntity } from '~/core/types';
+import { Entity as EntityModule } from '~/core/utils/entity';
 
 import { fetchEntities } from './fetch-entities';
-import { fetchTriples } from './fetch-triples';
 import { graphql } from './graphql';
 
 const getFetchSpaceQuery = (id: string) => `query {
@@ -115,7 +115,13 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     filter: [],
   });
 
-  const spaceConfig: Entity | undefined = spaceConfigs[0];
+  const spaceConfig = spaceConfigs[0] as Entity | undefined;
+  const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
+    ? {
+        ...spaceConfig,
+        image: EntityModule.cover(spaceConfig.triples) ?? null,
+      }
+    : null;
 
   return {
     id: networkSpace.id,
@@ -124,8 +130,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     editorControllers: networkSpace.spaceEditorControllers.nodes.map(account => account.accountId),
     editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
     // @TODO: Map the name and image of a space from the space configuration
-    attributes: {},
-    spaceConfig: spaceConfig ?? null,
+    spaceConfig: spaceConfigWithImage,
     createdAtBlock: networkSpace.createdAtBlock,
   };
 }

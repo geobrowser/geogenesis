@@ -2,6 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { AppConfig, Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
@@ -52,10 +53,10 @@ const getData = async ({
   const spaceId = space.id;
   const configEntity = space?.spaceConfig;
 
-  const spaceName = configEntity ? configEntity.name : space?.attributes[SYSTEM_IDS.NAME];
+  const spaceName = configEntity ? configEntity.name : space.id;
   const spaceImage = configEntity
     ? Entity.cover(configEntity.triples) ?? Entity.avatar(configEntity.triples)
-    : space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+    : PLACEHOLDER_SPACE_IMAGE;
 
   const [initialSpaceTypes, initialForeignTypes] = await Promise.all([
     fetchSpaceTypeTriples(spaceId),

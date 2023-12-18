@@ -1,6 +1,5 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import Image from 'next/legacy/image';
 import { useRouter } from 'next/navigation';
 
@@ -55,6 +54,11 @@ function MoveEntityReviewChanges() {
 
   const { data: wallet } = useWalletClient(); // user wallet session
 
+  const spaceToName = spaceTo?.spaceConfig?.name ?? undefined;
+  const spaceFromName = spaceFrom?.spaceConfig?.name ?? undefined;
+  const spaceToImage = spaceTo?.spaceConfig?.image ?? undefined;
+  const spaceFromImage = spaceFrom?.spaceConfig?.image ?? undefined;
+
   const handlePublish = React.useCallback(async () => {
     if (!wallet || !spaceIdFrom || !spaceIdTo) {
       return;
@@ -75,12 +79,8 @@ function MoveEntityReviewChanges() {
       }));
     };
 
-    const createProposalName = `Create ${triples[0]?.entityName ?? entityId} in ${spaceTo?.attributes[
-      SYSTEM_IDS.NAME
-    ]}`;
-    const deleteProposalName = `Delete ${triples[0]?.entityName ?? entityId} from ${spaceFrom?.attributes[
-      SYSTEM_IDS.NAME
-    ]}`;
+    const createProposalName = `Create ${triples[0]?.entityName ?? entityId} in ${spaceToName}`;
+    const deleteProposalName = `Delete ${triples[0]?.entityName ?? entityId} from ${spaceFromName}`;
 
     let createActions: CreateTripleAction[] = [];
     let deleteActions: DeleteTripleAction[] = [];
@@ -142,8 +142,8 @@ function MoveEntityReviewChanges() {
     spaceIdTo,
     triples,
     entityId,
-    spaceTo?.attributes,
-    spaceFrom?.attributes,
+    spaceToName,
+    spaceFromName,
     firstPublishComplete,
     makeProposal,
     createDispatch,
@@ -193,8 +193,8 @@ function MoveEntityReviewChanges() {
         <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px] ">
           <div className="flex w-full flex-row items-center justify-between gap-4 sm:flex-col">
             <SpaceMoveCard
-              spaceName={spaceTo?.attributes[SYSTEM_IDS.NAME]}
-              spaceImage={spaceTo?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
+              spaceName={spaceToName}
+              spaceImage={spaceToImage}
               actionType="create"
               txState={createState.reviewState}
               handlePublish={handlePublish}
@@ -202,8 +202,8 @@ function MoveEntityReviewChanges() {
             />
             <RightArrowLongSmall color="grey-04" />
             <SpaceMoveCard
-              spaceName={spaceFrom?.attributes[SYSTEM_IDS.NAME]}
-              spaceImage={spaceFrom?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]}
+              spaceName={spaceFromName}
+              spaceImage={spaceFromImage}
               actionType="delete"
               txState={deleteState.reviewState}
               handlePublish={handlePublish}
