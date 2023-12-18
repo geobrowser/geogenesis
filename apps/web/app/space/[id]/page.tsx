@@ -5,10 +5,8 @@ import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { fetchEntities } from '~/core/io/subgraph';
-import { fetchSubspaces } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
