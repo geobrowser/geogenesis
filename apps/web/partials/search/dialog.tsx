@@ -6,7 +6,6 @@ import Link from 'next/link';
 
 import { useGlobalSearch } from '~/core/hooks/use-global-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Entity } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -16,7 +15,7 @@ import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 
 interface Props {
-  onDone: (result: Entity) => void;
+  onDone: () => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -78,8 +77,8 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
                   key={result.id}
                 >
                   {/* It's safe to cast nameTripleSpace since we only render entities that have a name triple */}
-                  <Link href={NavUtils.toEntity(result.nameTripleSpace!, result.id)} onClick={() => onDone(result)}>
-                    <Command.Item className="aria-selected:bg-grey-01">
+                  <Link href={NavUtils.toEntity(result.nameTripleSpace!, result.id)} onClick={() => onDone()}>
+                    <Command.Item className="transition-colors duration-75 aria-selected:bg-grey-01">
                       <ResultContent
                         onClick={() => {
                           // The on-click is being handled by the ResultItem here. This is so we can
