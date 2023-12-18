@@ -201,7 +201,7 @@ export function useEntityTable() {
   );
 
   const createForeignType = (foreignType: TripleType) => {
-    insertForeignType(foreignType, spaceId, space?.spaceConfig?.id ?? null, create);
+    insertForeignType(foreignType, spaceId, space?.spaceConfigEntityId ?? null, create);
   };
 
   const createType = (entityName: string) => {

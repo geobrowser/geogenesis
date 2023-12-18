@@ -143,7 +143,8 @@ export const makeStubSpace = (spaceId: string): Space => {
     editorControllers: [],
     admins: [],
     attributes: {},
-    spaceConfig: null,
+    entityId: spaceId,
+    spaceConfigEntityId: null,
     createdAtBlock: '36472399',
   };
 };
