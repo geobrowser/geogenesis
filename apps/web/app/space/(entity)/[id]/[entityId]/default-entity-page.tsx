@@ -7,7 +7,6 @@ import { Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { Entity } from '~/core/utils/entity';
 import { Value } from '~/core/utils/value';
 

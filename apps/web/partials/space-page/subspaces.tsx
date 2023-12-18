@@ -23,7 +23,7 @@ export const Subspaces = ({ subspaces }: SubspacesProps) => {
     <>
       <Slider label="Subspaces">
         {subspaces.map((subspace, index) => {
-          const space = spaces.find(space => space.spaceConfigEntityId === subspace.id);
+          const space = spaces.find(space => space.spaceConfig?.id === subspace.id);
 
           if (!space) return null;
 
