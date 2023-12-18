@@ -90,13 +90,22 @@ const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
   if (!address) return [];
 
   const query = `{
-      spaces(where: {or: [{admins_: {id: "${address}"}}, {editorControllers_: {id: "${address}"}}]}) {
-        id
+      spaces(
+        filter: {
+          or: [
+            { spaceAdmins: { some: { accountId: { equalToInsensitive: "${address}" } } } }
+            { spaceEditorControllers: { some: { accountId: { equalToInsensitive: "${address}" } } } }
+          ]
+        }
+      ) {
+        nodes {
+          id
+        }
       }
     }`;
 
-  const spacesEffect = graphql<{ spaces: { id: string }[] }>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph,
+  const spacesEffect = graphql<{ spaces: { nodes: { id: string }[] } }>({
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
     query,
   });
 
@@ -116,5 +125,5 @@ const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
     }
   }
 
-  return result.right.spaces.map(space => space.id);
+  return result.right.spaces.nodes.map(space => space.id);
 };

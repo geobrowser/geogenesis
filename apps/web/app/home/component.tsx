@@ -114,10 +114,12 @@ const PersonalHomeDashboard = ({
         <Menu
           open={isMenuOpen}
           onOpenChange={setIsMenuOpen}
+          asChild
           trigger={<SmallButton icon={<ChevronDownSmall />}>{viewLabel[personalHomeView]}</SmallButton>}
           align="start"
         >
-          <button
+          <Link
+            href="/"
             onClick={() => {
               setPersonalHomeView('all');
               setIsMenuOpen(false);
@@ -127,8 +129,9 @@ const PersonalHomeDashboard = ({
             <Text variant="button" className="hover:!text-text">
               All
             </Text>
-          </button>
-          <button
+          </Link>
+          <Link
+            href="/"
             onClick={() => {
               setPersonalHomeView('proposals');
               setIsMenuOpen(false);
@@ -138,8 +141,9 @@ const PersonalHomeDashboard = ({
             <Text variant="button" className="hover:!text-text">
               Active proposals
             </Text>
-          </button>
-          <button
+          </Link>
+          <Link
+            href="/"
             onClick={() => {
               setPersonalHomeView('requests');
               setIsMenuOpen(false);
@@ -149,7 +153,7 @@ const PersonalHomeDashboard = ({
             <Text variant="button" className="hover:!text-text">
               Membership requests
             </Text>
-          </button>
+          </Link>
         </Menu>
       </div>
       <div className="mt-8 flex gap-8">
