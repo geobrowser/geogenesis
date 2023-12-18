@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -6,6 +7,7 @@ import type { Metadata } from 'next';
 
 import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
+import { fetchEntities } from '~/core/io/subgraph';
 import { fetchSubspaces } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
@@ -103,8 +105,19 @@ type SubspacesContainerProps = {
 };
 
 const SubspacesContainer = async ({ entityId }: SubspacesContainerProps) => {
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-  const subspaces = await fetchSubspaces({ entityId, endpoint: config.subgraph });
+  const subspaces = await fetchEntities({
+    typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
+    filter: [
+      {
+        field: 'attribute-id',
+        value: SYSTEM_IDS.BROADER_SPACES,
+      },
+      {
+        field: 'linked-to',
+        value: entityId,
+      },
+    ],
+  });
 
   return <Subspaces subspaces={subspaces} />;
 };

@@ -1,17 +1,19 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import Image from 'next/image';
 import Link from 'next/link';
 
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { Entity as EntityType } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { getImagePath } from '~/core/utils/utils';
 
 // import { Member } from '~/design-system/icons/member';
 import { Slider } from '~/design-system/slider';
 import { Spacer } from '~/design-system/spacer';
 
 type SubspacesProps = {
-  subspaces: any[];
+  subspaces: EntityType[];
 };
 
 export const Subspaces = ({ subspaces }: SubspacesProps) => {
@@ -28,13 +30,13 @@ export const Subspaces = ({ subspaces }: SubspacesProps) => {
           if (!space) return null;
 
           const href = `/space/${space.id}`;
-          const src = space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '/placeholder.png';
+          const image = Entity.cover(subspace.triples) ?? '/placeholder.png';
 
           return (
             <Link key={index} href={href} className="group">
               <div className="relative aspect-[16/9] w-full overflow-clip rounded-lg bg-grey-01">
                 <Image
-                  src={src}
+                  src={getImagePath(image)}
                   className="transition-transform duration-150 ease-in-out group-hover:scale-105"
                   objectFit="cover"
                   priority
