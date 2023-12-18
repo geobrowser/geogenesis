@@ -13,7 +13,6 @@ import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { Space } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
-import { isPermissionlessSpace } from '~/core/utils/utils';
 
 import { Component } from './component';
 

@@ -3,7 +3,6 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE, PUBLIC_SPACES } from '~/core/constants';
-import { fetchEntity } from '~/core/io/subgraph';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
 import { Entity, Space } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
