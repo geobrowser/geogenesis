@@ -10,45 +10,6 @@ import { resetPublicTablesToGenesis } from './src/utils/reset-public-tables-to-g
 
 dotenv.config();
 
-/**
- * Start from cache and genesis
- *   Use startBlockNumber from cache. Fallback if not available because of errors in cache.
- * Start from cache
- *   Use startBlockNumber from cache. Fallback if not available because of errors in cache.
- * Start from genesis
- *   Use startBlockNumber from genesis.
- *
- * Neither from cache nor genesis
- *   Use cursor. Fall back to genesis start block if not available.
- */
-function configureStream(blockNumber: number | null, options: any) {
-  let startBlockNumber: number | null = blockNumber;
-
-  return Effect.gen(function* (_) {
-    // if (options.block) {
-    //   startBlockNumber = Number(options.block);
-    // }
-
-    if (options.fromGenesis && options.fromCache) {
-      console.info(`Starting stream at block ${startBlockNumber} after populating data from cache.`);
-    }
-
-    if (options.fromGenesis && !options.fromCache) {
-      console.info(`Starting stream from Geo's genesis block ${START_BLOCK}.`);
-      startBlockNumber = START_BLOCK;
-    }
-
-    // We're starting at the most recently indexed segment of a block without any flags
-    // i.e., `substream start`
-    if (!startBlockNumber) {
-      console.info(`Starting stream from latest stored cursor`);
-      return yield* _(runStream());
-    }
-
-    yield* _(runStream({ startBlockNumber: startBlockNumber ?? START_BLOCK }));
-  });
-}
-
 async function main() {
   const program = new Command();
   program
@@ -91,6 +52,17 @@ async function main() {
     console.info(`Cache processing complete at block ${startBlockNumber}`);
   }
 
+  /**
+   * Start from cache and genesis
+   *   Use startBlockNumber from cache. Fallback if not available because of errors in cache.
+   * Start from cache
+   *   Use startBlockNumber from cache. Fallback if not available because of errors in cache.
+   * Start from genesis
+   *   Use startBlockNumber from genesis.
+   *
+   * Neither from cache nor genesis
+   *   Use cursor. Fall back to genesis start block if not available.
+   */
   const configureStream = Effect.retry(
     Effect.gen(function* (_) {
       // if (options.block) {
@@ -116,7 +88,11 @@ async function main() {
         return yield* _(runStream());
       }
 
-      yield* _(runStream({ startBlockNumber: startBlockNumber ?? START_BLOCK, shouldUseCursor }));
+      yield* _(
+        runStream({
+          startBlockNumber: startBlockNumber ?? START_BLOCK,
+        })
+      );
     }),
     // Retry jittered exponential with base of 100ms for up to 10 minutes.
     Schedule.exponential(100).pipe(
