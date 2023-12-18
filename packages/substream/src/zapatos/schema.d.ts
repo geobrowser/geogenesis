@@ -2739,6 +2739,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **triples.is_stale**
+      * - `bool` in database
+      * - `NOT NULL`, no default
+      */
+      is_stale: boolean;
     }
     export interface JSONSelectable {
       /**
@@ -2819,6 +2825,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **triples.is_stale**
+      * - `bool` in database
+      * - `NOT NULL`, no default
+      */
+      is_stale: boolean;
     }
     export interface Whereable {
       /**
@@ -2899,6 +2911,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triples.is_stale**
+      * - `bool` in database
+      * - `NOT NULL`, no default
+      */
+      is_stale?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -2979,6 +2997,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **triples.is_stale**
+      * - `bool` in database
+      * - `NOT NULL`, no default
+      */
+      is_stale: boolean | db.Parameter<boolean> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -3059,6 +3083,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **triples.is_stale**
+      * - `bool` in database
+      * - `NOT NULL`, no default
+      */
+      is_stale?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
     }
     export type UniqueIndex = 'triples_pkey';
     export type Column = keyof Selectable;

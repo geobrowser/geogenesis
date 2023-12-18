@@ -198,6 +198,7 @@ export function mapTriplesWithActionType(
           is_protected,
           created_at: timestamp,
           created_at_block: blockNumber,
+          is_stale: false,
         },
       ] as TripleWithActionTuple;
     });

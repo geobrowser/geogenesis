@@ -167,6 +167,7 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(([id, nam
   space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   created_at: ROOT_SPACE_CREATED_AT,
+  is_stale: false,
 }));
 
 const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
@@ -188,6 +189,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
+      is_stale: false,
     },
     /* Giving these attributes a value type of the type they are */
     {
@@ -206,6 +208,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
+      is_stale: false,
     },
   ])
   .flat();
@@ -229,6 +232,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
+      is_stale: false,
     },
     /* Giving these entities an attribute of attribute */
     ...attributes.map(attribute => ({
@@ -247,6 +251,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
+      is_stale: false,
     })),
   ])
   .flat();
@@ -278,6 +283,7 @@ export class BootstrapRootError extends Error {
 export function bootstrapRoot() {
   return Effect.tryPromise({
     try: async () => {
+      // @TODO: Create versions for the entities
       await Promise.all([
         db.insert('spaces', space).run(pool),
         db.insert('accounts', account).run(pool),

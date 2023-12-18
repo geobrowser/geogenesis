@@ -227,7 +227,13 @@ export async function populateWithFullEntries({
             new Error(`Failed to delete triple ${triple.id} from version ${version.id}}. ${(error as Error).message}`),
         });
 
+        const setStaleEffect = Effect.tryPromise({
+          try: () => db.update('triples', { is_stale: true }, { id: triple.id }).run(pool),
+          catch: () => new Error('Failed to set triple as stale'),
+        });
+
         yield* awaited(Effect.retry(deleteEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(Effect.retry(setStaleEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
       if (isNameCreateAction) {
