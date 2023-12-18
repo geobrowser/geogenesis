@@ -215,6 +215,7 @@ export async function populateWithFullEntries({
 
     const triplesDatabaseTuples = mapTriplesWithActionType(fullEntries, timestamp, blockNumber);
 
+    console.info(`Starting processing of ${triplesDatabaseTuples.length} triples`);
     console.time('Inserting individual triples and triple versions');
     for (const [actionType, triple] of triplesDatabaseTuples) {
       const isCreateTriple = actionType === TripleAction.Create;
@@ -255,7 +256,7 @@ export async function populateWithFullEntries({
                 }
               )
               .run(pool),
-          catch: () => new Error('Failed to insert triple'),
+          catch: error => new Error(`Failed to insert ${triple.id}. ${(error as Error).message}`),
         });
 
         yield* awaited(Effect.retry(insertTripleEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -281,7 +282,7 @@ export async function populateWithFullEntries({
 
         const setStaleEffect = Effect.tryPromise({
           try: () => db.update('triples', { is_stale: true }, { id: triple.id }).run(pool),
-          catch: () => new Error('Failed to set triple as stale'),
+          catch: error => new Error(`Failed to set triple ${triple.id} as stale. ${(error as Error).message}`),
         });
 
         yield* awaited(Effect.retry(deleteEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -310,7 +311,12 @@ export async function populateWithFullEntries({
                 }
               )
               .run(pool),
-          catch: () => new Error('Failed to create name'),
+          catch: error =>
+            new Error(
+              `Failed to create name ${String(triple.string_value)} for triple ${triple.id}. ${
+                (error as Error).message
+              }`
+            ),
         });
 
         yield* awaited(Effect.retry(insertNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -338,7 +344,12 @@ export async function populateWithFullEntries({
                 }
               )
               .run(pool),
-          catch: () => new Error('Failed to delete name'),
+          catch: error =>
+            new Error(
+              `Failed to delete name ${String(triple.string_value)} for triple ${triple.id}. ${
+                (error as Error).message
+              }`
+            ),
         });
 
         yield* awaited(Effect.retry(deleteNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -366,7 +377,12 @@ export async function populateWithFullEntries({
                 }
               )
               .run(pool),
-          catch: () => new Error('Failed to create description'),
+          catch: error =>
+            new Error(
+              `Failed to create description ${String(triple.string_value)} for triple ${triple.id}. ${
+                (error as Error).message
+              }`
+            ),
         });
 
         yield* awaited(Effect.retry(insertDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -394,7 +410,12 @@ export async function populateWithFullEntries({
                 }
               )
               .run(pool),
-          catch: () => new Error('Failed to delete description'),
+          catch: error =>
+            new Error(
+              `Failed to delete description ${String(triple.string_value)} for triple ${triple.id}. ${
+                (error as Error).message
+              }`
+            ),
         });
 
         yield* awaited(Effect.retry(deleteDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
