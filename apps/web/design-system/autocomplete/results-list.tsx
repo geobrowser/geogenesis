@@ -46,8 +46,8 @@ interface Props {
 export function ResultContent({ onClick, result, alreadySelected, spaces, withDescription = true }: Props) {
   const space = spaces.find(space => space.id === result.nameTripleSpace);
 
-  const spaceImg = space?.spaceConfig?.name ?? space?.id ?? '';
-  const spaceName = space?.spaceConfig?.image ?? null;
+  const spaceName = space?.spaceConfig?.name ?? space?.id ?? '';
+  const spaceImg = space?.spaceConfig?.image ?? null;
 
   const showBreadcrumbs = spaceName || result.types.length > 0;
   const showBreadcrumbChevron = spaceName && result.types.length > 0;
