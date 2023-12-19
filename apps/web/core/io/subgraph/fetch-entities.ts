@@ -29,6 +29,7 @@ function getFetchEntitiesQuery(
         triplesByEntityId: {
           some: {
             ${entityOfWhere}
+            isStale: { equalTo: false }
           }
         }
         ${typeIdsString}
@@ -40,7 +41,7 @@ function getFetchEntitiesQuery(
       nodes {
         id
         name
-        triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+        triplesByEntityId(filter: { isStale: { equalTo: false } }) {
           nodes {
             id
             attribute {
