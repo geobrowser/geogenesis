@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import dotenv from 'dotenv';
-import { Duration, Effect, Either, Predicate, Schedule, pipe } from 'effect';
+import { Duration, Effect, Either, Schedule, pipe } from 'effect';
 
 import { bootstrapRoot } from './src/bootstrap-root.js';
 import { START_BLOCK } from './src/constants/constants.js';
@@ -63,6 +63,8 @@ async function main() {
    * Neither from cache nor genesis
    *   Use cursor. Fall back to genesis start block if not available.
    */
+  let runCount = 1;
+
   const configureStream = Effect.retry(
     Effect.gen(function* (_) {
       // if (options.block) {
@@ -73,6 +75,7 @@ async function main() {
 
       if (options.fromGenesis && options.fromCache) {
         console.info(`Starting stream at block ${startBlockNumber} after populating data from cache.`);
+        shouldUseCursor = false;
       }
 
       if (options.fromGenesis && !options.fromCache) {
@@ -85,12 +88,18 @@ async function main() {
       // i.e., `substream start`
       if (!startBlockNumber) {
         console.info(`Starting stream from latest stored cursor`);
-        return yield* _(runStream());
+        return yield* _(runStream({ shouldUseCursor: true }));
+      }
+
+      // If we are recovering from a stream error, start from the cursor
+      if (runCount > 1) {
+        shouldUseCursor = true;
       }
 
       yield* _(
         runStream({
           startBlockNumber: startBlockNumber ?? START_BLOCK,
+          shouldUseCursor,
         })
       );
     }),
