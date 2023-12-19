@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 
 import { Services } from '~/core/services';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils, isPermissionlessSpace } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 

@@ -1,8 +1,6 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-
 import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/utils/entity';
-import { getRandomArrayItem, isPermissionlessSpace } from '~/core/utils/utils';
+import { getRandomArrayItem } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
