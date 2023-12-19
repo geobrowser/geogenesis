@@ -88,6 +88,7 @@ async function main() {
       // i.e., `substream start`
       if (!startBlockNumber) {
         console.info(`Starting stream from latest stored cursor`);
+        runCount = runCount + 1;
         return yield* _(runStream({ shouldUseCursor: true }));
       }
 
@@ -95,6 +96,8 @@ async function main() {
       if (runCount > 1) {
         shouldUseCursor = true;
       }
+
+      runCount = runCount + 1;
 
       yield* _(
         runStream({
