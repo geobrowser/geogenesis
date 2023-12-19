@@ -24,16 +24,7 @@ export function NavbarSpaceMetadata() {
     queryFn: async ({ signal }) => {
       if (!spaceId) return null;
       const space = await subgraph.fetchSpace({ id: spaceId });
-      const isPermissionless = isPermissionlessSpace(spaceId);
-
       if (!space) return null;
-
-      if (isPermissionless) {
-        config = {
-          ...config,
-          subgraph: config.permissionlessSubgraph,
-        };
-      }
 
       const spaceConfig = space.spaceConfig;
 
