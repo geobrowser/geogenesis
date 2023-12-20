@@ -23,13 +23,13 @@ export function useAccessControl(spaceId?: string | null) {
     },
   });
 
-  // if (process.env.NODE_ENV === 'development') {
-  //   return {
-  //     isAdmin: true,
-  //     isEditorController: true,
-  //     isEditor: true,
-  //   };
-  // }
+  if (process.env.NODE_ENV === 'development') {
+    return {
+      isAdmin: true,
+      isEditorController: true,
+      isEditor: true,
+    };
+  }
 
   if (!address || !hydrated || !space) {
     return {
@@ -39,15 +39,9 @@ export function useAccessControl(spaceId?: string | null) {
     };
   }
 
-  console.log('access', {
-    admins: space.admins,
-    editors: space.editors,
-    editorControllers: space.editorControllers,
-  });
-
   return {
-    isAdmin: space.admins.includes(address),
-    isEditorController: space.editorControllers.includes(address),
-    isEditor: space.editors.includes(address),
+    isAdmin: space.admins.map(s => s.toLowerCase()).includes(address.toLowerCase()),
+    isEditorController: space.editorControllers.map(s => s.toLowerCase()).includes(address.toLowerCase()),
+    isEditor: space.editors.map(s => s.toLowerCase()).includes(address.toLowerCase()),
   };
 }
