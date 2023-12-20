@@ -29,7 +29,7 @@ const PORT = process.env.PORT || 5001;
 const server = app.listen(PORT, () => {
   const address = server.address();
   if (typeof address !== 'string') {
-    const href = `http://localhost:${address?.port}${'graphiql' || '/graphiql'}`;
+    const href = `http://localhost:${address?.port}${'/graphiql' || '/graphiql'}`;
     console.log(`PostGraphiQL available at ${href} 🚀`);
   } else {
     console.log(`PostGraphile listening on ${address} 🚀`);
