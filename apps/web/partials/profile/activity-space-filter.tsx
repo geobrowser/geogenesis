@@ -1,6 +1,5 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import Image from 'next/legacy/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';

@@ -13,15 +13,14 @@ import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
 
 interface Props {
-  onConnectionChange: (type: 'connect' | 'disconnect', address: string) => Promise<void>;
   children: React.ReactNode;
 }
 
-export function Providers({ children, onConnectionChange }: Props) {
+export function Providers({ children }: Props) {
   return (
     <ReactQueryProvider>
       <JotaiProvider>
-        <WalletProvider onConnectionChange={onConnectionChange}>
+        <WalletProvider>
           <Services.Provider>
             <StatusBarContextProvider>
               <DiffProvider>

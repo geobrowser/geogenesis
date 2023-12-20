@@ -31,6 +31,7 @@ import {
   stepAtom,
 } from '~/partials/onboarding/dialog';
 
+import { Cookie } from '../cookie';
 import { Environment } from '../environment';
 
 const LOCAL_CHAIN: Chain = {
@@ -179,27 +180,18 @@ const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
 
 const wagmiConfig = isTestEnv ? createMockWalletConfig() : createRealWalletConfig();
 
-export function WalletProvider({
-  children,
-  onConnectionChange,
-}: {
-  children: React.ReactNode;
-  onConnectionChange: (type: 'connect' | 'disconnect', address: string) => Promise<void>;
-}) {
-  const onConnect = React.useCallback(
-    ({ address }: { address?: string }) => {
-      if (!address) {
-        return;
-      }
+export function WalletProvider({ children }: { children: React.ReactNode }) {
+  const onConnect = React.useCallback(({ address }: { address?: string }) => {
+    if (!address) {
+      return;
+    }
 
-      onConnectionChange('connect', address);
-    },
-    [onConnectionChange]
-  );
+    Cookie.onConnectionChange('connect', address);
+  }, []);
 
   const onDisconnect = React.useCallback(() => {
-    onConnectionChange('disconnect', '');
-  }, [onConnectionChange]);
+    Cookie.onConnectionChange('disconnect', '');
+  }, []);
 
   return (
     // @ts-expect-error not sure why wagmi isn't happy. It works at runtime as expected.

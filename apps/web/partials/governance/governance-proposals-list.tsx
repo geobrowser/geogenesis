@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import Link from 'next/link';
 import pluralize from 'pluralize';
 
-import { Cookie } from '~/core/cookie';
+import { WALLET_ADDRESS } from '~/core/cookie';
 import { Subgraph } from '~/core/io';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export async function GovernanceProposalsList({ spaceId }: Props) {
-  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
+  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
   const [proposals, isEditor] = await Promise.all([
     Subgraph.fetchProposals({ spaceId, first: 5 }),
