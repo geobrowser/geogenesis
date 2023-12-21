@@ -29,9 +29,10 @@ import { HistoryPanel } from '../history/history-panel';
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement;
+  typeNames: string[];
 }
 
-export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePageMetadataHeaderProps) {
+export function SpacePageMetadataHeader({ spaceId, membersComponent, typeNames }: SpacePageMetadataHeaderProps) {
   const isEditing = useUserIsEditing(spaceId);
   const [open, onOpenChange] = React.useState(false);
 
@@ -43,11 +44,10 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
     data: proposals,
     isFetching,
     isFetchingNextPage,
-    error,
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: async ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
+    queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
@@ -64,10 +64,19 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
 
   const showMore = !isOnePage && !isLastPage;
 
+  const additionalTypeChips = typeNames
+    .filter(t => t !== 'Space')
+    .map((typeName, i) => (
+      <span key={i} className="flex h-6 items-center rounded-sm bg-divider px-1.5 text-breadcrumb text-grey-04">
+        {typeName}
+      </span>
+    ));
+
   return (
     <div className="flex items-center justify-between text-text">
       <div className="flex items-center gap-2">
         <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">Space</span>
+        {additionalTypeChips}
         {membersComponent}
       </div>
       <div className="inline-flex items-center gap-4">
