@@ -6,7 +6,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ActivitySpaceFilter } from '~/partials/profile/activity-space-filter';
 
 interface Props {
-  params: { id: string; entityId: string };
+  params: { id: string; entityId?: string };
   children: React.ReactNode;
 }
 
