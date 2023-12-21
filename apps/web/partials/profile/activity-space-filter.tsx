@@ -77,11 +77,13 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
           key={space.id}
           className="flex w-full gap-2 bg-white p-3 text-button text-grey-04 transition-colors duration-75 hover:bg-bg hover:text-text"
         >
-          {space.spaceConfig?.image && (
-            <div className="relative mt-[4.5px] h-3 w-3 overflow-hidden rounded-xs">
-              <Image src={getImagePath(space.spaceConfig.image)} layout="fill" objectFit="cover" />
-            </div>
-          )}
+          <div className="relative mt-[4.5px] h-3 w-3 overflow-hidden rounded-xs">
+            <Image
+              src={space.spaceConfig?.image ? getImagePath(space.spaceConfig.image) : PLACEHOLDER_SPACE_IMAGE}
+              layout="fill"
+              objectFit="cover"
+            />
+          </div>
           {space.spaceConfig?.name}
         </Link>
       ))}
