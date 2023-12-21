@@ -40,17 +40,6 @@ interface TabProps {
 }
 
 function buildTabsForSpacePage(types: EntityType[], params: Props['params']): TabProps[] {
-  const SPACE_TABS = [
-    {
-      label: 'Overview',
-      href: `${NavUtils.toSpace(params.id)}`,
-    },
-    {
-      label: 'Governance',
-      href: `${NavUtils.toSpace(params.id)}/governance`,
-    },
-  ];
-
   const COMPANY_TABS = [
     {
       label: 'Overview',
@@ -77,19 +66,32 @@ function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Ta
     },
   ];
 
+  const SPACE_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+    },
+    {
+      label: 'Governance',
+      href: `${NavUtils.toSpace(params.id)}/governance`,
+    },
+  ];
+
   const typeIds = types.map(t => t.id);
   const tabs = [];
 
-  if (typeIds.includes(SYSTEM_IDS.SPACE_CONFIGURATION)) {
-    tabs.push(...SPACE_TABS);
-  }
-
+  // Order of how we add the tabs matters. We want to
+  // show "content-based" tabs first, then "space-based" tabs.
   if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
     tabs.push(...COMPANY_TABS);
   }
 
   if (typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
     tabs.push(...PERSON_TABS);
+  }
+
+  if (typeIds.includes(SYSTEM_IDS.SPACE_CONFIGURATION)) {
+    tabs.push(...SPACE_TABS);
   }
 
   const seen = new Map<string, TabProps>();
