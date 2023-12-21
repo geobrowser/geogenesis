@@ -1,13 +1,13 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import Image from 'next/legacy/image';
 
 import { Suspense } from 'react';
 
-import { Environment } from '~/core/environment';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
+import { Entity } from '~/core/utils/entity';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -33,8 +33,6 @@ export default async function ActivityPage({ searchParams, params }: Props) {
 }
 
 async function ActivityList({ params, searchParams }: Props) {
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
   const id = decodeURIComponent(params.entityId);
   // Alternatively we can fetch the on-chain profile from the id and use
   // the address associated with the on-chain profile. But this works.
@@ -42,21 +40,16 @@ async function ActivityList({ params, searchParams }: Props) {
 
   const [proposals, spaces] = await Promise.all([
     fetchProposalsByUser({
-      endpoint: config.subgraph,
       userId: address,
       spaceId: searchParams.spaceId,
       api: {
         fetchProfile: Subgraph.fetchProfile,
       },
     }),
-    Subgraph.fetchSpaces({
-      endpoint: config.subgraph,
-    }),
+    Subgraph.fetchSpaces(),
   ]);
 
   if (proposals.length === 0) return <p className="pt-1 text-body text-grey-04">There is no information here yet.</p>;
-
-  const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.NAME]]));
 
   return (
     <div className="divide-y divide-divider">
@@ -68,7 +61,10 @@ async function ActivityList({ params, searchParams }: Props) {
       ) : (
         proposals.map(p => {
           const space = spaces.find(s => s.id === p.space);
-          const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '';
+
+          const configEntity = space?.spaceConfig;
+          const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
+          const spaceImage = configEntity ? Entity.cover(configEntity.triples) : PLACEHOLDER_SPACE_IMAGE;
 
           const lastEditedDate = GeoDate.fromGeoTime(p.createdAt);
           const proposalChangeCount = Action.getChangeCount(
@@ -91,7 +87,7 @@ async function ActivityList({ params, searchParams }: Props) {
               <div className="flex w-full items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <Image objectFit="cover" priority layout="fill" src={getImagePath(spaceImage)} />
+                    <Image objectFit="cover" priority layout="fill" src={getImagePath(spaceImage ?? '')} />
                   </div>
                   <p className="text-metadataMedium">{proposalName}</p>
                 </div>
@@ -99,7 +95,7 @@ async function ActivityList({ params, searchParams }: Props) {
               </div>
 
               <p className="pl-6 text-breadcrumb">
-                {proposalChangeCount} edits on {proposedEntitiesCount} pages in {spaceNames[p.space]}
+                {proposalChangeCount} edits on {proposedEntitiesCount} pages in {spaceName}
               </p>
             </div>
           );

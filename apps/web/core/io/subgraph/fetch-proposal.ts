@@ -2,69 +2,69 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
 import { Proposal } from '~/core/types';
 
 import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { NetworkProposal, fromNetworkActions } from './network-local-mapping';
+import { SubstreamProposal, fromNetworkActions } from './network-local-mapping';
 
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
     id
     name
-    description
-    createdAt
+    spaceId
     createdAtBlock
-    createdBy {
-      id
-    }
+    createdById
+    createdAt
     status
     proposedVersions {
-      id
-      name
-      createdAt
-      createdBy {
+      nodes {
         id
-      }
-      actions {
-        actionType
-        id
-        attribute {
-          id
-          name
-        }
+        name
+        createdById
         entity {
           id
           name
         }
-        entityValue {
-          id
-          name
+        actions {
+          nodes {
+            id
+            actionType
+            attribute {
+              id
+              name
+            }
+            entity {
+              id
+              name
+            }
+            entityValue
+            numberValue
+            stringValue
+            valueType
+            valueId
+          }
         }
-        numberValue
-        stringValue
-        valueType
-        valueId
       }
     }
   }
 }`;
 
 export interface FetchProposalOptions {
-  endpoint: string;
   id: string;
   signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
-  proposal: NetworkProposal | null;
+  proposal: SubstreamProposal | null;
 }
 
 export async function fetchProposal(options: FetchProposalOptions): Promise<Proposal | null> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: options.endpoint,
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
     query: getFetchProposalQuery(options.id),
     signal: options?.signal,
   });
@@ -83,9 +83,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id} endpoint: ${
-              options.endpoint
-            }
+            `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id}
             
             queryString: ${getFetchProposalQuery(options.id)}
             `,
@@ -96,9 +94,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
             proposal: null,
           };
         default:
-          console.error(
-            `${error._tag}: Unable to fetch proposal, queryId: ${queryId} id: ${options.id} endpoint: ${options.endpoint}`
-          );
+          console.error(`${error._tag}: Unable to fetch proposal, queryId: ${queryId} id: ${options.id}`);
           return {
             proposal: null,
           };
@@ -116,36 +112,37 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
-  const maybeProfile = await fetchProfile({ address: proposal.createdBy.id, endpoint: options.endpoint });
+  const maybeProfile = await fetchProfile({ address: proposal.createdById });
 
   return {
     ...proposal,
+    space: proposal.spaceId,
     createdBy:
       maybeProfile !== null
         ? maybeProfile[1]
         : {
-            id: proposal.createdBy.id,
+            id: proposal.createdById,
             name: null,
             avatarUrl: null,
             coverUrl: null,
-            address: proposal.createdBy.id as `0x${string}`,
+            address: proposal.createdById as `0x${string}`,
             profileLink: null,
           },
-    proposedVersions: proposal.proposedVersions.map(v => {
+    proposedVersions: proposal.proposedVersions.nodes.map(v => {
       return {
         ...v,
         createdBy:
           maybeProfile !== null
             ? maybeProfile[1]
             : {
-                id: proposal.createdBy.id,
+                id: proposal.createdById,
                 name: null,
                 avatarUrl: null,
                 coverUrl: null,
-                address: proposal.createdBy.id as `0x${string}`,
+                address: proposal.createdById as `0x${string}`,
                 profileLink: null,
               },
-        actions: fromNetworkActions(v.actions, proposal.space),
+        actions: fromNetworkActions(v.actions.nodes, proposal.spaceId),
       };
     }),
   };

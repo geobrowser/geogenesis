@@ -4,10 +4,6 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import { memo } from 'react';
 
-import { useAccessControl } from '~/core/hooks/use-access-control';
-import { EntityOthersToast } from '~/core/presence/entity-others-toast';
-import { SpacePresenceProvider } from '~/core/presence/presence-provider';
-import { useEditable } from '~/core/state/editable-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 
 import { Spacer } from '~/design-system/spacer';
@@ -27,8 +23,6 @@ interface Props {
 
 export const EntityTableContainer = memo(function EntityTableContainer({ spaceId, showHeader = true }: Props) {
   const entityTableStore = useEntityTable();
-  const { isEditor } = useAccessControl(spaceId);
-  const { editable } = useEditable();
 
   return (
     <ErrorBoundary
@@ -100,11 +94,6 @@ export const EntityTableContainer = memo(function EntityTableContainer({ spaceId
           <NextButton isDisabled={!entityTableStore.hasNextPage} onClick={() => entityTableStore.setPage('next')} />
         </PageNumberContainer>
       </PageContainer>
-      {isEditor && editable && (
-        <SpacePresenceProvider entityId={entityTableStore.selectedType?.entityId ?? ''} spaceId={spaceId}>
-          <EntityOthersToast />
-        </SpacePresenceProvider>
-      )}
     </ErrorBoundary>
   );
 });

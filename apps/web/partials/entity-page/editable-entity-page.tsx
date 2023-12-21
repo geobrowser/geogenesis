@@ -7,8 +7,6 @@ import { useEffect, useState } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { EntityOthersToast } from '~/core/presence/entity-others-toast';
-import { EntityPresenceProvider } from '~/core/presence/presence-provider';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple, RelationValueTypesByAttributeId, TripleValueType } from '~/core/types';
@@ -94,7 +92,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
     const setTypeTriple = async () => {
       if (typeId) {
-        const typeEntity = await subgraph.fetchEntity({ endpoint: config.subgraph, id: typeId ?? '' });
+        const typeEntity = await subgraph.fetchEntity({ id: typeId ?? '' });
 
         if (typeEntity) {
           send({
@@ -133,8 +131,8 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
       const filtersEntities = await Promise.all(
         filters.map((filter: Filter) => {
           return Promise.all([
-            subgraph.fetchEntity({ endpoint: config.subgraph, id: filter[0] ?? '' }),
-            subgraph.fetchEntity({ endpoint: config.subgraph, id: filter[1] ?? '' }),
+            subgraph.fetchEntity({ id: filter[0] ?? '' }),
+            subgraph.fetchEntity({ id: filter[1] ?? '' }),
           ]);
         })
       );
@@ -186,9 +184,6 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
           </SquareButton>
         </div>
       </div>
-      <EntityPresenceProvider entityId={id} spaceId={spaceId}>
-        <EntityOthersToast />
-      </EntityPresenceProvider>
     </>
   );
 }

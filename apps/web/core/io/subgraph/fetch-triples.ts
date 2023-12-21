@@ -2,6 +2,7 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
 
 import { graphql } from './graphql';
@@ -14,33 +15,34 @@ interface GetFetchTriplesQueryOptions {
 }
 
 const getFetchTriplesQuery = ({ where, skip, first }: GetFetchTriplesQueryOptions) => `query {
-  triples(where: {${where}}, skip: ${skip}, first: ${first}) {
-    id
-    attribute {
+  triples(filter: {${where}}, first: ${first}, offset: ${skip}) {
+    nodes {
       id
-      name
-    }
-    entity {
-      id
-      name
-    }
-    entityValue {
-      id
-      name
-    }
-    numberValue
-    stringValue
-    valueType
-    valueId
-    isProtected
-    space {
-      id
+      attribute {
+        id
+        name
+      }
+      entity {
+        id
+        name
+      }
+      entityValue {
+        id
+        name
+      }
+      numberValue
+      stringValue
+      valueType
+      valueId
+      isProtected
+      space {
+        id
+      }
     }
   }
 }`;
 
 export interface FetchTriplesOptions {
-  endpoint: string;
   query: string;
   space?: string;
   skip: number;
@@ -50,11 +52,12 @@ export interface FetchTriplesOptions {
 }
 
 interface NetworkResult {
-  triples: NetworkTriple[];
+  triples: { nodes: NetworkTriple[] };
 }
 
 export async function fetchTriples(options: FetchTriplesOptions) {
   const queryId = uuid();
+  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const fieldFilters = Object.fromEntries(options.filter.map(clause => [clause.field, clause.value])) as Record<
     FilterField,
@@ -62,24 +65,25 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   >;
 
   const where = [
-    options.space && `space: ${JSON.stringify(options.space)}`,
+    `isStale: { equalTo: false }`,
+    options.space && `spaceId: { equalTo: ${JSON.stringify(options.space)} }`,
     // We can pass either `query` or `fieldFilters['entity-name']` to filter by entity name
     (options.query || fieldFilters['entity-name']) &&
-      `entity_: {name_contains_nocase: ${JSON.stringify(options.query || fieldFilters['entity-name'])}}`,
-    fieldFilters['entity-id'] && `entity: ${JSON.stringify(fieldFilters['entity-id'])}`,
+      `entity: {name: {startsWithInsensitive: ${JSON.stringify(options.query ?? fieldFilters['entity-name'])}}}`,
+    fieldFilters['entity-id'] && `entity: {id: {equalTo: ${JSON.stringify(fieldFilters['entity-id'])}}}`,
     fieldFilters['attribute-name'] &&
-      `attribute_: {name_contains_nocase: ${JSON.stringify(fieldFilters['attribute-name'])}}`,
-    fieldFilters['attribute-id'] && `attribute: ${JSON.stringify(fieldFilters['attribute-id'])}`,
+      `attribute: { name: {startsWithInsensitive: ${JSON.stringify(fieldFilters['attribute-name'])}} }`,
+    fieldFilters['attribute-id'] && `attribute: { id: {equalTo: ${JSON.stringify(fieldFilters['attribute-id'])}} }`,
 
-    // Until we have OR we can't search for name_contains OR value string contains
-    fieldFilters.value && `entityValue_: {name_contains_nocase: ${JSON.stringify(fieldFilters.value)}}`,
-    fieldFilters['linked-to'] && `valueId: ${JSON.stringify(fieldFilters['linked-to'])}`,
+    // // Until we have OR we can't search for name_contains OR value string contains
+    fieldFilters.value && `entity: {name: {startsWithInsensitive: ${JSON.stringify(fieldFilters.value)}}}`,
+    fieldFilters['linked-to'] && `entityValueId: {equalTo: ${JSON.stringify(fieldFilters['linked-to'])}}`,
   ]
     .filter(Boolean)
     .join(' ');
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: options.endpoint,
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
     query: getFetchTriplesQuery({ where, skip: options.skip, first: options.first }),
     signal: options?.signal,
   });
@@ -98,25 +102,23 @@ export async function fetchTriples(options: FetchTriplesOptions) {
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchTriples. queryId: ${queryId} endpoint: ${
-              options.endpoint
-            } space: ${options.space} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${
-              options.filter
-            }
+            `Encountered runtime graphql error in fetchTriples. queryId: ${queryId} endpoint: ${endpoint} space: ${
+              options.space
+            } query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}
             
             queryString: ${getFetchTriplesQuery({ where, skip: options.skip, first: options.first })}
             `,
             error.message
           );
 
-          return { triples: [] };
+          return { triples: { nodes: [] } };
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch triples, queryId: ${queryId} endpoint: ${options.endpoint} space: ${options.space} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
+            `${error._tag}: Unable to fetch triples, queryId: ${queryId} endpoint: ${endpoint} space: ${options.space} query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
           );
 
-          return { triples: [] };
+          return { triples: { nodes: [] } };
       }
     }
 
@@ -124,5 +126,5 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  return fromNetworkTriples(result.triples.filter(triple => !triple.isProtected));
+  return fromNetworkTriples(result.triples.nodes.filter(triple => !triple.isProtected));
 }

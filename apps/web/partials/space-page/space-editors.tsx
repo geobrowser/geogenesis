@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
-import { Cookie } from '~/core/cookie';
+import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export async function SpaceEditors({ spaceId }: Props) {
-  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
+  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
   const isEditor = await getIsEditorForSpace(spaceId, connectedAddress);
 
   if (isEditor) {

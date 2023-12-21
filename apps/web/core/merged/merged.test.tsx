@@ -72,7 +72,6 @@ describe('MergeDataSource merges local triples with network triples', () => {
     });
 
     const triples = await mergedNetwork.fetchTriples({
-      endpoint: options.development.subgraph,
       space: stubTriple.space,
       query: '',
       first: 10,
@@ -106,7 +105,6 @@ describe('MergeDataSource merges local triples with network triples', () => {
 
     const tripleForAlice = await mergedNetwork.fetchTriples({
       query: '',
-      endpoint: options.development.subgraph,
       first: 1,
       skip: 0,
       filter: [
@@ -121,7 +119,6 @@ describe('MergeDataSource merges local triples with network triples', () => {
 
     const triplesForBob = await mergedNetwork.fetchTriples({
       query: '',
-      endpoint: options.development.subgraph,
       first: 1,
       skip: 0,
       filter: [
@@ -257,7 +254,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
       localStore: createMockLocalStore(),
     });
 
-    const entity = await mergedNetwork.fetchEntity({ id: stubTriple.id, endpoint: options.development.subgraph });
+    const entity = await mergedNetwork.fetchEntity({ id: stubTriple.id });
 
     expect(entity).toEqual(Entity.entitiesFromTriples([changedLocalTriple.after])[0]);
   });
@@ -288,7 +285,6 @@ describe('MergeDataSource merges local entity with network entity', () => {
 
     const entity = await mergedNetwork.fetchEntity({
       id: changedLocalTriple.id,
-      endpoint: options.development.subgraph,
     });
 
     expect(entity).toEqual(Entity.entitiesFromTriples([changedLocalTriple])[0]);
@@ -306,7 +302,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
       localStore: createMockLocalStore(),
     });
 
-    const entity = await mergedNetwork.fetchEntity({ id: stubTriple.id, endpoint: options.development.subgraph });
+    const entity = await mergedNetwork.fetchEntity({ id: stubTriple.id });
 
     expect(entity).toEqual(Entity.entitiesFromTriples([stubTriple])[0]);
   });
@@ -325,7 +321,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
       localStore: createMockLocalStore(),
     });
 
-    const entity = await mergedNetwork.fetchEntity({ id: 'Banana', endpoint: options.development.subgraph });
+    const entity = await mergedNetwork.fetchEntity({ id: 'Banana' });
 
     expect(entity).toEqual(null);
   });

@@ -31,8 +31,8 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
 
   // check if the spaces name is not undefined and then sort alphabetically:
   const sortedSpacesForMove = spacesForMove.sort((spaceA: Space, spaceB: Space) => {
-    const nameA = spaceA.attributes[SYSTEM_IDS.NAME];
-    const nameB = spaceB.attributes[SYSTEM_IDS.NAME];
+    const nameA = spaceA.spaceConfig?.name ?? spaceA.id;
+    const nameB = spaceB.spaceConfig?.name ?? spaceB.id;
 
     if (nameA !== undefined && nameB !== undefined) {
       return nameA > nameB ? 1 : -1;
@@ -41,7 +41,7 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   });
 
   const filteredSpacesForMoveResults = sortedSpacesForMove.filter(
-    space => space.attributes[SYSTEM_IDS.NAME]?.toLowerCase().includes(debouncedQuery.toLowerCase())
+    space => space.spaceConfig?.name?.toLowerCase().includes(debouncedQuery.toLowerCase())
   );
 
   return (
@@ -63,16 +63,12 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
               setIsMoveReviewOpen(true);
             }}
           >
-            {space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] && (
+            {space.spaceConfig?.image && (
               <div className="relative h-8 w-8 overflow-hidden rounded">
-                <Image
-                  src={getImagePath(space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE])}
-                  layout="fill"
-                  objectFit="cover"
-                />
+                <Image src={getImagePath(space.spaceConfig.image)} layout="fill" objectFit="cover" />
               </div>
             )}
-            <Text variant="metadataMedium">{space.attributes[SYSTEM_IDS.NAME]}</Text>
+            <Text variant="metadataMedium">{space.spaceConfig?.name ?? space.id}</Text>
           </button>
         ))}
       </div>

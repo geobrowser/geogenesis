@@ -3,12 +3,10 @@ import { redirect } from 'next/navigation';
 
 import { Suspense } from 'react';
 
-import { AppConfig, Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { Entity } from '~/core/utils/entity';
 import { Value } from '~/core/utils/value';
 
@@ -37,9 +35,8 @@ interface Props {
 const EMPTY_ARRAY_AS_ENCODED_URI = '%5B%5D';
 
 export default async function DefaultEntityPage({ params, searchParams }: Props) {
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const props = await getData(params.id, params.entityId, config);
+  const decodedId = decodeURIComponent(params.entityId);
+  const props = await getData(params.id, decodedId);
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
@@ -78,17 +75,8 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
   );
 }
 
-const getData = async (spaceId: string, entityId: string, config: AppConfig) => {
-  const { isPermissionlessSpace, space } = await API.space(spaceId);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+const getData = async (spaceId: string, entityId: string) => {
+  const entity = await Subgraph.fetchEntity({ id: entityId });
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
@@ -116,16 +104,10 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
-        return Subgraph.fetchTriples({
-          endpoint: config.subgraph,
-          query: '',
-          skip: 0,
-          first: DEFAULT_PAGE_SIZE,
-          filter: [{ field: 'entity-id', value: blockId }],
-        });
+        return Subgraph.fetchEntity({ id: blockId });
       })
     )
-  ).flatMap(triples => triples);
+  ).flatMap(entity => entity?.triples ?? []);
 
   return {
     triples: entity?.triples ?? [],
@@ -133,7 +115,6 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
     name: entity?.name ?? null,
     description: Entity.description(entity?.triples ?? []),
     spaceId,
-    space,
     serverAvatarUrl,
     serverCoverUrl,
 

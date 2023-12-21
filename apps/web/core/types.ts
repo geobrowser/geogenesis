@@ -57,15 +57,17 @@ export type Triple = {
   placeholder?: boolean;
 };
 
+export type SpaceConfigEntity = Entity & {
+  image: string | null;
+};
+
 export type Space = {
   id: string;
   isRootSpace: boolean;
   editors: string[];
   editorControllers: string[];
   admins: string[];
-  attributes: Dictionary<string, string>;
-  entityId: string;
-  spaceConfigEntityId: string | null;
+  spaceConfig: SpaceConfigEntity | null;
   createdAtBlock: string;
 };
 
@@ -169,6 +171,22 @@ export type Proposal = {
   space: string;
 };
 
+export type Version = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  createdBy: Profile;
+  createdAt: number;
+  createdAtBlock: string;
+  spaceId: string;
+  actions: Action[];
+  triples: Triple[];
+  entity: {
+    id: string;
+    name: string;
+  };
+};
+
 export type ProposedVersion = {
   id: string;
   name: string | null;
@@ -176,6 +194,7 @@ export type ProposedVersion = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
+  spaceId: string;
   actions: Action[];
   entity: {
     id: string;

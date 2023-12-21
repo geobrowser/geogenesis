@@ -2,39 +2,41 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
 import { Entity as IEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { NetworkEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamNetworkEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntityQuery(id: string, blockNumber?: number) {
-  const blockNumberQuery = blockNumber ? `, block: {number: ${JSON.stringify(blockNumber)}}` : ``;
-
   return `query {
-    geoEntity(id: ${JSON.stringify(id)}${blockNumberQuery}) {
+    geoEntity(id: ${JSON.stringify(id)}) {
       id,
       name
-      entityOf {
-        id
-        stringValue
-        valueId
-        valueType
-        numberValue
-        space {
+      triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+        nodes {
           id
-        }
-        entityValue {
-          id
-          name
-        }
-        attribute {
-          id
-          name
-        }
-        entity {
-          id
-          name
+          attribute {
+            id
+            name
+          }
+          entity {
+            id
+            name
+          }
+          entityValue {
+            id
+            name
+          }
+          numberValue
+          stringValue
+          valueType
+          valueId
+          isProtected
+          space {
+            id
+          }
         }
       }
     }
@@ -42,22 +44,21 @@ function getFetchEntityQuery(id: string, blockNumber?: number) {
 }
 
 export interface FetchEntityOptions {
-  endpoint: string;
   id: string;
-  blockNumber?: number;
   signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
-  geoEntity: NetworkEntity | null;
+  geoEntity: SubstreamNetworkEntity | null;
 }
 
 export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity | null> {
   const queryId = uuid();
+  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: options.endpoint,
-    query: getFetchEntityQuery(options.id, options.blockNumber),
+    endpoint,
+    query: getFetchEntityQuery(options.id),
     signal: options.signal,
   });
 
@@ -75,11 +76,11 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${options.endpoint} id: ${
+            `Encountered runtime graphql error in fetchEntity. queryId: ${queryId} endpoint: ${endpoint} id: ${
               options.id
-            } blockNumber: ${options.blockNumber}
+            }
 
-            queryString: ${getFetchEntityQuery(options.id, options.blockNumber)}
+            queryString: ${getFetchEntityQuery(options.id)}
             `,
             error.message
           );
@@ -89,7 +90,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${options.endpoint} id: ${options.id} blockNumber: ${options.blockNumber}`
+            `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${endpoint} id: ${options.id}`
           );
           return {
             geoEntity: null,
@@ -107,7 +108,8 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
     return null;
   }
 
-  const triples = fromNetworkTriples(entity.entityOf);
+  const networkTriples = entity.triplesByEntityId.nodes;
+  const triples = fromNetworkTriples(networkTriples);
   const nameTriple = Entity.nameTriple(triples);
 
   return {

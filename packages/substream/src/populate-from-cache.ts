@@ -6,7 +6,7 @@ import { populateWithFullEntries } from './populate-entries';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import type { Roles } from './types';
 import { pool } from './utils/pool';
-import { type FullEntry, type RoleChange, ZodRoleChange } from './zod';
+import { type FullEntry, type RoleChange } from './zod';
 
 export async function populateFromCache() {
   try {
@@ -38,9 +38,8 @@ export async function populateFromCache() {
           cursor: maybeCachedEntry.cursor,
         });
 
-        if (maybeCachedEntry.block_number > blockNumber) {
-          blockNumber = maybeCachedEntry.block_number;
-        }
+        console.log('Setting latest block number to ', maybeCachedEntry.block_number);
+        blockNumber = maybeCachedEntry.block_number;
       }
 
       const maybeCachedRole: Schema.cache.roles.Selectable | undefined = await db
@@ -93,9 +92,8 @@ export async function populateFromCache() {
             });
         }
 
-        if (maybeCachedRole.created_at_block > blockNumber) {
-          blockNumber = maybeCachedRole.created_at_block;
-        }
+        console.log('Setting latest block number to ', maybeCachedRole.created_at_block);
+        blockNumber = maybeCachedRole.created_at_block;
       }
     }
 

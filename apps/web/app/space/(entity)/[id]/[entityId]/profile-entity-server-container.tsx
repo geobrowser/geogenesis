@@ -2,8 +2,7 @@ import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
-import { Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 
 import {
   EntityReferencedByLoading,
@@ -17,18 +16,7 @@ interface Props {
 }
 
 export async function ProfileEntityServerContainer({ params }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const person = await Subgraph.fetchEntity({ id: params.entityId, endpoint: config.subgraph });
+  const person = await Subgraph.fetchEntity({ id: params.entityId });
 
   // @TODO: Real error handling
   if (!person) {

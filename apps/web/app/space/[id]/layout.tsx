@@ -3,11 +3,9 @@ import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
-import { AppConfig, Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -27,28 +25,16 @@ import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-he
 import { SpaceConfigProvider } from './space-config-provider';
 
 interface Props {
-  params: { id: string; entityId?: string };
+  params: { id: string };
   children: React.ReactNode;
 }
 
 export default async function Layout({ children, params }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const props = await getData(params.id, config);
-
+  const props = await getData(params.id);
   const coverUrl = Entity.cover(props.triples);
 
   return (
-    <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
+    <SpaceConfigProvider spaceId={params.id}>
       <TypesStoreServerContainer spaceId={params.id}>
         <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
           <EditorProvider
@@ -104,35 +90,26 @@ function MembersSkeleton() {
   );
 }
 
-const getData = async (spaceId: string, config: AppConfig) => {
-  const { isPermissionlessSpace, space } = await API.space(spaceId);
+const getData = async (spaceId: string) => {
+  const space = await Subgraph.fetchSpace({ id: spaceId });
 
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
+  const entity = space?.spaceConfig;
 
-  const entityId = space?.spaceConfigEntityId;
-
-  if (!entityId) {
+  if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
     redirect(`/space/${spaceId}/entities`);
   }
-
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
 
   // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
   // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
   if (entity?.nameTripleSpace) {
     if (spaceId !== entity?.nameTripleSpace) {
       console.log('Redirecting to space from space configuration entity', entity?.nameTripleSpace);
-      redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
+      redirect(`/space/${entity?.nameTripleSpace}/${entity.id}`);
     }
   }
 
-  const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
+  const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
 
   const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
   const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
@@ -140,20 +117,14 @@ const getData = async (spaceId: string, config: AppConfig) => {
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
-        return Subgraph.fetchTriples({
-          endpoint: config.subgraph,
-          query: '',
-          skip: 0,
-          first: DEFAULT_PAGE_SIZE,
-          filter: [{ field: 'entity-id', value: blockId }],
-        });
+        return Subgraph.fetchEntity({ id: blockId });
       })
     )
-  ).flatMap(triples => triples);
+  ).flatMap(entity => entity?.triples ?? []);
 
   return {
     triples: entity?.triples ?? [],
-    id: entityId,
+    id: entity.id,
     name: entity?.name ?? spaceName ?? '',
     description: Entity.description(entity?.triples ?? []),
     spaceId,

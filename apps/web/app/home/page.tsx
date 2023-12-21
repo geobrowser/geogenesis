@@ -2,7 +2,7 @@ import { Effect, Either } from 'effect';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
 
-import { Cookie } from '~/core/cookie';
+import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { fetchProposalCountByUser } from '~/core/io/fetch-proposal-count-by-user';
 import { fetchOnchainProfile, fetchProfile } from '~/core/io/subgraph';
@@ -19,12 +19,12 @@ import { Component } from './component';
 export const dynamic = 'force-dynamic';
 
 export default async function PersonalHomePage() {
-  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
+  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const [spaces, person, profile, proposalsCount] = await Promise.all([
     getSpacesWhereAdmin(connectedAddress),
-    connectedAddress ? fetchProfile({ address: connectedAddress, endpoint: config.subgraph }) : null,
+    connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
     connectedAddress ? fetchOnchainProfile({ address: connectedAddress }) : null,
     connectedAddress
       ? fetchProposalCountByUser({
@@ -90,13 +90,22 @@ const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
   if (!address) return [];
 
   const query = `{
-      spaces(where: {or: [{admins_: {id: "${address}"}}, {editorControllers_: {id: "${address}"}}]}) {
-        id
+      spaces(
+        filter: {
+          or: [
+            { spaceAdmins: { some: { accountId: { equalToInsensitive: "${address}" } } } }
+            { spaceEditorControllers: { some: { accountId: { equalToInsensitive: "${address}" } } } }
+          ]
+        }
+      ) {
+        nodes {
+          id
+        }
       }
     }`;
 
-  const spacesEffect = graphql<{ spaces: { id: string }[] }>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph,
+  const spacesEffect = graphql<{ spaces: { nodes: { id: string }[] } }>({
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
     query,
   });
 
@@ -116,5 +125,5 @@ const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
     }
   }
 
-  return result.right.spaces.map(space => space.id);
+  return result.right.spaces.nodes.map(space => space.id);
 };

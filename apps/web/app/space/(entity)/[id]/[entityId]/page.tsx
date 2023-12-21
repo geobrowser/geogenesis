@@ -1,7 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { Environment } from '~/core/environment';
-import { API } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 
 import DefaultEntityPage from './default-entity-page';
@@ -16,23 +14,11 @@ interface Props {
 }
 
 export default async function EntityTemplateStrategy({ params, searchParams }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
+  const decodedId = decodeURIComponent(params.entityId);
 
   const types = await fetchEntityType({
-    endpoint: config.subgraph,
-    id: params.entityId,
+    id: decodedId,
   });
-
-  params.entityId = decodeURIComponent(params.entityId);
 
   if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
     return <ProfileEntityServerContainer params={params} />;

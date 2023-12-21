@@ -1,4 +1,4 @@
-import { IPFS_GATEWAY_PATH } from '~/core/constants';
+import { IPFS_GATEWAY_PATH, PUBLIC_SPACES } from '~/core/constants';
 import { Entity as IEntity } from '~/core/types';
 
 import { Entity } from './entity';
@@ -247,3 +247,8 @@ export function getGeoPersonIdFromOnchainId(address: `0x${string}`, onchainId: s
 }
 
 export const sleep = (delay: number) => new Promise(resolve => setTimeout(resolve, delay));
+
+export function isPermissionlessSpace(spaceId: string) {
+  // @TODO: Ensure we are correctly capitalizing the space id in the substream
+  return !PUBLIC_SPACES.includes(spaceId.toLowerCase());
+}

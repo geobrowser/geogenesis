@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { Environment } from '../environment';
 import { Services } from '../services';
 
 type SpacesAccounts = Record<string, string[]>;
@@ -14,10 +13,7 @@ export const useSpaces = () => {
 
   const { data: spaces } = useQuery({
     queryKey: ['spaces'],
-    queryFn: () =>
-      subgraph.fetchSpaces({
-        endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph,
-      }),
+    queryFn: () => subgraph.fetchSpaces(),
   });
 
   const editorControllers = React.useMemo(() => {

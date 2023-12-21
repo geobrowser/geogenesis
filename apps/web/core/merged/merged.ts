@@ -150,7 +150,7 @@ export class Merged implements IMergedDataSource {
    */
   fetchEntity = async (options: Parameters<Subgraph.ISubgraph['fetchEntity']>[0]) => {
     try {
-      const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id, endpoint: options.endpoint });
+      const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id });
 
       const actionsForEntityId = Entity.actionsForEntityId(this.store.allActions, options.id);
 
@@ -186,7 +186,7 @@ export class Merged implements IMergedDataSource {
 
     const filterState = await TableBlockSdk.createFiltersFromGraphQLString(
       options.params.filter ?? '',
-      async id => await this.fetchEntity({ id, endpoint: options.params.endpoint })
+      async id => await this.fetchEntity({ id })
     );
 
     /**
@@ -219,7 +219,7 @@ export class Merged implements IMergedDataSource {
     // This will return null if the entity we're fetching does not exist remotely.
     // i.e., the entity was created locally and has not been published to the server.
     const maybeServerEntitiesChangedLocally = await Promise.all(
-      changedEntitiesIdsFromAnotherType.map(id => this.subgraph.fetchEntity({ id, endpoint: options.params.endpoint }))
+      changedEntitiesIdsFromAnotherType.map(id => this.subgraph.fetchEntity({ id }))
     );
 
     const serverEntitiesChangedLocally = maybeServerEntitiesChangedLocally

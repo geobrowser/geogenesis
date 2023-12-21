@@ -37,23 +37,23 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
 
   const pathname = usePathname();
 
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
 
   const {
     data: proposals,
     isFetching,
     isFetchingNextPage,
+    error,
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: async ({ pageParam = 0 }) =>
-      subgraph.fetchProposals({ spaceId, endpoint: config.subgraph, page: pageParam }),
+    queryFn: async ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
   const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
-  const isOnePage = proposals?.pages && proposals.pages[0].length < 10;
+  const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
 
   const isLastPage =
     proposals?.pages &&

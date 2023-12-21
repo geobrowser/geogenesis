@@ -52,7 +52,7 @@ export function useConfiguredAttributeRelationTypes({
 }: {
   entityId: string;
 }): RelationValueTypesByAttributeId {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { allActions } = useActionsStore();
 
   const {
@@ -65,7 +65,6 @@ export function useConfiguredAttributeRelationTypes({
       // 1. Fetch all the triples for the entity
       // 2. Filter out the triples that are not relation value types
       subgraph.fetchTriples({
-        endpoint: config.subgraph,
         query: '',
         skip: 0,
         first: 100,

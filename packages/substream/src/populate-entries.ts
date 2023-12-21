@@ -13,7 +13,7 @@ import {
   mapTriplesWithActionType,
   mapVersions,
 } from './map-entries';
-import { TripleAction, type TripleWithActionTuple } from './types';
+import { TripleAction } from './types';
 import { upsertChunked } from './utils/db';
 import { pool } from './utils/pool';
 import { type FullEntry } from './zod';
@@ -75,95 +75,148 @@ export async function populateWithFullEntries({
     // This fetches all of the triples that were included in the previous version of an entity. Later
     // on we process all triples that were added and removed as part of this proposal and remove
     // deleted triples from the new version.
-    const triplesForVersionsEffect = Effect.gen(function* (awaited) {
-      const triplesForVersions = yield* awaited(
-        Effect.all(
-          versions.map(version => {
-            return Effect.gen(function* (awaited) {
-              const previousTripleVersions = yield* awaited(
-                Effect.tryPromise({
-                  try: async () => {
-                    const latestVersionForEntityId = await db
-                      .selectOne(
-                        'versions',
-                        { entity_id: version.entity_id },
-                        { order: { by: 'created_at', direction: 'DESC' } }
-                      )
-                      .run(pool);
+    const triplesForVersionsEffect: Effect.Effect<never, Error, Schema.triple_versions.Insertable[]> = Effect.gen(
+      function* (awaited) {
+        const triplesForVersions = yield* awaited(
+          Effect.all(
+            versions.map(version => {
+              return Effect.gen(function* (awaited) {
+                const previousTripleVersions = yield* awaited(
+                  Effect.tryPromise({
+                    try: () => db.select('triples', { entity_id: version.entity_id, is_stale: false }).run(pool),
+                    catch: error =>
+                      new Error(
+                        `Failed to fetch triples for entity id ${version.entity_id}. ${(error as Error).message}`
+                      ),
+                  })
+                );
 
-                    if (!latestVersionForEntityId) {
-                      return [];
-                    }
-
-                    return await db.select('triple_versions', { version_id: latestVersionForEntityId?.id }).run(pool);
-                  },
-                  catch: error =>
-                    new Error(
-                      `Failed to fetch triples for entity id ${version.entity_id}. ${(error as Error).message}`
-                    ),
-                })
-              );
-
-              // Take the triples from the last version and add them to the new version
-              return previousTripleVersions.map(tripleVersion => {
-                return {
-                  triple_id: tripleVersion.triple_id,
-                  version_id: version.id,
-                };
+                // Take the triples from the last version and add them to the new version
+                return previousTripleVersions.map(tripleVersion => {
+                  return {
+                    triple_id: tripleVersion.id,
+                    version_id: version.id,
+                  };
+                });
               });
-            });
-          }),
-          {
-            concurrency: 75,
-          }
-        )
-      );
+            }),
+            {
+              concurrency: 75,
+            }
+          )
+        );
 
-      return triplesForVersions.flat() as Schema.triple_versions.Insertable[];
-    });
+        return triplesForVersions.flat();
+      }
+    );
 
+    console.time('Fetching existing triples for versions');
     const existingTripleVersions: Schema.triple_versions.Insertable[] = yield* awaited(
       Effect.retry(triplesForVersionsEffect, Schedule.exponential(100).pipe(Schedule.jittered))
     );
+    console.timeEnd('Fetching existing triples for versions');
 
+    console.time('Inserting bulk accounts');
     yield* awaited(
       Effect.tryPromise({
-        try: async () => {
-          await Promise.all([
-            // @TODO: Can we batch these into a single upsert?
-            upsertChunked('accounts', accounts, 'id', {
-              updateColumns: db.doNothing,
-            }),
-            upsertChunked('actions', actions, 'id', {
-              updateColumns: db.doNothing,
-            }),
-            // We update the name and description for an entity when mapping
-            // through triples.
-            upsertChunked('geo_entities', geoEntities, 'id', {
-              updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
-              noNullUpdateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
-            }),
-            upsertChunked('proposals', proposals, 'id', {
-              updateColumns: db.doNothing,
-            }),
-            upsertChunked('proposed_versions', proposed_versions, 'id', {
-              updateColumns: db.doNothing,
-            }),
-            upsertChunked('spaces', spaces, 'id', {
-              updateColumns: db.doNothing,
-            }),
-            upsertChunked('versions', versions, 'id', {
-              updateColumns: db.doNothing,
-            }),
-            db.upsert('triple_versions', existingTripleVersions, ['triple_id', 'version_id']).run(pool),
-          ]);
-        },
-        catch: error => new Error(`Failed to insert bulk entries. ${(error as Error).message}`),
+        try: () =>
+          upsertChunked('accounts', accounts, 'id', {
+            updateColumns: db.doNothing,
+          }),
+        catch: error => new Error(`Failed to insert bulk accounts. ${(error as Error).message}`),
+      })
+    );
+    console.timeEnd('Inserting bulk accounts');
+
+    console.time('Inserting bulk actions');
+    yield* awaited(
+      Effect.tryPromise({
+        try: () =>
+          upsertChunked('actions', actions, 'id', {
+            updateColumns: db.doNothing,
+          }),
+        catch: error => new Error(`Failed to insert bulk actions. ${(error as Error).message}`),
+      })
+    );
+    console.timeEnd('Inserting bulk actions');
+
+    console.time('Inserting bulk entities');
+    yield* awaited(
+      Effect.tryPromise({
+        try: () =>
+          // We update the name and description for an entity when mapping
+          // through triples.
+          upsertChunked('geo_entities', geoEntities, 'id', {
+            updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
+            noNullUpdateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
+          }),
+        catch: error => new Error(`Failed to insert bulk entities. ${(error as Error).message}`),
+      })
+    );
+    console.timeEnd('Inserting bulk entities');
+
+    console.time('Inserting bulk proposals');
+    yield* awaited(
+      Effect.tryPromise({
+        try: () =>
+          upsertChunked('proposals', proposals, 'id', {
+            updateColumns: db.doNothing,
+          }),
+        catch: error => new Error(`Failed to insert bulk proposals. ${(error as Error).message}`),
+      })
+    );
+    console.timeEnd('Inserting bulk proposals');
+
+    console.time('Inserting bulk proposed versions');
+    yield* awaited(
+      Effect.tryPromise({
+        try: () =>
+          upsertChunked('proposed_versions', proposed_versions, 'id', {
+            updateColumns: db.doNothing,
+          }),
+        catch: error => new Error(`Failed to insert bulk proposed versions. ${(error as Error).message}`),
+      })
+    );
+    console.timeEnd('Inserting bulk proposed versions');
+
+    console.time('Inserting bulk spaces');
+    yield* awaited(
+      Effect.tryPromise({
+        try: () =>
+          upsertChunked('spaces', spaces, 'id', {
+            updateColumns: db.doNothing,
+          }),
+        catch: error => new Error(`Failed to insert bulk spaces. ${(error as Error).message}`),
+      })
+    );
+    console.timeEnd('Inserting bulk spaces');
+
+    console.time('Inserting bulk versions');
+    yield* awaited(
+      Effect.tryPromise({
+        try: () =>
+          upsertChunked('versions', versions, 'id', {
+            updateColumns: db.doNothing,
+          }),
+        catch: error => new Error(`Failed to insert bulk versions. ${(error as Error).message}`),
       })
     );
 
+    console.timeEnd('Inserting bulk versions');
+
+    console.time('Inserting bulk triple versions');
+    yield* awaited(
+      Effect.tryPromise({
+        try: () => upsertChunked('triple_versions', existingTripleVersions, ['triple_id', 'version_id']),
+        catch: error => new Error(`Failed to insert bulk triple versions. ${(error as Error).message}`),
+      })
+    );
+    console.timeEnd('Inserting bulk triple versions');
+
     const triplesDatabaseTuples = mapTriplesWithActionType(fullEntries, timestamp, blockNumber);
 
+    console.info(`Starting processing of ${triplesDatabaseTuples.length} triples`);
+    console.time('Inserting individual triples and triple versions');
     for (const [actionType, triple] of triplesDatabaseTuples) {
       const isCreateTriple = actionType === TripleAction.Create;
       const isDeleteTriple = actionType === TripleAction.Delete;
@@ -203,7 +256,7 @@ export async function populateWithFullEntries({
                 }
               )
               .run(pool),
-          catch: () => new Error('Failed to insert triple'),
+          catch: error => new Error(`Failed to insert ${triple.id}. ${(error as Error).message}`),
         });
 
         yield* awaited(Effect.retry(insertTripleEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -227,7 +280,13 @@ export async function populateWithFullEntries({
             new Error(`Failed to delete triple ${triple.id} from version ${version.id}}. ${(error as Error).message}`),
         });
 
+        const setStaleEffect = Effect.tryPromise({
+          try: () => db.update('triples', { is_stale: true }, { id: triple.id }).run(pool),
+          catch: error => new Error(`Failed to set triple ${triple.id} as stale. ${(error as Error).message}`),
+        });
+
         yield* awaited(Effect.retry(deleteEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(Effect.retry(setStaleEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
       if (isNameCreateAction) {
@@ -252,7 +311,12 @@ export async function populateWithFullEntries({
                 }
               )
               .run(pool),
-          catch: () => new Error('Failed to create name'),
+          catch: error =>
+            new Error(
+              `Failed to create name ${String(triple.string_value)} for triple ${triple.id}. ${
+                (error as Error).message
+              }`
+            ),
         });
 
         yield* awaited(Effect.retry(insertNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -280,7 +344,12 @@ export async function populateWithFullEntries({
                 }
               )
               .run(pool),
-          catch: () => new Error('Failed to delete name'),
+          catch: error =>
+            new Error(
+              `Failed to delete name ${String(triple.string_value)} for triple ${triple.id}. ${
+                (error as Error).message
+              }`
+            ),
         });
 
         yield* awaited(Effect.retry(deleteNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -308,7 +377,12 @@ export async function populateWithFullEntries({
                 }
               )
               .run(pool),
-          catch: () => new Error('Failed to create description'),
+          catch: error =>
+            new Error(
+              `Failed to create description ${String(triple.string_value)} for triple ${triple.id}. ${
+                (error as Error).message
+              }`
+            ),
         });
 
         yield* awaited(Effect.retry(insertDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -336,7 +410,12 @@ export async function populateWithFullEntries({
                 }
               )
               .run(pool),
-          catch: () => new Error('Failed to delete description'),
+          catch: error =>
+            new Error(
+              `Failed to delete description ${String(triple.string_value)} for triple ${triple.id}. ${
+                (error as Error).message
+              }`
+            ),
         });
 
         yield* awaited(Effect.retry(deleteDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
@@ -379,6 +458,8 @@ export async function populateWithFullEntries({
         yield* awaited(Effect.retry(deleteTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
     }
+
+    console.timeEnd('Inserting individual triples and triple versions');
   });
 
   return await Effect.runPromise(populateEffect);

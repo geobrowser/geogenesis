@@ -2,12 +2,15 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io/';
+import { fetchVersion } from '~/core/io/subgraph/fetch-version';
+import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
 import type {
   Action as ActionType,
   Entity as EntityType,
   ProposedVersion,
   Triple as TripleType,
   TripleValueType,
+  Version,
 } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Entity } from '~/core/utils/entity';
@@ -38,8 +41,8 @@ export type AttributeChange = {
   actions: Array<ActionId>;
 };
 
-export async function fromActions(actions: ActionType[], subgraph: Subgraph.ISubgraph, config: Environment.AppConfig) {
-  const entities: Record<EntityId, EntityType> = await getEntitiesFromActions(actions, subgraph, config);
+export async function fromActions(actions: ActionType[], subgraph: Subgraph.ISubgraph) {
+  const entities: Record<EntityId, EntityType> = await getEntitiesFromActions(actions, subgraph);
 
   const changes: Record<EntityId, Changeset> = {};
 
@@ -362,11 +365,7 @@ export async function fromActions(actions: ActionType[], subgraph: Subgraph.ISub
   return { changes, entities };
 }
 
-const getEntitiesFromActions = async (
-  actions: ActionType[],
-  subgraph: Subgraph.ISubgraph,
-  config: Environment.AppConfig
-) => {
+const getEntitiesFromActions = async (actions: ActionType[], subgraph: Subgraph.ISubgraph) => {
   const entities: Record<EntityId, EntityType> = {};
 
   const entitySet = new Set<EntityId>();
@@ -384,9 +383,7 @@ const getEntitiesFromActions = async (
   });
 
   const maybeRemoteEntities = await Promise.all(
-    [...entitySet.values()].map((entityId: EntityId) =>
-      subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph })
-    )
+    [...entitySet.values()].map((entityId: EntityId) => subgraph.fetchEntity({ id: entityId }))
   );
   const remoteEntities = maybeRemoteEntities.flatMap(entity => (entity ? [entity] : []));
 
@@ -407,7 +404,7 @@ const getEntitiesFromActions = async (
   const parentEntityIds = [...parentEntitySet.values()];
 
   const maybeRemoteParentEntities = await Promise.all(
-    parentEntityIds.map((entityId: EntityId) => subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph }))
+    parentEntityIds.map((entityId: EntityId) => subgraph.fetchEntity({ id: entityId }))
   );
   const remoteParentEntities = maybeRemoteParentEntities.flatMap(entity => (entity ? [entity] : []));
 
@@ -418,17 +415,12 @@ const getEntitiesFromActions = async (
   return entities;
 };
 
-export async function fromVersion(
-  versionId: string,
-  previousVersionId: string,
-  subgraph: Subgraph.ISubgraph,
-  config: Environment.AppConfig
-) {
+export async function fromVersion(versionId: string, previousVersionId: string, subgraph: Subgraph.ISubgraph) {
   const changes: Record<EntityId, Changeset> = {};
 
   const [selectedVersion, previousVersion] = await Promise.all([
-    subgraph.fetchProposedVersion({ id: versionId, endpoint: config.subgraph }),
-    subgraph.fetchProposedVersion({ id: previousVersionId, endpoint: config.subgraph }),
+    fetchVersion({ versionId: versionId }),
+    fetchVersion({ versionId: previousVersionId }),
   ]);
 
   const versions = {
@@ -447,46 +439,29 @@ export async function fromVersion(
     previousBlock = selectedBlock - 1;
   }
 
-  const [selectedEntity, previousEntity] = await Promise.all([
-    subgraph.fetchEntity({ id: entityId, blockNumber: selectedBlock, endpoint: config.subgraph }),
-    subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock, endpoint: config.subgraph }),
-  ]);
-
-  const selectedEntityBlockIdsTriple = selectedEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+  const selectedEntityBlockIdsTriple = selectedVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
   const selectedEntityBlockIds: string[] = selectedEntityBlockIdsTriple
     ? JSON.parse(Value.stringValue(selectedEntityBlockIdsTriple) || '[]')
     : [];
 
-  const previousEntityBlockIdsTriple = previousEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+  const previousEntityBlockIdsTriple = previousVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
   const previousEntityBlockIds: string[] = previousEntityBlockIdsTriple
     ? JSON.parse(Value.stringValue(previousEntityBlockIdsTriple) || '[]')
     : [];
 
   const [maybeRemoteSelectedEntityBlocks, maybeRemotePreviousEntityBlocks, maybeAdditionalRemotePreviousEntityBlocks] =
     await Promise.all([
-      Promise.all(
-        selectedEntityBlockIds.map(entityId =>
-          subgraph.fetchEntity({ id: entityId, blockNumber: selectedBlock, endpoint: config.subgraph })
-        )
-      ),
-      Promise.all(
-        selectedEntityBlockIds.map(entityId =>
-          subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock, endpoint: config.subgraph })
-        )
-      ),
-      Promise.all(
-        previousEntityBlockIds.map(entityId =>
-          subgraph.fetchEntity({ id: entityId, blockNumber: previousBlock, endpoint: config.subgraph })
-        )
-      ),
+      Promise.all(selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
+      Promise.all(selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
+      Promise.all(previousEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
     ]);
 
-  if (selectedEntity) {
+  if (selectedVersion) {
     changes[entityId] = {
-      name: selectedEntity.name ?? '',
+      name: previousVersion?.name ?? '',
     };
 
-    selectedEntity.triples.map(triple => {
+    selectedVersion.triples.map(triple => {
       switch (triple.value.type) {
         case 'entity': {
           changes[entityId] = {
@@ -527,8 +502,8 @@ export async function fromVersion(
     });
   }
 
-  if (previousEntity) {
-    previousEntity.triples.map(triple => {
+  if (previousVersion) {
+    previousVersion.triples.map(triple => {
       switch (triple.value.type) {
         case 'entity': {
           changes[entityId] = {
@@ -625,17 +600,12 @@ export async function fromVersion(
   return { changes, versions };
 }
 
-export async function fromProposal(
-  proposalId: string,
-  previousProposalId: string,
-  subgraph: Subgraph.ISubgraph,
-  config: Environment.AppConfig
-) {
+export async function fromProposal(proposalId: string, previousProposalId: string, subgraph: Subgraph.ISubgraph) {
   const changes: Record<EntityId, Changeset> = {};
 
   const [selectedProposal, previousProposal] = await Promise.all([
-    subgraph.fetchProposal({ id: proposalId, endpoint: config.subgraph }),
-    subgraph.fetchProposal({ id: previousProposalId, endpoint: config.subgraph }),
+    subgraph.fetchProposal({ id: proposalId }),
+    subgraph.fetchProposal({ id: previousProposalId }),
   ]);
 
   const proposals = {
@@ -643,51 +613,37 @@ export async function fromProposal(
     previous: previousProposal,
   };
 
-  let selectedBlock = 0;
-  let previousBlock = 0;
   const entitySet = new Set<EntityId>();
 
   if (selectedProposal) {
-    selectedBlock = parseInt(selectedProposal.createdAtBlock, 10);
-    previousBlock = selectedBlock - 1;
-
-    selectedProposal.proposedVersions.forEach((proposedVersion: ProposedVersion) => {
-      proposedVersion.actions.forEach(action => {
-        switch (action.type) {
-          case 'createTriple':
-            entitySet.add(action.entityId);
-            break;
-
-          case 'deleteTriple':
-            entitySet.add(action.entityId);
-            break;
-
-          // This should never trigger since all network actions are only create/delete
-          case 'editTriple':
-            console.error(
-              `editTriple found in subgraph action: proposalId: ${selectedProposal.id} entityId: ${action.after.entityId}`
-            );
-            entitySet.add(action.after.entityId);
-            break;
-        }
-      });
-    });
+    selectedProposal.proposedVersions.forEach(proposedVersion => entitySet.add(proposedVersion.entity.id));
   }
 
   const entityIds = [...entitySet.values()];
 
   for (const entityId of entityIds) {
-    const [selectedEntity, previousEntity] = await Promise.all([
-      subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph, blockNumber: selectedBlock }),
-      subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph, blockNumber: previousBlock }),
+    // Fetch the entity versions that correlate with the selected and previous proposals
+    // There's no way to fetch a specific version by proposal id so we need to fetch all
+    // versions by proposal id and select the first one. There should only ever be one
+    // version for an entity for a proposal.
+    const [maybeSelectedVersions, maybePreviousVersions] = await Promise.all([
+      selectedProposal ? fetchVersions({ entityId: entityId, proposalId: selectedProposal.id }) : [],
+      previousProposal ? fetchVersions({ entityId: entityId, proposalId: previousProposal.id }) : [],
     ]);
 
-    const selectedEntityBlockIdsTriple = selectedEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+    const selectedVersion: Version | undefined = maybeSelectedVersions[0];
+    const previousVersion: Version | undefined = maybePreviousVersions[0];
+
+    console.log('versions', { selectedVersion, previousVersion });
+
+    const selectedEntityBlockIdsTriple =
+      selectedVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
     const selectedEntityBlockIds: string[] = selectedEntityBlockIdsTriple
       ? JSON.parse(Value.stringValue(selectedEntityBlockIdsTriple) || '[]')
       : [];
 
-    const previousEntityBlockIdsTriple = previousEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+    const previousEntityBlockIdsTriple =
+      previousVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
     const previousEntityBlockIds: string[] = previousEntityBlockIdsTriple
       ? JSON.parse(Value.stringValue(previousEntityBlockIdsTriple) || '[]')
       : [];
@@ -697,29 +653,17 @@ export async function fromProposal(
       maybeRemotePreviousEntityBlocks,
       maybeAdditionalRemotePreviousEntityBlocks,
     ] = await Promise.all([
-      Promise.all(
-        selectedEntityBlockIds.map(entityId =>
-          subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph, blockNumber: selectedBlock })
-        )
-      ),
-      Promise.all(
-        selectedEntityBlockIds.map(entityId =>
-          subgraph.fetchEntity({ id: entityId, endpoint: config.subgraph, blockNumber: previousBlock })
-        )
-      ),
-      Promise.all(
-        previousEntityBlockIds.map(previousEntityId =>
-          subgraph.fetchEntity({ id: previousEntityId, endpoint: config.subgraph, blockNumber: previousBlock })
-        )
-      ),
+      Promise.all(selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
+      Promise.all(selectedEntityBlockIds.map(entityId => subgraph.fetchEntity({ id: entityId }))),
+      Promise.all(previousEntityBlockIds.map(previousEntityId => subgraph.fetchEntity({ id: previousEntityId }))),
     ]);
 
-    if (selectedEntity && !selectedEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
+    if (selectedVersion && !selectedVersion.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
       changes[entityId] = {
-        name: selectedEntity.name ?? '',
+        name: selectedVersion.entity.name ?? '',
       };
 
-      selectedEntity.triples.map(triple => {
+      selectedVersion.triples.map(triple => {
         switch (triple.value.type) {
           case 'entity': {
             changes[entityId] = {
@@ -760,8 +704,8 @@ export async function fromProposal(
       });
     }
 
-    if (previousEntity && !previousEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
-      previousEntity.triples.map(triple => {
+    if (previousVersion && !previousVersion.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
+      previousVersion.triples.map(triple => {
         switch (triple.value.type) {
           case 'entity': {
             changes[entityId] = {

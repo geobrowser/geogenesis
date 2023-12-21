@@ -4,12 +4,11 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
-import { Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -38,18 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
   const entityId = decodeURIComponent(params.entityId);
 
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+  const entity = await Subgraph.fetchEntity({ id: entityId });
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
   return {
@@ -82,38 +70,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProfileLayout({ children, params }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  params.entityId = decodeURIComponent(params.entityId);
-
-  const { isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
+  const decodedId = decodeURIComponent(params.entityId);
 
   const types = await fetchEntityType({
-    endpoint: config.subgraph,
-    id: params.entityId,
+    id: decodedId,
   });
 
   if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
     return (
-      <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
+      <SpaceConfigProvider spaceId={params.id}>
         <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>
       </SpaceConfigProvider>
     );
   }
 
-  const profile = await getProfilePage(params.entityId, config.subgraph);
+  const profile = await getProfilePage(decodedId);
 
   return (
-    <SpaceConfigProvider usePermissionlessSubgraph={isPermissionlessSpace}>
+    <SpaceConfigProvider spaceId={params.id}>
       <TypesStoreServerContainer spaceId={params.id}>
-        <EntityStoreProvider id={params.entityId} spaceId={params.id} initialTriples={profile.triples}>
+        <EntityStoreProvider id={decodedId} spaceId={params.id} initialTriples={profile.triples}>
           <EditorProvider
             id={profile.id}
             spaceId={params.id}
@@ -124,8 +100,8 @@ export default async function ProfileLayout({ children, params }: Props) {
             <EntityPageContentContainer>
               <EditableHeading
                 spaceId={params.id}
-                entityId={params.entityId}
-                name={profile.name ?? params.entityId}
+                entityId={decodedId}
+                name={profile.name ?? decodedId}
                 triples={profile.triples}
               />
               <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
@@ -135,8 +111,8 @@ export default async function ProfileLayout({ children, params }: Props) {
                 tabs={TABS.map(label => {
                   const href =
                     label === 'Overview'
-                      ? decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}`)
-                      : decodeURIComponent(`${NavUtils.toEntity(params.id, params.entityId)}/${label.toLowerCase()}`);
+                      ? decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}`)
+                      : decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}/${label.toLowerCase()}`);
                   return {
                     href,
                     label,
@@ -155,10 +131,7 @@ export default async function ProfileLayout({ children, params }: Props) {
   );
 }
 
-async function getProfilePage(
-  entityId: string,
-  endpoint: string
-): Promise<
+async function getProfilePage(entityId: string): Promise<
   IEntity & {
     avatarUrl: string | null;
     coverUrl: string | null;
@@ -168,13 +141,12 @@ async function getProfilePage(
   }
 > {
   const [person, referencesPerson, spaces] = await Promise.all([
-    Subgraph.fetchEntity({ id: entityId, endpoint }),
+    Subgraph.fetchEntity({ id: entityId }),
     Subgraph.fetchEntities({
-      endpoint,
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
-    Subgraph.fetchSpaces({ endpoint }),
+    Subgraph.fetchSpaces(),
   ]);
 
   // @TODO: Real error handling
@@ -196,8 +168,9 @@ async function getProfilePage(
   const referencedByEntities: ReferencedByEntity[] = referencesPerson.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
     const space = spaces.find(s => s.id === spaceId);
-    const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+    const configEntity = space?.spaceConfig;
+    const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
+    const spaceImage = configEntity ? Entity.cover(configEntity.triples) : PLACEHOLDER_SPACE_IMAGE;
 
     return {
       id: e.id,
@@ -217,16 +190,10 @@ async function getProfilePage(
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
-        return Subgraph.fetchTriples({
-          endpoint,
-          query: '',
-          skip: 0,
-          first: DEFAULT_PAGE_SIZE,
-          filter: [{ field: 'entity-id', value: blockId }],
-        });
+        return Subgraph.fetchEntity({ id: blockId });
       })
     )
-  ).flatMap(triples => triples);
+  ).flatMap(entity => entity?.triples ?? []);
 
   return {
     ...person,

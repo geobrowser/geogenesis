@@ -4,54 +4,58 @@ import { v4 as uuid } from 'uuid';
 
 import { Proposal } from '~/core/types';
 
+import { Environment } from '../environment';
 import { fetchProfile } from './subgraph';
 import { graphql } from './subgraph/graphql';
-import { NetworkProposal, fromNetworkActions } from './subgraph/network-local-mapping';
+import { SubstreamProposal, fromNetworkActions } from './subgraph/network-local-mapping';
 
 const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: string) => {
-  const where = [`createdBy_starts_with_nocase: ${JSON.stringify(createdBy)}`, spaceId && `space: "${spaceId}"`]
+  const filter = [
+    `createdById: { startsWithInsensitive\: "${createdBy}" }`,
+    spaceId && `spaceId: { equalTo: "${spaceId}" }`,
+  ]
     .filter(Boolean)
     .join(' ');
 
   return `query {
-    proposals(first: 10, where: {${where}}, orderBy: createdAt, orderDirection: desc, skip: ${skip}) {
-      id
-      name
-      description
-      space
-      createdAt
-      createdAtBlock
-      createdBy {
-        id
-      }
-      status
-      proposedVersions {
+    proposals(first: 5, filter: {${filter}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
+      nodes {
         id
         name
-        createdAt
+        spaceId
         createdAtBlock
-        createdBy {
-          id
-        }
-        actions {
-          actionType
-          id
-          attribute {
+        createdById
+        createdAt
+        status
+        proposedVersions {
+          nodes {
             id
             name
+            createdById
+            entity {
+              id
+              name
+            }
+            actions {
+              nodes {
+                id
+                actionType
+                attribute {
+                  id
+                  name
+                }
+                entity {
+                  id
+                  name
+                }
+                entityValue
+                numberValue
+                stringValue
+                valueType
+                valueId
+              }
+            }
           }
-          entity {
-            id
-            name
-          }
-          entityValue {
-            id
-            name
-          }
-          numberValue
-          stringValue
-          valueType
-          valueId
         }
       }
     }
@@ -59,7 +63,6 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
 };
 
 export interface FetchUserProposalsOptions {
-  endpoint: string;
   userId: string; // For now we use the address
   signal?: AbortController['signal'];
   spaceId?: string;
@@ -70,21 +73,21 @@ export interface FetchUserProposalsOptions {
 }
 
 interface NetworkResult {
-  proposals: NetworkProposal[];
+  proposals: { nodes: SubstreamProposal[] };
 }
 
 export async function fetchProposalsByUser({
-  endpoint,
   userId,
   spaceId,
   signal,
   page = 0,
 }: FetchUserProposalsOptions): Promise<Proposal[]> {
   const queryId = uuid();
+  const offset = page * 5;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: endpoint,
-    query: getFetchUserProposalsQuery(userId, page * 10, spaceId),
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    query: getFetchUserProposalsQuery(userId, offset, spaceId),
     signal,
   });
 
@@ -102,21 +105,25 @@ export async function fetchProposalsByUser({
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} userId: ${userId} endpoint: ${endpoint} page: ${page}
+            `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} userId: ${userId} page: ${page}
             
-            queryString: ${getFetchUserProposalsQuery(userId, page * 10)}
+            queryString: ${getFetchUserProposalsQuery(userId, offset)}
             `,
             error.message
           );
           return {
-            proposals: [],
+            proposals: {
+              nodes: [],
+            },
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch proposals, queryId: ${queryId} userId: ${userId} endpoint: ${endpoint} page: ${page}`
+            `${error._tag}: Unable to fetch proposals, queryId: ${queryId} userId: ${userId} page: ${page}`
           );
           return {
-            proposals: [],
+            proposals: {
+              nodes: [],
+            },
           };
       }
     }
@@ -125,40 +132,41 @@ export async function fetchProposalsByUser({
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const proposals = result.proposals.nodes;
 
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
   const profile = await fetchProfile({
-    endpoint,
     address: userId,
   });
 
-  return result.proposals.map(p => {
+  return proposals.map(p => {
     return {
       ...p,
       name: p.name,
       description: p.description,
+      space: p.spaceId,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
       createdBy: profile?.[1] ?? {
-        id: p.createdBy.id,
+        id: p.createdById,
         name: null,
         avatarUrl: null,
         coverUrl: null,
-        address: p.createdBy.id as `0x${string}`,
+        address: p.createdById as `0x${string}`,
         profileLink: null,
       },
-      proposedVersions: p.proposedVersions.map(v => {
+      proposedVersions: p.proposedVersions.nodes.map(v => {
         return {
           ...v,
           createdBy: profile?.[1] ?? {
-            id: p.createdBy.id,
+            id: p.createdById,
             name: null,
             avatarUrl: null,
             coverUrl: null,
-            address: p.createdBy.id as `0x${string}`,
+            address: p.createdById as `0x${string}`,
             profileLink: null,
           },
-          actions: fromNetworkActions(v.actions, userId),
+          actions: fromNetworkActions(v.actions.nodes, userId),
         };
       }),
     };

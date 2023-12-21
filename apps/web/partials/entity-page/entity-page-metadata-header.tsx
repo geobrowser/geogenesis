@@ -5,7 +5,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { Services } from '~/core/services';
+import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
 import { useDiff } from '~/core/state/diff-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { EntityType } from '~/core/types';
@@ -29,7 +29,6 @@ interface EntityPageMetadataHeaderProps {
 }
 
 export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: EntityPageMetadataHeaderProps) {
-  const { subgraph, config } = Services.useServices();
   const {
     data: versions,
     isFetching,
@@ -37,8 +36,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`entity-versions-for-entityId-${id}`],
-    queryFn: async ({ pageParam = 0 }) =>
-      subgraph.fetchProposedVersions({ entityId: id, spaceId, page: pageParam, endpoint: config.subgraph }),
+    queryFn: ({ signal, pageParam = 0 }) => fetchVersions({ entityId: id, page: pageParam, signal }),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
@@ -46,7 +44,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
   const { triples } = useEntityPageStore();
   const { setCompareMode, setSelectedVersion, setPreviousVersion, setIsCompareOpen } = useDiff();
 
-  const isOnePage = versions?.pages && versions.pages[0].length < 10;
+  const isOnePage = versions?.pages && versions.pages[0].length < 5;
 
   const isLastPage =
     versions?.pages &&

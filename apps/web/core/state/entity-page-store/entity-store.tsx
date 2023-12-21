@@ -69,7 +69,7 @@ const DEFAULT_PAGE_SIZE = 100;
 export function useEntityPageStore() {
   const { spaceId, id, initialTriples } = useEntityStoreInstance();
   const { allActions } = useActionsStore();
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
 
   const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: id });
 
@@ -111,7 +111,6 @@ export function useEntityPageStore() {
       const attributesOnType = await Promise.all(
         typeTriples.map(triple => {
           return subgraph.fetchTriples({
-            endpoint: config.subgraph,
             query: '',
             first: DEFAULT_PAGE_SIZE,
             signal,
@@ -135,7 +134,6 @@ export function useEntityPageStore() {
       const valueTypesForAttributes = await Promise.all(
         attributeTriples.map(attribute => {
           return subgraph.fetchTriples({
-            endpoint: config.subgraph,
             query: '',
             first: DEFAULT_PAGE_SIZE,
             skip: 0,

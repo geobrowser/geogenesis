@@ -80,12 +80,14 @@ const Versions = () => {
   }
 
   if (data === undefined) {
+    console.log('data is undefined');
     return <div className="text-metadataMedium">No versions found.</div>;
   }
 
   const { changes, versions } = data;
 
   if (!versions.selected) {
+    console.log('No selected version');
     return <div className="text-metadataMedium">No versions found.</div>;
   }
 
@@ -767,21 +769,23 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
 };
 
 const useChangesFromVersions = (selectedVersion: string, previousVersion: string) => {
-  const { subgraph, config } = Services.useServices();
-  const { data, isLoading } = useQuery({
+  const { subgraph } = Services.useServices();
+  const { data, isLoading, error } = useQuery({
     queryKey: [`${selectedVersion}-changes-from-${previousVersion}`],
-    queryFn: async () => Change.fromVersion(selectedVersion, previousVersion, subgraph, config),
+    queryFn: () => Change.fromVersion(selectedVersion, previousVersion, subgraph),
   });
+
+  console.log('error', error);
 
   // Typescript thinks is an array
   return [data, isLoading] as const;
 };
 
 const useChangesFromProposals = (selectedProposal: string, previousProposal: string) => {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${selectedProposal}-changes-from-${previousProposal}`],
-    queryFn: async () => Change.fromProposal(selectedProposal, previousProposal, subgraph, config),
+    queryFn: () => Change.fromProposal(selectedProposal, previousProposal, subgraph),
   });
 
   return [data, isLoading] as const;
@@ -892,17 +896,14 @@ const useFilters = (rawFilter: string) => {
   const { subgraph, config } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${rawFilter}`],
-    queryFn: async () => getFilters(rawFilter, subgraph, config),
+    queryFn: () => getFilters(rawFilter, subgraph, config),
   });
 
   return [data, isLoading] as const;
 };
 
 const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph, config: Environment.AppConfig) => {
-  const filters = await createFiltersFromGraphQLString(
-    rawFilter,
-    async id => await subgraph.fetchEntity({ id, endpoint: config.subgraph })
-  );
+  const filters = await createFiltersFromGraphQLString(rawFilter, async id => await subgraph.fetchEntity({ id }));
   const serverColumns = await fetchColumns({
     params: { skip: 0, first: 0, filter: '', endpoint: config.subgraph },
     api: {

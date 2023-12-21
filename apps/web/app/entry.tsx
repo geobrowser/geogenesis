@@ -1,7 +1,6 @@
 'use client';
 
 import { Analytics } from '@vercel/analytics/react';
-import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -9,7 +8,6 @@ import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
 import { Persistence } from '~/core/state/persistence';
-import { NavUtils } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
 
@@ -23,7 +21,6 @@ import { Review } from '~/partials/review/review';
 import { Dialog } from '~/partials/search';
 
 export function App({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
@@ -53,10 +50,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <Dialog
         open={open}
         onOpenChange={setOpen}
-        onDone={result => {
-          if (!result?.nameTripleSpace) return;
-
-          router.push(NavUtils.toEntity(result.nameTripleSpace, result.id));
+        onDone={() => {
           setOpen(false);
         }}
       />
