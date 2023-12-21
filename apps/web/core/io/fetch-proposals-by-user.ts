@@ -11,7 +11,7 @@ import { SubstreamProposal, fromNetworkActions } from './subgraph/network-local-
 
 const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: string) => {
   const filter = [
-    `createdById: { startsWithInsensitive\: "${createdBy}" }`,
+    `createdById: { startsWithInsensitive: "${createdBy}" }`,
     spaceId && `spaceId: { equalTo: "${spaceId}" }`,
   ]
     .filter(Boolean)

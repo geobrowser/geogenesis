@@ -9,7 +9,7 @@ import { Entity } from '~/core/utils/entity';
 import { graphql } from './graphql';
 import { SubstreamNetworkEntity, fromNetworkTriples } from './network-local-mapping';
 
-function getFetchEntityQuery(id: string, blockNumber?: number) {
+function getFetchEntityQuery(id: string) {
   return `query {
     geoEntity(id: ${JSON.stringify(id)}) {
       id,
@@ -117,7 +117,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
     name: entity.name,
     description: Entity.description(triples),
     nameTripleSpace: nameTriple?.space,
-    types: Entity.types(triples, entity?.nameTripleSpace ?? ''),
+    types: Entity.types(triples, entity?.nameTripleSpace),
     triples,
   };
 }

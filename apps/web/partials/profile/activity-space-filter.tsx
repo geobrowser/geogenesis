@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { ALL_SPACES_IMAGE } from '~/core/constants';
+import { ALL_SPACES_IMAGE, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -16,7 +16,7 @@ import { Menu } from '~/design-system/menu';
 
 interface Props {
   spaceId: string;
-  entityId: string;
+  entityId?: string;
 }
 
 export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
@@ -67,16 +67,23 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
     >
       {spacesWithAll.map(space => (
         <Link
-          href={NavUtils.toProfileActivity(spaceId, entityId, space.id === 'all' ? undefined : space.id)}
+          href={
+            // We know whether we are in the space route or entity route based on the presence of the entityId param
+            entityId
+              ? NavUtils.toProfileActivity(spaceId, entityId, space.id === 'all' ? undefined : space.id)
+              : NavUtils.toSpaceProfileActivity(spaceId, space.id === 'all' ? undefined : space.id)
+          }
           onClick={() => onSelect(space.id)}
           key={space.id}
           className="flex w-full gap-2 bg-white p-3 text-button text-grey-04 transition-colors duration-75 hover:bg-bg hover:text-text"
         >
-          {space.spaceConfig?.image && (
-            <div className="relative mt-[4.5px] h-3 w-3 overflow-hidden rounded-xs">
-              <Image src={getImagePath(space.spaceConfig.image)} layout="fill" objectFit="cover" />
-            </div>
-          )}
+          <div className="relative mt-[4.5px] h-3 w-3 overflow-hidden rounded-xs">
+            <Image
+              src={space.spaceConfig?.image ? getImagePath(space.spaceConfig.image) : PLACEHOLDER_SPACE_IMAGE}
+              layout="fill"
+              objectFit="cover"
+            />
+          </div>
           {space.spaceConfig?.name}
         </Link>
       ))}

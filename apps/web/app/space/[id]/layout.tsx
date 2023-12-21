@@ -29,9 +29,95 @@ interface Props {
   children: React.ReactNode;
 }
 
+interface EntityType {
+  id: string;
+  name: string | null;
+}
+
+interface TabProps {
+  label: string;
+  href: string;
+  priority: 1 | 2 | 3;
+}
+
+function buildTabsForSpacePage(types: EntityType[], params: Props['params']): TabProps[] {
+  const COMPANY_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Team',
+      href: `${NavUtils.toSpace(params.id)}/team`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Activity',
+      href: `${NavUtils.toSpace(params.id)}/activity`,
+      priority: 3 as const,
+    },
+  ];
+
+  const PERSON_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Activity',
+      href: `${NavUtils.toSpace(params.id)}/activity`,
+      priority: 3 as const,
+    },
+  ];
+
+  const SPACE_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Governance',
+      href: `${NavUtils.toSpace(params.id)}/governance`,
+      priority: 2 as const,
+    },
+  ];
+
+  const typeIds = types.map(t => t.id);
+  const tabs = [];
+
+  // Order of how we add the tabs matters. We want to
+  // show "content-based" tabs first, then "space-based" tabs.
+  if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
+    tabs.push(...COMPANY_TABS);
+  }
+
+  if (typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
+    tabs.push(...PERSON_TABS);
+  }
+
+  if (typeIds.includes(SYSTEM_IDS.SPACE_CONFIGURATION)) {
+    tabs.push(...SPACE_TABS);
+  }
+
+  const seen = new Map<string, TabProps>();
+
+  for (const tab of tabs) {
+    if (!seen.has(tab.label)) {
+      seen.set(tab.label, tab);
+    }
+  }
+
+  return [...seen.values()].sort((a, b) => a.priority - b.priority);
+}
+
 export default async function Layout({ children, params }: Props) {
   const props = await getData(params.id);
   const coverUrl = Entity.cover(props.triples);
+
+  const typeNames = props.space?.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
 
   return (
     <SpaceConfigProvider spaceId={params.id}>
@@ -48,6 +134,7 @@ export default async function Layout({ children, params }: Props) {
             <EntityPageContentContainer>
               <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
               <SpacePageMetadataHeader
+                typeNames={typeNames}
                 spaceId={props.spaceId}
                 membersComponent={
                   <React.Suspense fallback={<MembersSkeleton />}>
@@ -58,18 +145,7 @@ export default async function Layout({ children, params }: Props) {
               />
 
               <Spacer height={40} />
-              <TabGroup
-                tabs={[
-                  {
-                    label: 'Overview',
-                    href: `${NavUtils.toSpace(params.id)}`,
-                  },
-                  {
-                    label: 'Governance',
-                    href: `${NavUtils.toSpace(params.id)}/governance`,
-                  },
-                ]}
-              />
+              <TabGroup tabs={buildTabsForSpacePage(props.space?.spaceConfig?.types ?? [], params)} />
               <Spacer height={20} />
 
               {children}
@@ -92,7 +168,6 @@ function MembersSkeleton() {
 
 const getData = async (spaceId: string) => {
   const space = await Subgraph.fetchSpace({ id: spaceId });
-
   const entity = space?.spaceConfig;
 
   if (!entity) {

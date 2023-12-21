@@ -35,6 +35,13 @@ export const NavUtils = {
 
     return decodeURIComponent(`/space/${spaceId}/${newEntityId}`);
   },
+  toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
+    if (spaceIdParam) {
+      return decodeURIComponent(`/space/${spaceId}/activity?spaceId=${spaceIdParam}`);
+    }
+
+    return decodeURIComponent(`/space/${spaceId}/activity`);
+  },
   toProfileActivity: (spaceId: string, entityId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
       return decodeURIComponent(`/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`);

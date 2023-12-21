@@ -119,7 +119,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
     ? {
         ...spaceConfig,
-        image: EntityModule.cover(spaceConfig.triples) ?? null,
+        image: EntityModule.cover(spaceConfig.triples) ?? EntityModule.avatar(spaceConfig.triples) ?? null,
       }
     : null;
 

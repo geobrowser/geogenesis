@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -16,22 +17,11 @@ interface Props {
 }
 
 export async function ProfileEntityServerContainer({ params }: Props) {
-  const person = await Subgraph.fetchEntity({ id: params.entityId });
+  const person = await Subgraph.fetchEntity({ id: decodeURIComponent(params.entityId) });
 
   // @TODO: Real error handling
   if (!person) {
-    return (
-      <ProfilePageComponent
-        id={params.entityId}
-        triples={[]}
-        spaceId={params.id}
-        referencedByComponent={
-          <React.Suspense fallback={<EntityReferencedByLoading />}>
-            <EntityReferencedByServerContainer entityId={params.entityId} name={null} spaceId={params.id} />
-          </React.Suspense>
-        }
-      />
-    );
+    return <ProfilePageComponent id={params.entityId} triples={[]} spaceId={params.id} referencedByComponent={null} />;
   }
 
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
@@ -45,6 +35,12 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       );
       return redirect(`/space/${person?.nameTripleSpace}/${encodeURIComponent(params.entityId)}`);
     }
+  }
+
+  // Redirect from space configuration page to space page
+  if (person?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && person?.nameTripleSpace) {
+    console.log(`Redirecting from space configuration entity ${person.id} to space page ${person?.nameTripleSpace}`);
+    return redirect(`/space/${person?.nameTripleSpace}`);
   }
 
   return (

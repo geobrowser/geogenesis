@@ -126,7 +126,7 @@ export async function fetchSpaces() {
     const spaceConfigWithImage: SpaceConfigEntity | null = config
       ? {
           ...config,
-          image: EntityModule.cover(config.triples) ?? null,
+          image: EntityModule.cover(config.triples) ?? EntityModule.avatar(config.triples) ?? null,
         }
       : null;
 
@@ -141,5 +141,7 @@ export async function fetchSpaces() {
     };
   });
 
-  return spaces;
+  // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
+  // the query level when we index the space config entity as part of a Space.
+  return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
 }

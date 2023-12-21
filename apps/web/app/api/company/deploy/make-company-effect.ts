@@ -151,21 +151,11 @@ export async function makeCompanyEffect(
         },
       };
 
-      actions.push({
-        ...companyTypeTriple,
-        type: 'createTriple',
-        id: ID.createTripleId(companyTypeTriple),
-      });
-
-      // Add triples for creating a space configuration entity
-      const spaceConfigurationId = ID.createEntityId();
-
-      // Add types: Space to the space configuration entity
-      const spaceTriple: OmitStrict<Triple, 'id'> = {
+      const spaceTypeTriple: OmitStrict<Triple, 'id'> = {
         attributeId: SYSTEM_IDS.TYPES,
         attributeName: 'Types',
-        entityId: spaceConfigurationId,
-        entityName: `${username ?? userAccount}'s Space`,
+        entityId: profileId,
+        entityName: username ?? '',
         space: spaceAddress,
         value: {
           type: 'entity',
@@ -175,28 +165,15 @@ export async function makeCompanyEffect(
       };
 
       actions.push({
+        ...companyTypeTriple,
         type: 'createTriple',
-        id: ID.createTripleId(spaceTriple),
-        ...spaceTriple,
+        id: ID.createTripleId(companyTypeTriple),
       });
 
-      const spaceNameTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.NAME,
-        attributeName: 'Name',
-        entityId: spaceConfigurationId,
-        entityName: `${username ?? userAccount}'s Space`,
-        space: spaceAddress,
-        value: {
-          type: 'string',
-          value: `${username ?? userAccount}'s Space`,
-          id: ID.createValueId(),
-        },
-      };
-
       actions.push({
+        ...spaceTypeTriple,
         type: 'createTriple',
-        id: ID.createTripleId(spaceNameTriple),
-        ...spaceNameTriple,
+        id: ID.createTripleId(spaceTypeTriple),
       });
 
       slog({
