@@ -11,5 +11,5 @@ interface Props {
 // and the space/[id]/activity route. We can share the components for this
 // layout by using the same component for both routes.
 export default function Activity({ params, searchParams }: Props) {
-  return <ActivityPage params={params} searchParams={searchParams} />;
+  return <ActivityPage entityId={params.entityId} searchParams={searchParams} />;
 }

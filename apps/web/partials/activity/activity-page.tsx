@@ -15,25 +15,31 @@ import { Spacer } from '~/design-system/spacer';
 import { ActivityLoading } from './activity-loading';
 
 interface Props {
-  params: { id: string; entityId: string };
+  entityId: string | null;
+
   searchParams: {
     spaceId?: string;
   };
 }
 
-export async function ActivityPage({ searchParams, params }: Props) {
+export async function ActivityPage({ searchParams, entityId }: Props) {
   return (
     // loading.tsx only runs on the server the first time you load the page. Subsequent loads
     // require a manually defined suspense boundary.
     // https://github.com/vercel/next.js/issues/43548
     <Suspense key={`?spaceId=${searchParams?.spaceId}`} fallback={<ActivityLoading />}>
-      <ActivityList params={params} searchParams={searchParams} />
+      <ActivityList entityId={entityId} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function ActivityList({ params, searchParams }: Props) {
-  const id = decodeURIComponent(params.entityId);
+async function ActivityList({ searchParams, entityId }: Props) {
+  if (!entityId) {
+    return <p className="pt-1 text-body text-grey-04">There is no information here yet.</p>;
+  }
+
+  const id = decodeURIComponent(entityId);
+
   // Alternatively we can fetch the on-chain profile from the id and use
   // the address associated with the on-chain profile. But this works.
   const address = id.split('–')[0];
@@ -48,6 +54,8 @@ async function ActivityList({ params, searchParams }: Props) {
     }),
     Subgraph.fetchSpaces(),
   ]);
+
+  console.log('data', { proposals, spaces });
 
   if (proposals.length === 0) return <p className="pt-1 text-body text-grey-04">There is no information here yet.</p>;
 
@@ -87,7 +95,12 @@ async function ActivityList({ params, searchParams }: Props) {
               <div className="flex w-full items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <Image objectFit="cover" priority layout="fill" src={getImagePath(spaceImage ?? '')} />
+                    <Image
+                      objectFit="cover"
+                      priority
+                      layout="fill"
+                      src={spaceImage ? getImagePath(spaceImage) : PLACEHOLDER_SPACE_IMAGE}
+                    />
                   </div>
                   <p className="text-metadataMedium">{proposalName}</p>
                 </div>
