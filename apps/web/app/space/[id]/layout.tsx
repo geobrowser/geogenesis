@@ -66,6 +66,17 @@ function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Ta
     },
   ];
 
+  const PERSON_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+    },
+    {
+      label: 'Activity',
+      href: `${NavUtils.toSpace(params.id)}/activity`,
+    },
+  ];
+
   const typeIds = types.map(t => t.id);
   const tabs = [];
 
@@ -75,6 +86,10 @@ function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Ta
 
   if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
     tabs.push(...COMPANY_TABS);
+  }
+
+  if (typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
+    tabs.push(...PERSON_TABS);
   }
 
   const seen = new Map<string, TabProps>();
