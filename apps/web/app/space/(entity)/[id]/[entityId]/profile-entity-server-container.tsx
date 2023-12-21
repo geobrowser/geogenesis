@@ -17,22 +17,11 @@ interface Props {
 }
 
 export async function ProfileEntityServerContainer({ params }: Props) {
-  const person = await Subgraph.fetchEntity({ id: params.entityId });
+  const person = await Subgraph.fetchEntity({ id: decodeURIComponent(params.entityId) });
 
   // @TODO: Real error handling
   if (!person) {
-    return (
-      <ProfilePageComponent
-        id={params.entityId}
-        triples={[]}
-        spaceId={params.id}
-        referencedByComponent={
-          <React.Suspense fallback={<EntityReferencedByLoading />}>
-            <EntityReferencedByServerContainer entityId={params.entityId} name={null} spaceId={params.id} />
-          </React.Suspense>
-        }
-      />
-    );
+    return <ProfilePageComponent id={params.entityId} triples={[]} spaceId={params.id} referencedByComponent={null} />;
   }
 
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
