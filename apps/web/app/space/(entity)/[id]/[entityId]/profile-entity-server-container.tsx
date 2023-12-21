@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -45,6 +46,12 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       );
       return redirect(`/space/${person?.nameTripleSpace}/${encodeURIComponent(params.entityId)}`);
     }
+  }
+
+  // Redirect from space configuration page to space page
+  if (person?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && person?.nameTripleSpace) {
+    console.log(`Redirecting from space configuration entity ${person.id} to space page ${person?.nameTripleSpace}`);
+    return redirect(`/space/${person?.nameTripleSpace}`);
   }
 
   return (
