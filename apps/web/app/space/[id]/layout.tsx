@@ -37,6 +37,7 @@ interface EntityType {
 interface TabProps {
   label: string;
   href: string;
+  priority: 1 | 2 | 3;
 }
 
 function buildTabsForSpacePage(types: EntityType[], params: Props['params']): TabProps[] {
@@ -44,14 +45,17 @@ function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Ta
     {
       label: 'Overview',
       href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
     },
     {
       label: 'Team',
       href: `${NavUtils.toSpace(params.id)}/team`,
+      priority: 1 as const,
     },
     {
       label: 'Activity',
       href: `${NavUtils.toSpace(params.id)}/activity`,
+      priority: 3 as const,
     },
   ];
 
@@ -59,10 +63,12 @@ function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Ta
     {
       label: 'Overview',
       href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
     },
     {
       label: 'Activity',
       href: `${NavUtils.toSpace(params.id)}/activity`,
+      priority: 3 as const,
     },
   ];
 
@@ -70,10 +76,12 @@ function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Ta
     {
       label: 'Overview',
       href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
     },
     {
       label: 'Governance',
       href: `${NavUtils.toSpace(params.id)}/governance`,
+      priority: 2 as const,
     },
   ];
 
@@ -102,7 +110,7 @@ function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Ta
     }
   }
 
-  return [...seen.values()];
+  return [...seen.values()].sort((a, b) => a.priority - b.priority);
 }
 
 export default async function Layout({ children, params }: Props) {
