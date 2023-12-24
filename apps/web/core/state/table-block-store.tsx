@@ -108,7 +108,7 @@ export function useTableBlock() {
     queryFn: async () => {
       const filterState = TableBlockSdk.createFiltersFromGraphQLString(
         filterString,
-        async id => await merged.fetchOldEntity({ id })
+        async id => await merged.fetchEntity({ id })
       );
 
       return filterState;
@@ -181,15 +181,6 @@ export function useTableBlock() {
         columns,
         selectedType.entityId
       );
-
-      console.log('rows', {
-        rows,
-        columns,
-        typeId: selectedType.entityId,
-        filterState,
-        filterString,
-        endpoint: config.subgraph,
-      });
 
       return rows;
     },
