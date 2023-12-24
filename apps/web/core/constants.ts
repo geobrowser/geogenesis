@@ -55,3 +55,18 @@ export const PUBLIC_SPACES = [
   '0xD8Ad7433f795fC19899f6b62a9b9831090495CAF', // Music
   '0xf1803e327b4c4652c7De5B77D612eCc1222918F3', // Film
 ].map(s => s.toLowerCase());
+
+// These spaces are "Subspaces." We don't show these on the front page
+// of Geo.
+const PUBLIC_SUBSPACES = [
+  '0xEC07c19743179f1AC904Fee97a1A99310e500aB6', // End Homelessness in SF
+  '0xdFDD5Fe53F804717509416baEBd1807Bd769D40D', // Street Outreach in SF
+  '0x759Cc61Ea01ae5A510C7cAA7e79581c07d2A80C3', // Mentorship in SF
+  '0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD', // Transitional Housing in SF
+  '0x668356E8e22B11B389B136BB3A3a5afE388c6C5c', // Workforce Development in SF
+  '0x5402D2C23d9495F6632bAf6EA828D1893e870484', // Recovery in Sf
+
+  '0x1b7a66284C31A8D11a790ec79916c425Ef6E7886', // The Graph
+].map(s => s.toLowerCase());
+
+export const ALL_PUBLIC_SPACES = [...PUBLIC_SPACES, ...PUBLIC_SUBSPACES];

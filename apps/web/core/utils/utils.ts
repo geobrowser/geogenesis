@@ -1,4 +1,4 @@
-import { IPFS_GATEWAY_PATH, PUBLIC_SPACES } from '~/core/constants';
+import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_PATH } from '~/core/constants';
 import { Entity as IEntity } from '~/core/types';
 
 import { Entity } from './entity';
@@ -257,5 +257,5 @@ export const sleep = (delay: number) => new Promise(resolve => setTimeout(resolv
 
 export function isPermissionlessSpace(spaceId: string) {
   // @TODO: Ensure we are correctly capitalizing the space id in the substream
-  return !PUBLIC_SPACES.includes(spaceId.toLowerCase());
+  return !ALL_PUBLIC_SPACES.includes(spaceId.toLowerCase());
 }

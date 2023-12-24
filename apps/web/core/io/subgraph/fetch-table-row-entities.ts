@@ -17,7 +17,7 @@ import { NetworkEntity, fromNetworkTriples } from './network-local-mapping';
 function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
   return `query {
     geoEntities(where: ${filter}, first: ${first}, skip: ${skip}) {
-      id,
+      id
       name
       entityOf {
         id

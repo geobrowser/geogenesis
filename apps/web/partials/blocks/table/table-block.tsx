@@ -88,7 +88,8 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       return {
         ...f,
         columnName: 'Space',
-        value: spaces.find(s => s.id === f.value)?.spaceConfig?.name ?? f.value,
+        // @TODO: Substreams don't have the correct checksum for space address. This is being fixed.
+        value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
       };
     }
 
