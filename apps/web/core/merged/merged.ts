@@ -2,7 +2,7 @@ import { A, G, pipe } from '@mobily/ts-belt';
 
 import { Subgraph } from '~/core/io';
 import { useLocalStore } from '~/core/state/local-store';
-import { Column, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
+import { Column, Entity as IEntity, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
@@ -41,6 +41,7 @@ interface IMergedDataSource
     selectedTypeEntityId?: string
   ) => Promise<{ rows: Row[] }>;
   columns: (options: Parameters<typeof fetchColumns>[0]) => Promise<Column[]>;
+  fetchOldEntity: (options: { id: string }) => Promise<IEntity | null>;
 }
 
 /**
@@ -149,6 +150,33 @@ export class Merged implements IMergedDataSource {
    *
    */
   fetchEntity = async (options: Parameters<Subgraph.ISubgraph['fetchEntity']>[0]) => {
+    try {
+      const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id });
+
+      const actionsForEntityId = Entity.actionsForEntityId(this.store.allActions, options.id);
+
+      if (actionsForEntityId.length === 0) return maybeNetworkEntity;
+
+      // If not networkEntity we need to just return the local entity
+      if (!maybeNetworkEntity) {
+        return Entity.fromActions(this.store.allActions, options.id);
+      }
+
+      // If the network entity exists, we need to merge the local actions with the network entity.
+      const entity = Entity.mergeActionsWithEntity(this.store.allActions, maybeNetworkEntity);
+
+      if (!entity) {
+        return null;
+      }
+
+      return entity;
+    } catch (e) {
+      console.error('Could not merge local entity with network entity', e);
+      return null;
+    }
+  };
+
+  fetchOldEntity = async (options: { id: string }): Promise<IEntity | null> => {
     try {
       const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id });
 
