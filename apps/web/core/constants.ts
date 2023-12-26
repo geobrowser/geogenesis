@@ -54,6 +54,9 @@ export const PUBLIC_SPACES = [
   '0x2200938c792106D10f67f75cdD2f14A9dAeFf381', // Art
   '0xD8Ad7433f795fC19899f6b62a9b9831090495CAF', // Music
   '0xf1803e327b4c4652c7De5B77D612eCc1222918F3', // Film
+  '0x4b6c1BCBB27CC1F8FaCb1Db263cc3bB3cc95587f', // Employment
+  '0x96543F995669446ECB91aE84A6e564242eE0af39', // Books
+  '0x44a6e58B483d4c569bAaB9DD1FC7fA445C1f1Ea9', // History
 ].map(s => s.toLowerCase());
 
 // These spaces are "Subspaces." We don't show these on the front page
