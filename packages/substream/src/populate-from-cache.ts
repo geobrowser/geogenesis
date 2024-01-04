@@ -2,9 +2,11 @@ import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
 import { START_BLOCK } from './constants/constants';
+import { parseValidFullEntries } from './parse-valid-full-entries';
 import { populateWithFullEntries } from './populate-entries';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import type { Roles } from './types';
+import { getChecksumAddress } from './utils/get-checksum-address';
 import { pool } from './utils/pool';
 import { type FullEntry, type RoleChange } from './zod';
 
@@ -32,7 +34,7 @@ export async function populateFromCache() {
         // streaming and only write to the cache the final parsed and validated data. So we
         // don't need to re-validate here.
         await populateWithFullEntries({
-          fullEntries: maybeCachedEntry.data as any, // TODO: Zod typecheck this JSON
+          fullEntries: parseValidFullEntries(maybeCachedEntry.data as any), // TODO: Zod typecheck this JSON
           blockNumber: maybeCachedEntry.block_number,
           timestamp: maybeCachedEntry.timestamp,
           cursor: maybeCachedEntry.cursor,
@@ -70,11 +72,11 @@ export async function populateFromCache() {
           case 'GRANTED':
             await handleRoleGranted({
               roleGranted: {
-                account: maybeCachedRole.account,
+                account: getChecksumAddress(maybeCachedRole.account),
                 id: maybeCachedRole.id.toString(),
                 role: maybeCachedRole.role as Roles,
-                sender: maybeCachedRole.sender,
-                space: maybeCachedRole.space,
+                sender: getChecksumAddress(maybeCachedRole.sender),
+                space: getChecksumAddress(maybeCachedRole.space),
               },
               blockNumber: maybeCachedRole.created_at_block,
               timestamp: maybeCachedRole.created_at,
@@ -83,11 +85,11 @@ export async function populateFromCache() {
           case 'REVOKED':
             await handleRoleRevoked({
               roleRevoked: {
-                account: maybeCachedRole.account,
+                account: getChecksumAddress(maybeCachedRole.account),
                 id: maybeCachedRole.id.toString(),
                 role: maybeCachedRole.role as Roles,
-                sender: maybeCachedRole.sender,
-                space: maybeCachedRole.space,
+                sender: getChecksumAddress(maybeCachedRole.sender),
+                space: getChecksumAddress(maybeCachedRole.space),
               },
             });
         }
