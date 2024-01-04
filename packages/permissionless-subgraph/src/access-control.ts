@@ -6,7 +6,6 @@ import {
   log,
 } from '@graphprotocol/graph-ts'
 import { Account, Space } from '../generated/schema'
-import { getChecksumAddress } from './get-checksum-address'
 
 class RoleAddedParams {
   account: string
