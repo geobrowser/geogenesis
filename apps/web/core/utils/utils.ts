@@ -257,5 +257,5 @@ export const sleep = (delay: number) => new Promise(resolve => setTimeout(resolv
 
 export function isPermissionlessSpace(spaceId: string) {
   // @TODO: Ensure we are correctly capitalizing the space id in the substream
-  return !ALL_PUBLIC_SPACES.includes(spaceId.toLowerCase());
+  return !ALL_PUBLIC_SPACES.includes(spaceId);
 }
