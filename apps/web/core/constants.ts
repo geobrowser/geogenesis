@@ -33,7 +33,7 @@ export const PUBLIC_SPACES = [
   '0xB4B3d95e9c82cb26A5bd4BC73ffBa46F1e979f16', // Philosophy
   '0x1a39e2fe299ef8f855ce43abf7ac85d6e69e05f5', // Crypto
   '0x6144659cc8fccbb7bb41c94fc8429aec201a3ff5', // AI
-  '0xb4476A42A66eC1356A58D300555169E17db6756c', // People
+  // '0xb4476A42A66eC1356A58D300555169E17db6756c', // People
   '0x35D15c85AF6A00aBdc3AbFa4178C719e0220838e', // Sustainability
   '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458', // Energy
   '0xC46a79dD4Cf9635011ba3A68Fb3CE6b6f8008cC0', // Social work
@@ -54,4 +54,22 @@ export const PUBLIC_SPACES = [
   '0x2200938c792106D10f67f75cdD2f14A9dAeFf381', // Art
   '0xD8Ad7433f795fC19899f6b62a9b9831090495CAF', // Music
   '0xf1803e327b4c4652c7De5B77D612eCc1222918F3', // Film
+  '0x4b6c1BCBB27CC1F8FaCb1Db263cc3bB3cc95587f', // Employment
+  '0x96543F995669446ECB91aE84A6e564242eE0af39', // Books
+  '0x44a6e58B483d4c569bAaB9DD1FC7fA445C1f1Ea9', // History
 ].map(s => s.toLowerCase());
+
+// These spaces are "Subspaces." We don't show these on the front page
+// of Geo.
+const PUBLIC_SUBSPACES = [
+  '0xEC07c19743179f1AC904Fee97a1A99310e500aB6', // End Homelessness in SF
+  '0xdFDD5Fe53F804717509416baEBd1807Bd769D40D', // Street Outreach in SF
+  '0x759Cc61Ea01ae5A510C7cAA7e79581c07d2A80C3', // Mentorship in SF
+  '0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD', // Transitional Housing in SF
+  '0x668356E8e22B11B389B136BB3A3a5afE388c6C5c', // Workforce Development in SF
+  '0x5402D2C23d9495F6632bAf6EA828D1893e870484', // Recovery in Sf
+
+  '0x1b7a66284C31A8D11a790ec79916c425Ef6E7886', // The Graph
+].map(s => s.toLowerCase());
+
+export const ALL_PUBLIC_SPACES = [...PUBLIC_SPACES, ...PUBLIC_SUBSPACES];
