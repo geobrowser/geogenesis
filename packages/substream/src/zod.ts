@@ -2,13 +2,17 @@ import { z } from 'zod';
 
 import type { OmitStrict } from './types';
 
+// An entry comes from an event on the blockchain. This is
+// defined in our substream schema.
+// https://github.com/MercuricChloride/geo-substream/blob/master/proto/schema.proto
 export const ZodEntry = z.object({
   id: z.string(),
   index: z.string(),
   uri: z.string(),
-  author: z.string(),
-  space: z.string(),
+  author: z.string(), // Map to a correctly encoded hex string
+  space: z.string(), // Map to a correctly encoded hex string
 });
+
 export type Entry = z.infer<typeof ZodEntry>;
 
 export const ZodAction = z.object({

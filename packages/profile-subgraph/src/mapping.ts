@@ -1,4 +1,4 @@
-import { Address, log } from '@graphprotocol/graph-ts'
+import { log } from '@graphprotocol/graph-ts'
 import {
   GeoProfileHomeSpaceUpdated,
   GeoProfileRegistered,
@@ -12,13 +12,13 @@ function getProfileId(account: string, onChainId: string): string {
 
 export function handleGeoProfileRegistered(event: GeoProfileRegistered): void {
   const userAccount = getChecksumAddress(event.params.account)
-  const space = event.params.homeSpace
+  const space = getChecksumAddress(event.params.homeSpace)
   const onChainId = event.params.id.toString()
   const id = getProfileId(userAccount, onChainId)
 
   const newProfile = new GeoProfile(id)
   newProfile.account = userAccount
-  newProfile.homeSpace = space.toHexString()
+  newProfile.homeSpace = space
   newProfile.createdAt = event.block.timestamp
   newProfile.save()
 
@@ -29,7 +29,7 @@ export function handleGeoProfileHomeSpaceUpdated(
   event: GeoProfileHomeSpaceUpdated
 ): void {
   const userAccount = getChecksumAddress(event.params.account)
-  const space = event.params.homeSpace
+  const space = getChecksumAddress(event.params.homeSpace)
   const onChainId = event.params.id.toString()
   const id = getProfileId(userAccount, onChainId)
 
@@ -46,11 +46,11 @@ export function handleGeoProfileHomeSpaceUpdated(
     return
   }
 
-  profile.homeSpace = space.toHexString()
+  profile.homeSpace = space
   profile.save()
 
   log.info('Profile home space updated. Profile id – {}. New space – {}', [
     id,
-    space.toHexString(),
+    space,
   ])
 }

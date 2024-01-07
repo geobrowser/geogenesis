@@ -43,7 +43,7 @@ const sortByCreatedAtBlock = (a: Space, b: Space) =>
 
 // @HACK: Right now we hide some spaces from the front page. There's no way to remove
 // Spaces from the Subgraph store yet.
-const filterHiddenSpaces = (space: Space) => PUBLIC_SPACES.includes(space.id.toLowerCase());
+const filterHiddenSpaces = (space: Space) => PUBLIC_SPACES.includes(space.id);
 
 export const revalidate = 60; // 1 minute
 

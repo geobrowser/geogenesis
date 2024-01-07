@@ -27,12 +27,12 @@ export const EDITOR_CONTROLLER_ROLE_BINARY = '0xbc2c04b16435c5f4eaa37fec9ad808fe
 export const EDITOR_ROLE_BINARY = '0x21d1167972f621f75904fb065136bc8b53c7ba1c60ccd3a7758fbee465851e9c';
 
 export const PUBLIC_SPACES = [
-  '0x170b749413328ac9a94762031a7a05b00c1d2e34', // root
-  '0xc46618c200f02ef1eea28923fc3828301e63c4bd', // San Francisco
-  '0xe3d08763498e3247ec00a481f199b018f2148723', // Health
+  '0x170b749413328ac9a94762031a7A05b00c1D2e34', // root
+  '0xc46618C200f02EF1EEA28923FC3828301e63C4Bd', // San Francisco
+  '0xe3d08763498e3247EC00A481F199B018f2148723', // Health
   '0xB4B3d95e9c82cb26A5bd4BC73ffBa46F1e979f16', // Philosophy
-  '0x1a39e2fe299ef8f855ce43abf7ac85d6e69e05f5', // Crypto
-  '0x6144659cc8fccbb7bb41c94fc8429aec201a3ff5', // AI
+  '0x1A39E2Fe299Ef8f855ce43abF7AC85D6e69E05F5', // Crypto
+  '0x6144659cc8FCcBb7Bb41c94Fc8429Aec201A3ff5', // AI
   // '0xb4476A42A66eC1356A58D300555169E17db6756c', // People
   '0x35D15c85AF6A00aBdc3AbFa4178C719e0220838e', // Sustainability
   '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458', // Energy
@@ -57,7 +57,7 @@ export const PUBLIC_SPACES = [
   '0x4b6c1BCBB27CC1F8FaCb1Db263cc3bB3cc95587f', // Employment
   '0x96543F995669446ECB91aE84A6e564242eE0af39', // Books
   '0x44a6e58B483d4c569bAaB9DD1FC7fA445C1f1Ea9', // History
-].map(s => s.toLowerCase());
+];
 
 // These spaces are "Subspaces." We don't show these on the front page
 // of Geo.
@@ -70,6 +70,6 @@ const PUBLIC_SUBSPACES = [
   '0x5402D2C23d9495F6632bAf6EA828D1893e870484', // Recovery in Sf
 
   '0x1b7a66284C31A8D11a790ec79916c425Ef6E7886', // The Graph
-].map(s => s.toLowerCase());
+];
 
 export const ALL_PUBLIC_SPACES = [...PUBLIC_SPACES, ...PUBLIC_SUBSPACES];

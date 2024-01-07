@@ -10,6 +10,7 @@ import { populateWithFullEntries } from './populate-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { createSink, createStream } from './substreams.js/sink/src';
+import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
 import { getEntryWithIpfsContent } from './utils/ipfs';
 import { type FullEntry, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
@@ -195,11 +196,18 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               const { granted, revoked } = roleChange;
 
               if (granted) {
+                const roleChangeWithChecksum: (typeof roleChange)['granted'] = {
+                  ...granted,
+                  account: getChecksumAddress(granted.account),
+                  sender: getChecksumAddress(granted.sender),
+                  space: getChecksumAddress(granted.space),
+                };
+
                 yield* _(
                   Effect.tryPromise({
                     try: () =>
                       upsertCachedRoles({
-                        roleChange: granted,
+                        roleChange: roleChangeWithChecksum,
                         blockNumber,
                         cursor,
                         type: 'GRANTED',
@@ -213,18 +221,25 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 );
 
                 handleRoleGranted({
-                  roleGranted: granted,
+                  roleGranted: roleChangeWithChecksum,
                   blockNumber,
                   timestamp,
                 });
               }
 
               if (revoked) {
+                const roleChangeWithChecksum: (typeof roleChange)['revoked'] = {
+                  ...revoked,
+                  account: getChecksumAddress(revoked.account),
+                  sender: getChecksumAddress(revoked.sender),
+                  space: getChecksumAddress(revoked.space),
+                };
+
                 yield* _(
                   Effect.tryPromise({
                     try: () =>
                       upsertCachedRoles({
-                        roleChange: revoked,
+                        roleChange: roleChangeWithChecksum,
                         blockNumber,
                         cursor,
                         type: 'REVOKED',
@@ -238,7 +253,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 );
 
                 handleRoleRevoked({
-                  roleRevoked: revoked,
+                  roleRevoked: roleChangeWithChecksum,
                 });
               }
             }

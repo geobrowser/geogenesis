@@ -1,4 +1,5 @@
 import { isValidAction } from './utils/actions';
+import { getChecksumAddress } from './utils/get-checksum-address';
 import { type FullEntry, ZodUriData } from './zod';
 
 // Filter out any invalid actions from entries
@@ -30,6 +31,8 @@ export function parseValidFullEntries(nonValidatedFullEntries: FullEntry[]): Ful
     console.log(`Found ${actions.length} valid actions out of ${uriResponse.data.actions.length} total actions`);
     fullEntries.push({
       ...entry,
+      space: getChecksumAddress(entry.space),
+      author: getChecksumAddress(entry.author),
       uriData: { ...uriResponse.data, actions },
     });
   }
