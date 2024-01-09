@@ -13,7 +13,7 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
 
 import { useOnboarding } from '~/core/hooks/use-onboarding';
-import { type AccountType, createSpaceWithEntities } from '~/core/io/publish/contracts';
+import { createSpaceWithEntities } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
 import { SpaceType } from '~/core/types';
 import { getImagePath, sleep } from '~/core/utils/utils';
@@ -29,7 +29,7 @@ import { RadioGroup } from '~/design-system/radio-group';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
-export const accountTypeAtom = atom<SpaceType | null>(null);
+export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const nameAtom = atom<string>('');
 export const avatarAtom = atom<string>('');
 export const spaceAddressAtom = atom<string>('');
@@ -46,7 +46,7 @@ export function CreateSpaceDialog() {
   const { data: wallet } = useWalletClient();
 
   // @TODO: These don't need to be persisted
-  const accountType = useAtomValue(accountTypeAtom);
+  const spaceType = useAtomValue(spaceTypeAtom);
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
   const setSpaceAddress = useSetAtom(spaceAddressAtom);
@@ -58,16 +58,14 @@ export function CreateSpaceDialog() {
 
   if (!address) return null;
 
-  async function createSpaces(accountType: SpaceType) {
-    if (!address || !accountType) return;
-
-    return;
+  async function createSpaces(spaceType: SpaceType) {
+    if (!address || !spaceType) return;
 
     try {
       const { spaceAddress } = await createSpaceWithEntities({
         spaceAvatarUri: avatar,
         spaceName: name,
-        type: accountType,
+        type: spaceType,
         userAccount: address,
       });
 
@@ -83,7 +81,7 @@ export function CreateSpaceDialog() {
   }
 
   async function onRunOnboardingWorkflow() {
-    if (!address || !wallet || !accountType) return;
+    if (!address || !wallet || !spaceType) return;
 
     setShowRetry(false);
 
@@ -91,10 +89,10 @@ export function CreateSpaceDialog() {
       case 'onboarding':
         setStep('creating-spaces');
         await sleep(100);
-        createSpaces(accountType);
+        createSpaces(spaceType);
         break;
       case 'creating-spaces':
-        createSpaces(accountType);
+        createSpaces(spaceType);
         break;
     }
   }
@@ -246,7 +244,7 @@ function StepStart() {
 }
 
 function StepSelectType() {
-  const [accountType, setAccountType] = useAtom(accountTypeAtom);
+  const [spaceType, setspaceType] = useAtom(spaceTypeAtom);
   const setStep = useSetAtom(stepAtom);
 
   const options = [
@@ -265,14 +263,14 @@ function StepSelectType() {
         </div>
         <div className="mt-8">
           <RadioGroup
-            value={accountType ?? ''}
-            onValueChange={setAccountType as (value: string) => void}
+            value={spaceType ?? ''}
+            onValueChange={setspaceType as (value: string) => void}
             options={options}
           />
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <Button onClick={() => setStep('onboarding')} disabled={accountType === null} className="w-full">
+        <Button onClick={() => setStep('onboarding')} disabled={spaceType === null} className="w-full">
           Continue
         </Button>
       </div>
@@ -285,14 +283,14 @@ type StepOnboardingProps = {
   address: string;
 };
 
-const placeholderMessage: Record<AccountType, string> = {
-  person: 'Space name',
+const placeholderMessage: Record<SpaceType, string> = {
+  default: 'Space name',
   company: 'Company name',
   nonprofit: 'Nonprofit name',
 };
 
 function StepOnboarding({ onNext, address }: StepOnboardingProps) {
-  const accountType = useAtomValue(accountTypeAtom);
+  const spaceType = useAtomValue(spaceTypeAtom);
   const [name, setName] = useAtom(nameAtom);
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
@@ -323,7 +321,7 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
         <div className="flex w-full justify-center">
           <div className="inline-block pb-4">
             <input
-              placeholder={placeholderMessage[accountType as AccountType]}
+              placeholder={placeholderMessage[spaceType as SpaceType]}
               className="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
               value={name}
               onChange={({ currentTarget: { value } }) => setName(value)}
