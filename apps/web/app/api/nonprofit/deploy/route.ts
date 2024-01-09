@@ -15,9 +15,15 @@ export async function GET(request: Request) {
   const userAddress = searchParams.get('userAddress') as `0x${string}` | null;
 
   if (userAddress === null) {
-    return new Response(JSON.stringify({ error: 'Missing user address', reason: 'Missing user address' }), {
-      status: 400,
-    });
+    return new Response(
+      JSON.stringify({
+        error: 'Missing user address',
+        reason: "A user's wallet address is required to set permissions on the deployed space.",
+      }),
+      {
+        status: 400,
+      }
+    );
   }
 
   const username = searchParams.get('username');
@@ -33,9 +39,15 @@ export async function GET(request: Request) {
   }
 
   if (!userAddress) {
-    return new Response(JSON.stringify({ error: 'Missing user address', reason: 'Missing user address' }), {
-      status: 400,
-    });
+    return new Response(
+      JSON.stringify({
+        error: 'Missing user address',
+        reason: "A user's wallet address is required to set permissions on the deployed space.",
+      }),
+      {
+        status: 400,
+      }
+    );
   }
 
   if (!profileId) {

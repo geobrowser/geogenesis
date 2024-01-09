@@ -1,4 +1,3 @@
-// import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -16,9 +15,15 @@ export async function GET(request: Request) {
   const userAccount = searchParams.get('userAddress') as `0x${string}` | null;
 
   if (userAccount === null) {
-    return new Response(JSON.stringify({ error: 'Missing user address', reason: 'Missing user address' }), {
-      status: 400,
-    });
+    return new Response(
+      JSON.stringify({
+        error: 'Missing user address',
+        reason: "A user's wallet address is required to set permissions on the deployed space.",
+      }),
+      {
+        status: 400,
+      }
+    );
   }
 
   slog({
