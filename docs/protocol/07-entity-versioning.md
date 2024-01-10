@@ -10,6 +10,6 @@ Since the data model for publishing data in Geo is operation-based, the Versioni
 
 ### Implementation
 
-In the Geo data service we map the concept of a Triple to a relational database using PostgreSQL. We store a large table of triples (https://github.com/geobrowser/geogenesis/blob/bf51df1309f412de957942e0405400163f92878e/packages/substream/src/sql/initPublic.sql#L112).
+In the Geo data service we map the concept of a Triple to a relational database using PostgreSQL. We store a large table of triples that each reference an [Entity ID](https://github.com/geobrowser/geogenesis/blob/bf51df1309f412de957942e0405400163f92878e/packages/substream/src/sql/initPublic.sql#L112).
 
 Since we store _all_ triples over time, each triple has an `isStale` flag to denote if it exists as part of the most recent entity version. We associate each triple to one or many versions using a `TripleVersions` join table. You can see the schema definition [here](https://github.com/geobrowser/geogenesis/blob/bf51df1309f412de957942e0405400163f92878e/packages/substream/src/sql/initPublic.sql#L168).
