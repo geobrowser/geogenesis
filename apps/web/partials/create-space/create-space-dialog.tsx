@@ -13,7 +13,6 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useAccount, useWalletClient } from 'wagmi';
 
-import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { createSpaceWithEntities } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
 import { SpaceType } from '~/core/types';
@@ -41,17 +40,15 @@ export const stepAtom = atom<Step>('start');
 
 const workflowSteps: Array<Step> = ['creating-spaces', 'completed'];
 
-// @TODO: Can remove a lot of this stuff since there's only one error to handle, one "creating" state etc
 export function CreateSpaceDialog() {
   const { address } = useAccount();
   const { data: wallet } = useWalletClient();
+  const [open, onOpenChange] = useState(false);
 
-  // @TODO: These don't need to be persisted
   const spaceType = useAtomValue(spaceTypeAtom);
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
   const setSpaceAddress = useSetAtom(spaceAddressAtom);
-
   const [step, setStep] = useAtom(stepAtom);
 
   // Show retry immediately if workflow already started before initial render
@@ -101,7 +98,7 @@ export function CreateSpaceDialog() {
   }
 
   return (
-    <Dialog.Root>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Trigger>New space</Dialog.Trigger>
 
       <Dialog.Portal>
@@ -131,7 +128,11 @@ export function CreateSpaceDialog() {
                   {step === 'select-type' && <StepSelectType />}
                   {step === 'onboarding' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
                   {workflowSteps.includes(step) && (
-                    <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />
+                    <StepComplete
+                      onRetry={onRunOnboardingWorkflow}
+                      showRetry={showRetry}
+                      onDone={() => onOpenChange(false)}
+                    />
                   )}
                 </ModalCard>
               </motion.div>
@@ -188,7 +189,7 @@ const StepHeader = () => {
           <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="!border-none !bg-transparent" />
         )}
       </div>
-      {!workflowSteps.includes(step) && (
+      {step !== 'creating-spaces' && (
         <Dialog.Close asChild>
           <SquareButton icon={<Close />} className="!border-none !bg-transparent" />
         </Dialog.Close>
@@ -386,13 +387,11 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
 
 type StepCompleteProps = {
   onRetry: () => void;
+  onDone: () => void;
   showRetry: boolean;
 };
 
-function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
-  // @TODO: Close the dialog
-  const { hideOnboarding } = useOnboarding();
-
+function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
   const name = useAtomValue(nameAtom);
   const spaceAddress = useAtomValue(spaceAddressAtom);
   const step = useAtomValue(stepAtom);
@@ -439,7 +438,7 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
           </div>
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Link href={`/space/${spaceAddress}`} className="w-full" onClick={hideOnboarding}>
+          <Link href={`/space/${spaceAddress}`} className="w-full" onClick={onDone}>
             <Button className="w-full" disabled={step !== 'completed'}>
               Go to {name}
             </Button>
