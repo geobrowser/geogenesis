@@ -6,6 +6,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import Link from 'next/link';
+import { getAddress } from 'viem';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
@@ -73,7 +74,9 @@ export function CreateSpaceDialog() {
         throw new Error(`Creating space failed`);
       }
 
-      setSpaceAddress(spaceAddress);
+      // Make sure we're setting the checksum'd address
+      setSpaceAddress(getAddress(spaceAddress));
+      setStep('completed');
     } catch (error) {
       setShowRetry(true);
       console.error(error);
@@ -409,11 +412,15 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
             Setting up your new space
           </Text>
 
-          <Spacer height={24} />
+          {step === 'creating-spaces' && (
+            <>
+              <Spacer height={24} />
 
-          <div className="w-6">
-            <Dots color="bg-grey-02" />
-          </div>
+              <div className="w-6">
+                <Dots color="bg-grey-02" />
+              </div>
+            </>
+          )}
 
           {step !== 'completed' && showRetry && (
             <p className=" mt-4 text-center text-smallButton">

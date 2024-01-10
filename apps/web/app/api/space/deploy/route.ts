@@ -2,6 +2,7 @@ import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
+import { getAddress } from 'viem';
 
 import { SpaceType } from '~/core/types';
 import { slog } from '~/core/utils/utils';
@@ -198,5 +199,11 @@ export async function GET(request: Request) {
     account: userAccount,
   });
 
-  return new Response(JSON.stringify({ spaceAddress: proxyDeployTxReceipt.contractAddress }), { status: 200 });
+  // We can safely cast with ! here since we know we're handling the case where the contract address is empty
+  // in our deployment effects.
+  //
+  // Make sure we're returning the checksum'd address
+  return new Response(JSON.stringify({ spaceAddress: getAddress(proxyDeployTxReceipt.contractAddress!) }), {
+    status: 200,
+  });
 }

@@ -1,6 +1,7 @@
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
+import { getAddress } from 'viem';
 
 import { getGeoPersonIdFromOnchainId, slog } from '~/core/utils/utils';
 
@@ -125,5 +126,8 @@ export async function GET(request: Request) {
     account: userAddress,
   });
 
-  return new Response(JSON.stringify({ spaceAddress, entityId: geoEntityIdFromOnchainId }), { status: 200 });
+  // Make sure we're returning the checksum'd address
+  return new Response(JSON.stringify({ spaceAddress: getAddress(spaceAddress), entityId: geoEntityIdFromOnchainId }), {
+    status: 200,
+  });
 }

@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import Link from 'next/link';
+import { getAddress } from 'viem';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
@@ -85,8 +86,8 @@ export const OnboardingDialog = () => {
         throw new Error(`Creating space failed`);
       }
 
-      setSpaceAddress(spaceAddress);
-
+      // Make sure we're setting the checksum'd address
+      setSpaceAddress(getAddress(spaceAddress));
       setStep('registering-profile');
 
       setTimeout(() => {
