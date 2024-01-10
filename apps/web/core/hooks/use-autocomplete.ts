@@ -35,7 +35,7 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
               signal,
               filter: filter ?? [],
               typeIds: allowedTypes,
-              first: 10,
+              first: 100,
             }),
           catch: () => new Subgraph.Errors.AbortError(),
         })
