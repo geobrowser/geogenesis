@@ -6,7 +6,7 @@ Each Version stores the entire state of the [Entity](01-entities.md)'s triples a
 
 Since the data model for publishing data in Geo is operation-based, the Versioning model essentially works like a combination of an operations-based CRDT and a state-based CRDT at the [Entity](01-entities.md) level.
 
-[](images/versioning.png)
+![Image depicting how an entity and its triples have changed over time, each bundled set of changes resulting in a new entity version](images/versioning.png)
 
 ### Implementation
 

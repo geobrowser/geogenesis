@@ -6,7 +6,7 @@ An Entity is any concept in the Geo knowledge graph. It can be a person, an even
 
 In a graph database you can think of an Entity as a node, and Triples as the edges. In a relational database you can think of an Entity as a row, with each column being an Attribute and each value being a Triple's value – we'll cover Schemas in Geo in another document.
 
-[](images/entity.png)
+![Image depicting the graph-like nature of an entity and its triples](images/entity.png)
 
 ## System entities
 

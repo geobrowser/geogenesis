@@ -6,7 +6,7 @@ Triples are a concept traditionally used in graph databases or knowledge graph d
 
 In Geo a Triple is a data structure comprised of three elements (thus "Triple): an [Entity](01-entities.md) ID, an [Attribute](03-attributes.md) ID, and a [Value](04-values.md) ID. A set of Triples define the information for any given Entity (Entity) based on the Entity ID that each Triple references.
 
-[](images/triples.png)
+![Image depicting how a triple is composed of three identifiers](images/triples.png)
 
 ### Implementation
 

@@ -4,4 +4,4 @@ A Type in the Geo knowledge graph is an [Entity](01-entities.md) that describes 
 
 For example, Bill Gates might have the `Person` type as well as the `Founder` type. Each of these types might define an expected shape for the data in Bill Gates.
 
-[](images/types.png)
+![Image depicting how an entity can be composed of type triples, each with a schema](images/types.png)
