@@ -26,7 +26,11 @@ const loadingCircleVariants = {
   },
 };
 
-export function Dots() {
+interface Props {
+  color?: 'bg-grey-03' | 'bg-grey-02';
+}
+
+export function Dots({ color = 'bg-grey-03' }: Props) {
   return (
     <motion.div
       className="flex items-center justify-between gap-0.5"
@@ -35,7 +39,7 @@ export function Dots() {
       animate="end"
     >
       <motion.span
-        className="block h-1 w-1 rounded-full bg-grey-03"
+        className={`block h-1 w-1 rounded-full ${color}`}
         variants={loadingCircleVariants}
         transition={{
           duration: 0.225,
@@ -44,7 +48,7 @@ export function Dots() {
         }}
       />
       <motion.span
-        className="block h-1 w-1 rounded-full bg-grey-03"
+        className={`block h-1 w-1 rounded-full ${color}`}
         variants={loadingCircleVariants}
         transition={{
           duration: 0.225,
@@ -53,7 +57,7 @@ export function Dots() {
         }}
       />
       <motion.span
-        className="block h-1 w-1 rounded-full bg-grey-03"
+        className={`block h-1 w-1 rounded-full ${color}`}
         variants={loadingCircleVariants}
         transition={{
           duration: 0.225,
