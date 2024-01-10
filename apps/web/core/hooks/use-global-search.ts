@@ -26,7 +26,7 @@ export function useGlobalSearch() {
             merged.fetchEntities({
               query,
               signal,
-              first: 10,
+              first: 100,
               filter: [],
             }),
           catch: () => new Subgraph.Errors.AbortError(),
