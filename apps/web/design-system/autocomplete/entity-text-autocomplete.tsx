@@ -14,6 +14,7 @@ import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
+import { Entity as EntityType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 
 import { Divider } from '~/design-system/divider';
@@ -26,7 +27,7 @@ import { ResultContent, ResultsList } from './results-list';
 
 interface Props {
   placeholder?: string;
-  onDone: (result: { id: string; name: string | null }) => void;
+  onDone: (result: { id: string; name: string | null } | EntityType) => void;
   itemIds: string[];
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;

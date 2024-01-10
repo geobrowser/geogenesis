@@ -6,10 +6,12 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import React from 'react';
+
 import { useHydrated } from '~/core/hooks/use-hydrated';
 
 interface TabGroupProps {
-  tabs: Array<{ href: string; label: string; disabled?: boolean }>;
+  tabs: Array<{ href: string; label: string; badge?: string; disabled?: boolean }>;
   className?: string;
 }
 
@@ -17,7 +19,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   return (
     <div className={cx('flex items-center gap-6 border-b border-grey-02 pb-2', className)}>
       {tabs.map(t => (
-        <Tab key={t.href} href={t.href} label={t.label} disabled={t.disabled} />
+        <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} />
       ))}
     </div>
   );
@@ -26,10 +28,11 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
 interface TabProps {
   href: string;
   label: string;
+  badge?: string;
   disabled?: boolean;
 }
 
-const tabStyles = cva('relative text-quoteMedium transition-colors duration-100', {
+const tabStyles = cva('relative inline-flex gap-1.5 items-center text-quoteMedium transition-colors duration-100', {
   variants: {
     active: {
       true: 'text-text',
@@ -45,14 +48,19 @@ const tabStyles = cva('relative text-quoteMedium transition-colors duration-100'
   },
 });
 
-function Tab({ href, label, disabled }: TabProps) {
+function Tab({ href, label, badge, disabled }: TabProps) {
   const decodedHref = decodeURIComponent(href);
   const isHydrated = useHydrated();
   const path = usePathname();
   const active = decodeURIComponent(path ?? '') === decodedHref;
 
   if (disabled) {
-    return <div className={tabStyles({ active, disabled })}>{label}</div>;
+    return (
+      <div className={tabStyles({ active, disabled })}>
+        {label}
+        {badge && <Badge>{badge}</Badge>}
+      </div>
+    );
   }
 
   return (
@@ -73,6 +81,19 @@ function Tab({ href, label, disabled }: TabProps) {
         />
       )}
       {label}
+      {badge && <Badge>{badge}</Badge>}
     </Link>
   );
 }
+
+type BadgeProps = {
+  children: React.ReactNode;
+};
+
+const Badge = ({ children }: BadgeProps) => {
+  return (
+    <div className="flex-shrink-0">
+      <div className="rounded bg-black px-[0.3125rem] py-0.5 text-xs leading-none text-white">{children}</div>
+    </div>
+  );
+};
