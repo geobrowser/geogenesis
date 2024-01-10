@@ -14,4 +14,6 @@ A [Triple](02-triples.md) is a data structure composed of three elements: an [En
 
 Composing these identifier references between entities and triples creates the graph of information in Geo.
 
+Triples are organized and scoped into [Spaces](06-spaces.md). A Space is a smart contract that tracks data added to the knowledge graph via an append-only log of IPFS CIDs. The Geo knowledge graph is comprised of many spaces, each tracking their own set of data. Triples in Geo can reference entities from any Space. Additionally, spaces control their own governance and permissions behavior.
+
 ![Diagram depicting the data model between concepts in Geo](images/data-model.png)
