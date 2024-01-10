@@ -15,3 +15,5 @@ In the Geo data service we map the concept of a Triple to a relational database 
 Each Triple in Postgres references an Entity ID, Attribute ID, and Value ID. We also store some additional metadata to make querying things like the raw Value of the triple easier. There's also additional metadata around Entity versioning (See [Versioning](07-entity-versioning.md)).
 
 [Here's a link to the Triples schema in the Geo substream](https://github.com/geobrowser/geogenesis/blob/bf51df1309f412de957942e0405400163f92878e/packages/substream/src/sql/initPublic.sql#L112).
+
+![Diagram depicting the Geo data model](images/data-model.png)
