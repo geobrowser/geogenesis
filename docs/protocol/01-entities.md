@@ -8,11 +8,11 @@ In a graph database you can think of an Entity as a node, and Triples as the edg
 
 ![Image depicting the graph-like nature of an entity and its triples](images/entity.png)
 
-## System entities
+### System entities
 
 Since Geo is essentially a large, user-programmed graph database, there are many Entities that are defined by the Geo protocol itself that are used for system-level behavior. For example, the `Blocks` entity is an attribute that defines the identifiers for the rich text blocks used on an page.
 
-## Implementation
+### Implementation
 
 In the Geo data service we map these knowledge graph concepts to a relational database using PostgreSQL. We store a large table of triples that each reference an [Entity ID](https://github.com/geobrowser/geogenesis/blob/bf51df1309f412de957942e0405400163f92878e/packages/substream/src/sql/initPublic.sql#L114). See [Triples](02-triples.md) for more information.
 
