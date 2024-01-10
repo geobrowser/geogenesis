@@ -4,7 +4,7 @@ An Entity is any concept in the Geo knowledge graph. It can be a person, an even
 
 > For example, the Entity ID for Bill Gates might be `5`, with several triples referencing this ID. There might be a triple defining the name of the entity, the date of birth of the entity, and more.
 
-In a graph database you can think of an Entity as a node, and Triples as the edges. In a relational database you can think of an Entity as a row, with each column being an Attribute and each value being a Triple's value – we'll cover Schemas in Geo in another document.
+In a graph database you can think of an Entity as a node, and Triples as the edges. In a relational database you can think of an Entity as a row, with each column being an [Attribute](03-attributes.md) and each value being a Triple's [Value](04-values.md).
 
 ![Image depicting the graph-like nature of an entity and its triples](images/entity.png)
 
