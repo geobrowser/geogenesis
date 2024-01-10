@@ -4,7 +4,6 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity as IEntity } from '~/core/types';
 import { FilterField, FilterState } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
@@ -21,7 +20,8 @@ function getFetchEntitiesQuery(
   const typeIdsString =
     typeIds && typeIds.length > 0
       ? `geoEntityTypesByEntityId: { some: { typeId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } }`
-      : '';
+      : // Filter out block entities by default
+        `geoEntityTypesByEntityId: { every: { typeId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.TABLE_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.INDEXED_SPACE}"] } } }`;
 
   const constructedWhere =
     entityOfWhere !== ''
@@ -114,6 +114,12 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
     signal: options?.signal,
   });
 
+  if (options.query === 'supporting arguments')
+    console.log(
+      'query',
+      getFetchEntitiesQuery(options.query ?? '', entityOfWhere, options.typeIds, options.first, options.skip)
+    );
+
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
@@ -160,7 +166,7 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
 
   const sortedResults = sortSearchResultsByRelevance(geoEntities.nodes);
 
-  const sortedResultsWithTypesAndDescription: IEntity[] = sortedResults.map(result => {
+  return sortedResults.map(result => {
     const networkTriples = result.triplesByEntityId.nodes;
 
     // If there is no latest version just return an empty entity.
@@ -186,22 +192,6 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
       types: Entity.types(triples, nameTriple?.space),
       triples,
     };
-  });
-
-  // We filter block entities so we don't clutter entity search results with block entities.
-  // Eventually we might want to let the caller handle the filtering instead of doing it
-  // at the network level here.
-  //
-  // We could also do this filter at the top of the algorithm so we don't apply the extra
-  // transformations onto entities that we are going to filter out.
-  return sortedResultsWithTypesAndDescription.filter(result => {
-    return !result.types.some(
-      t =>
-        t.id === SYSTEM_IDS.TEXT_BLOCK ||
-        t.id === SYSTEM_IDS.TABLE_BLOCK ||
-        t.id === SYSTEM_IDS.IMAGE_BLOCK ||
-        t.id === SYSTEM_IDS.INDEXED_SPACE
-    );
   });
 }
 
