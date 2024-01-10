@@ -6,7 +6,7 @@ An Entity is any concept in the Geo knowledge graph. It can be a person, an even
 
 In a graph database you can think of an Entity as a node, and Triples as the edges. In a relational database you can think of an Entity as a row, with each column being an Attribute and each value being a Triple's value – we'll cover Schemas in Geo in another document.
 
-[](./images/entity.png)
+[](images/entity.png)
 
 ## System entities
 
@@ -14,6 +14,6 @@ Since Geo is essentially a large, user-programmed graph database, there are many
 
 ## Implementation
 
-In the Geo data service we map these knowledge graph concepts to a relational database using PostgreSQL. We store a large table of triples that each reference an Entity ID (https://github.com/geobrowser/geogenesis/blob/bf51df1309f412de957942e0405400163f92878e/packages/substream/src/sql/initPublic.sql#L114). See the Triple doc for information.
+In the Geo data service we map these knowledge graph concepts to a relational database using PostgreSQL. We store a large table of triples that each reference an Entity ID (https://github.com/geobrowser/geogenesis/blob/bf51df1309f412de957942e0405400163f92878e/packages/substream/src/sql/initPublic.sql#L114). See [Triples](02-triples.md) for more information.
 
 Here's a link to the Entities schema in the Geo data service (https://github.com/geobrowser/geogenesis/blob/bf51df1309f412de957942e0405400163f92878e/packages/substream/src/sql/initPublic.sql#L21).
