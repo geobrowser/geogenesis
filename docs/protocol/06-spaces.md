@@ -2,7 +2,7 @@
 
 A Space in Geo corresponds to a "bucket" of information that has some level of governance associated with it. Spaces each have their own governance models, some might have voting on content changes, some might not, but each space detemines _who_ is allowed to make content changes or not.
 
-A Space is a smart contract that tracks data added to the knowledge graph via an append-only log of [IPFS](https://ipfs.tech/) [content identifiers](https://docs.ipfs.tech/concepts/content-addressing). The Geo knowledge graph is comprised of many spaces, each tracking their own set of data. [Triples](02-triples.md) in Geo can reference entities from any Space. Additionally, spaces control their own governance and permissions behavior.
+A Space is a smart contract that tracks data added to the knowledge graph via an append-only log of [IPFS](https://ipfs.tech/) [content identifiers](https://docs.ipfs.tech/concepts/content-addressing). The Geo knowledge graph is comprised of many spaces, each tracking their own set of data. Anybody can deploy a Space contract and start their own knowledge graph or reference data in other spaces. [Triples](02-triples.md) in Geo can reference entities from any Space. Additionally, spaces control their own governance and permissions behavior.
 
 You can see the current implementation of the Geo Space contract [here](https://github.com/geobrowser/geogenesis/blob/master/packages/contracts/contracts/Space.sol).
 
