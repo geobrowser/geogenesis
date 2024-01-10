@@ -8,7 +8,7 @@ The Geo Genesis dApp is meant to be the best interface for interacting with the 
 
 ### Data model
 
-Knowledge in Geo are organized into an ["Entity"](./01-entities.md), a uniquely identifiable data structure that is referenced by ["Triples"](02-triples.md).
+Knowledge in Geo is organized into an ["Entity"](./01-entities.md), a uniquely identifiable data structure that is referenced by ["Triples"](02-triples.md).
 
 A [Triple](02-triples.md) is a data structure composed of three elements: an [Entity](01-entities.md) identifier, an [Attribute](03-attributes.md) identifier, and a [Value](04-values.md) identifier. Composing these identifier references between entities and triples creates the graph of information in Geo.
 
