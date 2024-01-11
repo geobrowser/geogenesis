@@ -56,7 +56,18 @@ message RolesRevoked {
   repeated RoleRevoked roles = 1;
 }
 
+message GeoProfileRegistered {
+  string requestor = 1;
+  string space = 2;
+  string id = 3;
+}
+
+message GeoProfilesRegistered {
+  repeated GeoProfileRegistered profiles = 1;
+}
+
 message GeoOutput {
   repeated EntryAdded entries = 1;
   repeated RoleChange role_changes = 2;
+  repeated GeoProfileRegistered profiles_registered = 3;
 }
