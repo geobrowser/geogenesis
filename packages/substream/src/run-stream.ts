@@ -8,6 +8,7 @@ import { readCursor, writeCursor } from './cursor';
 import { parseValidFullEntries } from './parse-valid-full-entries';
 import { populateWithFullEntries } from './populate-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
+import { populateProfiles } from './populate-profiles';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { createSink, createStream } from './substreams.js/sink/src';
 import { getChecksumAddress } from './utils/get-checksum-address';
@@ -146,10 +147,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const entryResponse = ZodEntryStreamResponse.safeParse(jsonOutput);
           const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
           const profileRegisteredResponse = ZodProfilesRegisteredStreamResponse.safeParse(jsonOutput);
-
-          if (profileRegisteredResponse.success) {
-            console.log('--- FOUND PROFILE REGISTERED ---', profileRegisteredResponse.data.profilesRegistered);
-          }
 
           if (entryResponse.success) {
             console.log('Processing ', entryResponse.data.entries.length, ' entries');

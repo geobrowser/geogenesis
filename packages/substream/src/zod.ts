@@ -17,7 +17,9 @@ export const ZodProfileRegistered = z.object({
   requestor: z.string(),
   space: z.string(),
   id: z.string(),
-})
+});
+
+export type ProfileRegistered = z.infer<typeof ZodProfileRegistered>;
 
 export type Entry = z.infer<typeof ZodEntry>;
 
