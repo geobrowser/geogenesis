@@ -73,7 +73,7 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent, typeNames }
     ));
 
   return (
-    <div className="flex items-center justify-between text-text">
+    <div className="flex flex-wrap items-center justify-between gap-y-2 text-text">
       <div className="flex items-center gap-2">
         <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">Space</span>
         {additionalTypeChips}
@@ -83,7 +83,7 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent, typeNames }
         {isEditing && (
           <Link
             href={NavUtils.toEntity(spaceId, ID.createEntityId())}
-            className="stroke-grey-04 transition-colors duration-75 hover:stroke-text"
+            className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
           >
             <Create />
           </Link>
@@ -123,6 +123,7 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent, typeNames }
             </div>
           )}
         </HistoryPanel>
+
         <Menu
           open={open}
           onOpenChange={onOpenChange}
