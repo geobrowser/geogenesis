@@ -1,50 +1,39 @@
 'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
 import * as React from 'react';
 
+import { ReactQueryProvider } from './query-client';
 import { Services } from './services';
-import { ActionsStoreProvider } from './state/actions-store/actions-store-provider';
 import { ActiveProposalProvider } from './state/active-proposal-store';
 import { AragonSDKProvider } from './state/aragon-dao-store';
 import { DiffProvider } from './state/diff-store';
-import { LocalStoreProvider } from './state/local-store';
-import { SpaceStoreProvider } from './state/space-store';
+import { JotaiProvider } from './state/jotai-provider';
 import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
 
-const queryClient = new QueryClient();
-
 interface Props {
-  onConnectionChange: (type: 'connect' | 'disconnect', address: string) => Promise<void>;
   children: React.ReactNode;
 }
 
-export function Providers({ children, onConnectionChange }: Props) {
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
-
+export function Providers({ children }: Props) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <WalletProvider onConnectionChange={onConnectionChange}>
-        <Services.Provider>
-          <ActionsStoreProvider>
-            <SpaceStoreProvider>
-              <LocalStoreProvider>
-                <StatusBarContextProvider>
-                  <DiffProvider>
-                    <AragonSDKProvider>{mounted && children}</AragonSDKProvider>
-                    <ActiveProposalProvider>{children}</ActiveProposalProvider>
-                  </DiffProvider>
-                </StatusBarContextProvider>
-              </LocalStoreProvider>
-            </SpaceStoreProvider>
-          </ActionsStoreProvider>
-        </Services.Provider>
-      </WalletProvider>
+    <ReactQueryProvider>
+      <JotaiProvider>
+        <WalletProvider>
+          <Services.Provider>
+            <StatusBarContextProvider>
+              <DiffProvider>
+                <AragonSDKProvider>
+                  <ActiveProposalProvider>{children}</ActiveProposalProvider>
+                </AragonSDKProvider>
+              </DiffProvider>
+            </StatusBarContextProvider>
+          </Services.Provider>
+        </WalletProvider>
+      </JotaiProvider>
       <ReactQueryDevtools initialIsOpen={false} />
-    </QueryClientProvider>
+    </ReactQueryProvider>
   );
 }

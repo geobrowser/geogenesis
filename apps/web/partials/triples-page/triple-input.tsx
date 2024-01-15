@@ -5,7 +5,7 @@ import { useRect } from '@radix-ui/react-use-rect';
 import * as React from 'react';
 import { useRef } from 'react';
 
-import { useTriples } from '~/core/hooks/use-triples';
+import { useTriples } from '~/core/state/triple-store/triple-store';
 import type { FilterClause, FilterState } from '~/core/types';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';

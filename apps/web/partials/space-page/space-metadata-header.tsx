@@ -29,15 +29,16 @@ import { HistoryPanel } from '../history/history-panel';
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement;
+  typeNames: string[];
 }
 
-export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePageMetadataHeaderProps) {
+export function SpacePageMetadataHeader({ spaceId, membersComponent, typeNames }: SpacePageMetadataHeaderProps) {
   const isEditing = useUserIsEditing(spaceId);
   const [open, onOpenChange] = React.useState(false);
 
   const pathname = usePathname();
 
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
 
   const {
     data: proposals,
@@ -46,14 +47,13 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: async ({ pageParam = 0 }) =>
-      subgraph.fetchProposals({ spaceId, endpoint: config.subgraph, page: pageParam }),
+    queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
   const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
-  const isOnePage = proposals?.pages && proposals.pages[0].length < 10;
+  const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
 
   const isLastPage =
     proposals?.pages &&
@@ -64,17 +64,26 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
 
   const showMore = !isOnePage && !isLastPage;
 
+  const additionalTypeChips = typeNames
+    .filter(t => t !== 'Space')
+    .map((typeName, i) => (
+      <span key={i} className="flex h-6 items-center rounded-sm bg-divider px-1.5 text-breadcrumb text-grey-04">
+        {typeName}
+      </span>
+    ));
+
   return (
-    <div className="flex items-center justify-between text-text">
+    <div className="flex flex-wrap items-center justify-between gap-y-2 text-text">
       <div className="flex items-center gap-2">
         <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">Space</span>
+        {additionalTypeChips}
         {membersComponent}
       </div>
       <div className="inline-flex items-center gap-4">
         {isEditing && (
           <Link
             href={NavUtils.toEntity(spaceId, ID.createEntityId())}
-            className="stroke-grey-04 transition-colors duration-75 hover:stroke-text"
+            className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
           >
             <Create />
           </Link>
@@ -114,6 +123,7 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
             </div>
           )}
         </HistoryPanel>
+
         <Menu
           open={open}
           onOpenChange={onOpenChange}

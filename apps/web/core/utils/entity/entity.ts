@@ -110,13 +110,14 @@ export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
       // array to a mutable version, but casting is cheaper performance-wise as
       // entitiesFromTriples may be used in performance-heavy situations.
       const mutableTriples = triples as unknown as ITriple[];
+      const tripleForName = nameTriple(mutableTriples);
 
       return {
         id: entityId,
         name: name(mutableTriples),
         description: description(mutableTriples),
         nameTripleSpace: nameTriple(mutableTriples)?.space,
-        types: types(mutableTriples, triples[0]?.space),
+        types: types(mutableTriples, tripleForName?.space),
         triples: mutableTriples,
       };
     })

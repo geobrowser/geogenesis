@@ -5,7 +5,10 @@ import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
 import Link from 'next/link';
+import { getAddress } from 'viem';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
@@ -13,9 +16,9 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
 
 import { useOnboarding } from '~/core/hooks/use-onboarding';
-import { createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
+import { type AccountType, createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
-import { NavUtils, getGeoPersonIdFromOnchainId, getImagePath } from '~/core/utils/utils';
+import { getGeoPersonIdFromOnchainId, getImagePath, sleep } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -23,41 +26,90 @@ import { Close } from '~/design-system/icons/close';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
+import { RadioGroup } from '~/design-system/radio-group';
 import { Text } from '~/design-system/text';
 
-type Step = 'start' | 'onboarding' | 'completing' | 'completed';
-type PublishingStep = 'idle' | 'creating-spaces' | 'registering-profile' | 'creating-geo-profile-entity' | 'done';
+export const accountTypeAtom = atomWithStorage<AccountType | null>('onboardingAccountType', null);
+export const nameAtom = atomWithStorage<string>('onboardingName', '');
+export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
+export const spaceAddressAtom = atomWithStorage<string>('onboardingSpaceAddress', '');
+export const profileIdAtom = atomWithStorage<string>('onboardingProfileId', '');
+
+type Step =
+  | 'start'
+  | 'select-type'
+  | 'onboarding'
+  | 'creating-spaces'
+  | 'registering-profile'
+  | 'creating-geo-profile-entity'
+  | 'completed';
+
+export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
+
+const workflowSteps: Array<Step> = [
+  'creating-spaces',
+  'registering-profile',
+  'creating-geo-profile-entity',
+  'completed',
+];
 
 export const OnboardingDialog = () => {
-  const queryClient = useQueryClient();
-  const { publish } = Services.useServices();
+  const { isOnboardingVisible } = useOnboarding();
+
   const { address } = useAccount();
   const { data: wallet } = useWalletClient();
+  const { publish } = Services.useServices();
+  const queryClient = useQueryClient();
 
-  const [name, setName] = useState('');
-  const [avatar, setAvatar] = useState('');
+  const accountType = useAtomValue(accountTypeAtom);
+  const name = useAtomValue(nameAtom);
+  const avatar = useAtomValue(avatarAtom);
+  const [spaceAddress, setSpaceAddress] = useAtom(spaceAddressAtom);
+  const [profileId, setProfileId] = useAtom(profileIdAtom);
 
-  const [step, setStep] = useState<Step>('start');
-  const [workflowStep, setWorkflowStep] = useState<PublishingStep>('idle');
+  const [step, setStep] = useAtom(stepAtom);
 
-  const { isOnboardingVisible } = useOnboarding();
+  // Show retry immediately if workflow already started before initial render
+  const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
 
   if (!address) return null;
 
-  async function onRunOnboardingWorkflow() {
-    if (address && workflowStep === 'idle' && wallet) {
-      setStep('completing');
-      setWorkflowStep('creating-spaces');
+  async function createSpaces(accountType: AccountType) {
+    if (!address || !accountType) return;
 
+    try {
       const { spaceAddress } = await deploySpaceContract({
         account: address,
       });
 
-      setWorkflowStep('registering-profile');
+      if (!spaceAddress) {
+        throw new Error(`Creating space failed`);
+      }
 
-      // @TODO: The main way that onboarding might fail is if the user's transaction fails.
-      // We should handle retries from the UI here. Nate has a design for it.
+      // Make sure we're setting the checksum'd address
+      setSpaceAddress(getAddress(spaceAddress));
+      setStep('registering-profile');
+
+      setTimeout(() => {
+        registerProfile(spaceAddress, accountType);
+      }, 100);
+    } catch (error) {
+      setShowRetry(true);
+      console.error(error);
+    }
+  }
+
+  async function registerProfile(spaceAddress: `0x${string}`, accountType: AccountType) {
+    if (!address || !wallet || !accountType) return;
+
+    try {
       const profileId = await publish.registerGeoProfile(wallet, spaceAddress);
+
+      if (!profileId) {
+        throw new Error(`Registering profile failed`);
+      }
+
+      setProfileId(`${profileId}`);
 
       // Update the query cache with the new profile while we wait for the profiles subgraph to
       // index the new onchain profile.
@@ -67,20 +119,65 @@ export const OnboardingDialog = () => {
         account: address,
       });
 
-      setWorkflowStep('creating-geo-profile-entity');
+      setStep('creating-geo-profile-entity');
 
+      setTimeout(() => {
+        createGeoProfileEntity(spaceAddress, profileId, accountType);
+      }, 100);
+    } catch (error) {
+      setShowRetry(true);
+      console.error(error);
+    }
+  }
+
+  async function createGeoProfileEntity(spaceAddress: `0x${string}`, profileId: string, accountType: AccountType) {
+    if (!address || !accountType) return;
+
+    try {
       const { entityId: profileEntityId } = await createProfileEntity({
         account: address,
-        spaceAddress,
+        spaceAddress: spaceAddress as `0x${string}`,
         avatarUri: avatar || null,
         username: name || null,
-        profileId,
+        profileId: profileId,
+        accountType,
       });
+
+      if (!profileEntityId) {
+        throw new Error(`Creating Geo profile entity failed`);
+      }
 
       console.log('Profile and personal space created:', { profileEntityId, spaceAddress });
 
-      setWorkflowStep('done');
+      await sleep(3_000);
+
       setStep('completed');
+    } catch (error) {
+      setShowRetry(true);
+      console.error(error);
+    }
+  }
+
+  async function onRunOnboardingWorkflow() {
+    if (!address || !wallet || !accountType) return;
+
+    setShowRetry(false);
+
+    switch (step) {
+      case 'onboarding':
+        setStep('creating-spaces');
+        await sleep(100);
+        createSpaces(accountType);
+        break;
+      case 'creating-spaces':
+        createSpaces(accountType);
+        break;
+      case 'registering-profile':
+        registerProfile(spaceAddress as `0x${string}`, accountType);
+        break;
+      case 'creating-geo-profile-entity':
+        createGeoProfileEntity(spaceAddress as `0x${string}`, profileId, accountType);
+        break;
     }
   }
 
@@ -94,32 +191,12 @@ export const OnboardingDialog = () => {
             transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15 }}
             className="relative z-10 flex h-full w-full items-start justify-center"
           >
-            <ModalCard key="card">
-              {step === 'start' && (
-                <>
-                  <StepHeader step={step} />
-                  <StepStart onNext={() => setStep('onboarding')} />
-                </>
-              )}
-              {step === 'onboarding' && (
-                <>
-                  <StepHeader step={step} onPrev={() => setStep('start')} />
-                  <StepOnboarding
-                    onNext={onRunOnboardingWorkflow}
-                    address={address}
-                    name={name}
-                    setName={setName}
-                    avatar={avatar}
-                    setAvatar={setAvatar}
-                  />
-                </>
-              )}
-              {(step === 'completing' || step === 'completed') && (
-                <>
-                  <StepHeader step={step} />
-                  <StepComplete workflowStep={workflowStep} />
-                </>
-              )}
+            <ModalCard childKey="card">
+              <StepHeader />
+              {step === 'start' && <StepStart />}
+              {step === 'select-type' && <StepSelectType />}
+              {step === 'onboarding' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
+              {workflowSteps.includes(step) && <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />}
             </ModalCard>
           </motion.div>
         </AnimatePresence>
@@ -129,50 +206,68 @@ export const OnboardingDialog = () => {
 };
 
 type ModalCardProps = {
-  key: string;
+  childKey: string;
   children: React.ReactNode;
 };
 
-const ModalCard = ({ key, children }: ModalCardProps) => {
+const ModalCard = ({ childKey, children }: ModalCardProps) => {
   return (
     <motion.div
-      key={key}
+      key={childKey}
       initial={{ opacity: 0, bottom: -5 }}
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="pointer-events-auto relative z-10 mt-32 aspect-square h-full max-h-[440px] w-full max-w-[360px] overflow-hidden rounded-lg border border-grey-02 bg-white p-4 shadow-dropdown"
+      className="pointer-events-auto relative z-10 mt-32 h-full max-h-[440px] w-full max-w-[360px] overflow-hidden rounded-lg border border-grey-02 bg-white p-4 shadow-dropdown"
     >
       {children}
     </motion.div>
   );
 };
 
-type StepHeaderProps = {
-  step: Step;
-  onPrev?: () => void;
-};
-
-const StepHeader = ({ step, onPrev }: StepHeaderProps) => {
+const StepHeader = () => {
   const { hideOnboarding } = useOnboarding();
+
+  const [step, setStep] = useAtom(stepAtom);
+
+  const showBack = step === 'select-type' || step === 'onboarding';
+
+  const handleBack = () => {
+    switch (step) {
+      case 'select-type':
+        setStep('start');
+        break;
+      case 'onboarding':
+        setStep('select-type');
+        break;
+      default:
+        break;
+    }
+  };
 
   return (
     <div className="relative z-20 flex items-center justify-between pb-2">
-      <div className="rotate-180">{onPrev && <SquareButton icon={<RightArrowLongSmall />} onClick={onPrev} />}</div>
-      {step !== 'completing' && <SquareButton icon={<Close />} onClick={hideOnboarding} />}
+      <div className="rotate-180">
+        {showBack && (
+          <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="!border-none !bg-transparent" />
+        )}
+      </div>
+      {!workflowSteps.includes(step) && (
+        <SquareButton icon={<Close />} onClick={hideOnboarding} className="!border-none !bg-transparent" />
+      )}
     </div>
   );
 };
 
 type StepContentsProps = {
-  key: string;
+  childKey: string;
   children: React.ReactNode;
 };
 
-const StepContents = ({ key, children }: StepContentsProps) => {
+const StepContents = ({ childKey, children }: StepContentsProps) => {
   return (
     <motion.div
-      key={key}
+      key={childKey}
       initial={{ opacity: 0, right: -20 }}
       animate={{ opacity: 1, left: 0, right: 0 }}
       exit={{ opacity: 0, left: -20 }}
@@ -184,29 +279,76 @@ const StepContents = ({ key, children }: StepContentsProps) => {
   );
 };
 
-type StepStartProps = {
-  onNext: () => void;
-};
+function StepStart() {
+  const setStep = useSetAtom(stepAtom);
 
-function StepStart({ onNext }: StepStartProps) {
   return (
     <>
-      <StepContents key="start">
+      <StepContents childKey="start">
         <div className="w-full">
           <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
-            Create your personal space and activity feed
+            Create your Geo account
           </Text>
-          <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
-            Use your personal space to update your profile and monitor your account activity on GEO.
+          <Text as="p" variant="body" className="mx-auto mt-2 px-8 text-center !text-base">
+            We’ll get you set up with a profile, <br className="xl:hidden" />
+            personal space and activity feed.
           </Text>
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="aspect-video rounded-lg bg-grey-02 shadow-lg">
-          <img src="/create.png" alt="" className="h-full w-full" />
+        <div className="aspect-video">
+          <div className="-m-[16px]">
+            <img src="/images/onboarding/0.png" alt="" className="inline-block h-full w-full" />
+          </div>
         </div>
-        <Button onClick={onNext} className="w-full">
+        <p className="text-center text-footnoteMedium">
+          Creating an account requires a small amount of{' '}
+          <a
+            href="https://www.coinbase.com/how-to-buy/polygon"
+            target="_blank"
+            rel="noopenner noreferrer"
+            className="text-ctaPrimary"
+          >
+            Polygon MATIC
+          </a>
+        </p>
+        <Button onClick={() => setStep('select-type')} className="w-full">
           Start
+        </Button>
+      </div>
+    </>
+  );
+}
+
+function StepSelectType() {
+  const [accountType, setAccountType] = useAtom(accountTypeAtom);
+  const setStep = useSetAtom(stepAtom);
+
+  const options = [
+    { image: '/images/onboarding/person.png', label: 'Person', value: 'person' },
+    { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
+    { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
+  ];
+
+  return (
+    <>
+      <StepContents childKey="account-type">
+        <div className="w-full">
+          <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
+            Select the account type
+          </Text>
+        </div>
+        <div className="mt-8">
+          <RadioGroup
+            value={accountType ?? ''}
+            onValueChange={setAccountType as (value: string) => void}
+            options={options}
+          />
+        </div>
+      </StepContents>
+      <div className="absolute inset-x-4 bottom-4 space-y-4">
+        <Button onClick={() => setStep('onboarding')} disabled={accountType === null} className="w-full">
+          Continue
         </Button>
       </div>
     </>
@@ -216,14 +358,21 @@ function StepStart({ onNext }: StepStartProps) {
 type StepOnboardingProps = {
   onNext: () => void;
   address: string;
-  name: string;
-  setName: (name: string) => void;
-  avatar: string;
-  setAvatar: (hash: string) => void;
 };
 
-function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: StepOnboardingProps) {
+const placeholderMessage: Record<AccountType, string> = {
+  person: 'Your name',
+  company: 'Company name',
+  nonprofit: 'Nonprofit name',
+};
+
+function StepOnboarding({ onNext, address }: StepOnboardingProps) {
+  const accountType = useAtomValue(accountTypeAtom);
+  const [name, setName] = useAtom(nameAtom);
+  const [avatar, setAvatar] = useAtom(avatarAtom);
+
   const validName = name.length > 0;
+
   const { storageClient } = Services.useServices();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -245,11 +394,11 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
 
   return (
     <>
-      <StepContents key="onboarding">
+      <StepContents childKey="onboarding">
         <div className="flex w-full justify-center">
           <div className="inline-block pb-4">
             <input
-              placeholder="Name..."
+              placeholder={placeholderMessage[accountType as AccountType]}
               className="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
               value={name}
               onChange={({ currentTarget: { value } }) => setName(value)}
@@ -302,7 +451,7 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 flex">
         <Button variant="secondary" disabled={!validName} onClick={onNext} className="w-full">
-          Continue
+          Create Account
         </Button>
       </div>
     </>
@@ -310,43 +459,82 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar }: S
 }
 
 type StepCompleteProps = {
-  workflowStep: PublishingStep;
+  onRetry: () => void;
+  showRetry: boolean;
 };
 
-const stageAsNumber = {
-  idle: 0,
+const stepNumber: Record<Step, number> = {
+  start: 0,
+  'select-type': 0,
+  onboarding: 0,
   'creating-spaces': 1,
   'registering-profile': 2,
   'creating-geo-profile-entity': 3,
-  done: 4,
+  completed: 4,
 };
 
-function StepComplete({ workflowStep: stage }: StepCompleteProps) {
+const retryMessage: Record<Step, string> = {
+  start: '',
+  'select-type': '',
+  onboarding: '',
+  'creating-spaces': 'Space creation failed',
+  'registering-profile': 'Profile registration failed',
+  'creating-geo-profile-entity': 'Geo profile creation failed',
+  completed: '',
+};
+
+const completeMessage: Record<AccountType, string> = {
+  person: 'Go to my personal space',
+  company: 'Go to my company space',
+  nonprofit: 'Go to my nonprofit space',
+};
+
+function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
   const { hideOnboarding } = useOnboarding();
+
+  const accountType = useAtomValue(accountTypeAtom);
+  const spaceAddress = useAtomValue(spaceAddressAtom);
+  const step = useAtomValue(stepAtom);
 
   return (
     <>
-      <StepContents key="start">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
-            {stage === 'creating-spaces' ? `Welcome to GEO!` : `Creating profile and feed`}
+      <StepContents childKey="start">
+        <div className="w-full pt-6">
+          <Text
+            as="h3"
+            variant="bodySemibold"
+            className={cx('mx-auto text-center !text-2xl', step === 'completed' && '-mt-[24px]')}
+          >
+            {step === 'completed' ? `Welcome to Geo!` : `Creating Geo account`}
           </Text>
-          <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
-            {complete[stageAsNumber[stage]]}
+          <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center !text-base">
+            {complete[stepNumber[step]].label}
           </Text>
-          <div className="mx-auto mt-2 w-1/3">
-            <Progress stage={stageAsNumber[stage]} />
-          </div>
+          {step !== 'completed' && (
+            <div className="mx-auto mt-2 w-1/3">
+              <Progress stage={stepNumber[step]} />
+            </div>
+          )}
+          {step !== 'completed' && showRetry && (
+            <p className=" mt-4 text-center text-smallButton">
+              {retryMessage[step]}{' '}
+              <button onClick={onRetry} className="text-ctaPrimary">
+                Retry
+              </button>
+            </p>
+          )}
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="aspect-video rounded-lg bg-grey-02 shadow-lg">
-          <img src="/creating.png" alt="" className="h-full w-full" />
+        <div className="aspect-video">
+          <div className="-m-[16px]">
+            <img src={complete[stepNumber[step]].image} alt="" className="inline-block h-full w-full" />
+          </div>
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Link href={NavUtils.toHome()} className="w-full" onClick={hideOnboarding}>
-            <Button className="w-full" disabled={stage !== 'done'}>
-              View Personal Home
+          <Link href={`/space/${spaceAddress}`} className="w-full" onClick={hideOnboarding}>
+            <Button className="w-full" disabled={step !== 'completed'}>
+              {completeMessage[accountType as AccountType]}
             </Button>
           </Link>
         </div>
@@ -355,26 +543,27 @@ function StepComplete({ workflowStep: stage }: StepCompleteProps) {
   );
 }
 
-const complete: Record<number, string> = {
-  1: `Step 1. Creating your personal space.`,
-  2: `Step 2. Sign the transaction to create your profile.`,
-  3: `Step 3. Finishing setting up your space...`,
-  4: `Start browsing content, voting on what matters, joining spaces and contributing to GEO as an editor.`,
+const complete: Record<number, { label: string; image: string }> = {
+  1: { label: `Setting up your profile and personal space`, image: `/images/onboarding/1.png` },
+  2: { label: `Sign the transaction from your wallet`, image: `/images/onboarding/2.png` },
+  3: { label: `Finalizing account creation`, image: `/images/onboarding/1.png` },
+  4: {
+    label: `Browse content, vote on what matters, join spaces and contribute to spaces that interest you as an editor`,
+    image: `/images/onboarding/3.png`,
+  },
 };
 
 type ProgressProps = {
   stage: number;
 };
 
-const Progress = ({ stage }: ProgressProps) => {
-  return (
-    <div className="flex gap-1">
-      <Indicator index={1} stage={stage} />
-      <Indicator index={2} stage={stage} />
-      <Indicator index={3} stage={stage} />
-    </div>
-  );
-};
+const Progress = ({ stage }: ProgressProps) => (
+  <div className="flex gap-1">
+    <Indicator index={1} stage={stage} />
+    <Indicator index={2} stage={stage} />
+    <Indicator index={3} stage={stage} />
+  </div>
+);
 
 type IndicatorProps = {
   index: number;
@@ -394,22 +583,14 @@ const Indicator = ({ index, stage }: IndicatorProps) => {
           delay: index >= stage ? 1 : 0,
         }}
         animate={{ width }}
-        className={cx('absolute bottom-0 left-0 top-0 bg-black', index === stage && 'animate-pulse')}
+        className={cx('absolute bottom-0 left-0 top-0 bg-black', index === stage && 'animate-pulse-strong')}
       />
     </div>
   );
 };
 
 const getWidth = (index: number, stage: number) => {
-  if (index > stage) {
-    return '0%';
-  }
-
-  if (index === stage) {
-    return '50%';
-  }
-
-  if (index < stage) {
-    return '100%';
-  }
+  if (index > stage) return '0%';
+  if (index === stage) return '50%';
+  if (index < stage) return '100%';
 };

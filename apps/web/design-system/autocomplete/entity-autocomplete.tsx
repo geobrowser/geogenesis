@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { batch } from '@legendapp/state';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
@@ -11,6 +10,7 @@ import { useState } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
@@ -54,9 +54,10 @@ interface Props {
   onDone: (result: { id: string; name: string | null }) => void;
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
+  attributeId?: string;
 }
 
-export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes, spaceId }: Props) {
+export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes, spaceId, attributeId }: Props) {
   const [, setToast] = useToast();
   const { create } = useActionsStore();
   const autocomplete = useAutocomplete({
@@ -68,6 +69,9 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
+
+  const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
+  const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
 
   React.useEffect(() => {
     const handleQueryChange = (e: MouseEvent) => {
@@ -84,41 +88,58 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
     const newEntityId = ID.createEntityId();
 
     // Create new entity with name and types
-    batch(() => {
-      create(
-        Triple.withId({
-          entityId: newEntityId,
-          attributeId: SYSTEM_IDS.NAME,
-          entityName: autocomplete.query,
-          attributeName: 'Name',
-          space: spaceId,
-          value: {
-            type: 'string',
-            id: ID.createValueId(),
-            value: autocomplete.query,
-          },
-        })
-      );
+    create(
+      Triple.withId({
+        entityId: newEntityId,
+        attributeId: SYSTEM_IDS.NAME,
+        entityName: autocomplete.query,
+        attributeName: 'Name',
+        space: spaceId,
+        value: {
+          type: 'string',
+          id: ID.createValueId(),
+          value: autocomplete.query,
+        },
+      })
+    );
 
-      if (allowedTypes) {
-        allowedTypes.forEach(type => {
-          create(
-            Triple.withId({
-              entityId: newEntityId,
-              attributeId: SYSTEM_IDS.TYPES,
-              entityName: autocomplete.query,
-              attributeName: 'Types',
-              space: spaceId,
-              value: {
-                type: 'entity',
-                id: type.typeId,
-                name: type.typeName,
-              },
-            })
-          );
-        });
-      }
-    });
+    if (allowedTypes) {
+      allowedTypes.forEach(type => {
+        create(
+          Triple.withId({
+            entityId: newEntityId,
+            attributeId: SYSTEM_IDS.TYPES,
+            entityName: autocomplete.query,
+            attributeName: 'Types',
+            space: spaceId,
+            value: {
+              type: 'entity',
+              id: type.typeId,
+              name: type.typeName,
+            },
+          })
+        );
+      });
+    }
+
+    if (relationValueTypesForAttribute) {
+      relationValueTypesForAttribute.forEach(type => {
+        create(
+          Triple.withId({
+            entityId: newEntityId,
+            attributeId: SYSTEM_IDS.TYPES,
+            entityName: autocomplete.query,
+            attributeName: 'Types',
+            space: spaceId,
+            value: {
+              type: 'entity',
+              id: type.typeId,
+              name: type.typeName,
+            },
+          })
+        );
+      });
+    }
 
     onDone({ id: newEntityId, name: autocomplete.query });
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);

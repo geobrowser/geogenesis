@@ -1,22 +1,14 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { Space } from '../types';
-import { ISubgraph } from './subgraph';
+import { Entity, Space, Triple } from '../types';
+import { ISubgraph, fetchEntities, fetchEntity, fetchTriples } from './subgraph';
 
-export const fetchSpaceTypeTriples = async (
-  fetchTriples: ISubgraph['fetchTriples'],
-  spaceId: string,
-  endpoint: string,
-  pageSize = 1000
-) => {
-  /* Fetch all entities with a type of type (e.g. Person / Place / Claim) */
-
+export async function fetchSpaceTypeTriples(spaceId: string): Promise<Triple[]> {
   const triples = await fetchTriples({
-    endpoint,
     query: '',
     space: spaceId,
     skip: 0,
-    first: pageSize,
+    first: 1000,
     filter: [
       { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
       {
@@ -27,26 +19,16 @@ export const fetchSpaceTypeTriples = async (
   });
 
   return triples;
-};
+}
 
-export const fetchForeignTypeTriples = async (
-  fetchTriples: ISubgraph['fetchTriples'],
-  space: Space,
-  endpoint: string,
-  pageSize = 1000
-) => {
-  if (!space.spaceConfigEntityId) {
-    return [];
-  }
-
+export async function fetchForeignTypeTriples(space: Space): Promise<Triple[]> {
   const foreignTypesFromSpaceConfig = await fetchTriples({
-    endpoint,
     query: '',
     space: space.id,
     skip: 0,
-    first: pageSize,
+    first: 1000,
     filter: [
-      { field: 'entity-id', value: space.spaceConfigEntityId },
+      { field: 'entity-id', value: space.spaceConfig?.id ?? '' },
       { field: 'attribute-id', value: SYSTEM_IDS.FOREIGN_TYPES },
     ],
   });
@@ -56,10 +38,9 @@ export const fetchForeignTypeTriples = async (
   const foreignTypes = await Promise.all(
     foreignTypesIds.map(entityId =>
       fetchTriples({
-        endpoint,
         query: '',
         skip: 0,
-        first: pageSize,
+        first: 1000,
         filter: [
           { field: 'entity-id', value: entityId },
           { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
@@ -70,4 +51,4 @@ export const fetchForeignTypeTriples = async (
   );
 
   return foreignTypes.flatMap(triples => triples);
-};
+}

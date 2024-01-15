@@ -21,8 +21,8 @@ export function NavbarLinkMenu() {
   const { spaces } = useSpaces();
   const urlComponents = useSelectedLayoutSegments();
 
-  const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.attributes.name]));
-  const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE]]));
+  const spaceNames = Object.fromEntries(spaces.map(space => [space.id, space.spaceConfig?.name ?? undefined]));
+  const spaceImages = Object.fromEntries(spaces.map(space => [space.id, space.spaceConfig?.image ?? undefined]));
 
   const onClick = (path: string) => {
     onOpenChange(false);

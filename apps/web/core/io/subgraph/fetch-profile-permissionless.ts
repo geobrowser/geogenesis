@@ -1,4 +1,3 @@
-import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -11,8 +10,6 @@ export interface FetchProfilePermissionlessOptions {
 }
 
 export async function fetchProfilePermissionless(options: FetchProfilePermissionlessOptions): Promise<Profile | null> {
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
   const onchainProfile = await fetchOnchainProfile({
     address: options.address,
   });
@@ -22,7 +19,6 @@ export async function fetchProfilePermissionless(options: FetchProfilePermission
   }
 
   const profile = await fetchEntity({
-    endpoint: config.permissionlessSubgraph,
     id: onchainProfile.id,
   });
 

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAccount } from 'wagmi';
 
-import { API } from '../io';
+import { Services } from '../services';
 import { useHydrated } from './use-hydrated';
 
 export function useAccessControl(spaceId?: string | null) {
@@ -12,13 +12,14 @@ export function useAccessControl(spaceId?: string | null) {
   // before setting state. Otherwise there will be client-server hydration mismatches.
   const hydrated = useHydrated();
   const { address } = useAccount();
+  const { subgraph } = Services.useServices();
 
-  const { data } = useQuery({
+  const { data: space } = useQuery({
     queryKey: ['access-control', spaceId, address],
     queryFn: async () => {
       if (!spaceId || !address) return null;
 
-      return await API.space(spaceId);
+      return await subgraph.fetchSpace({ id: spaceId });
     },
   });
 
@@ -30,7 +31,7 @@ export function useAccessControl(spaceId?: string | null) {
     };
   }
 
-  if (!address || !hydrated || !data || !data.space) {
+  if (!address || !hydrated || !space) {
     return {
       isAdmin: false,
       isEditorController: false,
@@ -39,8 +40,8 @@ export function useAccessControl(spaceId?: string | null) {
   }
 
   return {
-    isAdmin: data.space.admins.includes(address),
-    isEditorController: data.space.editorControllers.includes(address),
-    isEditor: data.space.editors.includes(address),
+    isAdmin: space.admins.map(s => s.toLowerCase()).includes(address.toLowerCase()),
+    isEditorController: space.editorControllers.map(s => s.toLowerCase()).includes(address.toLowerCase()),
+    isEditor: space.editors.map(s => s.toLowerCase()).includes(address.toLowerCase()),
   };
 }

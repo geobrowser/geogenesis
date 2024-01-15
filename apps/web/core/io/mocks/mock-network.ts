@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { observable } from '@legendapp/state';
 
 import { Space, Triple, TripleWithDateValue, TripleWithStringValue, TripleWithUrlValue, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -143,17 +142,12 @@ export const makeStubSpace = (spaceId: string): Space => {
     editors: [],
     editorControllers: [],
     admins: [],
-    attributes: {},
-    entityId: spaceId,
-    spaceConfigEntityId: null,
+    spaceConfig: null,
     createdAtBlock: '36472399',
   };
 };
 
 export class MockNetwork implements ISubgraph {
-  pageNumber$ = observable(0);
-  query$ = observable('');
-  spaces$ = observable([]);
   triples: Triple[] = [];
 
   constructor({ triples = [] }: { triples: Triple[] } = { triples: [] }) {

@@ -3,21 +3,19 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { Services } from '~/core/services';
-import { useActionsStoreInstance } from '~/core/state/actions-store/actions-store-provider';
-import { useSpaceStoreInstance } from '~/core/state/space-store';
-import { Column, Row, Triple } from '~/core/types';
+import { useSpaces } from '~/core/hooks/use-spaces';
+import { Column, GeoType, OmitStrict, Row, Space } from '~/core/types';
 
-import { useLocalStoreInstance } from '../local-store';
-import { EntityTableStore } from './entity-table-store';
 import { InitialEntityTableStoreParams } from './entity-table-store-params';
 
-const EntityTableStoreContext = createContext<EntityTableStore | undefined>(undefined);
+const EntityTableStoreContext = createContext<(OmitStrict<Props, 'children'> & { space: Space | null }) | undefined>(
+  undefined
+);
 
 interface Props {
   spaceId: string;
   children: React.ReactNode;
-  initialSelectedType: Triple | null;
+  initialSelectedType: GeoType | null;
   initialParams: InitialEntityTableStoreParams;
   initialColumns: Column[];
   initialRows: Row[];
@@ -31,38 +29,21 @@ export function EntityTableStoreProvider({
   initialColumns,
   initialRows,
 }: Props) {
-  const { subgraph, config } = Services.useServices();
-  const SpaceStore = useSpaceStoreInstance();
-  const ActionsStore = useActionsStoreInstance();
-  const LocalStore = useLocalStoreInstance();
+  const { spaces } = useSpaces();
+  const space = spaces.find(space => space.id === spaceId) ?? null;
 
-  const store = useMemo(() => {
-    return new EntityTableStore({
+  const value = useMemo(() => {
+    return {
       spaceId,
-      initialParams,
       initialSelectedType,
-      ActionsStore,
-      SpaceStore,
-      LocalStore,
+      initialParams,
       initialColumns,
       initialRows,
-      subgraph,
-      config,
-    });
-  }, [
-    spaceId,
-    initialSelectedType,
-    ActionsStore,
-    SpaceStore,
-    LocalStore,
-    initialParams,
-    initialColumns,
-    initialRows,
-    subgraph,
-    config,
-  ]);
+      space,
+    };
+  }, [spaceId, initialSelectedType, initialParams, initialColumns, initialRows, space]);
 
-  return <EntityTableStoreContext.Provider value={store}>{children}</EntityTableStoreContext.Provider>;
+  return <EntityTableStoreContext.Provider value={value}>{children}</EntityTableStoreContext.Provider>;
 }
 
 export function useEntityTableStoreInstance() {

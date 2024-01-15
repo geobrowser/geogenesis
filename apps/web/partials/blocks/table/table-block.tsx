@@ -16,7 +16,8 @@ import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
-import { IconButton, SmallButton } from '~/design-system/button';
+import { IconButton } from '~/design-system/button';
+import { Create } from '~/design-system/icons/create';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
 import { Search } from '~/design-system/icons/search';
@@ -36,7 +37,8 @@ interface Props {
   spaceId: string;
 }
 
-export function TableBlock({ spaceId }: Props) {
+// eslint-disable-next-line react/display-name
+export const TableBlock = React.memo(({ spaceId }: Props) => {
   const { setFilterState } = useTableBlock();
 
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
@@ -86,7 +88,8 @@ export function TableBlock({ spaceId }: Props) {
       return {
         ...f,
         columnName: 'Space',
-        value: spaces.find(s => s.id === f.value)?.attributes[SYSTEM_IDS.NAME] ?? f.value,
+        // @TODO: Substreams don't have the correct checksum for space address. This is being fixed.
+        value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
       };
     }
 
@@ -97,8 +100,8 @@ export function TableBlock({ spaceId }: Props) {
   });
 
   const typeId = type.entityId;
-  const filterId = filterState?.[0]?.columnId ?? null;
-  const filterValue = filterState?.[0]?.value ?? null;
+  const filters: Array<[string, string]> =
+    filterState && filterState.length > 0 ? filterState.map(filter => [filter.columnId, filter.value]) : [];
 
   return (
     <div>
@@ -126,7 +129,6 @@ export function TableBlock({ spaceId }: Props) {
           >
             <Search color="grey-02" />
           </span>
-
           <AnimatePresence initial={false} mode="wait">
             {filterState.length > 0 ? (
               <motion.div
@@ -156,19 +158,13 @@ export function TableBlock({ spaceId }: Props) {
               </motion.div>
             )}
           </AnimatePresence>
-
           <TableBlockContextMenu />
 
-          <span>
-            {isEditing && (
-              <>
-                <Spacer width={12} />
-                <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filterId, filterValue)}>
-                  <SmallButton className="whitespace-nowrap">New entity</SmallButton>
-                </Link>
-              </>
-            )}
-          </span>
+          {isEditing && (
+            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters)}>
+              <Create />
+            </Link>
+          )}
         </div>
       </div>
 
@@ -256,7 +252,7 @@ export function TableBlock({ spaceId }: Props) {
       </motion.div>
     </div>
   );
-}
+});
 
 const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
 

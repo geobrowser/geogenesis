@@ -89,13 +89,15 @@ describe('TableBlock SDK', () => {
         {
           columnId: SYSTEM_IDS.SPACE,
           valueType: 'string',
-          value: 'id 1',
+          value: '0x0000000000000000000000000000000000000000',
         },
       ],
       'type-id'
     );
 
-    expect(spaceFilter).toEqual(`{typeIds_contains_nocase: ["type-id"], entityOf_: {space: "id 1"}}`);
+    expect(spaceFilter).toEqual(
+      `{typeIds_contains_nocase: ["type-id"], entityOf_: {space: "0x0000000000000000000000000000000000000000"}}`
+    );
 
     const nullTypeIdFilter = createGraphQLStringFromFilters([], null);
 
@@ -206,7 +208,7 @@ describe('TableBlock SDK', () => {
     ]);
 
     const spaceFilter = await createFiltersFromGraphQLString(
-      `{typeIds_contains_nocase: ["type-id"], entityOf_: {space: "id 1"}}`,
+      `{typeIds_contains_nocase: ["type-id"], entityOf_: {space: "0x0000000000000000000000000000000000000000"}}`,
       async () => {
         return {
           id: 'id 1',
@@ -221,7 +223,7 @@ describe('TableBlock SDK', () => {
     expect(spaceFilter).toEqual([
       {
         columnId: SYSTEM_IDS.SPACE,
-        value: 'id 1',
+        value: '0x0000000000000000000000000000000000000000',
         valueType: 'string',
         valueName: null,
       },

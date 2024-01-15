@@ -10,11 +10,13 @@ interface Props {
   triples: Triple[];
   id: string;
   spaceId: string;
-
   typeId?: string | null;
-  filterId?: string | null;
-  filterValue?: string | null;
+  filters?: Array<Filter> | null;
 }
+
+type Filter = [FilterId, FilterValue];
+type FilterId = string;
+type FilterValue = string;
 
 export function ToggleEntityPage(props: Props) {
   const renderEditablePage = useUserIsEditing(props.spaceId);

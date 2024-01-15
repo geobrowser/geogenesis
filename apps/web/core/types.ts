@@ -57,15 +57,17 @@ export type Triple = {
   placeholder?: boolean;
 };
 
+export type SpaceConfigEntity = Entity & {
+  image: string | null;
+};
+
 export type Space = {
   id: string;
   isRootSpace: boolean;
   editors: string[];
   editorControllers: string[];
   admins: string[];
-  attributes: Dictionary<string, string>;
-  entityId: string;
-  spaceConfigEntityId: string | null;
+  spaceConfig: SpaceConfigEntity | null;
   createdAtBlock: string;
 };
 
@@ -106,7 +108,8 @@ export type EditTripleAction = {
   type: 'editTriple';
   before: DeleteTripleAction;
   after: CreateTripleAction;
-} & Publishable;
+} & Publishable &
+  Identifiable;
 
 // We associate an ID with actions locally so we can diff and merge them as they change locally.
 type Identifiable = {
@@ -168,6 +171,22 @@ export type Proposal = {
   space: string;
 };
 
+export type Version = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  createdBy: Profile;
+  createdAt: number;
+  createdAtBlock: string;
+  spaceId: string;
+  actions: Action[];
+  triples: Triple[];
+  entity: {
+    id: string;
+    name: string;
+  };
+};
+
 export type ProposedVersion = {
   id: string;
   name: string | null;
@@ -175,6 +194,7 @@ export type ProposedVersion = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
+  spaceId: string;
   actions: Action[];
   entity: {
     id: string;
@@ -212,3 +232,12 @@ export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & { value: Entit
 export type TripleWithImageValue = OmitStrict<Triple, 'value'> & { value: ImageValue };
 export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: DateValue };
 export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: UrlValue };
+
+export type SpaceId = string;
+export type SpaceActions = Record<SpaceId, Action[]>;
+
+export type EntityId = string;
+export type AttributeId = string;
+export type EntityActions = Record<EntityId, Record<AttributeId, Triple>>;
+
+export type SpaceType = 'default' | 'company' | 'nonprofit';

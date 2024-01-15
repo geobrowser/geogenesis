@@ -2,17 +2,21 @@
 
 import * as React from 'react';
 
-import { setSecondarySubgraphAsMain } from '~/core/services/services';
+import { useSecondarySubgraph } from '~/core/services/services';
+import { isPermissionlessSpace } from '~/core/utils/utils';
 
 interface Props {
   children: React.ReactNode;
-  usePermissionlessSubgraph: boolean;
+  spaceId: string;
 }
 
-export function SpaceConfigProvider({ children, usePermissionlessSubgraph }: Props) {
+export function SpaceConfigProvider({ children, spaceId }: Props) {
+  const setSecondarySubgraphAsMain = useSecondarySubgraph();
+
   React.useEffect(() => {
-    setSecondarySubgraphAsMain(usePermissionlessSubgraph);
-  }, [usePermissionlessSubgraph]);
+    const isPermissionless = isPermissionlessSpace(spaceId);
+    setSecondarySubgraphAsMain(isPermissionless);
+  }, [spaceId, setSecondarySubgraphAsMain]);
 
   return <>{children}</>;
 }

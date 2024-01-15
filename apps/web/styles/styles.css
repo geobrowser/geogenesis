@@ -67,6 +67,30 @@ textarea::placeholder {
 
 @tailwind components;
 
+/* Gradients */
+@layer utilities {
+  .bg-gradient-grey {
+    background: linear-gradient(64deg, #f0f3ff 0%, #f0f3ff 100%);
+  }
+  .bg-gradient-blue {
+    background: linear-gradient(64deg, rgba(57, 99, 254, 0.3) 0%, rgba(70, 245, 245, 0.3) 100%);
+  }
+  .bg-gradient-green {
+    background: linear-gradient(64deg, #9fffbf 0%, #ccfcff 100%);
+  }
+  .bg-gradient-orange {
+    background: linear-gradient(64deg, rgba(255, 161, 52, 0.3) -17.64%, rgba(255, 82, 58, 0.3) 100%);
+  }
+  .bg-gradient-purple {
+    background: linear-gradient(
+      64deg,
+      rgba(254, 83, 61, 0.3) 0%,
+      rgba(243, 32, 184, 0.3) 31.69%,
+      rgba(91, 36, 246, 0.3) 100%
+    );
+  }
+}
+
 @tailwind utilities;
 
 [data-rmiz-btn-unzoom] {
@@ -91,4 +115,14 @@ textarea::placeholder {
 
 .ProseMirror img {
   @apply h-auto max-w-full;
+}
+
+/* Hide scrollbar utility class */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

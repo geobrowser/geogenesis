@@ -3,67 +3,58 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { ROOT_SPACE_IMAGE } from '~/core/constants';
-import { Space } from '~/core/types';
+import { Environment } from '~/core/environment';
+import { Entity, Space, SpaceConfigEntity } from '~/core/types';
+import { Entity as EntityModule } from '~/core/utils/entity';
 
-import { fetchTriples } from './fetch-triples';
+import { fetchEntities } from './fetch-entities';
 import { graphql } from './graphql';
-import { NetworkSpace } from './network-local-mapping';
 
 const getFetchSpacesQuery = () => `query {
   spaces {
-    id
-    isRootSpace
-    admins {
+    nodes {
       id
-    }
-    editors {
-      id
-    }
-    editorControllers {
-      id
-    }
-    entity {
-      id
-      entityOf {
-        id
-        stringValue
-        attribute {
-          id
+      isRootSpace
+      spaceAdmins {
+        nodes {
+          accountId
         }
       }
+      spaceEditors {
+        nodes {
+          accountId
+        }
+      }
+      spaceEditorControllers {
+        nodes {
+          accountId
+        }
+      }
+      createdAtBlock
     }
-    createdAtBlock
   }
 }`;
 
-export interface FetchSpacesOptions {
-  endpoint: string;
-  signal?: AbortController['signal'];
-}
-
 interface NetworkResult {
-  spaces: NetworkSpace[];
+  spaces: {
+    nodes: {
+      id: string;
+      isRootSpace: boolean;
+      spaceAdmins: { nodes: { accountId: string }[] };
+      spaceEditors: { nodes: { accountId: string }[] };
+      spaceEditorControllers: { nodes: { accountId: string }[] };
+      createdAtBlock: string;
+    }[];
+  };
 }
 
-export async function fetchSpaces(options: FetchSpacesOptions) {
+export async function fetchSpaces() {
   const queryId = uuid();
-
-  const spaceConfigTriples = await fetchTriples({
-    endpoint: options.endpoint,
-    query: '',
-    first: 1000,
-    skip: 0,
-    filter: [
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-      { field: 'linked-to', value: SYSTEM_IDS.SPACE_CONFIGURATION },
-    ],
-  });
+  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: options.endpoint,
+    endpoint,
     query: getFetchSpacesQuery(),
-    signal: options?.signal,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -80,7 +71,7 @@ export async function fetchSpaces(options: FetchSpacesOptions) {
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${options.endpoint}
+            `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${endpoint}
             
             queryString: ${getFetchSpacesQuery()}
             `,
@@ -88,14 +79,18 @@ export async function fetchSpaces(options: FetchSpacesOptions) {
           );
 
           return {
-            spaces: [],
+            spaces: {
+              nodes: [],
+            },
           };
 
         default:
-          console.error(`${error._tag}: Unable to fetch spaces, queryId: ${queryId} endpoint: ${options.endpoint}`);
+          console.error(`${error._tag}: Unable to fetch spaces, queryId: ${queryId} endpoint: ${endpoint}`);
 
           return {
-            spaces: [],
+            spaces: {
+              nodes: [],
+            },
           };
       }
     }
@@ -105,28 +100,48 @@ export async function fetchSpaces(options: FetchSpacesOptions) {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const spaces = result.spaces.map((space): Space => {
-    const attributes = Object.fromEntries(
-      space.entity?.entityOf.map(entityOf => [entityOf.attribute.id, entityOf.stringValue]) || []
-    );
+  const spaceConfigs = await Promise.all(
+    result.spaces.nodes.map(async s => {
+      const configs = await fetchEntities({
+        query: '',
+        first: 1,
+        spaceId: s.id,
+        skip: 0,
+        typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
+        filter: [],
+      });
 
-    if (space.isRootSpace) {
-      attributes.name = 'Root';
-      attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] = ROOT_SPACE_IMAGE;
-    }
+      const spaceConfig: Entity | undefined = configs[0];
+
+      return {
+        spaceId: s.id,
+        config: spaceConfig,
+      };
+    })
+  );
+
+  const spaces = result.spaces.nodes.map((space): Space => {
+    const config = spaceConfigs.find(config => config.spaceId === space.id)?.config;
+
+    const spaceConfigWithImage: SpaceConfigEntity | null = config
+      ? {
+          ...config,
+          image: EntityModule.cover(config.triples) ?? EntityModule.avatar(config.triples) ?? null,
+        }
+      : null;
 
     return {
       id: space.id,
       isRootSpace: space.isRootSpace,
-      admins: space.admins.map(account => account.id),
-      editorControllers: space.editorControllers.map(account => account.id),
-      editors: space.editors.map(account => account.id),
-      entityId: space.entity?.id || '',
-      attributes,
-      spaceConfigEntityId: spaceConfigTriples.find(triple => triple.space === space.id)?.entityId || null,
+      admins: space.spaceAdmins.nodes.map(account => account.accountId),
+      editorControllers: space.spaceEditorControllers.nodes.map(account => account.accountId),
+      editors: space.spaceEditors.nodes.map(account => account.accountId),
+      spaceConfig: spaceConfigWithImage,
       createdAtBlock: space.createdAtBlock,
     };
   });
 
-  return spaces;
+  // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
+  // the query level when we index the space config entity as part of a Space.
+  return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
 }

@@ -5,12 +5,13 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { EntityStore } from '~/core/state/entity-page-store/entity-store';
 import { ImageValue, Triple as TripleType, TripleValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { groupBy } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
+
+import { useActionsStore } from '../hooks/use-actions-store';
 
 export type EditEvent =
   | {
@@ -156,6 +157,13 @@ export type EditEvent =
       };
     }
   | {
+      type: 'CREATE_ENTITY_TRIPLE';
+      payload: {
+        attributeId: string;
+        attributeName: string;
+      };
+    }
+  | {
       type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE';
       payload: {
         entityId: string;
@@ -172,9 +180,9 @@ export type EditEvent =
     };
 
 interface EditApi {
-  create: EntityStore['create'];
-  update: EntityStore['update'];
-  remove: EntityStore['remove'];
+  create: ReturnType<typeof useActionsStore>['create'];
+  update: ReturnType<typeof useActionsStore>['update'];
+  remove: ReturnType<typeof useActionsStore>['remove'];
 }
 
 interface ListenerConfig {
@@ -493,6 +501,25 @@ const listener =
           })
         );
       }
+      case 'CREATE_ENTITY_TRIPLE': {
+        const { attributeId, attributeName } = event.payload;
+
+        return create(
+          Triple.withId({
+            space: context.spaceId,
+            entityId: context.entityId,
+            entityName: context.entityName,
+            attributeId: attributeId,
+            attributeName: attributeName,
+            placeholder: false,
+            value: {
+              type: 'entity',
+              id: '',
+              name: '',
+            },
+          })
+        );
+      }
 
       case 'CREATE_ENTITY_TRIPLE_WITH_VALUE': {
         const { entityId, entityName, attributeId, attributeName } = event.payload;
@@ -520,7 +547,7 @@ const listener =
           entityId: ID.createEntityId(),
           entityName: '',
           attributeId: SYSTEM_IDS.TYPES,
-          attributeName: 'Type',
+          attributeName: 'Types',
           value: { id: SYSTEM_IDS.ATTRIBUTE, type: 'entity', name: 'Attribute' },
         });
 

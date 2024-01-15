@@ -1,11 +1,14 @@
+import { Effect, Either } from 'effect';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
 
-import { Cookie } from '~/core/cookie';
+import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
+import { fetchProposalCountByUser } from '~/core/io/fetch-proposal-count-by-user';
 import { fetchOnchainProfile, fetchProfile } from '~/core/io/subgraph';
 import { fetchInterimMembershipRequests } from '~/core/io/subgraph/fetch-interim-membership-requests';
-import { OnchainProfile, Profile, Space } from '~/core/types';
+import { graphql } from '~/core/io/subgraph/graphql';
+import { OnchainProfile, Profile } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -16,13 +19,19 @@ import { Component } from './component';
 export const dynamic = 'force-dynamic';
 
 export default async function PersonalHomePage() {
-  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
+  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const [spaces, person, profile] = await Promise.all([
+  const [spaces, person, profile, proposalsCount] = await Promise.all([
     getSpacesWhereAdmin(connectedAddress),
-    connectedAddress ? fetchProfile({ address: connectedAddress, endpoint: config.subgraph }) : null,
+    connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
     connectedAddress ? fetchOnchainProfile({ address: connectedAddress }) : null,
+    connectedAddress
+      ? fetchProposalCountByUser({
+          endpoint: config.subgraph,
+          userId: connectedAddress,
+        })
+      : null,
   ]);
 
   const membershipRequestsBySpace = await Promise.all(
@@ -30,6 +39,8 @@ export default async function PersonalHomePage() {
   );
 
   const membershipRequests = membershipRequestsBySpace.flat().sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
+
+  const acceptedProposalsCount = proposalsCount ?? 0;
 
   return (
     <Component
@@ -42,6 +53,7 @@ export default async function PersonalHomePage() {
       }
       activeProposals={[]}
       membershipRequests={membershipRequests}
+      acceptedProposalsCount={acceptedProposalsCount}
     />
   );
 }
@@ -77,34 +89,41 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
 const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
   if (!address) return [];
 
-  try {
-    const query = `{
-      spaces(where: {admins_: {id: "${address}"}}) {
-        id
+  const query = `{
+      spaces(
+        filter: {
+          or: [
+            { spaceAdmins: { some: { accountId: { equalToInsensitive: "${address}" } } } }
+            { spaceEditorControllers: { some: { accountId: { equalToInsensitive: "${address}" } } } }
+          ]
+        }
+      ) {
+        nodes {
+          id
+        }
       }
     }`;
 
-    const response = await fetch(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: query,
-      }),
-      cache: 'no-store',
-    });
+  const spacesEffect = graphql<{ spaces: { nodes: { id: string }[] } }>({
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    query,
+  });
 
-    const { data } = (await response.json()) as {
-      data: {
-        spaces: Space[];
-      };
-    };
+  const result = await Effect.runPromise(Effect.either(spacesEffect));
 
-    const spaces = data.spaces.map(space => space.id);
+  if (Either.isLeft(result)) {
+    const error = result.left;
 
-    return spaces;
-  } catch (error) {
-    return [];
+    switch (error._tag) {
+      case 'GraphqlRuntimeError':
+        console.error(`Encountered runtime graphql error in getSpacesWhereAdmin.`, error.message);
+        return [];
+
+      default:
+        console.error(`${error._tag}: Unable to fetch spaces where admin`);
+        return [];
+    }
   }
+
+  return result.right.spaces.nodes.map(space => space.id);
 };

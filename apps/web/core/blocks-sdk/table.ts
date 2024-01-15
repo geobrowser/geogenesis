@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { getAddress } from 'viem';
 
 import { ID } from '~/core/id';
 import { Entity as IEntity, Triple as ITriple, TripleValueType } from '~/core/types';
@@ -90,7 +91,15 @@ export function createGraphQLStringFromFilters(
       }
 
       if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'string') {
-        return `entityOf_: {space: "${filter.value}"}`;
+        // @HACK: We map to the checksum address when filtering by space. Old filters
+        // might be using the incorrectly formatted address so we need to check for that
+        // here. In the future we'll migrate to the new API's query string format which will
+        // update all existing filters to use the correct space address as well.
+        //
+        // Previous versions of the subgraph did not correctly checksum the space address
+        // so any queries that relied on the incorrect space address checksum will not work
+        // against newer versions of the protocol.
+        return `entityOf_: {space: "${getAddress(filter.value)}"}`;
       }
 
       if (filter.valueType === 'entity') {
@@ -206,7 +215,15 @@ export async function createFiltersFromGraphQLString(
     filters.push({
       columnId: SYSTEM_IDS.SPACE,
       valueType: 'string',
-      value: spaceValue,
+      // @HACK: We map to the checksum address when filtering by space. Old filters
+      // might be using the incorrectly formatted address so we need to check for that
+      // here. In the future we'll migrate to the new API's query string format which will
+      // update all existing filters to use the correct space address as well.
+      //
+      // Previous versions of the subgraph did not correctly checksum the space address
+      // so any queries that relied on the incorrect space address checksum will not work
+      // against newer versions of the protocol.
+      value: getAddress(spaceValue),
       valueName: null,
     });
   }

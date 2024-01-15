@@ -1,17 +1,7 @@
-import { ObservableComputed, computed } from '@legendapp/state';
-
-import { DEFAULT_OPENGRAPH_DESCRIPTION, DEFAULT_OPENGRAPH_IMAGE, IPFS_GATEWAY_PATH } from '~/core/constants';
+import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_PATH } from '~/core/constants';
 import { Entity as IEntity } from '~/core/types';
 
 import { Entity } from './entity';
-
-export function makeOptionalComputed<T>(initialValue: T, observable: ObservableComputed<T>): ObservableComputed<T> {
-  return computed(() => {
-    const data = observable.get() as T;
-    if (data === undefined) return initialValue;
-    return data;
-  });
-}
 
 export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
   return elements.flatMap((element, index) =>
@@ -27,12 +17,11 @@ export const NavUtils = {
     spaceId: string,
     newEntityId: string,
     typeId?: string | null,
-    filterId?: string | null,
-    filterValue?: string | null
+    filters?: Array<[string, string]> | null
   ) => {
-    if (typeId && filterId && filterValue) {
+    if (typeId && filters) {
       return decodeURIComponent(
-        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`
+        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filters=${encodeURI(JSON.stringify(filters))}`
       );
     }
 
@@ -40,7 +29,18 @@ export const NavUtils = {
       return decodeURIComponent(`/space/${spaceId}/${newEntityId}?typeId=${typeId}`);
     }
 
+    if (filters) {
+      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?filters=${encodeURI(JSON.stringify(filters))}`);
+    }
+
     return decodeURIComponent(`/space/${spaceId}/${newEntityId}`);
+  },
+  toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
+    if (spaceIdParam) {
+      return decodeURIComponent(`/space/${spaceId}/activity?spaceId=${spaceIdParam}`);
+    }
+
+    return decodeURIComponent(`/space/${spaceId}/activity`);
   },
   toProfileActivity: (spaceId: string, entityId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
@@ -156,7 +156,7 @@ export const getOpenGraphImageUrl = (value: string) => {
     return `https://www.geobrowser.io/preview/${value}.png`;
   }
 
-  return DEFAULT_OPENGRAPH_IMAGE;
+  return null;
 };
 
 export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
@@ -165,7 +165,7 @@ export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
   const serverCoverUrl = Entity.cover(entity?.triples);
   const imageUrl = serverAvatarUrl || serverCoverUrl || '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entity.description(entity?.triples ?? []) || DEFAULT_OPENGRAPH_DESCRIPTION;
+  const description = Entity.description(entity?.triples ?? []);
 
   return {
     entityName,
@@ -251,4 +251,11 @@ export function slog({
 
 export function getGeoPersonIdFromOnchainId(address: `0x${string}`, onchainId: string) {
   return `${address}–${onchainId}`;
+}
+
+export const sleep = (delay: number) => new Promise(resolve => setTimeout(resolve, delay));
+
+export function isPermissionlessSpace(spaceId: string) {
+  // @TODO: Ensure we are correctly capitalizing the space id in the substream
+  return !ALL_PUBLIC_SPACES.includes(spaceId);
 }

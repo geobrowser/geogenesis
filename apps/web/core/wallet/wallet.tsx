@@ -1,6 +1,7 @@
 'use client';
 
 import { ConnectKitButton, ConnectKitProvider, getDefaultConfig } from 'connectkit';
+import { useSetAtom } from 'jotai';
 import { createPublicClient, createWalletClient, http } from 'viem';
 
 import * as React from 'react';
@@ -12,6 +13,7 @@ import { InjectedConnector } from 'wagmi/connectors/injected';
 import { MetaMaskConnector } from 'wagmi/connectors/metaMask';
 import { MockConnector } from 'wagmi/connectors/mock';
 import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
+import { alchemyProvider } from 'wagmi/providers/alchemy';
 import { jsonRpcProvider } from 'wagmi/providers/jsonRpc';
 import { publicProvider } from 'wagmi/providers/public';
 
@@ -20,6 +22,16 @@ import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { Wallet } from '~/design-system/icons/wallet';
 import { Spacer } from '~/design-system/spacer';
 
+import {
+  accountTypeAtom,
+  avatarAtom,
+  nameAtom,
+  profileIdAtom,
+  spaceAddressAtom,
+  stepAtom,
+} from '~/partials/onboarding/dialog';
+
+import { Cookie } from '../cookie';
 import { Environment } from '../environment';
 
 const LOCAL_CHAIN: Chain = {
@@ -74,6 +86,7 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
         };
       },
     }),
+    alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY! }),
     // We need to use another provider if using a local chain
     ...(process.env.NEXT_PUBLIC_APP_ENV === 'development' ? [publicProvider()] : []),
   ]
@@ -167,27 +180,18 @@ const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
 
 const wagmiConfig = isTestEnv ? createMockWalletConfig() : createRealWalletConfig();
 
-export function WalletProvider({
-  children,
-  onConnectionChange,
-}: {
-  children: React.ReactNode;
-  onConnectionChange: (type: 'connect' | 'disconnect', address: string) => Promise<void>;
-}) {
-  const onConnect = React.useCallback(
-    ({ address }: { address?: string }) => {
-      if (!address) {
-        return;
-      }
+export function WalletProvider({ children }: { children: React.ReactNode }) {
+  const onConnect = React.useCallback(({ address }: { address?: string }) => {
+    if (!address) {
+      return;
+    }
 
-      onConnectionChange('connect', address);
-    },
-    [onConnectionChange]
-  );
+    Cookie.onConnectionChange('connect', address);
+  }, []);
 
   const onDisconnect = React.useCallback(() => {
-    onConnectionChange('disconnect', '');
-  }, [onConnectionChange]);
+    Cookie.onConnectionChange('disconnect', '');
+  }, []);
 
   return (
     // @ts-expect-error not sure why wagmi isn't happy. It works at runtime as expected.
@@ -206,6 +210,22 @@ export function GeoConnectButton() {
   const { disconnect } = useDisconnect();
   const { connect } = useConnect();
 
+  const setAccountType = useSetAtom(accountTypeAtom);
+  const setName = useSetAtom(nameAtom);
+  const setAvatar = useSetAtom(avatarAtom);
+  const setSpaceAddress = useSetAtom(spaceAddressAtom);
+  const setProfileId = useSetAtom(profileIdAtom);
+  const setStep = useSetAtom(stepAtom);
+
+  const resetOnboarding = () => {
+    setAccountType(null);
+    setName('');
+    setAvatar('');
+    setSpaceAddress('');
+    setProfileId('');
+    setStep('start');
+  };
+
   return (
     <ConnectKitButton.Custom>
       {({ show, isConnected }) => {
@@ -216,13 +236,15 @@ export function GeoConnectButton() {
                 isTestEnv
                   ? () => {
                       console.log('Test environment detected: using mock wallet');
-
                       connect({
                         connector: mockConnector,
                         chainId: polygon.id,
                       });
                     }
-                  : show
+                  : () => {
+                      resetOnboarding();
+                      show?.();
+                    }
               }
               variant="secondary"
             >
@@ -235,7 +257,10 @@ export function GeoConnectButton() {
         return (
           // We're using an anonymous function for disconnect to appease the TS gods.
           <button
-            onClick={() => disconnect()}
+            onClick={() => {
+              resetOnboarding();
+              disconnect();
+            }}
             className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0"
           >
             <DisconnectWallet />
