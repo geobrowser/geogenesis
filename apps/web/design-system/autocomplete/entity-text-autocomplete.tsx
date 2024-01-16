@@ -156,12 +156,12 @@ export function EntityTextAutocomplete({
             </ResultsList>
 
             {!isEmpty && !isLoading && (
-              <div className="pb-2">
+              <div>
                 <Divider type="horizontal" />
               </div>
             )}
 
-            <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
+            <div className="flex items-center justify-between p-2 text-smallButton">
               <AnimatePresence mode="wait">
                 {isLoading ? (
                   <motion.span

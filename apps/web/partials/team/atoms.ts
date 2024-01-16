@@ -15,3 +15,5 @@ export const teamMemberAvatarAtom = atom<string | null>(null);
 export const teamMemberNameAtom = atom<string | null>(null);
 
 export const teamMemberRoleAtom = atom<Role | null>(null);
+
+export const addedTeamMemberAtom = atom<boolean>(false);

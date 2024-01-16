@@ -9,33 +9,47 @@ import { useCallback, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useToast } from '~/core/hooks/use-toast';
+import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { Services } from '~/core/services';
 import { useEditable } from '~/core/state/editable-store';
 import { Entity as EntityType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
+import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { Avatar } from '~/design-system/avatar';
-import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { SmallButton, SquareButton } from '~/design-system/button';
 import { DeletableChipButton } from '~/design-system/chip';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
+import { InProgressSmall } from '~/design-system/icons/in-progress-small';
 import { InfoSmall } from '~/design-system/icons/info-small';
+import { Minus } from '~/design-system/icons/minus';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
 import { Tick } from '~/design-system/icons/tick';
 import { Trash } from '~/design-system/icons/trash';
-import { Unlink } from '~/design-system/icons/unlink';
 import { Upload } from '~/design-system/icons/upload';
 import { Menu } from '~/design-system/menu';
 import { PopoverMenu } from '~/design-system/popover-menu';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
-import { teamMemberAvatarAtom, teamMemberNameAtom, teamMemberRoleAtom, teamMemberStepAtom } from './atoms';
+import {
+  addedTeamMemberAtom,
+  teamMemberAvatarAtom,
+  teamMemberNameAtom,
+  teamMemberRoleAtom,
+  teamMemberStepAtom,
+} from './atoms';
+import { TeamMemberCreatedToast } from './toast';
+
+const ROLE_ATTRIBUTE = '9c1922f1-d7a2-47d1-841d-234cb2f56991';
 
 type TeamMembersProps = {
   spaceId: string;
@@ -117,6 +131,7 @@ const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
   const [avatar, setAvatar] = useAtom(teamMemberAvatarAtom);
   const [name, setName] = useAtom(teamMemberNameAtom);
   const [role, setRole] = useAtom(teamMemberRoleAtom);
+  const [hasAddedTeamMember, setHasAddedTeamMember] = useAtom(addedTeamMemberAtom);
 
   const [entityId, setEntityId] = useState<string>('');
 
@@ -126,8 +141,83 @@ const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
   const [error, setError] = useState<boolean>(false);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
+  const [, setToast] = useToast();
+  const { create } = useActionsStore();
+
   const handleAddLinkedTeamMember = () => {
-    console.info(`handle add linked team member`);
+    if (!person || !name || !role) return;
+
+    const linkedEntityId = person.id;
+    const newEntityId = ID.createEntityId();
+
+    // Create new entity
+    create(
+      Triple.withId({
+        entityId: newEntityId,
+        attributeId: SYSTEM_IDS.NAME,
+        entityName: name,
+        attributeName: 'Name',
+        space: spaceId,
+        value: {
+          type: 'string',
+          id: ID.createValueId(),
+          value: name,
+        },
+      })
+    );
+
+    // Add name attribute
+    create(
+      Triple.withId({
+        space: spaceId,
+        entityId: linkedEntityId,
+        entityName: name,
+        attributeId: SYSTEM_IDS.NAME,
+        attributeName: 'Name',
+        value: {
+          type: 'string',
+          id: ID.createValueId(),
+          value: name,
+        },
+      })
+    );
+
+    // Add avatar attribute
+    if (avatar) {
+      create(
+        Triple.withId({
+          space: spaceId,
+          entityId: linkedEntityId,
+          entityName: name,
+          attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+          attributeName: 'Avatar',
+          value: {
+            type: 'image',
+            id: ID.createValueId(),
+            value: Value.toImageValue(avatar),
+          },
+        })
+      );
+    }
+
+    // Add role attribute
+    create(
+      Triple.withId({
+        space: spaceId,
+        entityId: linkedEntityId,
+        entityName: name,
+        attributeId: ROLE_ATTRIBUTE,
+        attributeName: 'Role',
+        value: {
+          type: 'entity',
+          id: role.id,
+          name: role.name,
+        },
+      })
+    );
+
+    setHasAddedTeamMember(true);
+    setToast(<TeamMemberCreatedToast name={name} entityId={newEntityId} spaceId={spaceId} />);
   };
 
   const handleChangeRole = (role: Role) => {
@@ -241,20 +331,22 @@ const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
               <div className={cx('relative h-[48px] w-[48px] overflow-clip rounded')}>
                 {avatar ? <Avatar size={48} square avatarUrl={avatar} /> : <NoAvatar />}
               </div>
-              <PopoverMenu
-                isOpen={isAvatarMenuOpen}
-                onOpenChange={setIsAvatarMenuOpen}
-                menu={
-                  <>
-                    <SquareButton onClick={handleUploadAvatar} icon={<Upload />} />
-                    {hasFoundPerson && avatar !== linkedAvatar && (
-                      <SquareButton onClick={handleResetAvatar} icon={<RetrySmall />} />
-                    )}
-                    {avatar !== null && <SquareButton onClick={handleClearAvatar} icon={<Trash />} />}
-                  </>
-                }
-                position="top"
-              />
+              {!hasAddedTeamMember && (
+                <PopoverMenu
+                  isOpen={isAvatarMenuOpen}
+                  onOpenChange={setIsAvatarMenuOpen}
+                  menu={
+                    <>
+                      <SquareButton onClick={handleUploadAvatar} icon={<Upload />} />
+                      {hasFoundPerson && avatar !== linkedAvatar && (
+                        <SquareButton onClick={handleResetAvatar} icon={<RetrySmall />} />
+                      )}
+                      {avatar !== null && <SquareButton onClick={handleClearAvatar} icon={<Trash />} />}
+                    </>
+                  }
+                  position="top"
+                />
+              )}
             </div>
           )}
           <input
@@ -316,48 +408,66 @@ const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
             </div>
           </div>
           <div className="relative mt-4 border-b border-divider pb-2">
-            {!role ? (
-              <EntityTextAutocomplete
-                spaceId={spaceId}
-                placeholder="Find or create role..."
-                onDone={handleChangeRole}
-                itemIds={[]}
-                allowedTypes={[{ typeId: '9c1922f1-d7a2-47d1-841d-234cb2f56991', typeName: 'Role' }]}
-                attributeId="9c1922f1-d7a2-47d1-841d-234cb2f56991"
-                className="!h-auto !font-medium"
-              />
+            {!hasAddedTeamMember ? (
+              <>
+                {!role ? (
+                  <EntityTextAutocomplete
+                    spaceId={spaceId}
+                    placeholder="Find or create role..."
+                    onDone={handleChangeRole}
+                    itemIds={[]}
+                    allowedTypes={[{ typeId: '9c1922f1-d7a2-47d1-841d-234cb2f56991', typeName: 'Role' }]}
+                    attributeId="9c1922f1-d7a2-47d1-841d-234cb2f56991"
+                    className="!h-auto !font-medium"
+                  />
+                ) : (
+                  <div className="flex h-[29px] items-center text-body font-medium">
+                    <DeletableChipButton onClick={handleResetRole}>{role.name}</DeletableChipButton>
+                  </div>
+                )}
+                {error && (
+                  <div className="absolute inset-0 z-10 flex h-full w-full items-center bg-white">
+                    <div className="-mt-4 text-errorMessage text-red-01">
+                      Oops! It looks like there’s an issue. You need to enter a valid Person ID.
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="flex h-[29px] items-center text-body font-medium">
-                <DeletableChipButton onClick={handleResetRole}>{role.name}</DeletableChipButton>
-              </div>
-            )}
-            {error && (
-              <div className="absolute inset-0 z-10 flex h-full w-full items-center bg-white">
-                <div className="-mt-4 text-errorMessage text-red-01">
-                  Oops! It looks like there’s an issue. You need to enter a valid Person ID.
-                </div>
-              </div>
+              <div className="text-body font-medium">{role?.name}</div>
             )}
           </div>
         </div>
       </div>
-      <div className="mt-4 flex gap-4">
-        <div className="flex-1">
-          <SmallButton onClick={handleCancel} variant="secondary" className="w-full !shadow-none">
-            Cancel
-          </SmallButton>
-        </div>
-        <div className="flex-1">
-          <SmallButton
-            onClick={handleAddLinkedTeamMember}
-            variant="primary"
-            disabled={isDisabled}
-            className="w-full !shadow-none"
-          >
-            Add team member
-          </SmallButton>
-        </div>
+      <div className="mt-4 flex h-[1.5625rem] gap-4">
+        {!hasAddedTeamMember ? (
+          <>
+            <div className="flex-1">
+              <SmallButton onClick={handleCancel} variant="secondary" className="w-full !shadow-none">
+                Cancel
+              </SmallButton>
+            </div>
+            <div className="flex-1">
+              <SmallButton
+                onClick={handleAddLinkedTeamMember}
+                variant="primary"
+                disabled={isDisabled}
+                className="w-full !shadow-none"
+              >
+                Add team member
+              </SmallButton>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-2 text-metadataMedium">
+            <div className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+              <Minus />
+            </div>
+            <div>Pending</div>
+          </div>
+        )}
       </div>
+      {hasAddedTeamMember && <div className="absolute inset-0 z-20 cursor-not-allowed" />}
     </div>
   );
 };
@@ -373,11 +483,102 @@ const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
   const [avatar, setAvatar] = useAtom(teamMemberAvatarAtom);
   const [name, setName] = useAtom(teamMemberNameAtom);
   const [role, setRole] = useAtom(teamMemberRoleAtom);
+  const [hasAddedTeamMember, setHasAddedTeamMember] = useAtom(addedTeamMemberAtom);
 
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
+  const [, setToast] = useToast();
+  const { create } = useActionsStore();
+
   const handleAddUnlinkedTeamMember = () => {
-    console.info(`handle add unlinked team member`);
+    if (!name || !role) return;
+
+    const newEntityId = ID.createEntityId();
+
+    // Create new entity
+    create(
+      Triple.withId({
+        entityId: newEntityId,
+        attributeId: SYSTEM_IDS.NAME,
+        entityName: name,
+        attributeName: 'Name',
+        space: spaceId,
+        value: {
+          type: 'string',
+          id: ID.createValueId(),
+          value: name,
+        },
+      })
+    );
+
+    // Add person type
+    create(
+      Triple.withId({
+        entityId: newEntityId,
+        attributeId: SYSTEM_IDS.TYPES,
+        entityName: name,
+        attributeName: 'Types',
+        space: spaceId,
+        value: {
+          type: 'entity',
+          id: SYSTEM_IDS.PERSON_TYPE,
+          name: 'Person',
+        },
+      })
+    );
+
+    // Add name attribute
+    create(
+      Triple.withId({
+        space: spaceId,
+        entityId: newEntityId,
+        entityName: name,
+        attributeId: SYSTEM_IDS.NAME,
+        attributeName: 'Name',
+        value: {
+          type: 'string',
+          id: ID.createValueId(),
+          value: name,
+        },
+      })
+    );
+
+    // Add avatar attribute
+    if (avatar) {
+      create(
+        Triple.withId({
+          space: spaceId,
+          entityId: newEntityId,
+          entityName: name,
+          attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+          attributeName: 'Avatar',
+          value: {
+            type: 'image',
+            id: ID.createValueId(),
+            value: Value.toImageValue(avatar),
+          },
+        })
+      );
+    }
+
+    // Add role attribute
+    create(
+      Triple.withId({
+        space: spaceId,
+        entityId: newEntityId,
+        entityName: name,
+        attributeId: ROLE_ATTRIBUTE,
+        attributeName: 'Role',
+        value: {
+          type: 'entity',
+          id: role.id,
+          name: role.name,
+        },
+      })
+    );
+
+    setHasAddedTeamMember(true);
+    setToast(<TeamMemberCreatedToast name={name} entityId={newEntityId} spaceId={spaceId} />);
   };
 
   const handleCancel = () => {
@@ -423,24 +624,26 @@ const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
   const isDisabled = !name || !role;
 
   return (
-    <div className="w-full rounded-lg border border-grey-02 p-4">
+    <div className="relative w-full rounded-lg border border-grey-02 p-4">
       <div className="flex gap-4">
         <div className="flex-shrink-0">
           <div className="inline-flex flex-col items-center justify-center gap-2">
             <div className="relative h-[48px] w-[48px] overflow-clip rounded">
               {avatar ? <Avatar size={48} square avatarUrl={avatar} /> : <NoAvatar />}
             </div>
-            <PopoverMenu
-              isOpen={isAvatarMenuOpen}
-              onOpenChange={setIsAvatarMenuOpen}
-              menu={
-                <>
-                  <SquareButton onClick={handleUploadAvatar} icon={<Upload />} />
-                  {avatar !== null && <SquareButton onClick={handleClearAvatar} icon={<Trash />} />}
-                </>
-              }
-              position="top"
-            />
+            {!hasAddedTeamMember && (
+              <PopoverMenu
+                isOpen={isAvatarMenuOpen}
+                onOpenChange={setIsAvatarMenuOpen}
+                menu={
+                  <>
+                    <SquareButton onClick={handleUploadAvatar} icon={<Upload />} />
+                    {avatar !== null && <SquareButton onClick={handleClearAvatar} icon={<Trash />} />}
+                  </>
+                }
+                position="top"
+              />
+            )}
           </div>
           <input
             ref={fileInputRef}
@@ -461,41 +664,59 @@ const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
             />
           </div>
           <div className="mt-4 border-b border-divider pb-2">
-            {!role ? (
-              <EntityTextAutocomplete
-                spaceId={spaceId}
-                placeholder="Find or create role..."
-                onDone={handleChangeRole}
-                itemIds={[]}
-                allowedTypes={[{ typeId: '9c1922f1-d7a2-47d1-841d-234cb2f56991', typeName: 'Role' }]}
-                attributeId="9c1922f1-d7a2-47d1-841d-234cb2f56991"
-                className="!h-auto !font-medium"
-              />
+            {!hasAddedTeamMember ? (
+              <>
+                {!role ? (
+                  <EntityTextAutocomplete
+                    spaceId={spaceId}
+                    placeholder="Find or create role..."
+                    onDone={handleChangeRole}
+                    itemIds={[]}
+                    allowedTypes={[{ typeId: '9c1922f1-d7a2-47d1-841d-234cb2f56991', typeName: 'Role' }]}
+                    attributeId="9c1922f1-d7a2-47d1-841d-234cb2f56991"
+                    className="!h-auto !font-medium"
+                  />
+                ) : (
+                  <div className="flex h-[29px] items-center text-body font-medium">
+                    <DeletableChipButton onClick={handleResetRole}>{role.name}</DeletableChipButton>
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="flex h-[29px] items-center text-body font-medium">
-                <DeletableChipButton onClick={handleResetRole}>{role.name}</DeletableChipButton>
-              </div>
+              <div className="text-body font-medium">{role?.name}</div>
             )}
           </div>
         </div>
       </div>
-      <div className="mt-4 flex gap-4">
-        <div className="flex-1">
-          <SmallButton onClick={handleCancel} variant="secondary" className="w-full !shadow-none">
-            Cancel
-          </SmallButton>
-        </div>
-        <div className="flex-1">
-          <SmallButton
-            onClick={handleAddUnlinkedTeamMember}
-            variant="primary"
-            disabled={isDisabled}
-            className="w-full !shadow-none"
-          >
-            Add team member
-          </SmallButton>
-        </div>
+      <div className="mt-4 flex h-[1.5625rem] gap-4">
+        {!hasAddedTeamMember ? (
+          <>
+            <div className="flex-1">
+              <SmallButton onClick={handleCancel} variant="secondary" className="w-full !shadow-none">
+                Cancel
+              </SmallButton>
+            </div>
+            <div className="flex-1">
+              <SmallButton
+                onClick={handleAddUnlinkedTeamMember}
+                variant="primary"
+                disabled={isDisabled}
+                className="w-full !shadow-none"
+              >
+                Add team member
+              </SmallButton>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-2 text-metadataMedium">
+            <div className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+              <Minus />
+            </div>
+            <div>Pending</div>
+          </div>
+        )}
       </div>
+      {hasAddedTeamMember && <div className="absolute inset-0 z-20 cursor-not-allowed" />}
     </div>
   );
 };

@@ -37,7 +37,9 @@ export function imageValue(triple: Triple) {
 // format for storing in the triple
 // e.g., https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH -> ipfs://HASH
 export function toImageValue(rawValue: string) {
-  if (rawValue.includes('ipfs') && rawValue.includes('?arg=')) {
+  if (rawValue.startsWith('ipfs://') && rawValue.length === 53) {
+    return rawValue;
+  } else if (rawValue.includes('ipfs') && rawValue.includes('?arg=')) {
     return `ipfs://${getImageHash(rawValue)}`;
   } else {
     return '';
