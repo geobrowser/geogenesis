@@ -6,6 +6,10 @@ export type GeoPluginContextState = ContextState & {
   geoSpacePluginRepoAddress: string;
   geoGovernancePluginAddress: string;
   geoGovernancePluginRepoAddress: string;
+  geoMemberAccessPluginAddress: string;
+  geoMemberAccessPluginRepoAddress: string;
+  geoMainVotingPluginAddress: string;
+  geoMainVotingPluginRepoAddress: string;
 };
 
 export type GeoPluginOverriddenState = OverriddenState & {
