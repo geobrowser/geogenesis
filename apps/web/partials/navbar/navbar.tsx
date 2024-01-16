@@ -7,6 +7,7 @@ import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { Search } from '~/design-system/icons/search';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { CreateSpaceDropdown } from '../create-space/create-space-dropdown';
 import { NavbarActions } from './navbar-actions';
 import { NavbarSpaceMetadata } from './navbar-space-metadata';
 
@@ -37,7 +38,9 @@ export function Navbar({ onSearchClick }: Props) {
           we don't get any layout shift when the navbar actions appear.
       */}
       <ClientOnly>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <CreateSpaceDropdown />
+
           <button
             className="rounded-full p-2 text-grey-04 transition-colors duration-200 hover:bg-grey-01 focus:bg-grey-01 active:bg-divider"
             onClick={onSearchClick}

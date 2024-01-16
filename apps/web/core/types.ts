@@ -239,3 +239,5 @@ export type SpaceActions = Record<SpaceId, Action[]>;
 export type EntityId = string;
 export type AttributeId = string;
 export type EntityActions = Record<EntityId, Record<AttributeId, Triple>>;
+
+export type SpaceType = 'default' | 'company' | 'nonprofit';

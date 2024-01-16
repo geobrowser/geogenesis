@@ -129,7 +129,7 @@ export default async function Layout({ children, params }: Props) {
             initialBlockIdsTriple={props.blockIdsTriple}
             initialBlockTriples={props.blockTriples}
           >
-            <EntityPageCover avatarUrl={null} coverUrl={coverUrl} space />
+            <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
 
             <EntityPageContentContainer>
               <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
