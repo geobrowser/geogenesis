@@ -27,7 +27,6 @@ import { SmallButton, SquareButton } from '~/design-system/button';
 import { DeletableChipButton } from '~/design-system/chip';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
-import { InProgressSmall } from '~/design-system/icons/in-progress-small';
 import { InfoSmall } from '~/design-system/icons/info-small';
 import { Minus } from '~/design-system/icons/minus';
 import { RetrySmall } from '~/design-system/icons/retry-small';
@@ -136,6 +135,7 @@ const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
   const [entityId, setEntityId] = useState<string>('');
 
   const [person, setPerson] = useState<EntityType | null>(null);
+  const [linkedName, setLinkedName] = useState<string | null>(null);
   const [linkedAvatar, setLinkedAvatar] = useState<string | null>(null);
   const [hasFoundPerson, setHasFoundPerson] = useState<boolean>(false);
   const [error, setError] = useState<boolean>(false);
@@ -148,42 +148,27 @@ const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     if (!person || !name || !role) return;
 
     const linkedEntityId = person.id;
-    const newEntityId = ID.createEntityId();
-
-    // Create new entity
-    create(
-      Triple.withId({
-        entityId: newEntityId,
-        attributeId: SYSTEM_IDS.NAME,
-        entityName: name,
-        attributeName: 'Name',
-        space: spaceId,
-        value: {
-          type: 'string',
-          id: ID.createValueId(),
-          value: name,
-        },
-      })
-    );
 
     // Add name attribute
-    create(
-      Triple.withId({
-        space: spaceId,
-        entityId: linkedEntityId,
-        entityName: name,
-        attributeId: SYSTEM_IDS.NAME,
-        attributeName: 'Name',
-        value: {
-          type: 'string',
-          id: ID.createValueId(),
-          value: name,
-        },
-      })
-    );
+    if (linkedName !== name) {
+      create(
+        Triple.withId({
+          space: spaceId,
+          entityId: linkedEntityId,
+          entityName: name,
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
+          value: {
+            type: 'string',
+            id: ID.createValueId(),
+            value: name,
+          },
+        })
+      );
+    }
 
     // Add avatar attribute
-    if (avatar) {
+    if (avatar && linkedAvatar !== avatar) {
       create(
         Triple.withId({
           space: spaceId,
@@ -217,7 +202,7 @@ const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     );
 
     setHasAddedTeamMember(true);
-    setToast(<TeamMemberCreatedToast name={name} entityId={newEntityId} spaceId={spaceId} />);
+    setToast(<TeamMemberCreatedToast name={name} entityId={linkedEntityId} spaceId={spaceId} linked={true} />);
   };
 
   const handleChangeRole = (role: Role) => {
@@ -233,6 +218,7 @@ const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     setName(null);
     setRole(null);
     setPerson(null);
+    setLinkedName(null);
     setLinkedAvatar(null);
     setHasFoundPerson(false);
     setStep('start');
@@ -264,6 +250,7 @@ const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
             setAvatar(avatar);
             setName(Entity.name(person?.triples ?? []));
             setPerson(person);
+            setLinkedName(Entity.name(person?.triples ?? []));
             setLinkedAvatar(avatar);
             setHasFoundPerson(true);
           } else {
@@ -495,38 +482,6 @@ const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
 
     const newEntityId = ID.createEntityId();
 
-    // Create new entity
-    create(
-      Triple.withId({
-        entityId: newEntityId,
-        attributeId: SYSTEM_IDS.NAME,
-        entityName: name,
-        attributeName: 'Name',
-        space: spaceId,
-        value: {
-          type: 'string',
-          id: ID.createValueId(),
-          value: name,
-        },
-      })
-    );
-
-    // Add person type
-    create(
-      Triple.withId({
-        entityId: newEntityId,
-        attributeId: SYSTEM_IDS.TYPES,
-        entityName: name,
-        attributeName: 'Types',
-        space: spaceId,
-        value: {
-          type: 'entity',
-          id: SYSTEM_IDS.PERSON_TYPE,
-          name: 'Person',
-        },
-      })
-    );
-
     // Add name attribute
     create(
       Triple.withId({
@@ -577,8 +532,24 @@ const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
       })
     );
 
+    // Add person type
+    create(
+      Triple.withId({
+        entityId: newEntityId,
+        attributeId: SYSTEM_IDS.TYPES,
+        entityName: name,
+        attributeName: 'Types',
+        space: spaceId,
+        value: {
+          type: 'entity',
+          id: SYSTEM_IDS.PERSON_TYPE,
+          name: 'Person',
+        },
+      })
+    );
+
     setHasAddedTeamMember(true);
-    setToast(<TeamMemberCreatedToast name={name} entityId={newEntityId} spaceId={spaceId} />);
+    setToast(<TeamMemberCreatedToast name={name} entityId={newEntityId} spaceId={spaceId} linked={false} />);
   };
 
   const handleCancel = () => {

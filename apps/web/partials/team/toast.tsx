@@ -13,15 +13,18 @@ interface Props {
   name: string;
   entityId: string;
   spaceId: string;
+  linked?: boolean;
 }
 
-export function TeamMemberCreatedToast({ name, entityId, spaceId }: Props) {
+export function TeamMemberCreatedToast({ name, entityId, spaceId, linked }: Props) {
   const router = useRouter();
   const [, setToast] = useToast();
 
   return (
     <div className="flex items-center gap-3">
-      <p className="text-button">{name} created!</p>
+      <p className="text-button">
+        {name} {linked ? 'linked' : 'created'}!
+      </p>
       <SmallButton
         onClick={() => router.push(NavUtils.toEntity(spaceId, entityId))}
         icon={<NewTab />}
