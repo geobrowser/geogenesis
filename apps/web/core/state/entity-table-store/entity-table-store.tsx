@@ -71,7 +71,6 @@ export function useEntityTable() {
     queryKey: ['entity-table-columns', selectedType?.entityId, filterString],
     queryFn: async ({ signal }) => {
       const params: FetchRowsOptions['params'] = {
-        query: '',
         filter: filterString,
         typeIds: selectedType ? [selectedType.entityId] : [],
         first: DEFAULT_PAGE_SIZE + 1,
@@ -105,7 +104,6 @@ export function useEntityTable() {
       if (!columns) return [];
 
       const params: FetchRowsOptions['params'] = {
-        query: '',
         filter: filterString,
         typeIds: selectedType ? [selectedType.entityId] : [],
         first: DEFAULT_PAGE_SIZE + 1,

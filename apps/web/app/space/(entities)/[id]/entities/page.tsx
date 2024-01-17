@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { AppConfig, Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
@@ -29,21 +28,18 @@ interface Props {
 export default async function EntitiesPage({ params, searchParams }: Props) {
   const spaceId = params.id;
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const space = await Subgraph.fetchSpace({ id: spaceId });
-  const props = await getData({ space, config, initialParams });
+  const props = await getData({ space, initialParams });
 
   return <Component {...props} />;
 }
 
 const getData = async ({
   space,
-  config,
   initialParams,
 }: {
   space: Space | null;
-  config: AppConfig;
   initialParams: InitialEntityTableStoreParams;
 }) => {
   if (!space) {
