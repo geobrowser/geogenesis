@@ -104,14 +104,9 @@ export function useEntityPageStore() {
     initialData: createInitialSchemaTriples(spaceId, id),
     queryKey: ['entity-page-schema-triples', spaceId, id, typeTriples],
     queryFn: async ({ signal }) => {
-      console.log('typeTriples', typeTriples);
-
       if (typeTriples.length === 0) {
-        console.log('No type triples to query');
         return [];
       }
-
-      console.log('should not be querying', typeTriples.length === 0);
 
       const attributesOnType = await Promise.all(
         typeTriples.map(triple => {
@@ -135,7 +130,6 @@ export function useEntityPageStore() {
       );
 
       const attributeTriples = attributesOnType.flatMap(triples => triples);
-      console.log('attributeTriples', attributeTriples);
 
       // @TODO: We can get the value type in the above query and parse it here instead
       // of making another query.
