@@ -905,7 +905,7 @@ const useFilters = (rawFilter: string) => {
 const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph, config: Environment.AppConfig) => {
   const filters = await createFiltersFromGraphQLString(rawFilter, async id => await subgraph.fetchEntity({ id }));
   const serverColumns = await fetchColumns({
-    params: { skip: 0, first: 0, filter: '', endpoint: config.subgraph },
+    params: { skip: 0, first: 0, filter: '' },
     api: {
       fetchEntity: subgraph.fetchEntity,
       fetchTriples: subgraph.fetchTriples,

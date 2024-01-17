@@ -28,7 +28,6 @@ export default async function PersonalHomePage() {
     connectedAddress ? fetchOnchainProfile({ address: connectedAddress }) : null,
     connectedAddress
       ? fetchProposalCountByUser({
-          endpoint: config.subgraph,
           userId: connectedAddress,
         })
       : null,
