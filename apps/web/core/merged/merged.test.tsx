@@ -168,7 +168,6 @@ describe('MergeDataSource merges local entities with network entities', () => {
     });
 
     const entities = await mergedNetwork.fetchEntities({
-      endpoint: options.development.subgraph,
       query: '',
       filter: [],
     });
@@ -210,7 +209,6 @@ describe('MergeDataSource merges local entities with network entities', () => {
     });
 
     const entities = await mergedNetwork.fetchEntities({
-      endpoint: options.development.subgraph,
       query: 'Bob',
       filter: [],
     });

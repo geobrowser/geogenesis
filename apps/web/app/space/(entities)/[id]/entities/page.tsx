@@ -75,7 +75,6 @@ const getData = async ({
 
   const fetchParams: FetchRowsOptions['params'] = {
     ...initialParams,
-    endpoint: config.subgraph,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     typeIds: typeId ? [typeId] : [],

@@ -26,7 +26,7 @@ export interface TableBlockFilter {
 export function useTableBlock() {
   const { entityId, selectedType, spaceId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
 
   const merged = useMergedData();
   const { allActions, create, update } = useActionsStore();
@@ -65,7 +65,7 @@ export function useTableBlock() {
   // the data fetching.
   const { data: blockEntity, isLoading } = useQuery({
     // Refetch the entity if there have been local changes
-    queryKey: ['table-block-entity', entityId, actionsForEntityIdWithoutName, config.subgraph],
+    queryKey: ['table-block-entity', entityId, actionsForEntityIdWithoutName],
     queryFn: ({ signal }) => merged.fetchEntity({ id: entityId, signal }),
   });
 
@@ -104,7 +104,7 @@ export function useTableBlock() {
   }, [filterTriple, selectedType.entityId]);
 
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
-    queryKey: ['table-block-filter-value', filterString, config.subgraph],
+    queryKey: ['table-block-filter-value', filterString],
     queryFn: async () => {
       const filterState = TableBlockSdk.createFiltersFromGraphQLString(
         filterString,
@@ -117,13 +117,11 @@ export function useTableBlock() {
 
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
     // @TODO: ShownColumns changes should trigger a refetch
-    queryKey: ['table-block-columns', filterState, selectedType.entityId, entityId, config.subgraph],
+    queryKey: ['table-block-columns', filterState, selectedType.entityId, entityId],
     queryFn: async ({ signal }) => {
       const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState ?? [], selectedType.entityId);
 
       const params: FetchRowsOptions['params'] = {
-        endpoint: config.subgraph,
-        query: '',
         filter: filterString,
         typeIds: [selectedType.entityId],
         first: PAGE_SIZE + 1,
@@ -152,17 +150,14 @@ export function useTableBlock() {
   });
 
   const { data: rows, isLoading: isLoadingRows } = useQuery({
-    queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterState, config.subgraph],
+    queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterState],
     queryFn: async ({ signal }) => {
       if (!columns) return [];
 
-      const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState ?? [], selectedType.entityId);
+      const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
 
       const params: FetchRowsOptions['params'] = {
-        endpoint: config.subgraph,
-        query: '',
         filter: filterString,
-        typeIds: [selectedType.entityId],
         first: PAGE_SIZE + 1,
         skip: pageNumber * PAGE_SIZE,
       };

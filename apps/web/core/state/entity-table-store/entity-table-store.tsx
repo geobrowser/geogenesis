@@ -71,7 +71,6 @@ export function useEntityTable() {
     queryKey: ['entity-table-columns', selectedType?.entityId, filterString],
     queryFn: async ({ signal }) => {
       const params: FetchRowsOptions['params'] = {
-        endpoint: config.subgraph,
         query: '',
         filter: filterString,
         typeIds: selectedType ? [selectedType.entityId] : [],
@@ -106,7 +105,6 @@ export function useEntityTable() {
       if (!columns) return [];
 
       const params: FetchRowsOptions['params'] = {
-        endpoint: config.subgraph,
         query: '',
         filter: filterString,
         typeIds: selectedType ? [selectedType.entityId] : [],
