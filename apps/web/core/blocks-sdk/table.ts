@@ -288,7 +288,7 @@ export function createGraphQLStringFromFiltersV2(
       // by name and space.
       if (filter.columnId === SYSTEM_IDS.NAME && filter.valueType === 'string') {
         // For the name we can just search for the name based on the indexed GeoEntity name
-        return `name: { equalToInsensitive: "${filter.value}" }`;
+        return `name: { startsWithInsensitive: "${filter.value}" }`;
       }
 
       if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'string') {
@@ -327,9 +327,7 @@ export function createGraphQLStringFromFiltersV2(
   }
 
   // Wrap each filter expression in curly brackets
-  const multiFilterQuery = filtersAsStrings
-    .map(f => `geoEntityTypesByEntityId: { some: { typeId: { equalTo: "${typeId}" } } } {${f}}`)
-    .join(', ');
+  const multiFilterQuery = filtersAsStrings.map(f => `{ ${f} }`).join(', ');
 
-  return `{ and: [${multiFilterQuery}] }`;
+  return `{ and: [{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: "${typeId}" } } } } ${multiFilterQuery}] }`;
 }
