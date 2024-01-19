@@ -9,6 +9,12 @@ export type AppConfig = {
   membershipSubgraph: string;
   profileSubgraph: string;
   api: string;
+
+  // temporary until we completely remove subgraph dependencies.
+  // right now we still use the subgraph for fetching permissions
+  // in the /home page.
+  subgraph: string;
+  permissionlessSubgraph: string;
 };
 
 export const DEFAULT_ENV: AppEnv = 'production';
@@ -21,6 +27,9 @@ export const options: Record<AppEnv, AppConfig> = {
     membershipSubgraph: '',
     profileSubgraph: '',
     api: 'http://localhost:5001/graphql',
+
+    subgraph: 'http://localhost:8000/subgraphs/name/example',
+    permissionlessSubgraph: '',
   },
   testnet: {
     chainId: '80001',
@@ -29,6 +38,9 @@ export const options: Record<AppEnv, AppConfig> = {
     membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-mumbai',
     profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry-mumbai',
     api: 'http://localhost:5001/graphql',
+
+    subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/banana',
+    permissionlessSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-permissionless-mumbai',
   },
   production: {
     chainId: '137',
@@ -37,6 +49,9 @@ export const options: Record<AppEnv, AppConfig> = {
     membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-workshop',
     profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry',
     api: 'https://geo-protocol.up.railway.app/graphql',
+
+    subgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo',
+    permissionlessSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-permissionless',
   },
 };
 
