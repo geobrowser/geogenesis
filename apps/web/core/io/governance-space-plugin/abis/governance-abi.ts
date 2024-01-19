@@ -1,4 +1,4 @@
-export const spacePluginSetupAbi = [
+export const governanceAbi = [
   {
     inputs: [
       {
@@ -13,6 +13,17 @@ export const spacePluginSetupAbi = [
   {
     inputs: [
       {
+        internalType: 'uint256',
+        name: 'actualLength',
+        type: 'uint256',
+      },
+    ],
+    name: 'InvalidHelpers',
+    type: 'error',
+  },
+  {
+    inputs: [
+      {
         internalType: 'bytes',
         name: '_data',
         type: 'bytes',
@@ -21,14 +32,46 @@ export const spacePluginSetupAbi = [
     name: 'decodeInstallationParams',
     outputs: [
       {
-        internalType: 'string',
-        name: 'firstBlockContentUri',
-        type: 'string',
+        components: [
+          {
+            internalType: 'enum MajorityVotingBase.VotingMode',
+            name: 'votingMode',
+            type: 'uint8',
+          },
+          {
+            internalType: 'uint32',
+            name: 'supportThreshold',
+            type: 'uint32',
+          },
+          {
+            internalType: 'uint32',
+            name: 'minParticipation',
+            type: 'uint32',
+          },
+          {
+            internalType: 'uint64',
+            name: 'minDuration',
+            type: 'uint64',
+          },
+          {
+            internalType: 'uint256',
+            name: 'minProposerVotingPower',
+            type: 'uint256',
+          },
+        ],
+        internalType: 'struct MajorityVotingBase.VotingSettings',
+        name: 'votingSettings',
+        type: 'tuple',
       },
       {
-        internalType: 'address',
-        name: 'predecessorAddress',
-        type: 'address',
+        internalType: 'address[]',
+        name: 'initialEditors',
+        type: 'address[]',
+      },
+      {
+        internalType: 'uint64',
+        name: 'memberAccessProposalDuration',
+        type: 'uint64',
       },
       {
         internalType: 'address',
@@ -61,14 +104,46 @@ export const spacePluginSetupAbi = [
   {
     inputs: [
       {
-        internalType: 'string',
-        name: '_firstBlockContentUri',
-        type: 'string',
+        components: [
+          {
+            internalType: 'enum MajorityVotingBase.VotingMode',
+            name: 'votingMode',
+            type: 'uint8',
+          },
+          {
+            internalType: 'uint32',
+            name: 'supportThreshold',
+            type: 'uint32',
+          },
+          {
+            internalType: 'uint32',
+            name: 'minParticipation',
+            type: 'uint32',
+          },
+          {
+            internalType: 'uint64',
+            name: 'minDuration',
+            type: 'uint64',
+          },
+          {
+            internalType: 'uint256',
+            name: 'minProposerVotingPower',
+            type: 'uint256',
+          },
+        ],
+        internalType: 'struct MajorityVotingBase.VotingSettings',
+        name: '_votingSettings',
+        type: 'tuple',
       },
       {
-        internalType: 'address',
-        name: '_predecessorAddress',
-        type: 'address',
+        internalType: 'address[]',
+        name: '_initialEditors',
+        type: 'address[]',
+      },
+      {
+        internalType: 'uint64',
+        name: '_memberAccessProposalDuration',
+        type: 'uint64',
       },
       {
         internalType: 'address',
@@ -120,6 +195,19 @@ export const spacePluginSetupAbi = [
     type: 'function',
   },
   {
+    inputs: [],
+    name: 'memberAccessPluginImplementation',
+    outputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
     inputs: [
       {
         internalType: 'address',
@@ -136,7 +224,7 @@ export const spacePluginSetupAbi = [
     outputs: [
       {
         internalType: 'address',
-        name: 'plugin',
+        name: 'mainVotingPlugin',
         type: 'address',
       },
       {

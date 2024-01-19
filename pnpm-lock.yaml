@@ -18,10 +18,12 @@ importers:
 
   apps/web:
     specifiers:
-      '@aragon/osx-ethers': 1.3.0-rc0.2
-      '@aragon/sdk-client': 1.13.1-rc1
-      '@aragon/sdk-client-common': 1.5.0-rc0
+      '@aragon/osx-ethers': 1.3.1
+      '@aragon/sdk-client': 1.22.0
+      '@aragon/sdk-client-common': 1.14.0
       '@babel/core': ^7.19.0
+      '@ethersproject/abi': ^5.6.4
+      '@ethersproject/providers': ^5.6.8
       '@geogenesis/action-schema': workspace:*
       '@geogenesis/contracts': workspace:*
       '@geogenesis/ids': workspace:*
@@ -131,9 +133,11 @@ importers:
       vitest: ^0.22.1
       wagmi: 1.3.9
     dependencies:
-      '@aragon/osx-ethers': 1.3.0-rc0.2
-      '@aragon/sdk-client': 1.13.1-rc1
-      '@aragon/sdk-client-common': 1.5.0-rc0
+      '@aragon/osx-ethers': 1.3.1
+      '@aragon/sdk-client': 1.22.0
+      '@aragon/sdk-client-common': 1.14.0
+      '@ethersproject/abi': 5.7.0
+      '@ethersproject/providers': 5.7.2
       '@geogenesis/action-schema': link:../../packages/action-schema
       '@geogenesis/contracts': link:../../packages/contracts
       '@geogenesis/ids': link:../../packages/ids
@@ -659,8 +663,8 @@ packages:
       '@jridgewell/gen-mapping': 0.1.1
       '@jridgewell/trace-mapping': 0.3.17
 
-  /@aragon/osx-ethers/1.3.0-rc0.2:
-    resolution: {integrity: sha512-PpsmyZOBRQPElEsiLNkoGg/4j+oJn8SJC6S0oN837k5JofkleLbOdZgUmB0SHmL98hvcE157MoRZ4YM+IXbhhA==}
+  /@aragon/osx-ethers/1.2.1:
+    resolution: {integrity: sha512-3Fscq8C9elIktiI6OT7fR5iaAvim+ghU6IUvZF3P/phvWm9roNp/GXAROhA/Vx41NQxeqmfXokgFo6KOWt4drA==}
     dependencies:
       ethers: 5.7.2
     transitivePeerDependencies:
@@ -668,12 +672,30 @@ packages:
       - utf-8-validate
     dev: false
 
-  /@aragon/sdk-client-common/1.5.0-rc0:
-    resolution: {integrity: sha512-kDC7zYNNqrE5ZUiXnCwZBnv5hY40BQj6u47D+UZbvcj848gPz8ab/G+lPyTzL6heyoSgkfcgOC6e2QQQxMheDQ==}
+  /@aragon/osx-ethers/1.3.0:
+    resolution: {integrity: sha512-zfLAYdgZ3SSifHiyJLkBKmoDw/IEX/yzvw6liUAa/gz7HZOsrwp3JsBJaIwB2epOnGa6vhXyWTKKZ15aJvoMaA==}
+    dependencies:
+      ethers: 5.7.2
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+    dev: false
+
+  /@aragon/osx-ethers/1.3.1:
+    resolution: {integrity: sha512-6APDAasHrIVmJ0SxUSmWCxusVe46OF3eGZGp8MVD3j4BDJjJ+FIrrjN9ePkTpPja3X8GL6PD00l1WIzW2GZQMQ==}
+    dependencies:
+      ethers: 5.7.2
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+    dev: false
+
+  /@aragon/sdk-client-common/1.14.0:
+    resolution: {integrity: sha512-BIv3QzG+VTJmI5iaiF5+oT5USQfSKdRIcYDmUOQpBxfqG7nkMcKBTENgMTLqxD2wkmW5MMd+IG2btzpZlRjDlA==}
     engines: {node: '>=16'}
     dependencies:
-      '@aragon/osx-ethers': 1.3.0-rc0.2
-      '@aragon/sdk-common': 1.6.0
+      '@aragon/osx-ethers': 1.3.1
+      '@aragon/osx-ethers-v1.0.0': /@aragon/osx-ethers/1.2.1
       '@aragon/sdk-ipfs': 1.1.0
       '@ethersproject/abstract-signer': 5.7.0
       '@ethersproject/bignumber': 5.7.0
@@ -681,21 +703,21 @@ packages:
       '@ethersproject/contracts': 5.7.0
       '@ethersproject/providers': 5.7.2
       '@ethersproject/wallet': 5.7.0
-      graphql: 16.8.0
-      graphql-request: 4.3.0_graphql@16.8.0
+      graphql: 16.8.1
+      graphql-request: 4.3.0_graphql@16.8.1
+      yup: 1.3.3
     transitivePeerDependencies:
       - bufferutil
       - encoding
       - utf-8-validate
     dev: false
 
-  /@aragon/sdk-client/1.13.1-rc1:
-    resolution: {integrity: sha512-4Isv/K9zcyfyEAxrG1wdzQuik4VjRDzGxtmMRQjsljpfR/BFF7eBWfLFBgXKscLnipnV7gs5CdnJLXhklNZBnQ==}
+  /@aragon/sdk-client/1.22.0:
+    resolution: {integrity: sha512-OEEjV9BBQR6S8DdhwKyRiFzGgma9wHYsgb0BvGS88X62leTp4Ew4JMJuEGICxDECtlxU8L6P8EokDEIPyzG9Sw==}
     engines: {node: '>=16'}
     dependencies:
-      '@aragon/osx-ethers': 1.3.0-rc0.2
-      '@aragon/sdk-client-common': 1.5.0-rc0
-      '@aragon/sdk-common': 1.6.0
+      '@aragon/osx-ethers': 1.3.0
+      '@aragon/sdk-client-common': 1.14.0
       '@aragon/sdk-ipfs': 1.1.0
       '@ethersproject/abstract-signer': 5.7.0
       '@ethersproject/bignumber': 5.7.0
@@ -703,19 +725,15 @@ packages:
       '@ethersproject/contracts': 5.7.0
       '@ethersproject/providers': 5.7.2
       '@ethersproject/wallet': 5.7.0
-      '@openzeppelin/contracts': 4.9.3
-      '@openzeppelin/contracts-upgradeable': 4.9.3
-      graphql: 16.8.0
-      graphql-request: 4.3.0_graphql@16.8.0
+      '@openzeppelin/contracts': 4.9.5
+      '@openzeppelin/contracts-upgradeable': 4.9.5
+      graphql: 16.8.1
+      graphql-request: 4.3.0_graphql@16.8.1
+      yup: 1.3.3
     transitivePeerDependencies:
       - bufferutil
       - encoding
       - utf-8-validate
-    dev: false
-
-  /@aragon/sdk-common/1.6.0:
-    resolution: {integrity: sha512-RnXrqBXb6Mf79lgCDNQTgbwqslIo9xE3Kmzz+L3t8XAMPbrFqpgL/KhZQUUYClG6n7w6ar3K5lyqWk+GaXzjJQ==}
-    engines: {node: '>=14'}
     dev: false
 
   /@aragon/sdk-ipfs/1.1.0:
@@ -3612,16 +3630,16 @@ packages:
     resolution: {integrity: sha512-5GeFgqMiDlqGT8EdORadp1ntGF0qzWZLmEY7Wbp/yVhN7/B3NNzCxujuI77ktlyG81N3CUZP8cZe3ZAQ/cW10w==}
     dev: true
 
-  /@openzeppelin/contracts-upgradeable/4.9.3:
-    resolution: {integrity: sha512-jjaHAVRMrE4UuZNfDwjlLGDxTHWIOwTJS2ldnc278a0gevfXfPr8hxKEVBGFBE96kl2G3VHDZhUimw/+G3TG2A==}
+  /@openzeppelin/contracts-upgradeable/4.9.5:
+    resolution: {integrity: sha512-f7L1//4sLlflAN7fVzJLoRedrf5Na3Oal5PZfIq55NFcVZ90EpV1q5xOvL4lFvg3MNICSDr2hH0JUBxwlxcoPg==}
     dev: false
 
   /@openzeppelin/contracts/4.7.2:
     resolution: {integrity: sha512-4n/JL9izql8303mPqPdubuna/DWEMbmOzWYUWyCPhjhiEr2w3nQrjE7vZz1fBF+wzzP6dZbIcsgqACk53c9FGA==}
     dev: true
 
-  /@openzeppelin/contracts/4.9.3:
-    resolution: {integrity: sha512-He3LieZ1pP2TNt5JbkPA4PNT9WC3gOTOlDcFGJW4Le4QKqwmiNJCRt44APfxMxvq7OugU/cqYuPcSBzOw38DAg==}
+  /@openzeppelin/contracts/4.9.5:
+    resolution: {integrity: sha512-ZK+W5mVhRppff9BE6YdR8CC52C8zAvsVAiWhEtQ5+oNxFE6h1WdeWo+FJSF8KKvtxxVYZ7MTP/5KoVpAU3aSWg==}
     dev: false
 
   /@openzeppelin/hardhat-upgrades/1.21.0_otre5cawovoumuhplwky5nslpa:
@@ -7483,13 +7501,13 @@ packages:
   /@web-std/stream/1.0.0:
     resolution: {integrity: sha512-jyIbdVl+0ZJyKGTV0Ohb9E6UnxP+t7ZzX4Do3AHjZKxUXKMs9EmqnBDQgHF7bEw0EzbQygOjtt/7gvtmi//iCQ==}
     dependencies:
-      web-streams-polyfill: 3.2.1
+      web-streams-polyfill: 3.3.2
     dev: false
 
   /@web-std/stream/1.0.3:
     resolution: {integrity: sha512-5MIngxWyq4rQiGoDAC2WhjLuDraW8+ff2LD2et4NRY933K3gL8CHlUXrh8ZZ3dC9A9Xaub8c9sl5exOJE58D9Q==}
     dependencies:
-      web-streams-polyfill: 3.2.1
+      web-streams-polyfill: 3.3.2
     dev: false
 
   /@web3-storage/multipart-parser/1.0.0:
@@ -11620,7 +11638,7 @@ packages:
       debug: 4.3.4
       enhanced-resolve: 5.12.0
       eslint: 8.21.0
-      eslint-plugin-import: 2.26.0_m2m4u4ujm3f6v75yfbf66l5qly
+      eslint-plugin-import: 2.26.0_vfkjhpyu3ul4ompvtbiazva2r4
       get-tsconfig: 4.7.2
       globby: 13.1.2
       is-core-module: 2.13.0
@@ -14028,7 +14046,7 @@ packages:
       - supports-color
     dev: false
 
-  /graphql-request/4.3.0_graphql@16.8.0:
+  /graphql-request/4.3.0_graphql@16.8.1:
     resolution: {integrity: sha512-2v6hQViJvSsifK606AliqiNiijb1uwWp6Re7o0RTyH+uRTv/u7Uqm2g4Fjq/LgZIzARB38RZEvVBFOQOVdlBow==}
     peerDependencies:
       graphql: 14 - 16
@@ -14036,7 +14054,7 @@ packages:
       cross-fetch: 3.1.8
       extract-files: 9.0.0
       form-data: 3.0.1
-      graphql: 16.8.0
+      graphql: 16.8.1
     transitivePeerDependencies:
       - encoding
     dev: false
@@ -14057,6 +14075,12 @@ packages:
   /graphql/16.8.0:
     resolution: {integrity: sha512-0oKGaR+y3qcS5mCu1vb7KG+a89vjn06C7Ihq/dDl3jA+A8B3TKomvi3CiEcVLJQGalbu8F52LxkOym7U5sSfbg==}
     engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
+    dev: true
+
+  /graphql/16.8.1:
+    resolution: {integrity: sha512-59LZHPdGZVh695Ud9lRzPBVTtlX9ZCV150Er2W43ro37wVof0ctenSaskPPjN7lVTIN8mSZt8PHUNKZuNQUuxw==}
+    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
+    dev: false
 
   /growl/1.10.5:
     resolution: {integrity: sha512-qBr4OuELkhPenW6goKVXiv47US3clb3/IbuWF9KNKEijAy9oeHxU9IgzjvJhHkUzhaj7rOUD7+YGWqUjLp5oSA==}
@@ -15094,7 +15118,7 @@ packages:
   /isomorphic-unfetch/3.1.0:
     resolution: {integrity: sha512-geDJjpoZ8N0kWexiwkX8F9NkTsXhetLPVbZFQ+JTW239QNOwvB0gniuR1Wc6f0AMTn7/mFGyXvHTifrCp/GH8Q==}
     dependencies:
-      node-fetch: 2.6.12
+      node-fetch: 2.7.0
       unfetch: 4.2.0
     transitivePeerDependencies:
       - encoding
@@ -16875,6 +16899,18 @@ packages:
     dependencies:
       whatwg-url: 5.0.0
 
+  /node-fetch/2.7.0:
+    resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
+    engines: {node: 4.x || >=6.0.0}
+    peerDependencies:
+      encoding: ^0.1.0
+    peerDependenciesMeta:
+      encoding:
+        optional: true
+    dependencies:
+      whatwg-url: 5.0.0
+    dev: false
+
   /node-fetch/3.3.2:
     resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
@@ -18185,6 +18221,10 @@ packages:
       graceful-fs: 4.2.11
       retry: 0.12.0
       signal-exit: 3.0.7
+
+  /property-expr/2.0.6:
+    resolution: {integrity: sha512-SVtmxhRE/CGkn3eZY1T6pC8Nln6Fr/lu1mKSgRud0eC73whjGfoAogbn78LkD8aFL0zz3bAFerKSnOl7NlErBA==}
+    dev: false
 
   /prosemirror-changeset/2.2.1:
     resolution: {integrity: sha512-J7msc6wbxB4ekDFj+n9gTW/jav/p53kdlivvuppHsrZXCaQdVgRghoZbSS3kwrRyAstRVQ4/+u5k7YfLgkkQvQ==}
@@ -19905,6 +19945,7 @@ packages:
   /source-map/0.6.1:
     resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
+    requiresBuild: true
     dev: true
 
   /sourcemap-codec/1.4.8:
@@ -20670,6 +20711,10 @@ packages:
       retimer: 3.0.0
     dev: true
 
+  /tiny-case/1.0.3:
+    resolution: {integrity: sha512-Eet/eeMhkO6TX8mnUteS9zgPbUMQa4I6Kkp5ORiBD5476/m+PIRiumP5tmh5ioJpH7k51Kehawy2UDfsnxxY8Q==}
+    dev: false
+
   /tiny-glob/0.2.9:
     resolution: {integrity: sha512-g/55ssRPUjShh+xkfx9UPDXqhckHEsHr4Vd9zX55oSdGZc/MD0m3sferOkwWtp98bv+kcVfEHtRJgBVJzelrzg==}
     dependencies:
@@ -20779,6 +20824,10 @@ packages:
   /toidentifier/1.0.1:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
+
+  /toposort/2.0.2:
+    resolution: {integrity: sha512-0a5EOkAUp8D4moMi2W8ZF8jcga7BgZd91O/yabJCFY8az+XSzeGyTKs0Aoo897iV1Nj6guFq8orWDS96z91oGg==}
+    dev: false
 
   /totalist/1.1.0:
     resolution: {integrity: sha512-gduQwd1rOdDMGxFG1gEvhV88Oirdo2p+KjoYFU7k2g+i7n6AFFbDQ5kMPUsW0pNbfQsB/cwXvT1i4Bue0s9g5g==}
@@ -22068,6 +22117,11 @@ packages:
     resolution: {integrity: sha512-e0MO3wdXWKrLbL0DgGnUV7WHVuw9OUvL4hjgnPkIeEvESk74gAITi5G606JtZPp39cd8HA9VQzCIvA49LpPN5Q==}
     engines: {node: '>= 8'}
 
+  /web-streams-polyfill/3.3.2:
+    resolution: {integrity: sha512-3pRGuxRF5gpuZc0W+EpwQRmCD7gRqcDOMt688KmdlDAgAyaB1XlN0zq2njfDNm44XVdIouE7pZ6GzbdyH47uIQ==}
+    engines: {node: '>= 8'}
+    dev: false
+
   /web3-bzz/1.2.11:
     resolution: {integrity: sha512-XGpWUEElGypBjeFyUhTkiPXFbDVD6Nr/S5jznE3t8cWUA0FxRf1n3n/NuIZeb0H9RkN2Ctd/jNma/k8XGa3YKg==}
     engines: {node: '>=8.0.0'}
@@ -23256,6 +23310,15 @@ packages:
 
   /yoga-wasm-web/0.3.3:
     resolution: {integrity: sha512-N+d4UJSJbt/R3wqY7Coqs5pcV0aUj2j9IaQ3rNj9bVCLld8tTGKRa2USARjnvZJWVx1NDmQev8EknoczaOQDOA==}
+    dev: false
+
+  /yup/1.3.3:
+    resolution: {integrity: sha512-v8QwZSsHH2K3/G9WSkp6mZKO+hugKT1EmnMqLNUcfu51HU9MDyhlETT/JgtzprnrnQHPWsjc6MUDMBp/l9fNnw==}
+    dependencies:
+      property-expr: 2.0.6
+      tiny-case: 1.0.3
+      toposort: 2.0.2
+      type-fest: 2.19.0
     dev: false
 
   /zapatos/6.3.0_3uuhcfytzvk4vp3djvjyj6xkeq:

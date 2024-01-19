@@ -1,11 +1,23 @@
-import { ClientCore } from '@aragon/sdk-client-common';
-import { encodeAbiParameters, encodeFunctionData, hexToBytes } from 'viem';
+import { ClientCore, PluginInstallItem } from '@aragon/sdk-client-common';
+import { AlchemyProvider } from '@ethersproject/providers';
+import { ethers } from 'ethers';
+import {
+  bytesToHex,
+  bytesToString,
+  encodeAbiParameters,
+  encodeFunctionData,
+  getAddress,
+  hexToBytes,
+  toBytes,
+} from 'viem';
 
 import { GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS, GEO_SPACE_PLUGIN_REPO_ADDRESS, ZERO_ADDRESS } from '~/core/constants';
 
-import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi } from '../../abis';
+import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi, spacePluginSetupAbi } from '../../abis';
+import { governanceAbi } from '../../abis/governance-abi';
 import { GeoPluginContext } from '../../context';
 import { MainVotingSettingsType } from '../../types';
+import { GovernancePluginsSetup__factory, SpacePluginSetup__factory } from './typechain';
 
 export class GeoPluginClientEncoding extends ClientCore {
   private geoSpacePluginAddress: string;
@@ -72,7 +84,7 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Installation Functions
-  static getSpacePluginInstallItem({
+  static async getSpacePluginInstallItem({
     firstBlockContentUri,
     pluginUpgrader,
     precedessorSpace = ZERO_ADDRESS,
@@ -80,7 +92,7 @@ export class GeoPluginClientEncoding extends ClientCore {
     firstBlockContentUri: string;
     pluginUpgrader: string;
     precedessorSpace?: string;
-  }) {
+  }): Promise<PluginInstallItem> {
     // Define the ABI for the prepareInstallation function's inputs. This comes from the
     // `space-build-metadata.json` in our contracts repo, not from the setup plugin's ABIs.
     const prepareInstallationInputs = [
@@ -102,11 +114,8 @@ export class GeoPluginClientEncoding extends ClientCore {
       },
     ];
 
-    // Encode the data using encodeAbiParameter
-    // string memory _firstBlockContentUri,
-    // address _predecessorAddress,
-    // address _pluginUpgrader
-    const encodedData = encodeAbiParameters(prepareInstallationInputs, [
+    // This works but only if it's the only plugin being published. If we try multiple plugins we get an unpredictable gas limit
+    const encodedParams = encodeAbiParameters(prepareInstallationInputs, [
       firstBlockContentUri,
       precedessorSpace,
       pluginUpgrader,
@@ -114,36 +123,36 @@ export class GeoPluginClientEncoding extends ClientCore {
 
     return {
       id: GEO_SPACE_PLUGIN_REPO_ADDRESS,
-      data: hexToBytes(encodedData),
+      data: hexToBytes(encodedParams),
     };
   }
 
-  static getGovernancePluginInstallItem(params: {
+  static async getGovernancePluginInstallItem(params: {
     votingSettings: {
-      votingMode: number;
+      votingMode: 0 | 1;
       supportThreshold: number;
       minParticipation: number;
-      minDuration: number;
-      minProposerVotingPower: number;
+      minDuration: bigint;
+      minProposerVotingPower: bigint;
     };
-    initialEditors: string[];
-    pluginUpgrader: string;
-    memberAccessProposalDuration: number;
-  }) {
+    initialEditors: `0x${string}`[];
+    pluginUpgrader: `0x${string}`;
+    memberAccessProposalDuration: bigint;
+  }): Promise<PluginInstallItem> {
     // MajorityVotingBase.VotingSettings memory _votingSettings,
     // address[] memory _initialEditors,
     // uint64 _memberAccessProposalDuration,
     // address _pluginUpgrader
+    //  struct VotingSettings {
+    //     VotingMode votingMode;
+    //     uint32 supportThreshold;
+    //     uint32 minParticipation;
+    //     uint64 minDuration;
+    //     uint256 minProposerVotingPower;
+    // }
+    // votingSettings: comes from the MainVotingPlugin
     const prepareInstallationInputs = [
       {
-        //  struct VotingSettings {
-        //     VotingMode votingMode;
-        //     uint32 supportThreshold;
-        //     uint32 minParticipation;
-        //     uint64 minDuration;
-        //     uint256 minProposerVotingPower;
-        // }
-        // votingSettings: comes from the MainVotingPlugin
         components: [
           {
             internalType: 'enum MajorityVotingBase.VotingMode',
@@ -192,10 +201,7 @@ export class GeoPluginClientEncoding extends ClientCore {
       },
     ];
 
-    console.log('params', params);
-
-    // Encode the data using encodeAbiParameters
-    const encodedData = encodeAbiParameters(prepareInstallationInputs, [
+    const encodedParams = encodeAbiParameters(prepareInstallationInputs, [
       params.votingSettings,
       params.initialEditors,
       params.memberAccessProposalDuration,
@@ -203,8 +209,8 @@ export class GeoPluginClientEncoding extends ClientCore {
     ]);
 
     return {
-      id: GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS, // Assuming you have this constant defined somewhere
-      data: hexToBytes(encodedData),
+      id: GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS,
+      data: hexToBytes(encodedParams),
     };
   }
 

@@ -65,4 +65,21 @@ export class GeoPluginContext extends ContextCore {
   get geoGovernancePluginRepoAddress(): string {
     return this.state.geoGovernancePluginRepoAddress;
   }
+
+  // @TODO: Remove these
+  get geoMemberAccessPluginAddress(): string {
+    return this.state.geoMemberAccessPluginAddress;
+  }
+
+  get geoMemberAccessPluginRepoAddress(): string {
+    return this.state.geoMemberAccessPluginRepoAddress;
+  }
+
+  get geoMainVotingPluginAddress(): string {
+    return this.state.geoMainVotingPluginAddress;
+  }
+
+  get geoMainVotingPluginRepoAddress(): string {
+    return this.state.geoMainVotingPluginRepoAddress;
+  }
 }

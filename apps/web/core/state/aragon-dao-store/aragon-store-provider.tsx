@@ -1,5 +1,6 @@
 import { Client, ContextParams } from '@aragon/sdk-client';
 import { SupportedNetwork } from '@aragon/sdk-client-common';
+import { ethers } from 'ethers';
 
 import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
@@ -21,26 +22,15 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
   const [geoPluginClient, setGeoPluginClient] = useState<GeoPluginClient | undefined>(undefined);
   const ethersSigner = useEthersSigner();
 
+  // console.log('ethers signer', ethersSigner);
+
   const aragonSDKContextParams: ContextParams = useMemo(
     () => ({
       network: SupportedNetwork.POLYGON,
       signer: ethersSigner,
-      // daoFactoryAddress: '0xc715336B5E7F10294F36CA09f19A0493070E2eFB', // mumbai dao factory address
-      daoFactoryAddress: '0x51Ead12DEcD31ea75e1046EdFAda14dd639789b8', // polygon mainnet dao factory address
-      ensRegistryAddress: '0x96E54098317631641703404C06A5afAD89da7373',
-      web3Providers: 'https://polygon-mainnet.g.alchemy.com/v2/Qu7BVFD8_NIRN7eTsGus0GW7LneRT4u_',
-      // web3Providers: process.env.NEXT_PUBLIC_RPC_URL,
-      // ipfsNodes: [
-      // {
-      // url: 'https://testing-ipfs-0.aragon.network/api/v0',
-      // headers: { 'X-API-KEY': process.env.NEXT_PUBLIC_IPFS_KEY || '' },
-      //   },
-      // ],
-      // graphqlNodes: [
-      //   {
-      //     url: 'https://subgraph.satsuma-prod.com/aragon/osx-mumbai/api',
-      //   },
-      // ],
+      web3Providers: new ethers.providers.AlchemyProvider(137, 'Qu7BVFD8_NIRN7eTsGus0GW7LneRT4u_'),
+      daoFactoryAddress: '0x392f0FdfF3283b9f026CfFeC7f9c2De443af3E7C', // polygon mainnet dao factory address
+      ensRegistryAddress: '0x57bf333951967a0cC0afcD58FC7959Ca0Eae6905',
     }),
     [ethersSigner]
   );

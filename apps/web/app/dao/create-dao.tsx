@@ -1,28 +1,34 @@
 'use client';
 
-import { Client, CreateDaoParams, DaoCreationSteps, DaoMetadata } from '@aragon/sdk-client';
+import { Client, CreateDaoParams, DaoCreationSteps, DaoMetadata, VotingMode } from '@aragon/sdk-client';
 import { GasFeeEstimation } from '@aragon/sdk-client-common';
+import { getAddress } from 'viem';
 
 import { useWalletClient } from 'wagmi';
 
-import { GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS } from '~/core/constants';
+import { ZERO_ADDRESS } from '~/core/constants';
+import { Environment } from '~/core/environment';
 import { GeoPluginClientEncoding } from '~/core/io/governance-space-plugin/internal';
 import { GeoPersonalSpacePluginClientEncoding } from '~/core/io/personal-space-plugin/internal';
+import { StorageClient } from '~/core/io/storage/storage';
 import { useAragonSDKContext } from '~/core/state/aragon-dao-store';
+import { getImageHash } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
 
 // this route is only for testing creating a DAO on the frontend
 export default function CreateDao() {
-  const { geoPluginClient, geoPluginContext } = useAragonSDKContext();
+  const { geoPluginContext } = useAragonSDKContext();
   const { data: wallet } = useWalletClient();
+
+  console.log('context', { geoPluginContext });
 
   if (!geoPluginContext) throw new Error('geoPluginContext is undefined');
   const client: Client = new Client(geoPluginContext);
 
   const handleCreateDao = async () => {
     const metadata: DaoMetadata = {
-      name: 'Hack the Planet Test Personal DAO',
+      name: 'Governance testing',
       description: 'A personal test DAO for Hack the Planet',
       avatar:
         'https://legendary-digital-network-assets.s3.amazonaws.com/wp-content/uploads/2020/09/13021324/Hackers-cast-Featured.jpg',
@@ -34,47 +40,53 @@ export default function CreateDao() {
       ],
     };
 
-    const metadataUri = await client.methods.pinMetadata(metadata); // test Metadata -- change Metadata or DAO settings to summon another test DAO
-
-    if (!geoPluginClient) throw new Error('geoPluginClient is undefined');
-
     if (!wallet) return;
+    // const metadataUri = await client.methods.pinMetadata(metadata); // test Metadata -- change Metadata or DAO settings to summon another test DAO
 
-    const geoMainVotingPluginInstallItem = GeoPluginClientEncoding.getMainVotingPluginInstallItem({
+    // const metadataUri = await new StorageClient(
+    //   Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs
+    // ).uploadObject(metadata);
+
+    console.log('context', geoPluginContext);
+
+    const spacePluginInstallItem = await GeoPluginClientEncoding.getSpacePluginInstallItem({
+      firstBlockContentUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
+      // @HACK: Using a different upgrader from the governance plugin to work around
+      // a limitation in Aragon.
+      pluginUpgrader: getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
+      precedessorSpace: getAddress('0xd93A5fCf65b520BA24364682aCcf50dd2F9aC18B'), // Agriculture
+    });
+
+    const governancePluginConfig: Parameters<typeof GeoPluginClientEncoding.getGovernancePluginInstallItem>[0] = {
       votingSettings: {
-        votingMode: 1, // example value
-        supportThreshold: 50, // example value
-        minParticipation: 10, // example value
-        minDuration: 86400, // example value
-        minProposerVotingPower: 1000, // example value
+        votingMode: 0, // example value
+        supportThreshold: 1, // example value
+        minParticipation: 1, // example value
+        minDuration: BigInt(60 * 60 * 24), // example value
+        minProposerVotingPower: BigInt(1000), // example value
       },
-      initialEditors: [wallet?.account.address], // example values -- change to wallet address or whatever else
-      pluginUpgrader: wallet?.account.address, // not sure what the best practice is here per Aragon
-    });
-
-    // @TODO: Check how the mainVotingPlugin address is used in the CreateDAO factory method
-    const geoMemberAccessPluginInstallItem = GeoPluginClientEncoding.getMemberAccessPluginInstallItem({
-      multisigSettings: {
-        proposalDuration: 12345, // example value
-        mainVotingPlugin: GEO_MEMBER_ACCESS_PLUGIN_REPO_ADDRESS, // unsure if this should be the plugin address from the DAO Factory or the plugin repo address
-      },
-      pluginUpgrader: wallet?.account.address, // not sure what the best practice is here per Aragon
-    });
-
-    const geoPersonalSpacePluginInstallItem = GeoPersonalSpacePluginClientEncoding.getPersonalSpacePluginInstallItem({
-      initialEditorAddress: wallet?.account.address,
-    });
-
-    const createParams: CreateDaoParams = {
-      metadataUri,
-      ensSubdomain: 'test-hack-the-planet-mumbai-2',
-      // plugins: [geoMainVotingPluginInstallItem],
-      plugins: [geoPersonalSpacePluginInstallItem],
+      memberAccessProposalDuration: BigInt(60 * 60 * 24), // one day in seconds
+      initialEditors: [getAddress(wallet.account.address)], // example values -- @TODO: change to user's wallet address
+      pluginUpgrader: getAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // @TODO: Use deployer wallet
     };
 
-    const estimatedGas: GasFeeEstimation = await client.estimation.createDao(createParams);
-    console.log({ avg: estimatedGas.average, max: estimatedGas.max });
+    const governancePluginInstallItem =
+      await GeoPluginClientEncoding.getGovernancePluginInstallItem(governancePluginConfig);
 
+    const createParams: CreateDaoParams = {
+      metadataUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
+      ensSubdomain: '',
+      daoUri: 'https://geobrowser.io',
+      plugins: [governancePluginInstallItem, spacePluginInstallItem],
+    };
+
+    console.log('encoded installation params', {
+      governancePluginInstallItem,
+      spacePluginInstallItem,
+    });
+
+    // const estimatedGas: GasFeeEstimation = await client.estimation.createDao(createParams);
+    // console.log('estimation', estimatedGas);
     const steps = client.methods.createDao(createParams);
 
     for await (const step of steps) {
@@ -91,16 +103,14 @@ export default function CreateDao() {
             break;
         }
       } catch (err) {
-        console.error(err);
+        console.error('Failed creating DAO', err);
       }
     }
   };
 
   return (
-    <div className="flex flex-col">
-      <Button variant="primary" onClick={handleCreateDao}>
-        Create DAO
-      </Button>
-    </div>
+    <Button variant="primary" onClick={handleCreateDao}>
+      Create DAO
+    </Button>
   );
 }
