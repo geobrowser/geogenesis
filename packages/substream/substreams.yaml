@@ -35,10 +35,8 @@ modules:
     initialBlock: 36472424
     inputs:
       - source: sf.ethereum.type.v2.Block
-      - store: store_addresses
-        mode: get
     output:
-      type: proto:schema.RolesRevoked
+        type: proto:schema.RoleChanges
 
   - name: map_profiles_registered
     kind: map

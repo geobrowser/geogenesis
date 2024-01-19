@@ -1,10 +1,7 @@
 pub mod helpers;
 mod pb;
 
-use pb::schema::{
-    EntriesAdded, EntryAdded, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered, RoleChange,
-    RoleChanges,
-};
+use pb::schema::{EntriesAdded, EntryAdded, GeoOutput, RoleChange, RoleChanges};
 use substreams::store::*;
 use substreams_ethereum::{pb::eth, use_contract, Event};
 
@@ -13,11 +10,8 @@ use helpers::*;
 use_contract!(space, "abis/legacy-space.json");
 use_contract!(geo_profile_registry, "abis/geo-profile-registry.json");
 
-use space::events::{
-    EntryAdded as EntryAddedEvent, RoleGranted as RoleGrantedEvent, RoleRevoked as RoleRevokedEvent,
-};
-
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
+use space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
 
 const ROOT_SPACE_ADDRESS: &'static str = "0x170b749413328ac9a94762031a7a05b00c1d2e34";
 
@@ -63,10 +57,7 @@ fn store_addresses(entries: EntriesAdded, output: StoreSetIfNotExistsString) {
 }
 
 #[substreams::handlers::map]
-fn map_roles(
-    block: eth::v2::Block,
-    s: StoreGetString,
-) -> Result<RoleChanges, substreams::errors::Error> {
+fn map_roles(block: eth::v2::Block) -> Result<RoleChanges, substreams::errors::Error> {
     let changes: Vec<RoleChange> = block
         .logs()
         .filter_map(|log| {
@@ -76,20 +67,15 @@ fn map_roles(
             let id = format!("{block_number}-{tx_hash}-{log_index}");
             let address = format_hex(&log.address());
 
-            if let None = s.get_last(&address) {
-                if address != ROOT_SPACE_ADDRESS {
-                    return None;
-                }
-            }
-
-            if let Some(role_granted) = RoleGrantedEvent::match_and_decode(log) {
+            if let Some(role_granted) = RoleGranted::match_and_decode(log) {
                 let change = ChangeKind::Granted(role_granted);
                 return Some((change, id, address));
             }
-            if let Some(role_revoked) = RoleRevokedEvent::match_and_decode(log) {
+            if let Some(role_revoked) = RoleRevoked::match_and_decode(log) {
                 let change = ChangeKind::Revoked(role_revoked);
                 return Some((change, id, address));
             }
+
             return None;
         })
         .map(|(role_change, id, address)| role_change.as_change(id, address))
