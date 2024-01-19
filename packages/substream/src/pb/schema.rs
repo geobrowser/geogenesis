@@ -114,6 +114,8 @@ pub struct GeoOutput {
 pub struct SuccessorSpaceCreated {
     #[prost(string, tag="1")]
     pub predecessor_space: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub plugin_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

@@ -36,7 +36,7 @@ modules:
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
-        type: proto:schema.RoleChanges
+      type: proto:schema.RoleChanges
 
   - name: map_profiles_registered
     kind: map
@@ -45,6 +45,14 @@ modules:
       - source: sf.ethereum.type.v2.Block
     output:
       type: proto:schema.GeoProfilesRegistered
+
+  - name: map_successor_spaces_created
+    kind: map
+    initialBlock: 52513890
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.SuccessorSpacesCreated
 
   - name: geo_out
     kind: map

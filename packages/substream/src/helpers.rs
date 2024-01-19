@@ -1,8 +1,8 @@
 use substreams::{hex, Hex};
 
 use crate::{
+    legacy_space::events::{RoleGranted as RoleGrantedEvent, RoleRevoked as RoleRevokedEvent},
     pb::schema::{role_change::Change, RoleChange, RoleGranted, RoleRevoked},
-    space::events::{RoleGranted as RoleGrantedEvent, RoleRevoked as RoleRevokedEvent},
 };
 
 const ADMIN_ROLE: [u8; 32] =

@@ -74,6 +74,7 @@ message GeoOutput {
 
 message SuccessorSpaceCreated {
   string predecessorSpace = 1;
+  string pluginAddress = 2;
 }
 
 message SuccessorSpacesCreated {
