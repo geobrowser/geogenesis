@@ -89,7 +89,6 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
 // to the substream. Right now there's an issue with the substream where it is not correctly
 // indexing roles, so for now we are using this workaround while we fix the substream.
 const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
-  address = '0xE343E47d821a9bcE54F12237426A6ef391066b60';
   if (!address) return [];
 
   const query = `{
