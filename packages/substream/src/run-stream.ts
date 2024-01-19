@@ -8,12 +8,18 @@ import { readCursor, writeCursor } from './cursor';
 import { parseValidFullEntries } from './parse-valid-full-entries';
 import { populateWithFullEntries } from './populate-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
+import { populateProfiles } from './populate-profiles';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { createSink, createStream } from './substreams.js/sink/src';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
 import { getEntryWithIpfsContent } from './utils/ipfs';
-import { type FullEntry, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
+import {
+  type FullEntry,
+  ZodEntryStreamResponse,
+  ZodProfilesRegisteredStreamResponse,
+  ZodRoleChangeStreamResponse,
+} from './zod';
 
 export class InvalidPackageError extends Error {
   _tag: 'InvalidPackageError' = 'InvalidPackageError';
@@ -140,6 +146,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           const entryResponse = ZodEntryStreamResponse.safeParse(jsonOutput);
           const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
+          const profileRegisteredResponse = ZodProfilesRegisteredStreamResponse.safeParse(jsonOutput);
 
           if (entryResponse.success) {
             console.log('Processing ', entryResponse.data.entries.length, ' entries');
@@ -259,7 +266,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             }
           }
 
-          if (!entryResponse.success && !roleChangeResponse.success) {
+          if (!entryResponse.success && !roleChangeResponse.success && !profileRegisteredResponse.success) {
             console.error('Failed to parse substream message', unpackedOutput);
           }
         });

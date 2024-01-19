@@ -13,6 +13,14 @@ export const ZodEntry = z.object({
   space: z.string(), // Map to a correctly encoded hex string
 });
 
+export const ZodProfileRegistered = z.object({
+  requestor: z.string(),
+  space: z.string(),
+  id: z.string(),
+});
+
+export type ProfileRegistered = z.infer<typeof ZodProfileRegistered>;
+
 export type Entry = z.infer<typeof ZodEntry>;
 
 export const ZodAction = z.object({
@@ -73,6 +81,10 @@ export type RoleChange = z.infer<typeof ZodRoleChange>;
 
 export const ZodEntryStreamResponse = z.object({
   entries: z.array(ZodEntry).min(1),
+});
+
+export const ZodProfilesRegisteredStreamResponse = z.object({
+  profilesRegistered: z.array(ZodProfileRegistered).min(1),
 });
 
 export const ZodRoleChangeStreamResponse = z.object({

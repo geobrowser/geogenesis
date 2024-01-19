@@ -26,3 +26,12 @@ CREATE INDEX triple_versions_triple_index
 
 CREATE INDEX triple_versions_version_index
     on triple_versions (version_id);
+
+CREATE INDEX profile_account_id
+    on profiles (created_by_id);
+
+CREATE INDEX profile_entity_id
+    on profiles (entity_id);
+
+CREATE INDEX profile_space_id
+    on profiles (space_id);
