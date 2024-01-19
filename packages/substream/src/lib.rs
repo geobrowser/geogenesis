@@ -1,7 +1,11 @@
 pub mod helpers;
 mod pb;
 
-use pb::schema::{EntriesAdded, EntryAdded, GeoOutput, RoleChange, RoleChanges};
+use pb::schema::{
+    EntriesAdded, EntryAdded, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered, RoleChange,
+    RoleChanges,
+};
+
 use substreams::store::*;
 use substreams_ethereum::{pb::eth, use_contract, Event};
 
@@ -12,8 +16,6 @@ use_contract!(geo_profile_registry, "abis/geo-profile-registry.json");
 
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
-
-const ROOT_SPACE_ADDRESS: &'static str = "0x170b749413328ac9a94762031a7a05b00c1d2e34";
 
 #[substreams::handlers::map]
 fn map_entries_added(block: eth::v2::Block) -> Result<EntriesAdded, substreams::errors::Error> {
