@@ -109,6 +109,18 @@ pub struct GeoOutput {
     #[prost(message, repeated, tag="3")]
     pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SuccessorSpaceCreated {
+    #[prost(string, tag="1")]
+    pub predecessor_space: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SuccessorSpacesCreated {
+    #[prost(message, repeated, tag="1")]
+    pub spaces: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum Role {

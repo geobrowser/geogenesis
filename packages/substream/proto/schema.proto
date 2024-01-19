@@ -71,3 +71,11 @@ message GeoOutput {
   repeated RoleChange role_changes = 2;
   repeated GeoProfileRegistered profiles_registered = 3;
 }
+
+message SuccessorSpaceCreated {
+  string predecessorSpace = 1;
+}
+
+message SuccessorSpacesCreated {
+  repeated SuccessorSpaceCreated spaces = 1;
+}
