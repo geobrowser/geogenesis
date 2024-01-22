@@ -1,0 +1,21 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "dao",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "plugin",
+        "type": "address"
+      }
+    ],
+    "name": "GeoSpacePluginCreated",
+    "type": "event"
+  }
+]
