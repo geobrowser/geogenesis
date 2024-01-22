@@ -123,6 +123,20 @@ pub struct SuccessorSpacesCreated {
     #[prost(message, repeated, tag="1")]
     pub spaces: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeoSpaceCreated {
+    #[prost(string, tag="1")]
+    pub dao_address: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub space_address: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeoSpacesCreated {
+    #[prost(message, repeated, tag="1")]
+    pub spaces: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum Role {

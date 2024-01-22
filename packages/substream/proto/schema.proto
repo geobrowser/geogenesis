@@ -80,3 +80,12 @@ message SuccessorSpaceCreated {
 message SuccessorSpacesCreated {
   repeated SuccessorSpaceCreated spaces = 1;
 }
+
+message GeoSpaceCreated {
+  string daoAddress = 1;
+  string spaceAddress = 2;
+}
+
+message GeoSpacesCreated {
+  repeated GeoSpaceCreated spaces = 1;
+}

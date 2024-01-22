@@ -2,8 +2,9 @@ pub mod helpers;
 mod pb;
 
 use pb::schema::{
-    EntriesAdded, EntryAdded, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered, RoleChange,
-    RoleChanges, SuccessorSpaceCreated, SuccessorSpacesCreated,
+    EntriesAdded, EntryAdded, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
+    GeoSpaceCreated, GeoSpacesCreated, RoleChange, RoleChanges, SuccessorSpaceCreated,
+    SuccessorSpacesCreated,
 };
 
 use substreams::store::*;
@@ -14,10 +15,12 @@ use helpers::*;
 use_contract!(legacy_space, "abis/legacy-space.json");
 use_contract!(space, "abis/space.json");
 use_contract!(geo_profile_registry, "abis/geo-profile-registry.json");
+use_contract!(space_setup, "abis/space-setup.json");
 
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use legacy_space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
 use space::events::SuccessorSpaceCreated as SuccessSpaceCreatedEvent;
+use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
 
 #[substreams::handlers::map]
 fn map_entries_added(block: eth::v2::Block) -> Result<EntriesAdded, substreams::errors::Error> {
@@ -134,6 +137,27 @@ fn map_successor_spaces_created(
     Ok(SuccessorSpacesCreated {
         spaces: successor_spaces,
     })
+}
+
+#[substreams::handlers::map]
+fn map_spaces_created(
+    block: eth::v2::Block,
+) -> Result<GeoSpacesCreated, substreams::errors::Error> {
+    let spaces: Vec<GeoSpaceCreated> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(space_created) = GeoSpacePluginCreatedEvent::match_and_decode(log) {
+                return Some(GeoSpaceCreated {
+                    dao_address: format_hex(&space_created.dao),
+                    space_address: format_hex(&space_created.plugin),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(GeoSpacesCreated { spaces })
 }
 
 #[substreams::handlers::map]

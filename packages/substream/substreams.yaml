@@ -54,6 +54,14 @@ modules:
     output:
       type: proto:schema.SuccessorSpacesCreated
 
+  - name: map_spaces_created
+    kind: map
+    initialBlock: 52630300
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.GeoSpacesCreated
+
   - name: geo_out
     kind: map
     initialBlock: 36472424
