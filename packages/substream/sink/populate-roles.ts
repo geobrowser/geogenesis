@@ -1,9 +1,9 @@
 import * as db from 'zapatos/db';
 
-import { upsertCachedRoles } from './populate-from-cache';
 import { pool } from './utils/pool';
 import { type RoleChange } from './zod';
 
+// @TODO: Effectify the role granted and role revoked handlers
 export async function handleRoleGranted({
   roleGranted,
   blockNumber,
@@ -19,6 +19,18 @@ export async function handleRoleGranted({
     const isMemberRole = role === 'MEMBER';
     const isModeratorRole = role === 'MODERATOR';
 
+    /**
+     * @HACK: For legacy spaces we don't generate the space entry in the sink until someone
+     * actually adds content to the space. This is problematic as roles can be changed before
+     * any content is actually added to the space.
+     *
+     * Here we ensure that we create any relations for the role change before we create the
+     * role change itself.
+     *
+     * This gets fixed with the new DAO-based spaces as we create the space before we process
+     * any other events. See the substream mapping for more information on the different space
+     * contracts.
+     */
     await Promise.all([
       db
         .upsert('spaces', [{ id: roleGranted.space, created_at_block: blockNumber, is_root_space: false }], ['id'], {
@@ -80,6 +92,7 @@ export async function handleRoleGranted({
   }
 }
 
+// @TODO: Effectify the role granted and role revoked handlers
 export async function handleRoleRevoked({
   roleRevoked,
   blockNumber,
@@ -93,6 +106,18 @@ export async function handleRoleRevoked({
     const isMemberRole = role === 'MEMBER';
     const isModeratorRole = role === 'MODERATOR';
 
+    /**
+     * @HACK: For legacy spaces we don't generate the space entry in the sink until someone
+     * actually adds content to the space. This is problematic as roles can be changed before
+     * any content is actually added to the space.
+     *
+     * Here we ensure that we create any relations for the role change before we create the
+     * role change itself.
+     *
+     * This gets fixed with the new DAO-based spaces as we create the space before we process
+     * any other events. See the substream mapping for more information on the different space
+     * contracts.
+     */
     await Promise.all([
       db
         .upsert('spaces', [{ id: roleRevoked.space, created_at_block: blockNumber, is_root_space: false }], ['id'], {

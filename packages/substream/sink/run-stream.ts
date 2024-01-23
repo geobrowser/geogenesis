@@ -63,11 +63,13 @@ export class CouldNotWriteSpacesError extends Error {
 
 interface StreamConfig {
   startBlockNumber?: number;
+  // We pass in this flag as it might change depending on the execution state of the stream.
+  // If the stream has crashed we need to make sure that we fall back to the cursor.
   shouldUseCursor: boolean;
 }
 
 export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
-  const program = Effect.gen(function* (_) {
+  return Effect.gen(function* (_) {
     const startCursor = yield* _(
       Effect.tryPromise({
         try: () => readCursor(),
@@ -119,6 +121,20 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       maxRetrySeconds: 600, // 10 minutes.
     });
 
+    /**
+     * @HACK: Ticks in the stream might process out-of-order if any of the ticks take
+     * longer than subsequent ticks to execute. This is problematic as Geo relies on
+     * data being processed linearly to correctly build the knowledge graph state over
+     * time.
+     *
+     * We create a "Queue" using promise chaining to ensure that ticks are processed
+     * in the order that they come in. This is a giant hack and can destroy performance
+     * in JS.
+     *
+     * Soon (as of January 23, 2024) we'll migrate to a Queue implementation using Effect's
+     * Queue. This will allow us to queue up the DB writes necessary for a given tick and
+     * execute them in a more reasonable manner.
+     */
     let entriesQueue = Promise.resolve();
 
     const sink = createSink({
@@ -127,11 +143,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const cursor = message.cursor;
           const blockNumber = Number(message.clock?.number.toString());
           const timestamp = Number(message.clock?.timestamp?.seconds.toString());
-
-          // Skipping a massive block for now
-          if (message.clock?.number.toString() === '36472865') {
-            return;
-          }
 
           if (blockNumber % 1000 === 0) {
             slog({
@@ -168,21 +179,23 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
 
-          // @TODO: De-duplicate any spaces being added with both the space plugin governance
-          // plugins. This can likely happen when we refactor to a real queue implementation
-          // which has better aggregate->write separation and performance.
-          //
-          // Right now we have a lot of blocking writes to the DB, as we separate writing to the
-          // DB based on the type of event that we're reacting to. `populateEntries` also has
-          // quite a few serially blocking calls.
-          //
-          // We want to move to a Queue implementation instead of the hacky Promise queue that
-          // we currently have. This switch will give us a better opportunity to aggregate _all_
-          // the changes happening as part of a single block and then write them more efficiently.
-          //
-          // With the new governance contracts (as of January 23, 2024) we will be indexing _many_
-          // more events, so we'll need a more scalable way to handle async writes to the DB so
-          // indexing time doesn't balloon.
+          /**
+           * @TODO: De-duplicate any spaces being added with both the space plugin governance
+           * plugins. This can likely happen when we refactor to a real queue implementation
+           * which has better aggregation->write separation and performance.
+           *
+           * Right now we have a lot of blocking writes to the DB, as we separate writing to the
+           * DB based on the type of event that we're reacting to. `populateEntries` also has
+           * quite a few serially blocking calls.
+           *
+           * We want to move to a Queue implementation instead of the hacky Promise queue that
+           * we currently have. This switch will give us a better opportunity to aggregate _all_
+           * the changes happening as part of a single block and then write them more efficiently.
+           *
+           * With the new governance contracts (as of January 23, 2024) we will be indexing _many_
+           * more events, so we'll need a more scalable way to handle async writes to the DB so
+           * indexing time doesn't balloon.
+           */
           if (spacePluginCreatedResponse.success) {
             const spaces = mapSpaces(spacePluginCreatedResponse.data.spacesCreated, blockNumber);
 
@@ -285,11 +298,27 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               message: `Writing ${entries.length} entries to DB`,
             });
 
-            // @TODO: This should write all of the actions we need to take to an Effect.Queue
-            // The Effect.Queue will process each action in a separate process. This also lets
-            // us do all the DB writes for _all_ events at once instead of separating them out
-            // based on the event type.
+            /**
+             * @HACK: Ticks in the stream might process out-of-order if any of the ticks take
+             * longer than subsequent ticks to execute. This is problematic as Geo relies on
+             * data being processed linearly to correctly build the knowledge graph state over
+             * time.
+             *
+             * We create a "Queue" using promise chaining to ensure that ticks are processed
+             * in the order that they come in. This is a giant hack and can destroy performance
+             * in JS.
+             *
+             * Soon (as of January 23, 2024) we'll migrate to a Queue implementation using Effect's
+             * Queue. This will allow us to queue up the DB writes necessary for a given tick and
+             * execute them in a more reasonable manner.
+             */
             entriesQueue = entriesQueue.then(() => {
+              /**
+               * @TODO: This should write all of the actions we need to take to an Effect.Queue
+               * The Effect.Queue will process each action in a separate process. This also lets
+               * us do all the DB writes for _all_ events at once instead of separating them out
+               * based on the event type.
+               */
               return populateWithFullEntries({
                 fullEntries: validFullEntries,
                 blockNumber,
@@ -443,6 +472,4 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
     return yield* _(runStream);
   });
-
-  return program;
 }

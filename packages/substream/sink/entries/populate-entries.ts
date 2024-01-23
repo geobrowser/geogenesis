@@ -68,13 +68,14 @@ export async function populateWithFullEntries({
       cursor,
     });
 
-    // Fetch all existing triples into the new triple_versions join table. A new version of an entity
-    // should include all of the triples that were included in the previous entity, minus any triples
-    // that were deleted as part of a proposal.
+    // A new version of an entity should include all of the triples that were included in the previous
+    // version, minus any triples that were deleted as part of a proposal.
     //
     // This fetches all of the triples that were included in the previous version of an entity. Later
     // on we process all triples that were added and removed as part of this proposal and remove
     // deleted triples from the new version.
+    //
+    // @TODO: This is insanely slow for large data sets (some of which we have)
     const triplesForVersionsEffect: Effect.Effect<never, Error, Schema.triple_versions.Insertable[]> = Effect.gen(
       function* (awaited) {
         const triplesForVersions = yield* awaited(
@@ -100,6 +101,8 @@ export async function populateWithFullEntries({
                 });
               });
             }),
+            // We limit the number of connections to the DB to 75 to avoid errors where we surpass the pg
+            // connection limit. This mostly only occurs in very large data sets.
             {
               concurrency: 75,
             }
@@ -114,80 +117,66 @@ export async function populateWithFullEntries({
       Effect.retry(triplesForVersionsEffect, Schedule.exponential(100).pipe(Schedule.jittered))
     );
 
+    // Write all non-version and non-triple data in parallel
     yield* awaited(
-      Effect.tryPromise({
-        try: () =>
-          upsertChunked('accounts', accounts, 'id', {
-            updateColumns: db.doNothing,
-          }),
-        catch: error => new Error(`Failed to insert bulk accounts. ${(error as Error).message}`),
-      })
-    );
-
-    yield* awaited(
-      Effect.tryPromise({
-        try: () =>
-          upsertChunked('actions', actions, 'id', {
-            updateColumns: db.doNothing,
-          }),
-        catch: error => new Error(`Failed to insert bulk actions. ${(error as Error).message}`),
-      })
-    );
-
-    yield* awaited(
-      Effect.tryPromise({
-        try: () =>
-          // We update the name and description for an entity when mapping
-          // through triples.
-          upsertChunked('geo_entities', geoEntities, 'id', {
-            updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
-            noNullUpdateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
-          }),
-        catch: error => new Error(`Failed to insert bulk entities. ${(error as Error).message}`),
-      })
-    );
-
-    yield* awaited(
-      Effect.tryPromise({
-        try: () =>
-          upsertChunked('proposals', proposals, 'id', {
-            updateColumns: db.doNothing,
-          }),
-        catch: error => new Error(`Failed to insert bulk proposals. ${(error as Error).message}`),
-      })
-    );
-
-    yield* awaited(
-      Effect.tryPromise({
-        try: () =>
-          upsertChunked('proposed_versions', proposed_versions, 'id', {
-            updateColumns: db.doNothing,
-          }),
-        catch: error => new Error(`Failed to insert bulk proposed versions. ${(error as Error).message}`),
-      })
-    );
-
-    yield* awaited(
-      Effect.tryPromise({
-        try: () =>
-          upsertChunked('spaces', spaces, 'id', {
-            updateColumns: db.doNothing,
-          }),
-        catch: error => new Error(`Failed to insert bulk spaces. ${(error as Error).message}`),
-      })
-    );
-
-    yield* awaited(
-      Effect.tryPromise({
-        try: () =>
-          upsertChunked('versions', versions, 'id', {
-            updateColumns: db.doNothing,
-          }),
-        catch: error => new Error(`Failed to insert bulk versions. ${(error as Error).message}`),
-      })
-    );
-
-    yield* awaited(
+      Effect.all([
+        Effect.tryPromise({
+          try: () =>
+            upsertChunked('spaces', spaces, 'id', {
+              updateColumns: db.doNothing,
+            }),
+          catch: error => new Error(`Failed to insert bulk spaces. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () =>
+            upsertChunked('accounts', accounts, 'id', {
+              updateColumns: db.doNothing,
+            }),
+          catch: error => new Error(`Failed to insert bulk accounts. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () =>
+            upsertChunked('actions', actions, 'id', {
+              updateColumns: db.doNothing,
+            }),
+          catch: error => new Error(`Failed to insert bulk actions. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () =>
+            // We update the name and description for an entity when mapping
+            // through triples.
+            upsertChunked('geo_entities', geoEntities, 'id', {
+              updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
+              noNullUpdateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
+            }),
+          catch: error => new Error(`Failed to insert bulk entities. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () =>
+            upsertChunked('proposals', proposals, 'id', {
+              updateColumns: db.doNothing,
+            }),
+          catch: error => new Error(`Failed to insert bulk proposals. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () =>
+            upsertChunked('proposed_versions', proposed_versions, 'id', {
+              updateColumns: db.doNothing,
+            }),
+          catch: error => new Error(`Failed to insert bulk proposed versions. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () =>
+            upsertChunked('versions', versions, 'id', {
+              updateColumns: db.doNothing,
+            }),
+          catch: error => new Error(`Failed to insert bulk versions. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () => upsertChunked('triple_versions', existingTripleVersions, ['triple_id', 'version_id']),
+          catch: error => new Error(`Failed to insert bulk triple versions. ${(error as Error).message}`),
+        }),
+      ]),
       Effect.tryPromise({
         try: () => upsertChunked('triple_versions', existingTripleVersions, ['triple_id', 'version_id']),
         catch: error => new Error(`Failed to insert bulk triple versions. ${(error as Error).message}`),
@@ -196,6 +185,21 @@ export async function populateWithFullEntries({
 
     const triplesDatabaseTuples = mapTriplesWithActionType(fullEntries, timestamp, blockNumber);
 
+    /**
+     * Changes to data in Geo are modeled as "actions." You can create a triple or delete a triple.
+     * A client might publish _many_ actions, some of which are operations on the same triple. e.g.,
+     * Create, Delete, Create, Delete, Create.
+     *
+     * Therefore, we need to process all actions serially to ensure that the final result of the data
+     * is correct.
+     *
+     * @TODO: This is obviously fairly slow as may perform many async operations for each Create or
+     * Deleteaction. One way to speed this up is to "squash" all of the actions corresponding to each
+     * triple ahead of time to generate the minimum number of actions for each triple.
+     *
+     * Right now (January 23, 2024) the Geo Genesis client _does_ squash actions before publishing, but
+     * this wasn't always the case and other clients might not implement the squashing mechanism.
+     */
     for (const [actionType, triple] of triplesDatabaseTuples) {
       const isCreateTriple = actionType === TripleAction.Create;
       const isDeleteTriple = actionType === TripleAction.Delete;
@@ -210,13 +214,23 @@ export async function populateWithFullEntries({
       const isDescriptionCreateAction = isCreateTriple && isDescriptionAttribute && isStringValueType;
       const isDescriptionDeleteAction = isDeleteTriple && isDescriptionAttribute && isStringValueType;
 
-      // Insert all new triples and existing triples into the new triple_versions join table.
-      //
-      // A Version should include all triples that were added as part of this proposal, and also all
-      // triples that exist in previous versions of the entity. In the next step we delete all
-      // triples that were deleted as part of this proposal to ensure they aren't included in the new version.
+      /**
+       * Insert all new triples and existing triples into the triple_versions join table.
+       *
+       * The new Version should include all triples that were added as part of this proposal, and
+       * also all triples that exist in previous versions of the entity. In the next step we delete
+       * all triples that were deleted as part of this proposal to ensure they aren't included in
+       * the new version.
+       *
+       * @TODO: This is insanely slow for large data sets (some of which we have)
+       */
       const version = versions.find(v => v.entity_id === triple.entity_id);
 
+      /**
+       * @TODO: There's a bug here where we might create a triple_version for a triple that gets
+       * deleted later on in the same actions processing loop. If we squash ahead of time this
+       * shouldn't be an issue.
+       */
       if (isCreateTriple && version) {
         const insertTripleEffect = Effect.tryPromise({
           try: () => db.upsert('triples', triple, 'id').run(pool),
@@ -238,6 +252,7 @@ export async function populateWithFullEntries({
           catch: error => new Error(`Failed to insert ${triple.id}. ${(error as Error).message}`),
         });
 
+        // @TODO: Parallelize with Effect.all
         yield* awaited(Effect.retry(insertTripleEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
         yield* awaited(Effect.retry(insertTripleVersionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
@@ -259,15 +274,26 @@ export async function populateWithFullEntries({
             new Error(`Failed to delete triple ${triple.id} from version ${version.id}}. ${(error as Error).message}`),
         });
 
+        /**
+         * With our versioning model we store all triples that have ever been written to the system. If a
+         * triple is not part of the latest version for an entity we mark it as stale.
+         */
         const setStaleEffect = Effect.tryPromise({
           try: () => db.update('triples', { is_stale: true }, { id: triple.id }).run(pool),
           catch: error => new Error(`Failed to set triple ${triple.id} as stale. ${(error as Error).message}`),
         });
 
+        // @TODO: Parallelize with Effect.all
         yield* awaited(Effect.retry(deleteEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
         yield* awaited(Effect.retry(setStaleEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
+      /**
+       * We associate the triple data for the name and description triples with the entity itself to make
+       * querying the name and description of an entity easier.
+       *
+       * There's probably a better way to do this in SQL.
+       */
       if (isNameCreateAction) {
         const insertNameEffect = Effect.tryPromise({
           try: () =>
@@ -301,6 +327,12 @@ export async function populateWithFullEntries({
         yield* awaited(Effect.retry(insertNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
+      /**
+       * We associate the triple data for the name and description triples with the entity itself to make
+       * querying the name and description of an entity easier.
+       *
+       * There's probably a better way to do this in SQL.
+       */
       if (isNameDeleteAction) {
         const deleteNameEffect = Effect.tryPromise({
           try: () =>
@@ -334,6 +366,12 @@ export async function populateWithFullEntries({
         yield* awaited(Effect.retry(deleteNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
+      /**
+       * We associate the triple data for the name and description triples with the entity itself to make
+       * querying the name and description of an entity easier.
+       *
+       * There's probably a better way to do this in SQL.
+       */
       if (isDescriptionCreateAction) {
         const insertDescriptionEffect = Effect.tryPromise({
           try: () =>
@@ -367,6 +405,12 @@ export async function populateWithFullEntries({
         yield* awaited(Effect.retry(insertDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
+      /**
+       * We associate the triple data for the name and description triples with the entity itself to make
+       * querying the name and description of an entity easier.
+       *
+       * There's probably a better way to do this in SQL.
+       */
       if (isDescriptionDeleteAction) {
         const deleteDescriptionEffect = Effect.tryPromise({
           try: () =>
@@ -400,6 +444,12 @@ export async function populateWithFullEntries({
         yield* awaited(Effect.retry(deleteDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
+      /**
+       * We associate the triple data for the name and description triples with the entity itself to make
+       * querying the name and description of an entity easier.
+       *
+       * There's probably a better way to do this in SQL.
+       */
       if (isAddType) {
         const insertTypeEffect = Effect.tryPromise({
           try: () =>
@@ -422,6 +472,12 @@ export async function populateWithFullEntries({
         yield* awaited(Effect.retry(insertTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
+      /**
+       * We associate the triple data for the name and description triples with the entity itself to make
+       * querying the name and description of an entity easier.
+       *
+       * There's probably a better way to do this in SQL.
+       */
       if (isDeleteType) {
         const deleteTypeEffect = Effect.tryPromise({
           try: () =>

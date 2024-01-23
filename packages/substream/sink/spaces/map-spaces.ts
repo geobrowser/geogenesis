@@ -49,9 +49,10 @@ export function mapGovernanceToSpaces(
 }
 
 /**
- * It might make sense to have a separate function that takes the mapSpaces and mapGovernanceToSpaces
- * functions and merges any duplicate entries into a single DB call. Otherwise we're making multiple
- * writes to the DB with duplicate data which is blocking and slow.
+ * @TODO: It might make sense to have a separate function that takes the mapSpaces and
+ * mapGovernanceToSpaces functions and merges any duplicate entries into a single DB call.
+ * Otherwise we're making multiple writes to the DB with duplicate data which is blocking
+ * and slow.
  *
  * Maybe this can happen when we create the Queue implementation.
  */
