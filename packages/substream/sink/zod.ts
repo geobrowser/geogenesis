@@ -84,6 +84,8 @@ export const ZodSpacePluginCreated = z.object({
   spaceAddress: z.string(),
 });
 
+export type SpacePluginCreated = z.infer<typeof ZodSpacePluginCreated>;
+
 export const ZodSpacePluginCreatedStreamResponse = z.object({
   spacesCreated: z.array(ZodSpacePluginCreated).min(1),
 });
@@ -94,6 +96,8 @@ export const GovernancePluginsCreated = z.object({
   mainVotingAddress: z.string(),
   memberAccessAddress: z.string(),
 });
+
+export type GovernancePluginsCreated = z.infer<typeof GovernancePluginsCreated>;
 
 export const ZodGovernancePluginsCreatedStreamResponse = z.object({
   governancePluginsCreated: z.array(GovernancePluginsCreated).min(1),

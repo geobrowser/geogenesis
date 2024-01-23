@@ -2,6 +2,9 @@ import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { Effect, Stream } from 'effect';
+import { getAddress } from 'viem';
+import * as db from 'zapatos/db';
+import type * as S from 'zapatos/schema';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
@@ -14,8 +17,11 @@ import { createSink, createStream } from './substreams.js/sink/src';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
 import { getEntryWithIpfsContent } from './utils/ipfs';
+import { pool } from './utils/pool';
 import {
   type FullEntry,
+  GovernancePluginsCreated,
+  type SpacePluginCreated,
   ZodEntryStreamResponse,
   ZodGovernancePluginsCreatedStreamResponse,
   ZodProfilesRegisteredStreamResponse,
@@ -160,12 +166,45 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
           // const profileRegisteredResponse = ZodProfilesRegisteredStreamResponse.safeParse(jsonOutput);
 
-          // 52630303
-          if (spacePluginCreatedResponse.success) {
-            console.log('created a space plugin', JSON.stringify(spacePluginCreatedResponse.data, null, 2));
-          }
+          if (spacePluginCreatedResponse.success && governancePluginsCreatedResponse.success) {
+            const governancePluginsByDaoAddress = governancePluginsCreatedResponse.data.governancePluginsCreated.reduce(
+              (acc, governancePlugin) => {
+                if (!acc.get(governancePlugin.daoAddress)) {
+                  acc.set(governancePlugin.daoAddress, governancePlugin);
+                }
 
-          if (governancePluginsCreatedResponse.success) {
+                return acc;
+              },
+              new Map<string, GovernancePluginsCreated>()
+            );
+
+            const spacesToCreate: S.spaces.Insertable[] = spacePluginCreatedResponse.data.spacesCreated.map(
+              spacePlugin => {
+                const governancePlugin = governancePluginsByDaoAddress.get(spacePlugin.daoAddress);
+
+                return {
+                  id: getAddress(spacePlugin.daoAddress),
+                  main_voting_plugin_address: governancePlugin ? getAddress(governancePlugin.mainVotingAddress) : null,
+                  member_access_plugin_address: governancePlugin
+                    ? getAddress(governancePlugin.memberAccessAddress)
+                    : null,
+                  is_root_space: false, // @TODO: It _might_ be the root space
+                  created_at_block: blockNumber,
+                };
+              }
+            );
+
+            yield* _(
+              Effect.tryPromise({
+                try: async () => {
+                  await db.upsert('spaces', spacesToCreate, ['id']).run(pool);
+                },
+                catch: error => console.error(error),
+              })
+            );
+          } else if (spacePluginCreatedResponse.success) {
+            console.log('created a space plugin', JSON.stringify(spacePluginCreatedResponse.data, null, 2));
+          } else if (governancePluginsCreatedResponse.success) {
             console.log('created governance plugins', JSON.stringify(governancePluginsCreatedResponse.data, null, 2));
           }
 
