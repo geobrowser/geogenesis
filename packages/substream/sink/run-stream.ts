@@ -199,6 +199,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 catch: error => new CouldNotWriteSpacesError(String(error)),
               })
             );
+
+            slog({
+              requestId: message.cursor,
+              message: `Spaces written successfully`,
+            });
           }
 
           if (governancePluginsCreatedResponse.success) {
@@ -220,6 +225,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 catch: error => new CouldNotWriteSpacesError(String(error)),
               })
             );
+
+            slog({
+              requestId: message.cursor,
+              message: `Spaces with governance written successfully`,
+            });
           }
 
           if (entryResponse.success) {
@@ -229,6 +239,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             });
 
             const entries = entryResponse.data.entries;
+
+            slog({
+              requestId: message.cursor,
+              message: `Gathering IPFS content for ${entries.length} entries`,
+            });
 
             const maybeEntriesWithIpfsContent: (FullEntry | null)[] = yield* _(
               Effect.all(
@@ -245,6 +260,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
             const validFullEntries = parseValidFullEntries(nonValidatedFullEntries);
 
+            slog({
+              requestId: message.cursor,
+              message: `Caching ${entries.length} entries`,
+            });
             yield* _(
               Effect.tryPromise({
                 try: () =>
@@ -261,6 +280,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               })
             );
 
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${entries.length} entries to DB`,
+            });
+
             // @TODO: This should write all of the actions we need to take to an Effect.Queue
             // The Effect.Queue will process each action in a separate process. This also lets
             // us do all the DB writes for _all_ events at once instead of separating them out
@@ -276,11 +300,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (roleChangeResponse.success) {
-            slog({
-              requestId: message.cursor,
-              message: `Processing ${roleChangeResponse.data.roleChanges.length} role changes`,
-            });
-
             for (const roleChange of roleChangeResponse.data.roleChanges) {
               const { granted, revoked } = roleChange;
 
@@ -291,6 +310,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   sender: getChecksumAddress(granted.sender),
                   space: getChecksumAddress(granted.space),
                 };
+
+                slog({
+                  requestId: message.cursor,
+                  message: `Caching granted role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
+                    roleChangeWithChecksum.account
+                  } in space ${roleChangeWithChecksum.space}`,
+                });
 
                 yield* _(
                   Effect.tryPromise({
@@ -309,6 +335,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   })
                 );
 
+                slog({
+                  requestId: message.cursor,
+                  message: `Writing granted role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
+                    roleChangeWithChecksum.account
+                  } in space ${roleChangeWithChecksum.space} to DB`,
+                });
+
                 yield* _(
                   Effect.tryPromise({
                     try: () =>
@@ -323,6 +356,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                       ),
                   })
                 );
+
+                slog({
+                  requestId: message.cursor,
+                  message: `Granted role written successfully`,
+                });
               }
 
               if (revoked) {
@@ -332,6 +370,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   sender: getChecksumAddress(revoked.sender),
                   space: getChecksumAddress(revoked.space),
                 };
+
+                slog({
+                  requestId: message.cursor,
+                  message: `Caching revoked role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
+                    roleChangeWithChecksum.account
+                  } in space ${roleChangeWithChecksum.space}`,
+                });
 
                 yield* _(
                   Effect.tryPromise({
@@ -350,6 +395,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   })
                 );
 
+                slog({
+                  requestId: message.cursor,
+                  message: `Writing revoked role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
+                    roleChangeWithChecksum.account
+                  } in space ${roleChangeWithChecksum.space} to DB`,
+                });
+
                 yield* _(
                   Effect.tryPromise({
                     try: () =>
@@ -363,6 +415,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                       ),
                   })
                 );
+
+                slog({
+                  requestId: message.cursor,
+                  message: `Revoked role written successfully`,
+                });
               }
             }
           }

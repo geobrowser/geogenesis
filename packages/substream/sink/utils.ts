@@ -17,5 +17,5 @@ export function slog({
     level = 'info';
   }
 
-  console[level](`${level.toUpperCase()} – ${new Date().toISOString()} – requestId: ${requestId} – ${message}`);
+  console[level](`${level.toUpperCase()} – ${new Date().toISOString()} – ${message} – requestId: ${requestId}`);
 }
