@@ -2573,6 +2573,24 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_root_space: boolean;
+      /**
+      * **spaces.main_voting_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      main_voting_plugin_address: string | null;
+      /**
+      * **spaces.member_access_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      member_access_plugin_address: string | null;
+      /**
+      * **spaces.configuration_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      configuration_id: string | null;
     }
     export interface JSONSelectable {
       /**
@@ -2593,6 +2611,24 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_root_space: boolean;
+      /**
+      * **spaces.main_voting_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      main_voting_plugin_address: string | null;
+      /**
+      * **spaces.member_access_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      member_access_plugin_address: string | null;
+      /**
+      * **spaces.configuration_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      configuration_id: string | null;
     }
     export interface Whereable {
       /**
@@ -2613,6 +2649,24 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_root_space?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **spaces.main_voting_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      main_voting_plugin_address?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **spaces.member_access_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      member_access_plugin_address?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **spaces.configuration_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      configuration_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -2633,6 +2687,24 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_root_space: boolean | db.Parameter<boolean> | db.SQLFragment;
+      /**
+      * **spaces.main_voting_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      main_voting_plugin_address?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **spaces.member_access_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      member_access_plugin_address?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **spaces.configuration_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      configuration_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -2653,6 +2725,24 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_root_space?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
+      /**
+      * **spaces.main_voting_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      main_voting_plugin_address?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **spaces.member_access_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      member_access_plugin_address?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **spaces.configuration_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      configuration_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
     }
     export type UniqueIndex = 'spaces_pkey';
     export type Column = keyof Selectable;
