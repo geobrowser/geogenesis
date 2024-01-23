@@ -180,7 +180,6 @@ export async function populateWithFullEntries({
     console.timeEnd('Inserting bulk proposed versions');
 
     console.time('Inserting bulk spaces');
-    console.log('spaces', spaces);
     yield* awaited(
       Effect.tryPromise({
         try: () =>
