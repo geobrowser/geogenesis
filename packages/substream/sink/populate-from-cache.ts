@@ -2,8 +2,8 @@ import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
 import { START_BLOCK } from './constants/constants';
+import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidFullEntries } from './parse-valid-full-entries';
-import { populateWithFullEntries } from './populate-entries';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import type { Roles } from './types';
 import { getChecksumAddress } from './utils/get-checksum-address';

@@ -2,29 +2,25 @@ import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { Effect, Stream } from 'effect';
-import { getAddress } from 'viem';
 import * as db from 'zapatos/db';
-import type * as S from 'zapatos/schema';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
+import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidFullEntries } from './parse-valid-full-entries';
-import { populateWithFullEntries } from './populate-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
-import { populateProfiles } from './populate-profiles';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { createSink, createStream } from './substreams.js/sink/src';
+import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
 import { getEntryWithIpfsContent } from './utils/ipfs';
 import { pool } from './utils/pool';
 import {
   type FullEntry,
-  GovernancePluginsCreated,
-  type SpacePluginCreated,
   ZodEntryStreamResponse,
   ZodGovernancePluginsCreatedStreamResponse,
-  ZodProfilesRegisteredStreamResponse,
   ZodRoleChangeStreamResponse,
   ZodSpacePluginCreatedStreamResponse,
 } from './zod';
@@ -164,48 +160,59 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
           const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
-          // const profileRegisteredResponse = ZodProfilesRegisteredStreamResponse.safeParse(jsonOutput);
 
-          if (spacePluginCreatedResponse.success && governancePluginsCreatedResponse.success) {
-            const governancePluginsByDaoAddress = governancePluginsCreatedResponse.data.governancePluginsCreated.reduce(
-              (acc, governancePlugin) => {
-                if (!acc.get(governancePlugin.daoAddress)) {
-                  acc.set(governancePlugin.daoAddress, governancePlugin);
-                }
+          // @TODO: De-duplicate any spaces being added with both the space plugin governance
+          // plugins. This can likely happen when we refactor to a real queue implementation
+          // which has better aggregate->write separation and performance.
+          //
+          // Right now we have a lot of blocking writes to the DB, as we separate writing to the
+          // DB based on the type of event that we're reacting to. `populateEntries` also has
+          // quite a few serially blocking calls.
+          //
+          // We want to move to a Queue implementation instead of the hacky Promise queue that
+          // we currently have. This switch will give us a better opportunity to aggregate _all_
+          // the changes happening as part of a single block and then write them more efficiently.
+          //
+          // With the new governance contracts (as of January 23, 2024) we will be indexing _many_
+          // more events, so we'll need a more scalable way to handle async writes to the DB so
+          // indexing time doesn't balloon.
+          if (spacePluginCreatedResponse.success) {
+            const spaces = mapSpaces(spacePluginCreatedResponse.data.spacesCreated, blockNumber);
 
-                return acc;
-              },
-              new Map<string, GovernancePluginsCreated>()
-            );
-
-            const spacesToCreate: S.spaces.Insertable[] = spacePluginCreatedResponse.data.spacesCreated.map(
-              spacePlugin => {
-                const governancePlugin = governancePluginsByDaoAddress.get(spacePlugin.daoAddress);
-
-                return {
-                  id: getAddress(spacePlugin.daoAddress),
-                  main_voting_plugin_address: governancePlugin ? getAddress(governancePlugin.mainVotingAddress) : null,
-                  member_access_plugin_address: governancePlugin
-                    ? getAddress(governancePlugin.memberAccessAddress)
-                    : null,
-                  is_root_space: false, // @TODO: It _might_ be the root space
-                  created_at_block: blockNumber,
-                };
-              }
-            );
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${spaces.length} spaces to DB`,
+            });
 
             yield* _(
               Effect.tryPromise({
                 try: async () => {
-                  await db.upsert('spaces', spacesToCreate, ['id']).run(pool);
+                  await db.upsert('spaces', spaces, ['id']).run(pool);
                 },
                 catch: error => console.error(error),
               })
             );
-          } else if (spacePluginCreatedResponse.success) {
-            console.log('created a space plugin', JSON.stringify(spacePluginCreatedResponse.data, null, 2));
-          } else if (governancePluginsCreatedResponse.success) {
-            console.log('created governance plugins', JSON.stringify(governancePluginsCreatedResponse.data, null, 2));
+          }
+
+          if (governancePluginsCreatedResponse.success) {
+            const spaces = mapGovernanceToSpaces(
+              governancePluginsCreatedResponse.data.governancePluginsCreated,
+              blockNumber
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${spaces.length} spaces with governance to DB`,
+            });
+
+            yield* _(
+              Effect.tryPromise({
+                try: async () => {
+                  await db.upsert('spaces', spaces, ['id']).run(pool);
+                },
+                catch: error => console.error(error),
+              })
+            );
           }
 
           if (entryResponse.success) {
@@ -245,7 +252,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
 
             // @TODO: This should write all of the actions we need to take to an Effect.Queue
-            // The Effect.Queue will process each action in a separate process
+            // The Effect.Queue will process each action in a separate process. This also lets
+            // us do all the DB writes for _all_ events at once instead of separating them out
+            // based on the event type.
             entriesQueue = entriesQueue.then(() => {
               return populateWithFullEntries({
                 fullEntries: validFullEntries,

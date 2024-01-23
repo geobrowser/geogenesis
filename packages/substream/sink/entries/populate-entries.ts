@@ -2,7 +2,11 @@ import { Effect, Schedule } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
-import { DESCRIPTION, NAME, TYPES } from './constants/system-ids';
+import { DESCRIPTION, NAME, TYPES } from '../constants/system-ids';
+import { TripleAction } from '../types';
+import { upsertChunked } from '../utils/db';
+import { pool } from '../utils/pool';
+import { type FullEntry } from '../zod';
 import {
   mapAccounts,
   mapActions,
@@ -13,10 +17,6 @@ import {
   mapTriplesWithActionType,
   mapVersions,
 } from './map-entries';
-import { TripleAction } from './types';
-import { upsertChunked } from './utils/db';
-import { pool } from './utils/pool';
-import { type FullEntry } from './zod';
 
 export async function populateWithFullEntries({
   fullEntries,
