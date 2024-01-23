@@ -1,23 +1,11 @@
 import { ClientCore, PluginInstallItem } from '@aragon/sdk-client-common';
-import { AlchemyProvider } from '@ethersproject/providers';
-import { ethers } from 'ethers';
-import {
-  bytesToHex,
-  bytesToString,
-  encodeAbiParameters,
-  encodeFunctionData,
-  getAddress,
-  hexToBytes,
-  toBytes,
-} from 'viem';
+import { encodeAbiParameters, encodeFunctionData, hexToBytes } from 'viem';
 
 import { GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS, GEO_SPACE_PLUGIN_REPO_ADDRESS, ZERO_ADDRESS } from '~/core/constants';
 
 import { mainVotingPluginAbi, memberAccessPluginAbi, spacePluginAbi, spacePluginSetupAbi } from '../../abis';
-import { governanceAbi } from '../../abis/governance-abi';
 import { GeoPluginContext } from '../../context';
 import { MainVotingSettingsType } from '../../types';
-import { GovernancePluginsSetup__factory, SpacePluginSetup__factory } from './typechain';
 
 export class GeoPluginClientEncoding extends ClientCore {
   private geoSpacePluginAddress: string;
