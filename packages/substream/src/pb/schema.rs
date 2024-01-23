@@ -137,6 +137,22 @@ pub struct GeoSpacesCreated {
     #[prost(message, repeated, tag="1")]
     pub spaces: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeoGovernancePluginCreated {
+    #[prost(string, tag="1")]
+    pub dao_address: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub main_voting_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub member_access_address: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeoGovernancePluginsCreated {
+    #[prost(message, repeated, tag="1")]
+    pub plugins: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum Role {

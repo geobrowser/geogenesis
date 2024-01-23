@@ -2,9 +2,9 @@ pub mod helpers;
 mod pb;
 
 use pb::schema::{
-    EntriesAdded, EntryAdded, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
-    GeoSpaceCreated, GeoSpacesCreated, RoleChange, RoleChanges, SuccessorSpaceCreated,
-    SuccessorSpacesCreated,
+    EntriesAdded, EntryAdded, GeoGovernancePluginCreated, GeoGovernancePluginsCreated, GeoOutput,
+    GeoProfileRegistered, GeoProfilesRegistered, GeoSpaceCreated, GeoSpacesCreated, RoleChange,
+    RoleChanges, SuccessorSpaceCreated, SuccessorSpacesCreated,
 };
 
 use substreams::store::*;
@@ -16,8 +16,10 @@ use_contract!(legacy_space, "abis/legacy-space.json");
 use_contract!(space, "abis/space.json");
 use_contract!(geo_profile_registry, "abis/geo-profile-registry.json");
 use_contract!(space_setup, "abis/space-setup.json");
+use_contract!(governance_setup, "abis/governance-setup.json");
 
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
+use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
 use legacy_space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
 use space::events::SuccessorSpaceCreated as SuccessSpaceCreatedEvent;
 use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
@@ -158,6 +160,32 @@ fn map_spaces_created(
         .collect();
 
     Ok(GeoSpacesCreated { spaces })
+}
+
+#[substreams::handlers::map]
+fn map_governance_plugins_created(
+    block: eth::v2::Block,
+) -> Result<GeoGovernancePluginsCreated, substreams::errors::Error> {
+    let plugins: Vec<GeoGovernancePluginCreated> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(space_governance_created) =
+                GeoGovernancePluginCreatedEvent::match_and_decode(log)
+            {
+                return Some(GeoGovernancePluginCreated {
+                    dao_address: format_hex(&space_governance_created.dao),
+                    main_voting_address: format_hex(&space_governance_created.main_voting_plugin),
+                    member_access_address: format_hex(
+                        &space_governance_created.member_access_plugin,
+                    ),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(GeoGovernancePluginsCreated { plugins })
 }
 
 #[substreams::handlers::map]

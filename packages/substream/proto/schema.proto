@@ -89,3 +89,13 @@ message GeoSpaceCreated {
 message GeoSpacesCreated {
   repeated GeoSpaceCreated spaces = 1;
 }
+
+message GeoGovernancePluginCreated {
+  string daoAddress = 1;
+  string mainVotingAddress = 2;
+  string memberAccessAddress = 3;
+}
+
+message GeoGovernancePluginsCreated {
+  repeated GeoGovernancePluginCreated plugins = 1;
+}

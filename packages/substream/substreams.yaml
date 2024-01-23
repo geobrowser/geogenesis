@@ -62,6 +62,14 @@ modules:
     output:
       type: proto:schema.GeoSpacesCreated
 
+  - name: map_governance_plugins_created
+    kind: map
+    initialBlock: 52630300
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.GeoGovernancePluginsCreated
+
   - name: geo_out
     kind: map
     initialBlock: 36472424
