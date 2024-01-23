@@ -66,12 +66,6 @@ message GeoProfilesRegistered {
   repeated GeoProfileRegistered profiles = 1;
 }
 
-message GeoOutput {
-  repeated EntryAdded entries = 1;
-  repeated RoleChange role_changes = 2;
-  repeated GeoProfileRegistered profiles_registered = 3;
-}
-
 message SuccessorSpaceCreated {
   string predecessorSpace = 1;
   string pluginAddress = 2;
@@ -98,4 +92,13 @@ message GeoGovernancePluginCreated {
 
 message GeoGovernancePluginsCreated {
   repeated GeoGovernancePluginCreated plugins = 1;
+}
+
+message GeoOutput {
+  repeated EntryAdded entries = 1;
+  repeated RoleChange role_changes = 2;
+  repeated GeoProfileRegistered profiles_registered = 3;
+  repeated SuccessorSpaceCreated successor_spaces_created = 4;
+  repeated GeoSpaceCreated spaces_created = 5;
+  repeated GeoGovernancePluginCreated governance_plugins_created = 6;
 }

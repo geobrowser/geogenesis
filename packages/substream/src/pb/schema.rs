@@ -101,16 +101,6 @@ pub struct GeoProfilesRegistered {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GeoOutput {
-    #[prost(message, repeated, tag="1")]
-    pub entries: ::prost::alloc::vec::Vec<EntryAdded>,
-    #[prost(message, repeated, tag="2")]
-    pub role_changes: ::prost::alloc::vec::Vec<RoleChange>,
-    #[prost(message, repeated, tag="3")]
-    pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SuccessorSpaceCreated {
     #[prost(string, tag="1")]
     pub predecessor_space: ::prost::alloc::string::String,
@@ -152,6 +142,22 @@ pub struct GeoGovernancePluginCreated {
 pub struct GeoGovernancePluginsCreated {
     #[prost(message, repeated, tag="1")]
     pub plugins: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeoOutput {
+    #[prost(message, repeated, tag="1")]
+    pub entries: ::prost::alloc::vec::Vec<EntryAdded>,
+    #[prost(message, repeated, tag="2")]
+    pub role_changes: ::prost::alloc::vec::Vec<RoleChange>,
+    #[prost(message, repeated, tag="3")]
+    pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
+    #[prost(message, repeated, tag="4")]
+    pub successor_spaces_created: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
+    #[prost(message, repeated, tag="5")]
+    pub spaces_created: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
+    #[prost(message, repeated, tag="6")]
+    pub governance_plugins_created: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]

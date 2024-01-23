@@ -193,14 +193,23 @@ fn geo_out(
     entries: EntriesAdded,
     role_changes: RoleChanges,
     profiles_registered: GeoProfilesRegistered,
+    successor_spaces_created: SuccessorSpacesCreated,
+    spaces_created: GeoSpacesCreated,
+    governance_plugins_created: GeoGovernancePluginsCreated,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
     let role_changes = role_changes.changes;
     let profiles_registered = profiles_registered.profiles;
+    let successor_spaces_created = successor_spaces_created.spaces;
+    let spaces_created = spaces_created.spaces;
+    let governance_plugins_created = governance_plugins_created.plugins;
 
     Ok(GeoOutput {
         entries,
         role_changes,
         profiles_registered,
+        successor_spaces_created,
+        spaces_created,
+        governance_plugins_created,
     })
 }
