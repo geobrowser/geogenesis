@@ -77,9 +77,9 @@ modules:
       - map: map_entries_added
       - map: map_roles
       - map: map_profiles_registered
-      # - map: map_successor_spaces_created
       - map: map_spaces_created
       - map: map_governance_plugins_created
+      # - map: map_successor_spaces_created
     output:
       type: proto:schema.GeoOutput
 
