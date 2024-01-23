@@ -235,12 +235,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   })
                 );
 
-                handleRoleGranted({
-                  roleGranted: roleChangeWithChecksum,
-                  blockNumber,
-                  timestamp,
-                });
-
                 yield* _(
                   Effect.tryPromise({
                     try: () =>
@@ -295,11 +289,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                       ),
                   })
                 );
-
-                handleRoleRevoked({
-                  roleRevoked: roleChangeWithChecksum,
-                  blockNumber,
-                });
               }
             }
           }
