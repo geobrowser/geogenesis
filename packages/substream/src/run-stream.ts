@@ -37,6 +37,14 @@ export class CouldNotWriteCachedRoleError extends Error {
   _tag: 'CouldNotWriteCachedRoleError' = 'CouldNotWriteCachedRoleError';
 }
 
+export class CouldNotRevokeRoleError extends Error {
+  _tag: 'CouldNotRevokeRoleError' = 'CouldNotRevokeRoleError';
+}
+
+export class CouldNotGrantRoleError extends Error {
+  _tag: 'CouldNotGrantRoleError' = 'CouldNotGrantRoleError';
+}
+
 export class InvalidStreamConfigurationError extends Error {
   _tag: 'InvalidStreamConfigurationError' = 'InvalidStreamConfigurationError';
 }
@@ -232,6 +240,21 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   blockNumber,
                   timestamp,
                 });
+
+                yield* _(
+                  Effect.tryPromise({
+                    try: () =>
+                      handleRoleGranted({
+                        roleGranted: roleChangeWithChecksum,
+                        blockNumber,
+                        timestamp,
+                      }),
+                    catch: error =>
+                      new CouldNotGrantRoleError(
+                        `Could not handle granted role in block ${blockNumber} ${String(error)}}`
+                      ),
+                  })
+                );
               }
 
               if (revoked) {
@@ -259,15 +282,26 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   })
                 );
 
+                yield* _(
+                  Effect.tryPromise({
+                    try: () =>
+                      handleRoleRevoked({
+                        roleRevoked: roleChangeWithChecksum,
+                        blockNumber,
+                      }),
+                    catch: error =>
+                      new CouldNotRevokeRoleError(
+                        `Could not handle revoked role in block ${blockNumber} ${String(error)}}`
+                      ),
+                  })
+                );
+
                 handleRoleRevoked({
                   roleRevoked: roleChangeWithChecksum,
+                  blockNumber,
                 });
               }
             }
-          }
-
-          if (!entryResponse.success && !roleChangeResponse.success && !profileRegisteredResponse.success) {
-            console.error('Failed to parse substream message', unpackedOutput);
           }
         });
       },

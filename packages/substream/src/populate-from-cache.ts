@@ -91,6 +91,7 @@ export async function populateFromCache() {
                 sender: getChecksumAddress(maybeCachedRole.sender),
                 space: getChecksumAddress(maybeCachedRole.space),
               },
+              blockNumber,
             });
         }
 
