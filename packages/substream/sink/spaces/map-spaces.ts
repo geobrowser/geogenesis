@@ -1,3 +1,4 @@
+import { getAddress } from 'viem';
 import type * as S from 'zapatos/schema';
 
 import type { GovernancePluginsCreated, SpacePluginCreated } from '../zod';
@@ -28,7 +29,7 @@ import type { GovernancePluginsCreated, SpacePluginCreated } from '../zod';
 
 export function mapSpaces(spaces: SpacePluginCreated[], createdAtBlock: number): S.spaces.Insertable[] {
   return spaces.map(s => ({
-    id: s.daoAddress,
+    id: getAddress(s.daoAddress),
     is_root_space: false, // @TODO: it _might_ be the root space
     created_at_block: createdAtBlock,
   }));
@@ -39,11 +40,11 @@ export function mapGovernanceToSpaces(
   createdAtBlock: number
 ): S.spaces.Insertable[] {
   return spaces.map(s => ({
-    id: s.daoAddress,
+    id: getAddress(s.daoAddress),
     is_root_space: false, // @TODO: it _might_ be the root space
     created_at_block: createdAtBlock,
-    main_voting_plugin_address: s.mainVotingAddress,
-    member_access_plugin_address: s.memberAccessAddress,
+    main_voting_plugin_address: getAddress(s.mainVotingAddress),
+    member_access_plugin_address: getAddress(s.memberAccessAddress),
   }));
 }
 
