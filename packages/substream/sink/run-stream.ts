@@ -57,6 +57,10 @@ export class CouldNotReadCursorError extends Error {
   _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
 }
 
+export class CouldNotWriteSpacesError extends Error {
+  _tag: 'CouldNotWriteSpacesError' = 'CouldNotWriteSpacesError';
+}
+
 interface StreamConfig {
   startBlockNumber?: number;
   shouldUseCursor: boolean;
@@ -83,7 +87,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
     invariant(authIssueUrl, 'AUTH_ISSUE_URL is required');
 
     const substreamPackage = readPackageFromFile(MANIFEST);
-    console.info('Substream package downloaded');
+    console.info(`Using substream package ${MANIFEST}`);
 
     const { token } = yield* _(
       Effect.tryPromise({
@@ -129,9 +133,12 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             return;
           }
 
-          // if (blockNumber % 1000 === 0) {
-          console.log(`@ Block ${blockNumber}`);
-          // }
+          if (blockNumber % 1000 === 0) {
+            slog({
+              requestId: message.cursor,
+              message: `Processing block ${blockNumber}`,
+            });
+          }
 
           yield* _(
             Effect.tryPromise({
@@ -189,7 +196,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 try: async () => {
                   await db.upsert('spaces', spaces, ['id']).run(pool);
                 },
-                catch: error => console.error(error),
+                catch: error => new CouldNotWriteSpacesError(String(error)),
               })
             );
           }
@@ -210,13 +217,16 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 try: async () => {
                   await db.upsert('spaces', spaces, ['id']).run(pool);
                 },
-                catch: error => console.error(error),
+                catch: error => new CouldNotWriteSpacesError(String(error)),
               })
             );
           }
 
           if (entryResponse.success) {
-            console.log('Processing ', entryResponse.data.entries.length, ' entries');
+            slog({
+              requestId: message.cursor,
+              message: `Processing ${entryResponse.data.entries.length} entries`,
+            });
 
             const entries = entryResponse.data.entries;
 
@@ -266,7 +276,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (roleChangeResponse.success) {
-            console.log('Processing ', roleChangeResponse.data.roleChanges.length, ' role changes');
+            slog({
+              requestId: message.cursor,
+              message: `Processing ${roleChangeResponse.data.roleChanges.length} role changes`,
+            });
 
             for (const roleChange of roleChangeResponse.data.roleChanges) {
               const { granted, revoked } = roleChange;
