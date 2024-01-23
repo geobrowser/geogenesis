@@ -1,8 +1,28 @@
 import type * as Schema from 'zapatos/schema';
 
-import { type OmitStrict, TripleAction, type TripleWithActionTuple } from './types';
-import { generateActionId, generateProposalId, generateTripleId, generateVersionId } from './utils/id';
-import type { FullEntry } from './zod';
+import { type OmitStrict, TripleAction, type TripleWithActionTuple } from '../types';
+import { generateActionId, generateProposalId, generateTripleId, generateVersionId } from '../utils/id';
+import type { FullEntry } from '../zod';
+
+// export function mapProfilesRegistered({
+//   profileRegistered,
+//   blockNumber,
+//   timestamp,
+// }: {
+//   profileRegistered: ProfileRegistered[];
+//   blockNumber: number;
+//   timestamp: number;
+// }): Schema.profiles.Insertable[] {
+//   return profileRegistered.map(profile => ({
+//     id: profile.id,
+//     space_id: profile.space,
+//     created_at_block: blockNumber,
+//     created_at: timestamp,
+//     updated_at: timestamp,
+//     updated_at_block: blockNumber,
+//     created_by_id: profile.requestor,
+//   }));
+// }
 
 interface EntriesWithMetadata {
   fullEntries: FullEntry[];

@@ -1,0 +1,83 @@
+specVersion: v0.1.0
+package:
+  name: 'geo_substream'
+  version: v1.0.3
+
+protobuf:
+  files:
+    - schema.proto
+  importPaths:
+    - ./proto
+
+binaries:
+  default:
+    type: wasm/rust-v1
+    file: ./target/wasm32-unknown-unknown/release/geo_substream.wasm
+
+modules:
+  - name: map_entries_added
+    kind: map
+    initialBlock: 36472424
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.EntriesAdded
+
+  - name: store_addresses
+    kind: store
+    updatePolicy: set_if_not_exists
+    valueType: string
+    inputs:
+      - map: map_entries_added
+
+  - name: map_roles
+    kind: map
+    initialBlock: 36472424
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.RoleChanges
+
+  - name: map_profiles_registered
+    kind: map
+    initialBlock: 36472424
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.GeoProfilesRegistered
+
+  - name: map_successor_spaces_created
+    kind: map
+    initialBlock: 52513890
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.SuccessorSpacesCreated
+
+  - name: map_spaces_created
+    kind: map
+    initialBlock: 52630300
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.GeoSpacesCreated
+
+  - name: map_governance_plugins_created
+    kind: map
+    initialBlock: 52630300
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.GeoGovernancePluginsCreated
+
+  - name: geo_out
+    kind: map
+    initialBlock: 36472424
+    inputs:
+      - map: map_entries_added
+      - map: map_roles
+      - map: map_profiles_registered
+    output:
+      type: proto:schema.GeoOutput
+
+network: polygon

@@ -19,6 +19,19 @@ export async function handleRoleGranted({
     const isMemberRole = role === 'MEMBER';
     const isModeratorRole = role === 'MODERATOR';
 
+    await Promise.all([
+      db
+        .upsert('spaces', [{ id: roleGranted.space, created_at_block: blockNumber, is_root_space: false }], ['id'], {
+          updateColumns: db.doNothing,
+        })
+        .run(pool),
+      db
+        .upsert('accounts', [{ id: roleGranted.account }], ['id'], {
+          updateColumns: db.doNothing,
+        })
+        .run(pool),
+    ]);
+
     if (isAdminRole) {
       await db
         .upsert(
@@ -67,12 +80,31 @@ export async function handleRoleGranted({
   }
 }
 
-export async function handleRoleRevoked({ roleRevoked }: { roleRevoked: RoleChange }) {
+export async function handleRoleRevoked({
+  roleRevoked,
+  blockNumber,
+}: {
+  roleRevoked: RoleChange;
+  blockNumber: number;
+}) {
   try {
     const role = roleRevoked.role;
     const isAdminRole = role === 'ADMIN';
     const isMemberRole = role === 'MEMBER';
     const isModeratorRole = role === 'MODERATOR';
+
+    await Promise.all([
+      db
+        .upsert('spaces', [{ id: roleRevoked.space, created_at_block: blockNumber, is_root_space: false }], ['id'], {
+          updateColumns: db.doNothing,
+        })
+        .run(pool),
+      db
+        .upsert('accounts', [{ id: roleRevoked.account }], ['id'], {
+          updateColumns: db.doNothing,
+        })
+        .run(pool),
+    ]);
 
     if (isAdminRole) {
       await db

@@ -2,18 +2,28 @@ import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { Effect, Stream } from 'effect';
+import * as db from 'zapatos/db';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
+import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidFullEntries } from './parse-valid-full-entries';
-import { populateWithFullEntries } from './populate-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { createSink, createStream } from './substreams.js/sink/src';
+import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
 import { getEntryWithIpfsContent } from './utils/ipfs';
-import { type FullEntry, ZodEntryStreamResponse, ZodRoleChangeStreamResponse } from './zod';
+import { pool } from './utils/pool';
+import {
+  type FullEntry,
+  ZodEntryStreamResponse,
+  ZodGovernancePluginsCreatedStreamResponse,
+  ZodRoleChangeStreamResponse,
+  ZodSpacePluginCreatedStreamResponse,
+} from './zod';
 
 export class InvalidPackageError extends Error {
   _tag: 'InvalidPackageError' = 'InvalidPackageError';
@@ -31,12 +41,24 @@ export class CouldNotWriteCachedRoleError extends Error {
   _tag: 'CouldNotWriteCachedRoleError' = 'CouldNotWriteCachedRoleError';
 }
 
+export class CouldNotRevokeRoleError extends Error {
+  _tag: 'CouldNotRevokeRoleError' = 'CouldNotRevokeRoleError';
+}
+
+export class CouldNotGrantRoleError extends Error {
+  _tag: 'CouldNotGrantRoleError' = 'CouldNotGrantRoleError';
+}
+
 export class InvalidStreamConfigurationError extends Error {
   _tag: 'InvalidStreamConfigurationError' = 'InvalidStreamConfigurationError';
 }
 
 export class CouldNotReadCursorError extends Error {
   _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
+}
+
+export class CouldNotWriteSpacesError extends Error {
+  _tag: 'CouldNotWriteSpacesError' = 'CouldNotWriteSpacesError';
 }
 
 interface StreamConfig {
@@ -65,7 +87,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
     invariant(authIssueUrl, 'AUTH_ISSUE_URL is required');
 
     const substreamPackage = readPackageFromFile(MANIFEST);
-    console.info('Substream package downloaded');
+    console.info(`Using substream package ${MANIFEST}`);
 
     const { token } = yield* _(
       Effect.tryPromise({
@@ -112,7 +134,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (blockNumber % 1000 === 0) {
-            console.log(`@ Block ${blockNumber}`);
+            slog({
+              requestId: message.cursor,
+              message: `Processing block ${blockNumber}`,
+            });
           }
 
           yield* _(
@@ -140,11 +165,85 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           const entryResponse = ZodEntryStreamResponse.safeParse(jsonOutput);
           const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
+          const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
+          const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
+
+          // @TODO: De-duplicate any spaces being added with both the space plugin governance
+          // plugins. This can likely happen when we refactor to a real queue implementation
+          // which has better aggregate->write separation and performance.
+          //
+          // Right now we have a lot of blocking writes to the DB, as we separate writing to the
+          // DB based on the type of event that we're reacting to. `populateEntries` also has
+          // quite a few serially blocking calls.
+          //
+          // We want to move to a Queue implementation instead of the hacky Promise queue that
+          // we currently have. This switch will give us a better opportunity to aggregate _all_
+          // the changes happening as part of a single block and then write them more efficiently.
+          //
+          // With the new governance contracts (as of January 23, 2024) we will be indexing _many_
+          // more events, so we'll need a more scalable way to handle async writes to the DB so
+          // indexing time doesn't balloon.
+          if (spacePluginCreatedResponse.success) {
+            const spaces = mapSpaces(spacePluginCreatedResponse.data.spacesCreated, blockNumber);
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${spaces.length} spaces to DB`,
+            });
+
+            yield* _(
+              Effect.tryPromise({
+                try: async () => {
+                  await db.upsert('spaces', spaces, ['id']).run(pool);
+                },
+                catch: error => new CouldNotWriteSpacesError(String(error)),
+              })
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `Spaces written successfully`,
+            });
+          }
+
+          if (governancePluginsCreatedResponse.success) {
+            const spaces = mapGovernanceToSpaces(
+              governancePluginsCreatedResponse.data.governancePluginsCreated,
+              blockNumber
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${spaces.length} spaces with governance to DB`,
+            });
+
+            yield* _(
+              Effect.tryPromise({
+                try: async () => {
+                  await db.upsert('spaces', spaces, ['id']).run(pool);
+                },
+                catch: error => new CouldNotWriteSpacesError(String(error)),
+              })
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `Spaces with governance written successfully`,
+            });
+          }
 
           if (entryResponse.success) {
-            console.log('Processing ', entryResponse.data.entries.length, ' entries');
+            slog({
+              requestId: message.cursor,
+              message: `Processing ${entryResponse.data.entries.length} entries`,
+            });
 
             const entries = entryResponse.data.entries;
+
+            slog({
+              requestId: message.cursor,
+              message: `Gathering IPFS content for ${entries.length} entries`,
+            });
 
             const maybeEntriesWithIpfsContent: (FullEntry | null)[] = yield* _(
               Effect.all(
@@ -161,6 +260,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
             const validFullEntries = parseValidFullEntries(nonValidatedFullEntries);
 
+            slog({
+              requestId: message.cursor,
+              message: `Caching ${entries.length} entries`,
+            });
             yield* _(
               Effect.tryPromise({
                 try: () =>
@@ -177,8 +280,15 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               })
             );
 
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${entries.length} entries to DB`,
+            });
+
             // @TODO: This should write all of the actions we need to take to an Effect.Queue
-            // The Effect.Queue will process each action in a separate process
+            // The Effect.Queue will process each action in a separate process. This also lets
+            // us do all the DB writes for _all_ events at once instead of separating them out
+            // based on the event type.
             entriesQueue = entriesQueue.then(() => {
               return populateWithFullEntries({
                 fullEntries: validFullEntries,
@@ -190,8 +300,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (roleChangeResponse.success) {
-            console.log('Processing ', roleChangeResponse.data.roleChanges.length, ' role changes');
-
             for (const roleChange of roleChangeResponse.data.roleChanges) {
               const { granted, revoked } = roleChange;
 
@@ -202,6 +310,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   sender: getChecksumAddress(granted.sender),
                   space: getChecksumAddress(granted.space),
                 };
+
+                slog({
+                  requestId: message.cursor,
+                  message: `Caching granted role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
+                    roleChangeWithChecksum.account
+                  } in space ${roleChangeWithChecksum.space}`,
+                });
 
                 yield* _(
                   Effect.tryPromise({
@@ -220,10 +335,31 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   })
                 );
 
-                handleRoleGranted({
-                  roleGranted: roleChangeWithChecksum,
-                  blockNumber,
-                  timestamp,
+                slog({
+                  requestId: message.cursor,
+                  message: `Writing granted role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
+                    roleChangeWithChecksum.account
+                  } in space ${roleChangeWithChecksum.space} to DB`,
+                });
+
+                yield* _(
+                  Effect.tryPromise({
+                    try: () =>
+                      handleRoleGranted({
+                        roleGranted: roleChangeWithChecksum,
+                        blockNumber,
+                        timestamp,
+                      }),
+                    catch: error =>
+                      new CouldNotGrantRoleError(
+                        `Could not handle granted role in block ${blockNumber} ${String(error)}}`
+                      ),
+                  })
+                );
+
+                slog({
+                  requestId: message.cursor,
+                  message: `Granted role written successfully`,
                 });
               }
 
@@ -234,6 +370,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   sender: getChecksumAddress(revoked.sender),
                   space: getChecksumAddress(revoked.space),
                 };
+
+                slog({
+                  requestId: message.cursor,
+                  message: `Caching revoked role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
+                    roleChangeWithChecksum.account
+                  } in space ${roleChangeWithChecksum.space}`,
+                });
 
                 yield* _(
                   Effect.tryPromise({
@@ -252,15 +395,33 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   })
                 );
 
-                handleRoleRevoked({
-                  roleRevoked: roleChangeWithChecksum,
+                slog({
+                  requestId: message.cursor,
+                  message: `Writing revoked role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
+                    roleChangeWithChecksum.account
+                  } in space ${roleChangeWithChecksum.space} to DB`,
+                });
+
+                yield* _(
+                  Effect.tryPromise({
+                    try: () =>
+                      handleRoleRevoked({
+                        roleRevoked: roleChangeWithChecksum,
+                        blockNumber,
+                      }),
+                    catch: error =>
+                      new CouldNotRevokeRoleError(
+                        `Could not handle revoked role in block ${blockNumber} ${String(error)}}`
+                      ),
+                  })
+                );
+
+                slog({
+                  requestId: message.cursor,
+                  message: `Revoked role written successfully`,
                 });
               }
             }
-          }
-
-          if (!entryResponse.success && !roleChangeResponse.success) {
-            console.error('Failed to parse substream message', unpackedOutput);
           }
         });
       },

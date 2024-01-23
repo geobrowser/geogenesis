@@ -6,9 +6,11 @@ on:
   push:
     branches:
       - master
+      - stream/goverance
   pull_request:
     branches:
       - master
+      - stream/goverance
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

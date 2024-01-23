@@ -2,7 +2,11 @@ import { Effect, Schedule } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
-import { DESCRIPTION, NAME, TYPES } from './constants/system-ids';
+import { DESCRIPTION, NAME, TYPES } from '../constants/system-ids';
+import { TripleAction } from '../types';
+import { upsertChunked } from '../utils/db';
+import { pool } from '../utils/pool';
+import { type FullEntry } from '../zod';
 import {
   mapAccounts,
   mapActions,
@@ -13,10 +17,6 @@ import {
   mapTriplesWithActionType,
   mapVersions,
 } from './map-entries';
-import { TripleAction } from './types';
-import { upsertChunked } from './utils/db';
-import { pool } from './utils/pool';
-import { type FullEntry } from './zod';
 
 export async function populateWithFullEntries({
   fullEntries,
@@ -110,13 +110,10 @@ export async function populateWithFullEntries({
       }
     );
 
-    console.time('Fetching existing triples for versions');
     const existingTripleVersions: Schema.triple_versions.Insertable[] = yield* awaited(
       Effect.retry(triplesForVersionsEffect, Schedule.exponential(100).pipe(Schedule.jittered))
     );
-    console.timeEnd('Fetching existing triples for versions');
 
-    console.time('Inserting bulk accounts');
     yield* awaited(
       Effect.tryPromise({
         try: () =>
@@ -126,9 +123,7 @@ export async function populateWithFullEntries({
         catch: error => new Error(`Failed to insert bulk accounts. ${(error as Error).message}`),
       })
     );
-    console.timeEnd('Inserting bulk accounts');
 
-    console.time('Inserting bulk actions');
     yield* awaited(
       Effect.tryPromise({
         try: () =>
@@ -138,9 +133,7 @@ export async function populateWithFullEntries({
         catch: error => new Error(`Failed to insert bulk actions. ${(error as Error).message}`),
       })
     );
-    console.timeEnd('Inserting bulk actions');
 
-    console.time('Inserting bulk entities');
     yield* awaited(
       Effect.tryPromise({
         try: () =>
@@ -153,9 +146,7 @@ export async function populateWithFullEntries({
         catch: error => new Error(`Failed to insert bulk entities. ${(error as Error).message}`),
       })
     );
-    console.timeEnd('Inserting bulk entities');
 
-    console.time('Inserting bulk proposals');
     yield* awaited(
       Effect.tryPromise({
         try: () =>
@@ -165,9 +156,7 @@ export async function populateWithFullEntries({
         catch: error => new Error(`Failed to insert bulk proposals. ${(error as Error).message}`),
       })
     );
-    console.timeEnd('Inserting bulk proposals');
 
-    console.time('Inserting bulk proposed versions');
     yield* awaited(
       Effect.tryPromise({
         try: () =>
@@ -177,9 +166,7 @@ export async function populateWithFullEntries({
         catch: error => new Error(`Failed to insert bulk proposed versions. ${(error as Error).message}`),
       })
     );
-    console.timeEnd('Inserting bulk proposed versions');
 
-    console.time('Inserting bulk spaces');
     yield* awaited(
       Effect.tryPromise({
         try: () =>
@@ -189,9 +176,7 @@ export async function populateWithFullEntries({
         catch: error => new Error(`Failed to insert bulk spaces. ${(error as Error).message}`),
       })
     );
-    console.timeEnd('Inserting bulk spaces');
 
-    console.time('Inserting bulk versions');
     yield* awaited(
       Effect.tryPromise({
         try: () =>
@@ -202,21 +187,15 @@ export async function populateWithFullEntries({
       })
     );
 
-    console.timeEnd('Inserting bulk versions');
-
-    console.time('Inserting bulk triple versions');
     yield* awaited(
       Effect.tryPromise({
         try: () => upsertChunked('triple_versions', existingTripleVersions, ['triple_id', 'version_id']),
         catch: error => new Error(`Failed to insert bulk triple versions. ${(error as Error).message}`),
       })
     );
-    console.timeEnd('Inserting bulk triple versions');
 
     const triplesDatabaseTuples = mapTriplesWithActionType(fullEntries, timestamp, blockNumber);
 
-    console.info(`Starting processing of ${triplesDatabaseTuples.length} triples`);
-    console.time('Inserting individual triples and triple versions');
     for (const [actionType, triple] of triplesDatabaseTuples) {
       const isCreateTriple = actionType === TripleAction.Create;
       const isDeleteTriple = actionType === TripleAction.Delete;
@@ -458,8 +437,6 @@ export async function populateWithFullEntries({
         yield* awaited(Effect.retry(deleteTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
     }
-
-    console.timeEnd('Inserting individual triples and triple versions');
   });
 
   return await Effect.runPromise(populateEffect);

@@ -12,12 +12,6 @@ CREATE TABLE public.cursors (
 
 COMMENT ON TABLE public.cursors IS '@name substreamCursor';
 
-CREATE TABLE public.spaces (
-    id text PRIMARY KEY,
-    created_at_block integer NOT NULL,
-    is_root_space boolean NOT NULL
-);
-
 CREATE TABLE public.geo_entities (
     id text PRIMARY KEY,
     name character varying,
@@ -32,6 +26,15 @@ CREATE TABLE public.geo_entities (
     -- attribute_value_type_id text
 );
 
+CREATE TABLE public.spaces (
+    id text PRIMARY KEY,
+    created_at_block integer NOT NULL,
+    is_root_space boolean NOT NULL,
+    main_voting_plugin_address text,
+    member_access_plugin_address text,
+    configuration_id text REFERENCES public.geo_entities(id)
+);
+
 CREATE TABLE public.geo_entity_types (
     id serial PRIMARY KEY,
     entity_id text NOT NULL REFERENCES public.geo_entities(id),
@@ -39,6 +42,15 @@ CREATE TABLE public.geo_entity_types (
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     CONSTRAINT geo_entity_types_unique_entity_type_pair UNIQUE (entity_id, type_id)
+);
+
+CREATE TABLE public.profiles (
+    id text PRIMARY KEY,
+    entity_id text REFERENCES public.geo_entities(id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    created_by_id text NOT NULL REFERENCES public.accounts(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL
 );
 
 -- ALTER TABLE

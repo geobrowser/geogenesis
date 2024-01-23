@@ -2,11 +2,11 @@ import { Command } from 'commander';
 import dotenv from 'dotenv';
 import { Duration, Effect, Either, Schedule, pipe } from 'effect';
 
-import { bootstrapRoot } from './src/bootstrap-root.js';
-import { START_BLOCK } from './src/constants/constants.js';
-import { populateFromCache } from './src/populate-from-cache.js';
-import { runStream } from './src/run-stream.js';
-import { resetPublicTablesToGenesis } from './src/utils/reset-public-tables-to-genesis.js';
+import { bootstrapRoot } from './sink/bootstrap-root.js';
+import { START_BLOCK } from './sink/constants/constants.js';
+import { populateFromCache } from './sink/populate-from-cache.js';
+import { runStream } from './sink/run-stream.js';
+import { resetPublicTablesToGenesis } from './sink/utils/reset-public-tables-to-genesis.js';
 
 dotenv.config();
 
