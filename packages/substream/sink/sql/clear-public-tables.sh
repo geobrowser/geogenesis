@@ -3,6 +3,6 @@
 source .env
 
 echo "Running SQL scripts..."
-psql $DATABASE_URL < src/sql/clearPublicTables.sql
+psql $DATABASE_URL < sink/sql/clearPublicTables.sql
 echo "SQL scripts executed successfully."
 
