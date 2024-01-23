@@ -1,4 +1,37 @@
 // @generated
+// *
+// We currently index two sets of contracts representing spaces:
+// 1. The original Space contract with simple permissions rules and no proposals.
+// 2. The new (as of January 23rd, 2024) DAO-based contracts with Plugins representing
+//     the Space and any governance and permissions rules.
+//
+// Having multiple sets of contracts means that we support multiple methods for
+// indexing data from these contracts, including the data representing the contracts
+// themselves like the address of the contract and any plugins (if they exist).
+//
+// We will eventually deprecate the existing contracts and migrate data and permissions
+// in them to the new contract implementation. To do this we will likely only index the
+// old contracts up to a specific block number and then index the new contracts from that
+// block.
+//
+// Alternatively we might look to "snapshot" the state of Geo at a specific timepoint
+// and migrate fully to the new contracts. This would likely coincide with a migration
+// to a separate blockchain.
+//
+// The new, DAO-based contracts are based on Aragon's OSX architecture in which a DAO's
+// onchain functionality is defined by a set of plugin contracts. These plugins can be
+// used for things like governance, membership, or representing an append-only log of
+// IPFS content.
+
+/// *
+/// Entries represent the content being added to a legacy space (See top level for more
+/// info on the different space contracts). This content is stored on IPFS and represented
+/// by a content URI.
+///
+/// Additionally we map the author of the content and the space the content was added to.
+///
+/// The new, DAO-based contracts have a different method and event for adding content to
+/// a space which will get mapped in a separate handler.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EntryAdded {
@@ -83,6 +116,10 @@ pub struct RolesRevoked {
     #[prost(message, repeated, tag="1")]
     pub roles: ::prost::alloc::vec::Vec<RoleRevoked>,
 }
+/// *
+/// Profiles represent the users of Geo. Profiles are registered in the GeoProfileRegistry
+/// contract and are associated with a user's EVM-based address and the space where metadata
+/// representing their profile resides in.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoProfileRegistered {
@@ -99,6 +136,12 @@ pub struct GeoProfilesRegistered {
     #[prost(message, repeated, tag="1")]
     pub profiles: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
 }
+/// *
+/// The new DAO-based contracts allow forking of spaces into successor spaces. This is so
+/// users can create new spaces whose data is derived from another space.
+///
+/// This is immediately useful when migrating from legacy spaces to the new DAO-based spaces,
+/// but it's generally applicable across any space.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SuccessorSpaceCreated {
@@ -113,6 +156,13 @@ pub struct SuccessorSpacesCreated {
     #[prost(message, repeated, tag="1")]
     pub spaces: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
 }
+/// *
+/// The new DAO-based space contracts are based on Aragon's OSX architecture which uses
+/// plugins to define functionality assigned to a DAO (See the top level comment for more
+/// information on Aragon's DAO architecture).
+///
+/// This event maps creation of the Space plugin and associates the Space plugin contract
+/// address with the address of the DAO contract.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoSpaceCreated {
@@ -127,6 +177,17 @@ pub struct GeoSpacesCreated {
     #[prost(message, repeated, tag="1")]
     pub spaces: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
 }
+/// *
+/// The new DAO-based space contracts are based on Aragon's OSX architecture which uses
+/// plugins to define functionality assigned to a DAO (See the top level comment for more
+/// information on Aragon's DAO architecture).
+///
+/// This event maps creation of any governance plugins and associates the governance plugins
+/// contract addresses with the address of the DAO contract.
+///
+/// As of January 23, 2024 there are two governance plugins:
+/// 1. Voting plugin – This defines the voting and proposal rules and behaviors for a DAO
+/// 2. Member access plugin – This defines the membership rules and behaviors for a DAO
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoGovernancePluginCreated {
@@ -158,6 +219,13 @@ pub struct GeoOutput {
     #[prost(message, repeated, tag="6")]
     pub governance_plugins_created: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
 }
+/// *
+/// Roles represent the permissions for a legacy space (See top level comment for more info
+/// on the different space contracts). Roles fall into "admin", "editor controller" (moderator),
+/// and "editor" (member) roles, each granting different permissions within the space.
+///
+/// The new, DAO-based contracts have a different, but similar permissions model that omits the 
+/// moderator role.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum Role {

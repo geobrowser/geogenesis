@@ -234,7 +234,7 @@ fn map_spaces_created(
  * contract addresses with the address of the DAO contract.
  *
  * As of January 23, 2024 there are two governance plugins:
- * 1. Main voting plugin – This defines the voting and proposal rules and behaviors for a DAO
+ * 1. Voting plugin – This defines the voting and proposal rules and behaviors for a DAO
  * 2. Member access plugin – This defines the membership rules and behaviors for a DAO
  */
 #[substreams::handlers::map]
