@@ -17,8 +17,10 @@ import { getEntryWithIpfsContent } from './utils/ipfs';
 import {
   type FullEntry,
   ZodEntryStreamResponse,
+  ZodGovernancePluginsCreatedStreamResponse,
   ZodProfilesRegisteredStreamResponse,
   ZodRoleChangeStreamResponse,
+  ZodSpacePluginCreatedStreamResponse,
 } from './zod';
 
 export class InvalidPackageError extends Error {
@@ -125,9 +127,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             return;
           }
 
-          if (blockNumber % 1000 === 0) {
-            console.log(`@ Block ${blockNumber}`);
-          }
+          // if (blockNumber % 1000 === 0) {
+          console.log(`@ Block ${blockNumber}`);
+          // }
 
           yield* _(
             Effect.tryPromise({
@@ -154,7 +156,18 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           const entryResponse = ZodEntryStreamResponse.safeParse(jsonOutput);
           const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
-          const profileRegisteredResponse = ZodProfilesRegisteredStreamResponse.safeParse(jsonOutput);
+          const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
+          const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
+          // const profileRegisteredResponse = ZodProfilesRegisteredStreamResponse.safeParse(jsonOutput);
+
+          // 52630303
+          if (spacePluginCreatedResponse.success) {
+            console.log('created a space plugin', JSON.stringify(spacePluginCreatedResponse.data, null, 2));
+          }
+
+          if (governancePluginsCreatedResponse.success) {
+            console.log('created governance plugins', JSON.stringify(governancePluginsCreatedResponse.data, null, 2));
+          }
 
           if (entryResponse.success) {
             console.log('Processing ', entryResponse.data.entries.length, ' entries');

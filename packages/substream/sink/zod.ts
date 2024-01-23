@@ -13,13 +13,9 @@ export const ZodEntry = z.object({
   space: z.string(), // Map to a correctly encoded hex string
 });
 
-export const ZodProfileRegistered = z.object({
-  requestor: z.string(),
-  space: z.string(),
-  id: z.string(),
+export const ZodEntryStreamResponse = z.object({
+  entries: z.array(ZodEntry).min(1),
 });
-
-export type ProfileRegistered = z.infer<typeof ZodProfileRegistered>;
 
 export type Entry = z.infer<typeof ZodEntry>;
 
@@ -69,6 +65,41 @@ export interface FullEntry extends z.infer<typeof ZodFullEntry> {
   uriData: OmitStrict<UriData, 'actions'> & { actions: Action[] };
 }
 
+/** Profile registrations */
+export const ZodProfileRegistered = z.object({
+  requestor: z.string(),
+  space: z.string(),
+  id: z.string(),
+});
+
+export type ProfileRegistered = z.infer<typeof ZodProfileRegistered>;
+
+export const ZodProfilesRegisteredStreamResponse = z.object({
+  profilesRegistered: z.array(ZodProfileRegistered).min(1),
+});
+
+/** Creating a space plugin on a DAO */
+export const ZodSpacePluginCreated = z.object({
+  daoAddress: z.string(),
+  spaceAddress: z.string(),
+});
+
+export const ZodSpacePluginCreatedStreamResponse = z.object({
+  spacesCreated: z.array(ZodSpacePluginCreated).min(1),
+});
+
+/** Creating governance plugins on a DAO */
+export const GovernancePluginsCreated = z.object({
+  daoAddress: z.string(),
+  mainVotingAddress: z.string(),
+  memberAccessAddress: z.string(),
+});
+
+export const ZodGovernancePluginsCreatedStreamResponse = z.object({
+  governancePluginsCreated: z.array(GovernancePluginsCreated).min(1),
+});
+
+/** Roles Changes */
 export const ZodRoleChange = z.object({
   id: z.string(),
   role: z.enum(['ADMIN', 'MEMBER', 'MODERATOR']),
@@ -78,14 +109,6 @@ export const ZodRoleChange = z.object({
 });
 
 export type RoleChange = z.infer<typeof ZodRoleChange>;
-
-export const ZodEntryStreamResponse = z.object({
-  entries: z.array(ZodEntry).min(1),
-});
-
-export const ZodProfilesRegisteredStreamResponse = z.object({
-  profilesRegistered: z.array(ZodProfileRegistered).min(1),
-});
 
 export const ZodRoleChangeStreamResponse = z.object({
   roleChanges: z

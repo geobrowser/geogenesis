@@ -98,7 +98,7 @@ message GeoOutput {
   repeated EntryAdded entries = 1;
   repeated RoleChange role_changes = 2;
   repeated GeoProfileRegistered profiles_registered = 3;
-  repeated SuccessorSpaceCreated successor_spaces_created = 4;
+  // repeated SuccessorSpaceCreated successor_spaces_created = 4;
   repeated GeoSpaceCreated spaces_created = 5;
   repeated GeoGovernancePluginCreated governance_plugins_created = 6;
 }

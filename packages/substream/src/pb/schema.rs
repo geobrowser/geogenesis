@@ -152,8 +152,7 @@ pub struct GeoOutput {
     pub role_changes: ::prost::alloc::vec::Vec<RoleChange>,
     #[prost(message, repeated, tag="3")]
     pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
-    #[prost(message, repeated, tag="4")]
-    pub successor_spaces_created: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
+    /// repeated SuccessorSpaceCreated successor_spaces_created = 4;
     #[prost(message, repeated, tag="5")]
     pub spaces_created: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
     #[prost(message, repeated, tag="6")]
