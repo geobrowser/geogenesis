@@ -258,9 +258,13 @@ export async function populateWithFullEntries({
         yield* awaited(Effect.retry(insertTripleVersionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
       }
 
-      // We don't delete triples. Instead we store all triples ever created over time. We need
-      // to track these so we can look at historical state for entities. We do remove them from
-      // any new versions.
+      /**
+       * We don't delete triples. Instead we store all triples ever created over time. We need
+       * to track these so we can look at historical state for entities. We do remove them from
+       * any new versions.
+       *
+       * Here we remove the triple from the current if it was deleted.
+       */
       if (isDeleteTriple && version) {
         const deleteEffect = Effect.tryPromise({
           try: () =>
