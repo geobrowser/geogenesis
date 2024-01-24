@@ -194,8 +194,9 @@ export async function populateWithFullEntries({
      * is correct.
      *
      * @TODO: This is obviously fairly slow as may perform many async operations for each Create or
-     * Deleteaction. One way to speed this up is to "squash" all of the actions corresponding to each
-     * triple ahead of time to generate the minimum number of actions for each triple.
+     * Delete action. One way to speed this up is to "squash" all of the actions corresponding to each
+     * triple ahead of time to generate the minimum number of actions for each triple. Additionally
+     * there's a lot of optimizations we can do with _how_ we're processing the data serially.
      *
      * Right now (January 23, 2024) the Geo Genesis client _does_ squash actions before publishing, but
      * this wasn't always the case and other clients might not implement the squashing mechanism.
