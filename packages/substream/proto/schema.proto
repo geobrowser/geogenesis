@@ -35,7 +35,7 @@ package schema;
  * Additionally we map the author of the content and the space the content was added to.
  *
  * The new, DAO-based contracts have a different method and event for adding content to
- * a space which will get mapped in a separate handler.
+ * a space which will get mapped in a separate event.
  */
 message EntryAdded {
   string id = 1; //{block-number}-{tx-hash}-{log-index}
