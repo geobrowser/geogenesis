@@ -15,11 +15,20 @@ async function main() {
   program
     .option('--from-genesis', 'Start from genesis block')
     .option('--from-cache', 'Start from cached block')
-    .option('--block <number>', 'Start from block number');
+    .option('--block <number>', 'NOT IMPLEMENTED – Start from block number');
   program.parse(process.argv);
-  const options = program.opts();
 
   // @TODO: How do we make the options typesafe?
+  const options = program.opts();
+
+  /**
+   * @TODO: It probably makes more sense to tie resetting the DB to a separate flag.
+   *        There are probably scenarios where we want to index from the genesis block
+   *        but not reset the DB.
+   *
+   *        I'd assume that `--from-genesis` starts from the genesis block and doesn't
+   *        have any side effects related to the DB.
+   */
   if (options.fromGenesis) {
     console.info('Resetting public tables to genesis');
     const reset = await pipe(resetPublicTablesToGenesis(), Effect.either, Effect.runPromise);
@@ -53,6 +62,9 @@ async function main() {
   }
 
   /**
+   * The stream has several "execution states" depending on whether we are running the stream
+   * from genesis, using the cache, or if we're recovering from error states.
+   *
    * Start from cache and genesis
    *   Use startBlockNumber from cache. Fallback if not available because of errors in cache.
    * Start from cache
@@ -62,6 +74,10 @@ async function main() {
    *
    * Neither from cache nor genesis
    *   Use cursor. Fall back to genesis start block if not available.
+   *
+   * If we're recovering from an error state we always use the cursor. We need to make sure we
+   * don't accidentally start indexing from genesis again when restarting the stream, especially
+   * since indexing can take a long time as Polygon has a boatload of blocks.
    */
   let runCount = 1;
 
@@ -92,7 +108,9 @@ async function main() {
         return yield* _(runStream({ shouldUseCursor: true }));
       }
 
-      // If we are recovering from a stream error, start from the cursor
+      // If we are recovering from a stream crash, start from the cursor. If we start the
+      // substream from genesis and it crashes, we don't want to apply the genesis flag
+      // again and instead should start from the most recently indexed cursor.
       if (runCount > 1) {
         shouldUseCursor = true;
       }
@@ -116,7 +134,7 @@ async function main() {
   );
 
   // Retry the stream for ~10 minutes. If it fails during indexing we will restart
-  // from the last indexed cursor. The cursor is read inside `runStream` so that
+  // from the last indexed cursor. The cursor is read inside `configureStream` so that
   // retries will try and read from the latest cursor state if available.
   //
   // If there is no cursor for some reason it will run using the passed in start
