@@ -176,11 +176,11 @@ export async function populateWithFullEntries({
           try: () => upsertChunked('triple_versions', existingTripleVersions, ['triple_id', 'version_id']),
           catch: error => new Error(`Failed to insert bulk triple versions. ${(error as Error).message}`),
         }),
-      ]),
-      Effect.tryPromise({
-        try: () => upsertChunked('triple_versions', existingTripleVersions, ['triple_id', 'version_id']),
-        catch: error => new Error(`Failed to insert bulk triple versions. ${(error as Error).message}`),
-      })
+        Effect.tryPromise({
+          try: () => upsertChunked('triple_versions', existingTripleVersions, ['triple_id', 'version_id']),
+          catch: error => new Error(`Failed to insert bulk triple versions. ${(error as Error).message}`),
+        }),
+      ])
     );
 
     const triplesDatabaseTuples = mapTriplesWithActionType(fullEntries, timestamp, blockNumber);
