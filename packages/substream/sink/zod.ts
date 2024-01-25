@@ -91,16 +91,27 @@ export const ZodSpacePluginCreatedStreamResponse = z.object({
 });
 
 /** Creating governance plugins on a DAO */
-export const GovernancePluginsCreated = z.object({
+export const ZodGovernancePluginsCreated = z.object({
   daoAddress: z.string(),
   mainVotingAddress: z.string(),
   memberAccessAddress: z.string(),
 });
 
-export type GovernancePluginsCreated = z.infer<typeof GovernancePluginsCreated>;
+export type GovernancePluginsCreated = z.infer<typeof ZodGovernancePluginsCreated>;
 
 export const ZodGovernancePluginsCreatedStreamResponse = z.object({
-  governancePluginsCreated: z.array(GovernancePluginsCreated).min(1),
+  governancePluginsCreated: z.array(ZodGovernancePluginsCreated).min(1),
+});
+
+/** Adding editors to a space */
+export const ZodEditorsAdded = z.object({
+  addresses: z.array(z.string()),
+});
+
+export type EditorsAdded = z.infer<typeof ZodEditorsAdded>;
+
+export const ZodEditorsAddedStreamResponse = z.object({
+  editorsAdded: z.array(ZodEditorsAdded).min(1),
 });
 
 /** Roles Changes */
