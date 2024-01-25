@@ -9,7 +9,7 @@ import { readCursor, writeCursor } from './cursor';
 import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidFullEntries } from './parse-valid-full-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
-import { handleEditorsGrantedV2, handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { createSink, createStream } from './substreams.js/sink/src';
 import { slog } from './utils';
@@ -258,14 +258,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             });
 
             yield* _(
-              Effect.tryPromise({
-                try: () =>
-                  handleEditorsGrantedV2({
-                    editorsAdded: editorsAddedResponse.data.editorsAdded,
-                    blockNumber,
-                    timestamp,
-                  }),
-                catch: error => console.error('idk'),
+              getEditorsGrantedV2Effect({
+                editorsAdded: editorsAddedResponse.data.editorsAdded,
+                blockNumber,
+                timestamp,
               })
             );
 

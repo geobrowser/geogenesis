@@ -1,10 +1,23 @@
+import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { pool } from './utils/pool';
 import { type EditorsAdded, type RoleChange } from './zod';
 
-export async function handleEditorsGrantedV2({
+class SpaceWithPluginAddressNotFoundError extends Error {
+  _tag: 'SpaceWithPluginAddressNotFoundError' = 'SpaceWithPluginAddressNotFoundError';
+}
+
+class CouldNotWriteAccountsError extends Error {
+  _tag: 'CouldNotWriteAccountsError' = 'CouldNotWriteAccountsError';
+}
+
+class CouldNotWriteEditorsV2Error extends Error {
+  _tag: 'CouldNotWriteEditorsV2Error' = 'CouldNotWriteEditorsV2Error';
+}
+
+export function getEditorsGrantedV2Effect({
   editorsAdded,
   timestamp,
   blockNumber,
@@ -13,44 +26,59 @@ export async function handleEditorsGrantedV2({
   timestamp: number;
   blockNumber: number;
 }) {
-  try {
+  return Effect.gen(function* (_) {
     const accounts = editorsAdded.flatMap(e => e.addresses.map(a => ({ id: getChecksumAddress(a) })));
 
+    // This should be handled by our zod parsing validation so this shouldn't trigger
     if (editorsAdded.length === 0) {
-      // This should be handled by our zod parsing validation
       console.error('No editors added in editors granted event');
       return;
     }
 
-    // Note that these _should_ all be the same for a given editorsAdded event
+    // Note that the plugin address for each entry in editorsAdded _should_ be the same
+    // for a given editorsAdded event. TypeScript type narrowing doesn't really work when
+    // we're using `noUncheckedIndexedAccess` even though we've asserted that editorsAdded is
+    // not empty.
     const pluginAddress = editorsAdded[0]?.pluginAddress;
 
+    // This should be handled by our zod parsing validation, so we shouldn't see this
     if (!pluginAddress) {
-      // This should be handled by our zod parsing validation
       console.error('No plugin address in editors granted event');
       return;
     }
 
-    const spaceForPlugin = await db
-      .selectOne('spaces', { main_voting_plugin_address: getChecksumAddress(pluginAddress) }, { columns: ['id'] })
-      .run(pool);
+    const spaceForPlugin = yield* _(
+      Effect.tryPromise({
+        try: () =>
+          db
+            .selectOne('spaces', { main_voting_plugin_address: getChecksumAddress(pluginAddress) }, { columns: ['id'] })
+            .run(pool),
+        catch: error => new SpaceWithPluginAddressNotFoundError(String(error)),
+      })
+    );
 
     if (!spaceForPlugin) {
-      // @TODO: Effectify and return specialized error
-      throw new Error(`No space found for plugin address ${pluginAddress}`);
+      return yield* _(
+        Effect.fail(new SpaceWithPluginAddressNotFoundError(`No space found for plugin address ${pluginAddress}`))
+      );
     }
 
     /**
      * Here we ensure that we create any relations for the role change before we create the
      * role change itself.
      */
-    await db
-      .upsert('accounts', accounts, ['id'], {
-        updateColumns: db.doNothing,
+    yield* _(
+      Effect.tryPromise({
+        try: () =>
+          db
+            .upsert('accounts', accounts, ['id'], {
+              updateColumns: db.doNothing,
+            })
+            .run(pool),
+        catch: error => new CouldNotWriteAccountsError(String(error)),
       })
-      .run(pool);
+    );
 
-    // @TODO: Get a map of plugin address to space id
     const newEditors = editorsAdded.flatMap(({ addresses, pluginAddress }) =>
       addresses.map(a => ({
         space_id: getChecksumAddress(spaceForPlugin.id),
@@ -60,12 +88,16 @@ export async function handleEditorsGrantedV2({
       }))
     );
 
-    await db
-      .upsert('space_editors_v2', newEditors, ['space_id', 'account_id'], { updateColumns: db.doNothing })
-      .run(pool);
-  } catch (error) {
-    console.error('Error handling editors granted:', error);
-  }
+    yield* _(
+      Effect.tryPromise({
+        try: () =>
+          db
+            .upsert('space_editors_v2', newEditors, ['space_id', 'account_id'], { updateColumns: db.doNothing })
+            .run(pool),
+        catch: error => new CouldNotWriteEditorsV2Error(String(error)),
+      })
+    );
+  });
 }
 
 // @TODO: Effectify the role granted and role revoked handlers
