@@ -185,7 +185,7 @@ message EditorAdded {
 }
 
 message EditorsAdded {
-  repeated EditorAdded members = 1;
+  repeated EditorAdded editors = 1;
 }
 
 message GeoOutput {

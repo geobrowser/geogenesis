@@ -224,7 +224,7 @@ pub struct EditorAdded {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EditorsAdded {
     #[prost(message, repeated, tag="1")]
-    pub members: ::prost::alloc::vec::Vec<EditorAdded>,
+    pub editors: ::prost::alloc::vec::Vec<EditorAdded>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
