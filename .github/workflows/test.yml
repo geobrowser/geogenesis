@@ -18,6 +18,7 @@ concurrency:
 
 env:
   NEXT_PUBLIC_IS_TEST_ENV: true
+  START_BLOCK: 36472424
 
 jobs:
   test:

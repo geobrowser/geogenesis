@@ -10,7 +10,12 @@ import { getChecksumAddress } from './utils/get-checksum-address';
 import { pool } from './utils/pool';
 import { type FullEntry, type RoleChange } from './zod';
 
+/**
+ * Reading from cache assumes you want to start at the first entry in the cache. This entry
+ * may or may start at the genesis block.
+ */
 export async function populateFromCache() {
+  // @TODO: Effectify populateFromCache
   try {
     let id = 1;
     let tries = 0;

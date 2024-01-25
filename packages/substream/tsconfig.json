@@ -27,7 +27,7 @@
     "noEmit": true,
 
     /* Lib when not targeting the browser */
-    "lib": ["ES2022"]
+    "lib": ["ES2022"],
 
     /* Lib when targeting the browser */
     // "lib": ["ES2022", "DOM", "DOM.Iterable"]
@@ -38,6 +38,8 @@
     /* When building a library in a monorepo */
     // "composite": true,
     // "declarationMap": true,
+
+    "types": ["vitest/globals"]
   },
   "include": [
     "index.ts",

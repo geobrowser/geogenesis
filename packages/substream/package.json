@@ -17,7 +17,8 @@
     "start:from-genesis": "pnpm dotenv -e .env -- node dist/index.js --from-genesis",
     "start:from-genesis-with-cache": "pnpm dotenv -e .env -- node dist/index.js --from-cache --from-genesis",
     "start": "pnpm dotenv -e .env -- node dist/index.js",
-    "initialize": "./sink/sql/initAll.sh && pnpm zapatos"
+    "initialize": "./sink/sql/initAll.sh && pnpm zapatos",
+    "test": "vitest"
   },
   "dependencies": {
     "@bufbuild/buf": "^1.28.0",
@@ -59,7 +60,9 @@
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-prettier": "^4.0.0",
     "prettier": "^3.0.3",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vite": "^3.0.9",
+    "vitest": "^0.22.1"
   },
   "packageManager": "pnpm@7.30.5"
 }
