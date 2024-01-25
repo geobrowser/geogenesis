@@ -70,6 +70,14 @@ modules:
     output:
       type: proto:schema.GeoGovernancePluginsCreated
 
+  - name: map_editors_added
+    kind: map
+    initialBlock: 52630300
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.EditorsAdded
+
   - name: geo_out
     kind: map
     initialBlock: 36472424
@@ -79,6 +87,7 @@ modules:
       - map: map_profiles_registered
       - map: map_spaces_created
       - map: map_governance_plugins_created
+      - map: map_editors_added
       # - map: map_successor_spaces_created
     output:
       type: proto:schema.GeoOutput

@@ -2,9 +2,10 @@ pub mod helpers;
 mod pb;
 
 use pb::schema::{
-    EntriesAdded, EntryAdded, GeoGovernancePluginCreated, GeoGovernancePluginsCreated, GeoOutput,
-    GeoProfileRegistered, GeoProfilesRegistered, GeoSpaceCreated, GeoSpacesCreated, RoleChange,
-    RoleChanges, SuccessorSpaceCreated, SuccessorSpacesCreated,
+    EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
+    GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
+    GeoSpaceCreated, GeoSpacesCreated, RoleChange, RoleChanges, SuccessorSpaceCreated,
+    SuccessorSpacesCreated,
 };
 
 use substreams::store::*;
@@ -17,10 +18,12 @@ use_contract!(space, "abis/space.json");
 use_contract!(geo_profile_registry, "abis/geo-profile-registry.json");
 use_contract!(space_setup, "abis/space-setup.json");
 use_contract!(governance_setup, "abis/governance-setup.json");
+use_contract!(main_voting_plugin, "abis/main-voting-plugin.json");
 
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
 use legacy_space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
+use main_voting_plugin::events::MembersAdded as EditorsAddedEvent;
 use space::events::SuccessorSpaceCreated as SuccessSpaceCreatedEvent;
 use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
 
@@ -263,28 +266,71 @@ fn map_governance_plugins_created(
     Ok(GeoGovernancePluginsCreated { plugins })
 }
 
+/**
+ * An editor has editing and voting permissions in a DAO-based space. Editors join a space
+ * one of two ways:
+ * 1. They submit a request to join the space as an editor which goes to a vote. The editors
+ *    in the space vote on whether to accept the new editor.
+ * 2. They are added as a set of initial editors when first creating the space. This allows
+ *    space deployers to bootstrap a set of editors on space creation.
+ *
+ * @TODO: We can optimize the output a bit for downstream sinks by flattening the addresses
+ * array. Right now in the substream output we get:
+ *
+ * editors: [
+ *   { addresses: [...] },
+ * ].
+ *
+ * It would be nicer to just output a single array instead of a nested array.
+ */
+#[substreams::handlers::map]
+fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::errors::Error> {
+    let editors: Vec<EditorAdded> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(editors_added) = EditorsAddedEvent::match_and_decode(log) {
+                return Some(EditorAdded {
+                    addresses: editors_added
+                        .members // contract event calls them members, but conceptually they are editors
+                        .iter()
+                        .map(|address| format_hex(address))
+                        .collect(),
+                    plugin_address: format_hex(&log.address()),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(EditorsAdded { editors })
+}
+
 #[substreams::handlers::map]
 fn geo_out(
     entries: EntriesAdded,
     role_changes: RoleChanges,
     profiles_registered: GeoProfilesRegistered,
-    // successor_spaces_created: SuccessorSpacesCreated,
     spaces_created: GeoSpacesCreated,
     governance_plugins_created: GeoGovernancePluginsCreated,
+    // successor_spaces_created: SuccessorSpacesCreated,
+    editors_added: EditorsAdded,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
     let role_changes = role_changes.changes;
     let profiles_registered = profiles_registered.profiles;
-    // let successor_spaces_created = successor_spaces_created.spaces;
     let spaces_created = spaces_created.spaces;
     let governance_plugins_created = governance_plugins_created.plugins;
+    let editors_added = editors_added.editors;
+    // let successor_spaces_created = successor_spaces_created.spaces;
 
     Ok(GeoOutput {
         entries,
         role_changes,
         profiles_registered,
-        // successor_spaces_created,
         spaces_created,
         governance_plugins_created,
+        editors_added,
+        // successor_spaces_created,
     })
 }

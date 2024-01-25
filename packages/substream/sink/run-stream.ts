@@ -9,7 +9,7 @@ import { readCursor, writeCursor } from './cursor';
 import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidFullEntries } from './parse-valid-full-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
-import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { createSink, createStream } from './substreams.js/sink/src';
 import { slog } from './utils';
@@ -19,6 +19,7 @@ import { getEntryWithIpfsContent } from './utils/ipfs';
 import { pool } from './utils/pool';
 import {
   type FullEntry,
+  ZodEditorsAddedStreamResponse,
   ZodEntryStreamResponse,
   ZodGovernancePluginsCreatedStreamResponse,
   ZodRoleChangeStreamResponse,
@@ -178,6 +179,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
           const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
+          const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
 
           /**
            * @TODO: De-duplicate any spaces being added with both the space plugin governance
@@ -242,6 +244,38 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             slog({
               requestId: message.cursor,
               message: `Spaces with governance written successfully`,
+            });
+          }
+
+          /**
+           * The data model for DAO-based spaces works slightly differently than in legacy spaces.
+           * This means there will be a period where we need to support both data models depending
+           * on which space/contract we are working with. Eventually these data models will be merged
+           * and usage of the legacy space contracts will be migrated to the DAO-based contracts, but
+           * for now we are appending "V2" to permissions data models to denote it's used for the
+           * DAO-based spaces.
+           */
+          if (editorsAddedResponse.success) {
+            slog({
+              requestId: message.cursor,
+              message: `Writing editor role for accounts ${editorsAddedResponse.data.editorsAdded
+                .map(e => e.addresses)
+                .join(', ')} to space with plugin ${editorsAddedResponse.data.editorsAdded.map(
+                e => e.pluginAddress
+              )} to DB`,
+            });
+
+            yield* _(
+              getEditorsGrantedV2Effect({
+                editorsAdded: editorsAddedResponse.data.editorsAdded,
+                blockNumber,
+                timestamp,
+              })
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `Editor roles written successfully`,
             });
           }
 
