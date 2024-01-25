@@ -92,6 +92,7 @@ export const NONPROFIT_CATEGORIES_ATTRIBUTE =
 export const WEB_URL_ATTRIBUTE = 'e8010874-d330-4a4d-9907-62e89a19371a'
 export const AVATAR_ATTRIBUTE = '235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133'
 export const COVER_ATTRIBUTE = '34f53507-2e6b-42c5-a844-43981a77cfa2'
+export const ROLE_ATTRIBUTE = '9c1922f1-d7a2-47d1-841d-234cb2f56991'
 
 /* Example Usage: SF_Config -> FOREIGN_TYPES -> Some_Entity */
 export const FOREIGN_TYPES = 'be745973-05a9-4cd0-a46d-1c5538270faf'

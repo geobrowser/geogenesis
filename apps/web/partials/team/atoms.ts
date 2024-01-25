@@ -8,6 +8,8 @@ type TeamMemberStep = 'start' | 'find' | 'create';
 
 type Role = { id: string; name: string | null } | EntityType;
 
+export const draftMembersAtom = atom<Array<number>>([0]);
+
 export const teamMemberStepAtom = atom<TeamMemberStep>('start');
 
 export const teamMemberAvatarAtom = atom<string | null>(null);
