@@ -182,6 +182,7 @@ message EditorAdded {
   // when first creating the governance plugin. After that we only emit one
   // address at a time via proposals.
   repeated string addresses = 1;
+  string pluginAddress = 2;
 }
 
 message EditorsAdded {

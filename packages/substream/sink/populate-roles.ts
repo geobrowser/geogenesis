@@ -1,7 +1,72 @@
 import * as db from 'zapatos/db';
 
+import { getChecksumAddress } from './utils/get-checksum-address';
 import { pool } from './utils/pool';
-import { type RoleChange } from './zod';
+import { type EditorsAdded, type RoleChange } from './zod';
+
+export async function handleEditorsGrantedV2({
+  editorsAdded,
+  timestamp,
+  blockNumber,
+}: {
+  editorsAdded: EditorsAdded[];
+  timestamp: number;
+  blockNumber: number;
+}) {
+  try {
+    const accounts = editorsAdded.flatMap(e => e.addresses.map(a => ({ id: getChecksumAddress(a) })));
+
+    if (editorsAdded.length === 0) {
+      // This should be handled by our zod parsing validation
+      console.error('No editors added in editors granted event');
+      return;
+    }
+
+    // Note that these _should_ all be the same for a given editorsAdded event
+    const pluginAddress = editorsAdded[0]?.pluginAddress;
+
+    if (!pluginAddress) {
+      // This should be handled by our zod parsing validation
+      console.error('No plugin address in editors granted event');
+      return;
+    }
+
+    const spaceForPlugin = await db
+      .selectOne('spaces', { main_voting_plugin_address: getChecksumAddress(pluginAddress) }, { columns: ['id'] })
+      .run(pool);
+
+    if (!spaceForPlugin) {
+      // @TODO: Effectify and return specialized error
+      throw new Error(`No space found for plugin address ${pluginAddress}`);
+    }
+
+    /**
+     * Here we ensure that we create any relations for the role change before we create the
+     * role change itself.
+     */
+    await db
+      .upsert('accounts', accounts, ['id'], {
+        updateColumns: db.doNothing,
+      })
+      .run(pool);
+
+    // @TODO: Get a map of plugin address to space id
+    const newEditors = editorsAdded.flatMap(({ addresses, pluginAddress }) =>
+      addresses.map(a => ({
+        space_id: getChecksumAddress(spaceForPlugin.id),
+        account_id: getChecksumAddress(a),
+        created_at: timestamp,
+        created_at_block: blockNumber,
+      }))
+    );
+
+    await db
+      .upsert('space_editors_v2', newEditors, ['space_id', 'account_id'], { updateColumns: db.doNothing })
+      .run(pool);
+  } catch (error) {
+    console.error('Error handling editors granted:', error);
+  }
+}
 
 // @TODO: Effectify the role granted and role revoked handlers
 export async function handleRoleGranted({

@@ -9,7 +9,7 @@ import { readCursor, writeCursor } from './cursor';
 import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidFullEntries } from './parse-valid-full-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
-import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import { handleEditorsGrantedV2, handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { createSink, createStream } from './substreams.js/sink/src';
 import { slog } from './utils';
@@ -19,6 +19,7 @@ import { getEntryWithIpfsContent } from './utils/ipfs';
 import { pool } from './utils/pool';
 import {
   type FullEntry,
+  ZodEditorsAddedStreamResponse,
   ZodEntryStreamResponse,
   ZodGovernancePluginsCreatedStreamResponse,
   ZodRoleChangeStreamResponse,
@@ -178,6 +179,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
           const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
+          const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
 
           /**
            * @TODO: De-duplicate any spaces being added with both the space plugin governance
@@ -242,6 +244,34 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             slog({
               requestId: message.cursor,
               message: `Spaces with governance written successfully`,
+            });
+          }
+
+          if (editorsAddedResponse.success) {
+            slog({
+              requestId: message.cursor,
+              message: `Writing editor role for accounts ${editorsAddedResponse.data.editorsAdded
+                .map(e => e.addresses)
+                .join(', ')} to space with plugin ${editorsAddedResponse.data.editorsAdded.map(
+                e => e.pluginAddress
+              )} to DB`,
+            });
+
+            yield* _(
+              Effect.tryPromise({
+                try: () =>
+                  handleEditorsGrantedV2({
+                    editorsAdded: editorsAddedResponse.data.editorsAdded,
+                    blockNumber,
+                    timestamp,
+                  }),
+                catch: error => console.error('idk'),
+              })
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `Editor roles written successfully`,
             });
           }
 

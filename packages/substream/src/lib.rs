@@ -295,6 +295,7 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
                         .iter()
                         .map(|address| format_hex(address))
                         .collect(),
+                    plugin_address: format_hex(&log.address()),
                 });
             }
 

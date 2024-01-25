@@ -106,6 +106,7 @@ export const ZodGovernancePluginsCreatedStreamResponse = z.object({
 /** Adding editors to a space */
 export const ZodEditorsAdded = z.object({
   addresses: z.array(z.string()),
+  pluginAddress: z.string(),
 });
 
 export type EditorsAdded = z.infer<typeof ZodEditorsAdded>;

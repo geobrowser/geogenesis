@@ -219,6 +219,8 @@ pub struct EditorAdded {
     /// address at a time via proposals.
     #[prost(string, repeated, tag="1")]
     pub addresses: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, tag="2")]
+    pub plugin_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
