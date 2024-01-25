@@ -597,6 +597,8 @@ importers:
       tsx: ^4.6.0
       typescript: latest
       viem: ^1.16.0
+      vite: ^3.0.9
+      vitest: ^0.22.1
       yaml: ^2.3.4
       zapatos: ^6.2.0
       zod: ^3.22.4
@@ -612,7 +614,7 @@ importers:
       '@substreams/node': 0.4.3
       '@substreams/sink': 0.6.0_7u2smfe62ftvk6e3q4ynnrpvyq
       commander: 11.1.0
-      dotenv: 16.3.1
+      dotenv: 16.4.1
       effect: 2.0.0-next.56
       fast-check: 3.14.0
       fetch-retry: 5.0.6
@@ -627,7 +629,7 @@ importers:
       zod: 3.22.4
     devDependencies:
       '@trivago/prettier-plugin-sort-imports': 4.2.0_prettier@3.0.3
-      '@types/node': 20.11.2
+      '@types/node': 20.11.6
       '@types/pg': 8.10.9
       '@typescript-eslint/eslint-plugin': 6.13.1_vnppzclqnuaninlvbm3xmr24by
       '@typescript-eslint/parser': 6.13.1_5mr5kdlp66kwvgvlily63o2x6y
@@ -640,6 +642,8 @@ importers:
       eslint-plugin-prettier: 4.2.1_jhpdkszllzd3tb2pnkinrmricm
       prettier: 3.0.3
       typescript: 5.3.3
+      vite: 3.1.8
+      vitest: 0.22.1
 
 packages:
 
@@ -1267,8 +1271,8 @@ packages:
     resolution: {integrity: sha512-JyEH8Z+OD5Sc2opSg86qMHn1EM1Sa+zj/Tc0ovxdwk56ByVNONJSabuCUbLQp+eKN3rWNfrho0X+3SEqEPXIow==}
     dev: false
 
-  /@bufbuild/protobuf/1.6.0:
-    resolution: {integrity: sha512-hp19vSFgNw3wBBcVBx5qo5pufCqjaJ0Cfk5H/pfjNOfNWU+4/w0QVOmfAOZNRrNWRrVuaJWxcN8P2vhOkkzbBQ==}
+  /@bufbuild/protobuf/1.7.0:
+    resolution: {integrity: sha512-jIsRadRsyxf6ERBU1auY2c1k3doFdqh15F4HRZs4BELVuBtpN+3ipkXqcsWE+rD+EQNigeR29SfQ+ES6UX/jGg==}
     dev: false
 
   /@chainsafe/as-sha256/0.3.1:
@@ -1342,15 +1346,15 @@ packages:
       undici: 5.28.1
     dev: false
 
-  /@connectrpc/connect-node/1.3.0_ipswuynniv5iss7likpjunsnxm:
+  /@connectrpc/connect-node/1.3.0_tioubhd7fo52jbkrhqm3el6crm:
     resolution: {integrity: sha512-2fV/z/8MUFOkTn2Gbm7T/qvRfkpt/D/w7ykYqACZRH6VNG/faY4lH2wUZiNkwv9tzTrECKOJFyPsaGs3nRYK3w==}
     engines: {node: '>=16.0.0'}
     peerDependencies:
       '@bufbuild/protobuf': ^1.4.2
       '@connectrpc/connect': 1.3.0
     dependencies:
-      '@bufbuild/protobuf': 1.6.0
-      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.6.0
+      '@bufbuild/protobuf': 1.7.0
+      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.0
       undici: 5.28.2
     dev: false
 
@@ -1362,12 +1366,12 @@ packages:
       '@bufbuild/protobuf': 1.4.2
     dev: false
 
-  /@connectrpc/connect/1.3.0_@bufbuild+protobuf@1.6.0:
+  /@connectrpc/connect/1.3.0_@bufbuild+protobuf@1.7.0:
     resolution: {integrity: sha512-kTeWxJnLLtxKc2ZSDN0rIBgwfP8RwcLknthX4AKlIAmN9ZC4gGnCbwp+3BKcP/WH5c8zGBAWqSY3zeqCM+ah7w==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.4.2
     dependencies:
-      '@bufbuild/protobuf': 1.6.0
+      '@bufbuild/protobuf': 1.7.0
     dev: false
 
   /@cspotcode/source-map-support/0.8.1:
@@ -5123,14 +5127,14 @@ packages:
       '@stablelib/wipe': 1.0.1
     dev: false
 
-  /@substreams/core/0.7.0_ipswuynniv5iss7likpjunsnxm:
+  /@substreams/core/0.7.0_tioubhd7fo52jbkrhqm3el6crm:
     resolution: {integrity: sha512-SJ70pbIRWNdp17Ld1QbGJpQ2ohvYUBKiAkOKnODeqLCDmc/xKs66nxJCIzQOvIxqLXVRU3QiBwm6NQB3CKrP0A==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.4.2
       '@connectrpc/connect': ^1.1.3
     dependencies:
-      '@bufbuild/protobuf': 1.6.0
-      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.6.0
+      '@bufbuild/protobuf': 1.7.0
+      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.0
     dev: false
 
   /@substreams/core/0.8.0_rabf2hmdfizgo3zlfs6bmsltoi:
@@ -5166,10 +5170,10 @@ packages:
     resolution: {integrity: sha512-XpzXg4QhNgqTXjXB/OfuBwfp8REgPC9arpPFQ4vNS0toia6BZjOLirB42txl7DLo053FIaEDqPsKaR7D2Cmv0g==}
     engines: {node: '>=18'}
     dependencies:
-      '@bufbuild/protobuf': 1.6.0
-      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.6.0
-      '@connectrpc/connect-node': 1.3.0_ipswuynniv5iss7likpjunsnxm
-      '@substreams/core': 0.7.0_ipswuynniv5iss7likpjunsnxm
+      '@bufbuild/protobuf': 1.7.0
+      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.0
+      '@connectrpc/connect-node': 1.3.0_tioubhd7fo52jbkrhqm3el6crm
+      '@substreams/core': 0.7.0_tioubhd7fo52jbkrhqm3el6crm
       eventemitter3: 5.0.1
     dev: false
 
@@ -6037,11 +6041,10 @@ packages:
       undici-types: 5.26.5
     dev: true
 
-  /@types/node/20.11.2:
-    resolution: {integrity: sha512-cZShBaVa+UO1LjWWBPmWRR4+/eY/JR/UIEcDlVsw3okjWEu+rB7/mH6X3B/L+qJVHDLjk9QW/y2upp9wp1yDXA==}
+  /@types/node/20.11.6:
+    resolution: {integrity: sha512-+EOokTnksGVgip2PbYbr3xnR7kZigh4LbybAfBAw5BpnQ+FqBYUsvCEjYd70IXKlbohQ64mzEYmMtlWUY8q//Q==}
     dependencies:
       undici-types: 5.26.5
-    dev: true
 
   /@types/node/8.10.66:
     resolution: {integrity: sha512-tktOkFUA4kXx2hhhrB8bIFb5TbwzS4uOhKEmwiD+NoiL0qtP2OQ9mFldbgD4dV1djrlBYP6eBuQZiWjuHUpqFw==}
@@ -6073,7 +6076,7 @@ packages:
   /@types/pg/8.10.9:
     resolution: {integrity: sha512-UksbANNE/f8w0wOMxVKKIrLCbEMV+oM1uKejmwXr39olg4xqcfBDbXxObJAt6XxHbDa4XTKOlUEcEltXDX+XLQ==}
     dependencies:
-      '@types/node': 17.0.45
+      '@types/node': 20.11.6
       pg-protocol: 1.6.0
       pg-types: 4.0.1
 
@@ -10691,7 +10694,7 @@ packages:
     resolution: {integrity: sha512-314CA4TyK34YEJ6ntBf80eUY+t1XaFLyem1k9P0sX1gn30qThZ5qZr/ZwE318gEnzyYP9yj9HJk6SqwE0upkfw==}
     dependencies:
       cross-spawn: 7.0.3
-      dotenv: 16.3.1
+      dotenv: 16.4.1
       dotenv-expand: 10.0.0
       minimist: 1.2.7
     dev: true
@@ -10708,6 +10711,11 @@ packages:
 
   /dotenv/16.3.1:
     resolution: {integrity: sha512-IPzF4w4/Rd94bA9imS68tZBaYyBWSCE47V1RGuMrB94iyTOIEwRmVL2x/4An+6mETpLrKJ5hQkB8W4kFAadeIQ==}
+    engines: {node: '>=12'}
+    dev: false
+
+  /dotenv/16.4.1:
+    resolution: {integrity: sha512-CjA3y+Dr3FyFDOAMnxZEGtnW9KBR2M0JvvUtXNW+dYJL5ROWxP9DUHCwgFqpMk0OXCc0ljhaNTr2w/kutYIcHQ==}
     engines: {node: '>=12'}
 
   /dotignore/0.1.2:
@@ -11415,6 +11423,7 @@ packages:
   /esbuild/0.15.12:
     resolution: {integrity: sha512-PcT+/wyDqJQsRVhaE9uX/Oq4XLrFh0ce/bs2TJh4CSaw9xuvI+xFrH2nAYOADbhQjUgAhNWC5LKoUsakm4dxng==}
     engines: {node: '>=12'}
+    hasBin: true
     requiresBuild: true
     optionalDependencies:
       '@esbuild/android-arm': 0.15.12
@@ -11638,7 +11647,7 @@ packages:
       debug: 4.3.4
       enhanced-resolve: 5.12.0
       eslint: 8.21.0
-      eslint-plugin-import: 2.26.0_vfkjhpyu3ul4ompvtbiazva2r4
+      eslint-plugin-import: 2.26.0_m2m4u4ujm3f6v75yfbf66l5qly
       get-tsconfig: 4.7.2
       globby: 13.1.2
       is-core-module: 2.13.0
@@ -11692,7 +11701,7 @@ packages:
       eslint-import-resolver-webpack:
         optional: true
     dependencies:
-      '@typescript-eslint/parser': 6.13.1_bekczya6st5f65shkeeehffngq
+      '@typescript-eslint/parser': 6.13.1_5mr5kdlp66kwvgvlily63o2x6y
       debug: 3.2.7
       eslint-import-resolver-node: 0.3.6
       eslint-import-resolver-typescript: 3.5.2_jatgrcxl4x7ywe7ak6cnjca2ae
@@ -11791,7 +11800,7 @@ packages:
       '@typescript-eslint/parser':
         optional: true
     dependencies:
-      '@typescript-eslint/parser': 6.13.1_bekczya6st5f65shkeeehffngq
+      '@typescript-eslint/parser': 6.13.1_5mr5kdlp66kwvgvlily63o2x6y
       array-includes: 3.1.6
       array.prototype.flat: 1.3.0
       debug: 2.6.9
@@ -16123,6 +16132,7 @@ packages:
 
   /loupe/2.3.4:
     resolution: {integrity: sha512-OvKfgCC2Ndby6aSTREl5aCCPTNIzlDfQZvZxNUrBrihDhL3xcrYegTblhmEiCrg2kKQz4XsFIaemE5BF4ybSaQ==}
+    deprecated: Please upgrade to 2.3.7 which fixes GHSA-4q6p-r6v2-jvc5
     dependencies:
       get-func-name: 2.0.0
     dev: true
@@ -16732,6 +16742,7 @@ packages:
   /nanoid/3.3.6:
     resolution: {integrity: sha512-BGcqMMJuToF7i1rt+2PWSNVnWIkGCU78jBG3RxO/bZlnZPK2Cmi2QaffxGO/2RvWi9sL+FAiRiXMgsyxQ1DIDA==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
 
   /nanomatch/1.2.13:
     resolution: {integrity: sha512-fpoe2T0RbHwBTBUOftAfBPaDEi06ufaUai0mE6Yn1kacc3SnTErfb/h+X94VXzI64rKFHYImXSvdwGGCmwOqCA==}
@@ -17897,7 +17908,6 @@ packages:
       nanoid: 3.3.6
       picocolors: 1.0.0
       source-map-js: 1.0.2
-    dev: false
 
   /postgraphile-core/4.14.0_graphql@15.5.0+pg@8.11.3:
     resolution: {integrity: sha512-hhcVyyH0NnzR5DsEoAVv7MMjZviMxs8mfNv7ZhewK4u2dZ8QKznHx5ET/rentnehEWztZwfy/ktjRlN2pC0GjA==}
@@ -19150,6 +19160,7 @@ packages:
 
   /resolve/1.22.6:
     resolution: {integrity: sha512-njhxM7mV12JfufShqGy3Rz8j11RPdLy4xi15UurGJeoHLfJpVXKdh3ueuOqbYUcDZnffr6X739JBo5LzyahEsw==}
+    hasBin: true
     dependencies:
       is-core-module: 2.13.0
       path-parse: 1.0.7
@@ -19254,6 +19265,7 @@ packages:
   /rollup/2.78.1:
     resolution: {integrity: sha512-VeeCgtGi4P+o9hIg+xz4qQpRl6R401LWEXBmxYKOV4zlF82lyhgh2hTZnheFUbANE8l2A41F458iwj2vEYaXJg==}
     engines: {node: '>=10.0.0'}
+    hasBin: true
     optionalDependencies:
       fsevents: 2.3.3
     dev: true
@@ -21500,7 +21512,6 @@ packages:
 
   /undici-types/5.26.5:
     resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
-    dev: true
 
   /undici/5.22.1:
     resolution: {integrity: sha512-Ji2IJhFXZY0x/0tVBXeQwgPlLWw13GVzpsWPQ3rV50IFMMof2I55PZZxtm4P6iNq+L5znYN9nSTAq0ZyE6lSJw==}
@@ -21961,8 +21972,8 @@ packages:
         optional: true
     dependencies:
       esbuild: 0.15.12
-      postcss: 8.4.21
-      resolve: 1.22.1
+      postcss: 8.4.31
+      resolve: 1.22.6
       rollup: 2.78.1
     optionalDependencies:
       fsevents: 2.3.3
@@ -21992,13 +22003,13 @@ packages:
     dependencies:
       '@types/chai': 4.3.3
       '@types/chai-subset': 1.3.3
-      '@types/node': 18.7.18
+      '@types/node': 20.11.6
       chai: 4.3.6
       debug: 4.3.4
       local-pkg: 0.4.2
       tinypool: 0.2.4
       tinyspy: 1.0.2
-      vite: 3.0.9
+      vite: 3.1.8
     transitivePeerDependencies:
       - less
       - sass

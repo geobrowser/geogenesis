@@ -54,6 +54,10 @@ export function getEditorsGrantedV2Effect({
     // for a given editorsAdded event. TypeScript type narrowing doesn't really work when
     // we're using `noUncheckedIndexedAccess` even though we've asserted that editorsAdded is
     // not empty.
+    //
+    // @TODO: Actually there might be a scenario where multiple DAOs are created in the same
+    // block or multiple roles granted in the same block where each entry could be emitted in
+    // a different space.
     const pluginAddress = editorsAdded[0]?.pluginAddress;
 
     // This should be handled by our zod parsing validation, so we shouldn't see this
