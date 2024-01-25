@@ -31,7 +31,7 @@
 /// Additionally we map the author of the content and the space the content was added to.
 ///
 /// The new, DAO-based contracts have a different method and event for adding content to
-/// a space which will get mapped in a separate handler.
+/// a space which will get mapped in a separate event.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EntryAdded {
@@ -204,6 +204,28 @@ pub struct GeoGovernancePluginsCreated {
     #[prost(message, repeated, tag="1")]
     pub plugins: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
 }
+/// *
+/// An editor has editing and voting permissions in a DAO-based space. Editors join a space
+/// one of two ways:
+/// 1. They submit a request to join the space as an editor which goes to a vote. The editors
+///     in the space vote on whether to accept the new editor.
+/// 2. They are added as a set of initial editors when first creating the space. This allows
+///     space deployers to bootstrap a set of editors on space creation.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditorAdded {
+    /// The event emits an array of addresses. We only emit multiple addresses
+    /// when first creating the governance plugin. After that we only emit one
+    /// address at a time via proposals.
+    #[prost(string, repeated, tag="1")]
+    pub addresses: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditorsAdded {
+    #[prost(message, repeated, tag="1")]
+    pub members: ::prost::alloc::vec::Vec<EditorAdded>,
+}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoOutput {
@@ -213,11 +235,13 @@ pub struct GeoOutput {
     pub role_changes: ::prost::alloc::vec::Vec<RoleChange>,
     #[prost(message, repeated, tag="3")]
     pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
-    /// repeated SuccessorSpaceCreated successor_spaces_created = 4;
-    #[prost(message, repeated, tag="5")]
+    #[prost(message, repeated, tag="4")]
     pub spaces_created: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
-    #[prost(message, repeated, tag="6")]
+    #[prost(message, repeated, tag="5")]
     pub governance_plugins_created: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
+    /// repeated SuccessorSpaceCreated successor_spaces_created = 6;
+    #[prost(message, repeated, tag="6")]
+    pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
 }
 /// *
 /// Roles represent the permissions for a legacy space (See top level comment for more info

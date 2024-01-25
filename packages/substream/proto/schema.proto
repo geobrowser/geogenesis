@@ -169,11 +169,31 @@ message GeoGovernancePluginsCreated {
   repeated GeoGovernancePluginCreated plugins = 1;
 }
 
+/**
+ * An editor has editing and voting permissions in a DAO-based space. Editors join a space
+ * one of two ways:
+ * 1. They submit a request to join the space as an editor which goes to a vote. The editors
+ *    in the space vote on whether to accept the new editor.
+ * 2. They are added as a set of initial editors when first creating the space. This allows
+ *    space deployers to bootstrap a set of editors on space creation.
+ */
+message EditorAdded {
+  // The event emits an array of addresses. We only emit multiple addresses
+  // when first creating the governance plugin. After that we only emit one
+  // address at a time via proposals.
+  repeated string addresses = 1;
+}
+
+message EditorsAdded {
+  repeated EditorAdded members = 1;
+}
+
 message GeoOutput {
   repeated EntryAdded entries = 1;
   repeated RoleChange role_changes = 2;
   repeated GeoProfileRegistered profiles_registered = 3;
   repeated GeoSpaceCreated spaces_created = 4;
   repeated GeoGovernancePluginCreated governance_plugins_created = 5;
+  repeated EditorAdded editors_added = 6;
   // repeated SuccessorSpaceCreated successor_spaces_created = 6;
 }
