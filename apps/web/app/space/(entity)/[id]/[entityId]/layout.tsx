@@ -2,6 +2,8 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import * as React from 'react';
 
+import { Metadata } from 'next';
+
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { fetchEntityType } from '~/core/io/fetch-entity-type';
@@ -10,7 +12,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
@@ -22,15 +24,47 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
 
-import { SpaceConfigProvider } from '~/app/space/[id]/space-config-provider';
-
-const PERSON_TABS = ['Overview', 'Activity'] as const;
-const COMPANY_TABS = ['Overview', 'Team', 'Activity'] as const;
-const NONPROFIT_TABS = ['Overview', 'Activity'] as const;
+const TABS = ['Overview', 'Activity'] as const;
 
 interface Props {
   params: { id: string; entityId: string };
   children: React.ReactNode;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const spaceId = params.id;
+  const entityId = decodeURIComponent(params.entityId);
+
+  const entity = await Subgraph.fetchEntity({ id: entityId });
+  const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
+
+  return {
+    title: entityName ?? 'New entity',
+    description,
+    openGraph: {
+      title: entityName ?? 'New entity',
+      description: description ?? undefined,
+      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
+      images: openGraphImageUrl
+        ? [
+            {
+              url: openGraphImageUrl,
+            },
+          ]
+        : undefined,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      description: description ?? undefined,
+      images: openGraphImageUrl
+        ? [
+            {
+              url: openGraphImageUrl,
+            },
+          ]
+        : undefined,
+    },
+  };
 }
 
 export default async function ProfileLayout({ children, params }: Props) {
@@ -40,157 +74,52 @@ export default async function ProfileLayout({ children, params }: Props) {
     id: decodedId,
   });
 
-  // Person profile
-  if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
-    const profile = await getProfilePage(decodedId);
-
-    return (
-      <SpaceConfigProvider spaceId={params.id}>
-        <TypesStoreServerContainer spaceId={params.id}>
-          <EntityStoreProvider id={decodedId} spaceId={params.id} initialTriples={profile.triples}>
-            <EditorProvider
-              id={profile.id}
-              spaceId={params.id}
-              initialBlockIdsTriple={profile.blockIdsTriple}
-              initialBlockTriples={profile.blockTriples}
-            >
-              <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-              <EntityPageContentContainer>
-                <EditableHeading
-                  spaceId={params.id}
-                  entityId={decodedId}
-                  name={profile.name ?? decodedId}
-                  triples={profile.triples}
-                />
-                <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
-                <Spacer height={40} />
-                <TabGroup
-                  tabs={PERSON_TABS.map(label => {
-                    const href =
-                      label === 'Overview'
-                        ? decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}`)
-                        : decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}/${label.toLowerCase()}`);
-
-                    return {
-                      href,
-                      label,
-                    };
-                  })}
-                />
-                <Spacer height={20} />
-                {children}
-              </EntityPageContentContainer>
-            </EditorProvider>
-          </EntityStoreProvider>
-        </TypesStoreServerContainer>
-      </SpaceConfigProvider>
-    );
+  if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
+    return <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>;
   }
 
-  // Company profile
-  if (types.includes(SYSTEM_IDS.COMPANY_TYPE)) {
-    const profile = await getProfilePage(decodedId);
-
-    // @TODO get team members count
-    const teamMembers = 2;
-
-    return (
-      <SpaceConfigProvider spaceId={params.id}>
-        <TypesStoreServerContainer spaceId={params.id}>
-          <EntityStoreProvider id={decodedId} spaceId={params.id} initialTriples={profile.triples}>
-            <EditorProvider
-              id={profile.id}
-              spaceId={params.id}
-              initialBlockIdsTriple={profile.blockIdsTriple}
-              initialBlockTriples={profile.blockTriples}
-            >
-              <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-              <EntityPageContentContainer>
-                <EditableHeading
-                  spaceId={params.id}
-                  entityId={decodedId}
-                  name={profile.name ?? decodedId}
-                  triples={profile.triples}
-                />
-                <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
-                <Spacer height={40} />
-                <TabGroup
-                  tabs={COMPANY_TABS.map(label => {
-                    const href =
-                      label === 'Overview'
-                        ? decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}`)
-                        : decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}/${label.toLowerCase()}`);
-
-                    const badge = label === 'Team' ? teamMembers.toString(10) : undefined;
-
-                    return {
-                      href,
-                      label,
-                      badge,
-                    };
-                  })}
-                />
-                <Spacer height={20} />
-                {children}
-              </EntityPageContentContainer>
-            </EditorProvider>
-          </EntityStoreProvider>
-        </TypesStoreServerContainer>
-      </SpaceConfigProvider>
-    );
-  }
-
-  // Nonprofit profile
-  if (types.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
-    const profile = await getProfilePage(decodedId);
-
-    return (
-      <SpaceConfigProvider spaceId={params.id}>
-        <TypesStoreServerContainer spaceId={params.id}>
-          <EntityStoreProvider id={decodedId} spaceId={params.id} initialTriples={profile.triples}>
-            <EditorProvider
-              id={profile.id}
-              spaceId={params.id}
-              initialBlockIdsTriple={profile.blockIdsTriple}
-              initialBlockTriples={profile.blockTriples}
-            >
-              <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-              <EntityPageContentContainer>
-                <EditableHeading
-                  spaceId={params.id}
-                  entityId={decodedId}
-                  name={profile.name ?? decodedId}
-                  triples={profile.triples}
-                />
-                <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
-                <Spacer height={40} />
-                <TabGroup
-                  tabs={NONPROFIT_TABS.map(label => {
-                    const href =
-                      label === 'Overview'
-                        ? decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}`)
-                        : decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}/${label.toLowerCase()}`);
-
-                    return {
-                      href,
-                      label,
-                    };
-                  })}
-                />
-                <Spacer height={20} />
-                {children}
-              </EntityPageContentContainer>
-            </EditorProvider>
-          </EntityStoreProvider>
-        </TypesStoreServerContainer>
-      </SpaceConfigProvider>
-    );
-  }
+  const profile = await getProfilePage(decodedId);
 
   return (
-    <SpaceConfigProvider spaceId={params.id}>
-      <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>
-    </SpaceConfigProvider>
+    <TypesStoreServerContainer spaceId={params.id}>
+      <EntityStoreProvider id={decodedId} spaceId={params.id} initialTriples={profile.triples}>
+        <EditorProvider
+          id={profile.id}
+          spaceId={params.id}
+          initialBlockIdsTriple={profile.blockIdsTriple}
+          initialBlockTriples={profile.blockTriples}
+        >
+          <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+          <EntityPageContentContainer>
+            <EditableHeading
+              spaceId={params.id}
+              entityId={decodedId}
+              name={profile.name ?? decodedId}
+              triples={profile.triples}
+            />
+            <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
+
+            <Spacer height={40} />
+            <TabGroup
+              tabs={TABS.map(label => {
+                const href =
+                  label === 'Overview'
+                    ? decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}`)
+                    : decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}/${label.toLowerCase()}`);
+                return {
+                  href,
+                  label,
+                };
+              })}
+            />
+
+            <Spacer height={20} />
+
+            {children}
+          </EntityPageContentContainer>
+        </EditorProvider>
+      </EntityStoreProvider>
+    </TypesStoreServerContainer>
   );
 }
 

@@ -23,12 +23,11 @@ export default async function PersonalHomePage() {
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const [spaces, person, profile, proposalsCount] = await Promise.all([
-    getSpacesWhereAdmin(connectedAddress),
+    getSpacesWhereModerator(connectedAddress),
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
     connectedAddress ? fetchOnchainProfile({ address: connectedAddress }) : null,
     connectedAddress
       ? fetchProposalCountByUser({
-          endpoint: config.subgraph,
           userId: connectedAddress,
         })
       : null,
@@ -86,44 +85,50 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
   );
 };
 
-const getSpacesWhereAdmin = async (address?: string): Promise<string[]> => {
+// @HACK: (Jan 19, 2024) Right now this query uses the subgraph. Eventually this should move
+// to the substream. Right now there's an issue with the substream where it is not correctly
+// indexing roles, so for now we are using this workaround while we fix the substream.
+const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
   if (!address) return [];
 
   const query = `{
       spaces(
-        filter: {
-          or: [
-            { spaceAdmins: { some: { accountId: { equalToInsensitive: "${address}" } } } }
-            { spaceEditorControllers: { some: { accountId: { equalToInsensitive: "${address}" } } } }
-          ]
+        where: {
+            editorControllers_contains: ["${address}"]
         }
       ) {
-        nodes {
-          id
-        }
+        id
       }
     }`;
 
-  const spacesEffect = graphql<{ spaces: { nodes: { id: string }[] } }>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+  const permissionedSpacesEffect = graphql<{ spaces: { id: string }[] }>({
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph,
     query,
   });
 
-  const result = await Effect.runPromise(Effect.either(spacesEffect));
+  const permissionlessSpacesEffect = graphql<{ spaces: { id: string }[] }>({
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).permissionlessSubgraph,
+    query: query,
+  });
+
+  const combined = Effect.all([permissionedSpacesEffect, permissionlessSpacesEffect]);
+
+  const result = await Effect.runPromise(Effect.either(combined));
 
   if (Either.isLeft(result)) {
     const error = result.left;
 
     switch (error._tag) {
       case 'GraphqlRuntimeError':
-        console.error(`Encountered runtime graphql error in getSpacesWhereAdmin.`, error.message);
+        console.error(`Encountered runtime graphql error in getSpacesWhereModerator.`, error.message);
         return [];
 
       default:
-        console.error(`${error._tag}: Unable to fetch spaces where admin`);
+        console.error(`${error._tag}: Unable to fetch spaces where editor controller`);
         return [];
     }
   }
 
-  return result.right.spaces.nodes.map(space => space.id);
+  const spaces = result.right.flatMap(result => result.spaces.map(space => space.id));
+  return spaces;
 };
