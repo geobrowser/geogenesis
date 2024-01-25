@@ -14,7 +14,6 @@ dotenv.config();
 async function main() {
   const program = new Command();
   program
-    // .option('--from-genesis', 'Start from genesis block')
     .option('--from-cache', 'Start from cached block')
     .option('--start-block <number>', 'NOT IMPLEMENTED – Start from block number')
     .option('--reset-db', 'Reset public tables to genesis');
