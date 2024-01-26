@@ -63,13 +63,13 @@ export const TeamMembers = ({ spaceId, teamMembers = [] }: TeamMembersProps) => 
       {isEditMode ? (
         <>
           {teamMembers.map(teamMember => (
-            <EditTeamMember key={teamMember} teamMember={teamMember} />
+            <EditTeamMember key={teamMember.entityId} teamMember={teamMember} />
           ))}
         </>
       ) : (
         <>
           {teamMembers.map(teamMember => (
-            <TeamMember key={teamMember} teamMember={teamMember} />
+            <TeamMember key={teamMember.entityId} teamMember={teamMember} />
           ))}
         </>
       )}
