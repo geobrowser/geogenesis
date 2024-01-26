@@ -1,7 +1,8 @@
-import { AVATAR_ATTRIBUTE, ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { AVATAR_ATTRIBUTE, NAME, ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
 
 import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/utils/entity';
+import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
 import { TeamMembers } from '~/partials/team/team-members';
@@ -24,13 +25,20 @@ export default async function TeamPage({ params }: TeamPageProps) {
 
   const teamMembers: Array<TeamMember> = [];
 
-  const [roleTriples, avatarTriples] = await Promise.all([
+  const [roleTriples, nameTriples, avatarTriples] = await Promise.all([
     Subgraph.fetchTriples({
       space: spaceId,
       query: '',
       skip: 0,
       first: 1000,
       filter: [{ field: 'attribute-id', value: ROLE_ATTRIBUTE }],
+    }),
+    Subgraph.fetchTriples({
+      space: spaceId,
+      query: '',
+      skip: 0,
+      first: 1000,
+      filter: [{ field: 'attribute-id', value: NAME }],
     }),
     Subgraph.fetchTriples({
       space: spaceId,
@@ -79,18 +87,49 @@ export default async function TeamPage({ params }: TeamPageProps) {
       teamMembers[teamMemberIndex].space = entitySpaceId;
       teamMembers[teamMemberIndex].linked = true;
 
+      const nameTriple = nameTriples.find(nameTriple => nameTriple.entityId === entityId);
+
+      if (nameTriple) {
+        const name = Triple.getValue(nameTriple);
+
+        if (name) {
+          teamMembers[teamMemberIndex].name = name;
+        }
+      } else {
+        const name = Entity.name(entity.triples);
+
+        if (name) {
+          teamMembers[teamMemberIndex].name = name;
+        }
+      }
+
       const avatarTriple = avatarTriples.find(avatarTriple => avatarTriple.entityId === entityId);
 
       if (avatarTriple) {
         const avatar = Value.imageValue(avatarTriple);
-        teamMembers[teamMemberIndex].avatar = avatar ?? '';
+
+        if (avatar) {
+          teamMembers[teamMemberIndex].avatar = avatar;
+        }
       } else {
         const avatar = Entity.avatar(entity.triples);
-        teamMembers[teamMemberIndex].avatar = avatar ?? '';
+
+        if (avatar) {
+          teamMembers[teamMemberIndex].avatar = avatar;
+        }
       }
     } else {
+      const name = Entity.name(entity.triples);
+
+      if (name) {
+        teamMembers[teamMemberIndex].name = name;
+      }
+
       const avatar = Entity.avatar(entity.triples);
-      teamMembers[teamMemberIndex].avatar = avatar ?? '';
+
+      if (avatar) {
+        teamMembers[teamMemberIndex].avatar = avatar;
+      }
     }
   });
 

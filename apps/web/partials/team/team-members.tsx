@@ -38,9 +38,6 @@ export const TeamMembers = ({ spaceId, teamMembers = [] }: TeamMembersProps) => 
     }
   }, [isEditMode, setDraftMembers]);
 
-  // @TODO remove console.info for teamMembers
-  console.info('teamMembers:', teamMembers);
-
   return (
     <div className="grid auto-rows-fr grid-cols-2 gap-6">
       {isEditMode && (
