@@ -86,6 +86,7 @@ export function getEditorsGrantedV2Effect({
           // since we query using that column previously
           //
           // @TODO: There should be a way to return only not-null values using zapatos
+          // maybe using `having`
           const checksumPluginAddress = getChecksumAddress(s.main_voting_plugin_address!);
 
           if (!acc.has(checksumPluginAddress)) {
