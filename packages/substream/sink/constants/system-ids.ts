@@ -8,7 +8,7 @@ export const ATTRIBUTE = 'attribute';
 /* We could wire this up to the substream, but since we're hardcoding quite a bit already in bootstrapRoot.ts, this is probably fine */
 export const ROOT_SPACE_CREATED_AT = 1670280473;
 export const ROOT_SPACE_CREATED_AT_BLOCK = 36472429;
-export const ROOT_SPACE_CREATED_BY_ID = '0x66703c058795b9cb215fbcc7c6b07aee7d216f24';
+export const ROOT_SPACE_CREATED_BY_ID = '0x66703c058795B9Cb215fbcc7c6b07aee7D216F24';
 
 /*
   Example Usage: Rhonda Patrick -> TYPES -> Person

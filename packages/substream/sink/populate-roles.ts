@@ -54,33 +54,56 @@ export function getEditorsGrantedV2Effect({
     // for a given editorsAdded event. TypeScript type narrowing doesn't really work when
     // we're using `noUncheckedIndexedAccess` even though we've asserted that editorsAdded is
     // not empty.
-    //
-    // @TODO: Actually there might be a scenario where multiple DAOs are created in the same
-    // block or multiple roles granted in the same block where each entry could be emitted in
-    // a different space.
-    const pluginAddress = editorsAdded[0]?.pluginAddress;
+    const pluginAddresses = editorsAdded.map(e => e.pluginAddress);
 
-    // This should be handled by our zod parsing validation, so we shouldn't see this
-    if (!pluginAddress) {
-      console.error('No plugin address in editors granted event');
-      return;
-    }
-
-    const spaceForPlugin = yield* _(
-      Effect.tryPromise({
-        try: () =>
-          db
-            .selectOne('spaces', { main_voting_plugin_address: getChecksumAddress(pluginAddress) }, { columns: ['id'] })
-            .run(pool),
-        catch: error => new SpaceWithPluginAddressNotFoundError(String(error)),
-      })
+    const maybeSpacesForPlugins = yield* _(
+      Effect.all(
+        pluginAddresses.map(p =>
+          Effect.tryPromise({
+            try: () =>
+              db
+                .selectOne(
+                  'spaces',
+                  { main_voting_plugin_address: getChecksumAddress(p) },
+                  { columns: ['id', 'main_voting_plugin_address'] }
+                )
+                .run(pool),
+            catch: error => new SpaceWithPluginAddressNotFoundError(String(error)),
+          })
+        ),
+        {
+          concurrency: 20,
+        }
+      )
     );
 
-    if (!spaceForPlugin) {
-      return yield* _(
-        Effect.fail(new SpaceWithPluginAddressNotFoundError(`No space found for plugin address ${pluginAddress}`))
+    const spacesForPlugins = maybeSpacesForPlugins
+      .flatMap(s => (s ? [s] : []))
+      // Removing any duplicates and transforming to a map for faster access speed later
+      .reduce(
+        (acc, s) => {
+          // Can safely assert that s.main_voting_plugin_address is not null here
+          // since we query using that column previously
+          //
+          // @TODO: There should be a way to return only not-null values using zapatos
+          // maybe using `having`
+          const checksumPluginAddress = getChecksumAddress(s.main_voting_plugin_address!);
+
+          if (!acc.has(checksumPluginAddress)) {
+            acc.set(checksumPluginAddress, getChecksumAddress(s.id));
+          }
+
+          return acc;
+        },
+        // Mapping of the plugin address to the space id (address)
+        new Map<string, string>()
       );
-    }
+
+    // if (!spaceForPlugin) {
+    //   return yield* _(
+    //     Effect.fail(new SpaceWithPluginAddressNotFoundError(`No space found for plugin address ${pluginAddress}`))
+    //   );
+    // }
 
     /**
      * Here we ensure that we create any relations for the role change before we create the
@@ -100,7 +123,9 @@ export function getEditorsGrantedV2Effect({
 
     const newEditors = editorsAdded.flatMap(({ addresses, pluginAddress }) =>
       addresses.map(a => ({
-        space_id: getChecksumAddress(spaceForPlugin.id),
+        // Can safely assert that spacesForPlugins.get(pluginAddress) is not null here
+        // since we set up the mapping based on the plugin address previously
+        space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress))!,
         account_id: getChecksumAddress(a),
         created_at: timestamp,
         created_at_block: blockNumber,
