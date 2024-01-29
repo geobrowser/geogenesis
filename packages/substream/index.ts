@@ -22,8 +22,6 @@ async function main() {
   // @TODO: How do we make the options typesafe?
   const options = program.opts();
 
-  console.log('start block num', options.startBlock);
-
   /**
    * @TODO: It probably makes more sense to tie resetting the DB to a separate flag.
    *        There are probably scenarios where we want to index from the genesis block
