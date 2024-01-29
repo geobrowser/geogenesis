@@ -2,10 +2,10 @@ pub mod helpers;
 mod pb;
 
 use pb::schema::{
-    EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
+    DaoAction, EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
     GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
-    GeoSpaceCreated, GeoSpacesCreated, RoleChange, RoleChanges, SuccessorSpaceCreated,
-    SuccessorSpacesCreated,
+    GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalsCreated, RoleChange, RoleChanges,
+    SuccessorSpaceCreated, SuccessorSpacesCreated,
 };
 
 use substreams::store::*;
@@ -23,7 +23,9 @@ use_contract!(main_voting_plugin, "abis/main-voting-plugin.json");
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
 use legacy_space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
-use main_voting_plugin::events::MembersAdded as EditorsAddedEvent;
+use main_voting_plugin::events::{
+    MembersAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
+};
 use space::events::SuccessorSpaceCreated as SuccessSpaceCreatedEvent;
 use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
 
@@ -307,14 +309,50 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
 }
 
 #[substreams::handlers::map]
+fn map_proposals_created(
+    block: eth::v2::Block,
+) -> Result<ProposalsCreated, substreams::errors::Error> {
+    let proposals: Vec<ProposalCreated> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(proposal_created) = ProposalCreatedEvent::match_and_decode(log) {
+                return Some(ProposalCreated {
+                    actions: proposal_created
+                        .actions
+                        .iter()
+                        .map(|action| DaoAction {
+                            to: format_hex(&action.0),
+                            value: action.1.to_u64(),
+                            data: action.2.clone(),
+                        })
+                        .collect(),
+                    allow_failure_map: proposal_created.allow_failure_map.to_string(),
+                    proposal_id: proposal_created.proposal_id.to_string(),
+                    creator: format_hex(&proposal_created.creator),
+                    start_date: proposal_created.start_date.to_string(),
+                    end_date: proposal_created.end_date.to_string(),
+                    metadata: String::from_utf8(proposal_created.metadata).unwrap(),
+                    space: format_hex(&log.address()),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(ProposalsCreated { proposals })
+}
+
+#[substreams::handlers::map]
 fn geo_out(
     entries: EntriesAdded,
     role_changes: RoleChanges,
     profiles_registered: GeoProfilesRegistered,
     spaces_created: GeoSpacesCreated,
     governance_plugins_created: GeoGovernancePluginsCreated,
-    // successor_spaces_created: SuccessorSpacesCreated,
     editors_added: EditorsAdded,
+    proposals_created: ProposalsCreated,
+    // successor_spaces_created: SuccessorSpacesCreated,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
     let role_changes = role_changes.changes;
@@ -322,6 +360,7 @@ fn geo_out(
     let spaces_created = spaces_created.spaces;
     let governance_plugins_created = governance_plugins_created.plugins;
     let editors_added = editors_added.editors;
+    let proposals_created = proposals_created.proposals;
     // let successor_spaces_created = successor_spaces_created.spaces;
 
     Ok(GeoOutput {
@@ -331,6 +370,7 @@ fn geo_out(
         spaces_created,
         governance_plugins_created,
         editors_added,
+        proposals_created,
         // successor_spaces_created,
     })
 }

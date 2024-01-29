@@ -237,6 +237,44 @@ pub struct EditorsAdded {
     #[prost(message, repeated, tag="1")]
     pub editors: ::prost::alloc::vec::Vec<EditorAdded>,
 }
+/// *
+/// Proposals with Governance
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DaoAction {
+    #[prost(string, tag="1")]
+    pub to: ::prost::alloc::string::String,
+    #[prost(uint64, tag="2")]
+    pub value: u64,
+    #[prost(bytes="vec", tag="3")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProposalCreated {
+    #[prost(string, tag="1")]
+    pub proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub creator: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub start_date: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub end_date: ::prost::alloc::string::String,
+    #[prost(string, tag="5")]
+    pub metadata: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag="6")]
+    pub actions: ::prost::alloc::vec::Vec<DaoAction>,
+    #[prost(string, tag="7")]
+    pub allow_failure_map: ::prost::alloc::string::String,
+    #[prost(string, tag="8")]
+    pub space: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProposalsCreated {
+    #[prost(message, repeated, tag="1")]
+    pub proposals: ::prost::alloc::vec::Vec<ProposalCreated>,
+}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoOutput {
@@ -250,9 +288,11 @@ pub struct GeoOutput {
     pub spaces_created: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
     #[prost(message, repeated, tag="5")]
     pub governance_plugins_created: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
-    /// repeated SuccessorSpaceCreated successor_spaces_created = 6;
     #[prost(message, repeated, tag="6")]
     pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
+    /// repeated SuccessorSpaceCreated successor_spaces_created = 6;
+    #[prost(message, repeated, tag="7")]
+    pub proposals_created: ::prost::alloc::vec::Vec<ProposalCreated>,
 }
 /// *
 /// Roles represent the permissions for a legacy space (See top level comment for more info

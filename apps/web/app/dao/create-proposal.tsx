@@ -1,6 +1,6 @@
 'use client';
 
-import { bytesToString, encodeAbiParameters, fromBytes, hexToString, stringToBytes } from 'viem';
+import { bytesToString, encodeAbiParameters, fromBytes, hexToString, stringToBytes, stringToHex, toBytes } from 'viem';
 
 import { useContractWrite, usePrepareContractWrite } from 'wagmi';
 
@@ -117,7 +117,7 @@ export function CreateProposal() {
     abi,
     functionName: 'createProposal',
     args: [
-      fromBytes(stringToBytes('ipfs://QmTMt24BWFBPX7T3G6EquF8jt9odkeWvdzrFia6bvE3C3d'), 'hex'),
+      stringToHex('ipfs://QmTMt24BWFBPX7T3G6EquF8jt9odkeWvdzrFia6bvE3C3d'),
       [],
       BigInt(0),
       BigInt(0),
@@ -130,9 +130,14 @@ export function CreateProposal() {
   const writer = useContractWrite(config);
 
   const onClick = () => {
-    console.log('data', { data: writer, config });
-
     writer.write?.();
+
+    console.log('metadata', {
+      toOutput: fromBytes(stringToBytes('ipfs://QmTMt24BWFBPX7T3G6EquF8jt9odkeWvdzrFia6bvE3C3d'), 'hex'),
+      fromOutput: bytesToString(
+        Buffer.from('aXBmczovL1FtVE10MjRCV0ZCUFg3VDNHNkVxdUY4anQ5b2RrZVd2ZHpyRmlhNmJ2RTNDM2Q=')
+      ),
+    });
   };
 
   return <Button onClick={onClick}>Create proposal</Button>;
