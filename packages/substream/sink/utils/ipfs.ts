@@ -14,6 +14,7 @@ import {
   ZodProposalMetadata,
   ZodSubspaceProposal,
 } from '../zod.js';
+import { isValidAction } from './actions.js';
 import { getChecksumAddress } from './get-checksum-address.js';
 
 class UnableToParseBase64Error extends Error {
@@ -127,6 +128,15 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<never, neve
   });
 }
 
+/**
+ * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
+ *
+ * 1. Fetch the IPFS content
+ * 2. Parse the IPFS content to get the "type"
+ * 3. Return an object matching the type and the expected contents.
+ *
+ * Later on we map this to the database schema and write the proposal to the database.
+ */
 export function getProposalFromMetadata(
   proposal: Proposal
 ): Effect.Effect<never, never, ContentProposal | SubspaceProposal | MembershipProposal | null> {
@@ -162,6 +172,8 @@ export function getProposalFromMetadata(
       return null;
     }
 
+    console.log('maybeIpfsContent', ipfsContent);
+
     const validIpfsMetadata = ZodProposalMetadata.safeParse(ipfsContent);
 
     if (!validIpfsMetadata.success) {
@@ -171,19 +183,20 @@ export function getProposalFromMetadata(
     }
 
     switch (validIpfsMetadata.data.type) {
-      case 'root': {
-        // @TODO: Handle the case where we parse an invalid content proposal
-        const parsedContent = ZodContentProposal.parse(ipfsContent);
+      case 'content': {
+        const parsedContent = ZodContentProposal.safeParse(ipfsContent);
+
+        if (!parsedContent.success) {
+          return null;
+        }
 
         const mappedProposal: ContentProposal = {
           ...proposal,
-          // Remap the root proposal metadata type to the content proposal type.
-          // Calling the metadata "root" is mostly a historical artifact from
-          // when we only had one proposal type.
-          type: 'content',
-          proposalId: parsedContent.proposalId,
-          onchainProposalId: parsedContent.proposalId,
-          actions: parsedContent.actions,
+          type: validIpfsMetadata.data.type,
+          name: validIpfsMetadata.data.name ?? null,
+          proposalId: parsedContent.data.proposalId,
+          onchainProposalId: parsedContent.data.proposalId,
+          actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(proposal.space),
         };
@@ -193,15 +206,19 @@ export function getProposalFromMetadata(
 
       case 'add_subspace':
       case 'remove_subspace': {
-        // @TODO: Handle the case where we parse an invalid subspace proposal
-        const parsedSubspace = ZodSubspaceProposal.parse(ipfsContent);
+        const parsedSubspace = ZodSubspaceProposal.safeParse(ipfsContent);
+
+        if (!parsedSubspace.success) {
+          return null;
+        }
 
         const mappedProposal: SubspaceProposal = {
           ...proposal,
           type: validIpfsMetadata.data.type,
-          proposalId: parsedSubspace.proposalId,
-          onchainProposalId: parsedSubspace.proposalId,
-          subspace: getChecksumAddress(parsedSubspace.subspace),
+          name: validIpfsMetadata.data.name ?? null,
+          proposalId: parsedSubspace.data.proposalId,
+          onchainProposalId: parsedSubspace.data.proposalId,
+          subspace: getChecksumAddress(parsedSubspace.data.subspace),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(proposal.space),
         };
@@ -213,15 +230,19 @@ export function getProposalFromMetadata(
       case 'remove_editor':
       case 'add_member':
       case 'remove_member': {
-        // @TODO: Handle the case where we parse an invalid membership proposal
-        const parsedMembership = ZodMembershipProposal.parse(ipfsContent);
+        const parsedMembership = ZodMembershipProposal.safeParse(ipfsContent);
+
+        if (!parsedMembership.success) {
+          return null;
+        }
 
         const mappedProposal: MembershipProposal = {
           ...proposal,
           type: validIpfsMetadata.data.type,
-          proposalId: parsedMembership.proposalId,
-          onchainProposalId: parsedMembership.proposalId,
-          userAddress: getChecksumAddress(parsedMembership.userAddress),
+          name: validIpfsMetadata.data.name ?? null,
+          proposalId: parsedMembership.data.proposalId,
+          onchainProposalId: parsedMembership.data.proposalId,
+          userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(proposal.space),
         };

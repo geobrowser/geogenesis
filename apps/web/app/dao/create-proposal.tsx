@@ -1,19 +1,16 @@
 'use client';
 
-import { bytesToString, encodeAbiParameters, fromBytes, hexToString, stringToBytes, stringToHex, toBytes } from 'viem';
+import { type ContentProposalMetadata, VoteOption } from '@geogenesis/sdk';
+import { encodeAbiParameters, fromBytes, stringToBytes, stringToHex } from 'viem';
 
-import { useContractWrite, usePrepareContractWrite } from 'wagmi';
+import { useContractWrite, usePrepareContractWrite, useWalletClient } from 'wagmi';
+import { prepareWriteContract, writeContract } from 'wagmi/actions';
+
+import { Services } from '~/core/services';
 
 import { Button } from '~/design-system/button';
 
 import { abi } from './main-voting-abi';
-
-enum VoteOption {
-  None = 0,
-  Abstain = 1,
-  Yes = 2,
-  No = 3,
-}
 
 const createProposalInputs = [
   {
@@ -139,7 +136,9 @@ interface Props {
     | 'remove-subspace';
 }
 
-export function CreateProposal({ type }: Props) {
+export function useCreateContentProposal() {
+  const { storageClient } = Services.useServices();
+
   const { config } = usePrepareContractWrite({
     chainId: 137,
     address: '0xB4c6f281B29216a601A743D09151c2eb6EE17dB6',
@@ -168,8 +167,72 @@ export function CreateProposal({ type }: Props) {
 
   const writer = useContractWrite(config);
 
-  const onClick = () => {
-    writer.write?.();
+  return {
+    publish: writer.write,
+  };
+}
+
+export function CreateProposal({ type }: Props) {
+  const { storageClient } = Services.useServices();
+
+  // const { write } = useCreateContentProposal();
+
+  const { data: wallet } = useWalletClient();
+
+  if (!wallet) {
+    return <div>Loading wallet...</div>;
+  }
+
+  const onClick = async () => {
+    const proposal: ContentProposalMetadata = {
+      type: 'content',
+      version: '1.0.0',
+      proposalId: '420',
+      name: 'test proposal',
+      actions: [
+        {
+          entityId: '5',
+          attributeId: '6',
+          type: 'createTriple',
+          value: {
+            type: 'string',
+            id: '50',
+            value: 'hello world',
+          },
+        },
+      ],
+    };
+
+    const hash = await storageClient.uploadObject(proposal);
+    const uri = `ipfs://${hash}`;
+
+    console.log('wallet', wallet);
+
+    const config = await prepareWriteContract({
+      chainId: 137,
+      walletClient: wallet,
+      address: '0xB4c6f281B29216a601A743D09151c2eb6EE17dB6',
+      abi,
+      functionName: 'createProposal',
+      args: [
+        stringToHex(uri),
+        [
+          {
+            to: '0xE6fCF2ecB8DA3d02e0A0f78A1ec933c10Cfb3612',
+            value: BigInt(0),
+            data: encodeAbiParameters(processProposalInputs, [1, 2, stringToHex(uri)]),
+          },
+        ],
+        BigInt(0),
+        BigInt(0),
+        BigInt(0),
+        VoteOption.Yes,
+        true,
+      ],
+    });
+
+    const writeResult = await writeContract(config);
+    console.log('writeResult', writeResult);
   };
 
   return <Button onClick={onClick}>Create proposal</Button>;

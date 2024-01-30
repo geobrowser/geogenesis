@@ -70,6 +70,7 @@ CREATE TABLE public.log_entries (
 );
 
 CREATE TYPE public.proposal_type as ENUM ('content', 'add_subspace', 'remove_subspace', 'add_editor', 'remove_editor', 'add_member', 'remove_member');
+CREATE TYPE public.proposal_status as ENUM ('proposed', 'approved', 'rejected', 'canceled', 'executed');
 
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,
@@ -77,10 +78,10 @@ CREATE TABLE public.proposals (
     name text,
     description text,
     type proposal_type NOT NULL,
+    status proposal_status NOT NULL,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
-    status text NOT NULL,
     start_date integer NOT NULL,
     end_date integer NOT NULL
 );
@@ -172,6 +173,10 @@ CREATE TABLE public.versions (
     entity_id text NOT NULL REFERENCES public.geo_entities(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
+
+-- @TODO: Proposed Member
+-- @TODO: Proposed Editor
+-- @TODO: Proposed Subspace
 
 CREATE TABLE public.actions (
     id text PRIMARY KEY NOT NULL,

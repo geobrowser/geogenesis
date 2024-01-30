@@ -19,6 +19,10 @@ declare module 'zapatos/schema' {
 
   /* --- enums --- */
 
+  export type proposal_status = 'approved' | 'canceled' | 'executed' | 'proposed' | 'rejected';
+  export namespace every {
+    export type proposal_status = ['approved', 'canceled', 'executed', 'proposed', 'rejected'];
+  }
   export type proposal_type = 'add_editor' | 'add_member' | 'add_subspace' | 'content' | 'remove_editor' | 'remove_member' | 'remove_subspace';
   export namespace every {
     export type proposal_type = ['add_editor', 'add_member', 'add_subspace', 'content', 'remove_editor', 'remove_member', 'remove_subspace'];
@@ -1605,6 +1609,12 @@ declare module 'zapatos/schema' {
       */
       type: proposal_type;
       /**
+      * **proposals.status**
+      * - `proposal_status` in database
+      * - `NOT NULL`, no default
+      */
+      status: proposal_status;
+      /**
       * **proposals.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -1622,12 +1632,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_by_id: string;
-      /**
-      * **proposals.status**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      status: string;
       /**
       * **proposals.start_date**
       * - `int4` in database
@@ -1673,6 +1677,12 @@ declare module 'zapatos/schema' {
       */
       type: proposal_type;
       /**
+      * **proposals.status**
+      * - `proposal_status` in database
+      * - `NOT NULL`, no default
+      */
+      status: proposal_status;
+      /**
       * **proposals.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -1690,12 +1700,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_by_id: string;
-      /**
-      * **proposals.status**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      status: string;
       /**
       * **proposals.start_date**
       * - `int4` in database
@@ -1741,6 +1745,12 @@ declare module 'zapatos/schema' {
       */
       type?: proposal_type | db.Parameter<proposal_type> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, proposal_type | db.Parameter<proposal_type> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposals.status**
+      * - `proposal_status` in database
+      * - `NOT NULL`, no default
+      */
+      status?: proposal_status | db.Parameter<proposal_status> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, proposal_status | db.Parameter<proposal_status> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposals.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -1758,12 +1768,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **proposals.status**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      status?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposals.start_date**
       * - `int4` in database
@@ -1809,6 +1813,12 @@ declare module 'zapatos/schema' {
       */
       type: proposal_type | db.Parameter<proposal_type> | db.SQLFragment;
       /**
+      * **proposals.status**
+      * - `proposal_status` in database
+      * - `NOT NULL`, no default
+      */
+      status: proposal_status | db.Parameter<proposal_status> | db.SQLFragment;
+      /**
       * **proposals.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -1826,12 +1836,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_by_id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **proposals.status**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      status: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposals.start_date**
       * - `int4` in database
@@ -1877,6 +1881,12 @@ declare module 'zapatos/schema' {
       */
       type?: proposal_type | db.Parameter<proposal_type> | db.SQLFragment | db.SQLFragment<any, proposal_type | db.Parameter<proposal_type> | db.SQLFragment>;
       /**
+      * **proposals.status**
+      * - `proposal_status` in database
+      * - `NOT NULL`, no default
+      */
+      status?: proposal_status | db.Parameter<proposal_status> | db.SQLFragment | db.SQLFragment<any, proposal_status | db.Parameter<proposal_status> | db.SQLFragment>;
+      /**
       * **proposals.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -1894,12 +1904,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **proposals.status**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      status?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposals.start_date**
       * - `int4` in database

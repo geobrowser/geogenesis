@@ -3,7 +3,7 @@ import type * as Schema from 'zapatos/schema';
 
 import { START_BLOCK } from './constants/constants';
 import { populateWithFullEntries } from './entries/populate-entries';
-import { parseValidFullEntries } from './parse-valid-full-entries';
+import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
 import { handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import type { Roles } from './types';
 import { getChecksumAddress } from './utils/get-checksum-address';
@@ -39,7 +39,7 @@ export async function populateFromCache() {
         // streaming and only write to the cache the final parsed and validated data. So we
         // don't need to re-validate here.
         await populateWithFullEntries({
-          fullEntries: parseValidFullEntries(maybeCachedEntry.data as any), // TODO: Zod typecheck this JSON
+          fullEntries: parseValidActionsForFullEntries(maybeCachedEntry.data as any), // TODO: Zod typecheck this JSON
           blockNumber: maybeCachedEntry.block_number,
           timestamp: maybeCachedEntry.timestamp,
           cursor: maybeCachedEntry.cursor,

@@ -10,6 +10,7 @@ import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import { groupProposalsByType, mapContentProposalsToSchema } from './proposals/map-proposals';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { createSink, createStream } from './substreams.js/sink/src';
 import { slog } from './utils';
@@ -179,6 +180,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           const jsonOutput = unpackedOutput.toJson({ typeRegistry: registry });
+          console.log('@BLOCK ', blockNumber, jsonOutput);
 
           const entryResponse = ZodEntryStreamResponse.safeParse(jsonOutput);
           const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
@@ -286,24 +288,15 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (proposalResponse.success) {
-            console.log('Proposal response', proposalResponse.data);
+            slog({
+              requestId: message.cursor,
+              message: `Processing ${proposalResponse.data.proposalsCreated.length} proposals`,
+            });
 
             slog({
               requestId: message.cursor,
               message: `Gathering IPFS content for ${proposalResponse.data.proposalsCreated.length} entries`,
             });
-
-            /**
-             * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
-             *
-             * How do we store the different proposal types depending on the content type? Do we do something
-             * similar to triples where we have member, editor, and content fields that are nullable? Then
-             * we union the fields depending on the type of the proposal?
-             *
-             * 1. Fetch the IPFS content
-             * 2. Parse the IPFS content to get the "type"
-             * 3. Return an object matching the type and the expected contents
-             */
 
             const maybeProposals = yield* _(
               Effect.all(
@@ -314,12 +307,14 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               )
             );
 
-            const nonValidatedFullEntries = maybeProposals.filter(
+            const proposals = maybeProposals.filter(
               (maybeProposal): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal =>
                 maybeProposal !== null
             );
 
-            // const validFullEntries = parseValidActionsForFullEntries(nonValidatedFullEntries);
+            const { contentProposals } = groupProposalsByType(proposals);
+            const schemaContentProposals = yield* _(mapContentProposalsToSchema(contentProposals, blockNumber));
+            console.log('schema content proposals', schemaContentProposals);
           }
 
           if (entryResponse.success) {
