@@ -7,7 +7,7 @@ import * as db from 'zapatos/db';
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
 import { populateWithFullEntries } from './entries/populate-entries';
-import { parseValidFullEntries } from './parse-valid-full-entries';
+import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
@@ -15,13 +15,15 @@ import { createSink, createStream } from './substreams.js/sink/src';
 import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
-import { getEntryWithIpfsContent } from './utils/ipfs';
+import { getEntryWithIpfsContent, getProposalWithIpfsContent } from './utils/ipfs';
 import { pool } from './utils/pool';
 import {
   type FullEntry,
+  type Proposal,
   ZodEditorsAddedStreamResponse,
   ZodEntryStreamResponse,
   ZodGovernancePluginsCreatedStreamResponse,
+  ZodProposalStreamResponse,
   ZodRoleChangeStreamResponse,
   ZodSpacePluginCreatedStreamResponse,
 } from './zod';
@@ -180,6 +182,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
           const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
+          const proposalResponse = ZodProposalStreamResponse.safeParse(jsonOutput);
 
           /**
            * @TODO: De-duplicate any spaces being added with both the space plugin governance
@@ -279,6 +282,42 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             });
           }
 
+          if (proposalResponse.success) {
+            console.log('Proposal response', proposalResponse.data);
+
+            slog({
+              requestId: message.cursor,
+              message: `Gathering IPFS content for ${proposalResponse.data.proposalsCreated.length} entries`,
+            });
+
+            /**
+             * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
+             *
+             * How do we store the different proposal types depending on the content type? Do we do something
+             * similar to triples where we have member, editor, and content fields that are nullable? Then
+             * we union the fields depending on the type of the proposal?
+             *
+             * 1. Fetch the IPFS content
+             * 2. Parse the IPFS content to get the "type"
+             * 3. Return an object matching the type and the expected contents
+             */
+
+            const maybeEntriesWithIpfsContent: (Proposal | null)[] = yield* _(
+              Effect.all(
+                proposalResponse.data.proposalsCreated.map(entry => getProposalWithIpfsContent(entry)),
+                {
+                  concurrency: 20,
+                }
+              )
+            );
+
+            const nonValidatedFullEntries = maybeEntriesWithIpfsContent.filter(
+              (maybeFullEntry): maybeFullEntry is Proposal => maybeFullEntry !== null
+            );
+
+            // const validFullEntries = parseValidActionsForFullEntries(nonValidatedFullEntries);
+          }
+
           if (entryResponse.success) {
             slog({
               requestId: message.cursor,
@@ -305,7 +344,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               (maybeFullEntry): maybeFullEntry is FullEntry => maybeFullEntry !== null
             );
 
-            const validFullEntries = parseValidFullEntries(nonValidatedFullEntries);
+            const validFullEntries = parseValidActionsForFullEntries(nonValidatedFullEntries);
 
             slog({
               requestId: message.cursor,

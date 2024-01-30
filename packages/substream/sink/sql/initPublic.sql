@@ -69,15 +69,20 @@ CREATE TABLE public.log_entries (
     json text
 );
 
+CREATE TYPE public.proposal_type as ENUM ('content', 'add_subspace', 'remove_subspace', 'add_editor', 'remove_editor', 'add_member', 'remove_member');
+
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,
     space_id text NOT NULL REFERENCES public.spaces(id),
     name text,
     description text,
+    type proposal_type NOT NULL,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
-    status text NOT NULL
+    status text NOT NULL,
+    start_date integer NOT NULL,
+    end_date integer NOT NULL
 );
 
 CREATE TABLE public.proposed_versions (

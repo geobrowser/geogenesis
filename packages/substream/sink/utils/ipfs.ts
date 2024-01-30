@@ -1,7 +1,7 @@
 import { Effect, Either, Schedule } from 'effect';
 
 import { IPFS_GATEWAY } from '../constants/constants.js';
-import type { Entry, FullEntry, UriData } from '../zod.js';
+import type { ContentProposal, Entry, FullEntry, Proposal, UriData } from '../zod.js';
 
 class UnableToParseBase64Error extends Error {
   _tag: 'UnableToParseBase64Error' = 'UnableToParseBase64Error';
@@ -110,6 +110,51 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<never, neve
     return {
       ...entry,
       uriData: ipfsContent,
+    };
+  });
+}
+
+export function getProposalWithIpfsContent(entry: Proposal): Effect.Effect<never, never, ContentProposal | null> {
+  return Effect.gen(function* (unwrap) {
+    const fetchIpfsContentEffect = getFetchIpfsContentEffect(entry.metadata);
+
+    const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
+
+    if (Either.isLeft(maybeIpfsContent)) {
+      const error = maybeIpfsContent.left;
+
+      switch (error._tag) {
+        case 'UnableToParseBase64Error':
+          console.error(`Unable to parse base64 string ${entry.metadata}`, error);
+          break;
+        case 'FailedFetchingIpfsContentError':
+          console.error(`Failed fetching IPFS content from uri ${entry.metadata}`, error);
+          break;
+        case 'UnableToParseJsonError':
+          console.error(`Unable to parse JSON when reading content from uri ${entry.metadata}`, error);
+          break;
+        default:
+          console.error(`Unknown error when fetching IPFS content for uri ${entry.metadata}`, error);
+          break;
+      }
+
+      return null;
+    }
+
+    const ipfsContent = maybeIpfsContent.right;
+
+    if (!ipfsContent) {
+      return null;
+    }
+
+    switch (ipfsContent.type) {
+      case ''
+    }
+
+    return {
+      ...entry,
+      // @TODO: Return different data type depending on the type of content
+      content: ipfsContent,
     };
   });
 }

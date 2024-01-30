@@ -18,7 +18,11 @@ declare module 'zapatos/schema' {
   /* === schema: public === */
 
   /* --- enums --- */
-  /* (none) */
+
+  export type proposal_type = 'add_editor' | 'add_member' | 'add_subspace' | 'content' | 'remove_editor' | 'remove_member' | 'remove_subspace';
+  export namespace every {
+    export type proposal_type = ['add_editor', 'add_member', 'add_subspace', 'content', 'remove_editor', 'remove_member', 'remove_subspace'];
+  }
 
   /* --- tables --- */
 
@@ -1595,6 +1599,12 @@ declare module 'zapatos/schema' {
       */
       description: string | null;
       /**
+      * **proposals.type**
+      * - `proposal_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: proposal_type;
+      /**
       * **proposals.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -1618,6 +1628,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       status: string;
+      /**
+      * **proposals.start_date**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      start_date: number;
+      /**
+      * **proposals.end_date**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      end_date: number;
     }
     export interface JSONSelectable {
       /**
@@ -1645,6 +1667,12 @@ declare module 'zapatos/schema' {
       */
       description: string | null;
       /**
+      * **proposals.type**
+      * - `proposal_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: proposal_type;
+      /**
       * **proposals.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -1668,6 +1696,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       status: string;
+      /**
+      * **proposals.start_date**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      start_date: number;
+      /**
+      * **proposals.end_date**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      end_date: number;
     }
     export interface Whereable {
       /**
@@ -1695,6 +1735,12 @@ declare module 'zapatos/schema' {
       */
       description?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposals.type**
+      * - `proposal_type` in database
+      * - `NOT NULL`, no default
+      */
+      type?: proposal_type | db.Parameter<proposal_type> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, proposal_type | db.Parameter<proposal_type> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposals.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -1718,6 +1764,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       status?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposals.start_date**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      start_date?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposals.end_date**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      end_date?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -1745,6 +1803,12 @@ declare module 'zapatos/schema' {
       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
+      * **proposals.type**
+      * - `proposal_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: proposal_type | db.Parameter<proposal_type> | db.SQLFragment;
+      /**
       * **proposals.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -1768,6 +1832,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       status: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposals.start_date**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      start_date: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **proposals.end_date**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      end_date: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -1795,6 +1871,12 @@ declare module 'zapatos/schema' {
       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
+      * **proposals.type**
+      * - `proposal_type` in database
+      * - `NOT NULL`, no default
+      */
+      type?: proposal_type | db.Parameter<proposal_type> | db.SQLFragment | db.SQLFragment<any, proposal_type | db.Parameter<proposal_type> | db.SQLFragment>;
+      /**
       * **proposals.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -1818,6 +1900,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       status?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposals.start_date**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      start_date?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **proposals.end_date**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      end_date?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'proposals_pkey';
     export type Column = keyof Selectable;

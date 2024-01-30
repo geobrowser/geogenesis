@@ -308,6 +308,26 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
     Ok(EditorsAdded { editors })
 }
 
+/**
+ * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
+ * represent changes to content, membership (editor or member), governance changes, subspace
+ * membership, or anything else that can be executed by a DAO.
+ *
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ *
+ * Proposals require encoding a "callback" that represents the action to be taken if the proposal
+ * succeeds. For example, if a proposal is to add a new editor to the space, the callback would
+ * be the encoded function call to add the editor to the space.
+ *
+ * ```ts
+ * {
+ *   to: `0x123...`, // The address of the membership contract
+ *   data: `0x123...`, // The encoded function call parameters
+ * }
+ * ```
+ */
 #[substreams::handlers::map]
 fn map_proposals_created(
     block: eth::v2::Block,
@@ -316,6 +336,7 @@ fn map_proposals_created(
         .logs()
         .filter_map(|log| {
             if let Some(proposal_created) = ProposalCreatedEvent::match_and_decode(log) {
+                // @TODO: Should we return none if actions is empty?
                 return Some(ProposalCreated {
                     actions: proposal_created
                         .actions
@@ -331,7 +352,7 @@ fn map_proposals_created(
                     creator: format_hex(&proposal_created.creator),
                     start_date: proposal_created.start_date.to_string(),
                     end_date: proposal_created.end_date.to_string(),
-                    metadata: String::from_utf8(proposal_created.metadata).unwrap(),
+                    metadata_uri: String::from_utf8(proposal_created.metadata).unwrap(),
                     space: format_hex(&log.address()),
                 });
             }

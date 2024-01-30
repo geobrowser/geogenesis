@@ -238,7 +238,24 @@ pub struct EditorsAdded {
     pub editors: ::prost::alloc::vec::Vec<EditorAdded>,
 }
 /// *
-/// Proposals with Governance
+/// Proposals represent a proposal to change the state of a DAO-based space. Proposals can
+/// represent changes to content, membership (editor or member), governance changes, subspace
+/// membership, or anything else that can be executed by a DAO.
+///
+/// Currently we use a simple majority voting model, where a proposal requires 51% of the
+/// available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+/// _and_ members can create them.
+///
+/// Proposals require encoding a "callback" that represents the action to be taken if the proposal
+/// succeeds. For example, if a proposal is to add a new editor to the space, the callback would
+/// be the encoded function call to add the editor to the space.
+///
+/// ```ts
+/// {
+///    to: `0x123...`, // The address of the membership contract
+///    data: `0x123...`, // The encoded function call parameters
+/// }
+/// ```
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DaoAction {
@@ -261,7 +278,7 @@ pub struct ProposalCreated {
     #[prost(string, tag="4")]
     pub end_date: ::prost::alloc::string::String,
     #[prost(string, tag="5")]
-    pub metadata: ::prost::alloc::string::String,
+    pub metadata_uri: ::prost::alloc::string::String,
     #[prost(message, repeated, tag="6")]
     pub actions: ::prost::alloc::vec::Vec<DaoAction>,
     #[prost(string, tag="7")]

@@ -130,11 +130,14 @@ export function mapProposals({
     return {
       id: proposalId,
       name: fullEntry.uriData.name,
+      type: 'content',
       created_at_block: blockNumber,
       created_by_id: fullEntry.author,
       space_id: fullEntry.space,
       created_at: timestamp,
-      status: 'APPROVED',
+      status: 'approved',
+      start_date: timestamp,
+      end_date: timestamp,
     };
   });
 }
