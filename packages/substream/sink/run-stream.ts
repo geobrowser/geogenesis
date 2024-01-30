@@ -15,11 +15,14 @@ import { createSink, createStream } from './substreams.js/sink/src';
 import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
-import { getEntryWithIpfsContent, getProposalWithIpfsContent } from './utils/ipfs';
+import { getEntryWithIpfsContent, getProposalMetadata } from './utils/ipfs';
 import { pool } from './utils/pool';
 import {
+  type ContentProposal,
   type FullEntry,
+  type MembershipProposal,
   type Proposal,
+  type SubspaceProposal,
   ZodEditorsAddedStreamResponse,
   ZodEntryStreamResponse,
   ZodGovernancePluginsCreatedStreamResponse,
@@ -302,17 +305,18 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
              * 3. Return an object matching the type and the expected contents
              */
 
-            const maybeEntriesWithIpfsContent: (Proposal | null)[] = yield* _(
+            const maybeProposals: (ContentProposal | SubspaceProposal | MembershipProposal | null)[] = yield* _(
               Effect.all(
-                proposalResponse.data.proposalsCreated.map(entry => getProposalWithIpfsContent(entry)),
+                proposalResponse.data.proposalsCreated.map(proposal => getProposalMetadata(proposal)),
                 {
                   concurrency: 20,
                 }
               )
             );
 
-            const nonValidatedFullEntries = maybeEntriesWithIpfsContent.filter(
-              (maybeFullEntry): maybeFullEntry is Proposal => maybeFullEntry !== null
+            const nonValidatedFullEntries = maybeProposals.filter(
+              (maybeProposal): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal =>
+                maybeProposal !== null
             );
 
             // const validFullEntries = parseValidActionsForFullEntries(nonValidatedFullEntries);

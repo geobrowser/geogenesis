@@ -171,7 +171,7 @@ export const ZodProposalMetadata = z.object({
     'add_editor',
     'remove_editor',
     'add_member',
-    'remove_editor',
+    'remove_member',
   ]),
   name: z.string().optional(),
   // We version the data structured used to represent proposal metadata. Each
@@ -184,17 +184,39 @@ export type ProposalMetadata = z.infer<typeof ZodProposalMetadata>;
 
 export type Proposal = z.infer<typeof ZodProposal>;
 
+export const ZodContentProposal = z.object({
+  proposalId: z.string(),
+  actions: z.array(ZodAction),
+});
+
 export type ContentProposal = Proposal & {
+  type: 'content';
+  proposalId: string;
+  onchainProposalId: string;
   actions: Action[];
 };
 
+export const ZodMembershipProposal = z.object({
+  proposalId: z.string(),
+  userAddress: z.string(),
+});
+
 export type MembershipProposal = Proposal & {
   type: 'add_member' | 'remove_member' | 'add_editor' | 'remove_editor';
-  address: `0x${string}`;
+  proposalId: string;
+  onchainProposalId: string;
+  userAddress: `0x${string}`;
 };
+
+export const ZodSubspaceProposal = z.object({
+  proposalId: z.string(),
+  subspace: z.string(),
+});
 
 export type SubspaceProposal = Proposal & {
   type: 'add_subspace' | 'remove_subspace';
+  proposalId: string;
+  onchainProposalId: string;
   subspace: `0x${string}`;
 };
 

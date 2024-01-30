@@ -1,7 +1,20 @@
 import { Effect, Either, Schedule } from 'effect';
 
 import { IPFS_GATEWAY } from '../constants/constants.js';
-import type { ContentProposal, Entry, FullEntry, Proposal, UriData } from '../zod.js';
+import {
+  type ContentProposal,
+  type Entry,
+  type FullEntry,
+  type MembershipProposal,
+  type Proposal,
+  type SubspaceProposal,
+  type UriData,
+  ZodContentProposal,
+  ZodMembershipProposal,
+  ZodProposalMetadata,
+  ZodSubspaceProposal,
+} from '../zod.js';
+import { getChecksumAddress } from './get-checksum-address.js';
 
 class UnableToParseBase64Error extends Error {
   _tag: 'UnableToParseBase64Error' = 'UnableToParseBase64Error';
@@ -114,9 +127,11 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<never, neve
   });
 }
 
-export function getProposalWithIpfsContent(entry: Proposal): Effect.Effect<never, never, ContentProposal | null> {
+export function getProposalFromMetadata(
+  proposal: Proposal
+): Effect.Effect<never, never, ContentProposal | SubspaceProposal | MembershipProposal | null> {
   return Effect.gen(function* (unwrap) {
-    const fetchIpfsContentEffect = getFetchIpfsContentEffect(entry.metadata);
+    const fetchIpfsContentEffect = getFetchIpfsContentEffect(proposal.metadataUri);
 
     const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
 
@@ -125,16 +140,16 @@ export function getProposalWithIpfsContent(entry: Proposal): Effect.Effect<never
 
       switch (error._tag) {
         case 'UnableToParseBase64Error':
-          console.error(`Unable to parse base64 string ${entry.metadata}`, error);
+          console.error(`Unable to parse base64 string ${proposal.metadataUri}`, error);
           break;
         case 'FailedFetchingIpfsContentError':
-          console.error(`Failed fetching IPFS content from uri ${entry.metadata}`, error);
+          console.error(`Failed fetching IPFS content from uri ${proposal.metadataUri}`, error);
           break;
         case 'UnableToParseJsonError':
-          console.error(`Unable to parse JSON when reading content from uri ${entry.metadata}`, error);
+          console.error(`Unable to parse JSON when reading content from uri ${proposal.metadataUri}`, error);
           break;
         default:
-          console.error(`Unknown error when fetching IPFS content for uri ${entry.metadata}`, error);
+          console.error(`Unknown error when fetching IPFS content for uri ${proposal.metadataUri}`, error);
           break;
       }
 
@@ -147,14 +162,72 @@ export function getProposalWithIpfsContent(entry: Proposal): Effect.Effect<never
       return null;
     }
 
-    switch (ipfsContent.type) {
-      case ''
+    const validIpfsMetadata = ZodProposalMetadata.safeParse(ipfsContent);
+
+    if (!validIpfsMetadata.success) {
+      // @TODO: Effectify error handling
+      console.error('Failed to parse IPFS metadata', validIpfsMetadata.error);
+      return null;
     }
 
-    return {
-      ...entry,
-      // @TODO: Return different data type depending on the type of content
-      content: ipfsContent,
-    };
+    switch (validIpfsMetadata.data.type) {
+      case 'root': {
+        // @TODO: Handle the case where we parse an invalid content proposal
+        const parsedContent = ZodContentProposal.parse(ipfsContent);
+
+        const mappedProposal: ContentProposal = {
+          ...proposal,
+          // Remap the root proposal metadata type to the content proposal type.
+          // Calling the metadata "root" is mostly a historical artifact from
+          // when we only had one proposal type.
+          type: 'content',
+          proposalId: parsedContent.proposalId,
+          onchainProposalId: parsedContent.proposalId,
+          actions: parsedContent.actions,
+          creator: getChecksumAddress(proposal.creator),
+          space: getChecksumAddress(proposal.space),
+        };
+
+        return mappedProposal;
+      }
+
+      case 'add_subspace':
+      case 'remove_subspace': {
+        // @TODO: Handle the case where we parse an invalid subspace proposal
+        const parsedSubspace = ZodSubspaceProposal.parse(ipfsContent);
+
+        const mappedProposal: SubspaceProposal = {
+          ...proposal,
+          type: validIpfsMetadata.data.type,
+          proposalId: parsedSubspace.proposalId,
+          onchainProposalId: parsedSubspace.proposalId,
+          subspace: getChecksumAddress(parsedSubspace.subspace),
+          creator: getChecksumAddress(proposal.creator),
+          space: getChecksumAddress(proposal.space),
+        };
+
+        return mappedProposal;
+      }
+
+      case 'add_editor':
+      case 'remove_editor':
+      case 'add_member':
+      case 'remove_member': {
+        // @TODO: Handle the case where we parse an invalid membership proposal
+        const parsedMembership = ZodMembershipProposal.parse(ipfsContent);
+
+        const mappedProposal: MembershipProposal = {
+          ...proposal,
+          type: validIpfsMetadata.data.type,
+          proposalId: parsedMembership.proposalId,
+          onchainProposalId: parsedMembership.proposalId,
+          userAddress: getChecksumAddress(parsedMembership.userAddress),
+          creator: getChecksumAddress(proposal.creator),
+          space: getChecksumAddress(proposal.space),
+        };
+
+        return mappedProposal;
+      }
+    }
   });
 }
