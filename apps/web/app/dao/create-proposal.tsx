@@ -131,13 +131,6 @@ export function CreateProposal() {
 
   const onClick = () => {
     writer.write?.();
-
-    console.log('metadata', {
-      toOutput: fromBytes(stringToBytes('ipfs://QmTMt24BWFBPX7T3G6EquF8jt9odkeWvdzrFia6bvE3C3d'), 'hex'),
-      fromOutput: bytesToString(
-        Buffer.from('aXBmczovL1FtVE10MjRCV0ZCUFg3VDNHNkVxdUY4anQ5b2RrZVd2ZHpyRmlhNmJ2RTNDM2Q=')
-      ),
-    });
   };
 
   return <Button onClick={onClick}>Create proposal</Button>;
