@@ -190,10 +190,9 @@ CREATE TABLE public.actions (
     entity_value text REFERENCES public.geo_entities(id),
     array_value text [],
     proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
-    version_id text REFERENCES public.versions(id) NOT NULL,
+    -- version_id text REFERENCES public.versions(id) NOT NULL,
     created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    cursor text NOT NULL
+    created_at_block integer NOT NULL
 );
 
 CREATE TABLE public.triple_versions (

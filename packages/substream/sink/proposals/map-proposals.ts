@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
+import { generateActionId, generateVersionId } from '../utils/id';
 import type { ContentProposal, MembershipProposal, SubspaceProposal } from '../zod';
 
 /**
@@ -44,7 +45,8 @@ export function groupProposalsByType(proposals: (ContentProposal | MembershipPro
 
 export function mapContentProposalsToSchema(
   proposals: ContentProposal[],
-  blockNumber: number
+  blockNumber: number,
+  cursor: string
 ): Effect.Effect<
   never,
   never,
@@ -76,12 +78,70 @@ export function mapContentProposalsToSchema(
       };
 
       proposalsToWrite.push(proposalToWrite);
+
+      p.actions.forEach((action, index) => {
+        const string_value =
+          action.value.type === 'string' ||
+          action.value.type === 'image' ||
+          action.value.type === 'url' ||
+          action.value.type === 'date'
+            ? action.value.value
+            : null;
+        const entity_value = action.value.type === 'entity' ? action.value.id : null;
+
+        const proposed_version_id = generateVersionId({
+          entryIndex: index,
+          entityId: action.entityId,
+          cursor,
+        });
+
+        const action_id = generateActionId({
+          space_id: p.space,
+          entity_id: action.entityId,
+          attribute_id: action.attributeId,
+          value_id: action.value.id,
+          cursor,
+        });
+
+        const mappedAction: S.actions.Insertable = {
+          id: action_id,
+          action_type: action.type,
+          entity_id: action.entityId,
+          attribute_id: action.attributeId,
+          value_type: action.value.type,
+          value_id: action.value.id,
+          string_value,
+          entity_value,
+          proposed_version_id,
+          created_at: Number(p.startDate),
+          created_at_block: blockNumber,
+        };
+
+        return actionsToWrite.push(mappedAction);
+      });
+
+      const uniqueEntityIds = new Set(p.actions.map(action => action.entityId));
+
+      [...uniqueEntityIds.values()].forEach((entityId, entryIndex) => {
+        const mappedProposedVersion: S.proposed_versions.Insertable = {
+          id: generateVersionId({ entryIndex, entityId, cursor }),
+          entity_id: entityId,
+          created_at_block: blockNumber,
+          created_at: Number(p.startDate),
+          name: p.name,
+          created_by_id: p.creator,
+          proposal_id: p.proposalId,
+          space_id: p.space,
+        };
+
+        proposedVersionsToWrite.push(mappedProposedVersion);
+      });
     }
 
     return {
       proposals: proposalsToWrite,
-      proposedVersions: [],
-      actions: [],
+      proposedVersions: proposedVersionsToWrite,
+      actions: actionsToWrite,
     };
   });
 }

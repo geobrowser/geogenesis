@@ -313,7 +313,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
 
             const { contentProposals } = groupProposalsByType(proposals);
-            const schemaContentProposals = yield* _(mapContentProposalsToSchema(contentProposals, blockNumber));
+            const schemaContentProposals = yield* _(mapContentProposalsToSchema(contentProposals, blockNumber, cursor));
             console.log('schema content proposals', schemaContentProposals);
           }
 

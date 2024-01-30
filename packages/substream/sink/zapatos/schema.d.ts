@@ -157,12 +157,6 @@ declare module 'zapatos/schema' {
       */
       proposed_version_id: string;
       /**
-      * **actions.version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      version_id: string;
-      /**
       * **actions.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -174,12 +168,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
-      /**
-      * **actions.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      cursor: string;
     }
     export interface JSONSelectable {
       /**
@@ -249,12 +237,6 @@ declare module 'zapatos/schema' {
       */
       proposed_version_id: string;
       /**
-      * **actions.version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      version_id: string;
-      /**
       * **actions.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -266,12 +248,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
-      /**
-      * **actions.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      cursor: string;
     }
     export interface Whereable {
       /**
@@ -341,12 +317,6 @@ declare module 'zapatos/schema' {
       */
       proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
       * **actions.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -358,12 +328,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **actions.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      cursor?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -433,12 +397,6 @@ declare module 'zapatos/schema' {
       */
       proposed_version_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **actions.version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      version_id: string | db.Parameter<string> | db.SQLFragment;
-      /**
       * **actions.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -450,12 +408,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
-      /**
-      * **actions.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      cursor: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -525,12 +477,6 @@ declare module 'zapatos/schema' {
       */
       proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **actions.version_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
       * **actions.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -542,12 +488,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
-      /**
-      * **actions.cursor**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      cursor?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'actions_pkey';
     export type Column = keyof Selectable;

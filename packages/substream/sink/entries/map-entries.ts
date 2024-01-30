@@ -62,12 +62,6 @@ export function mapActions({
         cursor,
       });
 
-      const version_id = generateVersionId({
-        entryIndex,
-        entityId: action.entityId,
-        cursor,
-      });
-
       const action_id = generateActionId({
         space_id: fullEntry.space,
         entity_id: action.entityId,
@@ -86,10 +80,8 @@ export function mapActions({
         string_value,
         entity_value,
         proposed_version_id,
-        version_id,
         created_at: timestamp,
         created_at_block: blockNumber,
-        cursor,
       };
     });
   });
