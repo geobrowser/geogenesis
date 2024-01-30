@@ -156,8 +156,8 @@ export const ZodProposal = z.object({
   space: z.string(),
   creator: z.string(),
   metadataUri: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
 });
 
 // DAO-based spaces can have different proposal types. We need to be able

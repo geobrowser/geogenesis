@@ -274,9 +274,9 @@ pub struct ProposalCreated {
     #[prost(string, tag="2")]
     pub creator: ::prost::alloc::string::String,
     #[prost(string, tag="3")]
-    pub start_date: ::prost::alloc::string::String,
+    pub start_time: ::prost::alloc::string::String,
     #[prost(string, tag="4")]
-    pub end_date: ::prost::alloc::string::String,
+    pub end_time: ::prost::alloc::string::String,
     #[prost(string, tag="5")]
     pub metadata_uri: ::prost::alloc::string::String,
     #[prost(message, repeated, tag="6")]

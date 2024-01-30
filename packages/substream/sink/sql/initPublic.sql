@@ -82,8 +82,8 @@ CREATE TABLE public.proposals (
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
-    start_date integer NOT NULL,
-    end_date integer NOT NULL
+    start_time integer NOT NULL,
+    end_time integer NOT NULL
 );
 
 CREATE TABLE public.proposed_versions (

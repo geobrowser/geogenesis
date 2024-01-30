@@ -128,8 +128,8 @@ export function mapProposals({
       space_id: fullEntry.space,
       created_at: timestamp,
       status: 'approved',
-      start_date: timestamp,
-      end_date: timestamp,
+      start_time: timestamp,
+      end_time: timestamp,
     };
   });
 }

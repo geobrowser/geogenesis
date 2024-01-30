@@ -1573,17 +1573,17 @@ declare module 'zapatos/schema' {
       */
       created_by_id: string;
       /**
-      * **proposals.start_date**
+      * **proposals.start_time**
       * - `int4` in database
       * - `NOT NULL`, no default
       */
-      start_date: number;
+      start_time: number;
       /**
-      * **proposals.end_date**
+      * **proposals.end_time**
       * - `int4` in database
       * - `NOT NULL`, no default
       */
-      end_date: number;
+      end_time: number;
     }
     export interface JSONSelectable {
       /**
@@ -1641,17 +1641,17 @@ declare module 'zapatos/schema' {
       */
       created_by_id: string;
       /**
-      * **proposals.start_date**
+      * **proposals.start_time**
       * - `int4` in database
       * - `NOT NULL`, no default
       */
-      start_date: number;
+      start_time: number;
       /**
-      * **proposals.end_date**
+      * **proposals.end_time**
       * - `int4` in database
       * - `NOT NULL`, no default
       */
-      end_date: number;
+      end_time: number;
     }
     export interface Whereable {
       /**
@@ -1709,17 +1709,17 @@ declare module 'zapatos/schema' {
       */
       created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposals.start_date**
+      * **proposals.start_time**
       * - `int4` in database
       * - `NOT NULL`, no default
       */
-      start_date?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      start_time?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposals.end_date**
+      * **proposals.end_time**
       * - `int4` in database
       * - `NOT NULL`, no default
       */
-      end_date?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      end_time?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -1777,17 +1777,17 @@ declare module 'zapatos/schema' {
       */
       created_by_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **proposals.start_date**
+      * **proposals.start_time**
       * - `int4` in database
       * - `NOT NULL`, no default
       */
-      start_date: number | db.Parameter<number> | db.SQLFragment;
+      start_time: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **proposals.end_date**
+      * **proposals.end_time**
       * - `int4` in database
       * - `NOT NULL`, no default
       */
-      end_date: number | db.Parameter<number> | db.SQLFragment;
+      end_time: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -1845,17 +1845,17 @@ declare module 'zapatos/schema' {
       */
       created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **proposals.start_date**
+      * **proposals.start_time**
       * - `int4` in database
       * - `NOT NULL`, no default
       */
-      start_date?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      start_time?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **proposals.end_date**
+      * **proposals.end_time**
       * - `int4` in database
       * - `NOT NULL`, no default
       */
-      end_date?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      end_time?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'proposals_pkey';
     export type Column = keyof Selectable;

@@ -350,8 +350,8 @@ fn map_proposals_created(
                     allow_failure_map: proposal_created.allow_failure_map.to_string(),
                     proposal_id: proposal_created.proposal_id.to_string(),
                     creator: format_hex(&proposal_created.creator),
-                    start_date: proposal_created.start_date.to_string(),
-                    end_date: proposal_created.end_date.to_string(),
+                    start_time: proposal_created.start_date.to_string(),
+                    end_time: proposal_created.end_date.to_string(),
                     metadata_uri: String::from_utf8(proposal_created.metadata).unwrap(),
                     space: format_hex(&log.address()),
                 });

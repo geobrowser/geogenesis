@@ -227,8 +227,8 @@ message DaoAction {
 message ProposalCreated {
   string proposal_id = 1;
   string creator = 2;
-  string start_date = 3;
-  string end_date = 4;
+  string start_time = 3;
+  string end_time = 4;
   string metadata_uri = 5;
   repeated DaoAction actions = 6;
   string allow_failure_map = 7;

@@ -68,11 +68,11 @@ export function mapContentProposalsToSchema(
         id: p.proposalId,
         name: p.name,
         type: 'content',
-        created_at: Number(p.startDate),
+        created_at: Number(p.startTime),
         created_at_block: blockNumber,
         created_by_id: p.creator,
-        start_date: Number(p.startDate),
-        end_date: Number(p.endDate),
+        start_time: Number(p.startTime),
+        end_time: Number(p.endTime),
         space_id: p.space,
         status: 'approved',
       };
@@ -113,7 +113,7 @@ export function mapContentProposalsToSchema(
           string_value,
           entity_value,
           proposed_version_id,
-          created_at: Number(p.startDate),
+          created_at: Number(p.startTime),
           created_at_block: blockNumber,
         };
 
@@ -127,7 +127,7 @@ export function mapContentProposalsToSchema(
           id: generateVersionId({ entryIndex, entityId, cursor }),
           entity_id: entityId,
           created_at_block: blockNumber,
-          created_at: Number(p.startDate),
+          created_at: Number(p.startTime),
           name: p.name,
           created_by_id: p.creator,
           proposal_id: p.proposalId,

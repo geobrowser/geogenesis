@@ -68,6 +68,10 @@ export class CouldNotWriteSpacesError extends Error {
   _tag: 'CouldNotWriteSpacesError' = 'CouldNotWriteSpacesError';
 }
 
+export class CouldNotWriteProposalsError extends Error {
+  _tag: 'CouldNotWriteProposalsError' = 'CouldNotWriteProposalsError';
+}
+
 interface StreamConfig {
   startBlockNumber?: number;
   // We pass in this flag as it might change depending on the execution state of the stream.
@@ -315,6 +319,26 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             const { contentProposals } = groupProposalsByType(proposals);
             const schemaContentProposals = yield* _(mapContentProposalsToSchema(contentProposals, blockNumber, cursor));
             console.log('schema content proposals', schemaContentProposals);
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${contentProposals.length} proposals to DB`,
+            });
+
+            // @TODO: Put this in a transaction
+            yield* _(
+              Effect.tryPromise({
+                try: async () => {
+                  // @TODO: Batch since there might be postgres byte limits. See upsertChunked
+                  await Promise.all([
+                    db.upsert('proposals', schemaContentProposals.proposals, ['id']).run(pool),
+                    db.upsert('proposed_versions', schemaContentProposals.proposedVersions, ['id']).run(pool),
+                    db.upsert('actions', schemaContentProposals.actions, ['id']).run(pool),
+                  ]);
+                },
+                catch: error => new CouldNotWriteProposalsError(String(error)),
+              })
+            );
           }
 
           if (entryResponse.success) {
