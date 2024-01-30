@@ -19,6 +19,7 @@
     "@aragon/sdk-client-common": "1.14.0",
     "@ethersproject/abi": "^5.6.4",
     "@ethersproject/providers": "^5.6.8",
+    "@geogenesis/sdk": "workspace:*",
     "@geogenesis/action-schema": "workspace:*",
     "@geogenesis/contracts": "workspace:*",
     "@geogenesis/ids": "workspace:*",
