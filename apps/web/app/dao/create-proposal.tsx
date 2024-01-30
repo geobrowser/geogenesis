@@ -68,7 +68,25 @@ const createProposalInputs = [
     name: '_tryEarlyExecution',
     type: 'bool',
   },
-];
+] as const;
+
+const processProposalInputs = [
+  {
+    internalType: 'uint32',
+    name: '_blockIndex',
+    type: 'uint32',
+  },
+  {
+    internalType: 'uint32',
+    name: '_itemIndex',
+    type: 'uint32',
+  },
+  {
+    internalType: 'string',
+    name: '_contentUri',
+    type: 'string',
+  },
+] as const;
 
 function createProposalEncoding() {
   // @TODO: Add metadata to ipfs. this will include the root object. If the proposal is not a content proposal it will use
@@ -100,9 +118,9 @@ function createProposalEncoding() {
     // https://github.com/wevm/viem/issues/926
     fromBytes(stringToBytes('ipfs://QmTMt24BWFBPX7T3G6EquF8jt9odkeWvdzrFia6bvE3C3d'), 'hex'), // Some random IPFS entry from the subgraph
     [],
-    0,
-    0,
-    0,
+    BigInt(0),
+    BigInt(0),
+    BigInt(0),
     VoteOption.Yes,
     true,
   ]);
@@ -110,7 +128,18 @@ function createProposalEncoding() {
   return encodedParams;
 }
 
-export function CreateProposal() {
+interface Props {
+  type:
+    | 'content'
+    | 'add-member'
+    | 'remove-member'
+    | 'add-editor'
+    | 'remove-editor'
+    | 'add-subspace'
+    | 'remove-subspace';
+}
+
+export function CreateProposal({ type }: Props) {
   const { config } = usePrepareContractWrite({
     chainId: 137,
     address: '0xB4c6f281B29216a601A743D09151c2eb6EE17dB6',
@@ -118,7 +147,17 @@ export function CreateProposal() {
     functionName: 'createProposal',
     args: [
       stringToHex('ipfs://QmTMt24BWFBPX7T3G6EquF8jt9odkeWvdzrFia6bvE3C3d'),
-      [],
+      [
+        {
+          to: '0xE6fCF2ecB8DA3d02e0A0f78A1ec933c10Cfb3612',
+          value: BigInt(0),
+          data: encodeAbiParameters(processProposalInputs, [
+            1,
+            2,
+            stringToHex('ipfs://QmTMt24BWFBPX7T3G6EquF8jt9odkeWvdzrFia6bvE3C3d'),
+          ]),
+        },
+      ],
       BigInt(0),
       BigInt(0),
       BigInt(0),

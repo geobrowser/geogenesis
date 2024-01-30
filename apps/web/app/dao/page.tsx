@@ -8,7 +8,7 @@ function Page() {
     <div className="flex flex-row">
       <ClientOnly>
         <CreateDao />
-        <CreateProposal />
+        <CreateProposal type="content" />
       </ClientOnly>
     </div>
   );
