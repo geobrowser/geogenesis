@@ -15,7 +15,7 @@ import { createSink, createStream } from './substreams.js/sink/src';
 import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
-import { getEntryWithIpfsContent, getProposalMetadata } from './utils/ipfs';
+import { getEntryWithIpfsContent, getProposalFromMetadata } from './utils/ipfs';
 import { pool } from './utils/pool';
 import {
   type ContentProposal,
@@ -305,9 +305,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
              * 3. Return an object matching the type and the expected contents
              */
 
-            const maybeProposals: (ContentProposal | SubspaceProposal | MembershipProposal | null)[] = yield* _(
+            const maybeProposals = yield* _(
               Effect.all(
-                proposalResponse.data.proposalsCreated.map(proposal => getProposalMetadata(proposal)),
+                proposalResponse.data.proposalsCreated.map(proposal => getProposalFromMetadata(proposal)),
                 {
                   concurrency: 20,
                 }
