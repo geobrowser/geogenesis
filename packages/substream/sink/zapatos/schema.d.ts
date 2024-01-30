@@ -2717,6 +2717,12 @@ declare module 'zapatos/schema' {
       */
       is_root_space: boolean;
       /**
+      * **spaces.space_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      space_plugin_address: string | null;
+      /**
       * **spaces.main_voting_plugin_address**
       * - `text` in database
       * - Nullable, no default
@@ -2754,6 +2760,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_root_space: boolean;
+      /**
+      * **spaces.space_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      space_plugin_address: string | null;
       /**
       * **spaces.main_voting_plugin_address**
       * - `text` in database
@@ -2793,6 +2805,12 @@ declare module 'zapatos/schema' {
       */
       is_root_space?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **spaces.space_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      space_plugin_address?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **spaces.main_voting_plugin_address**
       * - `text` in database
       * - Nullable, no default
@@ -2831,6 +2849,12 @@ declare module 'zapatos/schema' {
       */
       is_root_space: boolean | db.Parameter<boolean> | db.SQLFragment;
       /**
+      * **spaces.space_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      space_plugin_address?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
       * **spaces.main_voting_plugin_address**
       * - `text` in database
       * - Nullable, no default
@@ -2868,6 +2892,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_root_space?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
+      /**
+      * **spaces.space_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      space_plugin_address?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **spaces.main_voting_plugin_address**
       * - `text` in database
