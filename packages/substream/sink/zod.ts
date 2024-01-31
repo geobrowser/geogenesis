@@ -153,7 +153,7 @@ export const ZodEditorsAddedStreamResponse = z.object({
  */
 export const ZodProposal = z.object({
   proposalId: z.string(),
-  space: z.string(),
+  pluginAddress: z.string(),
   creator: z.string(),
   metadataUri: z.string(),
   startTime: z.string(),

@@ -232,7 +232,7 @@ message ProposalCreated {
   string metadata_uri = 5;
   repeated DaoAction actions = 6;
   string allow_failure_map = 7;
-  string space = 8;
+  string plugin_address = 8;
 }
 
 message ProposalsCreated {

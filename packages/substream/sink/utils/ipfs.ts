@@ -1,6 +1,7 @@
 import { Effect, Either, Schedule } from 'effect';
 
 import { IPFS_GATEWAY } from '../constants/constants.js';
+import { slog } from '../utils.js';
 import {
   type ContentProposal,
   type Entry,
@@ -141,8 +142,12 @@ export function getProposalFromMetadata(
   proposal: Proposal
 ): Effect.Effect<never, never, ContentProposal | SubspaceProposal | MembershipProposal | null> {
   return Effect.gen(function* (unwrap) {
-    const fetchIpfsContentEffect = getFetchIpfsContentEffect(proposal.metadataUri);
+    slog({
+      message: `Fetching IPFS content for proposal, ${JSON.stringify(proposal, null, 2)}`,
+      requestId: '-1',
+    });
 
+    const fetchIpfsContentEffect = getFetchIpfsContentEffect(proposal.metadataUri);
     const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
 
     if (Either.isLeft(maybeIpfsContent)) {
@@ -172,8 +177,6 @@ export function getProposalFromMetadata(
       return null;
     }
 
-    console.log('maybeIpfsContent', ipfsContent);
-
     const validIpfsMetadata = ZodProposalMetadata.safeParse(ipfsContent);
 
     if (!validIpfsMetadata.success) {
@@ -198,7 +201,7 @@ export function getProposalFromMetadata(
           onchainProposalId: parsedContent.data.proposalId,
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress(proposal.creator),
-          space: getChecksumAddress(proposal.space),
+          pluginAddress: getChecksumAddress(proposal.pluginAddress),
         };
 
         return mappedProposal;
@@ -220,7 +223,7 @@ export function getProposalFromMetadata(
           onchainProposalId: parsedSubspace.data.proposalId,
           subspace: getChecksumAddress(parsedSubspace.data.subspace),
           creator: getChecksumAddress(proposal.creator),
-          space: getChecksumAddress(proposal.space),
+          pluginAddress: getChecksumAddress(proposal.pluginAddress),
         };
 
         return mappedProposal;
@@ -244,7 +247,7 @@ export function getProposalFromMetadata(
           onchainProposalId: parsedMembership.data.proposalId,
           userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
-          space: getChecksumAddress(proposal.space),
+          pluginAddress: getChecksumAddress(proposal.pluginAddress),
         };
 
         return mappedProposal;

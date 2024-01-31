@@ -28,8 +28,11 @@ export function generateActionId({
   return `${space_id}:${entity_id}:${attribute_id}:${value_id}:${cursor}}`;
 }
 
-// This should be the onchain-id + the space id (anything else?)
-// Note that the entries-based proposal does not have an onchain id
+// Proposal id should be generated on the client or at least deterministically derived
+// from the proposal metadata.
+//
+// This is so we can correctly map the proposal id on the server with the DAO.Action
+// callback we pass to the proposal.
 export function generateProposalId({ entryIndex, cursor }: { entryIndex: number; cursor: string }): string {
   return `${entryIndex}:${cursor}`;
 }

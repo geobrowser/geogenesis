@@ -298,7 +298,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
             slog({
               requestId: message.cursor,
-              message: `Gathering IPFS content for ${proposalResponse.data.proposalsCreated.length} entries`,
+              message: `Gathering IPFS content for ${proposalResponse.data.proposalsCreated.length} proposals`,
             });
 
             const maybeProposals = yield* _(

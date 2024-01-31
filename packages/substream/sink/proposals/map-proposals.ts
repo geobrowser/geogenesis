@@ -1,7 +1,12 @@
 import { Effect } from 'effect';
+import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
+import { SpaceWithPluginAddressNotFoundError } from '../errors';
+import { slog } from '../utils';
+import { getChecksumAddress } from '../utils/get-checksum-address';
 import { generateActionId, generateVersionId } from '../utils/id';
+import { pool } from '../utils/pool';
 import type { ContentProposal, MembershipProposal, SubspaceProposal } from '../zod';
 
 /**
@@ -49,7 +54,7 @@ export function mapContentProposalsToSchema(
   cursor: string
 ): Effect.Effect<
   never,
-  never,
+  SpaceWithPluginAddressNotFoundError,
   {
     proposals: S.proposals.Insertable[];
     proposedVersions: S.proposed_versions.Insertable[];
@@ -61,7 +66,65 @@ export function mapContentProposalsToSchema(
     const proposedVersionsToWrite: S.proposed_versions.Insertable[] = [];
     const actionsToWrite: S.actions.Insertable[] = [];
 
+    const pluginAddresses = proposals.map(e => e.pluginAddress);
+
+    const maybeSpacesForPlugins = yield* unwrap(
+      Effect.all(
+        pluginAddresses.map(p =>
+          Effect.tryPromise({
+            try: () =>
+              db
+                .selectOne(
+                  'spaces',
+                  { main_voting_plugin_address: getChecksumAddress(p) },
+                  { columns: ['id', 'main_voting_plugin_address'] }
+                )
+                .run(pool),
+            catch: error => new SpaceWithPluginAddressNotFoundError(String(error)),
+          })
+        ),
+        {
+          concurrency: 20,
+        }
+      )
+    );
+
+    const spacesForPlugins = maybeSpacesForPlugins
+      .flatMap(s => (s ? [s] : []))
+      // Removing any duplicates and transforming to a map for faster access speed later
+      .reduce(
+        (acc, s) => {
+          // Can safely assert that s.main_voting_plugin_address is not null here
+          // since we query using that column previously
+          //
+          // @TODO: There should be a way to return only not-null values using zapatos
+          // maybe using `having`
+          const checksumPluginAddress = getChecksumAddress(s.main_voting_plugin_address!);
+
+          if (!acc.has(checksumPluginAddress)) {
+            acc.set(checksumPluginAddress, getChecksumAddress(s.id));
+          }
+
+          return acc;
+        },
+        // Mapping of the plugin address to the space id (address)
+        new Map<string, string>()
+      );
     for (const p of proposals) {
+      const spaceId = spacesForPlugins.get(getChecksumAddress(p.pluginAddress));
+
+      if (!spaceId) {
+        if (spaceId === undefined) {
+          slog({
+            level: 'error',
+            message: `Could not find space for plugin address when mapping proposals, ${p.pluginAddress}. Proposal ${p}`,
+            requestId: '0',
+          });
+        }
+
+        continue;
+      }
+
       const proposalToWrite: S.proposals.Insertable = {
         id: p.proposalId,
         name: p.name,
@@ -71,7 +134,8 @@ export function mapContentProposalsToSchema(
         created_by_id: p.creator,
         start_time: Number(p.startTime),
         end_time: Number(p.endTime),
-        space_id: p.space,
+        // @TODO: Skip proposed versions where the space doesn't exist and log error
+        space_id: spacesForPlugins.get(getChecksumAddress(p.pluginAddress))!,
         status: 'approved',
       };
 
@@ -94,7 +158,7 @@ export function mapContentProposalsToSchema(
         });
 
         const action_id = generateActionId({
-          space_id: p.space,
+          space_id: spaceId,
           entity_id: action.entityId,
           attribute_id: action.attributeId,
           value_id: action.value.id,
@@ -129,7 +193,7 @@ export function mapContentProposalsToSchema(
           name: p.name,
           created_by_id: p.creator,
           proposal_id: p.proposalId,
-          space_id: p.space,
+          space_id: spaceId,
         };
 
         proposedVersionsToWrite.push(mappedProposedVersion);

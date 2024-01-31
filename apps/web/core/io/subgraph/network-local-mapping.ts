@@ -83,6 +83,8 @@ export type SubstreamProposal = {
   name: string | null;
   description: string | null;
   spaceId: string;
+  startTime: number;
+  endTime: number;
   status: 'APPROVED';
   proposedVersions: { nodes: SubstreamProposedVersion[] };
 };

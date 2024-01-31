@@ -20,6 +20,8 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
       createdAtBlock
       createdById
       createdAt
+      startTime
+      endTime
       status
       proposedVersions {
         nodes {

@@ -354,7 +354,7 @@ fn map_proposals_created(
                     start_time: proposal_created.start_date.to_string(),
                     end_time: proposal_created.end_date.to_string(),
                     metadata_uri: String::from_utf8(proposal_created.metadata).unwrap(),
-                    space: format_hex(&log.address()),
+                    plugin_address: format_hex(&log.address()),
                 });
             }
 

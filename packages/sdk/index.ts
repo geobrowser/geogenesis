@@ -41,3 +41,10 @@ export enum VoteOption {
   Yes = 2,
   No = 3,
 }
+
+export type ProposalStatus =
+  | 'PROPOSED'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'CANCELED'
+  | 'EXECUTED'

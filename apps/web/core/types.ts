@@ -2,6 +2,7 @@ import {
   CreateTripleAction as CreateTripleActionSchema,
   DeleteTripleAction as DeleteTripleActionSchema,
 } from '@geogenesis/action-schema';
+import { ProposalStatus } from '@geogenesis/sdk';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
@@ -169,6 +170,9 @@ export type Proposal = {
   createdAtBlock: string;
   proposedVersions: ProposedVersion[];
   space: string;
+  startTime: number;
+  endTime: number;
+  status: ProposalStatus;
 };
 
 export type Version = {

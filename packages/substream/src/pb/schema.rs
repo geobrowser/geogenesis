@@ -284,7 +284,7 @@ pub struct ProposalCreated {
     #[prost(string, tag="7")]
     pub allow_failure_map: ::prost::alloc::string::String,
     #[prost(string, tag="8")]
-    pub space: ::prost::alloc::string::String,
+    pub plugin_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
