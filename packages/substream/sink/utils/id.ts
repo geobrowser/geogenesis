@@ -28,6 +28,8 @@ export function generateActionId({
   return `${space_id}:${entity_id}:${attribute_id}:${value_id}:${cursor}}`;
 }
 
+// This should be the onchain-id + the space id (anything else?)
+// Note that the entries-based proposal does not have an onchain id
 export function generateProposalId({ entryIndex, cursor }: { entryIndex: number; cursor: string }): string {
   return `${entryIndex}:${cursor}`;
 }

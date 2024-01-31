@@ -292,6 +292,32 @@ pub struct ProposalsCreated {
     #[prost(message, repeated, tag="1")]
     pub proposals: ::prost::alloc::vec::Vec<ProposalCreated>,
 }
+/// *
+/// Votes represent a vote on a proposal in a DAO-based space.
+/// 
+/// Currently we use a simple majority voting model, where a proposal requires 51% of the
+/// available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+/// _and_ members can create them.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VoteCast {
+    #[prost(string, tag="1")]
+    pub onchain_proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub voter: ::prost::alloc::string::String,
+    #[prost(uint64, tag="3")]
+    pub vote_option: u64,
+    #[prost(uint64, tag="4")]
+    pub voting_power: u64,
+    #[prost(string, tag="5")]
+    pub space: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VotesCast {
+    #[prost(message, repeated, tag="1")]
+    pub votes: ::prost::alloc::vec::Vec<VoteCast>,
+}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoOutput {
@@ -307,9 +333,11 @@ pub struct GeoOutput {
     pub governance_plugins_created: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
     #[prost(message, repeated, tag="6")]
     pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
-    /// repeated SuccessorSpaceCreated successor_spaces_created = 6;
     #[prost(message, repeated, tag="7")]
     pub proposals_created: ::prost::alloc::vec::Vec<ProposalCreated>,
+    /// repeated SuccessorSpaceCreated successor_spaces_created = 6;
+    #[prost(message, repeated, tag="8")]
+    pub votes_cast: ::prost::alloc::vec::Vec<VoteCast>,
 }
 /// *
 /// Roles represent the permissions for a legacy space (See top level comment for more info

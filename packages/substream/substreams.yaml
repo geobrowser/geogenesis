@@ -86,6 +86,14 @@ modules:
     output:
       type: proto:schema.ProposalsCreated
 
+  - name: map_votes_cast
+    kind: map
+    initialBlock: 52969260
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.VotesCast
+
   - name: geo_out
     kind: map
     initialBlock: 36472424
@@ -97,6 +105,7 @@ modules:
       - map: map_governance_plugins_created
       - map: map_editors_added
       - map: map_proposals_created
+      - map: map_votes_cast
       # - map: map_successor_spaces_created
     output:
       type: proto:schema.GeoOutput

@@ -5,7 +5,7 @@ use pb::schema::{
     DaoAction, EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
     GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
     GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalsCreated, RoleChange, RoleChanges,
-    SuccessorSpaceCreated, SuccessorSpacesCreated,
+    SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
 };
 
 use substreams::store::*;
@@ -25,6 +25,7 @@ use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePlugin
 use legacy_space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
 use main_voting_plugin::events::{
     MembersAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
+    VoteCast as VoteCastEvent,
 };
 use space::events::SuccessorSpaceCreated as SuccessSpaceCreatedEvent;
 use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
@@ -364,6 +365,38 @@ fn map_proposals_created(
     Ok(ProposalsCreated { proposals })
 }
 
+/**
+ * Votes represent a vote on a proposal in a DAO-based space.
+ *
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ */
+#[substreams::handlers::map]
+fn map_votes_cast(block: eth::v2::Block) -> Result<VotesCast, substreams::errors::Error> {
+    let votes: Vec<VoteCast> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(vote_cast) = VoteCastEvent::match_and_decode(log) {
+                return Some(VoteCast {
+                    // The onchain proposal id is an incrementing integer. We represent
+                    // the proposal with a more unique id in the sink, so we remap the
+                    // name here to disambiguate between the onchain id and the sink id.
+                    onchain_proposal_id: vote_cast.proposal_id.to_string(),
+                    voter: format_hex(&vote_cast.voter),
+                    space: format_hex(&log.address()),
+                    vote_option: vote_cast.vote_option.to_u64(),
+                    voting_power: vote_cast.voting_power.to_u64(),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(VotesCast { votes })
+}
+
 #[substreams::handlers::map]
 fn geo_out(
     entries: EntriesAdded,
@@ -373,6 +406,7 @@ fn geo_out(
     governance_plugins_created: GeoGovernancePluginsCreated,
     editors_added: EditorsAdded,
     proposals_created: ProposalsCreated,
+    votes_cast: VotesCast,
     // successor_spaces_created: SuccessorSpacesCreated,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
@@ -382,6 +416,7 @@ fn geo_out(
     let governance_plugins_created = governance_plugins_created.plugins;
     let editors_added = editors_added.editors;
     let proposals_created = proposals_created.proposals;
+    let votes_cast = votes_cast.votes;
     // let successor_spaces_created = successor_spaces_created.spaces;
 
     Ok(GeoOutput {
@@ -392,6 +427,7 @@ fn geo_out(
         governance_plugins_created,
         editors_added,
         proposals_created,
+        votes_cast,
         // successor_spaces_created,
     })
 }

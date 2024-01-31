@@ -239,6 +239,25 @@ message ProposalsCreated {
   repeated ProposalCreated proposals = 1;
 }
 
+/**
+ * Votes represent a vote on a proposal in a DAO-based space.
+ * 
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ */
+message VoteCast {
+  string onchain_proposal_id = 1;
+  string voter = 2;
+  uint64 vote_option = 3;
+  uint64 voting_power = 4;
+  string space = 5;
+}
+
+message VotesCast {
+  repeated VoteCast votes = 1;
+}
+
 message GeoOutput {
   repeated EntryAdded entries = 1;
   repeated RoleChange role_changes = 2;
@@ -247,5 +266,6 @@ message GeoOutput {
   repeated GeoGovernancePluginCreated governance_plugins_created = 5;
   repeated EditorAdded editors_added = 6;
   repeated ProposalCreated proposals_created = 7;
+  repeated VoteCast votes_cast = 8;
   // repeated SuccessorSpaceCreated successor_spaces_created = 6;
 }
