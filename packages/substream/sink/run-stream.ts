@@ -184,7 +184,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           const jsonOutput = unpackedOutput.toJson({ typeRegistry: registry });
-          console.log('@BLOCK ', blockNumber, jsonOutput);
 
           const entryResponse = ZodEntryStreamResponse.safeParse(jsonOutput);
           const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);

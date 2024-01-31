@@ -57,8 +57,6 @@ export function mapContentProposalsToSchema(
   }
 > {
   return Effect.gen(function* (unwrap) {
-    console.log('Writing content proposal to database');
-
     const proposalsToWrite: S.proposals.Insertable[] = [];
     const proposedVersionsToWrite: S.proposed_versions.Insertable[] = [];
     const actionsToWrite: S.actions.Insertable[] = [];
