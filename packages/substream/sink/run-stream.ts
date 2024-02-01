@@ -161,12 +161,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const blockNumber = Number(message.clock?.number.toString());
           const timestamp = Number(message.clock?.timestamp?.seconds.toString());
 
-          if (blockNumber % 1000 === 0) {
-            slog({
-              requestId: message.cursor,
-              message: `Processing block ${blockNumber}`,
-            });
-          }
+          console.info('------------- @ BLOCK', blockNumber, '-------------');
 
           yield* _(
             Effect.tryPromise({
@@ -334,28 +329,45 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             const { contentProposals } = groupProposalsByType(proposals);
             const schemaContentProposals = yield* _(mapContentProposalsToSchema(contentProposals, blockNumber, cursor));
 
+            console.log('schemaContentProposals', schemaContentProposals);
+
             slog({
               requestId: message.cursor,
               message: `Writing ${contentProposals.length} proposals to DB`,
             });
 
             // @TODO: Put this in a transaction since all these writes are related
-            yield* _(
-              Effect.tryPromise({
-                try: async () => {
-                  // @TODO: Batch since there might be postgres byte limits. See upsertChunked
-                  await Promise.all([
-                    db.insert('proposals', schemaContentProposals.proposals).run(pool),
-                    db.insert('proposed_versions', schemaContentProposals.proposedVersions).run(pool),
-                    db.insert('actions', schemaContentProposals.actions).run(pool),
-                  ]);
-                },
-                catch: error => new CouldNotWriteProposalsError(String(error)),
-              })
+            const maybeProposalTx = yield* _(
+              Effect.either(
+                Effect.tryPromise({
+                  try: async () => {
+                    // @TODO: Batch since there might be postgres byte limits. See upsertChunked
+                    await Promise.all([
+                      db.insert('proposals', schemaContentProposals.proposals).run(pool),
+                      db.insert('proposed_versions', schemaContentProposals.proposedVersions).run(pool),
+                      db.insert('actions', schemaContentProposals.actions).run(pool),
+                    ]);
+                  },
+                  catch: error => {
+                    slog({
+                      requestId: message.cursor,
+                      message: `Failed to write proposals to DB ${error}`,
+                      level: 'error',
+                    });
+
+                    return error;
+                  },
+                })
+              )
             );
           }
 
           if (votesCast.success) {
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${votesCast.data.votesCast.length} votes to DB`,
+            });
+
             const schemaVotes = yield* _(mapVotes(votesCast.data.votesCast, blockNumber, timestamp));
 
             yield* _(
