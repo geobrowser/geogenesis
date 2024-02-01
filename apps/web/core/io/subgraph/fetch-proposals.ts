@@ -23,6 +23,14 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
       startTime
       endTime
       status
+      
+      proposalVotes {
+        totalCount
+        nodes {
+          vote
+        }
+      }
+
       proposedVersions {
         nodes {
           id

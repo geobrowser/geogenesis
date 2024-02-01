@@ -1,4 +1,4 @@
-import { Action, Entity, OmitStrict, ProposedVersion, Space, Triple, Value } from '~/core/types';
+import { Action, Entity, OmitStrict, ProposedVersion, Space, Triple, Value, Vote } from '~/core/types';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
@@ -86,6 +86,7 @@ export type SubstreamProposal = {
   startTime: number;
   endTime: number;
   status: 'APPROVED';
+  proposalVotes: { nodes: Vote[]; totalCount: number };
   proposedVersions: { nodes: SubstreamProposedVersion[] };
 };
 

@@ -161,6 +161,11 @@ export interface Cell {
 
 export type Row = Record<string, Cell>;
 
+export type Vote = {
+  vote: 'YES' | 'NO';
+  accountId: string;
+};
+
 export type Proposal = {
   id: string;
   name: string | null;
@@ -173,6 +178,10 @@ export type Proposal = {
   startTime: number;
   endTime: number;
   status: ProposalStatus;
+  proposalVotes: {
+    totalCount: number;
+    nodes: Vote[];
+  };
 };
 
 export type Version = {
