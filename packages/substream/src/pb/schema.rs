@@ -307,10 +307,8 @@ pub struct VoteCast {
     pub voter: ::prost::alloc::string::String,
     #[prost(uint64, tag="3")]
     pub vote_option: u64,
-    #[prost(uint64, tag="4")]
-    pub voting_power: u64,
     #[prost(string, tag="5")]
-    pub space: ::prost::alloc::string::String,
+    pub plugin_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

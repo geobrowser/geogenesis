@@ -310,6 +310,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               )
             );
 
+            console.log('maybeProposals', maybeProposals);
+
             const proposals = maybeProposals.filter(
               (maybeProposal): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal =>
                 maybeProposal !== null
@@ -324,7 +326,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               message: `Writing ${contentProposals.length} proposals to DB`,
             });
 
-            // @TODO: Put this in a transaction
+            // @TODO: Put this in a transaction since all these writes are related
             yield* _(
               Effect.tryPromise({
                 try: async () => {

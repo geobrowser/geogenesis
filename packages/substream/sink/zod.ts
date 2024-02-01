@@ -151,9 +151,18 @@ export const ZodEditorsAddedStreamResponse = z.object({
  * }
  * ```
  */
-export const ZodProposal = z.object({
+export const ZodSubstreamProposal = z.object({
   proposalId: z.string(),
   pluginAddress: z.string(),
+  creator: z.string(),
+  metadataUri: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
+});
+
+export const ZodProposal = z.object({
+  proposalId: z.string(),
+  space: z.string(),
   creator: z.string(),
   metadataUri: z.string(),
   startTime: z.string(),
@@ -182,6 +191,7 @@ export const ZodProposalMetadata = z.object({
 
 export type ProposalMetadata = z.infer<typeof ZodProposalMetadata>;
 
+export type SubstreamProposal = z.infer<typeof ZodSubstreamProposal>;
 export type Proposal = z.infer<typeof ZodProposal>;
 
 export const ZodContentProposal = z.object({
@@ -224,7 +234,7 @@ export type SubspaceProposal = Proposal & {
 };
 
 export const ZodProposalStreamResponse = z.object({
-  proposalsCreated: z.array(ZodProposal).min(1),
+  proposalsCreated: z.array(ZodSubstreamProposal).min(1),
 });
 
 /**

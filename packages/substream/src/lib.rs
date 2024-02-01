@@ -377,6 +377,7 @@ fn map_votes_cast(block: eth::v2::Block) -> Result<VotesCast, substreams::errors
     let votes: Vec<VoteCast> = block
         .logs()
         .filter_map(|log| {
+            // @TODO: Should we track our plugins/daos and only emit if the address is one of them?
             if let Some(vote_cast) = VoteCastEvent::match_and_decode(log) {
                 return Some(VoteCast {
                     // The onchain proposal id is an incrementing integer. We represent
@@ -384,9 +385,8 @@ fn map_votes_cast(block: eth::v2::Block) -> Result<VotesCast, substreams::errors
                     // name here to disambiguate between the onchain id and the sink id.
                     onchain_proposal_id: vote_cast.proposal_id.to_string(),
                     voter: format_hex(&vote_cast.voter),
-                    space: format_hex(&log.address()),
+                    plugin_address: format_hex(&log.address()),
                     vote_option: vote_cast.vote_option.to_u64(),
-                    voting_power: vote_cast.voting_power.to_u64(),
                 });
             }
 

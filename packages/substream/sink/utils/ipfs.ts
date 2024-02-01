@@ -1,14 +1,15 @@
 import { Effect, Either, Schedule } from 'effect';
 
 import { IPFS_GATEWAY } from '../constants/constants.js';
+import { SpaceWithPluginAddressNotFoundError } from '../errors.js';
 import { slog } from '../utils.js';
 import {
   type ContentProposal,
   type Entry,
   type FullEntry,
   type MembershipProposal,
-  type Proposal,
   type SubspaceProposal,
+  type SubstreamProposal,
   type UriData,
   ZodContentProposal,
   ZodMembershipProposal,
@@ -17,6 +18,7 @@ import {
 } from '../zod.js';
 import { isValidAction } from './actions.js';
 import { getChecksumAddress } from './get-checksum-address.js';
+import { getSpaceForVotingPlugin } from './get-space-for-voting-plugin.js';
 
 class UnableToParseBase64Error extends Error {
   _tag: 'UnableToParseBase64Error' = 'UnableToParseBase64Error';
@@ -132,16 +134,32 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<never, neve
 /**
  * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
  *
- * 1. Fetch the IPFS content
- * 2. Parse the IPFS content to get the "type"
- * 3. Return an object matching the type and the expected contents.
+ * 1. Verify that the space exists for the plugin address
+ * 2. Fetch the IPFS content
+ * 3. Parse the IPFS content to get the "type"
+ * 4. Return an object matching the type and the expected contents.
  *
  * Later on we map this to the database schema and write the proposal to the database.
  */
 export function getProposalFromMetadata(
-  proposal: Proposal
-): Effect.Effect<never, never, ContentProposal | SubspaceProposal | MembershipProposal | null> {
+  proposal: SubstreamProposal
+): Effect.Effect<
+  never,
+  SpaceWithPluginAddressNotFoundError,
+  ContentProposal | SubspaceProposal | MembershipProposal | null
+> {
   return Effect.gen(function* (unwrap) {
+    const maybeSpaceIdForPlugin = yield* unwrap(getSpaceForVotingPlugin(getChecksumAddress(proposal.pluginAddress)));
+
+    if (!maybeSpaceIdForPlugin) {
+      slog({
+        message: `Matching space in Proposal not found for plugin address ${proposal.pluginAddress}`,
+        requestId: '-1',
+      });
+
+      return null;
+    }
+
     slog({
       message: `Fetching IPFS content for proposal, ${JSON.stringify(proposal, null, 2)}`,
       requestId: '-1',
@@ -201,7 +219,7 @@ export function getProposalFromMetadata(
           onchainProposalId: parsedContent.data.proposalId,
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress(proposal.creator),
-          pluginAddress: getChecksumAddress(proposal.pluginAddress),
+          space: getChecksumAddress(maybeSpaceIdForPlugin),
         };
 
         return mappedProposal;
@@ -223,7 +241,7 @@ export function getProposalFromMetadata(
           onchainProposalId: parsedSubspace.data.proposalId,
           subspace: getChecksumAddress(parsedSubspace.data.subspace),
           creator: getChecksumAddress(proposal.creator),
-          pluginAddress: getChecksumAddress(proposal.pluginAddress),
+          space: getChecksumAddress(maybeSpaceIdForPlugin),
         };
 
         return mappedProposal;
@@ -247,7 +265,7 @@ export function getProposalFromMetadata(
           onchainProposalId: parsedMembership.data.proposalId,
           userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
-          pluginAddress: getChecksumAddress(proposal.pluginAddress),
+          space: getChecksumAddress(maybeSpaceIdForPlugin),
         };
 
         return mappedProposal;

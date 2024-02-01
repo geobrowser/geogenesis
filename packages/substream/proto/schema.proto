@@ -250,8 +250,7 @@ message VoteCast {
   string onchain_proposal_id = 1;
   string voter = 2;
   uint64 vote_option = 3;
-  uint64 voting_power = 4;
-  string space = 5;
+  string plugin_address = 5;
 }
 
 message VotesCast {
