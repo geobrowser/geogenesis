@@ -77,6 +77,7 @@ export type SubstreamVersion = {
 
 export type SubstreamProposal = {
   id: string;
+  onchainProposalId: string;
   createdById: string;
   createdAt: number;
   createdAtBlock: string;

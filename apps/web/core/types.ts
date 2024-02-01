@@ -168,6 +168,7 @@ export type Vote = {
 
 export type Proposal = {
   id: string;
+  onchainProposalId: string;
   name: string | null;
   description: string | null;
   createdBy: Profile;

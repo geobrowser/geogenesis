@@ -183,7 +183,7 @@ CREATE TABLE public.versions (
 -- @TODO: Proposed Subspace
 
 CREATE TABLE public.proposal_votes (
-    id text PRIMARY KEY,
+    PRIMARY KEY (onchain_proposal_id, space_id, account_id),
     proposal_id text NOT NULL REFERENCES public.proposals(id),
     onchain_proposal_id text,
     space_id text NOT NULL REFERENCES public.spaces(id),

@@ -160,8 +160,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const blockNumber = Number(message.clock?.number.toString());
           const timestamp = Number(message.clock?.timestamp?.seconds.toString());
 
-          console.info('------------- @ BLOCK', blockNumber, '-------------');
-
           yield* _(
             Effect.tryPromise({
               try: () => writeCursor(cursor, blockNumber),
@@ -211,6 +209,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
            * indexing time doesn't balloon.
            */
           if (spacePluginCreatedResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             const spaces = mapSpaces(spacePluginCreatedResponse.data.spacesCreated, blockNumber);
 
             slog({
@@ -234,6 +234,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (governancePluginsCreatedResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             const spaces = mapGovernanceToSpaces(
               governancePluginsCreatedResponse.data.governancePluginsCreated,
               blockNumber
@@ -268,6 +270,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
            * DAO-based spaces.
            */
           if (editorsAddedResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             slog({
               requestId: message.cursor,
               message: `Writing editor role for accounts ${editorsAddedResponse.data.editorsAdded
@@ -301,6 +305,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
            * _and_ members can create them.
            */
           if (proposalResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             slog({
               requestId: message.cursor,
               message: `Processing ${proposalResponse.data.proposalsCreated.length} proposals`,
@@ -328,15 +334,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             const { contentProposals } = groupProposalsByType(proposals);
             const schemaContentProposals = yield* _(mapContentProposalsToSchema(contentProposals, blockNumber, cursor));
 
-            console.log('schemaContentProposals', schemaContentProposals);
-
             slog({
               requestId: message.cursor,
               message: `Writing ${contentProposals.length} proposals to DB`,
             });
 
             // @TODO: Put this in a transaction since all these writes are related
-            const maybeProposalTx = yield* _(
+            yield* _(
               Effect.either(
                 Effect.tryPromise({
                   try: async () => {
@@ -362,22 +366,34 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (votesCast.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             slog({
               requestId: message.cursor,
-              message: `Writing ${votesCast.data.votesCast.length} votes to DB`,
+              message: `Writing ${votesCast.data.votesCast.length} votes to DB in block`,
             });
 
             const schemaVotes = yield* _(mapVotes(votesCast.data.votesCast, blockNumber, timestamp));
 
             yield* _(
-              Effect.tryPromise({
-                try: () => db.insert('proposal_votes', schemaVotes).run(pool),
-                catch: error => new CouldNotWriteVotesError(String(error)),
-              })
+              Effect.either(
+                Effect.tryPromise({
+                  try: () => db.insert('proposal_votes', schemaVotes).run(pool),
+                  catch: error => {
+                    slog({
+                      requestId: message.cursor,
+                      message: `Failed to write votes to DB ${error}`,
+                      level: 'error',
+                    });
+                  },
+                })
+              )
             );
           }
 
           if (entryResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             slog({
               requestId: message.cursor,
               message: `Processing ${entryResponse.data.entries.length} entries`,
@@ -461,6 +477,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (roleChangeResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             for (const roleChange of roleChangeResponse.data.roleChanges) {
               const { granted, revoked } = roleChange;
 

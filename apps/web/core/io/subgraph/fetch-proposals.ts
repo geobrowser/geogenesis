@@ -15,6 +15,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
   )}}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
     nodes {
       id
+      onchainProposalId
       name
       spaceId
       createdAtBlock
@@ -23,7 +24,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
       startTime
       endTime
       status
-      
+
       proposalVotes {
         totalCount
         nodes {

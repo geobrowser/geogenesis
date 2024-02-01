@@ -21,8 +21,6 @@ export default function CreateDao() {
   const { geoPluginContext } = useAragonSDKContext();
   const { data: wallet } = useWalletClient();
 
-  console.log('context', { geoPluginContext });
-
   if (!geoPluginContext) throw new Error('geoPluginContext is undefined');
   const client: Client = new Client(geoPluginContext);
 
@@ -47,8 +45,6 @@ export default function CreateDao() {
     //   Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs
     // ).uploadObject(metadata);
 
-    console.log('context', geoPluginContext);
-
     const spacePluginInstallItem = await GeoPluginClientEncoding.getSpacePluginInstallItem({
       firstBlockContentUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
       // @HACK: Using a different upgrader from the governance plugin to work around
@@ -66,7 +62,16 @@ export default function CreateDao() {
         minProposerVotingPower: BigInt(1000), // example value
       },
       memberAccessProposalDuration: BigInt(60 * 60 * 24), // one day in seconds
-      initialEditors: [getAddress(wallet.account.address)], // example values -- @TODO: change to user's wallet address
+      // Yaniv – 0xE343E47d821a9bcE54F12237426A6ef391066b60
+      // Arturas – 0x48f03232F947A6d92A5E839936c9250999f404a0
+      // Nate – 0x206d1f64bb177e2732479186Ee5502D7202509D0
+      // Me – 0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853
+      // Geo – 0x66703c058795B9Cb215fbcc7c6b07aee7D216F24
+      initialEditors: [
+        getAddress(wallet.account.address),
+        getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
+        getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
+      ], // example values -- @TODO: change to user's wallet address
       pluginUpgrader: getAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // @TODO: Use deployer wallet
     };
 
@@ -79,11 +84,6 @@ export default function CreateDao() {
       daoUri: 'https://geobrowser.io',
       plugins: [governancePluginInstallItem, spacePluginInstallItem],
     };
-
-    console.log('encoded installation params', {
-      governancePluginInstallItem,
-      spacePluginInstallItem,
-    });
 
     // const estimatedGas: GasFeeEstimation = await client.estimation.createDao(createParams);
     // console.log('estimation', estimatedGas);

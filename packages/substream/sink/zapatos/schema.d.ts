@@ -1523,12 +1523,6 @@ declare module 'zapatos/schema' {
     export type Table = 'proposal_votes';
     export interface Selectable {
       /**
-      * **proposal_votes.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string;
-      /**
       * **proposal_votes.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1537,9 +1531,9 @@ declare module 'zapatos/schema' {
       /**
       * **proposal_votes.onchain_proposal_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      onchain_proposal_id: string | null;
+      onchain_proposal_id: string;
       /**
       * **proposal_votes.space_id**
       * - `text` in database
@@ -1573,12 +1567,6 @@ declare module 'zapatos/schema' {
     }
     export interface JSONSelectable {
       /**
-      * **proposal_votes.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string;
-      /**
       * **proposal_votes.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1587,9 +1575,9 @@ declare module 'zapatos/schema' {
       /**
       * **proposal_votes.onchain_proposal_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      onchain_proposal_id: string | null;
+      onchain_proposal_id: string;
       /**
       * **proposal_votes.space_id**
       * - `text` in database
@@ -1623,12 +1611,6 @@ declare module 'zapatos/schema' {
     }
     export interface Whereable {
       /**
-      * **proposal_votes.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
       * **proposal_votes.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1637,7 +1619,7 @@ declare module 'zapatos/schema' {
       /**
       * **proposal_votes.onchain_proposal_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
       onchain_proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
@@ -1673,12 +1655,6 @@ declare module 'zapatos/schema' {
     }
     export interface Insertable {
       /**
-      * **proposal_votes.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string | db.Parameter<string> | db.SQLFragment;
-      /**
       * **proposal_votes.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1687,9 +1663,9 @@ declare module 'zapatos/schema' {
       /**
       * **proposal_votes.onchain_proposal_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      onchain_proposal_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      onchain_proposal_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposal_votes.space_id**
       * - `text` in database
@@ -1723,12 +1699,6 @@ declare module 'zapatos/schema' {
     }
     export interface Updatable {
       /**
-      * **proposal_votes.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
       * **proposal_votes.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1737,9 +1707,9 @@ declare module 'zapatos/schema' {
       /**
       * **proposal_votes.onchain_proposal_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      onchain_proposal_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      onchain_proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposal_votes.space_id**
       * - `text` in database

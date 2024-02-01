@@ -80,7 +80,6 @@ export function mapVotes(
       }
 
       schemaVotes.push({
-        id: Math.random().toString(36).substring(7),
         vote: voteType,
         space_id: maybeSpaceIdForPlugin,
         proposal_id: maybeProposal.id,

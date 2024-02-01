@@ -1,11 +1,13 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { type ContentProposalMetadata, VoteOption } from '@geogenesis/sdk';
-import { encodeAbiParameters, fromBytes, stringToBytes, stringToHex } from 'viem';
+import { encodeAbiParameters, stringToHex } from 'viem';
 
-import { useContractWrite, usePrepareContractWrite, useWalletClient } from 'wagmi';
+import { useWalletClient } from 'wagmi';
 import { prepareWriteContract, writeContract } from 'wagmi/actions';
 
+import { ID } from '~/core/id';
 import { Services } from '~/core/services';
 
 import { Button } from '~/design-system/button';
@@ -41,41 +43,6 @@ interface Props {
     | 'remove-subspace';
 }
 
-export function useCreateContentProposal() {
-  const { storageClient } = Services.useServices();
-
-  const { config } = usePrepareContractWrite({
-    chainId: 137,
-    address: '0xB4c6f281B29216a601A743D09151c2eb6EE17dB6',
-    abi,
-    functionName: 'createProposal',
-    args: [
-      stringToHex('ipfs://QmTMt24BWFBPX7T3G6EquF8jt9odkeWvdzrFia6bvE3C3d'),
-      [
-        {
-          to: '0xE6fCF2ecB8DA3d02e0A0f78A1ec933c10Cfb3612',
-          value: BigInt(0),
-          data: encodeAbiParameters(processProposalInputs, [
-            1,
-            2,
-            stringToHex('ipfs://QmTMt24BWFBPX7T3G6EquF8jt9odkeWvdzrFia6bvE3C3d'),
-          ]),
-        },
-      ],
-      BigInt(0),
-      BigInt(0),
-      BigInt(0),
-      VoteOption.Yes,
-      true,
-    ],
-  });
-
-  const writer = useContractWrite(config);
-
-  return {
-    publish: writer.write,
-  };
-}
 // @TODO: Add metadata to ipfs. this will include the root object. If the proposal is not a content proposal it will use
 // a new type of metadata object that has the proposal type and version object
 // 1. Create the proposal metadata for content
@@ -111,17 +78,17 @@ export function CreateProposal({ type }: Props) {
     const proposal: ContentProposalMetadata = {
       type: 'content',
       version: '1.0.0',
-      proposalId: '420',
-      name: 'test proposal',
+      proposalId: ID.createEntityId(),
+      name: 'Third proposal in the DAO',
       actions: [
         {
-          entityId: '5',
-          attributeId: '6',
+          entityId: ID.createEntityId(),
+          attributeId: SYSTEM_IDS.NAME,
           type: 'createTriple',
           value: {
             type: 'string',
-            id: '50',
-            value: 'hello world',
+            id: ID.createValueId(),
+            value: 'Third entity',
           },
         },
       ],
@@ -130,19 +97,18 @@ export function CreateProposal({ type }: Props) {
     const hash = await storageClient.uploadObject(proposal);
     const uri = `ipfs://${hash}`;
 
-    console.log('wallet', wallet);
-
     const config = await prepareWriteContract({
-      chainId: 137,
       walletClient: wallet,
-      address: '0xB4c6f281B29216a601A743D09151c2eb6EE17dB6',
+      // Main voting plugin address for DAO at 0x9b843a69F456f9422eCfB7247d1344Eb14C40A93
+      address: '0x467E86f1898D81F0D5c6cbf45a1FF3bfcb16ba00',
       abi,
       functionName: 'createProposal',
       args: [
         stringToHex(uri),
         [
           {
-            to: '0xE6fCF2ecB8DA3d02e0A0f78A1ec933c10Cfb3612',
+            // Space plugin address for DAO at 0x9b843a69F456f9422eCfB7247d1344Eb14C40A93
+            to: '0xD8EF1082fcc112D79f9E476E6879Ba266fc20796',
             value: BigInt(0),
             data: encodeAbiParameters(processProposalInputs, [1, 2, stringToHex(uri)]),
           },
