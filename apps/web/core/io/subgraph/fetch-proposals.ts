@@ -53,7 +53,10 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
                 id
                 name
               }
-              entityValue
+              entityValue {
+                id
+                name
+              }
               numberValue
               stringValue
               valueType

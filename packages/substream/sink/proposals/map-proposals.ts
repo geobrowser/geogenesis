@@ -113,7 +113,7 @@ export function mapContentProposalsToSchema(
           value_type: action.value.type,
           value_id: action.value.id,
           string_value,
-          entity_value,
+          entity_value_id: entity_value,
           proposed_version_id,
           created_at: Number(p.startTime),
           created_at_block: blockNumber,

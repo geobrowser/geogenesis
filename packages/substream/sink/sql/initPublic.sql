@@ -202,7 +202,7 @@ CREATE TABLE public.actions (
     value_id text,
     number_value text,
     string_value text,
-    entity_value text REFERENCES public.geo_entities(id),
+    entity_value_id text REFERENCES public.geo_entities(id),
     array_value text [],
     proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
     -- version_id text REFERENCES public.versions(id) NOT NULL,

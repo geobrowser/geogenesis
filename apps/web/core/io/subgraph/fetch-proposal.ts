@@ -40,7 +40,10 @@ export const getFetchProposalQuery = (id: string) => `query {
               id
               name
             }
-            entityValue
+            entityValue {
+              id
+              name
+            }
             numberValue
             stringValue
             valueType
