@@ -72,8 +72,12 @@ CREATE TABLE public.log_entries (
 CREATE TYPE public.proposal_type as ENUM ('content', 'add_subspace', 'remove_subspace', 'add_editor', 'remove_editor', 'add_member', 'remove_member');
 CREATE TYPE public.proposal_status as ENUM ('proposed', 'approved', 'rejected', 'canceled', 'executed');
 
+-- Maps to 2 or 3 onchain
+CREATE TYPE public.vote_type as ENUM ('yes', 'no');
+
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,
+    onchain_proposal_id text NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
     name text,
     description text,
@@ -177,6 +181,17 @@ CREATE TABLE public.versions (
 -- @TODO: Proposed Member
 -- @TODO: Proposed Editor
 -- @TODO: Proposed Subspace
+
+CREATE TABLE public.proposal_votes (
+    id text PRIMARY KEY,
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
+    onchain_proposal_id text,
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    account_id text NOT NULL REFERENCES public.accounts(id),
+    vote vote_type NOT NULL,
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL
+);
 
 CREATE TABLE public.actions (
     id text PRIMARY KEY NOT NULL,

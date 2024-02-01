@@ -5,7 +5,18 @@ import { SpaceWithPluginAddressNotFoundError } from '../errors';
 import { getChecksumAddress } from './get-checksum-address';
 import { pool } from './pool';
 
-// @TODO: We should only emit events from the substream that map to spaces we track
+/**
+ * Events from our DAO-based contracts might be emitted from different contracts. e.g.,
+ * voting-related events might come from the MainVoting plugin. We need to map these
+ * events to the actual space_id (the DAO contract address).
+ *
+ * This function looks up the space-id for a given plugin address.
+ *
+ * @TODO: We should only emit events from the substream that map to spaces we track. We
+ * can store the association between plugins and spaces in a substream store and emit it
+ * along with the event instead of having to read from the DB every time we receive an
+ * event that comes from a plugin.
+ */
 export function getSpaceForVotingPlugin(
   pluginAddress: `0x${string}`
 ): Effect.Effect<never, SpaceWithPluginAddressNotFoundError, `0x${string}` | null> {

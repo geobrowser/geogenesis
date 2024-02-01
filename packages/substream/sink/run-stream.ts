@@ -18,6 +18,7 @@ import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
 import { getEntryWithIpfsContent, getProposalFromMetadata } from './utils/ipfs';
 import { pool } from './utils/pool';
+import { mapVotes } from './votes/map-votes';
 import {
   type ContentProposal,
   type FullEntry,
@@ -30,6 +31,7 @@ import {
   ZodProposalStreamResponse,
   ZodRoleChangeStreamResponse,
   ZodSpacePluginCreatedStreamResponse,
+  ZodVotesCastStreamResponse,
 } from './zod';
 
 export class InvalidPackageError extends Error {
@@ -70,6 +72,10 @@ export class CouldNotWriteSpacesError extends Error {
 
 export class CouldNotWriteProposalsError extends Error {
   _tag: 'CouldNotWriteProposalsError' = 'CouldNotWriteProposalsError';
+}
+
+export class CouldNotWriteVotesError extends Error {
+  _tag: 'CouldNotWriteVotesError' = 'CouldNotWriteVotesError';
 }
 
 interface StreamConfig {
@@ -191,6 +197,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
           const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
           const proposalResponse = ZodProposalStreamResponse.safeParse(jsonOutput);
+          const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
 
           /**
            * @TODO: De-duplicate any spaces being added with both the space plugin governance
@@ -290,6 +297,15 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             });
           }
 
+          /**
+           * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
+           * represent changes to content, membership (editor or member), governance changes, subspace
+           * membership, or anything else that can be executed by a DAO.
+           *
+           * Currently we use a simple majority voting model, where a proposal requires 51% of the
+           * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+           * _and_ members can create them.
+           */
           if (proposalResponse.success) {
             slog({
               requestId: message.cursor,
@@ -310,8 +326,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               )
             );
 
-            console.log('maybeProposals', maybeProposals);
-
             const proposals = maybeProposals.filter(
               (maybeProposal): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal =>
                 maybeProposal !== null
@@ -319,7 +333,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
             const { contentProposals } = groupProposalsByType(proposals);
             const schemaContentProposals = yield* _(mapContentProposalsToSchema(contentProposals, blockNumber, cursor));
-            console.log('schema content proposals', schemaContentProposals);
 
             slog({
               requestId: message.cursor,
@@ -332,12 +345,23 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 try: async () => {
                   // @TODO: Batch since there might be postgres byte limits. See upsertChunked
                   await Promise.all([
-                    db.upsert('proposals', schemaContentProposals.proposals, ['id']).run(pool),
-                    db.upsert('proposed_versions', schemaContentProposals.proposedVersions, ['id']).run(pool),
-                    db.upsert('actions', schemaContentProposals.actions, ['id']).run(pool),
+                    db.insert('proposals', schemaContentProposals.proposals).run(pool),
+                    db.insert('proposed_versions', schemaContentProposals.proposedVersions).run(pool),
+                    db.insert('actions', schemaContentProposals.actions).run(pool),
                   ]);
                 },
                 catch: error => new CouldNotWriteProposalsError(String(error)),
+              })
+            );
+          }
+
+          if (votesCast.success) {
+            const schemaVotes = yield* _(mapVotes(votesCast.data.votesCast, blockNumber, timestamp));
+
+            yield* _(
+              Effect.tryPromise({
+                try: () => db.insert('proposal_votes', schemaVotes).run(pool),
+                catch: error => new CouldNotWriteVotesError(String(error)),
               })
             );
           }

@@ -67,6 +67,7 @@ export function mapContentProposalsToSchema(
 
       const proposalToWrite: S.proposals.Insertable = {
         id: p.proposalId,
+        onchain_proposal_id: p.onchainProposalId,
         name: p.name,
         type: 'content',
         created_at: Number(p.startTime),

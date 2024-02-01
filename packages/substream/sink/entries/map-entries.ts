@@ -122,6 +122,8 @@ export function mapProposals({
     return {
       id: proposalId,
       name: fullEntry.uriData.name,
+      // For legacy spaces we don't have onchain proposal id
+      onchain_proposal_id: '-1',
       type: 'content',
       created_at_block: blockNumber,
       created_by_id: fullEntry.author,
