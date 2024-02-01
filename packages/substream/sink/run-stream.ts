@@ -23,7 +23,6 @@ import {
   type ContentProposal,
   type FullEntry,
   type MembershipProposal,
-  type Proposal,
   type SubspaceProposal,
   ZodEditorsAddedStreamResponse,
   ZodEntryStreamResponse,
