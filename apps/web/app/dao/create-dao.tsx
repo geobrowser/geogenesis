@@ -1,7 +1,7 @@
 'use client';
 
-import { Client, CreateDaoParams, DaoCreationSteps, DaoMetadata, VotingMode } from '@aragon/sdk-client';
-import { GasFeeEstimation } from '@aragon/sdk-client-common';
+import { Client, CreateDaoParams, DaoCreationSteps, DaoMetadata } from '@aragon/sdk-client';
+import { VotingMode } from '@geogenesis/sdk';
 import { getAddress } from 'viem';
 
 import { useWalletClient } from 'wagmi';
@@ -17,7 +17,7 @@ import { getImageHash } from '~/core/utils/utils';
 import { Button } from '~/design-system/button';
 
 // this route is only for testing creating a DAO on the frontend
-export default function CreateDao() {
+export function CreateDao() {
   const { geoPluginContext } = useAragonSDKContext();
   const { data: wallet } = useWalletClient();
 
@@ -45,7 +45,7 @@ export default function CreateDao() {
     //   Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs
     // ).uploadObject(metadata);
 
-    const spacePluginInstallItem = await GeoPluginClientEncoding.getSpacePluginInstallItem({
+    const spacePluginInstallItem = GeoPluginClientEncoding.getSpacePluginInstallItem({
       firstBlockContentUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
       // @HACK: Using a different upgrader from the governance plugin to work around
       // a limitation in Aragon.
@@ -55,11 +55,12 @@ export default function CreateDao() {
 
     const governancePluginConfig: Parameters<typeof GeoPluginClientEncoding.getGovernancePluginInstallItem>[0] = {
       votingSettings: {
-        votingMode: 0, // example value
+        votingMode: VotingMode.Standard,
         supportThreshold: 1, // example value
         minParticipation: 1, // example value
-        minDuration: BigInt(60 * 60 * 24), // example value
-        minProposerVotingPower: BigInt(1000), // example value
+        // minDuration: BigInt(60 * 60 * 24), // 1 day
+        minDuration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
+        minProposerVotingPower: BigInt(1000),
       },
       memberAccessProposalDuration: BigInt(60 * 60 * 24), // one day in seconds
       // Yaniv – 0xE343E47d821a9bcE54F12237426A6ef391066b60
@@ -71,12 +72,11 @@ export default function CreateDao() {
         getAddress(wallet.account.address),
         getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
         getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
-      ], // example values -- @TODO: change to user's wallet address
+      ], // @TODO: change to user's wallet address
       pluginUpgrader: getAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // @TODO: Use deployer wallet
     };
 
-    const governancePluginInstallItem =
-      await GeoPluginClientEncoding.getGovernancePluginInstallItem(governancePluginConfig);
+    const governancePluginInstallItem = GeoPluginClientEncoding.getGovernancePluginInstallItem(governancePluginConfig);
 
     const createParams: CreateDaoParams = {
       metadataUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',

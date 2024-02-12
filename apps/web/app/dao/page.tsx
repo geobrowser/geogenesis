@@ -4,35 +4,30 @@ import { fetchProposals } from '~/core/io/subgraph';
 
 import { ClientOnly } from '~/design-system/client-only';
 
-import CreateDao from './create-dao';
+import { TEST_DAO_ADDRESS } from './constants';
+import { CreateDao } from './create-dao';
 import { CreateProposal } from './create-proposal';
+import { Execute } from './execute';
+import { Refetch } from './refetch';
 import { Vote } from './vote';
 
 export default async function Page() {
-  const proposals = await fetchProposals({ spaceId: '0xd9abC01d1AEc200FC394C2717d7E14348dC23792' });
+  const proposals = await fetchProposals({ spaceId: TEST_DAO_ADDRESS, tag: 'proposals' });
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-row gap-4">
-        <ClientOnly>
-          <CreateDao />
-        </ClientOnly>
-        <ClientOnly>
-          <CreateProposal type="content" />
-        </ClientOnly>
-      </div>
+      <Refetch />
 
       <div className="space-y-8">
         <div className="divide-y-2 divide-divider">
           {proposals.map(p => {
-            // convert current time to seconds (instead of milliseconds) and divide the difference
-            // between now and end time by seconds in an hour to get the hours remaining
             const secondsRemaining = Math.floor(p.endTime - Date.now() / 1000);
+            const isAwaitingExecution = secondsRemaining <= 0;
 
             return (
               <div key={p.id} className="py-4">
                 <p className="text-button">{p.name}</p>
-                <p>{p.status}</p>
+                <p>{isAwaitingExecution ? 'Pending Execution' : p.status}</p>
                 <p>{secondsRemaining} seconds remaining</p>
                 <div className="flex items-center gap-2">
                   <p>Total votes: {p.proposalVotes.totalCount}</p>
@@ -46,11 +41,21 @@ export default async function Page() {
                   <Vote onchainProposalId={p.onchainProposalId} type={VoteOption.No}>
                     No
                   </Vote>
+                  <Execute onchainProposalId={p.onchainProposalId}>Execute</Execute>
                 </div>
               </div>
             );
           })}
         </div>
+      </div>
+
+      <div className="flex flex-row gap-4">
+        <ClientOnly>
+          <CreateDao />
+        </ClientOnly>
+        <ClientOnly>
+          <CreateProposal type="content" />
+        </ClientOnly>
       </div>
     </div>
   );

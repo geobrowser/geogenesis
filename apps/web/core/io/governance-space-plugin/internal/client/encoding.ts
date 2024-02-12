@@ -1,4 +1,5 @@
 import { ClientCore, PluginInstallItem } from '@aragon/sdk-client-common';
+import { VotingMode } from '@geogenesis/sdk';
 import { encodeAbiParameters, encodeFunctionData, hexToBytes } from 'viem';
 
 import { GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS, GEO_SPACE_PLUGIN_REPO_ADDRESS, ZERO_ADDRESS } from '~/core/constants';
@@ -72,7 +73,7 @@ export class GeoPluginClientEncoding extends ClientCore {
   }
 
   // Installation Functions
-  static async getSpacePluginInstallItem({
+  static getSpacePluginInstallItem({
     firstBlockContentUri,
     pluginUpgrader,
     precedessorSpace = ZERO_ADDRESS,
@@ -80,7 +81,7 @@ export class GeoPluginClientEncoding extends ClientCore {
     firstBlockContentUri: string;
     pluginUpgrader: string;
     precedessorSpace?: string;
-  }): Promise<PluginInstallItem> {
+  }): PluginInstallItem {
     // Define the ABI for the prepareInstallation function's inputs. This comes from the
     // `space-build-metadata.json` in our contracts repo, not from the setup plugin's ABIs.
     const prepareInstallationInputs = [
@@ -115,9 +116,9 @@ export class GeoPluginClientEncoding extends ClientCore {
     };
   }
 
-  static async getGovernancePluginInstallItem(params: {
+  static getGovernancePluginInstallItem(params: {
     votingSettings: {
-      votingMode: 0 | 1;
+      votingMode: VotingMode;
       supportThreshold: number;
       minParticipation: number;
       minDuration: bigint;
@@ -126,7 +127,7 @@ export class GeoPluginClientEncoding extends ClientCore {
     initialEditors: `0x${string}`[];
     pluginUpgrader: `0x${string}`;
     memberAccessProposalDuration: bigint;
-  }): Promise<PluginInstallItem> {
+  }): PluginInstallItem {
     // MajorityVotingBase.VotingSettings memory _votingSettings,
     // address[] memory _initialEditors,
     // uint64 _memberAccessProposalDuration,

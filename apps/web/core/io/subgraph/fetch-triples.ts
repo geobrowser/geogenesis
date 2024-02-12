@@ -6,7 +6,7 @@ import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
 
 import { graphql } from './graphql';
-import { NetworkTriple, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamTriple, fromNetworkTriples } from './network-local-mapping';
 
 interface GetFetchTriplesQueryOptions {
   where: string;
@@ -52,7 +52,7 @@ export interface FetchTriplesOptions {
 }
 
 interface NetworkResult {
-  triples: { nodes: NetworkTriple[] };
+  triples: { nodes: SubstreamTriple[] };
 }
 
 export async function fetchTriples(options: FetchTriplesOptions) {

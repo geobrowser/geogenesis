@@ -42,6 +42,11 @@ export enum VoteOption {
   No = 3,
 }
 
+export enum VotingMode {
+  Standard = 0,
+  EarlyExecution = 1,
+}
+
 export type ProposalStatus =
   | 'PROPOSED'
   | 'APPROVED'
