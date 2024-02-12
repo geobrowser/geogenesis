@@ -5,6 +5,7 @@ import { VoteOption } from '@geogenesis/sdk';
 import { useWalletClient } from 'wagmi';
 import { prepareWriteContract, writeContract } from 'wagmi/actions';
 
+import { TEST_MAIN_VOTING_PLUGIN_ADDRESS } from './constants';
 import { abi } from './main-voting-abi';
 
 interface Props {
@@ -21,11 +22,11 @@ export function Vote({ type, onchainProposalId, children }: Props) {
 
     const config = await prepareWriteContract({
       walletClient: wallet,
-      // Main voting plugin address for DAO at 0x9b843a69F456f9422eCfB7247d1344Eb14C40A93
-      address: '0x467E86f1898D81F0D5c6cbf45a1FF3bfcb16ba00',
+      // Main voting plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
+      address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
       abi,
       functionName: 'vote',
-      args: [BigInt(onchainProposalId), VoteOption.Yes, true],
+      args: [BigInt(onchainProposalId), type, true],
     });
 
     const writeResult = await writeContract(config);

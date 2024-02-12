@@ -12,6 +12,7 @@ import { Services } from '~/core/services';
 
 import { Button } from '~/design-system/button';
 
+import { TEST_MAIN_VOTING_PLUGIN_ADDRESS, TEST_SPACE_PLUGIN_ADDRESS } from './constants';
 import { abi } from './main-voting-abi';
 
 const processProposalInputs = [
@@ -79,7 +80,7 @@ export function CreateProposal({ type }: Props) {
       type: 'content',
       version: '1.0.0',
       proposalId: ID.createEntityId(),
-      name: 'Third proposal in the DAO',
+      name: 'Fifth proposal in the DAO',
       actions: [
         {
           entityId: ID.createEntityId(),
@@ -88,7 +89,7 @@ export function CreateProposal({ type }: Props) {
           value: {
             type: 'string',
             id: ID.createValueId(),
-            value: 'Third entity',
+            value: 'Fifth entity',
           },
         },
       ],
@@ -99,16 +100,16 @@ export function CreateProposal({ type }: Props) {
 
     const config = await prepareWriteContract({
       walletClient: wallet,
-      // Main voting plugin address for DAO at 0x9b843a69F456f9422eCfB7247d1344Eb14C40A93
-      address: '0x467E86f1898D81F0D5c6cbf45a1FF3bfcb16ba00',
+      // Main voting plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
+      address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
       abi,
       functionName: 'createProposal',
       args: [
         stringToHex(uri),
         [
           {
-            // Space plugin address for DAO at 0x9b843a69F456f9422eCfB7247d1344Eb14C40A93
-            to: '0xD8EF1082fcc112D79f9E476E6879Ba266fc20796',
+            // Space plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
+            to: TEST_SPACE_PLUGIN_ADDRESS,
             value: BigInt(0),
             data: encodeAbiParameters(processProposalInputs, [1, 2, stringToHex(uri)]),
           },

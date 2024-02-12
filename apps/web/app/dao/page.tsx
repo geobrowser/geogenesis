@@ -9,7 +9,7 @@ import { CreateProposal } from './create-proposal';
 import { Vote } from './vote';
 
 export default async function Page() {
-  const proposals = await fetchProposals({ spaceId: '0x9b843a69F456f9422eCfB7247d1344Eb14C40A93' });
+  const proposals = await fetchProposals({ spaceId: '0xd9abC01d1AEc200FC394C2717d7E14348dC23792' });
 
   return (
     <div className="space-y-4">
@@ -27,19 +27,17 @@ export default async function Page() {
           {proposals.map(p => {
             // convert current time to seconds (instead of milliseconds) and divide the difference
             // between now and end time by seconds in an hour to get the hours remaining
-            const hoursRemaining = Math.floor((p.endTime - Date.now() / 1000) / 3600);
-            const minutesRemaining = Math.floor((p.endTime - Date.now() / 1000) / 60 / 24);
+            const secondsRemaining = Math.floor(p.endTime - Date.now() / 1000);
 
             return (
               <div key={p.id} className="py-4">
-                <p>{p.name}</p>
+                <p className="text-button">{p.name}</p>
                 <p>{p.status}</p>
-                <p>
-                  {hoursRemaining} hours and {minutesRemaining} minutes remaining
-                </p>
+                <p>{secondsRemaining} seconds remaining</p>
                 <div className="flex items-center gap-2">
                   <p>Total votes: {p.proposalVotes.totalCount}</p>
                   <p>Yes: {p.proposalVotes.nodes.filter(p => p.vote === 'YES').length}</p>
+                  <p>No: {p.proposalVotes.nodes.filter(p => p.vote === 'NO').length}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Vote onchainProposalId={p.onchainProposalId} type={VoteOption.Yes}>
