@@ -167,6 +167,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             })
           );
 
+          if (blockNumber % 1000 === 0) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+          }
+
           const mapOutput = message.output?.mapOutput;
 
           if (!mapOutput || mapOutput?.value?.byteLength === 0) {
