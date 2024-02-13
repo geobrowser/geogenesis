@@ -1,28 +1,24 @@
 'use client';
 
-import { Client, CreateDaoParams, DaoCreationSteps, DaoMetadata } from '@aragon/sdk-client';
+import { Client, Context, CreateDaoParams, DaoCreationSteps, DaoMetadata } from '@aragon/sdk-client';
 import { VotingMode } from '@geogenesis/sdk';
 import { getAddress } from 'viem';
 
 import { useWalletClient } from 'wagmi';
 
-import { ZERO_ADDRESS } from '~/core/constants';
-import { Environment } from '~/core/environment';
-import { GeoPluginClientEncoding } from '~/core/io/governance-space-plugin/internal';
-import { GeoPersonalSpacePluginClientEncoding } from '~/core/io/personal-space-plugin/internal';
-import { StorageClient } from '~/core/io/storage/storage';
 import { useAragonSDKContext } from '~/core/state/aragon-dao-store';
-import { getImageHash } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
 
+import { getGovernancePluginInstallItem, getSpacePluginInstallItem } from './encodings';
+
 // this route is only for testing creating a DAO on the frontend
 export function CreateDao() {
-  const { geoPluginContext } = useAragonSDKContext();
+  const { sdkContextParams } = useAragonSDKContext();
   const { data: wallet } = useWalletClient();
 
-  if (!geoPluginContext) throw new Error('geoPluginContext is undefined');
-  const client: Client = new Client(geoPluginContext);
+  if (!sdkContextParams) throw new Error('geoPluginContext is undefined');
+  const client: Client = new Client(new Context(sdkContextParams));
 
   const handleCreateDao = async () => {
     const metadata: DaoMetadata = {
@@ -45,7 +41,7 @@ export function CreateDao() {
     //   Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs
     // ).uploadObject(metadata);
 
-    const spacePluginInstallItem = GeoPluginClientEncoding.getSpacePluginInstallItem({
+    const spacePluginInstallItem = getSpacePluginInstallItem({
       firstBlockContentUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
       // @HACK: Using a different upgrader from the governance plugin to work around
       // a limitation in Aragon.
@@ -53,7 +49,7 @@ export function CreateDao() {
       precedessorSpace: getAddress('0xd93A5fCf65b520BA24364682aCcf50dd2F9aC18B'), // Agriculture
     });
 
-    const governancePluginConfig: Parameters<typeof GeoPluginClientEncoding.getGovernancePluginInstallItem>[0] = {
+    const governancePluginConfig: Parameters<typeof getGovernancePluginInstallItem>[0] = {
       votingSettings: {
         votingMode: VotingMode.Standard,
         supportThreshold: 1, // example value
@@ -76,7 +72,7 @@ export function CreateDao() {
       pluginUpgrader: getAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // @TODO: Use deployer wallet
     };
 
-    const governancePluginInstallItem = GeoPluginClientEncoding.getGovernancePluginInstallItem(governancePluginConfig);
+    const governancePluginInstallItem = getGovernancePluginInstallItem(governancePluginConfig);
 
     const createParams: CreateDaoParams = {
       metadataUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
