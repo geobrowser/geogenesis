@@ -1,6 +1,7 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
+import { createSink, createStream } from '@substreams/sink';
 import { Effect, Stream } from 'effect';
 import * as db from 'zapatos/db';
 
@@ -12,7 +13,6 @@ import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { groupProposalsByType, mapContentProposalsToSchema } from './proposals/map-proposals';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
-import { createSink, createStream } from './substreams.js/sink/src';
 import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';

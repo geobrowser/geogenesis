@@ -49,13 +49,13 @@ export function mapContentProposalsToSchema(
   blockNumber: number,
   cursor: string
 ): Effect.Effect<
-  never,
-  SpaceWithPluginAddressNotFoundError,
   {
     proposals: S.proposals.Insertable[];
     proposedVersions: S.proposed_versions.Insertable[];
     actions: S.actions.Insertable[];
-  }
+  },
+  SpaceWithPluginAddressNotFoundError,
+  never
 > {
   return Effect.gen(function* (unwrap) {
     const proposalsToWrite: S.proposals.Insertable[] = [];

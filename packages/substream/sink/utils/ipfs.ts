@@ -1,4 +1,5 @@
 import { Duration, Effect, Either, Schedule } from 'effect';
+import type { TimeoutException } from 'effect/Cause';
 
 import { IPFS_GATEWAY } from '../constants/constants.js';
 import { SpaceWithPluginAddressNotFoundError } from '../errors.js';
@@ -35,9 +36,9 @@ class UnableToParseJsonError extends Error {
 function getFetchIpfsContentEffect(
   uri: string
 ): Effect.Effect<
-  never,
-  UnableToParseBase64Error | FailedFetchingIpfsContentError | UnableToParseJsonError,
-  UriData | null
+  UriData | null,
+  UnableToParseBase64Error | FailedFetchingIpfsContentError | UnableToParseJsonError | TimeoutException,
+  never
 > {
   return Effect.gen(function* (unwrap) {
     if (uri.startsWith('data:application/json;base64,')) {
@@ -75,7 +76,7 @@ function getFetchIpfsContentEffect(
       const response = yield* unwrap(
         // Attempt to fetch with jittered exponential backoff for 60 seconds before failing
         Effect.retry(
-          ipfsFetchEffect,
+          ipfsFetchEffect.pipe(Effect.timeout(Duration.seconds(60))),
           Schedule.exponential(100).pipe(
             Schedule.jittered,
             Schedule.compose(Schedule.elapsed),
@@ -101,7 +102,7 @@ function getFetchIpfsContentEffect(
   });
 }
 
-export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<never, never, FullEntry | null> {
+export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry | null> {
   return Effect.gen(function* (unwrap) {
     const fetchIpfsContentEffect = getFetchIpfsContentEffect(entry.uri);
 
@@ -154,9 +155,9 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<never, neve
 export function getProposalFromMetadata(
   proposal: SubstreamProposal
 ): Effect.Effect<
-  never,
+  ContentProposal | SubspaceProposal | MembershipProposal | null,
   SpaceWithPluginAddressNotFoundError,
-  ContentProposal | SubspaceProposal | MembershipProposal | null
+  never
 > {
   return Effect.gen(function* (unwrap) {
     const maybeSpaceIdForPlugin = yield* unwrap(getSpaceForVotingPlugin(getChecksumAddress(proposal.pluginAddress)));
@@ -190,6 +191,9 @@ export function getProposalFromMetadata(
           break;
         case 'UnableToParseJsonError':
           console.error(`Unable to parse JSON when reading content from uri ${proposal.metadataUri}`, error);
+          break;
+        case 'TimeoutException':
+          console.error(`Timed out when fetching IPFS content for uri ${proposal.metadataUri}`, error);
           break;
         default:
           console.error(`Unknown error when fetching IPFS content for uri ${proposal.metadataUri}`, error);

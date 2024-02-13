@@ -26,9 +26,9 @@ export function mapVotes(
   blockNumber: number,
   timestamp: number
 ): Effect.Effect<
-  never,
+  S.proposal_votes.Insertable[],
   ProposalWithOnchainProposalIdAndSpaceIdNotFoundError | SpaceWithPluginAddressNotFoundError,
-  S.proposal_votes.Insertable[]
+  never
 > {
   return Effect.gen(function* (unwrap) {
     const schemaVotes: S.proposal_votes.Insertable[] = [];
