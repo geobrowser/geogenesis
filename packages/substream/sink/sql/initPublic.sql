@@ -30,6 +30,7 @@ CREATE TABLE public.spaces (
     id text PRIMARY KEY,
     created_at_block integer NOT NULL,
     is_root_space boolean NOT NULL,
+    space_plugin_address text,
     main_voting_plugin_address text,
     member_access_plugin_address text,
     configuration_id text REFERENCES public.geo_entities(id)
@@ -68,15 +69,25 @@ CREATE TABLE public.log_entries (
     json text
 );
 
+CREATE TYPE public.proposal_type as ENUM ('content', 'add_subspace', 'remove_subspace', 'add_editor', 'remove_editor', 'add_member', 'remove_member');
+CREATE TYPE public.proposal_status as ENUM ('proposed', 'approved', 'rejected', 'canceled', 'executed');
+
+-- Maps to 2 or 3 onchain
+CREATE TYPE public.vote_type as ENUM ('yes', 'no');
+
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,
+    onchain_proposal_id text NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
     name text,
     description text,
+    type proposal_type NOT NULL,
+    status proposal_status NOT NULL,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
-    status text NOT NULL
+    start_time integer NOT NULL,
+    end_time integer NOT NULL
 );
 
 CREATE TABLE public.proposed_versions (
@@ -167,6 +178,21 @@ CREATE TABLE public.versions (
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
+-- @TODO: Proposed Member
+-- @TODO: Proposed Editor
+-- @TODO: Proposed Subspace
+
+CREATE TABLE public.proposal_votes (
+    PRIMARY KEY (onchain_proposal_id, space_id, account_id),
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
+    onchain_proposal_id text,
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    account_id text NOT NULL REFERENCES public.accounts(id),
+    vote vote_type NOT NULL,
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL
+);
+
 CREATE TABLE public.actions (
     id text PRIMARY KEY NOT NULL,
     action_type text NOT NULL,
@@ -176,13 +202,12 @@ CREATE TABLE public.actions (
     value_id text,
     number_value text,
     string_value text,
-    entity_value text REFERENCES public.geo_entities(id),
+    entity_value_id text REFERENCES public.geo_entities(id),
     array_value text [],
     proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
-    version_id text REFERENCES public.versions(id) NOT NULL,
+    -- version_id text REFERENCES public.versions(id) NOT NULL,
     created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    cursor text NOT NULL
+    created_at_block integer NOT NULL
 );
 
 CREATE TABLE public.triple_versions (

@@ -2,10 +2,10 @@ pub mod helpers;
 mod pb;
 
 use pb::schema::{
-    EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
+    DaoAction, EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
     GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
-    GeoSpaceCreated, GeoSpacesCreated, RoleChange, RoleChanges, SuccessorSpaceCreated,
-    SuccessorSpacesCreated,
+    GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalsCreated, RoleChange, RoleChanges,
+    SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
 };
 
 use substreams::store::*;
@@ -23,7 +23,10 @@ use_contract!(main_voting_plugin, "abis/main-voting-plugin.json");
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
 use legacy_space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
-use main_voting_plugin::events::MembersAdded as EditorsAddedEvent;
+use main_voting_plugin::events::{
+    MembersAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
+    VoteCast as VoteCastEvent,
+};
 use space::events::SuccessorSpaceCreated as SuccessSpaceCreatedEvent;
 use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
 
@@ -306,6 +309,94 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
     Ok(EditorsAdded { editors })
 }
 
+/**
+ * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
+ * represent changes to content, membership (editor or member), governance changes, subspace
+ * membership, or anything else that can be executed by a DAO.
+ *
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ *
+ * Proposals require encoding a "callback" that represents the action to be taken if the proposal
+ * succeeds. For example, if a proposal is to add a new editor to the space, the callback would
+ * be the encoded function call to add the editor to the space.
+ *
+ * ```ts
+ * {
+ *   to: `0x123...`, // The address of the membership contract
+ *   data: `0x123...`, // The encoded function call parameters
+ * }
+ * ```
+ */
+#[substreams::handlers::map]
+fn map_proposals_created(
+    block: eth::v2::Block,
+) -> Result<ProposalsCreated, substreams::errors::Error> {
+    let proposals: Vec<ProposalCreated> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(proposal_created) = ProposalCreatedEvent::match_and_decode(log) {
+                // @TODO: Should we return none if actions is empty?
+                return Some(ProposalCreated {
+                    actions: proposal_created
+                        .actions
+                        .iter()
+                        .map(|action| DaoAction {
+                            to: format_hex(&action.0),
+                            value: action.1.to_u64(),
+                            data: action.2.clone(),
+                        })
+                        .collect(),
+                    allow_failure_map: proposal_created.allow_failure_map.to_string(),
+                    proposal_id: proposal_created.proposal_id.to_string(),
+                    creator: format_hex(&proposal_created.creator),
+                    start_time: proposal_created.start_date.to_string(),
+                    end_time: proposal_created.end_date.to_string(),
+                    metadata_uri: String::from_utf8(proposal_created.metadata).unwrap(),
+                    plugin_address: format_hex(&log.address()),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(ProposalsCreated { proposals })
+}
+
+/**
+ * Votes represent a vote on a proposal in a DAO-based space.
+ *
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ */
+#[substreams::handlers::map]
+fn map_votes_cast(block: eth::v2::Block) -> Result<VotesCast, substreams::errors::Error> {
+    let votes: Vec<VoteCast> = block
+        .logs()
+        .filter_map(|log| {
+            // @TODO: Should we track our plugins/daos and only emit if the address is one of them?
+            if let Some(vote_cast) = VoteCastEvent::match_and_decode(log) {
+                return Some(VoteCast {
+                    // The onchain proposal id is an incrementing integer. We represent
+                    // the proposal with a more unique id in the sink, so we remap the
+                    // name here to disambiguate between the onchain id and the sink id.
+                    onchain_proposal_id: vote_cast.proposal_id.to_string(),
+                    voter: format_hex(&vote_cast.voter),
+                    plugin_address: format_hex(&log.address()),
+                    vote_option: vote_cast.vote_option.to_u64(),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(VotesCast { votes })
+}
+
 #[substreams::handlers::map]
 fn geo_out(
     entries: EntriesAdded,
@@ -313,8 +404,10 @@ fn geo_out(
     profiles_registered: GeoProfilesRegistered,
     spaces_created: GeoSpacesCreated,
     governance_plugins_created: GeoGovernancePluginsCreated,
-    // successor_spaces_created: SuccessorSpacesCreated,
     editors_added: EditorsAdded,
+    proposals_created: ProposalsCreated,
+    votes_cast: VotesCast,
+    // successor_spaces_created: SuccessorSpacesCreated,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
     let role_changes = role_changes.changes;
@@ -322,6 +415,8 @@ fn geo_out(
     let spaces_created = spaces_created.spaces;
     let governance_plugins_created = governance_plugins_created.plugins;
     let editors_added = editors_added.editors;
+    let proposals_created = proposals_created.proposals;
+    let votes_cast = votes_cast.votes;
     // let successor_spaces_created = successor_spaces_created.spaces;
 
     Ok(GeoOutput {
@@ -331,6 +426,8 @@ fn geo_out(
         spaces_created,
         governance_plugins_created,
         editors_added,
+        proposals_created,
+        votes_cast,
         // successor_spaces_created,
     })
 }

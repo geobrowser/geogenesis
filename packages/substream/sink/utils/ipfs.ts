@@ -1,7 +1,24 @@
-import { Effect, Either, Schedule } from 'effect';
+import { Duration, Effect, Either, Schedule } from 'effect';
 
 import { IPFS_GATEWAY } from '../constants/constants.js';
-import type { Entry, FullEntry, UriData } from '../zod.js';
+import { SpaceWithPluginAddressNotFoundError } from '../errors.js';
+import { slog } from '../utils.js';
+import {
+  type ContentProposal,
+  type Entry,
+  type FullEntry,
+  type MembershipProposal,
+  type SubspaceProposal,
+  type SubstreamProposal,
+  type UriData,
+  ZodContentProposal,
+  ZodMembershipProposal,
+  ZodProposalMetadata,
+  ZodSubspaceProposal,
+} from '../zod.js';
+import { isValidAction } from './actions.js';
+import { getChecksumAddress } from './get-checksum-address.js';
+import { getSpaceForVotingPlugin } from './get-space-for-voting-plugin.js';
 
 class UnableToParseBase64Error extends Error {
   _tag: 'UnableToParseBase64Error' = 'UnableToParseBase64Error';
@@ -55,8 +72,18 @@ function getFetchIpfsContentEffect(
         },
       });
 
-      // @TODO: Add max retry time before erroring out
-      const response = yield* unwrap(Effect.retry(ipfsFetchEffect, Schedule.exponential('1 seconds')));
+      const response = yield* unwrap(
+        // Attempt to fetch with jittered exponential backoff for 60 seconds before failing
+        Effect.retry(
+          ipfsFetchEffect,
+          Schedule.exponential(100).pipe(
+            Schedule.jittered,
+            Schedule.compose(Schedule.elapsed),
+            // Retry for 1 minute.
+            Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(60)))
+          )
+        )
+      );
 
       return yield* unwrap(
         Effect.tryPromise({
@@ -111,5 +138,148 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<never, neve
       ...entry,
       uriData: ipfsContent,
     };
+  });
+}
+
+/**
+ * We don't know the content type of the proposal until we fetch the IPFS content and parse it.
+ *
+ * 1. Verify that the space exists for the plugin address
+ * 2. Fetch the IPFS content
+ * 3. Parse the IPFS content to get the "type"
+ * 4. Return an object matching the type and the expected contents.
+ *
+ * Later on we map this to the database schema and write the proposal to the database.
+ */
+export function getProposalFromMetadata(
+  proposal: SubstreamProposal
+): Effect.Effect<
+  never,
+  SpaceWithPluginAddressNotFoundError,
+  ContentProposal | SubspaceProposal | MembershipProposal | null
+> {
+  return Effect.gen(function* (unwrap) {
+    const maybeSpaceIdForPlugin = yield* unwrap(getSpaceForVotingPlugin(getChecksumAddress(proposal.pluginAddress)));
+
+    if (!maybeSpaceIdForPlugin) {
+      slog({
+        message: `Matching space in Proposal not found for plugin address ${proposal.pluginAddress}`,
+        requestId: '-1',
+      });
+
+      return null;
+    }
+
+    slog({
+      message: `Fetching IPFS content for proposal, ${JSON.stringify(proposal, null, 2)}`,
+      requestId: '-1',
+    });
+
+    const fetchIpfsContentEffect = getFetchIpfsContentEffect(proposal.metadataUri);
+    const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
+
+    if (Either.isLeft(maybeIpfsContent)) {
+      const error = maybeIpfsContent.left;
+
+      switch (error._tag) {
+        case 'UnableToParseBase64Error':
+          console.error(`Unable to parse base64 string ${proposal.metadataUri}`, error);
+          break;
+        case 'FailedFetchingIpfsContentError':
+          console.error(`Failed fetching IPFS content from uri ${proposal.metadataUri}`, error);
+          break;
+        case 'UnableToParseJsonError':
+          console.error(`Unable to parse JSON when reading content from uri ${proposal.metadataUri}`, error);
+          break;
+        default:
+          console.error(`Unknown error when fetching IPFS content for uri ${proposal.metadataUri}`, error);
+          break;
+      }
+
+      return null;
+    }
+
+    const ipfsContent = maybeIpfsContent.right;
+
+    if (!ipfsContent) {
+      return null;
+    }
+
+    const validIpfsMetadata = ZodProposalMetadata.safeParse(ipfsContent);
+
+    if (!validIpfsMetadata.success) {
+      // @TODO: Effectify error handling
+      console.error('Failed to parse IPFS metadata', validIpfsMetadata.error);
+      return null;
+    }
+
+    switch (validIpfsMetadata.data.type) {
+      case 'content': {
+        const parsedContent = ZodContentProposal.safeParse(ipfsContent);
+
+        if (!parsedContent.success) {
+          return null;
+        }
+
+        const mappedProposal: ContentProposal = {
+          ...proposal,
+          type: validIpfsMetadata.data.type,
+          name: validIpfsMetadata.data.name ?? null,
+          proposalId: parsedContent.data.proposalId,
+          onchainProposalId: proposal.proposalId,
+          actions: parsedContent.data.actions.filter(isValidAction),
+          creator: getChecksumAddress(proposal.creator),
+          space: getChecksumAddress(maybeSpaceIdForPlugin),
+        };
+
+        return mappedProposal;
+      }
+
+      case 'add_subspace':
+      case 'remove_subspace': {
+        const parsedSubspace = ZodSubspaceProposal.safeParse(ipfsContent);
+
+        if (!parsedSubspace.success) {
+          return null;
+        }
+
+        const mappedProposal: SubspaceProposal = {
+          ...proposal,
+          type: validIpfsMetadata.data.type,
+          name: validIpfsMetadata.data.name ?? null,
+          proposalId: parsedSubspace.data.proposalId,
+          onchainProposalId: proposal.proposalId,
+          subspace: getChecksumAddress(parsedSubspace.data.subspace),
+          creator: getChecksumAddress(proposal.creator),
+          space: getChecksumAddress(maybeSpaceIdForPlugin),
+        };
+
+        return mappedProposal;
+      }
+
+      case 'add_editor':
+      case 'remove_editor':
+      case 'add_member':
+      case 'remove_member': {
+        const parsedMembership = ZodMembershipProposal.safeParse(ipfsContent);
+
+        if (!parsedMembership.success) {
+          return null;
+        }
+
+        const mappedProposal: MembershipProposal = {
+          ...proposal,
+          type: validIpfsMetadata.data.type,
+          name: validIpfsMetadata.data.name ?? null,
+          proposalId: parsedMembership.data.proposalId,
+          onchainProposalId: proposal.proposalId,
+          userAddress: getChecksumAddress(parsedMembership.data.userAddress),
+          creator: getChecksumAddress(proposal.creator),
+          space: getChecksumAddress(maybeSpaceIdForPlugin),
+        };
+
+        return mappedProposal;
+      }
+    }
   });
 }

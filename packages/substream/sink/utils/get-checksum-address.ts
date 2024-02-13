@@ -8,7 +8,7 @@ import { getAddress } from 'viem';
  * have consistent addresses throughout the data service and also aligns
  * with how addresses are represented on Polygonscan.
  */
-export function getChecksumAddress(address: string): string {
+export function getChecksumAddress(address: string): `0x${string}` {
   /**
    * Using the polygon chain id (137) seems to checksum the address
    * differently than what you get on polygonscan. If we don't specify

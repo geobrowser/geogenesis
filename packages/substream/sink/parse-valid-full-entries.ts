@@ -3,7 +3,7 @@ import { getChecksumAddress } from './utils/get-checksum-address';
 import { type FullEntry, ZodUriData } from './zod';
 
 // Filter out any invalid actions from entries
-export function parseValidFullEntries(nonValidatedFullEntries: FullEntry[]): FullEntry[] {
+export function parseValidActionsForFullEntries(nonValidatedFullEntries: FullEntry[]): FullEntry[] {
   const fullEntries: FullEntry[] = [];
 
   for (const entry of nonValidatedFullEntries) {

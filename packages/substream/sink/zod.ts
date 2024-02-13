@@ -132,6 +132,132 @@ export const ZodEditorsAddedStreamResponse = z.object({
 });
 
 /**
+ * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
+ * represent changes to content, membership (editor or member), governance changes, subspace
+ * membership, or anything else that can be executed by a DAO.
+ *
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ *
+ * Proposals require encoding a "callback" that represents the action to be taken if the proposal
+ * succeeds. For example, if a proposal is to add a new editor to the space, the callback would
+ * be the encoded function call to add the editor to the space.
+ *
+ * ```ts
+ * {
+ *   to: `0x123...`, // The address of the membership contract
+ *   data: `0x123...`, // The encoded function call parameters
+ * }
+ * ```
+ */
+export const ZodSubstreamProposal = z.object({
+  proposalId: z.string(),
+  pluginAddress: z.string(),
+  creator: z.string(),
+  metadataUri: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
+});
+
+export const ZodProposal = z.object({
+  proposalId: z.string(),
+  space: z.string(),
+  creator: z.string(),
+  metadataUri: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
+});
+
+// DAO-based spaces can have different proposal types. We need to be able
+// to parse the proposal type in order to validate the contents of the
+// proposal and write to the sink correctly.
+export const ZodProposalMetadata = z.object({
+  type: z.enum([
+    'content',
+    'add_subspace',
+    'remove_subspace',
+    'add_editor',
+    'remove_editor',
+    'add_member',
+    'remove_member',
+  ]),
+  name: z.string().optional(),
+  // We version the data structured used to represent proposal metadata. Each
+  // proposal type has their own metadata and versioning that we can change
+  // independently of other proposal types.
+  version: z.string(),
+});
+
+export type ProposalMetadata = z.infer<typeof ZodProposalMetadata>;
+
+export type SubstreamProposal = z.infer<typeof ZodSubstreamProposal>;
+export type Proposal = z.infer<typeof ZodProposal>;
+
+export const ZodContentProposal = z.object({
+  proposalId: z.string(),
+  actions: z.array(ZodAction),
+});
+
+export type ContentProposal = Proposal & {
+  type: 'content';
+  name: string | null;
+  proposalId: string;
+  onchainProposalId: string;
+  actions: Action[];
+};
+
+export const ZodMembershipProposal = z.object({
+  proposalId: z.string(),
+  userAddress: z.string(),
+});
+
+export type MembershipProposal = Proposal & {
+  type: 'add_member' | 'remove_member' | 'add_editor' | 'remove_editor';
+  name: string | null;
+  proposalId: string;
+  onchainProposalId: string;
+  userAddress: `0x${string}`;
+};
+
+export const ZodSubspaceProposal = z.object({
+  proposalId: z.string(),
+  subspace: z.string(),
+});
+
+export type SubspaceProposal = Proposal & {
+  type: 'add_subspace' | 'remove_subspace';
+  name: string | null;
+  proposalId: string;
+  onchainProposalId: string;
+  subspace: `0x${string}`;
+};
+
+export const ZodProposalStreamResponse = z.object({
+  proposalsCreated: z.array(ZodSubstreamProposal).min(1),
+});
+
+/**
+ * Votes represent a vote on a proposal in a DAO-based space.
+ *
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ */
+export const ZodVote = z.object({
+  onchainProposalId: z.string(),
+  voter: z.string(),
+  voteOption: z.string(), // corresponds to VoteOption enum
+  pluginAddress: z.string(),
+});
+
+export type Vote = z.infer<typeof ZodVote>;
+
+export const ZodVotesCastStreamResponse = z.object({
+  votesCast: z.array(ZodVote).min(1),
+});
+
+/**
  * Roles changes represent permission changes in a legacy space.
  *
  * The data model for DAO-based spaces works slightly differently than in legacy spaces.

@@ -7,23 +7,30 @@ import * as db from 'zapatos/db';
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
 import { populateWithFullEntries } from './entries/populate-entries';
-import { parseValidFullEntries } from './parse-valid-full-entries';
+import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import { groupProposalsByType, mapContentProposalsToSchema } from './proposals/map-proposals';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { createSink, createStream } from './substreams.js/sink/src';
 import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
-import { getEntryWithIpfsContent } from './utils/ipfs';
+import { getEntryWithIpfsContent, getProposalFromMetadata } from './utils/ipfs';
 import { pool } from './utils/pool';
+import { mapVotes } from './votes/map-votes';
 import {
+  type ContentProposal,
   type FullEntry,
+  type MembershipProposal,
+  type SubspaceProposal,
   ZodEditorsAddedStreamResponse,
   ZodEntryStreamResponse,
   ZodGovernancePluginsCreatedStreamResponse,
+  ZodProposalStreamResponse,
   ZodRoleChangeStreamResponse,
   ZodSpacePluginCreatedStreamResponse,
+  ZodVotesCastStreamResponse,
 } from './zod';
 
 export class InvalidPackageError extends Error {
@@ -60,6 +67,14 @@ export class CouldNotReadCursorError extends Error {
 
 export class CouldNotWriteSpacesError extends Error {
   _tag: 'CouldNotWriteSpacesError' = 'CouldNotWriteSpacesError';
+}
+
+export class CouldNotWriteProposalsError extends Error {
+  _tag: 'CouldNotWriteProposalsError' = 'CouldNotWriteProposalsError';
+}
+
+export class CouldNotWriteVotesError extends Error {
+  _tag: 'CouldNotWriteVotesError' = 'CouldNotWriteVotesError';
 }
 
 interface StreamConfig {
@@ -145,19 +160,16 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const blockNumber = Number(message.clock?.number.toString());
           const timestamp = Number(message.clock?.timestamp?.seconds.toString());
 
-          if (blockNumber % 1000 === 0) {
-            slog({
-              requestId: message.cursor,
-              message: `Processing block ${blockNumber}`,
-            });
-          }
-
           yield* _(
             Effect.tryPromise({
               try: () => writeCursor(cursor, blockNumber),
               catch: () => new CouldNotWriteCursorError(),
             })
           );
+
+          if (blockNumber % 1000 === 0) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+          }
 
           const mapOutput = message.output?.mapOutput;
 
@@ -180,6 +192,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
           const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
+          const proposalResponse = ZodProposalStreamResponse.safeParse(jsonOutput);
+          const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
 
           /**
            * @TODO: De-duplicate any spaces being added with both the space plugin governance
@@ -199,6 +213,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
            * indexing time doesn't balloon.
            */
           if (spacePluginCreatedResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             const spaces = mapSpaces(spacePluginCreatedResponse.data.spacesCreated, blockNumber);
 
             slog({
@@ -222,6 +238,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (governancePluginsCreatedResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             const spaces = mapGovernanceToSpaces(
               governancePluginsCreatedResponse.data.governancePluginsCreated,
               blockNumber
@@ -256,6 +274,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
            * DAO-based spaces.
            */
           if (editorsAddedResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             slog({
               requestId: message.cursor,
               message: `Writing editor role for accounts ${editorsAddedResponse.data.editorsAdded
@@ -279,7 +299,105 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             });
           }
 
+          /**
+           * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
+           * represent changes to content, membership (editor or member), governance changes, subspace
+           * membership, or anything else that can be executed by a DAO.
+           *
+           * Currently we use a simple majority voting model, where a proposal requires 51% of the
+           * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+           * _and_ members can create them.
+           */
+          if (proposalResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
+            slog({
+              requestId: message.cursor,
+              message: `Processing ${proposalResponse.data.proposalsCreated.length} proposals`,
+            });
+
+            slog({
+              requestId: message.cursor,
+              message: `Gathering IPFS content for ${proposalResponse.data.proposalsCreated.length} proposals`,
+            });
+
+            const maybeProposals = yield* _(
+              Effect.all(
+                proposalResponse.data.proposalsCreated.map(proposal => getProposalFromMetadata(proposal)),
+                {
+                  concurrency: 20,
+                }
+              )
+            );
+
+            const proposals = maybeProposals.filter(
+              (maybeProposal): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal =>
+                maybeProposal !== null
+            );
+
+            const { contentProposals } = groupProposalsByType(proposals);
+            const schemaContentProposals = yield* _(mapContentProposalsToSchema(contentProposals, blockNumber, cursor));
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${contentProposals.length} proposals to DB`,
+            });
+
+            // @TODO: Put this in a transaction since all these writes are related
+            yield* _(
+              Effect.either(
+                Effect.tryPromise({
+                  try: async () => {
+                    // @TODO: Batch since there might be postgres byte limits. See upsertChunked
+                    await Promise.all([
+                      db.insert('proposals', schemaContentProposals.proposals).run(pool),
+                      db.insert('proposed_versions', schemaContentProposals.proposedVersions).run(pool),
+                      db.insert('actions', schemaContentProposals.actions).run(pool),
+                    ]);
+                  },
+                  catch: error => {
+                    slog({
+                      requestId: message.cursor,
+                      message: `Failed to write proposals to DB ${error}`,
+                      level: 'error',
+                    });
+
+                    return error;
+                  },
+                })
+              )
+            );
+          }
+
+          if (votesCast.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${votesCast.data.votesCast.length} votes to DB in block`,
+            });
+
+            const schemaVotes = yield* _(mapVotes(votesCast.data.votesCast, blockNumber, timestamp));
+
+            yield* _(
+              Effect.either(
+                Effect.tryPromise({
+                  try: () => db.insert('proposal_votes', schemaVotes).run(pool),
+                  catch: error => {
+                    slog({
+                      requestId: message.cursor,
+                      message: `Failed to write votes to DB ${error}`,
+                      level: 'error',
+                    });
+                  },
+                })
+              )
+            );
+          }
+
           if (entryResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             slog({
               requestId: message.cursor,
               message: `Processing ${entryResponse.data.entries.length} entries`,
@@ -305,7 +423,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               (maybeFullEntry): maybeFullEntry is FullEntry => maybeFullEntry !== null
             );
 
-            const validFullEntries = parseValidFullEntries(nonValidatedFullEntries);
+            const validFullEntries = parseValidActionsForFullEntries(nonValidatedFullEntries);
 
             slog({
               requestId: message.cursor,
@@ -363,6 +481,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (roleChangeResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
             for (const roleChange of roleChangeResponse.data.roleChanges) {
               const { granted, revoked } = roleChange;
 

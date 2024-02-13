@@ -22,6 +22,7 @@
     "@geogenesis/action-schema": "workspace:*",
     "@geogenesis/contracts": "workspace:*",
     "@geogenesis/ids": "workspace:*",
+    "@geogenesis/sdk": "workspace:*",
     "@liveblocks/client": "^1.0.0",
     "@liveblocks/react": "^1.0.0",
     "@mobily/ts-belt": "^4.0.0-rc.2",

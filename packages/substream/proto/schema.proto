@@ -198,6 +198,65 @@ message EditorsAdded {
   repeated EditorAdded editors = 1;
 }
 
+/**
+ * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
+ * represent changes to content, membership (editor or member), governance changes, subspace
+ * membership, or anything else that can be executed by a DAO.
+ *
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ *
+ * Proposals require encoding a "callback" that represents the action to be taken if the proposal
+ * succeeds. For example, if a proposal is to add a new editor to the space, the callback would
+ * be the encoded function call to add the editor to the space.
+ *
+ * ```ts
+ * {
+ *   to: `0x123...`, // The address of the membership contract
+ *   data: `0x123...`, // The encoded function call parameters
+ * }
+ * ```
+ */
+message DaoAction {
+  string to = 1;
+  uint64 value = 2;
+  bytes data = 3;
+}
+
+message ProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string metadata_uri = 5;
+  repeated DaoAction actions = 6;
+  string allow_failure_map = 7;
+  string plugin_address = 8;
+}
+
+message ProposalsCreated {
+  repeated ProposalCreated proposals = 1;
+}
+
+/**
+ * Votes represent a vote on a proposal in a DAO-based space.
+ * 
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ */
+message VoteCast {
+  string onchain_proposal_id = 1;
+  string voter = 2;
+  uint64 vote_option = 3;
+  string plugin_address = 5;
+}
+
+message VotesCast {
+  repeated VoteCast votes = 1;
+}
+
 message GeoOutput {
   repeated EntryAdded entries = 1;
   repeated RoleChange role_changes = 2;
@@ -205,5 +264,7 @@ message GeoOutput {
   repeated GeoSpaceCreated spaces_created = 4;
   repeated GeoGovernancePluginCreated governance_plugins_created = 5;
   repeated EditorAdded editors_added = 6;
+  repeated ProposalCreated proposals_created = 7;
+  repeated VoteCast votes_cast = 8;
   // repeated SuccessorSpaceCreated successor_spaces_created = 6;
 }

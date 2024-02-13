@@ -268,12 +268,16 @@ const account: s.accounts.Insertable = {
 
 const proposal: s.proposals.Insertable = {
   id: '0',
+  onchain_proposal_id: '-1',
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
   created_at: ROOT_SPACE_CREATED_AT,
   space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
-  status: 'APPROVED',
+  type: 'content',
+  status: 'approved',
+  start_time: ROOT_SPACE_CREATED_AT,
+  end_time: ROOT_SPACE_CREATED_AT,
 };
 
 export class BootstrapRootError extends Error {

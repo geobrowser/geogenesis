@@ -1,17 +1,17 @@
-import { Action, Entity, OmitStrict, ProposedVersion, Space, Triple, Value } from '~/core/types';
+import { Action, Entity, OmitStrict, ProposedVersion, Space, Triple, Value, Vote } from '~/core/types';
 
-type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
+type NetworkNumberValue = { valueType: 'number'; numberValue: string };
 
-type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
+type NetworkStringValue = { valueType: 'string'; stringValue: string };
 
-type NetworkImageValue = { valueType: 'IMAGE'; stringValue: string };
+type NetworkImageValue = { valueType: 'image'; stringValue: string };
 
 // Right now we can end up with a null entityValue until we handle triple validation on the subgraph
-type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
+type NetworkEntityValue = { valueType: 'entity'; entityValue: { id: string; name: string | null } };
 
-type NetworkDateValue = { valueType: 'DATE'; stringValue: string };
+type NetworkDateValue = { valueType: 'date'; stringValue: string };
 
-type NetworkUrlValue = { valueType: 'URL'; stringValue: string };
+type NetworkUrlValue = { valueType: 'url'; stringValue: string };
 
 type NetworkValue =
   | NetworkNumberValue
@@ -21,7 +21,7 @@ type NetworkValue =
   | NetworkDateValue
   | NetworkUrlValue;
 
-export type NetworkTriple = NetworkValue & {
+export type SubstreamTriple = NetworkValue & {
   id: string;
   entity: { id: string; name: string | null };
   attribute: { id: string; name: string | null };
@@ -30,29 +30,20 @@ export type NetworkTriple = NetworkValue & {
   space: Space;
 };
 
-export type NetworkAction = OmitStrict<NetworkTriple, 'space' | 'isProtected'> &
-  NetworkValue & {
-    actionType: 'CREATE' | 'DELETE';
-  };
-
-export type SubstreamNetworkAction = OmitStrict<NetworkTriple, 'space' | 'isProtected'> &
+export type SubstreamAction = OmitStrict<SubstreamTriple, 'space' | 'isProtected'> &
   NetworkValue & {
     actionType: 'createTriple' | 'deleteTriple';
     // @TODO: This should be a reference
     entityValue: string | null;
   };
 
-export type NetworkEntity = Entity & {
-  entityOf: ({ space: Space } & NetworkTriple)[];
-};
-
-export type SubstreamNetworkEntity = OmitStrict<Entity, 'triples'> & {
+export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
   // versionsByEntityId: { nodes: { tripleVersions: { nodes: { triple: NetworkTriple }[] } }[] };
-  triplesByEntityId: { nodes: NetworkTriple[] };
+  triplesByEntityId: { nodes: SubstreamTriple[] };
 };
 
 export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> & {
-  actions: { nodes: SubstreamNetworkAction[] };
+  actions: { nodes: SubstreamAction[] };
 
   // The NetworkVersion does not have a name or avatar associated
   // with the createdBy field
@@ -67,66 +58,72 @@ export type SubstreamVersion = {
   createdAt: number;
   createdAtBlock: string;
   spaceId: string;
-  actions: { nodes: SubstreamNetworkAction[] };
+  actions: { nodes: SubstreamAction[] };
   entity: {
     id: string;
     name: string;
   };
-  tripleVersions: { nodes: { triple: NetworkTriple }[] };
+  tripleVersions: { nodes: { triple: SubstreamTriple }[] };
 };
 
 export type SubstreamProposal = {
   id: string;
+  onchainProposalId: string;
   createdById: string;
   createdAt: number;
   createdAtBlock: string;
   name: string | null;
   description: string | null;
   spaceId: string;
+  startTime: number;
+  endTime: number;
   status: 'APPROVED';
+  proposalVotes: { nodes: Vote[]; totalCount: number };
   proposedVersions: { nodes: SubstreamProposedVersion[] };
 };
 
-export function extractValue(networkTriple: NetworkTriple | NetworkAction): Value {
+export function extractValue(networkTriple: SubstreamTriple | SubstreamAction): Value {
   switch (networkTriple.valueType) {
-    case 'STRING':
+    case 'string':
       return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
-    case 'IMAGE':
+    case 'image':
       return { type: 'image', id: networkTriple.valueId, value: networkTriple.stringValue };
-    case 'NUMBER':
+    case 'number':
       return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
-    case 'ENTITY':
+    case 'entity':
       return {
         type: 'entity',
         id: networkTriple.entityValue.id,
         name: networkTriple.entityValue.name,
       };
-    case 'DATE':
+    case 'date':
       return { type: 'date', id: networkTriple.valueId, value: networkTriple.stringValue };
-    case 'URL':
+    case 'url':
       return { type: 'url', id: networkTriple.valueId, value: networkTriple.stringValue };
   }
 }
 
-export function extractActionValue(networkAction: SubstreamNetworkAction): Value {
+export function extractActionValue(networkAction: SubstreamAction): Value {
   switch (networkAction.valueType) {
-    case 'STRING':
+    case 'string':
       return { type: 'string', id: networkAction.valueId, value: networkAction.stringValue };
-    case 'IMAGE':
+    case 'image':
       return { type: 'image', id: networkAction.valueId, value: networkAction.stringValue };
-    case 'NUMBER':
+    case 'number':
       return { type: 'number', id: networkAction.valueId, value: networkAction.numberValue };
-    case 'ENTITY':
+    case 'entity':
       return {
         type: 'entity',
         id: networkAction.entityValue,
         name: null,
       };
-    case 'DATE':
+    case 'date':
       return { type: 'date', id: networkAction.valueId, value: networkAction.stringValue };
-    case 'URL':
+    case 'url':
       return { type: 'url', id: networkAction.valueId, value: networkAction.stringValue };
   }
+
+  console.log('networkAction', networkAction);
 }
 
 export function getActionFromChangeStatus(action: Action) {
@@ -140,93 +137,70 @@ export function getActionFromChangeStatus(action: Action) {
   }
 }
 
-function networkTripleHasEmptyValue(networkTriple: NetworkTriple | NetworkAction): boolean {
+function networkTripleHasEmptyValue(networkTriple: SubstreamTriple | SubstreamAction): boolean {
   switch (networkTriple.valueType) {
-    case 'STRING':
+    case 'string':
       return !networkTriple.stringValue;
-    case 'NUMBER':
+    case 'number':
       return !networkTriple.numberValue;
-    case 'ENTITY':
+    case 'entity':
       return !networkTriple.entityValue;
-    case 'IMAGE':
+    case 'image':
       return !networkTriple.stringValue;
-    case 'DATE':
+    case 'date':
       return !networkTriple.stringValue;
-    case 'URL':
+    case 'url':
       return !networkTriple.stringValue;
   }
 }
 
-function substreamTripleHasEmptyValue(networkTriple: NetworkTriple | SubstreamNetworkAction): boolean {
+function substreamTripleHasEmptyValue(networkTriple: SubstreamAction): boolean {
   switch (networkTriple.valueType) {
-    case 'STRING':
+    case 'string':
       return !networkTriple.stringValue;
-    case 'NUMBER':
+    case 'number':
       return !networkTriple.numberValue;
-    case 'ENTITY':
+    case 'entity':
       return !networkTriple.entityValue;
-    case 'IMAGE':
+    case 'image':
       return !networkTriple.stringValue;
-    case 'DATE':
+    case 'date':
       return !networkTriple.stringValue;
-    case 'URL':
+    case 'url':
       return !networkTriple.stringValue;
   }
 }
 
-function networkTripleHasEmptyAttribute(networkTriple: NetworkTriple | SubstreamNetworkAction): boolean {
+function networkTripleHasEmptyAttribute(networkTriple: SubstreamAction | SubstreamTriple): boolean {
   return !networkTriple.attribute || !networkTriple.attribute.id;
 }
 
-export function fromNetworkTriples(networkTriples: NetworkTriple[]): Triple[] {
-  return (
-    networkTriples
-      // @TODO: Remove this once we have correct types for substreams triples value types.
-      // Right now they are set as lowercase in the substream db, but uppercase in the subgraph.
-      .map(
-        networkTriple =>
-          ({
-            ...networkTriple,
-            valueType: networkTriple.valueType.toUpperCase() as NetworkValue['valueType'],
-          }) as NetworkTriple
-      )
-      .map(networkTriple => {
-        // There's an edge-case bug where the value can be null even though it should be an object.
-        // Right now we're not doing any triple validation, but once we do we will no longer be indexing
-        // empty triples.
-        if (networkTripleHasEmptyValue(networkTriple) || networkTripleHasEmptyAttribute(networkTriple)) {
-          return null;
-        }
+export function fromNetworkTriples(networkTriples: SubstreamTriple[]): Triple[] {
+  return networkTriples
+    .map(networkTriple => {
+      // There's an edge-case bug where the value can be null even though it should be an object.
+      // Right now we're not doing any triple validation, but once we do we will no longer be indexing
+      // empty triples.
+      if (networkTripleHasEmptyValue(networkTriple) || networkTripleHasEmptyAttribute(networkTriple)) {
+        return null;
+      }
 
-        return {
-          id: networkTriple.id,
-          entityId: networkTriple.entity.id,
-          entityName: networkTriple.entity.name,
-          attributeId: networkTriple.attribute.id,
-          attributeName: networkTriple.attribute.name,
-          value: extractValue(networkTriple),
-          space: networkTriple.space.id,
-        };
-      })
-      .flatMap(triple => (triple ? [triple] : []))
-  );
+      return {
+        id: networkTriple.id,
+        entityId: networkTriple.entity.id,
+        entityName: networkTriple.entity.name,
+        attributeId: networkTriple.attribute.id,
+        attributeName: networkTriple.attribute.name,
+        value: extractValue(networkTriple),
+        space: networkTriple.space.id,
+      };
+    })
+    .flatMap(triple => (triple ? [triple] : []));
 }
 
-export function fromNetworkActions(
-  networkActions: SubstreamNetworkAction[] | NetworkAction[],
-  spaceId: string
-): Action[] {
+export function fromNetworkActions(networkActions: SubstreamAction[], spaceId: string): Action[] {
   try {
     const newActions = networkActions
-      // @TODO: Remove this once we have correct types for substreams triples value types.
-      // Right now they are set as lowercase in the substream db, but uppercase in the subgraph.
-      .map(
-        networkAction =>
-          ({
-            ...networkAction,
-            valueType: networkAction.valueType.toUpperCase() as NetworkValue['valueType'],
-          }) as SubstreamNetworkAction
-      )
       .map(networkAction => {
         // There's an edge-case bug where the value can be null even though it should be an object.
         // Right now we're not doing any triple validation, but once we do we will no longer be indexing
