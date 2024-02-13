@@ -122,9 +122,11 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
     switch (error._tag) {
       case 'GraphqlRuntimeError':
         console.error(`Encountered runtime graphql error in getSpacesWhereModerator.`, error.message);
+        break;
 
       default:
         console.error(`${error._tag}: Unable to fetch permissioned spaces where editor controller`);
+        break;
     }
   }
 
@@ -134,14 +136,16 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
     switch (error._tag) {
       case 'GraphqlRuntimeError':
         console.error(`Encountered runtime graphql error in getSpacesWhereModerator.`, error.message);
+        break;
 
       default:
         console.error(`${error._tag}: Unable to fetch permissionless spaces where editor controller`);
+        break;
     }
   }
 
-  let permissionedSpaces: { id: string }[] = Either.isLeft(permissioned) ? [] : permissioned.right.spaces;
-  let permissionlessSpaces: { id: string }[] = Either.isLeft(permissionless) ? [] : permissionless.right.spaces;
+  const permissionedSpaces: { id: string }[] = Either.isLeft(permissioned) ? [] : permissioned.right.spaces;
+  const permissionlessSpaces: { id: string }[] = Either.isLeft(permissionless) ? [] : permissionless.right.spaces;
 
   const spaces = [...permissionedSpaces, ...permissionlessSpaces].map(space => space.id);
   return spaces;
