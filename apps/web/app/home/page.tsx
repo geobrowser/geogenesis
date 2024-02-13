@@ -94,7 +94,7 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
   const query = `{
       spaces(
         where: {
-            editorControllers_contains: ["${address}"]
+            editorControllers_contains: ["0x48f03232F947A6d92A5E839936c9250999f404a0"]
         }
       ) {
         id
@@ -112,23 +112,37 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
   });
 
   const combined = Effect.all([permissionedSpacesEffect, permissionlessSpacesEffect]);
+    Effect.runPromise(Effect.either(permissionedSpacesEffect)),
+    Effect.runPromise(Effect.either(permissionlessSpacesEffect)),
+  ]);
 
-  const result = await Effect.runPromise(Effect.either(combined));
-
-  if (Either.isLeft(result)) {
-    const error = result.left;
+  if (Either.isLeft(permissioned)) {
+    const error = permissioned.left;
 
     switch (error._tag) {
       case 'GraphqlRuntimeError':
         console.error(`Encountered runtime graphql error in getSpacesWhereModerator.`, error.message);
-        return [];
 
       default:
-        console.error(`${error._tag}: Unable to fetch spaces where editor controller`);
-        return [];
+        console.error(`${error._tag}: Unable to fetch permissioned spaces where editor controller`);
     }
   }
 
-  const spaces = result.right.flatMap(result => result.spaces.map(space => space.id));
+  if (Either.isLeft(permissionless)) {
+    const error = permissionless.left;
+
+    switch (error._tag) {
+      case 'GraphqlRuntimeError':
+        console.error(`Encountered runtime graphql error in getSpacesWhereModerator.`, error.message);
+
+      default:
+        console.error(`${error._tag}: Unable to fetch permissionless spaces where editor controller`);
+    }
+  }
+
+  let permissionedSpaces: { id: string }[] = Either.isLeft(permissioned) ? [] : permissioned.right.spaces;
+  let permissionlessSpaces: { id: string }[] = Either.isLeft(permissionless) ? [] : permissionless.right.spaces;
+
+  const spaces = [...permissionedSpaces, ...permissionlessSpaces].map(space => space.id);
   return spaces;
 };
