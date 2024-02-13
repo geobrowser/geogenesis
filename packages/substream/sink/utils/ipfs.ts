@@ -102,7 +102,7 @@ function getFetchIpfsContentEffect(
   });
 }
 
-export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry | null, never> {
+export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry | null> {
   return Effect.gen(function* (unwrap) {
     const fetchIpfsContentEffect = getFetchIpfsContentEffect(entry.uri);
 

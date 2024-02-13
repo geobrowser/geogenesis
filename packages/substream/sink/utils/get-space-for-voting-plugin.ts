@@ -19,7 +19,7 @@ import { pool } from './pool';
  */
 export function getSpaceForVotingPlugin(
   pluginAddress: `0x${string}`
-): Effect.Effect<`0x${string}` | null, SpaceWithPluginAddressNotFoundError, never> {
+): Effect.Effect<`0x${string}` | null, SpaceWithPluginAddressNotFoundError> {
   return Effect.gen(function* (unwrap) {
     const spaceExistsForPluginAddress = yield* unwrap(
       Effect.tryPromise({
