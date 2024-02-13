@@ -22,8 +22,6 @@ import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
-import { SpaceConfigProvider } from './space-config-provider';
-
 interface Props {
   params: { id: string };
   children: React.ReactNode;
@@ -120,40 +118,38 @@ export default async function Layout({ children, params }: Props) {
   const typeNames = props.space?.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
 
   return (
-    <SpaceConfigProvider spaceId={params.id}>
-      <TypesStoreServerContainer spaceId={params.id}>
-        <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
-          <EditorProvider
-            id={props.id}
-            spaceId={props.spaceId}
-            initialBlockIdsTriple={props.blockIdsTriple}
-            initialBlockTriples={props.blockTriples}
-          >
-            <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
+    <TypesStoreServerContainer spaceId={params.id}>
+      <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
+        <EditorProvider
+          id={props.id}
+          spaceId={props.spaceId}
+          initialBlockIdsTriple={props.blockIdsTriple}
+          initialBlockTriples={props.blockTriples}
+        >
+          <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
 
-            <EntityPageContentContainer>
-              <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
-              <SpacePageMetadataHeader
-                typeNames={typeNames}
-                spaceId={props.spaceId}
-                membersComponent={
-                  <React.Suspense fallback={<MembersSkeleton />}>
-                    <SpaceEditors spaceId={params.id} />
-                    <SpaceMembers spaceId={params.id} />
-                  </React.Suspense>
-                }
-              />
+          <EntityPageContentContainer>
+            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+            <SpacePageMetadataHeader
+              typeNames={typeNames}
+              spaceId={props.spaceId}
+              membersComponent={
+                <React.Suspense fallback={<MembersSkeleton />}>
+                  <SpaceEditors spaceId={params.id} />
+                  <SpaceMembers spaceId={params.id} />
+                </React.Suspense>
+              }
+            />
 
-              <Spacer height={40} />
-              <TabGroup tabs={buildTabsForSpacePage(props.space?.spaceConfig?.types ?? [], params)} />
-              <Spacer height={20} />
+            <Spacer height={40} />
+            <TabGroup tabs={buildTabsForSpacePage(props.space?.spaceConfig?.types ?? [], params)} />
+            <Spacer height={20} />
 
-              {children}
-            </EntityPageContentContainer>
-          </EditorProvider>
-        </EntityStoreProvider>
-      </TypesStoreServerContainer>
-    </SpaceConfigProvider>
+            {children}
+          </EntityPageContentContainer>
+        </EditorProvider>
+      </EntityStoreProvider>
+    </TypesStoreServerContainer>
   );
 }
 

@@ -1057,19 +1057,19 @@ const TableFilter = ({ filter }: TableFilterProps) => {
 };
 
 const useFilters = (rawFilter: string) => {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${rawFilter}`],
-    queryFn: async () => getFilters(rawFilter, subgraph, config),
+    queryFn: async () => getFilters(rawFilter, subgraph),
   });
 
   return [data, isLoading] as const;
 };
 
-const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph, config: Environment.AppConfig) => {
+const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph) => {
   const filters = await createFiltersFromGraphQLString(rawFilter, async id => await subgraph.fetchEntity({ id }));
   const serverColumns = await fetchColumns({
-    params: { skip: 0, first: 0, filter: '', endpoint: config.subgraph },
+    params: { skip: 0, first: 0, filter: '' },
     api: {
       fetchEntity: subgraph.fetchEntity,
       fetchTriples: subgraph.fetchTriples,

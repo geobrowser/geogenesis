@@ -1,7 +1,5 @@
 'use client';
 
-import { atom, useAtomValue, useSetAtom } from 'jotai';
-
 import * as React from 'react';
 import { ReactNode, createContext, useContext, useMemo } from 'react';
 
@@ -21,25 +19,10 @@ interface Props {
   children: ReactNode;
 }
 
-export const shouldUseSecondarySubgraphAtom = atom(false);
-
-export function useSecondarySubgraph() {
-  return useSetAtom(shouldUseSecondarySubgraphAtom);
-}
-
 export function ServicesProvider({ children }: Props) {
-  const secondarySubgraph = useAtomValue(shouldUseSecondarySubgraphAtom);
-
   const services = useMemo((): Services => {
     let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
     const storageClient = new Storage.StorageClient(config.ipfs);
-
-    if (secondarySubgraph) {
-      config = {
-        ...config,
-        subgraph: config.permissionlessSubgraph,
-      };
-    }
 
     return {
       config,
@@ -47,7 +30,7 @@ export function ServicesProvider({ children }: Props) {
       subgraph: Subgraph,
       publish: Publish,
     };
-  }, [secondarySubgraph]);
+  }, []);
 
   return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>;
 }

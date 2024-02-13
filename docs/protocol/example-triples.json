@@ -1,0 +1,1658 @@
+{
+  "data": {
+    "triples": {
+      "nodes": [
+        {
+          "id": "0x024D1Df6658FD4E1d65C507a2D12547D26150FAc:75763150-ffb0-43b7-9987-bfa99dd6e50b:235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133:9fde6b7d-a0fd-47e9-b820-17d30e578c6d",
+          "entity": {
+            "id": "75763150-ffb0-43b7-9987-bfa99dd6e50b",
+            "name": "metamagick"
+          },
+          "attribute": {
+            "id": "235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133",
+            "name": "Avatar"
+          },
+          "valueId": "9fde6b7d-a0fd-47e9-b820-17d30e578c6d",
+          "valueType": "image",
+          "stringValue": "ipfs://QmZ9mar9ZydHg81gwJWLNVnZvmxxDskC15rmi1R1brSq6L",
+          "entityValue": null
+        },
+        {
+          "id": "0x024D1Df6658FD4E1d65C507a2D12547D26150FAc:75763150-ffb0-43b7-9987-bfa99dd6e50b:d7ab4092-0ab5-441e-88c3-5c27952de773:af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "entity": {
+            "id": "75763150-ffb0-43b7-9987-bfa99dd6e50b",
+            "name": "metamagick"
+          },
+          "attribute": {
+            "id": "d7ab4092-0ab5-441e-88c3-5c27952de773",
+            "name": "Type"
+          },
+          "valueId": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+            "name": "Person"
+          }
+        },
+        {
+          "id": "0x024D1Df6658FD4E1d65C507a2D12547D26150FAc:75763150-ffb0-43b7-9987-bfa99dd6e50b:name:90003931-da9b-4b77-b068-0b2481bd5486",
+          "entity": {
+            "id": "75763150-ffb0-43b7-9987-bfa99dd6e50b",
+            "name": "metamagick"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "90003931-da9b-4b77-b068-0b2481bd5486",
+          "valueType": "string",
+          "stringValue": "metamagick",
+          "entityValue": null
+        },
+        {
+          "id": "0x024D1Df6658FD4E1d65C507a2D12547D26150FAc:75763150-ffb0-43b7-9987-bfa99dd6e50b:type:af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "entity": {
+            "id": "75763150-ffb0-43b7-9987-bfa99dd6e50b",
+            "name": "metamagick"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+            "name": "Person"
+          }
+        },
+        {
+          "id": "0x0278F42a3F0595F2Ba9f2BBA6c47CB08F17AABE9:0x141289E4fd9DF614d94F482D820a801aA77189eC–28:name:caef412f-9662-4c06-a770-bcae964b60a1",
+          "entity": {
+            "id": "0x141289E4fd9DF614d94F482D820a801aA77189eC–28",
+            "name": "Kyle Rojas"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "caef412f-9662-4c06-a770-bcae964b60a1",
+          "valueType": "string",
+          "stringValue": "Kyle Rojas",
+          "entityValue": null
+        },
+        {
+          "id": "0x0278F42a3F0595F2Ba9f2BBA6c47CB08F17AABE9:0x141289E4fd9DF614d94F482D820a801aA77189eC–28:type:af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "entity": {
+            "id": "0x141289E4fd9DF614d94F482D820a801aA77189eC–28",
+            "name": "Kyle Rojas"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+            "name": "Person"
+          }
+        },
+        {
+          "id": "0x0278F42a3F0595F2Ba9f2BBA6c47CB08F17AABE9:4b8f78ff-929a-4167-aa74-d49cabaaf564:name:bcf645ca-3e15-42b2-a44b-c750a8f4b945",
+          "entity": {
+            "id": "4b8f78ff-929a-4167-aa74-d49cabaaf564",
+            "name": "Kyle Rojas's Space"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "bcf645ca-3e15-42b2-a44b-c750a8f4b945",
+          "valueType": "string",
+          "stringValue": "Kyle Rojas's Space",
+          "entityValue": null
+        },
+        {
+          "id": "0x0278F42a3F0595F2Ba9f2BBA6c47CB08F17AABE9:4b8f78ff-929a-4167-aa74-d49cabaaf564:type:1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "entity": {
+            "id": "4b8f78ff-929a-4167-aa74-d49cabaaf564",
+            "name": "Kyle Rojas's Space"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+            "name": "Space"
+          }
+        },
+        {
+          "id": "0x02BA6eA64Cc5ED937ca7C40AE6DAfE57F79e0894:0x4ef48Eb3E0930a14637A19106776c4ACD0Ca14F2–65:name:852421af-ae71-44f3-85ee-6fad75db8d5a",
+          "entity": {
+            "id": "0x4ef48Eb3E0930a14637A19106776c4ACD0Ca14F2–65",
+            "name": "Pritam"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "852421af-ae71-44f3-85ee-6fad75db8d5a",
+          "valueType": "string",
+          "stringValue": "Pritam",
+          "entityValue": null
+        },
+        {
+          "id": "0x02BA6eA64Cc5ED937ca7C40AE6DAfE57F79e0894:0x4ef48Eb3E0930a14637A19106776c4ACD0Ca14F2–65:type:af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "entity": {
+            "id": "0x4ef48Eb3E0930a14637A19106776c4ACD0Ca14F2–65",
+            "name": "Pritam"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+            "name": "Person"
+          }
+        },
+        {
+          "id": "0x02BA6eA64Cc5ED937ca7C40AE6DAfE57F79e0894:17f561dc-031e-4683-8561-ccbe3b3f3a97:name:40dac81c-081e-4668-b561-331902b238d0",
+          "entity": {
+            "id": "17f561dc-031e-4683-8561-ccbe3b3f3a97",
+            "name": "Pritam's Space"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "40dac81c-081e-4668-b561-331902b238d0",
+          "valueType": "string",
+          "stringValue": "Pritam's Space",
+          "entityValue": null
+        },
+        {
+          "id": "0x02BA6eA64Cc5ED937ca7C40AE6DAfE57F79e0894:17f561dc-031e-4683-8561-ccbe3b3f3a97:type:1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "entity": {
+            "id": "17f561dc-031e-4683-8561-ccbe3b3f3a97",
+            "name": "Pritam's Space"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+            "name": "Space"
+          }
+        },
+        {
+          "id": "0x039B903e0Bec62C27d6c67929415A4426Ee6D6b6:0xDfd60a8E1e17FBb78E8CA332906A822D862f3D57–151:name:9483cc90-1b57-4e7a-907d-17e4cfb491e3",
+          "entity": {
+            "id": "0xDfd60a8E1e17FBb78E8CA332906A822D862f3D57–151",
+            "name": "JB87"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "9483cc90-1b57-4e7a-907d-17e4cfb491e3",
+          "valueType": "string",
+          "stringValue": "JB87",
+          "entityValue": null
+        },
+        {
+          "id": "0x039B903e0Bec62C27d6c67929415A4426Ee6D6b6:0xDfd60a8E1e17FBb78E8CA332906A822D862f3D57–151:type:1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "entity": {
+            "id": "0xDfd60a8E1e17FBb78E8CA332906A822D862f3D57–151",
+            "name": "JB87"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+            "name": "Space"
+          }
+        },
+        {
+          "id": "0x039B903e0Bec62C27d6c67929415A4426Ee6D6b6:0xDfd60a8E1e17FBb78E8CA332906A822D862f3D57–151:type:af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "entity": {
+            "id": "0xDfd60a8E1e17FBb78E8CA332906A822D862f3D57–151",
+            "name": "JB87"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+            "name": "Person"
+          }
+        },
+        {
+          "id": "0x03C0a3A996558D53EF32CF08B9FeC409Fc255b0e:0xB6b207E9Ff95a9648FfF4D91e8BB3aEC9F853a25–141:235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133:adb40aa3-f5e9-40a8-a472-3f861a5ef8a7",
+          "entity": {
+            "id": "0xB6b207E9Ff95a9648FfF4D91e8BB3aEC9F853a25–141",
+            "name": "aruslu"
+          },
+          "attribute": {
+            "id": "235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133",
+            "name": "Avatar"
+          },
+          "valueId": "adb40aa3-f5e9-40a8-a472-3f861a5ef8a7",
+          "valueType": "image",
+          "stringValue": "ipfs://QmV4sgM47g1xSGEn18JiujgzRqeJPmk3FiiorxBL1UD2ge",
+          "entityValue": null
+        },
+        {
+          "id": "0x03C0a3A996558D53EF32CF08B9FeC409Fc255b0e:0xB6b207E9Ff95a9648FfF4D91e8BB3aEC9F853a25–141:name:e5e0513a-3dd7-4594-bdca-838faa46d50e",
+          "entity": {
+            "id": "0xB6b207E9Ff95a9648FfF4D91e8BB3aEC9F853a25–141",
+            "name": "aruslu"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "e5e0513a-3dd7-4594-bdca-838faa46d50e",
+          "valueType": "string",
+          "stringValue": "aruslu",
+          "entityValue": null
+        },
+        {
+          "id": "0x03C0a3A996558D53EF32CF08B9FeC409Fc255b0e:0xB6b207E9Ff95a9648FfF4D91e8BB3aEC9F853a25–141:type:1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "entity": {
+            "id": "0xB6b207E9Ff95a9648FfF4D91e8BB3aEC9F853a25–141",
+            "name": "aruslu"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+            "name": "Space"
+          }
+        },
+        {
+          "id": "0x03C0a3A996558D53EF32CF08B9FeC409Fc255b0e:0xB6b207E9Ff95a9648FfF4D91e8BB3aEC9F853a25–141:type:af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "entity": {
+            "id": "0xB6b207E9Ff95a9648FfF4D91e8BB3aEC9F853a25–141",
+            "name": "aruslu"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+            "name": "Person"
+          }
+        },
+        {
+          "id": "0x042Ee5e22e057f0124b55405dde85579C84511f0:0x7C0D681098a9d46Bd34637870C3afa4bfC9EC720–128:235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133:ab930989-f9fb-41f0-8979-4727fd2f55fc",
+          "entity": {
+            "id": "0x7C0D681098a9d46Bd34637870C3afa4bfC9EC720–128",
+            "name": "vid"
+          },
+          "attribute": {
+            "id": "235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133",
+            "name": "Avatar"
+          },
+          "valueId": "ab930989-f9fb-41f0-8979-4727fd2f55fc",
+          "valueType": "image",
+          "stringValue": "ipfs://QmVobBhkeBS9XjHPsHzo8A8ho3qKN3rbiaRspfeYcDvEZD",
+          "entityValue": null
+        },
+        {
+          "id": "0x042Ee5e22e057f0124b55405dde85579C84511f0:0x7C0D681098a9d46Bd34637870C3afa4bfC9EC720–128:name:ae64b40e-2f56-4676-a22f-ba307615b72d",
+          "entity": {
+            "id": "0x7C0D681098a9d46Bd34637870C3afa4bfC9EC720–128",
+            "name": "vid"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "ae64b40e-2f56-4676-a22f-ba307615b72d",
+          "valueType": "string",
+          "stringValue": "vid",
+          "entityValue": null
+        },
+        {
+          "id": "0x042Ee5e22e057f0124b55405dde85579C84511f0:0x7C0D681098a9d46Bd34637870C3afa4bfC9EC720–128:type:1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "entity": {
+            "id": "0x7C0D681098a9d46Bd34637870C3afa4bfC9EC720–128",
+            "name": "vid"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+            "name": "Space"
+          }
+        },
+        {
+          "id": "0x042Ee5e22e057f0124b55405dde85579C84511f0:0x7C0D681098a9d46Bd34637870C3afa4bfC9EC720–128:type:af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "entity": {
+            "id": "0x7C0D681098a9d46Bd34637870C3afa4bfC9EC720–128",
+            "name": "vid"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+            "name": "Person"
+          }
+        },
+        {
+          "id": "0x0680e16e6475dAe8cbb2fe41B4b40073Af7F58cb:c195ea98-9960-476b-af5b-f213e6231302:d7ab4092-0ab5-441e-88c3-5c27952de773:af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "entity": {
+            "id": "c195ea98-9960-476b-af5b-f213e6231302",
+            "name": "weewoobeebop"
+          },
+          "attribute": {
+            "id": "d7ab4092-0ab5-441e-88c3-5c27952de773",
+            "name": "Type"
+          },
+          "valueId": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+            "name": "Person"
+          }
+        },
+        {
+          "id": "0x0680e16e6475dAe8cbb2fe41B4b40073Af7F58cb:c195ea98-9960-476b-af5b-f213e6231302:name:62ebb55f-6f93-4892-81c4-ba27ce971561",
+          "entity": {
+            "id": "c195ea98-9960-476b-af5b-f213e6231302",
+            "name": "weewoobeebop"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "62ebb55f-6f93-4892-81c4-ba27ce971561",
+          "valueType": "string",
+          "stringValue": "weewoobeebop",
+          "entityValue": null
+        },
+        {
+          "id": "0x07d81583d14d00d32cF28931F7Ec806671554C32:0xF86C1c7E9f4bAA3e500B2c86C73Ba06D9D55BbA9–103:name:50a3088b-0fda-4757-bf69-749a616b3df4",
+          "entity": {
+            "id": "0xF86C1c7E9f4bAA3e500B2c86C73Ba06D9D55BbA9–103",
+            "name": "nata"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "50a3088b-0fda-4757-bf69-749a616b3df4",
+          "valueType": "string",
+          "stringValue": "nata",
+          "entityValue": null
+        },
+        {
+          "id": "0x07d81583d14d00d32cF28931F7Ec806671554C32:0xF86C1c7E9f4bAA3e500B2c86C73Ba06D9D55BbA9–103:type:af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "entity": {
+            "id": "0xF86C1c7E9f4bAA3e500B2c86C73Ba06D9D55BbA9–103",
+            "name": "nata"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "af7ae93b-97d6-4aed-ad69-0c1d3da149a1",
+            "name": "Person"
+          }
+        },
+        {
+          "id": "0x07d81583d14d00d32cF28931F7Ec806671554C32:527fcff0-d4d1-48a7-a0e7-3f8c21c9f927:name:ccbf80ee-7559-4510-a161-be242c7fa9e5",
+          "entity": {
+            "id": "527fcff0-d4d1-48a7-a0e7-3f8c21c9f927",
+            "name": "nata's Space"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "ccbf80ee-7559-4510-a161-be242c7fa9e5",
+          "valueType": "string",
+          "stringValue": "nata's Space",
+          "entityValue": null
+        },
+        {
+          "id": "0x07d81583d14d00d32cF28931F7Ec806671554C32:527fcff0-d4d1-48a7-a0e7-3f8c21c9f927:type:1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "entity": {
+            "id": "527fcff0-d4d1-48a7-a0e7-3f8c21c9f927",
+            "name": "nata's Space"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "1d5d0c2a-db23-466c-a0b0-9abe879df457",
+            "name": "Space"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0018c088-010d-4596-bb34-dcdad83b32ac:dd4999b9-77f0-4c2b-a02b-5a26b233854e:e8c1e82a-eb99-4e67-9ff8-f46b456bd37b",
+          "entity": {
+            "id": "0018c088-010d-4596-bb34-dcdad83b32ac",
+            "name": "Theological interpre"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "e8c1e82a-eb99-4e67-9ff8-f46b456bd37b",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "e8c1e82a-eb99-4e67-9ff8-f46b456bd37b",
+            "name": "The coming of the Messiah "
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0018c088-010d-4596-bb34-dcdad83b32ac:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:7e564a03-e572-4f79-921b-d2482339f30c",
+          "entity": {
+            "id": "0018c088-010d-4596-bb34-dcdad83b32ac",
+            "name": "Theological interpre"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "7e564a03-e572-4f79-921b-d2482339f30c",
+          "valueType": "string",
+          "stringValue": "## **Theological interpretations:**\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0018c088-010d-4596-bb34-dcdad83b32ac:name:1fe426d4-6cf5-49e1-9ca6-6972db816fd6",
+          "entity": {
+            "id": "0018c088-010d-4596-bb34-dcdad83b32ac",
+            "name": "Theological interpre"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "1fe426d4-6cf5-49e1-9ca6-6972db816fd6",
+          "valueType": "string",
+          "stringValue": "Theological interpre",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0018c088-010d-4596-bb34-dcdad83b32ac:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "0018c088-010d-4596-bb34-dcdad83b32ac",
+            "name": "Theological interpre"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:003426d1-2584-4339-a556-f9cd3e0344c2:01412f83-8189-4ab1-8365-65c7fd358cc1:669f1639-8956-48c0-9051-99ee6fa16919",
+          "entity": {
+            "id": "003426d1-2584-4339-a556-f9cd3e0344c2",
+            "name": "Cosmology"
+          },
+          "attribute": {
+            "id": "01412f83-8189-4ab1-8365-65c7fd358cc1",
+            "name": "Attributes"
+          },
+          "valueId": "669f1639-8956-48c0-9051-99ee6fa16919",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "669f1639-8956-48c0-9051-99ee6fa16919",
+            "name": "Religions"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:003426d1-2584-4339-a556-f9cd3e0344c2:01412f83-8189-4ab1-8365-65c7fd358cc1:bbe96cee-e9c8-4a7b-b07a-f6e4f9877190",
+          "entity": {
+            "id": "003426d1-2584-4339-a556-f9cd3e0344c2",
+            "name": "Cosmology"
+          },
+          "attribute": {
+            "id": "01412f83-8189-4ab1-8365-65c7fd358cc1",
+            "name": "Attributes"
+          },
+          "valueId": "bbe96cee-e9c8-4a7b-b07a-f6e4f9877190",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "bbe96cee-e9c8-4a7b-b07a-f6e4f9877190",
+            "name": "Convergences"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:003426d1-2584-4339-a556-f9cd3e0344c2:Description:c97761d1-9fdc-4de1-bef8-df8f44b05dbc",
+          "entity": {
+            "id": "003426d1-2584-4339-a556-f9cd3e0344c2",
+            "name": "Cosmology"
+          },
+          "attribute": {
+            "id": "Description",
+            "name": "Description"
+          },
+          "valueId": "c97761d1-9fdc-4de1-bef8-df8f44b05dbc",
+          "valueType": "string",
+          "stringValue": "The explanation of the origin, evolution, and eventual fate of the universe from a religious or spiritual perspective. This may include beliefs on origin in the form of a creation myth, subsequent evolution, current organizational form and nature, and eventual fate or destiny.",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:003426d1-2584-4339-a556-f9cd3e0344c2:name:f6221d4d-bc5f-47af-85df-a2a188dd0679",
+          "entity": {
+            "id": "003426d1-2584-4339-a556-f9cd3e0344c2",
+            "name": "Cosmology"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "f6221d4d-bc5f-47af-85df-a2a188dd0679",
+          "valueType": "string",
+          "stringValue": "Cosmology",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:003426d1-2584-4339-a556-f9cd3e0344c2:type:d7ab4092-0ab5-441e-88c3-5c27952de773",
+          "entity": {
+            "id": "003426d1-2584-4339-a556-f9cd3e0344c2",
+            "name": "Cosmology"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "d7ab4092-0ab5-441e-88c3-5c27952de773",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "d7ab4092-0ab5-441e-88c3-5c27952de773",
+            "name": "Type"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00430715-f48f-493c-b7c1-a4cf3426c331:dd4999b9-77f0-4c2b-a02b-5a26b233854e:a1dd26c3-2005-4a0a-9378-d05a9019506b",
+          "entity": {
+            "id": "00430715-f48f-493c-b7c1-a4cf3426c331",
+            "name": "In ancient Greece, c"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "a1dd26c3-2005-4a0a-9378-d05a9019506b",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "a1dd26c3-2005-4a0a-9378-d05a9019506b",
+            "name": "Chanting and singing"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00430715-f48f-493c-b7c1-a4cf3426c331:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:f0809638-4e55-4f32-ac26-f33ad8f995cb",
+          "entity": {
+            "id": "00430715-f48f-493c-b7c1-a4cf3426c331",
+            "name": "In ancient Greece, c"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "f0809638-4e55-4f32-ac26-f33ad8f995cb",
+          "valueType": "string",
+          "stringValue": "In ancient Greece, chanting and hymns were central not only to religious ceremonies but also to the oral narration of epic tales. This blend of poetry, music, and ritualistic performance was fundamental in disseminating mythological and historical narratives, cementing the role of chanting and singing in cultural preservation.\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00430715-f48f-493c-b7c1-a4cf3426c331:name:aa0a0aee-b305-44dd-b327-d557f4804833",
+          "entity": {
+            "id": "00430715-f48f-493c-b7c1-a4cf3426c331",
+            "name": "In ancient Greece, c"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "aa0a0aee-b305-44dd-b327-d557f4804833",
+          "valueType": "string",
+          "stringValue": "In ancient Greece, c",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00430715-f48f-493c-b7c1-a4cf3426c331:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "00430715-f48f-493c-b7c1-a4cf3426c331",
+            "name": "In ancient Greece, c"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0055744c-945b-45eb-a7b1-ee70d08679ac:dd4999b9-77f0-4c2b-a02b-5a26b233854e:487ddd32-ad82-4bc2-90fb-347887ef5790",
+          "entity": {
+            "id": "0055744c-945b-45eb-a7b1-ee70d08679ac",
+            "name": "Implications for eth"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "487ddd32-ad82-4bc2-90fb-347887ef5790",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "487ddd32-ad82-4bc2-90fb-347887ef5790",
+            "name": "Exploration of the transcendent"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0055744c-945b-45eb-a7b1-ee70d08679ac:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:072dfcaf-cca6-4b4d-a431-6ebfddecbeb7",
+          "entity": {
+            "id": "0055744c-945b-45eb-a7b1-ee70d08679ac",
+            "name": "Implications for eth"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "072dfcaf-cca6-4b4d-a431-6ebfddecbeb7",
+          "valueType": "string",
+          "stringValue": "## **Implications for ethical and moral living**\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0055744c-945b-45eb-a7b1-ee70d08679ac:name:ada3d153-4003-4b1c-aca3-88a30d4ddd9c",
+          "entity": {
+            "id": "0055744c-945b-45eb-a7b1-ee70d08679ac",
+            "name": "Implications for eth"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "ada3d153-4003-4b1c-aca3-88a30d4ddd9c",
+          "valueType": "string",
+          "stringValue": "Implications for eth",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0055744c-945b-45eb-a7b1-ee70d08679ac:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "0055744c-945b-45eb-a7b1-ee70d08679ac",
+            "name": "Implications for eth"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00767408-9e3a-4a30-82e0-424d908f257b:235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133:2a92973d-f86d-4626-9dad-6d64e53c4265",
+          "entity": {
+            "id": "00767408-9e3a-4a30-82e0-424d908f257b",
+            "name": "Shafa'ah (Intercession)"
+          },
+          "attribute": {
+            "id": "235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133",
+            "name": "Avatar"
+          },
+          "valueId": "2a92973d-f86d-4626-9dad-6d64e53c4265",
+          "valueType": "image",
+          "stringValue": "ipfs://QmYwLNgiBUXa9TKqjyiRFawM7yKyCMSBqPEbg7KjEPL3LE",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00767408-9e3a-4a30-82e0-424d908f257b:34f53507-2e6b-42c5-a844-43981a77cfa2:f95a0882-cb04-4122-80b5-d5aabac228a0",
+          "entity": {
+            "id": "00767408-9e3a-4a30-82e0-424d908f257b",
+            "name": "Shafa'ah (Intercession)"
+          },
+          "attribute": {
+            "id": "34f53507-2e6b-42c5-a844-43981a77cfa2",
+            "name": "Cover"
+          },
+          "valueId": "f95a0882-cb04-4122-80b5-d5aabac228a0",
+          "valueType": "image",
+          "stringValue": "ipfs://QmWKxrPxoUR4tdy2TtJtb1quAwz1kGY4sV4XiwEMJdnhbm",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00767408-9e3a-4a30-82e0-424d908f257b:669f1639-8956-48c0-9051-99ee6fa16919:83f83efe-3bcf-4746-aabd-640e4fb1bcfd",
+          "entity": {
+            "id": "00767408-9e3a-4a30-82e0-424d908f257b",
+            "name": "Shafa'ah (Intercession)"
+          },
+          "attribute": {
+            "id": "669f1639-8956-48c0-9051-99ee6fa16919",
+            "name": "Religions"
+          },
+          "valueId": "83f83efe-3bcf-4746-aabd-640e4fb1bcfd",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "83f83efe-3bcf-4746-aabd-640e4fb1bcfd",
+            "name": "Islam"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00767408-9e3a-4a30-82e0-424d908f257b:beaba5cb-a677-41a8-b353-77030613fc70:cf4ce074-337f-40df-ae77-56e2b1ba3071",
+          "entity": {
+            "id": "00767408-9e3a-4a30-82e0-424d908f257b",
+            "name": "Shafa'ah (Intercession)"
+          },
+          "attribute": {
+            "id": "beaba5cb-a677-41a8-b353-77030613fc70",
+            "name": "Blocks"
+          },
+          "valueId": "cf4ce074-337f-40df-ae77-56e2b1ba3071",
+          "valueType": "string",
+          "stringValue": "[\"acf97c9a-278a-4d32-bcd2-e25a7dfdaef7\",\"8e4fc3fb-eff2-4c7e-881a-7e3e643f5091\",\"c52f4949-1e65-4a56-81f1-168871582887\"]",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00767408-9e3a-4a30-82e0-424d908f257b:Description:ca640a82-d212-491d-ac10-77a8a29320cf",
+          "entity": {
+            "id": "00767408-9e3a-4a30-82e0-424d908f257b",
+            "name": "Shafa'ah (Intercession)"
+          },
+          "attribute": {
+            "id": "Description",
+            "name": "Description"
+          },
+          "valueId": "ca640a82-d212-491d-ac10-77a8a29320cf",
+          "valueType": "string",
+          "stringValue": "Concept that plays a significant role in Islamic eschatology. It refers to the act of certain individuals, particularly prophets and the righteous, interceding on behalf of others on the Day of Judgment. The primary purpose of intercession is to seek God's mercy and forgiveness for those who may have committed sins but are not deserving of eternal damnation in hell.",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00767408-9e3a-4a30-82e0-424d908f257b:name:7192fc9d-9e1b-4210-958b-fc64d72f24de",
+          "entity": {
+            "id": "00767408-9e3a-4a30-82e0-424d908f257b",
+            "name": "Shafa'ah (Intercession)"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "7192fc9d-9e1b-4210-958b-fc64d72f24de",
+          "valueType": "string",
+          "stringValue": "Shafa'ah (Intercession)",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00767408-9e3a-4a30-82e0-424d908f257b:type:7bc9a434-9326-4248-9588-44aacaa68cb4",
+          "entity": {
+            "id": "00767408-9e3a-4a30-82e0-424d908f257b",
+            "name": "Shafa'ah (Intercession)"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "7bc9a434-9326-4248-9588-44aacaa68cb4",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "7bc9a434-9326-4248-9588-44aacaa68cb4",
+            "name": "Eschatology"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:007c32ed-321c-4bd4-89d3-53adc3c20b7c:dd4999b9-77f0-4c2b-a02b-5a26b233854e:7713430f-b8fd-4c7b-a0c2-343018705fb0",
+          "entity": {
+            "id": "007c32ed-321c-4bd4-89d3-53adc3c20b7c",
+            "name": "Mullahs in Sunni Isl"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "7713430f-b8fd-4c7b-a0c2-343018705fb0",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "7713430f-b8fd-4c7b-a0c2-343018705fb0",
+            "name": "Mullah"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:007c32ed-321c-4bd4-89d3-53adc3c20b7c:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:a4f51284-c243-48c3-b33f-13bbdbed976b",
+          "entity": {
+            "id": "007c32ed-321c-4bd4-89d3-53adc3c20b7c",
+            "name": "Mullahs in Sunni Isl"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "a4f51284-c243-48c3-b33f-13bbdbed976b",
+          "valueType": "string",
+          "stringValue": "### **Mullahs in Sunni Islam**\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:007c32ed-321c-4bd4-89d3-53adc3c20b7c:name:b5bbb46a-1c04-4e73-8719-48d771e4c24c",
+          "entity": {
+            "id": "007c32ed-321c-4bd4-89d3-53adc3c20b7c",
+            "name": "Mullahs in Sunni Isl"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "b5bbb46a-1c04-4e73-8719-48d771e4c24c",
+          "valueType": "string",
+          "stringValue": "Mullahs in Sunni Isl",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:007c32ed-321c-4bd4-89d3-53adc3c20b7c:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "007c32ed-321c-4bd4-89d3-53adc3c20b7c",
+            "name": "Mullahs in Sunni Isl"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:007e5edd-c8dc-4608-a736-714e48dfc40b:name:71ebffda-fbce-4287-8097-0e489a4701a0",
+          "entity": {
+            "id": "007e5edd-c8dc-4608-a736-714e48dfc40b",
+            "name": "Middle East"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "71ebffda-fbce-4287-8097-0e489a4701a0",
+          "valueType": "string",
+          "stringValue": "Middle East",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:007e5edd-c8dc-4608-a736-714e48dfc40b:type:911a8e0a-52f2-4655-a0c6-d89cd161bb12",
+          "entity": {
+            "id": "007e5edd-c8dc-4608-a736-714e48dfc40b",
+            "name": "Middle East"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "911a8e0a-52f2-4655-a0c6-d89cd161bb12",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "911a8e0a-52f2-4655-a0c6-d89cd161bb12",
+            "name": "Region"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0087a71b-823a-4f4e-81bd-d36c12ba3f25:dd4999b9-77f0-4c2b-a02b-5a26b233854e:96c3656c-722d-4978-adf3-f8b85b0e0239",
+          "entity": {
+            "id": "0087a71b-823a-4f4e-81bd-d36c12ba3f25",
+            "name": "Themes and Reflectio"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "96c3656c-722d-4978-adf3-f8b85b0e0239",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "96c3656c-722d-4978-adf3-f8b85b0e0239",
+            "name": "Yom Kippur"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0087a71b-823a-4f4e-81bd-d36c12ba3f25:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:913e0943-6a78-40f6-a3ba-5ef2c531dd40",
+          "entity": {
+            "id": "0087a71b-823a-4f4e-81bd-d36c12ba3f25",
+            "name": "Themes and Reflectio"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "913e0943-6a78-40f6-a3ba-5ef2c531dd40",
+          "valueType": "string",
+          "stringValue": "# **Themes and Reflections**\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0087a71b-823a-4f4e-81bd-d36c12ba3f25:name:3b7ace75-8209-41b1-981b-f392b34c8ac3",
+          "entity": {
+            "id": "0087a71b-823a-4f4e-81bd-d36c12ba3f25",
+            "name": "Themes and Reflectio"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "3b7ace75-8209-41b1-981b-f392b34c8ac3",
+          "valueType": "string",
+          "stringValue": "Themes and Reflectio",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:0087a71b-823a-4f4e-81bd-d36c12ba3f25:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "0087a71b-823a-4f4e-81bd-d36c12ba3f25",
+            "name": "Themes and Reflectio"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:008b028d-6647-4fb8-bad0-5010339526ba:dd4999b9-77f0-4c2b-a02b-5a26b233854e:06e1f480-4d31-497b-b42b-8cd5450765f1",
+          "entity": {
+            "id": "008b028d-6647-4fb8-bad0-5010339526ba",
+            "name": "Theological Definiti"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "06e1f480-4d31-497b-b42b-8cd5450765f1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "06e1f480-4d31-497b-b42b-8cd5450765f1",
+            "name": "Kiddush (blessing over wine or grape juice)"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:008b028d-6647-4fb8-bad0-5010339526ba:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:eee6f30b-19ab-4532-b4b2-73c49da6eae3",
+          "entity": {
+            "id": "008b028d-6647-4fb8-bad0-5010339526ba",
+            "name": "Theological Definiti"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "eee6f30b-19ab-4532-b4b2-73c49da6eae3",
+          "valueType": "string",
+          "stringValue": "## **Theological Definition and Origins**\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:008b028d-6647-4fb8-bad0-5010339526ba:name:5f99c541-f727-4213-a416-f95cddae0874",
+          "entity": {
+            "id": "008b028d-6647-4fb8-bad0-5010339526ba",
+            "name": "Theological Definiti"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "5f99c541-f727-4213-a416-f95cddae0874",
+          "valueType": "string",
+          "stringValue": "Theological Definiti",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:008b028d-6647-4fb8-bad0-5010339526ba:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "008b028d-6647-4fb8-bad0-5010339526ba",
+            "name": "Theological Definiti"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00a2a31f-c681-47ae-a825-bb1b2706a7eb:dd4999b9-77f0-4c2b-a02b-5a26b233854e:5516afa2-1a78-4b8f-a03b-1eb1521791f1",
+          "entity": {
+            "id": "00a2a31f-c681-47ae-a825-bb1b2706a7eb",
+            "name": null
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "5516afa2-1a78-4b8f-a03b-1eb1521791f1",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "5516afa2-1a78-4b8f-a03b-1eb1521791f1",
+            "name": "Mikveh"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00a2a31f-c681-47ae-a825-bb1b2706a7eb:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:815a6e9f-6b84-4412-9e01-27f6c35784b1",
+          "entity": {
+            "id": "00a2a31f-c681-47ae-a825-bb1b2706a7eb",
+            "name": null
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "815a6e9f-6b84-4412-9e01-27f6c35784b1",
+          "valueType": "string",
+          "stringValue": "1. **Natural Water Source**: A Mikveh must be filled with “living” water, ideally sourced from a natural spring, rainwater, or melted snow. This water should flow into the bath in a way that has not been drawn by human intervention.\n\n2. **Size and Depth**: It must be large enough to allow an average-sized person to immerse completely, with enough space to move around freely.\n\n\n<!-- -->\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00a2a31f-c681-47ae-a825-bb1b2706a7eb:name:abed5698-bb14-4085-aae0-3c5ff999c56c",
+          "entity": {
+            "id": "00a2a31f-c681-47ae-a825-bb1b2706a7eb",
+            "name": null
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "abed5698-bb14-4085-aae0-3c5ff999c56c",
+          "valueType": "string",
+          "stringValue": "Natural Water Source",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00a2a31f-c681-47ae-a825-bb1b2706a7eb:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "00a2a31f-c681-47ae-a825-bb1b2706a7eb",
+            "name": null
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00ab318c-e670-4b24-9113-0883f053cb72:dd4999b9-77f0-4c2b-a02b-5a26b233854e:09c13423-0b35-44df-b6cf-5eff8f5449db",
+          "entity": {
+            "id": "00ab318c-e670-4b24-9113-0883f053cb72",
+            "name": "In the United States"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "09c13423-0b35-44df-b6cf-5eff8f5449db",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "09c13423-0b35-44df-b6cf-5eff8f5449db",
+            "name": "Wearing new or specific clothes"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00ab318c-e670-4b24-9113-0883f053cb72:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:d41994c4-f301-4185-8714-5575d6be572e",
+          "entity": {
+            "id": "00ab318c-e670-4b24-9113-0883f053cb72",
+            "name": "In the United States"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "d41994c4-f301-4185-8714-5575d6be572e",
+          "valueType": "string",
+          "stringValue": "In the United States and other Western countries, while there is no specific color or clothing tradition for New Year's Eve, many people choose to dress up in formal or festive attire for parties and celebrations. This practice reflects a more general sense of renewal and celebration associated with the new year.\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00ab318c-e670-4b24-9113-0883f053cb72:name:5ba1e8fd-3695-44fc-86f8-3d7c26d61c16",
+          "entity": {
+            "id": "00ab318c-e670-4b24-9113-0883f053cb72",
+            "name": "In the United States"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "5ba1e8fd-3695-44fc-86f8-3d7c26d61c16",
+          "valueType": "string",
+          "stringValue": "In the United States",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00ab318c-e670-4b24-9113-0883f053cb72:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "00ab318c-e670-4b24-9113-0883f053cb72",
+            "name": "In the United States"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00c807d5-0ad5-4037-854a-16184460d80f:dd4999b9-77f0-4c2b-a02b-5a26b233854e:f3f5fd61-f835-4b5f-af1e-0de56b6fd475",
+          "entity": {
+            "id": "00c807d5-0ad5-4037-854a-16184460d80f",
+            "name": null
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "f3f5fd61-f835-4b5f-af1e-0de56b6fd475",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "f3f5fd61-f835-4b5f-af1e-0de56b6fd475",
+            "name": "Halal"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00c807d5-0ad5-4037-854a-16184460d80f:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:b6ec6894-c640-4e76-a7c0-56a980f52356",
+          "entity": {
+            "id": "00c807d5-0ad5-4037-854a-16184460d80f",
+            "name": null
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "b6ec6894-c640-4e76-a7c0-56a980f52356",
+          "valueType": "string",
+          "stringValue": "- **Ingredients**: Products should not contain any haram substances such as alcohol or ingredients derived from animals (like pork-derived gelatin) unless the animal was slaughtered in the halal manner.\n\n- **Manufacturing**: The production process must be free from contamination with haram substances.\n\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00c807d5-0ad5-4037-854a-16184460d80f:name:a8ff72ea-859b-4ece-8a32-a255ad12d6aa",
+          "entity": {
+            "id": "00c807d5-0ad5-4037-854a-16184460d80f",
+            "name": null
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "a8ff72ea-859b-4ece-8a32-a255ad12d6aa",
+          "valueType": "string",
+          "stringValue": "Ingredients: Product",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00c807d5-0ad5-4037-854a-16184460d80f:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "00c807d5-0ad5-4037-854a-16184460d80f",
+            "name": null
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00c8b91a-410c-457a-900d-da0bbb95d76e:dd4999b9-77f0-4c2b-a02b-5a26b233854e:6cb86a74-c562-42f3-a479-e6781ddf02ab",
+          "entity": {
+            "id": "00c8b91a-410c-457a-900d-da0bbb95d76e",
+            "name": "Resilience and Regen"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "6cb86a74-c562-42f3-a479-e6781ddf02ab",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "6cb86a74-c562-42f3-a479-e6781ddf02ab",
+            "name": "Lotus Flower"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00c8b91a-410c-457a-900d-da0bbb95d76e:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:e532bf38-6aba-4e84-8f5f-85cc386bf783",
+          "entity": {
+            "id": "00c8b91a-410c-457a-900d-da0bbb95d76e",
+            "name": "Resilience and Regen"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "e532bf38-6aba-4e84-8f5f-85cc386bf783",
+          "valueType": "string",
+          "stringValue": "1. **Resilience and Regeneration**: The lotus’s ability to emerge pristine from murky waters symbolizes resilience, rebirth, and the ability to overcome challenges or adversities.\n\n2. **Spiritual Awakening and Potential**: The unfolding petals of the lotus symbolize the expansion of the soul and spiritual awakening. It represents the potential for each individual to attain enlightenment and the purity of heart and mind.\n\n3. **Universality and Interconnectedness**: The widespread significance of the lotus across various cultures and religions points to a universal truth about the human condition and the shared journey towards spiritual fulfillment.\n\n\n<!-- -->\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00c8b91a-410c-457a-900d-da0bbb95d76e:name:1e2aaa41-fe99-4cfa-99d8-db593727a3d7",
+          "entity": {
+            "id": "00c8b91a-410c-457a-900d-da0bbb95d76e",
+            "name": "Resilience and Regen"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "1e2aaa41-fe99-4cfa-99d8-db593727a3d7",
+          "valueType": "string",
+          "stringValue": "Resilience and Regen",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00c8b91a-410c-457a-900d-da0bbb95d76e:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "00c8b91a-410c-457a-900d-da0bbb95d76e",
+            "name": "Resilience and Regen"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00d0ed15-6fbe-4ef4-a49a-4da6846a17c3:dd4999b9-77f0-4c2b-a02b-5a26b233854e:acda31b7-762e-44ad-bdc3-0935fc66d8bf",
+          "entity": {
+            "id": "00d0ed15-6fbe-4ef4-a49a-4da6846a17c3",
+            "name": "However, utilitarian"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "acda31b7-762e-44ad-bdc3-0935fc66d8bf",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "acda31b7-762e-44ad-bdc3-0935fc66d8bf",
+            "name": "Don't use violence"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00d0ed15-6fbe-4ef4-a49a-4da6846a17c3:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:9325ec8f-7f1d-4c56-9943-d18031e47611",
+          "entity": {
+            "id": "00d0ed15-6fbe-4ef4-a49a-4da6846a17c3",
+            "name": "However, utilitarian"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "9325ec8f-7f1d-4c56-9943-d18031e47611",
+          "valueType": "string",
+          "stringValue": "However, utilitarianism is not without its challenges in the context of non-violence. One key issue is the difficulty in predicting outcomes. In some cases, non-violent actions may not lead to the desired change and could even exacerbate a situation. The decision-making process in utilitarianism requires a prediction of outcomes, which is often fraught with uncertainty. This raises questions about the practicality of always choosing non-violent methods from a utilitarian standpoint.\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00d0ed15-6fbe-4ef4-a49a-4da6846a17c3:name:98d05b59-c886-4dd9-8090-f1b9bb266d47",
+          "entity": {
+            "id": "00d0ed15-6fbe-4ef4-a49a-4da6846a17c3",
+            "name": "However, utilitarian"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "98d05b59-c886-4dd9-8090-f1b9bb266d47",
+          "valueType": "string",
+          "stringValue": "However, utilitarian",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00d0ed15-6fbe-4ef4-a49a-4da6846a17c3:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "00d0ed15-6fbe-4ef4-a49a-4da6846a17c3",
+            "name": "However, utilitarian"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00da1ac3-4c00-4a73-a72f-ab1645b29e55:dd4999b9-77f0-4c2b-a02b-5a26b233854e:6d1cf75b-72ec-4a26-867f-d6e5cb4f7171",
+          "entity": {
+            "id": "00da1ac3-4c00-4a73-a72f-ab1645b29e55",
+            "name": "Diplomatic Engagemen"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "6d1cf75b-72ec-4a26-867f-d6e5cb4f7171",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "6d1cf75b-72ec-4a26-867f-d6e5cb4f7171",
+            "name": "Saint Sava"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00da1ac3-4c00-4a73-a72f-ab1645b29e55:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:41cff97d-2a9b-4560-9274-445643c456ba",
+          "entity": {
+            "id": "00da1ac3-4c00-4a73-a72f-ab1645b29e55",
+            "name": "Diplomatic Engagemen"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "41cff97d-2a9b-4560-9274-445643c456ba",
+          "valueType": "string",
+          "stringValue": "**Diplomatic Engagements**\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00da1ac3-4c00-4a73-a72f-ab1645b29e55:name:cbe53c32-1bd0-4d54-8080-f5c75bbc4a5d",
+          "entity": {
+            "id": "00da1ac3-4c00-4a73-a72f-ab1645b29e55",
+            "name": "Diplomatic Engagemen"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "cbe53c32-1bd0-4d54-8080-f5c75bbc4a5d",
+          "valueType": "string",
+          "stringValue": "Diplomatic Engagemen",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00da1ac3-4c00-4a73-a72f-ab1645b29e55:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "00da1ac3-4c00-4a73-a72f-ab1645b29e55",
+            "name": "Diplomatic Engagemen"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00da889d-7c35-410d-a28f-8d819484cbdc:dd4999b9-77f0-4c2b-a02b-5a26b233854e:e292c2cd-5f6e-44f7-bf62-c5839fa719dc",
+          "entity": {
+            "id": "00da889d-7c35-410d-a28f-8d819484cbdc",
+            "name": "Sacred rituals"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "e292c2cd-5f6e-44f7-bf62-c5839fa719dc",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "e292c2cd-5f6e-44f7-bf62-c5839fa719dc",
+            "name": "Funeral"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00da889d-7c35-410d-a28f-8d819484cbdc:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:908f33d6-afa9-4416-9de0-02e5ac8d203d",
+          "entity": {
+            "id": "00da889d-7c35-410d-a28f-8d819484cbdc",
+            "name": "Sacred rituals"
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "908f33d6-afa9-4416-9de0-02e5ac8d203d",
+          "valueType": "string",
+          "stringValue": "## **Sacred rituals**\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00da889d-7c35-410d-a28f-8d819484cbdc:name:cd15a068-f6d3-4fe6-87a6-deeb80ea17ec",
+          "entity": {
+            "id": "00da889d-7c35-410d-a28f-8d819484cbdc",
+            "name": "Sacred rituals"
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "cd15a068-f6d3-4fe6-87a6-deeb80ea17ec",
+          "valueType": "string",
+          "stringValue": "Sacred rituals",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00da889d-7c35-410d-a28f-8d819484cbdc:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "00da889d-7c35-410d-a28f-8d819484cbdc",
+            "name": "Sacred rituals"
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00e7485a-e856-427d-bd2d-e7d92f1be700:dd4999b9-77f0-4c2b-a02b-5a26b233854e:f7c83da4-8ea2-46d4-9fd3-f494ee772890",
+          "entity": {
+            "id": "00e7485a-e856-427d-bd2d-e7d92f1be700",
+            "name": null
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "f7c83da4-8ea2-46d4-9fd3-f494ee772890",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "f7c83da4-8ea2-46d4-9fd3-f494ee772890",
+            "name": "Epiphany"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00e7485a-e856-427d-bd2d-e7d92f1be700:f88047ce-bd8d-4fbf-83f6-58e84ee533e4:944b760f-83c1-477d-b15e-1428f2d53710",
+          "entity": {
+            "id": "00e7485a-e856-427d-bd2d-e7d92f1be700",
+            "name": null
+          },
+          "attribute": {
+            "id": "f88047ce-bd8d-4fbf-83f6-58e84ee533e4",
+            "name": "Markdown Content"
+          },
+          "valueId": "944b760f-83c1-477d-b15e-1428f2d53710",
+          "valueType": "string",
+          "stringValue": "The liturgical practices and traditions associated with Epiphany **vary significantly** between **Western** and **Eastern** Christian denominations, each enriching the feast with unique customs and theological emphases.\n\n",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00e7485a-e856-427d-bd2d-e7d92f1be700:name:4c470619-dfce-4c3b-8d19-48fc8fed7523",
+          "entity": {
+            "id": "00e7485a-e856-427d-bd2d-e7d92f1be700",
+            "name": null
+          },
+          "attribute": {
+            "id": "name",
+            "name": "Name"
+          },
+          "valueId": "4c470619-dfce-4c3b-8d19-48fc8fed7523",
+          "valueType": "string",
+          "stringValue": "The liturgical pract",
+          "entityValue": null
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00e7485a-e856-427d-bd2d-e7d92f1be700:type:8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "entity": {
+            "id": "00e7485a-e856-427d-bd2d-e7d92f1be700",
+            "name": null
+          },
+          "attribute": {
+            "id": "type",
+            "name": "Types"
+          },
+          "valueId": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "8426caa1-43d6-47d4-a6f1-00c7c1a9a320",
+            "name": "Text Block"
+          }
+        },
+        {
+          "id": "0x0A7d904669976410e8Da452e592EeFC5A4b5d3c9:00e8c7b5-177b-4a79-8f90-91ac78c24c2b:dd4999b9-77f0-4c2b-a02b-5a26b233854e:17c56485-4858-4883-9e0c-e5b6c022d105",
+          "entity": {
+            "id": "00e8c7b5-177b-4a79-8f90-91ac78c24c2b",
+            "name": "Journey to Iberia"
+          },
+          "attribute": {
+            "id": "dd4999b9-77f0-4c2b-a02b-5a26b233854e",
+            "name": "Parent Entity"
+          },
+          "valueId": "17c56485-4858-4883-9e0c-e5b6c022d105",
+          "valueType": "entity",
+          "stringValue": null,
+          "entityValue": {
+            "id": "17c56485-4858-4883-9e0c-e5b6c022d105",
+            "name": "Saint Nino"
+          }
+        }
+      ]
+    }
+  }
+}
