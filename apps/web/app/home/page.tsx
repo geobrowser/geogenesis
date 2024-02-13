@@ -111,7 +111,7 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
     query: query,
   });
 
-  const combined = Effect.all([permissionedSpacesEffect, permissionlessSpacesEffect]);
+  const [permissioned, permissionless] = await Promise.all([
     Effect.runPromise(Effect.either(permissionedSpacesEffect)),
     Effect.runPromise(Effect.either(permissionlessSpacesEffect)),
   ]);
