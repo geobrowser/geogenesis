@@ -3,7 +3,7 @@ import { SupportedNetwork } from '@aragon/sdk-client-common';
 import { ethers } from 'ethers';
 
 import * as React from 'react';
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 
 import { useEthersSigner } from '~/core/wallet/ethers-adapters';
 
@@ -15,8 +15,6 @@ const AragonSDKContext = createContext<AragonSDKContextValue | undefined>(undefi
 
 export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) => {
   const ethersSigner = useEthersSigner();
-
-  // console.log('ethers signer', ethersSigner);
 
   const sdkContextParams: ContextParams = useMemo(
     () => ({

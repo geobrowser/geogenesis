@@ -1,7 +1,6 @@
 'use client';
 
 import { Client, Context, CreateDaoParams, DaoCreationSteps, DaoMetadata } from '@aragon/sdk-client';
-import { Web3ContextState } from '@aragon/sdk-client-common/dist/internal';
 import { VotingMode } from '@geogenesis/sdk';
 import { getAddress } from 'viem';
 
