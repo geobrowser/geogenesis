@@ -111,24 +111,42 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
     query: query,
   });
 
-  const combined = Effect.all([permissionedSpacesEffect, permissionlessSpacesEffect]);
+  const [permissioned, permissionless] = await Promise.all([
+    Effect.runPromise(Effect.either(permissionedSpacesEffect)),
+    Effect.runPromise(Effect.either(permissionlessSpacesEffect)),
+  ]);
 
-  const result = await Effect.runPromise(Effect.either(combined));
-
-  if (Either.isLeft(result)) {
-    const error = result.left;
+  if (Either.isLeft(permissioned)) {
+    const error = permissioned.left;
 
     switch (error._tag) {
       case 'GraphqlRuntimeError':
         console.error(`Encountered runtime graphql error in getSpacesWhereModerator.`, error.message);
-        return [];
+        break;
 
       default:
-        console.error(`${error._tag}: Unable to fetch spaces where editor controller`);
-        return [];
+        console.error(`${error._tag}: Unable to fetch permissioned spaces where editor controller`);
+        break;
     }
   }
 
-  const spaces = result.right.flatMap(result => result.spaces.map(space => space.id));
+  if (Either.isLeft(permissionless)) {
+    const error = permissionless.left;
+
+    switch (error._tag) {
+      case 'GraphqlRuntimeError':
+        console.error(`Encountered runtime graphql error in getSpacesWhereModerator.`, error.message);
+        break;
+
+      default:
+        console.error(`${error._tag}: Unable to fetch permissionless spaces where editor controller`);
+        break;
+    }
+  }
+
+  const permissionedSpaces: { id: string }[] = Either.isLeft(permissioned) ? [] : permissioned.right.spaces;
+  const permissionlessSpaces: { id: string }[] = Either.isLeft(permissionless) ? [] : permissionless.right.spaces;
+
+  const spaces = [...permissionedSpaces, ...permissionlessSpaces].map(space => space.id);
   return spaces;
 };
