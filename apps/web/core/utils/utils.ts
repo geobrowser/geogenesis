@@ -259,3 +259,7 @@ export function isPermissionlessSpace(spaceId: string) {
   // @TODO: Ensure we are correctly capitalizing the space id in the substream
   return !ALL_PUBLIC_SPACES.includes(spaceId);
 }
+
+export function toTitleCase(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
