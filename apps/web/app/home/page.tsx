@@ -94,7 +94,7 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
   const query = `{
       spaces(
         where: {
-            editorControllers_contains: ["0x48f03232F947A6d92A5E839936c9250999f404a0"]
+            editorControllers_contains: ["${address}"]
         }
       ) {
         id
