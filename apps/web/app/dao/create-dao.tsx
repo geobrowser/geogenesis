@@ -1,6 +1,7 @@
 'use client';
 
-import { Client, CreateDaoParams, DaoCreationSteps, DaoMetadata } from '@aragon/sdk-client';
+import { Client, Context, CreateDaoParams, DaoCreationSteps, DaoMetadata } from '@aragon/sdk-client';
+import { Web3ContextState } from '@aragon/sdk-client-common/dist/internal';
 import { VotingMode } from '@geogenesis/sdk';
 import { getAddress } from 'viem';
 
@@ -14,11 +15,11 @@ import { getGovernancePluginInstallItem, getSpacePluginInstallItem } from './enc
 
 // this route is only for testing creating a DAO on the frontend
 export function CreateDao() {
-  const { geoPluginContext } = useAragonSDKContext();
+  const { sdkContextParams } = useAragonSDKContext();
   const { data: wallet } = useWalletClient();
 
-  if (!geoPluginContext) throw new Error('geoPluginContext is undefined');
-  const client: Client = new Client(geoPluginContext);
+  if (!sdkContextParams) throw new Error('geoPluginContext is undefined');
+  const client: Client = new Client(new Context(sdkContextParams));
 
   const handleCreateDao = async () => {
     const metadata: DaoMetadata = {

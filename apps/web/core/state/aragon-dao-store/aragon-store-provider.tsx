@@ -1,30 +1,24 @@
-import { Client, ContextParams } from '@aragon/sdk-client';
+import { ContextParams } from '@aragon/sdk-client';
 import { SupportedNetwork } from '@aragon/sdk-client-common';
 import { ethers } from 'ethers';
 
 import * as React from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-import { GeoPluginContext as GeoPluginBaseContext } from '~/core/io/governance-space-plugin';
-import { GeoPluginClient } from '~/core/io/governance-space-plugin/client';
 import { useEthersSigner } from '~/core/wallet/ethers-adapters';
 
 export interface AragonSDKContextValue {
-  geoPluginContext?: GeoPluginBaseContext;
-  baseClient?: Client;
-  geoPluginClient?: GeoPluginClient;
+  sdkContextParams?: ContextParams;
 }
 
 const AragonSDKContext = createContext<AragonSDKContextValue | undefined>(undefined);
 
 export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) => {
-  const [geoPluginContext, setGeoPluginContext] = useState<GeoPluginBaseContext | undefined>(undefined);
-  const [geoPluginClient, setGeoPluginClient] = useState<GeoPluginClient | undefined>(undefined);
   const ethersSigner = useEthersSigner();
 
   // console.log('ethers signer', ethersSigner);
 
-  const aragonSDKContextParams: ContextParams = useMemo(
+  const sdkContextParams: ContextParams = useMemo(
     () => ({
       network: SupportedNetwork.POLYGON,
       signer: ethersSigner,
@@ -35,21 +29,7 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
     [ethersSigner]
   );
 
-  useEffect(() => {
-    const geoPluginContextInstance = new GeoPluginBaseContext(aragonSDKContextParams);
-    setGeoPluginContext(geoPluginContextInstance);
-  }, [aragonSDKContextParams]);
-
-  useEffect(() => {
-    if (geoPluginContext) {
-      const geoPluginClientInstance = new GeoPluginClient(geoPluginContext);
-      setGeoPluginClient(geoPluginClientInstance);
-    }
-  }, [geoPluginContext]);
-
-  return (
-    <AragonSDKContext.Provider value={{ geoPluginContext, geoPluginClient }}>{children}</AragonSDKContext.Provider>
-  );
+  return <AragonSDKContext.Provider value={{ sdkContextParams }}>{children}</AragonSDKContext.Provider>;
 };
 
 export const useAragonSDKContext = () => {
