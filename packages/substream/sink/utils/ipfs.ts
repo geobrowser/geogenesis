@@ -1,4 +1,4 @@
-import { Effect, Either, Schedule } from 'effect';
+import { Duration, Effect, Either, Schedule } from 'effect';
 
 import { IPFS_GATEWAY } from '../constants/constants.js';
 import { SpaceWithPluginAddressNotFoundError } from '../errors.js';
@@ -72,8 +72,18 @@ function getFetchIpfsContentEffect(
         },
       });
 
-      // @TODO: Add max retry time before erroring out
-      const response = yield* unwrap(Effect.retry(ipfsFetchEffect, Schedule.exponential('1 seconds')));
+      const response = yield* unwrap(
+        // Attempt to fetch with jittered exponential backoff for 60 seconds before failing
+        Effect.retry(
+          ipfsFetchEffect,
+          Schedule.exponential(100).pipe(
+            Schedule.jittered,
+            Schedule.compose(Schedule.elapsed),
+            // Retry for 1 minute.
+            Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(60)))
+          )
+        )
+      );
 
       return yield* unwrap(
         Effect.tryPromise({
