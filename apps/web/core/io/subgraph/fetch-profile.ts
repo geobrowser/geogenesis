@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { fetchEntity } from './fetch-entity';
 import { fetchProfilePermissionless } from './fetch-profile-permissionless';
 import { graphql } from './graphql';
-import { SubstreamNetworkEntity } from './network-local-mapping';
+import { SubstreamEntity } from './network-local-mapping';
 
 export interface FetchProfileOptions {
   address: string;
@@ -18,7 +18,7 @@ export interface FetchProfileOptions {
 }
 
 interface NetworkResult {
-  geoEntities: { nodes: SubstreamNetworkEntity[] };
+  geoEntities: { nodes: SubstreamEntity[] };
 }
 
 // We fetch for geoEntities -> name because the id of the wallet entity might not be the

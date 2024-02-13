@@ -2,6 +2,8 @@
 
 import { VoteOption } from '@geogenesis/sdk';
 
+import * as React from 'react';
+
 import { useWalletClient } from 'wagmi';
 import { prepareWriteContract, writeContract } from 'wagmi/actions';
 
