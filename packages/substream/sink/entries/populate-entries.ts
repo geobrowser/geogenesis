@@ -76,7 +76,7 @@ export async function populateWithFullEntries({
     // deleted triples from the new version.
     //
     // @TODO: This is insanely slow for large data sets (some of which we have)
-    const triplesForVersionsEffect: Effect.Effect<never, Error, Schema.triple_versions.Insertable[]> = Effect.gen(
+    const triplesForVersionsEffect: Effect.Effect<Schema.triple_versions.Insertable[], Error> = Effect.gen(
       function* (awaited) {
         const triplesForVersions = yield* awaited(
           Effect.all(
