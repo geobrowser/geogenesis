@@ -269,3 +269,65 @@ export async function createFiltersFromGraphQLString(
 
   return filters;
 }
+
+export function createGraphQLStringFromFiltersV2(
+  filters: {
+    columnId: string;
+    valueType: TripleValueType;
+    value: string;
+  }[],
+  typeId: string | null
+): string {
+  if (!typeId) return '';
+  if (filters.length === 0) return `{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: "${typeId}" } } } }`;
+
+  const filtersAsStrings = filters
+    .map(filter => {
+      // We treat Name and Space as special filters even though they are not always
+      // columns on the type schema for a table. We allow users to be able to filter
+      // by name and space.
+      if (filter.columnId === SYSTEM_IDS.NAME && filter.valueType === 'string') {
+        // For the name we can just search for the name based on the indexed GeoEntity name
+        return `name: { startsWithInsensitive: "${filter.value}" }`;
+      }
+
+      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'string') {
+        // @HACK: We map to the checksum address when filtering by space. Old filters
+        // might be using the incorrectly formatted address so we need to check for that
+        // here. In the future we'll migrate to the new API's query string format which will
+        // update all existing filters to use the correct space address as well.
+        //
+        // Previous versions of the subgraph did not correctly checksum the space address
+        // so any queries that relied on the incorrect space address checksum will not work
+        // against newer versions of the protocol.
+        return `triplesByEntityId: {
+          some: {
+            spaceId: { equalTo: "${getAddress(filter.value)}" }
+          }
+        }`;
+      }
+
+      if (filter.valueType === 'entity') {
+        // value is the ID of the relation
+        return `triplesByEntityId: { some: { attributeId: { equalTo: "${filter.columnId}" }, entityValueId: { equalTo: "${filter.value}"} } }`;
+      }
+
+      if (filter.valueType === 'string') {
+        // value is just the stringValue of the triple
+        return `triplesByEntityId: { some: { attributeId: { equalTo: "${filter.columnId}" }, stringValue: { equalToInsensitive: "${filter.value}"} } }`;
+      }
+
+      // We don't support other value types yet
+      return null;
+    })
+    .flatMap(f => (f ? [f] : []));
+
+  if (filtersAsStrings.length === 1) {
+    return `{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: "${typeId}" } } }, ${filtersAsStrings[0]}}`;
+  }
+
+  // Wrap each filter expression in curly brackets
+  const multiFilterQuery = filtersAsStrings.map(f => `{ ${f} }`).join(', ');
+
+  return `{ and: [{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: "${typeId}" } } } } ${multiFilterQuery}] }`;
+}

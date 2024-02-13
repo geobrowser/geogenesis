@@ -8,6 +8,10 @@ In a graph database you can think of an Entity as a node, and Triples as the edg
 
 ![Image depicting the graph-like nature of an entity and its triples](images/entity.png)
 
+Below is an example of an Entity and its related triples data coming from Geo. Additionally, we map several other properties in an Entity such as its [Types](05-types.md), schema, and associated [Versioning](./07-entity-versioning.md) relationships.
+
+![Image depicting entity data coming from the Geo backend](images/entity-data.png)
+
 ### Implementation
 
 In the Geo data service we map these knowledge graph concepts to a relational database using PostgreSQL. We store a large table of triples that each reference an [Entity ID](https://github.com/geobrowser/geogenesis/blob/bf51df1309f412de957942e0405400163f92878e/packages/substream/src/sql/initPublic.sql#L114). See [Triples](02-triples.md) for more information.

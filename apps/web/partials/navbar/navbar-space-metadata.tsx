@@ -1,6 +1,5 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 
@@ -14,13 +13,12 @@ import { NavbarBreadcrumb } from './navbar-breadcrumb';
 import { NavbarLinkMenu } from './navbar-link-menu';
 
 export function NavbarSpaceMetadata() {
-  let { config } = Services.useServices();
   const { subgraph } = Services.useServices();
   const params = useParams();
   const spaceId: string | undefined = params?.['id'] as string | undefined;
 
   const { data } = useQuery({
-    queryKey: ['space', spaceId, config.subgraph],
+    queryKey: ['space', spaceId],
     queryFn: async ({ signal }) => {
       if (!spaceId) return null;
       const space = await subgraph.fetchSpace({ id: spaceId });

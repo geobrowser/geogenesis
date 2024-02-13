@@ -24,8 +24,6 @@ import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ReferencedByEntity } from '~/partials/entity-page/types';
 
-import { SpaceConfigProvider } from '~/app/space/[id]/space-config-provider';
-
 const TABS = ['Overview', 'Activity'] as const;
 
 interface Props {
@@ -77,57 +75,51 @@ export default async function ProfileLayout({ children, params }: Props) {
   });
 
   if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
-    return (
-      <SpaceConfigProvider spaceId={params.id}>
-        <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>
-      </SpaceConfigProvider>
-    );
+    return <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>;
   }
 
   const profile = await getProfilePage(decodedId);
 
   return (
-    <SpaceConfigProvider spaceId={params.id}>
-      <TypesStoreServerContainer spaceId={params.id}>
-        <EntityStoreProvider id={decodedId} spaceId={params.id} initialTriples={profile.triples}>
-          <EditorProvider
-            id={profile.id}
-            spaceId={params.id}
-            initialBlockIdsTriple={profile.blockIdsTriple}
-            initialBlockTriples={profile.blockTriples}
-          >
-            <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-            <EntityPageContentContainer>
-              <EditableHeading
-                spaceId={params.id}
-                entityId={decodedId}
-                name={profile.name ?? decodedId}
-                triples={profile.triples}
-              />
-              <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
+    <TypesStoreServerContainer spaceId={params.id}>
+      <EntityStoreProvider id={decodedId} spaceId={params.id} initialTriples={profile.triples}>
+        <EditorProvider
+          id={profile.id}
+          spaceId={params.id}
+          initialBlockIdsTriple={profile.blockIdsTriple}
+          initialBlockTriples={profile.blockTriples}
+        >
+          <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+          <EntityPageContentContainer>
+            <EditableHeading
+              spaceId={params.id}
+              entityId={decodedId}
+              name={profile.name ?? decodedId}
+              triples={profile.triples}
+            />
+            <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
 
-              <Spacer height={40} />
-              <TabGroup
-                tabs={TABS.map(label => {
-                  const href =
-                    label === 'Overview'
-                      ? decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}`)
-                      : decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}/${label.toLowerCase()}`);
-                  return {
-                    href,
-                    label,
-                  };
-                })}
-              />
+            <Spacer height={40} />
+            <TabGroup
+              tabs={TABS.map(label => {
+                const href =
+                  label === 'Overview'
+                    ? decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}`)
+                    : decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}/${label.toLowerCase()}`);
+                return {
+                  href,
+                  label,
+                };
+              })}
+            />
 
-              <Spacer height={20} />
+            <Spacer height={20} />
 
-              {children}
-            </EntityPageContentContainer>
-          </EditorProvider>
-        </EntityStoreProvider>
-      </TypesStoreServerContainer>
-    </SpaceConfigProvider>
+            {children}
+          </EntityPageContentContainer>
+        </EditorProvider>
+      </EntityStoreProvider>
+    </TypesStoreServerContainer>
   );
 }
 

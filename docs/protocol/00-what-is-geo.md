@@ -1,10 +1,10 @@
 # What is Geo?
 
-Geo is two things: 1) the protocol, and 2) Geo Genesis, a dApp.
+Geo is two things: 1) a way for communities to organize and get to consensus on knowledge and information and 2) A user interface for browsing The Graph.
 
-At it's core, the Geo protocol is a worldwide, public, decentralized graph database built with Polygon, IPFS, and a data service deployed on The Graph Horizon. Geo enables us to curate the world's public knowledge in a trustless, decentralized, transparent way.
+At it's core, the Geo is a worldwide, public, decentralized graph database built with Ethereum, IPFS, and a data service deployed on The Graph Network. Geo enables us to curate the world's public knowledge in a trustless, decentralized, transparent way.
 
-The Geo Genesis dApp is meant to be the best interface for interacting with the public knowledge in the Geo protocol.
+The Geo Genesis dApp is meant to be the best interface for browsing and interacting with public knowledge and information.
 
 ### Data model
 

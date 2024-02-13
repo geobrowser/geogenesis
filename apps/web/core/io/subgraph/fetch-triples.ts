@@ -126,5 +126,5 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  return fromNetworkTriples(result.triples.nodes.filter(triple => !triple.isProtected));
+  return fromNetworkTriples(result.triples.nodes);
 }
