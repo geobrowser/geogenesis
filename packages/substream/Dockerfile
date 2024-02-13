@@ -21,4 +21,4 @@ COPY --from=build /app/src/sql /app/src/sql
 
 # TODO: Figure out how to set up schema for DB as part of
 # postgres setup
-CMD [ "pnpm", "start", "--from-cache", "--from-genesis"]
+CMD [ "pnpm", "start"]
