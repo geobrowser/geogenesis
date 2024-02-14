@@ -122,13 +122,13 @@ export function useAccessControl(spaceId?: string | null) {
     },
   });
 
-  // if (process.env.NODE_ENV === 'development') {
-  //   return {
-  //     isAdmin: true,
-  //     isEditorController: true,
-  //     isEditor: true,
-  //   };
-  // }
+  if (process.env.NODE_ENV === 'development') {
+    return {
+      isAdmin: true,
+      isEditorController: true,
+      isEditor: true,
+    };
+  }
 
   if (!address || !hydrated || !space) {
     return {
