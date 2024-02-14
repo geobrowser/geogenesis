@@ -556,12 +556,12 @@ importers:
       '@bufbuild/protobuf': ^1.4.2
       '@connectrpc/connect': ^1.1.3
       '@connectrpc/connect-node': ^1.1.3
-      '@effect/platform-node': ^0.31.9
-      '@effect/schema': ^0.48.4
-      '@substreams/core': ^0.8.0
-      '@substreams/manifest': ^0.7.0
-      '@substreams/node': ^0.4.3
-      '@substreams/sink': ^0.6.0
+      '@effect/platform-node': 0.31.9
+      '@effect/schema': 0.48.4
+      '@substreams/core': 0.8.0
+      '@substreams/manifest': 0.7.0
+      '@substreams/node': 0.4.3
+      '@substreams/sink': 0.6.0
       '@trivago/prettier-plugin-sort-imports': ^4.2.0
       '@types/node': latest
       '@types/pg': ^8.10.9
@@ -570,7 +570,7 @@ importers:
       commander: latest
       dotenv: latest
       dotenv-cli: ^7.3.0
-      effect: ^2.0.0-next.55
+      effect: 2.0.0-next.55
       esbuild: ^0.19.5
       eslint: ^8.21.0
       eslint-config-prettier: ^8.5.0
@@ -595,15 +595,15 @@ importers:
       '@bufbuild/protobuf': 1.4.2
       '@connectrpc/connect': 1.1.3_@bufbuild+protobuf@1.4.2
       '@connectrpc/connect-node': 1.1.3_rabf2hmdfizgo3zlfs6bmsltoi
-      '@effect/platform-node': 0.31.9_ahljyljorygtkwayn2ohjn67ui
-      '@effect/schema': 0.48.4_rquq5squbjzsx4lxgpih2idvli
+      '@effect/platform-node': 0.31.9_4vgu5ok2jnv3ld3c7qowfmlame
+      '@effect/schema': 0.48.4_mjjwvshfpxy7bpv3il2vf7a6qe
       '@substreams/core': 0.8.0_rabf2hmdfizgo3zlfs6bmsltoi
-      '@substreams/manifest': 0.7.0_oajrmmbqwqbmh5q2wowor3efr4
+      '@substreams/manifest': 0.7.0_5yxxqb4n4rtzmucbvcvensutaq
       '@substreams/node': 0.4.3
-      '@substreams/sink': 0.6.0_7u2smfe62ftvk6e3q4ynnrpvyq
-      commander: 11.1.0
-      dotenv: 16.4.1
-      effect: 2.0.0-next.56
+      '@substreams/sink': 0.6.0_bcxvkn6ukflpo5llnxvnddpo5q
+      commander: 12.0.0
+      dotenv: 16.4.3
+      effect: 2.0.0-next.55
       fast-check: 3.14.0
       fetch-retry: 5.0.6
       node-fetch: 3.3.2
@@ -617,7 +617,7 @@ importers:
       zod: 3.22.4
     devDependencies:
       '@trivago/prettier-plugin-sort-imports': 4.2.0_prettier@3.0.3
-      '@types/node': 20.11.6
+      '@types/node': 20.11.17
       '@types/pg': 8.10.9
       '@typescript-eslint/eslint-plugin': 6.13.1_vnppzclqnuaninlvbm3xmr24by
       '@typescript-eslint/parser': 6.13.1_5mr5kdlp66kwvgvlily63o2x6y
@@ -1172,8 +1172,8 @@ packages:
     resolution: {integrity: sha512-JyEH8Z+OD5Sc2opSg86qMHn1EM1Sa+zj/Tc0ovxdwk56ByVNONJSabuCUbLQp+eKN3rWNfrho0X+3SEqEPXIow==}
     dev: false
 
-  /@bufbuild/protobuf/1.7.0:
-    resolution: {integrity: sha512-jIsRadRsyxf6ERBU1auY2c1k3doFdqh15F4HRZs4BELVuBtpN+3ipkXqcsWE+rD+EQNigeR29SfQ+ES6UX/jGg==}
+  /@bufbuild/protobuf/1.7.2:
+    resolution: {integrity: sha512-i5GE2Dk5ekdlK1TR7SugY4LWRrKSfb5T1Qn4unpIMbfxoeGKERKQ59HG3iYewacGD10SR7UzevfPnh6my4tNmQ==}
     dev: false
 
   /@chainsafe/as-sha256/0.3.1:
@@ -1247,15 +1247,15 @@ packages:
       undici: 5.28.1
     dev: false
 
-  /@connectrpc/connect-node/1.3.0_tioubhd7fo52jbkrhqm3el6crm:
+  /@connectrpc/connect-node/1.3.0_bxtizuvznsbuo3vepj6cj6snqi:
     resolution: {integrity: sha512-2fV/z/8MUFOkTn2Gbm7T/qvRfkpt/D/w7ykYqACZRH6VNG/faY4lH2wUZiNkwv9tzTrECKOJFyPsaGs3nRYK3w==}
     engines: {node: '>=16.0.0'}
     peerDependencies:
       '@bufbuild/protobuf': ^1.4.2
       '@connectrpc/connect': 1.3.0
     dependencies:
-      '@bufbuild/protobuf': 1.7.0
-      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.0
+      '@bufbuild/protobuf': 1.7.2
+      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.2
       undici: 5.28.2
     dev: false
 
@@ -1267,12 +1267,12 @@ packages:
       '@bufbuild/protobuf': 1.4.2
     dev: false
 
-  /@connectrpc/connect/1.3.0_@bufbuild+protobuf@1.7.0:
+  /@connectrpc/connect/1.3.0_@bufbuild+protobuf@1.7.2:
     resolution: {integrity: sha512-kTeWxJnLLtxKc2ZSDN0rIBgwfP8RwcLknthX4AKlIAmN9ZC4gGnCbwp+3BKcP/WH5c8zGBAWqSY3zeqCM+ah7w==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.4.2
     dependencies:
-      '@bufbuild/protobuf': 1.7.0
+      '@bufbuild/protobuf': 1.7.2
     dev: false
 
   /@cspotcode/source-map-support/0.8.1:
@@ -1282,39 +1282,39 @@ packages:
       '@jridgewell/trace-mapping': 0.3.9
     dev: true
 
-  /@effect/platform-node/0.31.9_ahljyljorygtkwayn2ohjn67ui:
+  /@effect/platform-node/0.31.9_4vgu5ok2jnv3ld3c7qowfmlame:
     resolution: {integrity: sha512-paV3NIOgkQVLrB6D+ChDNLppZzfPfInc6Hc/1bKRX53PF6jobq3+15MignbT765yPW/0Y2g0Eu1zNZBE5ouQbg==}
     peerDependencies:
       effect: 2.0.0-next.55
     dependencies:
-      '@effect/platform': 0.30.6_ahljyljorygtkwayn2ohjn67ui
-      effect: 2.0.0-next.56
+      '@effect/platform': 0.30.6_4vgu5ok2jnv3ld3c7qowfmlame
+      effect: 2.0.0-next.55
       mime: 3.0.0
       multipasta: 0.1.19
     transitivePeerDependencies:
       - '@effect/schema'
     dev: false
 
-  /@effect/platform/0.30.6_ahljyljorygtkwayn2ohjn67ui:
+  /@effect/platform/0.30.6_4vgu5ok2jnv3ld3c7qowfmlame:
     resolution: {integrity: sha512-TJpE5BAaXhtV0qGcR9mvzuW3QsIPmzYoEAwhxmJyzefvlGyD9UC5KXzWwQeQW9J7yQ7/48J8feGTp5ZJAvUOFA==}
     peerDependencies:
       '@effect/schema': ^0.48.0
       effect: 2.0.0-next.55
     dependencies:
-      '@effect/schema': 0.48.4_rquq5squbjzsx4lxgpih2idvli
-      effect: 2.0.0-next.56
+      '@effect/schema': 0.48.4_mjjwvshfpxy7bpv3il2vf7a6qe
+      effect: 2.0.0-next.55
       find-my-way: 7.7.0
       multipasta: 0.1.19
       path-browserify: 1.0.1
     dev: false
 
-  /@effect/schema/0.48.4_rquq5squbjzsx4lxgpih2idvli:
+  /@effect/schema/0.48.4_mjjwvshfpxy7bpv3il2vf7a6qe:
     resolution: {integrity: sha512-V+1eY8VvYuEZs+vU0JWPoh30gNdBtDnabOJrE2tNuoMKcw9LgjQFaPoVR4Jw7Swm0TmdfRHuIkhWjK4i7XyGiA==}
     peerDependencies:
       effect: 2.0.0-next.55
       fast-check: ^3.13.2
     dependencies:
-      effect: 2.0.0-next.56
+      effect: 2.0.0-next.55
       fast-check: 3.14.0
     dev: false
 
@@ -5050,14 +5050,14 @@ packages:
       '@stablelib/wipe': 1.0.1
     dev: false
 
-  /@substreams/core/0.7.0_tioubhd7fo52jbkrhqm3el6crm:
+  /@substreams/core/0.7.0_bxtizuvznsbuo3vepj6cj6snqi:
     resolution: {integrity: sha512-SJ70pbIRWNdp17Ld1QbGJpQ2ohvYUBKiAkOKnODeqLCDmc/xKs66nxJCIzQOvIxqLXVRU3QiBwm6NQB3CKrP0A==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.4.2
       '@connectrpc/connect': ^1.1.3
     dependencies:
-      '@bufbuild/protobuf': 1.7.0
-      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.0
+      '@bufbuild/protobuf': 1.7.2
+      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.2
     dev: false
 
   /@substreams/core/0.8.0_rabf2hmdfizgo3zlfs6bmsltoi:
@@ -5070,7 +5070,7 @@ packages:
       '@connectrpc/connect': 1.1.3_@bufbuild+protobuf@1.4.2
     dev: false
 
-  /@substreams/manifest/0.7.0_oajrmmbqwqbmh5q2wowor3efr4:
+  /@substreams/manifest/0.7.0_5yxxqb4n4rtzmucbvcvensutaq:
     resolution: {integrity: sha512-pCYd/O7hIi2DylVqeXX9Z7AQiHmJwwnvW/ZOdvi4VGreHSuBcQIL0MxB5OlJ4OFpvLSkh8qp2yZ5nGbzS1TjQQ==}
     peerDependencies:
       '@bufbuild/buf': ^1.28.0
@@ -5081,9 +5081,9 @@ packages:
     dependencies:
       '@bufbuild/buf': 1.28.1
       '@bufbuild/protobuf': 1.4.2
-      '@effect/schema': 0.48.4_rquq5squbjzsx4lxgpih2idvli
+      '@effect/schema': 0.48.4_mjjwvshfpxy7bpv3il2vf7a6qe
       '@substreams/core': 0.8.0_rabf2hmdfizgo3zlfs6bmsltoi
-      effect: 2.0.0-next.56
+      effect: 2.0.0-next.55
       yaml: 2.3.4
     transitivePeerDependencies:
       - '@connectrpc/connect'
@@ -5093,14 +5093,14 @@ packages:
     resolution: {integrity: sha512-XpzXg4QhNgqTXjXB/OfuBwfp8REgPC9arpPFQ4vNS0toia6BZjOLirB42txl7DLo053FIaEDqPsKaR7D2Cmv0g==}
     engines: {node: '>=18'}
     dependencies:
-      '@bufbuild/protobuf': 1.7.0
-      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.0
-      '@connectrpc/connect-node': 1.3.0_tioubhd7fo52jbkrhqm3el6crm
-      '@substreams/core': 0.7.0_tioubhd7fo52jbkrhqm3el6crm
+      '@bufbuild/protobuf': 1.7.2
+      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.2
+      '@connectrpc/connect-node': 1.3.0_bxtizuvznsbuo3vepj6cj6snqi
+      '@substreams/core': 0.7.0_bxtizuvznsbuo3vepj6cj6snqi
       eventemitter3: 5.0.1
     dev: false
 
-  /@substreams/sink/0.6.0_7u2smfe62ftvk6e3q4ynnrpvyq:
+  /@substreams/sink/0.6.0_bcxvkn6ukflpo5llnxvnddpo5q:
     resolution: {integrity: sha512-km25ZLj/Hb3TVYZTW7KtYpSZU8+6rhhLHhhZZhu/nWnuwBw4iefPlTXEsTAOTTCSSAB9UXa2C7xx/U7UH8ok6Q==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.4.2
@@ -5110,7 +5110,7 @@ packages:
       '@bufbuild/protobuf': 1.4.2
       '@connectrpc/connect': 1.1.3_@bufbuild+protobuf@1.4.2
       '@substreams/core': 0.8.0_rabf2hmdfizgo3zlfs6bmsltoi
-      effect: 2.0.0-next.56
+      effect: 2.0.0-next.55
     dev: false
 
   /@swc/helpers/0.5.2:
@@ -5964,9 +5964,8 @@ packages:
       undici-types: 5.26.5
     dev: true
 
-  /@types/node/20.11.6:
-    resolution: {integrity: sha512-+EOokTnksGVgip2PbYbr3xnR7kZigh4LbybAfBAw5BpnQ+FqBYUsvCEjYd70IXKlbohQ64mzEYmMtlWUY8q//Q==}
-    dependencies:
+  /@types/node/20.11.17:
+    resolution: {integrity: sha512-QmgQZGWu1Yw9TDyAP9ZzpFJKynYNeOvwMJmaxABfieQoVoiVOS6MN1WSpqpRcbeA5+RW82kraAVxCCJg+780Qw==}
       undici-types: 5.26.5
     dev: true
 
@@ -9707,9 +9706,9 @@ packages:
     resolution: {integrity: sha512-VtDvQpIJBvBatnONUsPzXYFVKQQAhuf3XTNOAsdBxCNO/QCtUUd8LSgjn0GVarBkCad6aJCZfXgrjYbl/KRr7w==}
     dev: false
 
-  /commander/11.1.0:
-    resolution: {integrity: sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==}
-    engines: {node: '>=16'}
+  /commander/12.0.0:
+    resolution: {integrity: sha512-MwVNWlYjDTtOjX5PiD7o5pK0UrFU/OYgcJfjjK4RaHZETNtjJqrZa9Y9ds88+A+f+d5lv+561eZ+yCKoS3gbAA==}
+    engines: {node: '>=18'}
     dev: false
 
   /commander/2.18.0:
@@ -10559,7 +10558,7 @@ packages:
     resolution: {integrity: sha512-314CA4TyK34YEJ6ntBf80eUY+t1XaFLyem1k9P0sX1gn30qThZ5qZr/ZwE318gEnzyYP9yj9HJk6SqwE0upkfw==}
     dependencies:
       cross-spawn: 7.0.3
-      dotenv: 16.4.1
+      dotenv: 16.4.3
       dotenv-expand: 10.0.0
       minimist: 1.2.7
     dev: true
@@ -10579,8 +10578,8 @@ packages:
     engines: {node: '>=12'}
     dev: false
 
-  /dotenv/16.4.1:
-    resolution: {integrity: sha512-CjA3y+Dr3FyFDOAMnxZEGtnW9KBR2M0JvvUtXNW+dYJL5ROWxP9DUHCwgFqpMk0OXCc0ljhaNTr2w/kutYIcHQ==}
+  /dotenv/16.4.3:
+    resolution: {integrity: sha512-II98GFrje5psQTSve0E7bnwMFybNLqT8Vu8JIFWRjsE3khyNUm/loZupuy5DVzG2IXf/ysxvrixYOQnM6mjD3A==}
     engines: {node: '>=12'}
 
   /dotignore/0.1.2:
@@ -10626,8 +10625,8 @@ packages:
     resolution: {integrity: sha512-vwMIl39m8fMBeXoGIdSwMi2lrg7NltyrGMK0N/liGDl7G9LXvERKOCipNcobSIGO0V7hjaXEWgL6W/KEWEww+g==}
     dev: false
 
-  /effect/2.0.0-next.56:
-    resolution: {integrity: sha512-Z6L9rf78OveZorl4pC82hUM/kNhQ8epChuCBVNIjVsookbb6iqTuP9goi3qi6CR7xUZE+HnOKF2bzMIdOOP+Vw==}
+  /effect/2.0.0-next.55:
+    resolution: {integrity: sha512-kNOB/HaDSdaFSDVXK2gyf4XcTKbKKlllyoS871uDyoJskcc+024sSOHnNioXZPgkqaz55a3mad4DFfLUIETwYQ==}
     dev: false
 
   /ejs/3.1.6:
@@ -16229,6 +16228,7 @@ packages:
   /mime/3.0.0:
     resolution: {integrity: sha512-jSCU7/VB1loIWBZe14aEYHU/+1UMEHoaO7qxCOVJOw9GgH72VAWppxNcjU+x9a2k3GSIBXNKxXQFqRvvZ7vr3A==}
     engines: {node: '>=10.0.0'}
+    hasBin: true
     dev: false
 
   /mimic-fn/1.2.0:
