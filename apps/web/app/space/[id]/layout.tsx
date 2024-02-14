@@ -54,7 +54,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       filter: [{ field: 'attribute-id', value: ROLE_ATTRIBUTE }],
     });
 
-    if (roleTriples) {
+    if (roleTriples.length > 0) {
       teamCount = roleTriples.length;
     }
   }

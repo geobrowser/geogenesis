@@ -56,6 +56,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
   const [avatar, setAvatar] = useAtom(teamMemberAvatarAtom);
   const [name, setName] = useAtom(teamMemberNameAtom);
   const [role, setRole] = useAtom(teamMemberRoleAtom);
+  const roleUrl = role ? `/space/${role.nameTripleSpace}/${role.id}` : '';
   const [hasAddedTeamMember, setHasAddedTeamMember] = useAtom(addedTeamMemberAtom);
   const [draftMembers, setDraftMembers] = useAtom(draftMembersAtom);
 
@@ -165,15 +166,16 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
         const entityId = value.trim();
         setEntityId(entityId);
 
-        const person = await Subgraph.fetchEntity({
-          id: entityId,
-        });
+        const [person, types] = await Promise.all([
+          Subgraph.fetchEntity({
+            id: entityId,
+          }),
+          fetchEntityType({
+            id: entityId,
+          }),
+        ]);
 
         if (person) {
-          const types = await fetchEntityType({
-            id: entityId,
-          });
-
           if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
             const avatar = Entity.avatar(person?.triples);
             setAvatar(avatar);
@@ -205,9 +207,9 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     }
   }, []);
 
-  const handleOnChangeAvatar = async (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const file = e.target.files[0];
+  const handleOnChangeAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      const file = event.target.files[0];
       const ipfsUri = await storageClient.uploadFile(file);
       const imageValue = Value.toImageValue(ipfsUri);
       setAvatar(imageValue);
@@ -338,7 +340,9 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
                   />
                 ) : (
                   <div className="flex h-[29px] items-center text-body font-medium">
-                    <DeletableChipButton onClick={handleResetRole}>{role.name}</DeletableChipButton>
+                    <DeletableChipButton href={roleUrl} onClick={handleResetRole}>
+                      {role.name}
+                    </DeletableChipButton>
                   </div>
                 )}
                 {error && (

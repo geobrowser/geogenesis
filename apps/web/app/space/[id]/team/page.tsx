@@ -1,6 +1,7 @@
 import { AVATAR_ATTRIBUTE, NAME, ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
 
 import { Subgraph } from '~/core/io';
+import type { Triple as TripleType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
@@ -16,13 +17,19 @@ export type TeamMember = {
   space: string;
   name: string;
   role: string;
+  roleTriple: TripleType;
   avatar: string;
   linked: boolean;
 };
 
 export default async function TeamPage({ params }: TeamPageProps) {
   const spaceId = params.id;
+  const teamMembers = await getTeamMembers(spaceId);
 
+  return <TeamMembers spaceId={spaceId} teamMembers={teamMembers} />;
+}
+
+const getTeamMembers = async (spaceId: string) => {
   const teamMembers: Array<TeamMember> = [];
 
   const [roleTriples, nameTriples, avatarTriples] = await Promise.all([
@@ -49,7 +56,7 @@ export default async function TeamPage({ params }: TeamPageProps) {
     }),
   ]);
 
-  if (!roleTriples) {
+  if (roleTriples.length === 0) {
     return [];
   }
 
@@ -61,6 +68,7 @@ export default async function TeamPage({ params }: TeamPageProps) {
       space: triple.space,
       name: triple.entityName ?? '',
       role: triple.value.name ?? '',
+      roleTriple: triple,
       avatar: '',
       linked: false,
     };
@@ -133,5 +141,5 @@ export default async function TeamPage({ params }: TeamPageProps) {
     }
   });
 
-  return <TeamMembers spaceId={spaceId} teamMembers={teamMembers} />;
-}
+  return teamMembers;
+};

@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
 import { useAtom, useSetAtom } from 'jotai';
 
 import { useCallback, useRef, useState } from 'react';
@@ -44,6 +43,7 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
   const [avatar, setAvatar] = useAtom(teamMemberAvatarAtom);
   const [name, setName] = useAtom(teamMemberNameAtom);
   const [role, setRole] = useAtom(teamMemberRoleAtom);
+  const roleUrl = role ? `/space/${role.nameTripleSpace}/${role.id}` : '';
   const [hasAddedTeamMember, setHasAddedTeamMember] = useAtom(addedTeamMemberAtom);
   const [draftMembers, setDraftMembers] = useAtom(draftMembersAtom);
 
@@ -97,7 +97,7 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
         space: spaceId,
         entityId: newEntityId,
         entityName: name,
-        attributeId: ROLE_ATTRIBUTE,
+        attributeId: SYSTEM_IDS.ROLE_ATTRIBUTE,
         attributeName: 'Role',
         value: {
           type: 'entity',
@@ -153,9 +153,9 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
     }
   }, []);
 
-  const handleChangeAvatar = async (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const file = e.target.files[0];
+  const handleChangeAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      const file = event.target.files[0];
       const ipfsUri = await storageClient.uploadFile(file);
       const imageValue = Value.toImageValue(ipfsUri);
       setAvatar(imageValue);
@@ -225,7 +225,9 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
                   />
                 ) : (
                   <div className="flex h-[29px] items-center text-body font-medium">
-                    <DeletableChipButton onClick={handleResetRole}>{role.name}</DeletableChipButton>
+                    <DeletableChipButton href={roleUrl} onClick={handleResetRole}>
+                      {role.name}
+                    </DeletableChipButton>
                   </div>
                 )}
               </>

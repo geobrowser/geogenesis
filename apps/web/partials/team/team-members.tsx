@@ -17,7 +17,8 @@ import {
   teamMemberRoleAtom,
   teamMemberStepAtom,
 } from './atoms';
-import { EditTeamMember, TeamMember } from './team-member';
+import { EditTeamMember } from './edit-team-member';
+import { TeamMember } from './team-member';
 import { TeamMember as TeamMemberType } from '~/app/space/[id]/team/page';
 
 type TeamMembersProps = {
@@ -63,7 +64,7 @@ export const TeamMembers = ({ spaceId, teamMembers = [] }: TeamMembersProps) => 
       {isEditMode ? (
         <>
           {teamMembers.map(teamMember => (
-            <EditTeamMember key={teamMember.entityId} teamMember={teamMember} />
+            <EditTeamMember key={teamMember.entityId} teamMember={teamMember} spaceId={spaceId} />
           ))}
         </>
       ) : (

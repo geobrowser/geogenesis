@@ -2,11 +2,9 @@
 
 import { atom } from 'jotai';
 
-import { Entity as EntityType } from '~/core/types';
+import { Role } from './types';
 
 type TeamMemberStep = 'start' | 'find' | 'create';
-
-type Role = { id: string; name: string | null } | EntityType;
 
 export const draftMembersAtom = atom<Array<number>>([0]);
 
