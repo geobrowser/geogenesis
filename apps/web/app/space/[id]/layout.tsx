@@ -133,6 +133,7 @@ export default async function Layout({ children, params }: Props) {
             <SpacePageMetadataHeader
               typeNames={typeNames}
               spaceId={props.spaceId}
+              entityId={props.id}
               membersComponent={
                 <React.Suspense fallback={<MembersSkeleton />}>
                   <SpaceEditors spaceId={params.id} />
