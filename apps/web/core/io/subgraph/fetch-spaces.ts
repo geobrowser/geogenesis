@@ -126,7 +126,7 @@ export async function fetchSpaces() {
     const spaceConfigWithImage: SpaceConfigEntity | null = config
       ? {
           ...config,
-          image: EntityModule.cover(config.triples) ?? EntityModule.avatar(config.triples) ?? null,
+          image: EntityModule.avatar(config.triples) ?? EntityModule.cover(config.triples) ?? null,
         }
       : null;
 
