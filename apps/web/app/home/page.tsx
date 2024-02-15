@@ -102,7 +102,7 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
     }`;
 
   const substreamQuery = `{
-  spaces(filter: { spaceEditors: { some: { accountId: { equalTo: "${'0xdA039d254f9ae51436D9f3DEcDA520c3B055191c'}" } } } }) {
+  spaces(filter: { spaceEditors: { some: { accountId: { equalTo: "${address}" } } } }) {
     nodes {
       id
     }
