@@ -60,7 +60,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
   const roleUrl: string | null = role
     ? roleEntityId === initialRoleEntityId
-      ? `/space/${role.space}/${role.entityId}`
+      ? `/space/${role.space}/${role.value.id}`
       : `/space/${role.nameTripleSpace}/${role.id}`
     : null;
 

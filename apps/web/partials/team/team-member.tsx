@@ -13,7 +13,7 @@ type TeamMemberProps = {
 };
 
 export const TeamMember = ({ teamMember }: TeamMemberProps) => {
-  const roleUrl = `/space/${teamMember.roleTriple.space}/${teamMember.roleTriple.entityId}`;
+  const roleUrl = `/space/${teamMember.roleTriple.space}/${teamMember.roleTriple.value.id}`;
 
   return (
     <div className="flex items-center gap-4">
