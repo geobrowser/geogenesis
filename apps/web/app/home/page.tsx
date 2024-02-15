@@ -91,7 +91,7 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
 const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
   if (!address) return [];
 
-  const query = `{
+  const subgraphQuery = `{
       spaces(
         where: {
             editorControllers_contains: ["${address}"]
@@ -101,14 +101,22 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
       }
     }`;
 
+  const substreamQuery = `{
+  spaces(filter: { spaceEditors: { some: { accountId: { equalTo: "${'0xdA039d254f9ae51436D9f3DEcDA520c3B055191c'}" } } } }) {
+    nodes {
+      id
+    }
+  }
+}`;
+
   const permissionedSpacesEffect = graphql<{ spaces: { id: string }[] }>({
     endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph,
-    query,
+    query: subgraphQuery,
   });
 
-  const permissionlessSpacesEffect = graphql<{ spaces: { id: string }[] }>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).permissionlessSubgraph,
-    query: query,
+  const permissionlessSpacesEffect = graphql<{ spaces: { nodes: { id: string }[] } }>({
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    query: substreamQuery,
   });
 
   const [permissioned, permissionless] = await Promise.all([
@@ -145,7 +153,7 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
   }
 
   const permissionedSpaces: { id: string }[] = Either.isLeft(permissioned) ? [] : permissioned.right.spaces;
-  const permissionlessSpaces: { id: string }[] = Either.isLeft(permissionless) ? [] : permissionless.right.spaces;
+  const permissionlessSpaces = Either.isLeft(permissionless) ? [] : permissionless.right.spaces.nodes;
 
   const spaces = [...permissionedSpaces, ...permissionlessSpaces].map(space => space.id);
   return spaces;
