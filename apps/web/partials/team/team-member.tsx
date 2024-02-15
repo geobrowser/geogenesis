@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import { Avatar } from '~/design-system/avatar';
+import { LinkableChip } from '~/design-system/chip';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 
 import type { TeamMember as TeamMemberType } from '~/app/space/[id]/team/page';
@@ -12,6 +13,8 @@ type TeamMemberProps = {
 };
 
 export const TeamMember = ({ teamMember }: TeamMemberProps) => {
+  const roleUrl = `/space/${teamMember.roleTriple.space}/${teamMember.roleTriple.entityId}`;
+
   return (
     <div className="flex items-center gap-4">
       <div className="flex-shrink-0">
@@ -33,7 +36,7 @@ export const TeamMember = ({ teamMember }: TeamMemberProps) => {
           )}
         </div>
         <div className="mt-1">
-          <div className="text-tableCell font-medium text-grey-04">{teamMember.role}</div>
+          <LinkableChip href={roleUrl}>{teamMember.role}</LinkableChip>
         </div>
       </div>
     </div>
