@@ -43,6 +43,7 @@ describe('Entity autocomplete results list', () => {
             name: 'Name-1',
             description: 'Description-1',
             types: [{ id: 'type-id-1', name: 'Type-1' }],
+            nameTripleSpaces: ['space-1'],
             triples: [],
           }}
           alreadySelected={false}
