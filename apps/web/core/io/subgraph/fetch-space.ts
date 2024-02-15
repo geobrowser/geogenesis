@@ -74,7 +74,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
             `Encountered runtime graphql error in fetchSpace. queryId: ${queryId} spaceId: ${
               options.id
             } endpoint: ${endpoint}
-            
+
             queryString: ${getFetchSpaceQuery(options.id)}
             `,
             error.message
@@ -115,11 +115,16 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     filter: [],
   });
 
-  const spaceConfig = spaceConfigs[0] as Entity | undefined;
+  // Ensure that we're using the space config that has been defined in the current space.
+  // Eventually this association will be handled by the substream API.
+  const spaceConfig = spaceConfigs.find(s =>
+    Boolean(s.triples.find(t => t.attributeId === SYSTEM_IDS.TYPES && t.space === options.id))
+  );
+
   const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
     ? {
         ...spaceConfig,
-        image: EntityModule.cover(spaceConfig.triples) ?? EntityModule.avatar(spaceConfig.triples) ?? null,
+        image: EntityModule.avatar(spaceConfig.triples) ?? EntityModule.cover(spaceConfig.triples) ?? null,
       }
     : null;
 

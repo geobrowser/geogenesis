@@ -26,7 +26,7 @@ import { ResultContent, ResultsList } from './results-list';
 
 interface Props {
   placeholder?: string;
-  onDone: (result: { id: string; name: string | null }) => void;
+  onDone: (result: { id: string; name: string | null; nameTripleSpace?: string }) => void;
   itemIds: string[];
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
@@ -155,12 +155,12 @@ export function EntityTextAutocomplete({
             </ResultsList>
 
             {!isEmpty && !isLoading && (
-              <div className="pb-2">
+              <div>
                 <Divider type="horizontal" />
               </div>
             )}
 
-            <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
+            <div className="flex items-center justify-between p-2 text-smallButton">
               <AnimatePresence mode="wait">
                 {isLoading ? (
                   <motion.span
