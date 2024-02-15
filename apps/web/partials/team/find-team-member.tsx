@@ -44,6 +44,7 @@ import {
 import { NoAvatar } from './no-avatar';
 import { TeamMemberCreatedToast } from './toast';
 import type { Role } from './types';
+import { cachedFetchEntityType } from '~/app/space/(entity)/[id]/[entityId]/cached-entity-type';
 
 type FindTeamMemberProps = {
   spaceId: string;
@@ -162,12 +163,8 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
         Subgraph.fetchEntity({
           id: entityId,
         }),
-        fetchEntityType({
-          id: entityId,
-        }),
+        cachedFetchEntityType(entityId),
       ]);
-
-      console.log('person', person)
 
       if (person) {
         if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {

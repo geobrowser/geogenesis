@@ -23,6 +23,8 @@ import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
+import { cachedFetchSpace } from './cached-fetch-space';
+
 interface Props {
   params: { id: string };
   children: React.ReactNode;
@@ -180,7 +182,8 @@ function MembersSkeleton() {
 }
 
 const getData = async (spaceId: string) => {
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  // @TODO: If there's no space we should 404
+  const space = await cachedFetchSpace(spaceId);
   const entity = space?.spaceConfig;
 
   if (!entity) {

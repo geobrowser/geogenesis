@@ -8,6 +8,7 @@ import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { Entity } from '~/core/utils/entity';
+import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
@@ -77,21 +78,22 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
 
 const getData = async (spaceId: string, entityId: string) => {
   const entity = await Subgraph.fetchEntity({ id: entityId });
+  const nameTripleSpace = entity?.nameTripleSpaces?.[0];
 
   // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
-    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${entity?.nameTripleSpace}`);
-    return redirect(`/space/${entity?.nameTripleSpace}`);
+  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && nameTripleSpace) {
+    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${nameTripleSpace}`);
+    return redirect(NavUtils.toSpace(nameTripleSpace));
   }
 
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
   // the space for the entity we are rendering, so we need to redirect to the correct space.
-  if (entity?.nameTripleSpace) {
-    if (spaceId !== entity?.nameTripleSpace) {
+  if (nameTripleSpace) {
+    if (spaceId !== nameTripleSpace) {
       console.log(
-        `Redirecting from incorrect space ${spaceId} to correct space ${entity?.nameTripleSpace} for entity ${entityId}`
+        `Redirecting from incorrect space ${spaceId} to correct space ${nameTripleSpace} for entity ${entityId}`
       );
-      return redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
+      return redirect(NavUtils.toEntity(nameTripleSpace, entityId));
     }
   }
 

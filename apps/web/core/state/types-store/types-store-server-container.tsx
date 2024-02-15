@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { Subgraph } from '~/core/io';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 
 import { TypesStoreProvider } from './types-store';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   spaceId: string;
@@ -11,7 +11,7 @@ interface Props {
 }
 
 export async function TypesStoreServerContainer({ spaceId, children }: Props) {
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
 
   const [types, foreignTypes] = await Promise.all([
     fetchSpaceTypeTriples(spaceId),
