@@ -1,7 +1,7 @@
 import { AVATAR_ATTRIBUTE, NAME, ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
 import { Effect, Either } from 'effect';
-import { Environment } from '~/core/environment';
 
+import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { graphql } from '~/core/io/subgraph/graphql';
 import type { Triple as TripleType } from '~/core/types';
@@ -10,7 +10,6 @@ import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
 import { TeamMembers } from '~/partials/team/team-members';
-
 
 // We fetch for geoEntities -> name because the id of the wallet entity might not be the
 // same as the actual wallet address.
@@ -45,7 +44,7 @@ async function fetchOnchainProfileByEntityId(entityId: string): Promise<OnchainG
     query: getFetchProfileQuery(entityId),
   });
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function*(awaited) {
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(fetchWalletsGraphqlEffect));
 
     if (Either.isLeft(resultOrError)) {
@@ -59,7 +58,8 @@ async function fetchOnchainProfileByEntityId(entityId: string): Promise<OnchainG
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProfile. endpoint: ${config.profileSubgraph
+            `Encountered runtime graphql error in fetchProfile. endpoint: ${
+              config.profileSubgraph
             } entityId: ${entityId}
 
               queryString: ${getFetchProfileQuery(entityId)}
@@ -157,30 +157,33 @@ const getTeamMembers = async (spaceId: string) => {
     teamMembers.push(teamMember);
   });
 
-  const [entities, profiles] = await Promise.all(
-    [
-      Promise.all(
-        teamMembers.map(teamMember => {
-          return Subgraph.fetchEntity({ id: teamMember.entityId });
-        })),
-      // @TODO: Once we index profiles in the substream this can be put into a single graphql query
-      Promise.all(
-        teamMembers.map(teamMember => {
-          return fetchOnchainProfileByEntityId(teamMember.entityId);
-        }))
-    ]);
+  const [entities, profiles] = await Promise.all([
+    Promise.all(
+      teamMembers.map(teamMember => {
+        return Subgraph.fetchEntity({ id: teamMember.entityId });
+      })
+    ),
+    // @TODO: Once we index profiles in the substream this can be put into a single graphql query
+    Promise.all(
+      teamMembers.map(teamMember => {
+        return fetchOnchainProfileByEntityId(teamMember.entityId);
+      })
+    ),
+  ]);
 
   entities.forEach(entity => {
     if (!entity) return;
 
     const entityId = entity.id;
-    const entitySpaceId = entity.nameTripleSpace;
     const teamMemberIndex = teamMembers.findIndex(teamMember => teamMember.entityId === entityId);
 
-    const isLinked = entitySpaceId && spaceId !== entitySpaceId;
+    const profile = profiles.find(profile => profile && profile.id === entityId);
+    const profileSpaceId = profile?.homeSpace;
+
+    const isLinked = !!profileSpaceId && spaceId !== profileSpaceId;
 
     if (isLinked) {
-      teamMembers[teamMemberIndex].space = entitySpaceId;
+      teamMembers[teamMemberIndex].space = profileSpaceId;
       teamMembers[teamMemberIndex].linked = true;
 
       const nameTriple = nameTriples.find(nameTriple => nameTriple.entityId === entityId);
