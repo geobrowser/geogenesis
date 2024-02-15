@@ -175,21 +175,21 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
         id: result.id,
         name: result.name,
         description: null,
-        nameTripleSpace: undefined,
+        nameTripleSpaces: [],
         types: [],
         triples: [],
       };
     }
 
     const triples = fromNetworkTriples(networkTriples);
-    const nameTriple = Entity.nameTriple(triples);
+    const nameTriples = Entity.nameTriples(triples);
 
     return {
       id: result.id,
       name: result.name,
       description: Entity.description(triples),
-      nameTripleSpace: nameTriple?.space,
-      types: Entity.types(triples, nameTriple?.space),
+      nameTripleSpaces: nameTriples.map(t => t.space),
+      types: Entity.types(triples),
       triples,
     };
   });

@@ -100,18 +100,29 @@ export async function fetchSpaces() {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
+  // @TODO: This should be tied to the space config entity in the substream
+  // eventually.
+  const configs = await fetchEntities({
+    query: '',
+    typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
+    filter: [],
+  });
+
   const spaceConfigs = await Promise.all(
     result.spaces.nodes.map(async s => {
-      const configs = await fetchEntities({
-        query: '',
-        first: 1,
-        spaceId: s.id,
-        skip: 0,
-        typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
-        filter: [],
-      });
-
-      const spaceConfig: Entity | undefined = configs[0];
+      // Ensure that we're using the space config that has been defined in the current space.
+      // Eventually this association will be handled by the substream API.
+      const spaceConfig = configs
+        .filter(c => c.nameTripleSpaces?.includes(s.id))
+        .find(c =>
+          c.triples.some(
+            t =>
+              t.space === s.id &&
+              t.attributeId === SYSTEM_IDS.TYPES &&
+              t.value.type === 'entity' &&
+              t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
+          )
+        );
 
       return {
         spaceId: s.id,

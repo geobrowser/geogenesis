@@ -18,7 +18,6 @@ const space: Space = {
     image: null,
     name: 'Space-1',
     triples: [],
-    nameTripleSpace: 'space-1',
     description: 'Description-1',
     types: [
       {
@@ -44,8 +43,8 @@ describe('Entity autocomplete results list', () => {
             name: 'Name-1',
             description: 'Description-1',
             types: [{ id: 'type-id-1', name: 'Type-1' }],
+            nameTripleSpaces: ['space-1'],
             triples: [],
-            nameTripleSpace: 'space-1',
           }}
           alreadySelected={false}
         />

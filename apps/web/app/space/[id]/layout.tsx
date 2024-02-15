@@ -23,6 +23,8 @@ import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 
+import { cachedFetchSpace } from './cached-fetch-space';
+
 interface Props {
   params: { id: string };
   children: React.ReactNode;
@@ -180,21 +182,13 @@ function MembersSkeleton() {
 }
 
 const getData = async (spaceId: string) => {
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  // @TODO: If there's no space we should 404
+  const space = await cachedFetchSpace(spaceId);
   const entity = space?.spaceConfig;
 
   if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
     redirect(`/space/${spaceId}/entities`);
-  }
-
-  // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
-  // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
-  if (entity?.nameTripleSpace) {
-    if (spaceId !== entity?.nameTripleSpace) {
-      console.log('Redirecting to space from space configuration entity', entity?.nameTripleSpace);
-      redirect(`/space/${entity?.nameTripleSpace}/${entity.id}`);
-    }
   }
 
   const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';

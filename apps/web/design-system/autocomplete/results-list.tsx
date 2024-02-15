@@ -44,7 +44,10 @@ interface Props {
 }
 
 export function ResultContent({ onClick, result, alreadySelected, spaces, withDescription = true }: Props) {
-  const space = spaces.find(space => space.id === result.nameTripleSpace);
+  const duplicates = spaces.filter(space => space.id === result.name);
+  console.log('duplicates', duplicates);
+
+  const space = spaces.find(space => space.id === result.nameTripleSpaces?.[0] ?? '');
 
   const spaceName = space?.spaceConfig?.name ?? space?.id ?? '';
   const spaceImg = space?.spaceConfig?.image ?? null;

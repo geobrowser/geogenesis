@@ -233,7 +233,7 @@ export class Merged implements IMergedDataSource {
             // attached to a triple in the data model. Once we represents entities across multiple spaces
             // this filter likely won't make sense anymore.
             if (filter.columnId === 'space') {
-              return entity.nameTripleSpace === filter.value;
+              return entity.nameTripleSpaces?.includes(filter.value);
             }
 
             return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
@@ -258,7 +258,7 @@ export class Merged implements IMergedDataSource {
             // attached to a triple in the data model. Once we represents entities across multiple spaces
             // this filter likely won't make sense anymore.
             if (filter.columnId === 'space') {
-              return entity.nameTripleSpace === filter.value;
+              return entity.nameTripleSpaces?.includes(filter.value);
             }
 
             return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);

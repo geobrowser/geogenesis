@@ -108,9 +108,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
 
   const spaceConfigs = await fetchEntities({
     query: '',
-    first: 1,
     spaceId: options.id,
-    skip: 0,
     typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
     filter: [],
   });
