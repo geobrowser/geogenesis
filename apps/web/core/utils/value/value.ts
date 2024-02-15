@@ -37,7 +37,9 @@ export function imageValue(triple: Triple) {
 // format for storing in the triple
 // e.g., https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH -> ipfs://HASH
 export function toImageValue(rawValue: string) {
-  if (rawValue.startsWith('ipfs://') && rawValue.length === 53) {
+  // The CIDv0 decoding algorithm checks for length 46 and starts with 'Qm'
+  // We check for length 53 to account for the `ipfs://` prefix
+  if (rawValue.startsWith('ipfs://Qm') && rawValue.length === 53) {
     return rawValue;
   } else if (rawValue.includes('ipfs') && rawValue.includes('?arg=')) {
     return `ipfs://${getImageHash(rawValue)}`;
