@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -38,7 +39,26 @@ interface TabProps {
   priority: 1 | 2 | 3;
 }
 
-function buildTabsForSpacePage(types: EntityType[], params: Props['params']): TabProps[] {
+async function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Promise<TabProps[]> {
+  const typeIds = types.map(t => t.id);
+  const tabs = [];
+
+  let teamCount = 0;
+
+  if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
+    const roleTriples = await Subgraph.fetchTriples({
+      space: params.id,
+      query: '',
+      skip: 0,
+      first: 1000,
+      filter: [{ field: 'attribute-id', value: ROLE_ATTRIBUTE }],
+    });
+
+    if (roleTriples.length > 0) {
+      teamCount = roleTriples.length;
+    }
+  }
+
   const COMPANY_TABS = [
     {
       label: 'Overview',
@@ -49,6 +69,7 @@ function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Ta
       label: 'Team',
       href: `${NavUtils.toSpace(params.id)}/team`,
       priority: 1 as const,
+      badge: <>{teamCount.toString()}</>,
     },
     {
       label: 'Activity',
@@ -83,9 +104,6 @@ function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Ta
     },
   ];
 
-  const typeIds = types.map(t => t.id);
-  const tabs = [];
-
   // Order of how we add the tabs matters. We want to
   // show "content-based" tabs first, then "space-based" tabs.
   if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
@@ -116,6 +134,7 @@ export default async function Layout({ children, params }: Props) {
   const coverUrl = Entity.cover(props.triples);
 
   const typeNames = props.space?.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
+  const tabs = await buildTabsForSpacePage(props.space?.spaceConfig?.types ?? [], params);
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
@@ -127,7 +146,6 @@ export default async function Layout({ children, params }: Props) {
           initialBlockTriples={props.blockTriples}
         >
           <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
-
           <EntityPageContentContainer>
             <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
             <SpacePageMetadataHeader
@@ -141,11 +159,9 @@ export default async function Layout({ children, params }: Props) {
                 </React.Suspense>
               }
             />
-
             <Spacer height={40} />
-            <TabGroup tabs={buildTabsForSpacePage(props.space?.spaceConfig?.types ?? [], params)} />
+            <TabGroup tabs={tabs} />
             <Spacer height={20} />
-
             {children}
           </EntityPageContentContainer>
         </EditorProvider>

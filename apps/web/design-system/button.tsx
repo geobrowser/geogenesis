@@ -7,7 +7,6 @@ import { forwardRef } from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 
-
 export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'done' | 'success' | 'error';
 
 type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
@@ -28,7 +27,8 @@ const buttonClassNames = (className = '') =>
           secondary:
             '!text-grey-04 hover:!text-text bg-white hover:bg-bg border-grey-02 hover:border-text focus:border-text focus:shadow-inner-text shadow-button',
           tertiary: 'text-white bg-text border-white shadow-none',
-          ghost: '!text-grey-04 hover:!text-text bg-white hover:bg-bg border-transparent hover:border-text focus:border-text focus:shadow-inner-text shadow-none hover:shadow-button',
+          ghost:
+            '!text-grey-04 hover:!text-text bg-white hover:bg-bg border-transparent hover:border-text focus:border-text focus:shadow-inner-text shadow-none hover:shadow-button',
           success: 'text-white bg-green border-white shadow-none',
           error: 'text-white bg-red-01 border-white shadow-none',
           done: 'text-text bg-green border-green',
@@ -37,7 +37,7 @@ const buttonClassNames = (className = '') =>
         },
         small: {
           false: 'px-3 py-2 gap-2 text-[1.0625rem] leading-[1.125rem] text-button',
-          true: 'px-1.5 py-1 gap-1.5 text-xs leading-none text-smallButton',
+          true: 'px-1.5 py-1 gap-1.5 leading-none text-smallButton',
         },
         disabled: {
           true: 'cursor-not-allowed',
@@ -57,8 +57,6 @@ export const Button = forwardRef(function Button(
   { variant = 'primary', icon, small = false, className = '', disabled = false, children, ...rest }: ButtonProps,
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
-
-
   return (
     <button
       ref={ref}
