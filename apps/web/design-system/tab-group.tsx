@@ -28,18 +28,18 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
 interface TabProps {
   href: string;
   label: string;
-  badge?: string;
+  badge?: React.ReactNode;
   disabled?: boolean;
 }
 
-const tabStyles = cva('relative inline-flex gap-1.5 items-center text-quoteMedium transition-colors duration-100', {
+const tabStyles = cva('relative inline-flex items-center gap-1.5 text-quoteMedium transition-colors duration-100', {
   variants: {
     active: {
       true: 'text-text',
       false: 'text-grey-04 hover:text-text',
     },
     disabled: {
-      true: 'cursor-not-allowed hover:!text-grey-04 opacity-25',
+      true: 'cursor-not-allowed opacity-25 hover:!text-grey-04',
       false: '',
     },
   },
