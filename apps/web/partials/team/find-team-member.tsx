@@ -45,8 +45,6 @@ import { NoAvatar } from './no-avatar';
 import { TeamMemberCreatedToast } from './toast';
 import type { Role } from './types';
 
-const VALID_ENTITY_ID_LENGTHS = [36, 44];
-
 type FindTeamMemberProps = {
   spaceId: string;
 };
@@ -157,41 +155,36 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     async ({ currentTarget: { value } }: ChangeEvent<HTMLInputElement>) => {
       if (error) return;
 
-      const entityIdLength = value.trim().length;
-      const isValidEntityId = VALID_ENTITY_ID_LENGTHS.includes(entityIdLength);
+      const entityId = value.trim();
+      setEntityId(entityId);
 
-      if (!isValidEntityId) {
-        setEntityId(value);
-      } else {
-        const entityId = value.trim();
-        setEntityId(entityId);
+      const [person, types] = await Promise.all([
+        Subgraph.fetchEntity({
+          id: entityId,
+        }),
+        fetchEntityType({
+          id: entityId,
+        }),
+      ]);
 
-        const [person, types] = await Promise.all([
-          Subgraph.fetchEntity({
-            id: entityId,
-          }),
-          fetchEntityType({
-            id: entityId,
-          }),
-        ]);
+      console.log('person', person)
 
-        if (person) {
-          if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
-            const avatar = Entity.avatar(person?.triples);
-            setAvatar(avatar);
-            setName(Entity.name(person?.triples ?? []));
-            setPerson(person);
-            setLinkedName(Entity.name(person?.triples ?? []));
-            setLinkedAvatar(avatar);
-            setHasFoundPerson(true);
-          } else {
-            setEntityId('');
-            setError(true);
-          }
+      if (person) {
+        if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
+          const avatar = Entity.avatar(person?.triples);
+          setAvatar(avatar);
+          setName(Entity.name(person?.triples ?? []));
+          setPerson(person);
+          setLinkedName(Entity.name(person?.triples ?? []));
+          setLinkedAvatar(avatar);
+          setHasFoundPerson(true);
         } else {
           setEntityId('');
           setError(true);
         }
+      } else {
+        setEntityId('');
+        setError(true);
       }
     },
     [setAvatar, setName, error]
