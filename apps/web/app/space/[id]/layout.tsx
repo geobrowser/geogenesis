@@ -69,7 +69,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       label: 'Team',
       href: `${NavUtils.toSpace(params.id)}/team`,
       priority: 1 as const,
-      badge: <>{teamCount}</>,
+      badge: <>{teamCount.toString()}</>,
     },
     {
       label: 'Activity',
