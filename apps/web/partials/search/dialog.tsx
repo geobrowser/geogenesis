@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import { useGlobalSearch } from '~/core/hooks/use-global-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { Entity, OmitStrict } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -25,6 +26,22 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
   const { spaces } = useSpaces();
 
   if (!open) return null;
+
+  const separatedResults = autocomplete.results.reduce(
+    (acc, result) => {
+      for (const spaceId of result.nameTripleSpaces ?? []) {
+        acc.push({
+          ...result,
+          space: spaceId,
+        });
+      }
+
+      return acc;
+    },
+    [] as (OmitStrict<Entity, 'nameTripleSpaces'> & { space: string })[]
+  );
+
+  console.log('separated results', separatedResults);
 
   return (
     <Command.Dialog open={open} onOpenChange={onOpenChange} label="Entity search">
@@ -69,7 +86,7 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
               {autocomplete.isEmpty && (
                 <Command.Empty className="px-2 pb-2">No results found for {autocomplete.query}</Command.Empty>
               )}
-              {autocomplete.results.map((result, i) => (
+              {separatedResults.map((result, i) => (
                 <motion.div
                   initial={{ opacity: 0, y: -5 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -77,7 +94,7 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
                   key={result.id}
                 >
                   {/* It's safe to cast nameTripleSpace since we only render entities that have a name triple */}
-                  <Link href={NavUtils.toEntity(result.nameTripleSpace!, result.id)} onClick={() => onDone()}>
+                  <Link href={NavUtils.toEntity(result.space, result.id)} onClick={() => onDone()}>
                     <Command.Item className="transition-colors duration-75 aria-selected:bg-grey-01">
                       <ResultContent
                         onClick={() => {

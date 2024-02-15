@@ -86,6 +86,10 @@ export function nameTriple(triples: ITriple[]): ITriple | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
 }
 
+export function nameTriples(triples: ITriple[]): ITriple[] {
+  return triples.filter(triple => triple.attributeId === SYSTEM_IDS.NAME);
+}
+
 export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
 }
@@ -114,7 +118,7 @@ export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
         id: entityId,
         name: name(triples),
         description: description(triples),
-        nameTripleSpace: nameTriple(triples)?.space,
+        nameTripleSpaces: nameTriples(triples).map(triple => triple.space),
         types: types(triples, tripleForName?.space),
         triples,
       };
@@ -166,7 +170,7 @@ export function mergeActionsWithEntity(allActionsInStore: Action[], networkEntit
     id: networkEntity.id,
     name: name(triplesForEntity),
     description: description(triplesForEntity),
-    nameTripleSpace: nameTriple(triplesForEntity)?.space,
+    nameTripleSpaces: nameTriples(triplesForEntity).map(triple => triple.space),
     types: types(triplesForEntity, triplesForEntity[0]?.space),
     triples: triplesForEntity,
   };
@@ -181,7 +185,7 @@ export function fromActions(allActionsInStore: Action[], entityId: string): IEnt
     id: entityId,
     name: name(triplesForEntityWithLocalNames),
     description: description(triplesForEntityWithLocalNames),
-    nameTripleSpace: nameTriple(triplesForEntityWithLocalNames)?.space,
+    nameTripleSpaces: nameTriples(triplesForEntityWithLocalNames).map(triple => triple.space),
     types: types(triplesForEntityWithLocalNames, triplesForEntityWithLocalNames[0]?.space),
     triples: triplesForEntityWithLocalNames,
   };

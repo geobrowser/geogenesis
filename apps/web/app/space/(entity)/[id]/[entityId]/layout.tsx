@@ -124,7 +124,6 @@ async function getProfilePage(entityId: string): Promise<
   IEntity & {
     avatarUrl: string | null;
     coverUrl: string | null;
-    referencedByEntities: ReferencedByEntity[];
     blockTriples: Triple[];
     blockIdsTriple: Triple | null;
   }

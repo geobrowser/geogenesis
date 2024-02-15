@@ -37,14 +37,17 @@ export const ResultItem = ({ existsOnEntity = false, className = '', ...rest }: 
 
 interface Props {
   onClick: () => void;
-  result: Entity;
+  result: Entity & { space: string };
   alreadySelected?: boolean;
   spaces: Space[];
   withDescription?: boolean;
 }
 
 export function ResultContent({ onClick, result, alreadySelected, spaces, withDescription = true }: Props) {
-  const space = spaces.find(space => space.id === result.nameTripleSpace);
+  const duplicates = spaces.filter(space => space.id === result.space);
+  console.log('duplicates', duplicates);
+
+  const space = spaces.find(space => space.id === result.space);
 
   const spaceName = space?.spaceConfig?.name ?? space?.id ?? '';
   const spaceImg = space?.spaceConfig?.image ?? null;

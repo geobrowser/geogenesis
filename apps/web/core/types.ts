@@ -131,7 +131,7 @@ export type Entity = {
   description: string | null;
   types: EntityType[];
   triples: Triple[];
-  nameTripleSpace?: string;
+  nameTripleSpaces?: string[];
 };
 
 export type GeoType = {

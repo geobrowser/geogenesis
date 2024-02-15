@@ -125,6 +125,8 @@ function useOptimisticAttributes({
 
   const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: IEntity) => {
     const attributeValueTypeTriple = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE);
+    // This _should_ only be one space, but there may be a situation now where it's multiple spaces. Need to monitor this.
+    const attributeSpace = attribute.nameTripleSpaces?.[0];
 
     if (attributeValueTypeTriple) {
       remove(attributeValueTypeTriple);
@@ -148,13 +150,13 @@ function useOptimisticAttributes({
       }
     }
 
-    if (attribute.nameTripleSpace) {
+    if (attributeSpace) {
       const newTriple = Triple.withId({
         entityId: attribute.id,
         entityName: attribute.name,
         attributeId: SYSTEM_IDS.VALUE_TYPE,
         attributeName: 'Value type',
-        space: attribute.nameTripleSpace,
+        space: attributeSpace,
         value: {
           type: 'entity',
           id: newValueTypeId,
@@ -439,8 +441,11 @@ function SchemaAttributes() {
     spaceId: type.space,
   });
 
-  const onChangeAttributeName = (newName: string, entity: IEntity, oldNameTriple?: ITriple) => {
-    if (!entity.nameTripleSpace) {
+  const onChangeAttributeName = (newName: string, attribute: IEntity, oldNameTriple?: ITriple) => {
+    // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
+    const attributeSpace = attribute.nameTripleSpaces?.[0];
+
+    if (!attributeSpace) {
       console.error("The entity doesn't have a name triple space");
       return;
     }
@@ -450,9 +455,9 @@ function SchemaAttributes() {
         Triple.withId({
           attributeId: SYSTEM_IDS.NAME,
           attributeName: 'Name',
-          entityId: entity.id,
-          entityName: entity.name,
-          space: entity.nameTripleSpace,
+          entityId: attribute.id,
+          entityName: attribute.name,
+          space: attributeSpace,
           value: {
             type: 'string',
             id: ID.createValueId(),

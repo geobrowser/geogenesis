@@ -138,7 +138,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
       name: result.name,
       description: Entity.description(triples),
       nameTripleSpace: nameTriple?.space,
-      types: Entity.types(triples, nameTriple?.space),
+      types: Entity.types(triples),
       triples,
     };
   });

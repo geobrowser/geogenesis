@@ -191,15 +191,6 @@ const getData = async (spaceId: string) => {
     redirect(`/space/${spaceId}/entities`);
   }
 
-  // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
-  // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
-  if (entity?.nameTripleSpace) {
-    if (spaceId !== entity?.nameTripleSpace) {
-      console.log('Redirecting to space from space configuration entity', entity?.nameTripleSpace);
-      redirect(`/space/${entity?.nameTripleSpace}/${entity.id}`);
-    }
-  }
-
   const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
 
   const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
