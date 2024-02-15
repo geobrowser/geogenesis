@@ -124,20 +124,19 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
         id: result.id,
         name: result.name,
         description: null,
-        nameTripleSpace: undefined,
         types: [],
         triples: [],
       };
     }
 
     const triples = fromNetworkTriples(networkTriples);
-    const nameTriple = Entity.nameTriple(triples);
+    const nameTriples = Entity.nameTriples(triples);
 
     return {
       id: result.id,
       name: result.name,
       description: Entity.description(triples),
-      nameTripleSpace: nameTriple?.space,
+      nameTripleSpaces: nameTriples.map(t => t.space),
       types: Entity.types(triples),
       triples,
     };

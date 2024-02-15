@@ -27,21 +27,16 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
 
   if (!open) return null;
 
-  const separatedResults = autocomplete.results.reduce(
-    (acc, result) => {
-      for (const spaceId of result.nameTripleSpaces ?? []) {
-        acc.push({
-          ...result,
-          space: spaceId,
-        });
-      }
+  const separatedResults = autocomplete.results.reduce((acc, result) => {
+    for (const spaceId of result.nameTripleSpaces ?? []) {
+      acc.push({
+        ...result,
+        nameTripleSpaces: [spaceId],
+      });
+    }
 
-      return acc;
-    },
-    [] as (OmitStrict<Entity, 'nameTripleSpaces'> & { space: string })[]
-  );
-
-  console.log('separated results', separatedResults);
+    return acc;
+  }, [] as Entity[]);
 
   return (
     <Command.Dialog open={open} onOpenChange={onOpenChange} label="Entity search">
@@ -94,7 +89,7 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
                   key={result.id}
                 >
                   {/* It's safe to cast nameTripleSpace since we only render entities that have a name triple */}
-                  <Link href={NavUtils.toEntity(result.space, result.id)} onClick={() => onDone()}>
+                  <Link href={NavUtils.toEntity(result.nameTripleSpaces![0], result.id)} onClick={() => onDone()}>
                     <Command.Item className="transition-colors duration-75 aria-selected:bg-grey-01">
                       <ResultContent
                         onClick={() => {

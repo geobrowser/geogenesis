@@ -175,7 +175,7 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
         id: result.id,
         name: result.name,
         description: null,
-        nameTripleSpace: undefined,
+        nameTripleSpaces: [],
         types: [],
         triples: [],
       };
