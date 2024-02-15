@@ -74,7 +74,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
             `Encountered runtime graphql error in fetchSpace. queryId: ${queryId} spaceId: ${
               options.id
             } endpoint: ${endpoint}
-            
+
             queryString: ${getFetchSpaceQuery(options.id)}
             `,
             error.message
@@ -119,7 +119,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
     ? {
         ...spaceConfig,
-        image: EntityModule.cover(spaceConfig.triples) ?? EntityModule.avatar(spaceConfig.triples) ?? null,
+        image: EntityModule.avatar(spaceConfig.triples) ?? EntityModule.cover(spaceConfig.triples) ?? null,
       }
     : null;
 
