@@ -4,7 +4,7 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { FilterField, FilterState } from '~/core/types';
+import { Entity as EntityType, FilterField, FilterState } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
@@ -85,7 +85,7 @@ interface NetworkResult {
   geoEntities: { nodes: SubstreamNetworkEntity[] };
 }
 
-export async function fetchEntities(options: FetchEntitiesOptions) {
+export async function fetchEntities(options: FetchEntitiesOptions): Promise<EntityType[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
@@ -113,12 +113,6 @@ export async function fetchEntities(options: FetchEntitiesOptions) {
     query: getFetchEntitiesQuery(options.query ?? '', entityOfWhere, options.typeIds, options.first, options.skip),
     signal: options?.signal,
   });
-
-  if (options.query === 'supporting arguments')
-    console.log(
-      'query',
-      getFetchEntitiesQuery(options.query ?? '', entityOfWhere, options.typeIds, options.first, options.skip)
-    );
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));

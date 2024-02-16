@@ -4,7 +4,7 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity, Space, SpaceConfigEntity } from '~/core/types';
+import { Entity, Space, SpaceConfigEntity, Triple } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
 
 import { fetchEntities } from './fetch-entities';
@@ -72,7 +72,7 @@ export async function fetchSpaces() {
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${endpoint}
-            
+
             queryString: ${getFetchSpacesQuery()}
             `,
             error.message
@@ -105,31 +105,28 @@ export async function fetchSpaces() {
   const configs = await fetchEntities({
     query: '',
     typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
+    first: 1000,
     filter: [],
   });
 
-  const spaceConfigs = await Promise.all(
-    result.spaces.nodes.map(async s => {
-      // Ensure that we're using the space config that has been defined in the current space.
-      // Eventually this association will be handled by the substream API.
-      const spaceConfig = configs
-        .filter(c => c.nameTripleSpaces?.includes(s.id))
-        .find(c =>
-          c.triples.some(
-            t =>
-              t.space === s.id &&
-              t.attributeId === SYSTEM_IDS.TYPES &&
-              t.value.type === 'entity' &&
-              t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
-          )
-        );
+  const spaceConfigs = result.spaces.nodes.map(s => {
+    // Ensure that we're using the space config that has been defined in the current space.
+    // Eventually this association will be handled by the substream API.
+    const spaceConfig = configs.find(config =>
+      config.triples.some(
+        t =>
+          t.space === s.id &&
+          t.attributeId === SYSTEM_IDS.TYPES &&
+          t.value.type === 'entity' &&
+          t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
+      )
+    );
 
-      return {
-        spaceId: s.id,
-        config: spaceConfig,
-      };
-    })
-  );
+    return {
+      spaceId: s.id,
+      config: spaceConfig,
+    };
+  });
 
   const spaces = result.spaces.nodes.map((space): Space => {
     const config = spaceConfigs.find(config => config.spaceId === space.id)?.config;
