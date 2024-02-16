@@ -10,6 +10,7 @@ import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
+import * as Dropdown from '@radix-ui/react-dropdown-menu'
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
@@ -49,6 +50,8 @@ import { TextButton } from '~/design-system/text-button';
 import { AttributeConfigurationMenu } from '~/partials/entity-page/attribute-configuration-menu';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
+
+const MotionContent = motion(Dropdown.Content);
 
 // We keep track of the attributes in local state in order to quickly render
 // the changes the user has made to the schema. Otherwise there will be loading
@@ -244,63 +247,73 @@ export function TableBlockContextMenu() {
     }
   };
 
-  const spaceImage = Entity.cover(space?.spaceConfig?.triples) ?? null;
+  const spaceImage = space?.spaceConfig?.image ?? null;
 
   return (
-    <Menu
-      // using modal will prevent the menu from closing when opening up another dialog or popover
-      // from within the menu
-      modal
+    <Dropdown.Root
       open={isMenuOpen}
       onOpenChange={setIsMenuOpen}
-      align="end"
-      trigger={isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-      className="max-w-[180px] bg-white"
     >
-      <MenuItem>
-        <button onClick={onCopyViewId} className="inline-flex w-full items-center gap-2 px-3 py-2">
-          <Copy /> <span>Copy view ID</span>
-        </button>
-      </MenuItem>
-      <MenuItem>
-        <Link href={NavUtils.toEntity(spaceId, entityId)} className="inline-flex w-full items-center gap-2 px-3 py-2">
-          <Cog /> <span>View config</span>
-        </Link>
-      </MenuItem>
-      {isEditing && (
-        <TableBlockSchemaConfigurationDialog
-          trigger={
-            <MenuItem>
-              <div className="inline-flex items-center gap-2 px-3 py-2">
-                <FilteredTableView />
-                <span className="text-button">Edit type</span>
-              </div>
-            </MenuItem>
-          }
-          content={
-            <div className="flex flex-col gap-6 p-4">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <Image layout="fill" objectFit="cover" src={getImagePath(spaceImage ?? '')} />
+      <Dropdown.Trigger>
+        {isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
+      </Dropdown.Trigger>
+      <Dropdown.Portal>
+        <MotionContent
+          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+          transition={{
+            duration: 0.1,
+            ease: 'easeInOut',
+          }}
+          sideOffset={8}
+          className='max-w-[180px] bg-white z-100 divide-y divide-grey-02 overflow-hidden rounded-lg border border-grey-02 shadow-lg' align="end">
+          <MenuItem>
+            <button onClick={onCopyViewId} className="inline-flex w-full items-center gap-2 px-3 py-2">
+              <Copy /> <span>Copy view ID</span>
+            </button>
+          </MenuItem>
+          <MenuItem>
+            <Link href={NavUtils.toEntity(spaceId, entityId)} className="inline-flex w-full items-center gap-2 px-3 py-2">
+              <Cog /> <span>View config</span>
+            </Link>
+          </MenuItem>
+          {isEditing && (
+            <TableBlockSchemaConfigurationDialog
+              trigger={
+                <MenuItem>
+                  <div className="inline-flex items-center gap-2 px-3 py-2">
+                    <FilteredTableView />
+                    <span className="text-button">Edit type</span>
                   </div>
-                  <h1 className="text-mediumTitle">{type.entityName}</h1>
+                </MenuItem>
+              }
+              content={
+                <div className="flex flex-col gap-6 p-4">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="relative h-4 w-4 overflow-hidden rounded-sm">
+                        <Image layout="fill" objectFit="cover" src={getImagePath(spaceImage ?? '')} />
+                      </div>
+                      <h1 className="text-mediumTitle">{type.entityName}</h1>
+                    </div>
+
+                    <h2 className="text-metadata text-grey-04">
+                      Making changes to this type it will affect everywhere that this type is referenced.
+                    </h2>
+                  </div>
+
+                  <React.Suspense fallback={<AddAttributeLoading />}>
+                    <AddAttribute />
+                    <SchemaAttributes />
+                  </React.Suspense>
                 </div>
-
-                <h2 className="text-metadata text-grey-04">
-                  Making changes to this type it will affect everywhere that this type is referenced.
-                </h2>
-              </div>
-
-              <React.Suspense fallback={<AddAttributeLoading />}>
-                <AddAttribute />
-                <SchemaAttributes />
-              </React.Suspense>
-            </div>
-          }
-        />
-      )}
-    </Menu>
+              }
+            />
+          )}
+        </MotionContent>
+      </Dropdown.Portal>
+    </Dropdown.Root>
   );
 }
 
