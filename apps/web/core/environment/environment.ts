@@ -46,7 +46,7 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '137',
     rpc: 'https://polygon-rpc.com',
     ipfs: 'https://api.thegraph.com/ipfs',
-    membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-workshop',
+    membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-logs',
     profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry',
     api: 'https://geo-protocol.up.railway.app/graphql',
 
