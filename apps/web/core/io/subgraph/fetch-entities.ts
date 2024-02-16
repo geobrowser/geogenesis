@@ -160,7 +160,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
 
   const sortedResults = sortSearchResultsByRelevance(geoEntities.nodes);
 
-  const res = sortedResults.map(result => {
+  return sortedResults.map(result => {
     const networkTriples = result.triplesByEntityId.nodes;
 
     // If there is no latest version just return an empty entity.
@@ -187,8 +187,6 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
       triples,
     };
   });
-
-  return res;
 }
 
 const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
