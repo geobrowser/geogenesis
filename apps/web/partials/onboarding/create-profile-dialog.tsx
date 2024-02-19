@@ -139,7 +139,7 @@ export const CreateProfileDialog = () => {
         });
       }
 
-      const typeTriple: OmitStrict<Triple, 'id'> = {
+      const personTypeTriple: OmitStrict<Triple, 'id'> = {
         attributeId: SYSTEM_IDS.TYPES,
         attributeName: 'Types',
         entityId: onchainProfile.id,
@@ -152,20 +152,11 @@ export const CreateProfileDialog = () => {
         },
       };
 
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(typeTriple),
-        ...typeTriple,
-      });
-
-      // Add triples for creating a space configuration entity
-      const spaceConfigurationId = ID.createEntityId();
-
-      const spaceTriple: OmitStrict<Triple, 'id'> = {
+      const spaceTypeTriple: OmitStrict<Triple, 'id'> = {
         attributeId: SYSTEM_IDS.TYPES,
         attributeName: 'Types',
-        entityId: spaceConfigurationId,
-        entityName: `${name ?? address}'s Space`,
+        entityId: onchainProfile.id,
+        entityName: name ?? '',
         space: onchainProfile.homeSpace,
         value: {
           type: 'entity',
@@ -176,27 +167,14 @@ export const CreateProfileDialog = () => {
 
       actions.push({
         type: 'createTriple',
-        id: ID.createTripleId(spaceTriple),
-        ...spaceTriple,
+        id: ID.createTripleId(personTypeTriple),
+        ...personTypeTriple,
       });
-
-      const spaceNameTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.NAME,
-        attributeName: 'Name',
-        entityId: spaceConfigurationId,
-        entityName: `${name ?? address}'s Space`,
-        space: onchainProfile.homeSpace,
-        value: {
-          type: 'string',
-          value: `${name ?? address}'s Space`,
-          id: ID.createValueId(),
-        },
-      };
 
       actions.push({
         type: 'createTriple',
-        id: ID.createTripleId(spaceNameTriple),
-        ...spaceNameTriple,
+        id: ID.createTripleId(spaceTypeTriple),
+        ...spaceTypeTriple,
       });
 
       try {
