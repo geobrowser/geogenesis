@@ -1,0 +1,35 @@
+// Vitest Snapshot v1
+
+exports[`TableBlock SDK > Builds a graphql query from table block filters for the postgraphile-based substreams API 1`] = `"{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: \\"type-id\\" } } }, triplesByEntityId: { some: { attributeId: { equalTo: \\"type\\" }, stringValue: { equalToInsensitive: \\"Value 1\\"}, isStale: { equalTo: false } } }}"`;
+
+exports[`TableBlock SDK > Builds a graphql query from table block filters for the postgraphile-based substreams API 2`] = `"{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: \\"type-id\\" } } }, triplesByEntityId: { some: { attributeId: { equalTo: \\"type\\" }, entityValueId: { equalTo: \\"id 1\\"}, isStale: { equalTo: false } } }}"`;
+
+exports[`TableBlock SDK > Builds a graphql query from table block filters for the postgraphile-based substreams API 3`] = `"{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: \\"type-id\\" } } }, name: { startsWithInsensitive: \\"id 1\\" }}"`;
+
+exports[`TableBlock SDK > Builds a graphql query from table block filters for the postgraphile-based substreams API 4`] = `"{ and: [{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: \\"type-id\\" } } } } { triplesByEntityId: { some: { attributeId: { equalTo: \\"type\\" }, stringValue: { equalToInsensitive: \\"Value 1\\"}, isStale: { equalTo: false } } } }, { triplesByEntityId: { some: { attributeId: { equalTo: \\"type\\" }, entityValueId: { equalTo: \\"id 1\\"}, isStale: { equalTo: false } } } }, { name: { startsWithInsensitive: \\"id 1\\" } }] }"`;
+
+exports[`TableBlock SDK > Builds a graphql query from table block filters for the postgraphile-based substreams API 5`] = `
+"{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: \\"type-id\\" } } }, triplesByEntityId: {
+          some: {
+            spaceId: { equalTo: \\"0x0000000000000000000000000000000000000000\\" },
+            isStale: { equalTo: false }
+          }
+        }}"
+`;
+
+exports[`TableBlock SDK > Substream: Builds a graphql query from table block filters 1`] = `"{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: \\"type-id\\" } } }, triplesByEntityId: { some: { attributeId: { equalTo: \\"type\\" }, stringValue: { equalToInsensitive: \\"Value 1\\"}, isStale: { equalTo: false } } }}"`;
+
+exports[`TableBlock SDK > Substream: Builds a graphql query from table block filters 2`] = `"{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: \\"type-id\\" } } }, triplesByEntityId: { some: { attributeId: { equalTo: \\"type\\" }, entityValueId: { equalTo: \\"id 1\\"}, isStale: { equalTo: false } } }}"`;
+
+exports[`TableBlock SDK > Substream: Builds a graphql query from table block filters 3`] = `"{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: \\"type-id\\" } } }, name: { startsWithInsensitive: \\"id 1\\" }}"`;
+
+exports[`TableBlock SDK > Substream: Builds a graphql query from table block filters 4`] = `"{ and: [{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: \\"type-id\\" } } } } { triplesByEntityId: { some: { attributeId: { equalTo: \\"type\\" }, stringValue: { equalToInsensitive: \\"Value 1\\"}, isStale: { equalTo: false } } } }, { triplesByEntityId: { some: { attributeId: { equalTo: \\"type\\" }, entityValueId: { equalTo: \\"id 1\\"}, isStale: { equalTo: false } } } }, { name: { startsWithInsensitive: \\"id 1\\" } }] }"`;
+
+exports[`TableBlock SDK > Substream: Builds a graphql query from table block filters 5`] = `
+"{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: \\"type-id\\" } } }, triplesByEntityId: {
+          some: {
+            spaceId: { equalTo: \\"0x0000000000000000000000000000000000000000\\" },
+            isStale: { equalTo: false }
+          }
+        }}"
+`;

@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 import { MockNetworkData } from '~/core/io';
 
-import { createFiltersFromGraphQLString, createGraphQLStringFromFilters } from './table';
+import {
+  createFiltersFromGraphQLString,
+  createGraphQLStringFromFilters,
+  createGraphQLStringFromFiltersV2,
+} from './table';
 
 describe('TableBlock SDK', () => {
   /**
@@ -228,5 +232,86 @@ describe('TableBlock SDK', () => {
         valueName: null,
       },
     ]);
+  });
+
+  it('Builds a graphql query from table block filters for the postgraphile-based substreams API', () => {
+    const stringFilter = createGraphQLStringFromFiltersV2(
+      [
+        {
+          columnId: 'type',
+          value: 'Value 1',
+          valueType: 'string',
+        },
+      ],
+      'type-id'
+    );
+
+    expect(stringFilter).toMatchSnapshot();
+
+    const entityFilter = createGraphQLStringFromFiltersV2(
+      [
+        {
+          columnId: 'type',
+          value: 'id 1',
+          valueType: 'entity',
+        },
+      ],
+      'type-id'
+    );
+
+    expect(entityFilter).toMatchSnapshot();
+
+    const nameFilter = createGraphQLStringFromFiltersV2(
+      [
+        {
+          columnId: SYSTEM_IDS.NAME,
+          value: 'id 1',
+          valueType: 'string',
+        },
+      ],
+      'type-id'
+    );
+
+    expect(nameFilter).toMatchSnapshot();
+
+    const andFilter = createGraphQLStringFromFiltersV2(
+      [
+        {
+          columnId: 'type',
+          value: 'Value 1',
+          valueType: 'string',
+        },
+        {
+          columnId: 'type',
+          value: 'id 1',
+          valueType: 'entity',
+        },
+        {
+          columnId: SYSTEM_IDS.NAME,
+          value: 'id 1',
+          valueType: 'string',
+        },
+      ],
+      'type-id'
+    );
+
+    expect(andFilter).toMatchSnapshot();
+
+    const spaceFilter = createGraphQLStringFromFiltersV2(
+      [
+        {
+          columnId: SYSTEM_IDS.SPACE,
+          valueType: 'string',
+          value: '0x0000000000000000000000000000000000000000',
+        },
+      ],
+      'type-id'
+    );
+
+    expect(spaceFilter).toMatchSnapshot();
+
+    const nullTypeIdFilter = createGraphQLStringFromFiltersV2([], null);
+
+    expect(nullTypeIdFilter).toEqual('');
   });
 });
