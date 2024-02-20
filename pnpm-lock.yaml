@@ -580,7 +580,6 @@ importers:
       '@connectrpc/connect': ^1.3.0
       '@connectrpc/connect-node': ^1.3.0
       '@effect/schema': ^0.62.6
-      '@geogenesis/ids': workspace:*
       '@substreams/core': ^0.15.1
       '@substreams/manifest': ^0.14.1
       '@substreams/node': ^0.6.2
@@ -621,13 +620,12 @@ importers:
       '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.2
       '@connectrpc/connect-node': 1.3.0_bxtizuvznsbuo3vepj6cj6snqi
       '@effect/schema': 0.62.6_4guqwn6xtccv4qrkgrvab5r4jm
-      '@geogenesis/ids': link:../ids
       '@substreams/core': 0.15.1_bxtizuvznsbuo3vepj6cj6snqi
       '@substreams/manifest': 0.14.1_4u75gul3ner4hsltffhqfmc2xe
       '@substreams/node': 0.6.2
       '@substreams/sink': 0.13.1_xwbrhnovn7ls6etgs7j4wvaj4e
       commander: 12.0.0
-      dotenv: 16.4.4
+      dotenv: 16.4.5
       effect: 2.3.5
       fast-check: 3.14.0
       fetch-retry: 5.0.6
@@ -10688,7 +10686,7 @@ packages:
     resolution: {integrity: sha512-314CA4TyK34YEJ6ntBf80eUY+t1XaFLyem1k9P0sX1gn30qThZ5qZr/ZwE318gEnzyYP9yj9HJk6SqwE0upkfw==}
     dependencies:
       cross-spawn: 7.0.3
-      dotenv: 16.4.4
+      dotenv: 16.4.5
       dotenv-expand: 10.0.0
       minimist: 1.2.7
     dev: true
@@ -10708,8 +10706,8 @@ packages:
     engines: {node: '>=12'}
     dev: false
 
-  /dotenv/16.4.4:
-    resolution: {integrity: sha512-XvPXc8XAQThSjAbY6cQ/9PcBXmFoWuw1sQ3b8HqUCR6ziGXjkTi//kB9SWa2UwqlgdAIuRqAa/9hVljzPehbYg==}
+  /dotenv/16.4.5:
+    resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
     engines: {node: '>=12'}
 
   /dotignore/0.1.2:
