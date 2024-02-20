@@ -40,7 +40,7 @@ modules:
 
   - name: map_profiles_registered
     kind: map
-    initialBlock: 36472424
+    initialBlock: 53752626
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -56,7 +56,7 @@ modules:
 
   - name: map_spaces_created
     kind: map
-    initialBlock: 52630300
+    initialBlock: 53752626
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -64,7 +64,7 @@ modules:
 
   - name: map_governance_plugins_created
     kind: map
-    initialBlock: 52630300
+    initialBlock: 53752626
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -72,7 +72,7 @@ modules:
 
   - name: map_editors_added
     kind: map
-    initialBlock: 52630300
+    initialBlock: 53752626
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -80,7 +80,7 @@ modules:
 
   - name: map_proposals_created
     kind: map
-    initialBlock: 52630300
+    initialBlock: 53752626
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -88,7 +88,7 @@ modules:
 
   - name: map_votes_cast
     kind: map
-    initialBlock: 52969260
+    initialBlock: 53752626
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
