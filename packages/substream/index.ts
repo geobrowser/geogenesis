@@ -3,7 +3,6 @@ import dotenv from 'dotenv';
 import { Duration, Effect, Either, Schedule, pipe } from 'effect';
 
 import { bootstrapRoot } from './sink/bootstrap-root.js';
-import { START_BLOCK } from './sink/constants/constants.js';
 import { getStreamConfiguration } from './sink/get-stream-configuration.js';
 import { populateFromCache } from './sink/populate-from-cache.js';
 import { runStream } from './sink/run-stream.js';
