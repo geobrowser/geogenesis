@@ -17,8 +17,8 @@ FROM base
 COPY --from=build /app/dist /app/dist
 COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/package.json /app/package.json
-COPY --from=build /app/src/sink /app/src/sink
+COPY --from=build /app/sink /app/sink
 
 # TODO: Figure out how to set up schema for DB as part of
 # postgres setup
-CMD [ "pnpm", "start"]
+CMD [ "pnpm", "start", "--start-block", "36472424", "--reset-db"]
