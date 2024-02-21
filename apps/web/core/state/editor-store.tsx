@@ -333,7 +333,7 @@ export function useEditorStore() {
               value: {
                 id: ID.createValueId(),
                 type: 'string',
-                value: TableBlockSdk.createGraphQLStringFromFilters(
+                value: TableBlockSdk.createGraphQLStringFromFiltersV2(
                   [
                     {
                       columnId: SYSTEM_IDS.SPACE,
