@@ -248,7 +248,7 @@ export function useTableBlock() {
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
       const newFiltersString =
-        newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFiltersV2(newState, selectedType.entityId);
+        newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, selectedType.entityId);
 
       const entityName = Entity.name(nameTriple ? [nameTriple] : []) ?? '';
 
