@@ -1,13 +1,13 @@
 'use client';
 
 import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { WagmiProvider, createConfig } from '@privy-io/wagmi';
+import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
 import { http } from 'viem';
 
 import * as React from 'react';
 
-import { useAccount } from 'wagmi';
+import { useAccount, useAccountEffect, useDisconnect } from 'wagmi';
 import { polygon } from 'wagmi/chains';
 import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
 
@@ -171,7 +171,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
 export function GeoConnectButton() {
   const { address } = useAccount();
-  const { login, logout } = usePrivy();
+  const { login, logout, user } = usePrivy();
+  const { disconnect } = useDisconnect();
+  const { wallets } = useWallets();
+  const { setActiveWallet } = useSetActiveWallet();
 
   const setAccountType = useSetAtom(accountTypeAtom);
   const setName = useSetAtom(nameAtom);
@@ -179,6 +182,36 @@ export function GeoConnectButton() {
   const setSpaceAddress = useSetAtom(spaceAddressAtom);
   const setProfileId = useSetAtom(profileIdAtom);
   const setStep = useSetAtom(stepAtom);
+
+  // We're still using wagmi for contract calls instead of Privy. This means that
+  // we need to keep the wagmi wallet state in sync with Privy as the user logs
+  // in and out.
+  //
+  // Currently we put all login/logout side-effects here. Normally we'd put these
+  // in the event handler we use for login/logout, but since there's lots of state
+  // from both privy and wagmi that updates on login/logout, there's not a clean
+  // way to have all of the data we need in one event handler without data being stale.
+  //
+  // @TODO: Maybe a state machine is better
+  React.useEffect(() => {
+    const addWalletToWagmi = async (address?: string) => {
+      const wallet = wallets.find(w => w.address === address);
+
+      if (wallet) {
+        // Cookie.onConnectionChange('connect', wallet.address);
+        resetOnboarding();
+        await setActiveWallet(wallet);
+      }
+    };
+
+    if (user?.wallet?.address) {
+      addWalletToWagmi(user.wallet.address);
+    } else {
+      // Cookie.onConnectionChange('disconnect', '');
+      disconnect();
+      resetOnboarding();
+    }
+  }, [user?.wallet?.address, wallets]);
 
   const resetOnboarding = () => {
     setAccountType(null);
@@ -199,7 +232,6 @@ export function GeoConnectButton() {
                 login();
               }
             : () => {
-                resetOnboarding();
                 login();
               }
         }
@@ -214,7 +246,6 @@ export function GeoConnectButton() {
   return (
     <button
       onClick={() => {
-        resetOnboarding();
         logout();
       }}
       className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0"
