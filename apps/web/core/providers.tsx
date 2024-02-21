@@ -24,8 +24,8 @@ export function Providers({ children }: Props) {
   return (
     <PrivyProvider>
       <QueryClientProvider client={queryClient}>
-        <JotaiProvider>
-          <WalletProvider>
+        <WalletProvider>
+          <JotaiProvider>
             <Services.Provider>
               <StatusBarContextProvider>
                 <DiffProvider>
@@ -33,8 +33,8 @@ export function Providers({ children }: Props) {
                 </DiffProvider>
               </StatusBarContextProvider>
             </Services.Provider>
-          </WalletProvider>
-        </JotaiProvider>
+          </JotaiProvider>
+        </WalletProvider>
         <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>
     </PrivyProvider>
