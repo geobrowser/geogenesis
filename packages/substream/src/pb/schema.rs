@@ -206,7 +206,7 @@ pub struct GeoGovernancePluginsCreated {
 }
 /// *
 /// This event represents adding editors to a DAO-based space
-/// 
+///
 /// The data model for DAO-based spaces works slightly differently than in legacy spaces.
 /// This means there will be a period where we need to support both data models depending
 /// on which space/contract we are working with. Eventually these data models will be merged
@@ -294,7 +294,7 @@ pub struct ProposalsCreated {
 }
 /// *
 /// Votes represent a vote on a proposal in a DAO-based space.
-/// 
+///
 /// Currently we use a simple majority voting model, where a proposal requires 51% of the
 /// available votes in order to pass. Only editors are allowed to vote on proposals, but editors
 /// _and_ members can create them.
@@ -321,28 +321,22 @@ pub struct VotesCast {
 pub struct GeoOutput {
     #[prost(message, repeated, tag="1")]
     pub entries: ::prost::alloc::vec::Vec<EntryAdded>,
+    /// repeated GeoProfileRegistered profiles_registered = 3;
+    /// repeated GeoSpaceCreated spaces_created = 4;
+    /// repeated GeoGovernancePluginCreated governance_plugins_created = 5;
+    /// repeated EditorAdded editors_added = 6;
+    /// repeated ProposalCreated proposals_created = 7;
+    /// repeated VoteCast votes_cast = 8;
+    /// repeated SuccessorSpaceCreated successor_spaces_created = 6;
     #[prost(message, repeated, tag="2")]
     pub role_changes: ::prost::alloc::vec::Vec<RoleChange>,
-    #[prost(message, repeated, tag="3")]
-    pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
-    #[prost(message, repeated, tag="4")]
-    pub spaces_created: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
-    #[prost(message, repeated, tag="5")]
-    pub governance_plugins_created: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
-    #[prost(message, repeated, tag="6")]
-    pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
-    #[prost(message, repeated, tag="7")]
-    pub proposals_created: ::prost::alloc::vec::Vec<ProposalCreated>,
-    /// repeated SuccessorSpaceCreated successor_spaces_created = 6;
-    #[prost(message, repeated, tag="8")]
-    pub votes_cast: ::prost::alloc::vec::Vec<VoteCast>,
 }
 /// *
 /// Roles represent the permissions for a legacy space (See top level comment for more info
 /// on the different space contracts). Roles fall into "admin", "editor controller" (moderator),
 /// and "editor" (member) roles, each granting different permissions within the space.
 ///
-/// The new, DAO-based contracts have a different, but similar permissions model that omits the 
+/// The new, DAO-based contracts have a different, but similar permissions model that omits the
 /// moderator role.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
