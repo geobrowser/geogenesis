@@ -15,7 +15,7 @@ export function MemberRow({ editor }: EditorRowProps) {
       className="flex flex-1 items-center gap-2 p-2 transition-colors duration-150 hover:bg-divider"
     >
       <div className="relative h-8 w-8 overflow-hidden rounded-full">
-        <Avatar size={32} avatarUrl={editor.avatarUrl} value={editor.address ?? ''} />
+        <Avatar size={32} avatarUrl={editor.avatarUrl} value={editor.address} />
       </div>
       <p className="text-metadataMedium">{editor.name}</p>
     </Link>

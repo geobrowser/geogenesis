@@ -19,7 +19,7 @@ export async function SpaceMembersChip({ spaceId }: Props) {
       <AvatarGroup>
         {firstThreeMembers.map(editor => (
           <AvatarGroup.Item key={editor.id}>
-            <Avatar priority size={12} avatarUrl={editor.avatarUrl} value={editor.id} />
+            <Avatar priority size={12} avatarUrl={editor.avatarUrl} value={editor.address} />
           </AvatarGroup.Item>
         ))}
       </AvatarGroup>
