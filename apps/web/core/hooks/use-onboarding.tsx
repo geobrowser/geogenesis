@@ -2,7 +2,7 @@ import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useAccount } from 'wagmi';
+import { useAccount, useAccountEffect } from 'wagmi';
 
 import { useGeoProfile } from './use-geo-profile';
 
@@ -26,7 +26,7 @@ export function useOnboarding() {
     }
   }, [isFetched, profile, address, setIsOnboardingVisible]);
 
-  useAccount({
+  useAccountEffect({
     onDisconnect: () => setIsOnboardingVisible(false),
     onConnect({ address }) {
       if (address && isFetched && !profile) {

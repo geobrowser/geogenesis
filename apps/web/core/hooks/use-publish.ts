@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useWalletClient } from 'wagmi';
+import { useConfig, useWalletClient } from 'wagmi';
 
 import { Services } from '../services';
 import { Action as IAction, ReviewState } from '../types';
@@ -15,6 +15,7 @@ interface MakeProposalOptions {
 }
 
 export function usePublish() {
+  const config = useConfig();
   const { storageClient, publish: publishService } = Services.useServices();
   const { restore, actions: actionsBySpace } = useActionsStore();
   const { data: wallet } = useWalletClient();
@@ -38,7 +39,7 @@ export function usePublish() {
         name,
         onChangePublishState,
         space: spaceId,
-        wallet,
+        walletConfig: config,
       });
 
       const actionsBeingPublished = new Set(

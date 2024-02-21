@@ -8,7 +8,7 @@ import Link from 'next/link';
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 
-import { useWalletClient } from 'wagmi';
+import { useConfig } from 'wagmi';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
@@ -307,12 +307,17 @@ type MembershipRequestProps = {
 const MembershipRequest = ({ request, onRequestProcessed }: MembershipRequestProps) => {
   const profile = request.requestor;
 
-  const { data: wallet } = useWalletClient();
+  const config = useConfig();
 
   const handleAccept = async () => {
-    if (wallet && request.space && profile.id) {
-      const roleToChange = await Publish.getRole(request.space.id, 'EDITOR_ROLE');
-      await Publish.grantRole({ spaceId: request.space.id, role: roleToChange, wallet, userAddress: profile.address });
+    if (request.space && profile.id) {
+      const roleToChange = await Publish.getRole(config, request.space.id, 'EDITOR_ROLE');
+      await Publish.grantRole({
+        spaceId: request.space.id,
+        role: roleToChange,
+        walletConfig: config,
+        userAddress: profile.address,
+      });
       onRequestProcessed(request.id);
     }
   };

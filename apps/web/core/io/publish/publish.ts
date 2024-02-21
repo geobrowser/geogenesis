@@ -2,9 +2,10 @@ import { Root } from '@geogenesis/action-schema';
 import { GeoProfileRegistryAbi, SpaceAbi } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Effect from 'effect/Effect';
+import { WalletClient } from 'viem';
 
-import { WalletClient } from 'wagmi';
-import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
+import { Config } from 'wagmi';
+import { readContract, simulateContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions';
 
 import { UPLOAD_CHUNK_SIZE } from '~/core/constants';
 
@@ -38,7 +39,7 @@ export class TransactionWriteFailedError extends Error {
 }
 
 export type MakeProposalOptions = {
-  wallet: WalletClient;
+  walletConfig: Config;
   actions: Action[];
   space: string;
   onChangePublishState: (newState: ReviewState) => void;
@@ -49,7 +50,7 @@ export type MakeProposalOptions = {
 export async function makeProposal({
   storageClient,
   actions,
-  wallet,
+  walletConfig,
   onChangePublishState,
   space,
   name,
@@ -75,11 +76,10 @@ export async function makeProposal({
 
   const prepareTxEffect = Effect.tryPromise({
     try: () =>
-      prepareWriteContract({
+      simulateContract(walletConfig, {
         abi: SpaceAbi,
         address: space as unknown as `0x${string}`,
         functionName: 'addEntries',
-        walletClient: wallet,
         args: [cids],
       }),
     catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
@@ -92,23 +92,23 @@ export async function makeProposal({
 
     return yield* awaited(
       Effect.tryPromise({
-        try: () => writeContract(contractConfig),
+        try: () => writeContract(walletConfig, contractConfig.request),
         catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
       })
     );
   });
 
   const publishProgram = Effect.gen(function* (awaited) {
-    const writeTxResult = yield* awaited(writeTxEffect);
+    const writeTxHash = yield* awaited(writeTxEffect);
 
-    console.log('Transaction hash: ', writeTxResult.hash);
+    console.log('Transaction hash: ', writeTxHash);
     onChangePublishState('publishing-contract');
 
     const waitForTransactionEffect = yield* awaited(
       Effect.tryPromise({
         try: () =>
-          waitForTransaction({
-            hash: writeTxResult.hash,
+          waitForTransactionReceipt(walletConfig, {
+            hash: writeTxHash,
           }),
         catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
       })
@@ -144,8 +144,12 @@ export async function uploadFile(storageClient: Storage.IStorageClient, file: Fi
   return fileUri;
 }
 
-export async function getRole(spaceId: string, role: 'EDITOR_ROLE' | 'ADMIN_ROLE' | 'EDITOR_CONTROLLER_ROLE') {
-  const data = (await readContract({
+export async function getRole(
+  walletConfig: Config,
+  spaceId: string,
+  role: 'EDITOR_ROLE' | 'ADMIN_ROLE' | 'EDITOR_CONTROLLER_ROLE'
+) {
+  const data = (await readContract(walletConfig, {
     abi: SpaceAbi,
     address: spaceId as unknown as `0x${string}`,
     functionName: role,
@@ -156,66 +160,63 @@ export async function getRole(spaceId: string, role: 'EDITOR_ROLE' | 'ADMIN_ROLE
 
 export async function grantRole({
   spaceId,
-  wallet,
+  walletConfig,
   role,
   userAddress,
 }: {
   spaceId: string;
-  wallet: WalletClient;
+  walletConfig: Config;
   role: string;
   userAddress: string;
 }) {
-  const contractConfig = await prepareWriteContract({
+  const { request } = await simulateContract(walletConfig, {
     abi: SpaceAbi,
     address: spaceId as unknown as `0x${string}`,
     functionName: 'grantRole',
-    walletClient: wallet,
     args: [role, userAddress],
   });
 
-  const tx = await writeContract(contractConfig);
-  console.log(`Role granted to ${userAddress}. Transaction hash: ${tx.hash}`);
-  return tx.hash;
+  const txHash = await writeContract(walletConfig, request);
+  console.log(`Role granted to ${userAddress}. Transaction hash: ${txHash}`);
+  return txHash;
 }
 
 export async function revokeRole({
   spaceId,
-  wallet,
+  walletConfig,
   role,
   userAddress,
 }: {
   spaceId: string;
-  wallet: WalletClient;
+  walletConfig: Config;
   role: string;
   userAddress: string;
 }) {
-  const contractConfig = await prepareWriteContract({
+  const { request } = await simulateContract(walletConfig, {
     abi: SpaceAbi,
     address: spaceId as unknown as `0x${string}`,
     functionName: 'revokeRole',
-    walletClient: wallet,
     args: [role, userAddress],
   });
 
-  const tx = await writeContract(contractConfig);
-  console.log(`Role revoked from ${userAddress}. Transaction hash: ${tx.hash}`);
-  return tx.hash;
+  const txHash = await writeContract(walletConfig, request);
+  console.log(`Role revoked from ${userAddress}. Transaction hash: ${txHash}`);
+  return txHash;
 }
 
-export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${string}`): Promise<string> {
-  const contractConfig = await prepareWriteContract({
+export async function registerGeoProfile(walletConfig: Config, spaceId: `0x${string}`): Promise<string> {
+  const { request, result } = await simulateContract(walletConfig, {
     abi: GeoProfileRegistryAbi,
     address: SYSTEM_IDS.PROFILE_REGISTRY_ADDRESS,
     functionName: 'registerGeoProfile',
-    walletClient: wallet,
     args: [spaceId],
   });
 
-  const tx = await writeContract(contractConfig);
-  const waited = await waitForTransaction({
-    hash: tx.hash,
+  const txHash = await writeContract(walletConfig, request);
+  const waited = await waitForTransactionReceipt(walletConfig, {
+    hash: txHash,
   });
 
   console.log(`Geo profile created. Transaction hash: ${waited.transactionHash}`);
-  return contractConfig.result as string;
+  return result as string;
 }

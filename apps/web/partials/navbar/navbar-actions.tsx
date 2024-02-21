@@ -35,6 +35,8 @@ export function NavbarActions() {
   const { profile, isLoading: isProfileLoading } = useGeoProfile(address);
   const { person, isLoading: isPersonLoading } = usePerson(address);
 
+  console.log('address', address);
+
   if (!address) {
     return <GeoConnectButton />;
   }
@@ -104,12 +106,12 @@ export function NavbarActions() {
 }
 
 const avatarMenuItemStyles = cva(
-  'flex w-full select-none items-center justify-between bg-white py-2 px-3 text-button hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
+  'flex w-full select-none items-center justify-between bg-white px-3 py-2 text-button hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
   {
     variants: {
       disabled: {
         true: 'cursor-not-allowed text-grey-03',
-        false: 'cursor-pointer text-grey-04 hover:text-text hover:bg-bg',
+        false: 'cursor-pointer text-grey-04 hover:bg-bg hover:text-text',
       },
     },
     defaultVariants: {
