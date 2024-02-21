@@ -39,6 +39,11 @@ export async function createProfileEntity({
   }
 
   const createProfileResponse = await fetch(url);
+
+  if (!createProfileResponse.ok || createProfileResponse.status >= 400) {
+    console.error('Unable to create profile', createProfileResponse.status, createProfileResponse.statusText);
+  }
+
   return await createProfileResponse.json();
 }
 
