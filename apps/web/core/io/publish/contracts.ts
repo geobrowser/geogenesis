@@ -5,6 +5,18 @@ export async function deploySpaceContract({ account }: { account: string }): Pro
 
   // @TODO: Error and success handling with Effect
   const spaceContractDeploymentResponse = await fetch(url);
+
+  const createAndConfigureSpaceResponse = await fetch(url);
+
+  if (!createAndConfigureSpaceResponse.ok || createAndConfigureSpaceResponse.status >= 400) {
+    console.error(
+      'Unable to create and configure space',
+      createAndConfigureSpaceResponse.status,
+      createAndConfigureSpaceResponse.statusText
+    );
+    throw new Error(`Unable to create and configure space: ${createAndConfigureSpaceResponse.statusText}`);
+  }
+
   return await spaceContractDeploymentResponse.json();
 }
 
@@ -42,6 +54,7 @@ export async function createProfileEntity({
 
   if (!createProfileResponse.ok || createProfileResponse.status >= 400) {
     console.error('Unable to create profile', createProfileResponse.status, createProfileResponse.statusText);
+    throw new Error(`Unable to create profile: ${createProfileResponse.statusText}`);
   }
 
   return await createProfileResponse.json();
@@ -68,6 +81,16 @@ export async function createSpaceWithEntities({
     url.searchParams.set('spaceAvatarUri', spaceAvatarUri);
   }
 
-  const createProfileResponse = await fetch(url);
-  return await createProfileResponse.json();
+  const createSpaceEntitiesResponse = await fetch(url);
+
+  if (!createSpaceEntitiesResponse.ok || createSpaceEntitiesResponse.status >= 400) {
+    console.error(
+      'Unable to create entities in space',
+      createSpaceEntitiesResponse.status,
+      createSpaceEntitiesResponse.statusText
+    );
+    throw new Error(`Unable to create entities in space: ${createSpaceEntitiesResponse.statusText}`);
+  }
+
+  return await createSpaceEntitiesResponse.json();
 }
