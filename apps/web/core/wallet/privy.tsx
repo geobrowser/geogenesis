@@ -9,12 +9,14 @@ import {
   useWallets,
 } from '@privy-io/react-auth';
 import { useSetActiveWallet } from '@privy-io/wagmi';
+import { zeroAddress } from 'viem';
 
 import * as React from 'react';
 
 // import { polygon } from 'viem/chains';
 import { useAccount, useAccountEffect, useConfig, useDisconnect } from 'wagmi';
 
+import { Cookie } from '../cookie';
 import { registerGeoProfile } from '../io/publish';
 
 const config: PrivyClientConfig = {
@@ -56,36 +58,11 @@ export function PrivyProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function LoginButton() {
-  const { disconnect } = useDisconnect();
-  const { login, logout, user } = usePrivy();
-  const { wallets } = useWallets();
-  const { setActiveWallet } = useSetActiveWallet();
-
-  React.useEffect(() => {
-    if (user?.wallet?.address) {
-      const addWalletToWagmi = async () => {
-        const wallet = wallets.find(w => w.address === user.wallet?.address);
-
-        if (wallet) {
-          await setActiveWallet(wallet);
-        }
-      };
-
-      addWalletToWagmi();
-    } else {
-      disconnect();
-    }
-  }, [user?.wallet?.address, wallets]);
-
-  return <button onClick={user ? logout : login}>{user ? 'Logout' : 'Login'}</button>;
-}
-
 export function TransactionTest() {
   const config = useConfig();
   const { address } = useAccount();
 
   if (!address) return;
 
-  return <button onClick={() => registerGeoProfile(config, '0xTestTestTestTestTestTestTestTestTestTe')}>Deploy</button>;
+  return <button onClick={() => registerGeoProfile(config, zeroAddress)}>Deploy</button>;
 }
