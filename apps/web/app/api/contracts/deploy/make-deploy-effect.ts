@@ -276,7 +276,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
   // RPC nodes we use have rate-limiting that is hard to predict.
   const deploymentEffect = Effect.gen(function* (unwrap) {
     // Deploy proxy contract
-    const deployProxyEffect = Effect.retry(deployEffect, Schedule.exponential('1 seconds'));
+    const deployProxyEffect = Effect.retry(deployEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered));
     const deployProxyResult = yield* unwrap(deployProxyEffect);
 
     if (deployProxyResult.contractAddress === null) {
@@ -286,26 +286,21 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
     // Initialize proxy contract
     const initializeEffect = Effect.retry(
       createInitializeEffect(deployProxyResult.contractAddress),
-      Schedule.exponential('1 seconds')
+      Schedule.exponential('100 millis').pipe(Schedule.jittered)
     );
     yield* unwrap(initializeEffect);
 
     // Add the new space to the permissionless space registry
     const registerSpaceEffect = Effect.retry(
       createRegisterSpaceEffect(deployProxyResult.contractAddress),
-      Schedule.exponential('1 seconds')
+      Schedule.exponential('100 millis').pipe(Schedule.jittered)
     );
     yield* unwrap(registerSpaceEffect);
 
     // Configure roles in proxy contract. We need to configure the roles after adding to the registry.
-    // This is because the indexer will not pick up events that happen before the indexer starts indexing
-    // a dynamic data source.
-    //
-    // @TODO: With substreams this shouldn't matter since we index every block, not just a specific address
-    // at a specific block number.
     const configureRolesEffect = Effect.retry(
       createConfigureRolesEffect(deployProxyResult.contractAddress),
-      Schedule.exponential('1 seconds')
+      Schedule.exponential('100 millis').pipe(Schedule.jittered)
     );
     yield* unwrap(configureRolesEffect);
 
