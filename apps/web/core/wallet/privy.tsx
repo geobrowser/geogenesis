@@ -13,7 +13,7 @@ import { useSetActiveWallet } from '@privy-io/wagmi';
 import * as React from 'react';
 
 // import { polygon } from 'viem/chains';
-import { useAccount, useAccountEffect, useConfig } from 'wagmi';
+import { useAccount, useAccountEffect, useConfig, useDisconnect } from 'wagmi';
 
 import { registerGeoProfile } from '../io/publish';
 
@@ -57,6 +57,7 @@ export function PrivyProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function LoginButton() {
+  const { disconnect } = useDisconnect();
   const { login, logout, user } = usePrivy();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
@@ -72,6 +73,8 @@ export function LoginButton() {
       };
 
       addWalletToWagmi();
+    } else {
+      disconnect();
     }
   }, [user?.wallet?.address, wallets]);
 

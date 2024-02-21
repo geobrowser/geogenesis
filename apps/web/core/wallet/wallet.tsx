@@ -1,28 +1,30 @@
 'use client';
 
-// import { ConnectKitButton } from 'connectkit';
-// import { useSetAtom } from 'jotai';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig } from '@privy-io/wagmi';
+import { useSetAtom } from 'jotai';
 import { http } from 'viem';
 
 import * as React from 'react';
 
-import { useConnect, useDisconnect } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { polygon } from 'wagmi/chains';
 import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
 
-// import { Button } from '~/design-system/button';
-// import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
-// import { Wallet } from '~/design-system/icons/wallet';
-// import { Spacer } from '~/design-system/spacer';
-// import {
-//   accountTypeAtom,
-//   avatarAtom,
-//   nameAtom,
-//   profileIdAtom,
-//   spaceAddressAtom,
-//   stepAtom,
-// } from '~/partials/onboarding/dialog';
+import { Button } from '~/design-system/button';
+import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
+import { Wallet } from '~/design-system/icons/wallet';
+import { Spacer } from '~/design-system/spacer';
+
+import {
+  accountTypeAtom,
+  avatarAtom,
+  nameAtom,
+  profileIdAtom,
+  spaceAddressAtom,
+  stepAtom,
+} from '~/partials/onboarding/dialog';
+
 import { Cookie } from '../cookie';
 
 // const LOCAL_CHAIN: Chain = {
@@ -164,82 +166,62 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return isTestEnv ? mockConfig : getRealWalletConfig(ethereum);
   }, [isTestEnv, ethereum]);
 
-  return (
-    <WagmiProvider config={walletConfig}>
-      {/* <ConnectKitProvider onConnect={onConnect} onDisconnect={onDisconnect}> */}
-      {children}
-      {/* </ConnectKitProvider> */}
-    </WagmiProvider>
-  );
+  return <WagmiProvider config={walletConfig}>{children}</WagmiProvider>;
 }
 
 export function GeoConnectButton() {
-  return null;
-  // There's currently no mechanisms in connectkit to handle disconnecting their APIs
-  // without going through the modal. It uses wagmi internally so we can escape-hatch
-  // into wagmi-land to disconnect.
-  // const { disconnect } = useDisconnect();
-  // const { connect } = useConnect();
+  const { address } = useAccount();
+  const { login, logout } = usePrivy();
 
-  // const setAccountType = useSetAtom(accountTypeAtom);
-  // const setName = useSetAtom(nameAtom);
-  // const setAvatar = useSetAtom(avatarAtom);
-  // const setSpaceAddress = useSetAtom(spaceAddressAtom);
-  // const setProfileId = useSetAtom(profileIdAtom);
-  // const setStep = useSetAtom(stepAtom);
+  const setAccountType = useSetAtom(accountTypeAtom);
+  const setName = useSetAtom(nameAtom);
+  const setAvatar = useSetAtom(avatarAtom);
+  const setSpaceAddress = useSetAtom(spaceAddressAtom);
+  const setProfileId = useSetAtom(profileIdAtom);
+  const setStep = useSetAtom(stepAtom);
 
-  // const resetOnboarding = () => {
-  //   setAccountType(null);
-  //   setName('');
-  //   setAvatar('');
-  //   setSpaceAddress('');
-  //   setProfileId('');
-  //   setStep('start');
-  // };
+  const resetOnboarding = () => {
+    setAccountType(null);
+    setName('');
+    setAvatar('');
+    setSpaceAddress('');
+    setProfileId('');
+    setStep('start');
+  };
 
-  // return (
-  //   <ConnectKitButton.Custom>
-  //     {({ show, isConnected }) => {
-  //       if (!isConnected) {
-  //         return (
-  //           <Button
-  //             onClick={
-  //               isTestEnv
-  //                 ? () => {
-  //                   console.log('Test environment detected: using mock wallet');
-  //                   connect({
-  //                     connector: mockConfig.connectors[0],
-  //                     chainId: polygon.id,
-  //                   });
-  //                 }
-  //                 : () => {
-  //                   resetOnboarding();
-  //                   show?.();
-  //                 }
-  //             }
-  //             variant="secondary"
-  //           >
-  //             <Wallet />
-  //             Connect
-  //           </Button>
-  //         );
-  //       }
+  if (!address) {
+    return (
+      <Button
+        onClick={
+          isTestEnv
+            ? () => {
+                console.log('Test environment detected: using mock wallet');
+                login();
+              }
+            : () => {
+                resetOnboarding();
+                login();
+              }
+        }
+        variant="secondary"
+      >
+        <Wallet />
+        Log in
+      </Button>
+    );
+  }
 
-  //       return (
-  //         // We're using an anonymous function for disconnect to appease the TS gods.
-  //         <button
-  //           onClick={() => {
-  //             resetOnboarding();
-  //             disconnect();
-  //           }}
-  //           className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0"
-  //         >
-  //           <DisconnectWallet />
-  //           <Spacer width={8} />
-  //           <p className="text-button">Disconnect</p>
-  //         </button>
-  //       );
-  //     }}
-  //   </ConnectKitButton.Custom>
-  // );
+  return (
+    <button
+      onClick={() => {
+        resetOnboarding();
+        logout();
+      }}
+      className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0"
+    >
+      <DisconnectWallet />
+      <Spacer width={8} />
+      <p className="text-button">Log out</p>
+    </button>
+  );
 }
