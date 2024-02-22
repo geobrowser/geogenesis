@@ -59,11 +59,6 @@ export function CreateDao() {
         minProposerVotingPower: BigInt(1000),
       },
       memberAccessProposalDuration: BigInt(60 * 60 * 24), // one day in seconds
-      // Yaniv – 0xE343E47d821a9bcE54F12237426A6ef391066b60
-      // Arturas – 0x48f03232F947A6d92A5E839936c9250999f404a0
-      // Nate – 0x206d1f64bb177e2732479186Ee5502D7202509D0
-      // Me – 0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853
-      // Geo – 0x66703c058795B9Cb215fbcc7c6b07aee7D216F24
       initialEditors: [
         getAddress(wallet.account.address),
         getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
