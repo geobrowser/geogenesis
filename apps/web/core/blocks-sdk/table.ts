@@ -302,19 +302,20 @@ export function createGraphQLStringFromFiltersV2(
         // against newer versions of the protocol.
         return `triplesByEntityId: {
           some: {
-            spaceId: { equalTo: "${getAddress(filter.value)}" }
+            spaceId: { equalTo: "${getAddress(filter.value)}" },
+            isStale: { equalTo: false }
           }
         }`;
       }
 
       if (filter.valueType === 'entity') {
         // value is the ID of the relation
-        return `triplesByEntityId: { some: { attributeId: { equalTo: "${filter.columnId}" }, entityValueId: { equalTo: "${filter.value}"} } }`;
+        return `triplesByEntityId: { some: { attributeId: { equalTo: "${filter.columnId}" }, entityValueId: { equalTo: "${filter.value}"}, isStale: { equalTo: false } } }`;
       }
 
       if (filter.valueType === 'string') {
         // value is just the stringValue of the triple
-        return `triplesByEntityId: { some: { attributeId: { equalTo: "${filter.columnId}" }, stringValue: { equalToInsensitive: "${filter.value}"} } }`;
+        return `triplesByEntityId: { some: { attributeId: { equalTo: "${filter.columnId}" }, stringValue: { equalToInsensitive: "${filter.value}"}, isStale: { equalTo: false } } }`;
       }
 
       // We don't support other value types yet

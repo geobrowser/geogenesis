@@ -110,14 +110,14 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
 
   const networkTriples = entity.triplesByEntityId.nodes;
   const triples = fromNetworkTriples(networkTriples);
-  const nameTriple = Entity.nameTriple(triples);
+  const nameTriples = Entity.nameTriples(triples);
 
   return {
     id: entity.id,
     name: entity.name,
     description: Entity.description(triples),
-    nameTripleSpace: nameTriple?.space,
-    types: Entity.types(triples, entity?.nameTripleSpace),
+    nameTripleSpaces: nameTriples.map(t => t.space),
+    types: Entity.types(triples),
     triples,
   };
 }

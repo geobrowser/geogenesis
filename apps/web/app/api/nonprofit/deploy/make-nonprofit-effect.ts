@@ -316,20 +316,20 @@ export async function makeNonprofitEffect(
 
   const onboardEffect = Effect.gen(function* (unwrap) {
     // Add geo profile entity to new space
-    yield* unwrap(Effect.retry(profileEffect, Schedule.exponential('1 seconds')));
+    yield* unwrap(Effect.retry(profileEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered)));
 
     // @TODO: Batch?
     // Configure roles in proxy contract
     for (const role of ROLES) {
       const grantRoleEffect = createGrantRoleEffect(role);
-      yield* unwrap(Effect.retry(grantRoleEffect, Schedule.exponential('1 seconds')));
+      yield* unwrap(Effect.retry(grantRoleEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered)));
     }
 
     // @TODO Batch?
     // Renounce deployer roles in proxy contract
     for (const role of ROLES) {
       const renounceRoleEffect = createRenounceRoleEffect(role);
-      yield* unwrap(Effect.retry(renounceRoleEffect, Schedule.exponential('1 seconds')));
+      yield* unwrap(Effect.retry(renounceRoleEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered)));
     }
   });
 

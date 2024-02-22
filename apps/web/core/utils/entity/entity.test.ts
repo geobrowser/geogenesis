@@ -320,7 +320,7 @@ it('Entity.entitiesFromTriples should map Triples to Entity', () => {
       name: 'entity-1',
       description: 'banana description',
       types: [],
-      nameTripleSpace: 'spaceId',
+      nameTripleSpaces: ['spaceId'],
       triples: [triplesFromMultipleEntities[0], triplesFromMultipleEntities[1]],
     },
     {
@@ -328,7 +328,7 @@ it('Entity.entitiesFromTriples should map Triples to Entity', () => {
       name: 'entity-2',
       description: 'apple description',
       types: [],
-      nameTripleSpace: 'spaceId',
+      nameTripleSpaces: ['spaceId'],
       triples: [triplesFromMultipleEntities[2], triplesFromMultipleEntities[3]],
     },
   ];
@@ -339,6 +339,7 @@ it('Entity.entitiesFromTriples should map Triples to Entity', () => {
 const localActions: Record<string, Action[]> = {
   spaceId: [
     {
+      id: '5',
       type: 'editTriple',
       before: {
         type: 'deleteTriple',
@@ -374,7 +375,7 @@ it('Entity.mergeActionsWithNetworkEntities should merge local actions with entit
       name: 'entity-1-changed',
       description: 'banana description',
       types: [],
-      nameTripleSpace: 'spaceId',
+      nameTripleSpaces: ['spaceId'],
       triples: [
         {
           type: 'createTriple',

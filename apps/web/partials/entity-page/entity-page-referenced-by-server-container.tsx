@@ -15,7 +15,7 @@ interface Props {
   spaceId: string;
 }
 
-export async function EntityReferencedByServerContainer({ entityId, name, spaceId }: Props) {
+export async function EntityReferencedByServerContainer({ entityId, name }: Props) {
   const [related, spaces] = await Promise.all([
     Subgraph.fetchEntities({
       query: '',
@@ -28,7 +28,7 @@ export async function EntityReferencedByServerContainer({ entityId, name, spaceI
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
     const space = spaces.find(s => s.id === spaceId);
     const spaceName = space?.spaceConfig?.name ?? null;
-    const spaceImage = Entity.cover(space?.spaceConfig?.triples) ?? null;
+    const spaceImage = Entity.avatar(space?.spaceConfig?.triples) ?? Entity.cover(space?.spaceConfig?.triples) ?? null;
 
     return {
       id: e.id,

@@ -4,7 +4,7 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity, Space, SpaceConfigEntity } from '~/core/types';
+import { Entity, Space, SpaceConfigEntity, Triple } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
 
 import { fetchEntities } from './fetch-entities';
@@ -72,7 +72,7 @@ export async function fetchSpaces() {
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${endpoint}
-            
+
             queryString: ${getFetchSpacesQuery()}
             `,
             error.message
@@ -100,25 +100,33 @@ export async function fetchSpaces() {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const spaceConfigs = await Promise.all(
-    result.spaces.nodes.map(async s => {
-      const configs = await fetchEntities({
-        query: '',
-        first: 1,
-        spaceId: s.id,
-        skip: 0,
-        typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
-        filter: [],
-      });
+  // @TODO: This should be tied to the space config entity in the substream
+  // eventually.
+  const configs = await fetchEntities({
+    query: '',
+    typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
+    first: 1000,
+    filter: [],
+  });
 
-      const spaceConfig: Entity | undefined = configs[0];
+  const spaceConfigs = result.spaces.nodes.map(s => {
+    // Ensure that we're using the space config that has been defined in the current space.
+    // Eventually this association will be handled by the substream API.
+    const spaceConfig = configs.find(config =>
+      config.triples.some(
+        t =>
+          t.space === s.id &&
+          t.attributeId === SYSTEM_IDS.TYPES &&
+          t.value.type === 'entity' &&
+          t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
+      )
+    );
 
-      return {
-        spaceId: s.id,
-        config: spaceConfig,
-      };
-    })
-  );
+    return {
+      spaceId: s.id,
+      config: spaceConfig,
+    };
+  });
 
   const spaces = result.spaces.nodes.map((space): Space => {
     const config = spaceConfigs.find(config => config.spaceId === space.id)?.config;
@@ -126,7 +134,7 @@ export async function fetchSpaces() {
     const spaceConfigWithImage: SpaceConfigEntity | null = config
       ? {
           ...config,
-          image: EntityModule.cover(config.triples) ?? EntityModule.avatar(config.triples) ?? null,
+          image: EntityModule.avatar(config.triples) ?? EntityModule.cover(config.triples) ?? null,
         }
       : null;
 

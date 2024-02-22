@@ -1,3 +1,5 @@
+import { cache } from 'react';
+
 import { Subgraph } from '~/core/io';
 import { OmitStrict, Profile } from '~/core/types';
 
@@ -6,7 +8,7 @@ type EditorsForSpace = {
   totalEditors: number;
 };
 
-export async function getEditorsForSpace(spaceId: string): Promise<EditorsForSpace> {
+export const getEditorsForSpace = cache(async (spaceId: string): Promise<EditorsForSpace> => {
   const space = await Subgraph.fetchSpace({ id: spaceId });
 
   if (!space) {
@@ -39,4 +41,4 @@ export async function getEditorsForSpace(spaceId: string): Promise<EditorsForSpa
     allEditors: allEditorsWithProfiles,
     totalEditors: space.editors.length,
   };
-}
+});

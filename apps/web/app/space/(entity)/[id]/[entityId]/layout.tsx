@@ -4,9 +4,6 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Subgraph } from '~/core/io';
-import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -22,7 +19,9 @@ import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
-import { ReferencedByEntity } from '~/partials/entity-page/types';
+
+import { cachedFetchEntityType } from './cached-entity-type';
+import { cachedFetchEntity } from './cached-fetch-entity';
 
 const TABS = ['Overview', 'Activity'] as const;
 
@@ -35,7 +34,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
   const entityId = decodeURIComponent(params.entityId);
 
-  const entity = await Subgraph.fetchEntity({ id: entityId });
+  const entity = await cachedFetchEntity(entityId);
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
   return {
@@ -70,9 +69,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ProfileLayout({ children, params }: Props) {
   const decodedId = decodeURIComponent(params.entityId);
 
-  const types = await fetchEntityType({
-    id: decodedId,
-  });
+  const types = await cachedFetchEntityType(decodedId);
 
   if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
     return <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>;
@@ -127,19 +124,11 @@ async function getProfilePage(entityId: string): Promise<
   IEntity & {
     avatarUrl: string | null;
     coverUrl: string | null;
-    referencedByEntities: ReferencedByEntity[];
     blockTriples: Triple[];
     blockIdsTriple: Triple | null;
   }
 > {
-  const [person, referencesPerson, spaces] = await Promise.all([
-    Subgraph.fetchEntity({ id: entityId }),
-    Subgraph.fetchEntities({
-      query: '',
-      filter: [{ field: 'linked-to', value: entityId }],
-    }),
-    Subgraph.fetchSpaces(),
-  ]);
+  const person = await cachedFetchEntity(entityId);
 
   // @TODO: Real error handling
   if (!person) {
@@ -151,30 +140,10 @@ async function getProfilePage(entityId: string): Promise<
       triples: [],
       types: [],
       description: null,
-      referencedByEntities: [],
       blockTriples: [],
       blockIdsTriple: null,
     };
   }
-
-  const referencedByEntities: ReferencedByEntity[] = referencesPerson.map(e => {
-    const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
-    const space = spaces.find(s => s.id === spaceId);
-    const configEntity = space?.spaceConfig;
-    const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
-    const spaceImage = configEntity ? Entity.cover(configEntity.triples) : PLACEHOLDER_SPACE_IMAGE;
-
-    return {
-      id: e.id,
-      name: e.name,
-      types: e.types,
-      space: {
-        id: spaceId,
-        name: spaceName,
-        image: spaceImage,
-      },
-    };
-  });
 
   const blockIdsTriple = person?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
   const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
@@ -182,7 +151,7 @@ async function getProfilePage(entityId: string): Promise<
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
-        return Subgraph.fetchEntity({ id: blockId });
+        return cachedFetchEntity(blockId);
       })
     )
   ).flatMap(entity => entity?.triples ?? []);
@@ -191,7 +160,6 @@ async function getProfilePage(entityId: string): Promise<
     ...person,
     avatarUrl: Entity.avatar(person.triples),
     coverUrl: Entity.cover(person.triples),
-    referencedByEntities,
     blockTriples,
     blockIdsTriple,
   };
