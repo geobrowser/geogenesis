@@ -25,7 +25,7 @@ import {
   stepAtom,
 } from '~/partials/onboarding/dialog';
 
-import { Cookie } from '../cookie';
+// import { Cookie } from '../cookie';
 
 // const LOCAL_CHAIN: Chain = {
 //   id: Number(Environment.options.development.chainId),
@@ -44,50 +44,6 @@ import { Cookie } from '../cookie';
 //       http: [Environment.options.development.rpc],
 //     },
 //   },
-// };
-
-// const customTransport = custom({
-//   rpc: (chain: Chain): { http: string; webSocket?: string } => {
-//     if (chain.id === polygon.id) {
-//       return {
-//         http: process.env.NEXT_PUBLIC_RPC_URL!,
-//         webSocket: process.env.NEXT_PUBLIC_WSS_URL!,
-//       };
-//     }
-
-//     if (chain.id === polygonMumbai.id) {
-//       return {
-//         http: polygonMumbai.rpcUrls.default.http[0],
-//       };
-//     }
-
-//     if (chain.id === LOCAL_CHAIN.id) {
-//       return {
-//         http: LOCAL_CHAIN.rpcUrls.default.http[0],
-//       };
-//     }
-
-//     return {
-//       http: polygon.rpcUrls.default.http[0],
-//     };
-//   },
-// }),
-
-// const getMockWalletClient = () =>
-//   createWalletClient({
-//     transport: http(polygon.rpcUrls.default.http[0]),
-//     chain: polygon,
-//     account: '0x66703c058795B9Cb215fbcc7c6b07aee7D216F24',
-//     key: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
-//     pollingInterval: 100,
-//   });
-
-// const getMockPublicClient = () => {
-//   return createPublicClient({
-//     transport: http(polygon.rpcUrls.default.http[0]),
-//     chain: polygon,
-//     pollingInterval: 100,
-//   });
 // };
 
 const getRealWalletConfig = (ethereum?: any) =>
@@ -148,18 +104,6 @@ const mockConfig = createConfig({
 const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const onConnect = React.useCallback(({ address }: { address?: string }) => {
-    if (!address) {
-      return;
-    }
-
-    Cookie.onConnectionChange('connect', address);
-  }, []);
-
-  const onDisconnect = React.useCallback(() => {
-    Cookie.onConnectionChange('disconnect', '');
-  }, []);
-
   const ethereum = typeof window !== 'undefined' ? window?.ethereum : undefined;
 
   const walletConfig = React.useMemo(() => {
@@ -183,6 +127,15 @@ export function GeoConnectButton() {
   const setProfileId = useSetAtom(profileIdAtom);
   const setStep = useSetAtom(stepAtom);
 
+  const resetOnboarding = () => {
+    setAccountType(null);
+    setName('');
+    setAvatar('');
+    setSpaceAddress('');
+    setProfileId('');
+    setStep('start');
+  };
+
   // We're still using wagmi for contract calls instead of Privy. This means that
   // we need to keep the wagmi wallet state in sync with Privy as the user logs
   // in and out.
@@ -196,8 +149,9 @@ export function GeoConnectButton() {
   React.useEffect(() => {
     const addWalletToWagmi = async (address?: string) => {
       const wallet = wallets.find(w => w.address === address);
+      console.log('wallet', { wallets, wallet });
 
-      if (wallet) {
+      if (wallet !== undefined) {
         // Cookie.onConnectionChange('connect', wallet.address);
         resetOnboarding();
         await setActiveWallet(wallet);
@@ -212,15 +166,6 @@ export function GeoConnectButton() {
       resetOnboarding();
     }
   }, [user?.wallet?.address, wallets]);
-
-  const resetOnboarding = () => {
-    setAccountType(null);
-    setName('');
-    setAvatar('');
-    setSpaceAddress('');
-    setProfileId('');
-    setStep('start');
-  };
 
   if (!address) {
     return (
