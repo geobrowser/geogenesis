@@ -1,3 +1,4 @@
+import localFont from 'next/font/local';
 import 'react-medium-image-zoom/dist/styles.css';
 
 import * as React from 'react';
@@ -11,6 +12,32 @@ import '../styles/fonts.css';
 import '../styles/styles.css';
 import '../styles/tiptap.css';
 import { App } from './entry';
+
+const calibre = localFont({
+  src: [
+    {
+      path: './fonts/calibre-regular.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: './fonts/calibre-medium.woff2',
+      weight: '500',
+      style: 'normal',
+    },
+    {
+      path: './fonts/calibre-semibold.woff2',
+      weight: '600',
+      style: 'normal',
+    },
+    {
+      path: './fonts/calibre-bold.woff2',
+      weight: '700',
+      style: 'normal',
+    },
+  ],
+  variable: '--font-calibre',
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.ENV_URL ?? 'https://geobrowser.io'),
@@ -83,7 +110,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${calibre.variable}`}>
       <head>
         <link rel="preload" as="image" href={DEFAULT_OPENGRAPH_IMAGE} />
       </head>

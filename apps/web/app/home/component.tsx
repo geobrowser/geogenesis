@@ -332,7 +332,7 @@ const MembershipRequest = ({ request, onRequestProcessed }: MembershipRequestPro
         <Link href={profile?.profileLink ?? ''} className="flex items-center justify-between">
           <div className="text-smallTitle">{profile?.name ?? profile.id}</div>
           <div className="relative h-5 w-5 overflow-hidden rounded-full">
-            <Avatar value={profile.id} avatarUrl={profile?.avatarUrl} size={20} />
+            <Avatar value={profile.address} avatarUrl={profile?.avatarUrl} size={20} />
           </div>
         </Link>
         <Link

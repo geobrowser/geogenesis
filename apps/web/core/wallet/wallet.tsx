@@ -4,11 +4,11 @@ import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
 import { http } from 'viem';
+import { polygon } from 'viem/chains';
 
 import * as React from 'react';
 
-import { useAccount, useAccountEffect, useDisconnect } from 'wagmi';
-import { polygon } from 'wagmi/chains';
+import { useAccount, useDisconnect } from 'wagmi';
 import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
 
 import { Button } from '~/design-system/button';

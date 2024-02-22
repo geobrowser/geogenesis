@@ -27,7 +27,7 @@
     "noEmit": true,
 
     /* Lib when not targeting the browser */
-    "lib": ["ES2022"]
+    "lib": ["ES2022"],
 
     /* Lib when targeting the browser */
     // "lib": ["ES2022", "DOM", "DOM.Iterable"]
@@ -38,6 +38,27 @@
     /* When building a library in a monorepo */
     // "composite": true,
     // "declarationMap": true,
+
+    "types": ["vitest/globals"]
   },
-  "include": ["index.ts", "src/**/*", "schema.d.ts"]
+  "include": [
+    "index.ts",
+    "sink/**/*",
+    "schema.d.ts",
+    "sink/bootstrap-root.ts",
+    "sink/cursor.ts",
+    "sink/entries/map-entries.ts",
+    "sink/parse-valid-full-entries.ts",
+    "sink/entries/populate-entries.ts",
+    "sink/populate-from-cache.ts",
+    "sink/populate-profiles.ts",
+    "sink/populate-roles.ts",
+    "sink/run-stream.ts",
+    "sink/types.ts",
+    "sink/zod.ts",
+    "sink/zapatos",
+    "sink/utils",
+    "sink/substreams.js",
+    "sink/constants"
+  ]
 }

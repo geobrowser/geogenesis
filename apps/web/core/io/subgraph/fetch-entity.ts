@@ -7,7 +7,7 @@ import { Entity as IEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { SubstreamNetworkEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntityQuery(id: string) {
   return `query {
@@ -49,7 +49,7 @@ export interface FetchEntityOptions {
 }
 
 interface NetworkResult {
-  geoEntity: SubstreamNetworkEntity | null;
+  geoEntity: SubstreamEntity | null;
 }
 
 export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity | null> {

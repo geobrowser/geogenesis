@@ -43,7 +43,7 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
                     className="flex items-center gap-1.5 transition-colors duration-75 hover:text-text"
                   >
                     <div className="relative h-3 w-3 overflow-hidden rounded-full">
-                      <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.id} />
+                      <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.address} />
                     </div>
                     <p>{p.createdBy.name ?? p.createdBy.id}</p>
                   </Link>

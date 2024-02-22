@@ -100,7 +100,7 @@ export function useTableBlock() {
       return stringValue;
     }
 
-    return TableBlockSdk.createGraphQLStringFromFilters([], selectedType.entityId);
+    return TableBlockSdk.createGraphQLStringFromFiltersV2([], selectedType.entityId);
   }, [filterTriple, selectedType.entityId]);
 
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
@@ -119,7 +119,7 @@ export function useTableBlock() {
     // @TODO: ShownColumns changes should trigger a refetch
     queryKey: ['table-block-columns', filterState, selectedType.entityId, entityId],
     queryFn: async ({ signal }) => {
-      const filterString = TableBlockSdk.createGraphQLStringFromFilters(filterState ?? [], selectedType.entityId);
+      const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
 
       const params: FetchRowsOptions['params'] = {
         filter: filterString,

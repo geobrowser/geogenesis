@@ -29,6 +29,8 @@ export class StorageClient implements IStorageClient {
 
     const { Hash } = await response.json();
 
+    console.log('ipfs hash', Hash);
+
     return Hash;
   }
 
