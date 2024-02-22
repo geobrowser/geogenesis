@@ -7,6 +7,7 @@ import * as React from 'react';
 import { ReactQueryProvider } from './query-client';
 import { Services } from './services';
 import { ActiveProposalProvider } from './state/active-proposal-store';
+import { AragonSDKProvider } from './state/aragon-dao-store';
 import { DiffProvider } from './state/diff-store';
 import { JotaiProvider } from './state/jotai-provider';
 import { StatusBarContextProvider } from './state/status-bar-store';
@@ -24,7 +25,9 @@ export function Providers({ children }: Props) {
           <Services.Provider>
             <StatusBarContextProvider>
               <DiffProvider>
-                <ActiveProposalProvider>{children}</ActiveProposalProvider>
+                <AragonSDKProvider>
+                  <ActiveProposalProvider>{children}</ActiveProposalProvider>
+                </AragonSDKProvider>
               </DiffProvider>
             </StatusBarContextProvider>
           </Services.Provider>

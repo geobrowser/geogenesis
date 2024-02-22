@@ -7,7 +7,7 @@ import { createPublicClient, createWalletClient, http } from 'viem';
 import * as React from 'react';
 
 import { Chain, WagmiConfig, configureChains, createConfig, useConnect, useDisconnect } from 'wagmi';
-import { polygon, polygonMumbai } from 'wagmi/chains';
+import { goerli, polygon, polygonMumbai } from 'wagmi/chains';
 import { CoinbaseWalletConnector } from 'wagmi/connectors/coinbaseWallet';
 import { InjectedConnector } from 'wagmi/connectors/injected';
 import { MetaMaskConnector } from 'wagmi/connectors/metaMask';

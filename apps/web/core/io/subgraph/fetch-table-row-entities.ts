@@ -7,7 +7,7 @@ import { Entity as IEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { SubstreamNetworkEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 // this differs from the fetchEntities method in that we pass in a custom graphql string that represents
 // the set of custom Table filters set on the table. These filters have small differences from the other
@@ -60,7 +60,7 @@ export interface FetchTableRowEntitiesOptions {
 }
 
 interface NetworkResult {
-  geoEntities: { nodes: SubstreamNetworkEntity[] };
+  geoEntities: { nodes: SubstreamEntity[] };
 }
 
 export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<IEntity[]> {

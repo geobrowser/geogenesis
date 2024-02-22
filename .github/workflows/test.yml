@@ -1,12 +1,16 @@
 name: Unit tests
 
 on:
+  # Trigger the workflow on push or pull request,
+  # but only for the main branch
   push:
     branches:
       - master
+      - stream/goverance
   pull_request:
     branches:
       - master
+      - stream/goverance
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,6 +18,7 @@ concurrency:
 
 env:
   NEXT_PUBLIC_IS_TEST_ENV: true
+  START_BLOCK: 36472424
 
 jobs:
   test:

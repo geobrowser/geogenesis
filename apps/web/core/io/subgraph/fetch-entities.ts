@@ -8,7 +8,7 @@ import { Entity as EntityType, FilterField, FilterState } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { SubstreamNetworkEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntitiesQuery(
   query: string | undefined,
@@ -82,7 +82,7 @@ export interface FetchEntitiesOptions {
 }
 
 interface NetworkResult {
-  geoEntities: { nodes: SubstreamNetworkEntity[] };
+  geoEntities: { nodes: SubstreamEntity[] };
 }
 
 export async function fetchEntities(options: FetchEntitiesOptions): Promise<EntityType[]> {
@@ -205,6 +205,6 @@ const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
   return a.length - b.length;
 };
 
-function sortSearchResultsByRelevance(startEntities: SubstreamNetworkEntity[]) {
+function sortSearchResultsByRelevance(startEntities: SubstreamEntity[]) {
   return startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
 }

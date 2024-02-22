@@ -14,9 +14,15 @@
     "test:e2e:install": "pnpm exec playwright install --with-deps"
   },
   "dependencies": {
+    "@aragon/osx-ethers": "1.3.1",
+    "@aragon/sdk-client": "1.22.0",
+    "@aragon/sdk-client-common": "1.14.0",
+    "@ethersproject/abi": "^5.6.4",
+    "@ethersproject/providers": "^5.6.8",
     "@geogenesis/action-schema": "workspace:*",
     "@geogenesis/contracts": "workspace:*",
     "@geogenesis/ids": "workspace:*",
+    "@geogenesis/sdk": "workspace:*",
     "@liveblocks/client": "^1.0.0",
     "@liveblocks/react": "^1.0.0",
     "@mobily/ts-belt": "^4.0.0-rc.2",
@@ -61,6 +67,7 @@
     "dexie": "^3.2.4",
     "diff": "^5.1.0",
     "effect": "2.0.0-next.48",
+    "ethers": "^5.0.0",
     "framer-motion": "^10.15.2",
     "immer": "^9.0.16",
     "jotai": "^2.5.1",

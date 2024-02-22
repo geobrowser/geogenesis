@@ -12,6 +12,7 @@ import { SubstreamProposal, fromNetworkActions } from './network-local-mapping';
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
     id
+    onchainProposalId
     name
     spaceId
     createdAtBlock
@@ -39,7 +40,10 @@ export const getFetchProposalQuery = (id: string) => `query {
               id
               name
             }
-            entityValue
+            entityValue {
+              id
+              name
+            }
             numberValue
             stringValue
             valueType
