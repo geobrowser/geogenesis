@@ -149,7 +149,6 @@ export function GeoConnectButton() {
   React.useEffect(() => {
     const addWalletToWagmi = async (address?: string) => {
       const wallet = wallets.find(w => w.address === address);
-      console.log('wallet', { wallets, wallet });
 
       if (wallet !== undefined) {
         // Cookie.onConnectionChange('connect', wallet.address);
