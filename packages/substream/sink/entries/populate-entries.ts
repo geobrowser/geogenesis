@@ -339,6 +339,35 @@ export async function populateWithFullEntries({
        * There's probably a better way to do this in SQL.
        */
       if (isNameDeleteAction) {
+        /**
+         * There might be more than one name triple defined on an entity at any given time. We need to make sure
+         * we fall back to a random name if we're deleting the current name. There's probably a better way to
+         * do this with derived/computed columns in SQL. We will also likely handle this in a FTS index that knows
+         * how to handle entities with multiple names/spaces in the future.
+         *
+         * We have already processed any name triples that are to be deleted in the same proposal. We should be safe
+         * to query for any current name triples for the entity without worrying about colliding with a name triple
+         * that has yet to be deleted.
+         */
+        const maybeNameTripleForEntityEffect = Effect.tryPromise({
+          try: () =>
+            db
+              .selectOne('triples', {
+                entity_id: triple.entity_id,
+                attribute_id: NAME,
+                // @TODO: should be a typed enum instead of `text`
+                value_type: 'string',
+                is_stale: false,
+              })
+              .run(pool),
+          catch: error =>
+            new Error(
+              `Failed to fetch pre-existing name triple for entity ${triple.entity_id}. ${(error as Error).message}`
+            ),
+        });
+
+        const maybeNameTripleForEntity = yield* awaited(maybeNameTripleForEntityEffect);
+
         const deleteNameEffect = Effect.tryPromise({
           try: () =>
             db
@@ -346,7 +375,7 @@ export async function populateWithFullEntries({
                 'geo_entities',
                 {
                   id: triple.entity_id,
-                  name: null,
+                  name: maybeNameTripleForEntity ? maybeNameTripleForEntity.string_value : null,
                   created_by_id: accounts[0]!.id,
                   created_at: timestamp,
                   created_at_block: blockNumber,
