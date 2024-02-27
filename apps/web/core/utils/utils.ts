@@ -1,3 +1,6 @@
+import { version as uuidVersion } from 'uuid';
+import { validate as uuidValidate } from 'uuid';
+
 import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_PATH } from '~/core/constants';
 import { Entity as IEntity } from '~/core/types';
 
@@ -263,3 +266,9 @@ export function isPermissionlessSpace(spaceId: string) {
 export function toTitleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
+
+export const uuidValidateV4 = (uuid: string) => {
+  if (!uuid) return false;
+
+  return uuidValidate(uuid) && uuidVersion(uuid) === 4;
+};
