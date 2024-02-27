@@ -1,6 +1,6 @@
 'use client';
 
-import { ConnectedWallet, useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
+import { useLogin, useLogout, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
 import { http } from 'viem';
@@ -8,7 +8,7 @@ import { polygon } from 'viem/chains';
 
 import * as React from 'react';
 
-import { useAccount, useConnect, useConnectors, useDisconnect } from 'wagmi';
+import { useAccount, useDisconnect } from 'wagmi';
 import { coinbaseWallet, injected, metaMask, mock, walletConnect } from 'wagmi/connectors';
 
 import { Button } from '~/design-system/button';
@@ -49,13 +49,12 @@ import { Cookie } from '../cookie';
 const getRealWalletConfig = (ethereum?: any) =>
   createConfig({
     chains: [polygon],
+    // This enables us to use a single injected connector but handle multiple wallet
+    // extensions within the browser.
     multiInjectedProviderDiscovery: true,
     transports: {
       [polygon.id]: http(process.env.NEXT_PUBLIC_RPC_URL!),
     },
-    // These connectors are based on how `connectkit` configures them internally when using
-    // their default configuration.
-    // https://github.com/family/connectkit/blob/47984040867a15ff8cbfdcdea534ad662c2d405e/packages/connectkit/src/defaultConfig.ts#L173
     connectors: [
       coinbaseWallet({
         chainId: 137,
@@ -131,16 +130,14 @@ export function GeoConnectButton() {
   // We're still using wagmi for contract calls instead of Privy. This means that
   // we need to keep the wagmi wallet state in sync with Privy as the user logs
   // in and out.
-  //
-  // Currently we put all login/logout side-effects here. Normally we'd put these
-  // in the event handler we use for login/logout, but since there's lots of state
-  // from both privy and wagmi that updates on login/logout, there's not a clean
-  // way to have all of the data we need in one event handler without data being stale.
   const { login } = useLogin({
     onComplete: user => {
       const wallet = wallets.find(wallet => wallet.address === user?.wallet?.address);
 
       if (wallet) {
+        // setActiveWallet is a privy-specific API for connecting any of the
+        // privy-aware wallets to wagmi's store.
+        // https://docs.privy.io/reference/sdk/wagmi/functions/useSetActiveWallet#setactivewallet%23function-usesetactivewallet
         setActiveWallet(wallet);
         resetOnboarding();
       }

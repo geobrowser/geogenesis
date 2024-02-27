@@ -23,8 +23,6 @@ export function useOnboarding() {
   // Whenever the user reloads Geo they will be prompted to go through
   // onboarding again if they don't have a profile.
   React.useEffect(() => {
-    // @TODO: How do we prevent flashing the onboarding when the user
-    // while we're still fetching the profile?
     if (isModalOpen) {
       setIsOnboardingVisible(false);
     } else if (isFetched && !isLoading && !profile) {
