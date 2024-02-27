@@ -3,13 +3,14 @@ import { type HttpTransport, WalletClient } from 'viem';
 
 import * as React from 'react';
 
-import { type PublicClient, usePublicClient, useWalletClient } from 'wagmi';
+import { UsePublicClientReturnType, usePublicClient, useWalletClient } from 'wagmi';
 
 // we need this ethers install to be able to create adapters to support the Aragon SDK
 // once the SDK has native viem support we can drop this
 
-export function publicClientToProvider(publicClient: PublicClient) {
-  const { chain, transport } = publicClient;
+export function publicClientToProvider(publicClient: UsePublicClientReturnType) {
+  const chain = publicClient!.chain;
+  const transport = publicClient!.transport;
   const network = {
     chainId: chain.id,
     name: chain.name,
