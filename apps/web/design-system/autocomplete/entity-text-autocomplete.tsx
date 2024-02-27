@@ -10,6 +10,7 @@ import { useRef } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
@@ -25,14 +26,23 @@ import { ResultContent, ResultsList } from './results-list';
 
 interface Props {
   placeholder?: string;
-  onDone: (result: { id: string; name: string | null }) => void;
+  onDone: (result: { id: string; name: string | null; nameTripleSpace?: string }) => void;
   itemIds: string[];
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
+  attributeId?: string;
   className?: string;
 }
 
-export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTypes, spaceId, className = '' }: Props) {
+export function EntityTextAutocomplete({
+  placeholder,
+  itemIds,
+  onDone,
+  allowedTypes,
+  spaceId,
+  attributeId,
+  className = '',
+}: Props) {
   const [, setToast] = useToast();
   const { create } = useActionsStore();
   const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
@@ -41,6 +51,9 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
   const { spaces } = useSpaces();
+
+  const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
+  const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
@@ -63,6 +76,25 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
 
     if (allowedTypes) {
       allowedTypes.forEach(type => {
+        create(
+          Triple.withId({
+            entityId: newEntityId,
+            attributeId: SYSTEM_IDS.TYPES,
+            entityName: query,
+            attributeName: 'Types',
+            space: spaceId,
+            value: {
+              type: 'entity',
+              id: type.typeId,
+              name: type.typeName,
+            },
+          })
+        );
+      });
+    }
+
+    if (relationValueTypesForAttribute) {
+      relationValueTypesForAttribute.forEach(type => {
         create(
           Triple.withId({
             entityId: newEntityId,
@@ -123,12 +155,12 @@ export function EntityTextAutocomplete({ placeholder, itemIds, onDone, allowedTy
             </ResultsList>
 
             {!isEmpty && !isLoading && (
-              <div className="pb-2">
+              <div>
                 <Divider type="horizontal" />
               </div>
             )}
 
-            <div className="flex items-center justify-between p-2 pt-0 text-smallButton">
+            <div className="flex items-center justify-between p-2 text-smallButton">
               <AnimatePresence mode="wait">
                 {isLoading ? (
                   <motion.span

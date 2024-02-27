@@ -1,11 +1,14 @@
-import { API } from '~/core/io';
+import { cache } from 'react';
 
-export async function getIsEditorForSpace(spaceId: string, connectedAddress?: string): Promise<boolean> {
-  const { space } = await API.space(spaceId);
+import { Subgraph } from '~/core/io';
+
+export const getIsEditorForSpace = cache(async (spaceId: string, connectedAddress?: string): Promise<boolean> => {
+  const space = await Subgraph.fetchSpace({ id: spaceId });
 
   if (!space) {
     throw new Error("Space doesn't exist");
   }
 
-  return connectedAddress ? space.editors.includes(connectedAddress) : false;
-}
+  // @HACK to get around incorrect checksum addresses in substream
+  return connectedAddress ? space.editors.map(e => e.toLowerCase()).includes(connectedAddress?.toLowerCase()) : false;
+});

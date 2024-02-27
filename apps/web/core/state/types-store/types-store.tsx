@@ -55,8 +55,7 @@ export function useTypesStore(): {
     if (!space) return [];
 
     const triplesFromSpaceActions = triples.filter(t => t.space === space.id);
-
-    const spaceConfigId = space.spaceConfigEntityId;
+    const spaceConfigId = space.spaceConfig?.id;
 
     if (!spaceConfigId) {
       const localSpaceConfigId = triplesFromSpaceActions.find(

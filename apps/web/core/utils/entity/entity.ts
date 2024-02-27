@@ -86,6 +86,10 @@ export function nameTriple(triples: ITriple[]): ITriple | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
 }
 
+export function nameTriples(triples: ITriple[]): ITriple[] {
+  return triples.filter(triple => triple.attributeId === SYSTEM_IDS.NAME);
+}
+
 export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
   return triples.find(triple => triple.attributeId === SYSTEM_IDS.VALUE_TYPE);
 }
@@ -102,23 +106,21 @@ export function valueTypeId(triples: ITriple[]): ValueTypeId | null {
 export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
   return pipe(
     triples,
-    A.groupBy(triple => triple.entityId),
+    // ts-belt returns readonly arrays from groupBy, so we use our own
+    // groupBy here to avoid weird casting later. We might be able to
+    // get around this by using a newer version of ts-belt.
+    triples => groupBy(triples, triple => triple.entityId),
     D.toPairs,
     A.map(([entityId, triples]) => {
-      // ts-belt returns readonly arrays from groupBy, so we need to coerce here.
-      // We can do array operations like .concat or .slice to coerce the triples
-      // array to a mutable version, but casting is cheaper performance-wise as
-      // entitiesFromTriples may be used in performance-heavy situations.
-      const mutableTriples = triples as unknown as ITriple[];
-      const tripleForName = nameTriple(mutableTriples);
+      const tripleForName = nameTriple(triples);
 
       return {
         id: entityId,
-        name: name(mutableTriples),
-        description: description(mutableTriples),
-        nameTripleSpace: nameTriple(mutableTriples)?.space,
-        types: types(mutableTriples, tripleForName?.space),
-        triples: mutableTriples,
+        name: name(triples),
+        description: description(triples),
+        nameTripleSpaces: nameTriples(triples).map(triple => triple.space),
+        types: types(triples, tripleForName?.space),
+        triples,
       };
     })
   );
@@ -168,7 +170,7 @@ export function mergeActionsWithEntity(allActionsInStore: Action[], networkEntit
     id: networkEntity.id,
     name: name(triplesForEntity),
     description: description(triplesForEntity),
-    nameTripleSpace: nameTriple(triplesForEntity)?.space,
+    nameTripleSpaces: nameTriples(triplesForEntity).map(triple => triple.space),
     types: types(triplesForEntity, triplesForEntity[0]?.space),
     triples: triplesForEntity,
   };
@@ -183,7 +185,7 @@ export function fromActions(allActionsInStore: Action[], entityId: string): IEnt
     id: entityId,
     name: name(triplesForEntityWithLocalNames),
     description: description(triplesForEntityWithLocalNames),
-    nameTripleSpace: nameTriple(triplesForEntityWithLocalNames)?.space,
+    nameTripleSpaces: nameTriples(triplesForEntityWithLocalNames).map(triple => triple.space),
     types: types(triplesForEntityWithLocalNames, triplesForEntityWithLocalNames[0]?.space),
     triples: triplesForEntityWithLocalNames,
   };

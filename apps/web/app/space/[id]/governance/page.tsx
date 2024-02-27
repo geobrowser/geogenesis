@@ -4,7 +4,6 @@ import * as Either from 'effect/Either';
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
-import { API } from '~/core/io';
 import { graphql } from '~/core/io/subgraph/graphql';
 
 import { SmallButton } from '~/design-system/button';
@@ -16,13 +15,12 @@ interface Props {
   params: { id: string };
 }
 
-export default async function GovernancePage({ params }: Props) {
-  const proposalsCount = await getProposalsCount({ params });
+const votingPeriod = '24h';
+const passThreshold = '51%';
+const rejectedProposalsCount = 0;
 
-  const votingPeriod = '24h';
-  const passThreshold = '51%';
-  const acceptedProposalsCount = proposalsCount === 1000 ? '1,000+' : proposalsCount.toString();
-  const rejectedProposalsCount = 0;
+export default async function GovernancePage({ params }: Props) {
+  const acceptedProposalsCount = await getProposalsCount({ params });
 
   return (
     <div className="space-y-4">
@@ -66,28 +64,17 @@ function GovernanceMetadataBox({ children }: { children: React.ReactNode }) {
 
 interface NetworkResult {
   proposals: {
-    id: string;
-  }[];
+    totalCount: number;
+  };
 }
 
 async function getProposalsCount({ params }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: config.subgraph,
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
     query: `
       query {
-        proposals(where: { space: "${params.id}" } first: 1000) {
-          id
+        proposals(filter: { spaceId: { equalToInsensitive: "${params.id}" } }) {
+          totalCount
         }
       }`,
   });
@@ -107,12 +94,16 @@ async function getProposalsCount({ params }: Props) {
         case 'GraphqlRuntimeError':
           console.error(`Encountered runtime graphql error in governance/page. spaceId: ${params.id}`, error.message);
           return {
-            proposals: [],
+            proposals: {
+              totalCount: 0,
+            },
           };
         default:
           console.error(`${error._tag}: Unable to fetch proposals count, spaceId: ${params.id}`);
           return {
-            proposals: [],
+            proposals: {
+              totalCount: 0,
+            },
           };
       }
     }
@@ -121,6 +112,5 @@ async function getProposalsCount({ params }: Props) {
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-
-  return result.proposals.length;
+  return result.proposals.totalCount;
 }

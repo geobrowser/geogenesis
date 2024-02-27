@@ -1,9 +1,7 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { Environment } from '~/core/environment';
 import { Profile, Space } from '~/core/types';
 
 import { Subgraph } from '..';
@@ -52,7 +50,6 @@ export async function fetchInterimMembershipRequests({
   signal,
 }: FetchProposalsOptions): Promise<MembershipRequestWithProfile[]> {
   const queryId = uuid();
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: endpoint,
@@ -102,14 +99,13 @@ export async function fetchInterimMembershipRequests({
     Promise.all(
       result.membershipRequests.map(request =>
         Subgraph.fetchProfile({
-          endpoint: config.subgraph,
           address: request.requestor,
         })
       )
     ),
     Promise.all(
       result.membershipRequests.map(async request => {
-        const space = await Subgraph.fetchSpace({ endpoint: config.subgraph, id: request.space });
+        const space = await Subgraph.fetchSpace({ id: request.space });
 
         if (!space) {
           return null;
@@ -138,10 +134,13 @@ export async function fetchInterimMembershipRequests({
     const profile = memberAddressToProfilesMap.get(request.requestor);
     const space = requestIdToSpaceMap.get(request.id);
 
+    const name = space?.spaceConfig?.name ?? request.space;
+    const image = space?.spaceConfig?.image ?? null;
+
     const spaceMetadata = {
       id: space?.id ?? request.space,
-      name: space?.attributes.name ?? request.space,
-      image: space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null,
+      name,
+      image,
     };
 
     return {

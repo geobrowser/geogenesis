@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 import * as React from 'react';
 
-import { ZERO_WIDTH_SPACE } from '~/core/constants';
+import { PLACEHOLDER_SPACE_IMAGE, ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
@@ -31,7 +31,7 @@ interface Props {
 }
 
 export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE }: Props) {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const isEditing = useUserIsEditing(spaceId);
 
   const {
@@ -41,14 +41,13 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
     fetchNextPage,
   } = useInfiniteQuery({
     queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: async ({ pageParam = 0 }) =>
-      subgraph.fetchProposals({ spaceId, endpoint: config.subgraph, page: pageParam }),
+    queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
   });
 
   const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
-  const isOnePage = proposals?.pages && proposals.pages[0].length < 10;
+  const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
 
   const isLastPage =
     proposals?.pages &&
@@ -66,7 +65,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
           <Image
             objectFit="cover"
             layout="fill"
-            src={getImagePath(spaceImage ?? '') || '/placeholder.png'}
+            src={getImagePath(spaceImage ?? '') || PLACEHOLDER_SPACE_IMAGE}
             alt={`Cover image for ${spaceName}`}
           />
         </div>

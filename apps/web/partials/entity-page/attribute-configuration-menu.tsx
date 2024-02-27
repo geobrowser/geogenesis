@@ -11,7 +11,6 @@ import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Services } from '~/core/services';
 import { Entity, OmitStrict, RelationValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { NavUtils } from '~/core/utils/utils';
@@ -31,7 +30,6 @@ interface Props {
 export function AttributeConfigurationMenu({ trigger, attributeId, attributeName }: Props) {
   const [open, setOpen] = React.useState(false);
 
-  const { config } = Services.useServices();
   const merged = useMergedData();
 
   // To add the relation value type triple to the correct space we need to fetch
@@ -46,7 +44,6 @@ export function AttributeConfigurationMenu({ trigger, attributeId, attributeName
         query: '',
         first: 1,
         skip: 0,
-        endpoint: config.subgraph,
         filter: [
           {
             field: 'entity-id',

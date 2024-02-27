@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import Link from 'next/link';
+import { getAddress } from 'viem';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
@@ -85,8 +86,8 @@ export const OnboardingDialog = () => {
         throw new Error(`Creating space failed`);
       }
 
-      setSpaceAddress(spaceAddress);
-
+      // Make sure we're setting the checksum'd address
+      setSpaceAddress(getAddress(spaceAddress));
       setStep('registering-profile');
 
       setTimeout(() => {
@@ -325,8 +326,7 @@ function StepSelectType() {
 
   const options = [
     { image: '/images/onboarding/person.png', label: 'Person', value: 'person' },
-    // @TODO restore once company spaces are ready
-    // { image: '/images/onboarding/company.png', label: 'Company', value: 'company', disabled: true },
+    { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
     { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
   ];
 

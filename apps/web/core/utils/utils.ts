@@ -1,7 +1,4 @@
-import { version as uuidVersion } from 'uuid';
-import { validate as uuidValidate } from 'uuid';
-
-import { IPFS_GATEWAY_PATH } from '~/core/constants';
+import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_PATH } from '~/core/constants';
 import { Entity as IEntity } from '~/core/types';
 
 import { Entity } from './entity';
@@ -20,12 +17,11 @@ export const NavUtils = {
     spaceId: string,
     newEntityId: string,
     typeId?: string | null,
-    filterId?: string | null,
-    filterValue?: string | null
+    filters?: Array<[string, string]> | null
   ) => {
-    if (typeId && filterId && filterValue) {
+    if (typeId && filters) {
       return decodeURIComponent(
-        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filterId=${filterId}&filterValue=${filterValue}`
+        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filters=${encodeURI(JSON.stringify(filters))}`
       );
     }
 
@@ -33,7 +29,18 @@ export const NavUtils = {
       return decodeURIComponent(`/space/${spaceId}/${newEntityId}?typeId=${typeId}`);
     }
 
+    if (filters) {
+      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?filters=${encodeURI(JSON.stringify(filters))}`);
+    }
+
     return decodeURIComponent(`/space/${spaceId}/${newEntityId}`);
+  },
+  toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
+    if (spaceIdParam) {
+      return decodeURIComponent(`/space/${spaceId}/activity?spaceId=${spaceIdParam}`);
+    }
+
+    return decodeURIComponent(`/space/${spaceId}/activity`);
   },
   toProfileActivity: (spaceId: string, entityId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
@@ -248,8 +255,11 @@ export function getGeoPersonIdFromOnchainId(address: `0x${string}`, onchainId: s
 
 export const sleep = (delay: number) => new Promise(resolve => setTimeout(resolve, delay));
 
-export const uuidValidateV4 = (uuid: string) => {
-  if (!uuid) return false;
+export function isPermissionlessSpace(spaceId: string) {
+  // @TODO: Ensure we are correctly capitalizing the space id in the substream
+  return !ALL_PUBLIC_SPACES.includes(spaceId);
+}
 
-  return uuidValidate(uuid) && uuidVersion(uuid) === 4;
-};
+export function toTitleCase(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}

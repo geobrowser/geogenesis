@@ -117,7 +117,7 @@ export async function makeProposal({
     if (waitForTransactionEffect.status !== 'success') {
       return yield* awaited(
         Effect.fail(
-          new TransactionRevertedError(`Transaction reverted: 
+          new TransactionRevertedError(`Transaction reverted:
       hash: ${waitForTransactionEffect.transactionHash}
       status: ${waitForTransactionEffect.status}
       blockNumber: ${waitForTransactionEffect.blockNumber}
@@ -128,7 +128,7 @@ export async function makeProposal({
       );
     }
 
-    console.log(`Transaction successful. Receipt: 
+    console.log(`Transaction successful. Receipt:
     hash: ${waitForTransactionEffect.transactionHash}
     status: ${waitForTransactionEffect.status}
     blockNumber: ${waitForTransactionEffect.blockNumber}

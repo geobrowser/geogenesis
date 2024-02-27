@@ -9,7 +9,6 @@ import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 
-import { Environment } from '../environment';
 import { useMergedData } from './use-merged-data';
 
 export function useGlobalSearch() {
@@ -25,9 +24,9 @@ export function useGlobalSearch() {
         Effect.tryPromise({
           try: () =>
             merged.fetchEntities({
-              endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph,
               query,
               signal,
+              first: 10,
               filter: [],
             }),
           catch: () => new Subgraph.Errors.AbortError(),

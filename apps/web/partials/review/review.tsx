@@ -18,7 +18,7 @@ import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { Environment } from '~/core/environment';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
@@ -66,60 +66,36 @@ type Proposal = {
 type EntityId = string;
 
 type GatewaySpaceWithEntityConfig = {
-  space: {
-    spaceConfigEntityId: string;
-  } & Space;
-  isPermissionlessSpace: boolean;
-};
+  spaceConfigEntityId: string;
+} & Space;
 
 const ReviewChanges = () => {
   const { subgraph } = Services.useServices();
   const { state } = useStatusBar();
-
   const { allSpacesWithActions } = useActionsStore();
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
 
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', allSpacesWithActions],
     queryFn: async () => {
-      const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-      const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => API.space(s)));
+      const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => subgraph.fetchSpace({ id: s })));
       const spaces = maybeSpaces.filter(
-        (s): s is GatewaySpaceWithEntityConfig => s.space !== null && s.space.spaceConfigEntityId !== null
+        (s): s is Space & { spaceConfig: EntityType } => s !== null && s.spaceConfig !== null
       );
-
-      const spaceConfigToSpaceMap = new Map<string, string>();
-
-      for (const space of spaces) {
-        spaceConfigToSpaceMap.set(space.space.spaceConfigEntityId, space.space.id);
-      }
-
-      const spaceConfigs = (
-        await Promise.all(
-          spaces.map(space =>
-            subgraph.fetchEntity({
-              endpoint: space.isPermissionlessSpace ? config.permissionlessSubgraph : config.subgraph,
-              id: space.space.spaceConfigEntityId,
-            })
-          )
-        )
-      ).filter((c): c is EntityType => c !== null);
 
       const spacesMap = new Map<string, { id: string; name: string | null; image: string | null }>();
 
-      for (const config of spaceConfigs) {
-        const id = spaceConfigToSpaceMap.get(config.id);
+      for (const space of spaces) {
+        const id = space.id;
+        const config = space.spaceConfig;
+        const maybeImageHash = Entity.cover(config.triples) ?? Entity.avatar(config.triples);
+        const image = maybeImageHash ? getImagePath(maybeImageHash) : null;
 
-        if (id) {
-          const maybeImageHash = Entity.cover(config.triples) ?? Entity.avatar(config.triples);
-          const image = maybeImageHash ? getImagePath(maybeImageHash) : null;
-
-          spacesMap.set(id, {
-            id,
-            name: config.name,
-            image,
-          });
-        }
+        spacesMap.set(id, {
+          id,
+          name: config.name,
+          image,
+        });
       }
 
       return spacesMap;
@@ -134,9 +110,9 @@ const ReviewChanges = () => {
       state.reviewState !== 'publishing-contract'
     ) {
       setIsReviewOpen(false);
-      return;
+    } else {
+      setActiveSpace(allSpacesWithActions[0] ?? '');
     }
-    setActiveSpace(allSpacesWithActions[0] ?? '');
   }, [allSpacesWithActions, setActiveSpace, setIsReviewOpen, state.reviewState]);
 
   // Options for space selector dropdown
@@ -970,10 +946,10 @@ const labelClassNames = `text-footnote text-grey-04`;
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
 const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: ['changes', spaceId, actions],
-    queryFn: async () => Change.fromActions(Action.prepareActionsForPublishing(actions), subgraph, config),
+    queryFn: async () => Change.fromActions(Action.prepareActionsForPublishing(actions), subgraph),
   });
 
   return [data, isLoading] as const;
@@ -1031,12 +1007,6 @@ function parseMarkdown(markdownString: string) {
   return { markdownType, markdownContent };
 }
 
-function getSpaceImage(spaces: Space[], spaceId: string): string {
-  return getImagePath(
-    spaces.find(({ id }) => id === spaceId)?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '/placeholder.png'
-  );
-}
-
 type TableFiltersProps = {
   rawFilter: string;
 };
@@ -1087,22 +1057,19 @@ const TableFilter = ({ filter }: TableFilterProps) => {
 };
 
 const useFilters = (rawFilter: string) => {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${rawFilter}`],
-    queryFn: async () => getFilters(rawFilter, subgraph, config),
+    queryFn: async () => getFilters(rawFilter, subgraph),
   });
 
   return [data, isLoading] as const;
 };
 
-const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph, config: Environment.AppConfig) => {
-  const filters = await createFiltersFromGraphQLString(
-    rawFilter,
-    async id => await subgraph.fetchEntity({ id, endpoint: config.subgraph })
-  );
+const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph) => {
+  const filters = await createFiltersFromGraphQLString(rawFilter, async id => await subgraph.fetchEntity({ id }));
   const serverColumns = await fetchColumns({
-    params: { skip: 0, first: 0, filter: '', endpoint: config.subgraph },
+    params: { skip: 0, first: 0, filter: '' },
     api: {
       fetchEntity: subgraph.fetchEntity,
       fetchTriples: subgraph.fetchTriples,

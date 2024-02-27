@@ -2,6 +2,7 @@ import {
   CreateTripleAction as CreateTripleActionSchema,
   DeleteTripleAction as DeleteTripleActionSchema,
 } from '@geogenesis/action-schema';
+import { ProposalStatus } from '@geogenesis/sdk';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
@@ -57,15 +58,17 @@ export type Triple = {
   placeholder?: boolean;
 };
 
+export type SpaceConfigEntity = Entity & {
+  image: string | null;
+};
+
 export type Space = {
   id: string;
   isRootSpace: boolean;
   editors: string[];
   editorControllers: string[];
   admins: string[];
-  attributes: Dictionary<string, string>;
-  entityId: string;
-  spaceConfigEntityId: string | null;
+  spaceConfig: SpaceConfigEntity | null;
   createdAtBlock: string;
 };
 
@@ -129,7 +132,7 @@ export type Entity = {
   description: string | null;
   types: EntityType[];
   triples: Triple[];
-  nameTripleSpace?: string;
+  nameTripleSpaces?: string[];
 };
 
 export type GeoType = {
@@ -158,8 +161,14 @@ export interface Cell {
 
 export type Row = Record<string, Cell>;
 
+export type Vote = {
+  vote: 'YES' | 'NO';
+  accountId: string;
+};
+
 export type Proposal = {
   id: string;
+  onchainProposalId: string;
   name: string | null;
   description: string | null;
   createdBy: Profile;
@@ -167,6 +176,29 @@ export type Proposal = {
   createdAtBlock: string;
   proposedVersions: ProposedVersion[];
   space: string;
+  startTime: number;
+  endTime: number;
+  status: ProposalStatus;
+  proposalVotes: {
+    totalCount: number;
+    nodes: Vote[];
+  };
+};
+
+export type Version = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  createdBy: Profile;
+  createdAt: number;
+  createdAtBlock: string;
+  spaceId: string;
+  actions: Action[];
+  triples: Triple[];
+  entity: {
+    id: string;
+    name: string;
+  };
 };
 
 export type ProposedVersion = {
@@ -176,6 +208,7 @@ export type ProposedVersion = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
+  spaceId: string;
   actions: Action[];
   entity: {
     id: string;
@@ -220,3 +253,5 @@ export type SpaceActions = Record<SpaceId, Action[]>;
 export type EntityId = string;
 export type AttributeId = string;
 export type EntityActions = Record<EntityId, Record<AttributeId, Triple>>;
+
+export type SpaceType = 'default' | 'company' | 'nonprofit';

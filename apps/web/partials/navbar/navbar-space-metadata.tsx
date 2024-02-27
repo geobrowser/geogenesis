@@ -1,10 +1,8 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 
-import { API } from '~/core/io';
 import { Services } from '~/core/services';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -15,44 +13,23 @@ import { NavbarBreadcrumb } from './navbar-breadcrumb';
 import { NavbarLinkMenu } from './navbar-link-menu';
 
 export function NavbarSpaceMetadata() {
-  let { config } = Services.useServices();
   const { subgraph } = Services.useServices();
   const params = useParams();
   const spaceId: string | undefined = params?.['id'] as string | undefined;
 
   const { data } = useQuery({
-    queryKey: ['space', spaceId, config.subgraph],
+    queryKey: ['space', spaceId],
     queryFn: async ({ signal }) => {
       if (!spaceId) return null;
-      const { space, isPermissionlessSpace } = await API.space(spaceId);
-
+      const space = await subgraph.fetchSpace({ id: spaceId });
       if (!space) return null;
 
-      if (isPermissionlessSpace) {
-        config = {
-          ...config,
-          subgraph: config.permissionlessSubgraph,
-        };
-      }
-
-      if (!space.spaceConfigEntityId) {
-        return {
-          name: space.attributes[SYSTEM_IDS.NAME] ?? space.id,
-          img: space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE],
-          href: NavUtils.toSpace(space.id),
-        };
-      }
-
-      const spaceConfig = await subgraph.fetchEntity({
-        id: space.spaceConfigEntityId,
-        endpoint: config.subgraph,
-        signal,
-      });
+      const spaceConfig = space.spaceConfig;
 
       if (!spaceConfig) {
         return {
-          name: space.attributes[SYSTEM_IDS.NAME] ?? space.id,
-          img: space.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE],
+          name: space.spaceConfig?.name ?? space.id,
+          img: space.spaceConfig?.image ?? null,
           href: NavUtils.toSpace(space.id),
         };
       }

@@ -54,7 +54,11 @@ export const TAG_TYPE = '3d31f766-b651-48af-a357-271343a773de'
 export const TOPIC_TYPE = '1d7f027e-415c-4f69-800e-460fde65feb9'
 export const GOAL_TYPE = 'f7191246-3dca-4e77-8a79-d9cdc9804127'
 export const CLAIM_TYPE = 'fa8e8e54-f742-4c00-b73c-05adee2b4545'
+export const COMPANY_TYPE = '9cc8a65d-df92-4c0c-8d90-24980e822dc0'
 
+export const VALUES_ATTRIBUTE = 'c8e8fd5f-011d-4c8e-8aaf-1a2ffc5b48fd'
+export const VISION_ATTRIBUTE = 'c6702478-93c7-4af4-8f2a-285a46cc19ca'
+export const MISSION_ATTRIBUTE = '6db5eaa5-1cf6-463e-88f9-87bd631db044'
 export const SPEAKERS_ATTRIBUTE = '03597522-e1f2-423b-882d-330cfe89331d'
 export const RELEVANT_QUESTIONS_ATTRIBUTE =
   'ee5648a5-d638-4780-9796-cd8605517545'
@@ -88,6 +92,7 @@ export const NONPROFIT_CATEGORIES_ATTRIBUTE =
 export const WEB_URL_ATTRIBUTE = 'e8010874-d330-4a4d-9907-62e89a19371a'
 export const AVATAR_ATTRIBUTE = '235ba0e8-dc7e-4bdd-a1e1-6d0d4497f133'
 export const COVER_ATTRIBUTE = '34f53507-2e6b-42c5-a844-43981a77cfa2'
+export const ROLE_ATTRIBUTE = '9c1922f1-d7a2-47d1-841d-234cb2f56991'
 
 /* Example Usage: SF_Config -> FOREIGN_TYPES -> Some_Entity */
 export const FOREIGN_TYPES = 'be745973-05a9-4cd0-a46d-1c5538270faf'

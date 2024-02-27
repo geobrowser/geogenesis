@@ -547,7 +547,7 @@ const listener =
           entityId: ID.createEntityId(),
           entityName: '',
           attributeId: SYSTEM_IDS.TYPES,
-          attributeName: 'Type',
+          attributeName: 'Types',
           value: { id: SYSTEM_IDS.ATTRIBUTE, type: 'entity', name: 'Attribute' },
         });
 

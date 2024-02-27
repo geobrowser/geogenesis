@@ -23,6 +23,7 @@
     "@next/next/no-img-element": 0,
     "no-undef": 1,
     "no-unused-vars": 0, // this gets handled by @typescript-eslint/no-unused-vars
-    "@typescript-eslint/no-explicit-any": 0
+    "@typescript-eslint/no-explicit-any": 0,
+    "@typescript-eslint/prefer-as-const": 0
   }
 }

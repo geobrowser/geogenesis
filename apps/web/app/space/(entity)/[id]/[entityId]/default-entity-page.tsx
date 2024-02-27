@@ -3,13 +3,12 @@ import { redirect } from 'next/navigation';
 
 import { Suspense } from 'react';
 
-import { AppConfig, Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
-import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { Entity } from '~/core/utils/entity';
+import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
@@ -30,23 +29,24 @@ interface Props {
   params: { id: string; entityId: string };
   searchParams: {
     typeId?: string;
-    filterId?: string;
-    filterValue?: string;
+    filters?: string;
   };
 }
 
-export default async function DefaultEntityPage({ params, searchParams }: Props) {
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+const EMPTY_ARRAY_AS_ENCODED_URI = '%5B%5D';
 
-  const props = await getData(params.id, params.entityId, config);
+export default async function DefaultEntityPage({ params, searchParams }: Props) {
+  const decodedId = decodeURIComponent(params.entityId);
+  const props = await getData(params.id, decodedId);
 
   const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
   const types = Entity.types(props.triples);
 
-  const filterId = searchParams.filterId ?? null;
-  const filterValue = searchParams.filterValue ?? null;
   const typeId = searchParams.typeId ?? null;
+
+  const encodedFilters = searchParams.filters ?? EMPTY_ARRAY_AS_ENCODED_URI;
+  const filters = JSON.parse(decodeURI(encodedFilters));
 
   return (
     <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
@@ -63,7 +63,7 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
             <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
             <Spacer height={40} />
             <Editor shouldHandleOwnSpacing />
-            <ToggleEntityPage {...props} filterId={filterId} filterValue={filterValue} typeId={typeId} />
+            <ToggleEntityPage {...props} typeId={typeId} filters={filters} />
             <Spacer height={40} />
             <Suspense fallback={<EntityReferencedByLoading />}>
               <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
@@ -76,32 +76,24 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
   );
 }
 
-const getData = async (spaceId: string, entityId: string, config: AppConfig) => {
-  const { isPermissionlessSpace, space } = await API.space(spaceId);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
+const getData = async (spaceId: string, entityId: string) => {
+  const entity = await Subgraph.fetchEntity({ id: entityId });
+  const nameTripleSpace = entity?.nameTripleSpaces?.[0];
 
   // Redirect from space configuration page to space page
-  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && entity?.nameTripleSpace) {
-    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${entity?.nameTripleSpace}`);
-    return redirect(`/space/${entity?.nameTripleSpace}`);
+  if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && nameTripleSpace) {
+    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${nameTripleSpace}`);
+    return redirect(NavUtils.toSpace(nameTripleSpace));
   }
 
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching
   // the space for the entity we are rendering, so we need to redirect to the correct space.
-  if (entity?.nameTripleSpace) {
-    if (spaceId !== entity?.nameTripleSpace) {
+  if (nameTripleSpace) {
+    if (spaceId !== nameTripleSpace) {
       console.log(
-        `Redirecting from incorrect space ${spaceId} to correct space ${entity?.nameTripleSpace} for entity ${entityId}`
+        `Redirecting from incorrect space ${spaceId} to correct space ${nameTripleSpace} for entity ${entityId}`
       );
-      return redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
+      return redirect(NavUtils.toEntity(nameTripleSpace, entityId));
     }
   }
 
@@ -114,16 +106,10 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
   const blockTriples = (
     await Promise.all(
       blockIds.map(blockId => {
-        return Subgraph.fetchTriples({
-          endpoint: config.subgraph,
-          query: '',
-          skip: 0,
-          first: DEFAULT_PAGE_SIZE,
-          filter: [{ field: 'entity-id', value: blockId }],
-        });
+        return Subgraph.fetchEntity({ id: blockId });
       })
     )
-  ).flatMap(triples => triples);
+  ).flatMap(entity => entity?.triples ?? []);
 
   return {
     triples: entity?.triples ?? [],
@@ -131,7 +117,6 @@ const getData = async (spaceId: string, entityId: string, config: AppConfig) => 
     name: entity?.name ?? null,
     description: Entity.description(entity?.triples ?? []),
     spaceId,
-    space,
     serverAvatarUrl,
     serverCoverUrl,
 

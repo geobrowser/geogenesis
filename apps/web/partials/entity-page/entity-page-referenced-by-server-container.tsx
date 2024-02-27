@@ -1,7 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-
-import { Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/utils/entity';
 import { getRandomArrayItem } from '~/core/utils/utils';
 
@@ -18,32 +15,20 @@ interface Props {
   spaceId: string;
 }
 
-export async function EntityReferencedByServerContainer({ entityId, name, spaceId }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace } = await API.space(spaceId);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
+export async function EntityReferencedByServerContainer({ entityId, name }: Props) {
   const [related, spaces] = await Promise.all([
     Subgraph.fetchEntities({
-      endpoint: config.subgraph,
       query: '',
       filter: [{ field: 'linked-to', value: entityId }],
     }),
-    Subgraph.fetchSpaces({ endpoint: config.subgraph }),
+    Subgraph.fetchSpaces(),
   ]);
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
     const space = spaces.find(s => s.id === spaceId);
-    const spaceName = space?.attributes[SYSTEM_IDS.NAME] ?? null;
-    const spaceImage = space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? null;
+    const spaceName = space?.spaceConfig?.name ?? null;
+    const spaceImage = Entity.avatar(space?.spaceConfig?.triples) ?? Entity.cover(space?.spaceConfig?.triples) ?? null;
 
     return {
       id: e.id,

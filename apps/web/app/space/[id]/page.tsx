@@ -1,12 +1,12 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { AppConfig, Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
-import { fetchSubspaces } from '~/core/io/subgraph/fetch-subspaces';
+import { Subgraph } from '~/core/io';
+import { fetchEntities } from '~/core/io/subgraph';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -26,25 +26,15 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const { isPermissionlessSpace, space } = await API.space(params.id);
+  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const entity = space?.spaceConfig;
 
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const entityId = space?.spaceConfigEntityId;
-
-  if (!entityId) {
+  if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
-    return redirect(`/space/${spaceId}/entities`);
+    redirect(`/space/${spaceId}/entities`);
   }
 
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
 
   return {
@@ -53,7 +43,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: entityName ?? spaceId,
       description: description ?? undefined,
-      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entityId)}`,
+      url: `https://geobrowser.io${NavUtils.toEntity(spaceId, entity.id)}`,
       images: openGraphImageUrl
         ? [
             {
@@ -77,18 +67,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function SpacePage({ params }: Props) {
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const props = await getData(params.id, config);
+  const props = await getData(params.id);
 
   return (
     <>
@@ -124,44 +103,36 @@ type SubspacesContainerProps = {
 };
 
 const SubspacesContainer = async ({ entityId }: SubspacesContainerProps) => {
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-  const subspaces = await fetchSubspaces({ entityId, endpoint: config.subgraph });
+  const subspaces = await fetchEntities({
+    typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
+    filter: [
+      {
+        field: 'attribute-id',
+        value: SYSTEM_IDS.BROADER_SPACES,
+      },
+      {
+        field: 'linked-to',
+        value: entityId,
+      },
+    ],
+  });
 
   return <Subspaces subspaces={subspaces} />;
 };
 
-const getData = async (spaceId: string, config: AppConfig) => {
-  const { isPermissionlessSpace, space } = await API.space(spaceId);
+const getData = async (spaceId: string) => {
+  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const entity = space?.spaceConfig;
 
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const entityId = space?.spaceConfigEntityId;
-
-  if (!entityId) {
+  if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
     redirect(`/space/${spaceId}/entities`);
-  }
-
-  const entity = await Subgraph.fetchEntity({ endpoint: config.subgraph, id: entityId });
-
-  // @HACK: Entities we are rendering might be in a different space. Right now there's a bug where we aren't
-  // fetching the space for the entity we are rendering, so we need to redirect to the correct space.
-  if (entity?.nameTripleSpace) {
-    if (spaceId !== entity?.nameTripleSpace) {
-      console.log('Redirecting to space from space configuration entity', entity?.nameTripleSpace);
-      redirect(`/space/${entity?.nameTripleSpace}/${entityId}`);
-    }
   }
 
   return {
     name: entity?.name ?? null,
     triples: entity?.triples ?? [],
-    id: entityId,
+    id: entity.id,
     spaceId,
   };
 };

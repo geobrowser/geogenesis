@@ -329,16 +329,14 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
   const debouncedQuery = useDebouncedValue(query, 100);
   const { spaces } = useSpaces();
 
-  const results = spaces.filter(
-    s => s.attributes[SYSTEM_IDS.NAME]?.toLowerCase().startsWith(debouncedQuery.toLowerCase())
-  );
+  const results = spaces.filter(s => s.spaceConfig?.name?.toLowerCase().startsWith(debouncedQuery.toLowerCase()));
 
   const onSelectSpace = (space: Space) => {
     onQueryChange('');
 
     onSelect({
       id: space.id,
-      name: space.attributes[SYSTEM_IDS.NAME] ?? null,
+      name: space.spaceConfig?.name ?? null,
     });
   };
 
@@ -359,14 +357,14 @@ function TableBlockSpaceFilterInput({ onSelect, selectedValue }: TableBlockSpace
                   <ResultItem onClick={() => onSelectSpace(result)}>
                     <div className="flex w-full items-center justify-between leading-[1rem]">
                       <Text as="li" variant="metadataMedium" ellipsize className="leading-[1.125rem]">
-                        {result.attributes[SYSTEM_IDS.NAME] ?? result.id}
+                        {result.spaceConfig?.name ?? result.id}
                       </Text>
                     </div>
                     <Spacer height={4} />
                     <div className="flex items-center gap-1.5 overflow-hidden">
-                      {(result.attributes[SYSTEM_IDS.NAME] ?? null) && (
-                        <Breadcrumb img={result.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? ''}>
-                          {result.attributes[SYSTEM_IDS.NAME] ?? result.id}
+                      {(result.spaceConfig?.name ?? result.id) && (
+                        <Breadcrumb img={result.spaceConfig?.image ?? ''}>
+                          {result.spaceConfig?.name ?? result.id}
                         </Breadcrumb>
                       )}
                       <span style={{ rotate: '270deg' }}>

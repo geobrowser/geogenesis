@@ -3,12 +3,10 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import React, { useTransition } from 'react';
 
-import { Environment } from '../environment';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { useMergedData } from '../hooks/use-merged-data';
 import { ID } from '../id';
 import { Merged } from '../merged';
-import { Services } from '../services';
 import {
   Action,
   DeleteTripleAction,
@@ -51,7 +49,6 @@ interface MigrateHubConfig {
   };
   queryClient: QueryClient;
   merged: Merged;
-  appConfig: Environment.AppConfig;
 }
 
 export interface IMigrateHub {
@@ -83,7 +80,6 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
               query: '',
               first: FIRST,
               skip: page * FIRST,
-              endpoint: config.appConfig.subgraph,
               filter: [
                 {
                   field: 'linked-to',
@@ -137,7 +133,6 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
               query: '',
               first: FIRST,
               skip: page * FIRST,
-              endpoint: config.appConfig.subgraph,
               filter: [
                 {
                   field: 'attribute-id',
@@ -308,7 +303,6 @@ export function useMigrateHub() {
   const queryClient = useQueryClient();
   const merged = useMergedData();
 
-  const { config: appConfig } = Services.useServices();
   const [, startTransition] = useTransition();
 
   const hub = React.useMemo(() => {
@@ -320,9 +314,8 @@ export function useMigrateHub() {
       },
       merged,
       queryClient,
-      appConfig,
     });
-  }, [create, update, remove, queryClient, merged, appConfig]);
+  }, [create, update, remove, queryClient, merged]);
 
   const dispatch = React.useCallback(
     async (action: MigrateAction) => {

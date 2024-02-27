@@ -71,8 +71,6 @@ export function useEntityTable() {
     queryKey: ['entity-table-columns', selectedType?.entityId, filterString],
     queryFn: async ({ signal }) => {
       const params: FetchRowsOptions['params'] = {
-        endpoint: config.subgraph,
-        query: '',
         filter: filterString,
         typeIds: selectedType ? [selectedType.entityId] : [],
         first: DEFAULT_PAGE_SIZE + 1,
@@ -106,8 +104,6 @@ export function useEntityTable() {
       if (!columns) return [];
 
       const params: FetchRowsOptions['params'] = {
-        endpoint: config.subgraph,
-        query: '',
         filter: filterString,
         typeIds: selectedType ? [selectedType.entityId] : [],
         first: DEFAULT_PAGE_SIZE + 1,
@@ -145,7 +141,7 @@ export function useEntityTable() {
 
       // Make sure we merge any unpublished entities
       const maybeRelationAttributeTypes = await Promise.all(
-        columns.map(t => t.id).map(attributeId => merged.fetchEntity({ id: attributeId, endpoint: config.subgraph }))
+        columns.map(t => t.id).map(attributeId => merged.fetchEntity({ id: attributeId }))
       );
 
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
@@ -201,7 +197,7 @@ export function useEntityTable() {
   );
 
   const createForeignType = (foreignType: TripleType) => {
-    insertForeignType(foreignType, spaceId, space?.spaceConfigEntityId ?? null, create);
+    insertForeignType(foreignType, spaceId, space?.spaceConfig?.id ?? null, create);
   };
 
   const createType = (entityName: string) => {

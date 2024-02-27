@@ -6,10 +6,10 @@ import {
 } from '../generated/templates/Space/Space'
 import { addEntry } from './add-entry'
 import { addRole, removeRole } from './access-control'
-import { BigInt } from '@graphprotocol/graph-ts'
+import { getChecksumAddress } from './get-checksum-address'
 
 export function handleEntryAdded(event: EntryAdded): void {
-  const address = event.address.toHexString()
+  const address = getChecksumAddress(event.address)
 
   const rootSpace = Space.load(address)
 
@@ -17,7 +17,7 @@ export function handleEntryAdded(event: EntryAdded): void {
     return
   }
 
-  // HACK to avoid a breaking proposal over thanksgiving weekend
+  // @HACK to avoid a breaking proposal over thanksgiving weekend
   // "hash": "0x30f8c9a314342764eb53a7ecfef597e78e4a6c0945152e86eeb807521433e4b9",
   // "number": "50271786"
   if (event.block.number.toString().split('.')[0] == '50271786') {
@@ -36,18 +36,18 @@ export function handleEntryAdded(event: EntryAdded): void {
 
 export function handleRoleGranted(event: RoleGranted): void {
   addRole({
-    space: event.address,
+    space: getChecksumAddress(event.address),
     role: event.params.role,
-    account: event.params.account,
+    account: getChecksumAddress(event.params.account),
     createdAtBlock: event.block.number,
   })
 }
 
 export function handleRoleRevoked(event: RoleRevoked): void {
   removeRole({
-    space: event.address,
+    space: getChecksumAddress(event.address),
     role: event.params.role,
-    account: event.params.account,
+    account: getChecksumAddress(event.params.account),
     createdAtBlock: event.block.number,
   })
 }

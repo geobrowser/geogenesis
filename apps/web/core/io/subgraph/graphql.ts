@@ -5,6 +5,7 @@ import { AbortError, GraphqlRuntimeError, HttpError, JsonParseError } from './er
 interface GraphqlConfig {
   endpoint: string;
   query: string;
+  tag?: string;
   signal?: AbortController['signal'];
 }
 
@@ -13,7 +14,7 @@ interface GraphqlResponse<T> {
   errors: unknown[];
 }
 
-export function graphql<T>({ endpoint, query, signal }: GraphqlConfig) {
+export function graphql<T>({ endpoint, query, signal, tag }: GraphqlConfig) {
   const graphqlFetchEffect = Effect.tryPromise({
     try: () =>
       fetch(endpoint, {
@@ -25,6 +26,7 @@ export function graphql<T>({ endpoint, query, signal }: GraphqlConfig) {
         signal,
         next: {
           revalidate: 0,
+          tags: tag ? [tag] : undefined,
         },
       }),
     catch: e => {

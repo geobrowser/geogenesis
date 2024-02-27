@@ -9,15 +9,23 @@ import { ResultContent } from './results-list';
 
 const space: Space = {
   id: 'space-1',
-  entityId: 'space-1',
   isRootSpace: false,
   editors: [],
   editorControllers: [],
   admins: [],
-  attributes: {
-    [SYSTEM_IDS.NAME]: 'Space-1',
+  spaceConfig: {
+    id: 'space-config-1',
+    image: null,
+    name: 'Space-1',
+    triples: [],
+    description: 'Description-1',
+    types: [
+      {
+        id: SYSTEM_IDS.SPACE_CONFIGURATION,
+        name: 'Space Configuration',
+      },
+    ],
   },
-  spaceConfigEntityId: 'space-1',
   createdAtBlock: 'block-1',
 };
 
@@ -35,8 +43,8 @@ describe('Entity autocomplete results list', () => {
             name: 'Name-1',
             description: 'Description-1',
             types: [{ id: 'type-id-1', name: 'Type-1' }],
+            nameTripleSpaces: ['space-1'],
             triples: [],
-            nameTripleSpace: 'space-1',
           }}
           alreadySelected={false}
         />

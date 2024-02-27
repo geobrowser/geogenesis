@@ -2,7 +2,7 @@
   "db": {
     "connectionString": "{{DATABASE_URL}}"
   },
-  "outDir": "./src",
+  "outDir": "./sink",
   "schemas": {
     "public": {
       "include": "*",

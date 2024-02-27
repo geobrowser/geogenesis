@@ -151,21 +151,11 @@ export async function makePersonEffect(
         },
       };
 
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(typeTriple),
-        ...typeTriple,
-      });
-
-      // Add triples for creating a space configuration entity
-      const spaceConfigurationId = ID.createEntityId();
-
-      // Add types: Space to the space configuration entity
-      const spaceTriple: OmitStrict<Triple, 'id'> = {
+      const spaceTypeTriple: OmitStrict<Triple, 'id'> = {
         attributeId: SYSTEM_IDS.TYPES,
         attributeName: 'Types',
-        entityId: spaceConfigurationId,
-        entityName: `${username ?? userAccount}'s Space`,
+        entityId: profileId,
+        entityName: username ?? '',
         space: spaceAddress,
         value: {
           type: 'entity',
@@ -176,27 +166,14 @@ export async function makePersonEffect(
 
       actions.push({
         type: 'createTriple',
-        id: ID.createTripleId(spaceTriple),
-        ...spaceTriple,
+        id: ID.createTripleId(typeTriple),
+        ...typeTriple,
       });
-
-      const spaceNameTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.NAME,
-        attributeName: 'Name',
-        entityId: spaceConfigurationId,
-        entityName: `${username ?? userAccount}'s Space`,
-        space: spaceAddress,
-        value: {
-          type: 'string',
-          value: `${username ?? userAccount}'s Space`,
-          id: ID.createValueId(),
-        },
-      };
 
       actions.push({
         type: 'createTriple',
-        id: ID.createTripleId(spaceNameTriple),
-        ...spaceNameTriple,
+        id: ID.createTripleId(spaceTypeTriple),
+        ...spaceTypeTriple,
       });
 
       slog({
@@ -320,20 +297,20 @@ export async function makePersonEffect(
 
   const onboardEffect = Effect.gen(function* (unwrap) {
     // Add geo profile entity to new space
-    yield* unwrap(Effect.retry(profileEffect, Schedule.exponential('1 seconds')));
+    yield* unwrap(Effect.retry(profileEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered)));
 
     // @TODO: Batch?
     // Configure roles in proxy contract
     for (const role of ROLES) {
       const grantRoleEffect = createGrantRoleEffect(role);
-      yield* unwrap(Effect.retry(grantRoleEffect, Schedule.exponential('1 seconds')));
+      yield* unwrap(Effect.retry(grantRoleEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered)));
     }
 
     // @TODO Batch?
     // Renounce deployer roles in proxy contract
     for (const role of ROLES) {
       const renounceRoleEffect = createRenounceRoleEffect(role);
-      yield* unwrap(Effect.retry(renounceRoleEffect, Schedule.exponential('1 seconds')));
+      yield* unwrap(Effect.retry(renounceRoleEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered)));
     }
   });
 

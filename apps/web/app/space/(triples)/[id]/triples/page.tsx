@@ -1,11 +1,8 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-
 import * as React from 'react';
 
-import { Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
-import { Entity } from '~/core/utils/entity';
 
 import { Component } from './component';
 
@@ -25,30 +22,12 @@ export default async function TriplesPage({ params, searchParams }: Props) {
 
 const getData = async ({ params, searchParams }: Props) => {
   const spaceId = params.id;
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { space, isPermissionlessSpace } = await API.space(params.id);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
+  const space = await Subgraph.fetchSpace({ id: spaceId });
   const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);
+  const configEntity = space?.spaceConfig;
 
-  const configEntity = space?.spaceConfigEntityId
-    ? await Subgraph.fetchEntity({
-        id: space?.spaceConfigEntityId,
-        endpoint: config.subgraph,
-      })
-    : null;
-
-  const spaceName = configEntity ? configEntity.name : space?.attributes[SYSTEM_IDS.NAME];
-  const spaceImage = configEntity
-    ? Entity.cover(configEntity.triples) ?? Entity.avatar(configEntity.triples)
-    : space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+  const spaceName = space?.spaceConfig?.name ?? space?.id ?? '';
+  const spaceImage = configEntity ? configEntity.image : PLACEHOLDER_SPACE_IMAGE;
 
   return {
     spaceId,

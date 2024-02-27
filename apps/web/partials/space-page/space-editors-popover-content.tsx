@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import pluralize from 'pluralize';
 
-import { Cookie } from '~/core/cookie';
+import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { getEditorsForSpace } from './get-editors-for-space';
 import { getIsEditorForSpace } from './get-is-editor-for-space';
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export async function SpaceEditorsContent({ spaceId }: Props) {
-  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
+  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
   const [{ allEditors: allMembers, totalEditors }, isEditor] = await Promise.all([
     getEditorsForSpace(spaceId),

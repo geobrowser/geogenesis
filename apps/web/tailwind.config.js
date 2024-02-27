@@ -225,9 +225,9 @@ module.exports = {
           },
         ],
         smallButton: [
-          '0.75rem',
+          '0.875rem',
           {
-            lineHeight: '0.75rem',
+            lineHeight: '0.875rem',
             fontWeight: '500',
           },
         ],
@@ -291,6 +291,13 @@ module.exports = {
           '0.678rem',
           {
             lineHeight: '0.75rem',
+            fontWeight: '500',
+          },
+        ],
+        errorMessage: [
+          '0.875rem',
+          {
+            lineHeight: '1rem',
             fontWeight: '500',
           },
         ],

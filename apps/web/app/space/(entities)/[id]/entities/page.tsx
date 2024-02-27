@@ -2,8 +2,8 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { AppConfig, Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
@@ -28,29 +28,18 @@ interface Props {
 export default async function EntitiesPage({ params, searchParams }: Props) {
   const spaceId = params.id;
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
-  const { isPermissionlessSpace, space } = await API.space(spaceId);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
-
-  const props = await getData({ space, config, initialParams });
+  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const props = await getData({ space, initialParams });
 
   return <Component {...props} />;
 }
 
 const getData = async ({
   space,
-  config,
   initialParams,
 }: {
   space: Space | null;
-  config: AppConfig;
   initialParams: InitialEntityTableStoreParams;
 }) => {
   if (!space) {
@@ -58,41 +47,21 @@ const getData = async ({
   }
 
   const spaceId = space.id;
+  const configEntity = space?.spaceConfig;
 
-  const configEntity = space?.spaceConfigEntityId
-    ? await Subgraph.fetchEntity({
-        id: space?.spaceConfigEntityId,
-        endpoint: config.subgraph,
-      })
-    : null;
-
-  const spaceName = configEntity ? configEntity.name : space?.attributes[SYSTEM_IDS.NAME];
+  const spaceName = configEntity ? configEntity.name : space.id;
   const spaceImage = configEntity
     ? Entity.cover(configEntity.triples) ?? Entity.avatar(configEntity.triples)
-    : space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE];
+    : PLACEHOLDER_SPACE_IMAGE;
 
-  const [initialSpaceTypes, initialForeignTypes, defaultTypeTriples] = await Promise.all([
-    fetchSpaceTypeTriples(Subgraph.fetchTriples, spaceId, config.subgraph),
-    fetchForeignTypeTriples(Subgraph.fetchTriples, space, config.subgraph),
-    Subgraph.fetchTriples({
-      endpoint: config.subgraph,
-      query: '',
-      skip: 0,
-      first: DEFAULT_PAGE_SIZE,
-      filter: [
-        { field: 'entity-id', value: space.entityId ?? '' },
-        {
-          field: 'attribute-id',
-          value: SYSTEM_IDS.DEFAULT_TYPE,
-        },
-      ],
-    }),
+  const [initialSpaceTypes, initialForeignTypes] = await Promise.all([
+    fetchSpaceTypeTriples(spaceId),
+    fetchForeignTypeTriples(space),
   ]);
 
   // This can be empty if there are no types in the Space
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
-
-  const defaultTypeId = defaultTypeTriples[0]?.value.id;
+  const defaultTypeId = configEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.DEFAULT_TYPE)?.value.id;
 
   const initialSelectedType =
     initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
@@ -102,7 +71,6 @@ const getData = async ({
 
   const fetchParams: FetchRowsOptions['params'] = {
     ...initialParams,
-    endpoint: config.subgraph,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
     typeIds: typeId ? [typeId] : [],

@@ -25,6 +25,7 @@ import {
 } from '../generated/schema'
 import { Space as SpaceDataSource } from '../generated/templates'
 import { createTripleId } from './id'
+import { getChecksumAddress } from './get-checksum-address'
 
 export function handleSpaceAdded(
   spaceAddress: string,
@@ -38,7 +39,11 @@ export function handleSpaceAdded(
   }
 
   log.debug(`Adding space: ${spaceAddress}`, [])
-  let space = new Space(spaceAddress)
+  let space = new Space(
+    // The string value set in the Space triple on the entity may not
+    // be checksummed, so we need to checksum it here.
+    getChecksumAddress(Address.fromBytes(Address.fromHexString(spaceAddress)))
+  )
 
   space.admins = []
   space.editors = []
@@ -114,7 +119,6 @@ export function createProposedVersion(
     proposal.proposedVersions = proposal.proposedVersions.concat([versionId])
     proposal.save()
   }
-
   return version
 }
 
@@ -167,7 +171,6 @@ export function createVersion(
     version.createdAtBlock = createdAtBlock
     version.save()
   }
-
   return version
 }
 
@@ -221,19 +224,18 @@ export function handleCreateTripleAction(
     log.debug('Creating date value', [])
     triple.valueType = 'DATE'
     triple.valueId = dateValue.id
-    triple.stringValue = decodeURIComponent(dateValue.value)
+    triple.stringValue = dateValue.value
     log.debug('Finished creating date value', [])
   }
 
   const stringValue = fact.value.asStringValue()
   if (stringValue) {
-    log.debug('Creating string value', [stringValue.value])
     triple.valueType = 'STRING'
     triple.valueId = stringValue.id
-    triple.stringValue = decodeURIComponent(stringValue.value)
+    triple.stringValue = stringValue.value
 
     if (attribute.id == NAME) {
-      entity.name = decodeURIComponent(stringValue.value)
+      entity.name = stringValue.value
       entity.save()
     }
 
@@ -243,21 +245,17 @@ export function handleCreateTripleAction(
     )
 
     if (attribute.id == SPACE) {
-      handleSpaceAdded(
-        decodeURIComponent(stringValue.value),
-        false,
-        createdAtBlock,
-        fact.entityId
-      )
+      handleSpaceAdded(stringValue.value, false, createdAtBlock, fact.entityId)
     }
   }
 
   const urlValue = fact.value.asUrlValue()
   if (urlValue) {
     log.debug('Creating url value', [])
+
     triple.valueType = 'URL'
     triple.valueId = urlValue.id
-    triple.stringValue = decodeURIComponent(urlValue.value)
+    triple.stringValue = urlValue.value
     log.debug('Finished creating url value', [])
   }
 
@@ -265,7 +263,7 @@ export function handleCreateTripleAction(
   if (imageValue) {
     triple.valueType = 'IMAGE'
     triple.valueId = imageValue.id
-    triple.stringValue = decodeURIComponent(imageValue.value)
+    triple.stringValue = imageValue.value
 
     log.debug(
       `space: ${space}, entityId: ${entity.id}, attributeId: ${attribute.id}, value: ${imageValue.value}`,
@@ -433,14 +431,14 @@ export function handleAction(
     let dValue: string | null = null
     if (dateValue != null) {
       valueId = dateValue.id
-      dValue = decodeURIComponent(dateValue.value) ? dateValue.value : ''
+      dValue = dateValue.value
     }
 
     let urlValue = value.asUrlValue()
     let uValue: string | null = null
     if (urlValue != null) {
       valueId = urlValue.id
-      uValue = decodeURIComponent(urlValue.value)
+      uValue = urlValue.value
     }
 
     let entityValue = value.asEntityValue()
@@ -453,13 +451,13 @@ export function handleAction(
     let strValue: string | null = null
     if (stringValue != null) {
       valueId = stringValue.id
-      strValue = decodeURIComponent(stringValue.value)
+      strValue = stringValue.value
     }
     let numberValue = value.asNumberValue()
     let numValue: string | null = null
     if (numberValue != null) {
       valueId = numberValue.id
-      numValue = decodeURIComponent(numberValue.value)
+      numValue = numberValue.value
     }
     let action = getOrCreateAction(
       actionId,

@@ -7,11 +7,10 @@ import { useEffect, useState } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { EntityOthersToast } from '~/core/presence/entity-others-toast';
-import { EntityPresenceProvider } from '~/core/presence/presence-provider';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple, RelationValueTypesByAttributeId, TripleValueType } from '~/core/types';
+import type { Entity as EntityType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
@@ -42,11 +41,14 @@ interface Props {
   id: string;
   spaceId: string;
   typeId?: string | null;
-  filterId?: string | null;
-  filterValue?: string | null;
+  filters?: Array<Filter> | null;
 }
 
-export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, filterId, filterValue }: Props) {
+type Filter = [FilterId, FilterValue];
+type FilterId = string;
+type FilterValue = string;
+
+export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, filters }: Props) {
   const {
     triples: localTriples,
     schemaTriples,
@@ -69,7 +71,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
   const send = useEditEvents({
     context: {
-      entityId: id,
+      entityId: decodeURIComponent(id),
       spaceId,
       entityName: name,
     },
@@ -90,7 +92,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
     const setTypeTriple = async () => {
       if (typeId) {
-        const typeEntity = await subgraph.fetchEntity({ endpoint: config.subgraph, id: typeId ?? '' });
+        const typeEntity = await subgraph.fetchEntity({ id: typeId ?? '' });
 
         if (typeEntity) {
           send({
@@ -124,12 +126,23 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     if (hasSetFilter) return;
 
     const setFilterTriple = async () => {
-      const [idEntity, valueEntity] = await Promise.all([
-        subgraph.fetchEntity({ endpoint: config.subgraph, id: filterId ?? '' }),
-        subgraph.fetchEntity({ endpoint: config.subgraph, id: filterValue ?? '' }),
-      ]);
+      if (!filters || filters.length === 0) return;
 
-      if (filterId && filterValue && idEntity && valueEntity) {
+      const filtersEntities = await Promise.all(
+        filters.map((filter: Filter) => {
+          return Promise.all([
+            subgraph.fetchEntity({ id: filter[0] ?? '' }),
+            subgraph.fetchEntity({ id: filter[1] ?? '' }),
+          ]);
+        })
+      );
+
+      filtersEntities.forEach((filterEntities: [EntityType | null, EntityType | null]) => {
+        const idEntity = filterEntities[0];
+        const valueEntity = filterEntities[1];
+
+        if (!idEntity || !valueEntity) return;
+
         send({
           type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
           payload: {
@@ -139,15 +152,15 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
             entityName: valueEntity.name || '',
           },
         });
-      }
+      });
     };
 
-    if (filterId && filterValue) {
+    if (filters && filters.length > 0) {
       setFilterTriple();
     }
 
     setHasSetFilter(true);
-  }, [hasSetType, hasSetFilter, subgraph, config, send, filterId, filterValue]);
+  }, [hasSetType, hasSetFilter, subgraph, config, send, filters]);
 
   return (
     <>
@@ -171,9 +184,6 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
           </SquareButton>
         </div>
       </div>
-      <EntityPresenceProvider entityId={id} spaceId={spaceId}>
-        <EntityOthersToast />
-      </EntityPresenceProvider>
     </>
   );
 }
@@ -481,6 +491,7 @@ function EntityAttributes({
                 itemIds={entityValueTriples
                   .filter(triple => triple.attributeId === attributeId)
                   .map(triple => triple.value.id)}
+                attributeId={attributeId}
               />
             </div>
           );
@@ -554,6 +565,7 @@ function EntityAttributes({
                 onDone={result => linkAttribute(attributeId, result)}
                 itemIds={attributeIds}
                 allowedTypes={relationTypes}
+                attributeId={attributeId}
               />
             ) : (
               <Text as="p" variant="bodySemibold">

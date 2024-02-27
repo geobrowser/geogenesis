@@ -2,9 +2,8 @@ import { cookies } from 'next/headers';
 import Link from 'next/link';
 import pluralize from 'pluralize';
 
-import { Cookie } from '~/core/cookie';
-import { Environment } from '~/core/environment';
-import { API, Subgraph } from '~/core/io';
+import { WALLET_ADDRESS } from '~/core/cookie';
+import { Subgraph } from '~/core/io';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
 
@@ -19,20 +18,10 @@ interface Props {
 }
 
 export async function GovernanceProposalsList({ spaceId }: Props) {
-  const connectedAddress = cookies().get(Cookie.WALLET_ADDRESS)?.value;
-  let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
-
-  const { isPermissionlessSpace } = await API.space(spaceId);
-
-  if (isPermissionlessSpace) {
-    config = {
-      ...config,
-      subgraph: config.permissionlessSubgraph,
-    };
-  }
+  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
   const [proposals, isEditor] = await Promise.all([
-    Subgraph.fetchProposals({ spaceId, first: 5, endpoint: config.subgraph }),
+    Subgraph.fetchProposals({ spaceId, first: 5 }),
     getIsEditorForSpace(spaceId, connectedAddress),
   ]);
 
@@ -54,7 +43,7 @@ export async function GovernanceProposalsList({ spaceId }: Props) {
                     className="flex items-center gap-1.5 transition-colors duration-75 hover:text-text"
                   >
                     <div className="relative h-3 w-3 overflow-hidden rounded-full">
-                      <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.id} />
+                      <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.address} />
                     </div>
                     <p>{p.createdBy.name ?? p.createdBy.id}</p>
                   </Link>

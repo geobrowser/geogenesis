@@ -2,10 +2,12 @@ import { A } from '@mobily/ts-belt';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
+import Link from 'next/link';
 
 import { useGlobalSearch } from '~/core/hooks/use-global-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Entity } from '~/core/types';
+import { Entity, OmitStrict } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
@@ -14,7 +16,7 @@ import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 
 interface Props {
-  onDone: (result: Entity) => void;
+  onDone: () => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -24,6 +26,17 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
   const { spaces } = useSpaces();
 
   if (!open) return null;
+
+  const separatedResults = autocomplete.results.reduce((acc, result) => {
+    for (const spaceId of result.nameTripleSpaces ?? []) {
+      acc.push({
+        ...result,
+        nameTripleSpaces: [spaceId],
+      });
+    }
+
+    return acc;
+  }, [] as Entity[]);
 
   return (
     <Command.Dialog open={open} onOpenChange={onOpenChange} label="Entity search">
@@ -68,23 +81,26 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
               {autocomplete.isEmpty && (
                 <Command.Empty className="px-2 pb-2">No results found for {autocomplete.query}</Command.Empty>
               )}
-              {autocomplete.results.map((result, i) => (
+              {separatedResults.map((result, i) => (
                 <motion.div
                   initial={{ opacity: 0, y: -5 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.02 * i }}
                   key={result.id}
                 >
-                  <Command.Item onSelect={() => onDone(result)} className="aria-selected:bg-grey-01">
-                    <ResultContent
-                      onClick={() => {
-                        // The on-click is being handled by the ResultItem here. This is so we can
-                        // have the keyboard navigation work as expected with the cmdk lib.
-                      }}
-                      result={result}
-                      spaces={spaces}
-                    />
-                  </Command.Item>
+                  {/* It's safe to cast nameTripleSpace since we only render entities that have a name triple */}
+                  <Link href={NavUtils.toEntity(result.nameTripleSpaces![0], result.id)} onClick={() => onDone()}>
+                    <Command.Item className="transition-colors duration-75 aria-selected:bg-grey-01">
+                      <ResultContent
+                        onClick={() => {
+                          // The on-click is being handled by the ResultItem here. This is so we can
+                          // have the keyboard navigation work as expected with the cmdk lib.
+                        }}
+                        result={result}
+                        spaces={spaces}
+                      />
+                    </Command.Item>
+                  </Link>
                 </motion.div>
               ))}
             </ResultsList>

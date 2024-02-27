@@ -150,7 +150,7 @@ export class Merged implements IMergedDataSource {
    */
   fetchEntity = async (options: Parameters<Subgraph.ISubgraph['fetchEntity']>[0]) => {
     try {
-      const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id, endpoint: options.endpoint });
+      const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id });
 
       const actionsForEntityId = Entity.actionsForEntityId(this.store.allActions, options.id);
 
@@ -186,7 +186,7 @@ export class Merged implements IMergedDataSource {
 
     const filterState = await TableBlockSdk.createFiltersFromGraphQLString(
       options.params.filter ?? '',
-      async id => await this.fetchEntity({ id, endpoint: options.params.endpoint })
+      async id => await this.fetchEntity({ id })
     );
 
     /**
@@ -219,19 +219,21 @@ export class Merged implements IMergedDataSource {
     // This will return null if the entity we're fetching does not exist remotely.
     // i.e., the entity was created locally and has not been published to the server.
     const maybeServerEntitiesChangedLocally = await Promise.all(
-      changedEntitiesIdsFromAnotherType.map(id => this.subgraph.fetchEntity({ id, endpoint: options.params.endpoint }))
+      changedEntitiesIdsFromAnotherType.map(id => this.subgraph.fetchEntity({ id }))
     );
 
     const serverEntitiesChangedLocally = maybeServerEntitiesChangedLocally
       .flatMap(e => (e ? [e] : []))
+      // Uhhh this is O(n * m * o) where n is the number of entities, m is the number of triples
+      // in an entity, and o is the number of filters. This is not great.
       .filter(entity => {
         for (const filter of filterState) {
           return entity.triples.some(triple => {
             // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
-            // attached to a triple in the subgraph. Once we represents entities across multiple spaces
+            // attached to a triple in the data model. Once we represents entities across multiple spaces
             // this filter likely won't make sense anymore.
             if (filter.columnId === 'space') {
-              return entity.nameTripleSpace === filter.value;
+              return entity.nameTripleSpaces?.includes(filter.value);
             }
 
             return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
@@ -243,6 +245,8 @@ export class Merged implements IMergedDataSource {
 
     const serverEntityTriples = serverRows.flatMap(t => t.triples);
 
+    // Merge the triples from the server with the triples from the local store and apply any filters
+    // to them.
     const entitiesCreatedOrChangedLocally = pipe(
       this.store.actions,
       actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
@@ -251,10 +255,10 @@ export class Merged implements IMergedDataSource {
         for (const filter of filterState) {
           return entity.triples.some(triple => {
             // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
-            // attached to a triple in the subgraph. Once we represents entities across multiple spaces
+            // attached to a triple in the data model. Once we represents entities across multiple spaces
             // this filter likely won't make sense anymore.
             if (filter.columnId === 'space') {
-              return entity.nameTripleSpace === filter.value;
+              return entity.nameTripleSpaces?.includes(filter.value);
             }
 
             return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);
@@ -268,7 +272,7 @@ export class Merged implements IMergedDataSource {
     const localEntitiesIds = new Set(entitiesCreatedOrChangedLocally.map(e => e.id));
     const serverEntitiesChangedLocallyIds = new Set(serverEntitiesChangedLocally.map(e => e.id));
 
-    // Filter out any server rows that have been changed locally
+    // Filter out any server row triples that have been changed locally
     const filteredServerRows = serverEntityTriples.filter(
       sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
     );
@@ -287,10 +291,7 @@ export class Merged implements IMergedDataSource {
       ...filteredServerRows,
     ]);
 
-    // Make sure we only generate rows for entities that have the selected type
-    const entitiesWithSelectedType = entities.filter(e => e.types.some(t => t.id === selectedTypeEntityId));
-
-    return EntityTable.fromColumnsAndRows(entitiesWithSelectedType, columns);
+    return EntityTable.fromColumnsAndRows(entities, columns);
   };
 }
 

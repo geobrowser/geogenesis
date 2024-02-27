@@ -1,0 +1,270 @@
+syntax = "proto3";
+
+package schema;
+
+/**
+ * We currently index two sets of contracts representing spaces:
+ * 1. The original Space contract with simple permissions rules and no proposals.
+ * 2. The new (as of January 23rd, 2024) DAO-based contracts with Plugins representing
+ *    the Space and any governance and permissions rules.
+ *
+ * Having multiple sets of contracts means that we support multiple methods for
+ * indexing data from these contracts, including the data representing the contracts
+ * themselves like the address of the contract and any plugins (if they exist).
+ *
+ * We will eventually deprecate the existing contracts and migrate data and permissions
+ * in them to the new contract implementation. To do this we will likely only index the
+ * old contracts up to a specific block number and then index the new contracts from that
+ * block.
+ *
+ * Alternatively we might look to "snapshot" the state of Geo at a specific timepoint
+ * and migrate fully to the new contracts. This would likely coincide with a migration
+ * to a separate blockchain.
+ *
+ * The new, DAO-based contracts are based on Aragon's OSX architecture in which a DAO's
+ * onchain functionality is defined by a set of plugin contracts. These plugins can be
+ * used for things like governance, membership, or representing an append-only log of
+ * IPFS content.
+ */
+
+/**
+ * Entries represent the content being added to a legacy space (See top level for more
+ * info on the different space contracts). This content is stored on IPFS and represented
+ * by a content URI.
+ *
+ * Additionally we map the author of the content and the space the content was added to.
+ *
+ * The new, DAO-based contracts have a different method and event for adding content to
+ * a space which will get mapped in a separate event.
+ */
+message EntryAdded {
+  string id = 1; //{block-number}-{tx-hash}-{log-index}
+  string index = 2;
+  string uri = 3;
+  string author = 4;
+  string space = 5;
+}
+
+message EntriesAdded {
+  repeated EntryAdded entries = 1;
+}
+
+/**
+ * Roles represent the permissions for a legacy space (See top level comment for more info
+ * on the different space contracts). Roles fall into "admin", "editor controller" (moderator),
+ * and "editor" (member) roles, each granting different permissions within the space.
+ *
+ * The new, DAO-based contracts have a different, but similar permissions model that omits the
+ * moderator role.
+ */
+enum Role {
+  NULL_ROLE = 0;
+  MODERATOR = 1;
+  MEMBER = 2;
+  ADMIN = 3;
+}
+
+message RoleChange {
+  oneof change {
+    RoleGranted granted = 1;
+    RoleRevoked revoked = 2;
+  }
+}
+
+message RoleChanges {
+  repeated RoleChange changes = 1;
+}
+
+message RoleGranted {
+  string id = 1;
+  Role role = 2;
+  string account = 3;
+  string sender = 4;
+  string space = 5;
+}
+
+message RolesGranted {
+  repeated RoleGranted roles = 1;
+}
+
+message RoleRevoked {
+  string id = 1;
+  Role role = 2;
+  string account = 3;
+  string sender = 4;
+  string space = 5;
+}
+
+message RolesRevoked {
+  repeated RoleRevoked roles = 1;
+}
+
+/**
+ * Profiles represent the users of Geo. Profiles are registered in the GeoProfileRegistry
+ * contract and are associated with a user's EVM-based address and the space where metadata
+ * representing their profile resides in.
+*/
+message GeoProfileRegistered {
+  string requestor = 1;
+  string space = 2;
+  string id = 3;
+}
+
+message GeoProfilesRegistered {
+  repeated GeoProfileRegistered profiles = 1;
+}
+
+/**
+ * The new DAO-based contracts allow forking of spaces into successor spaces. This is so
+ * users can create new spaces whose data is derived from another space.
+ *
+ * This is immediately useful when migrating from legacy spaces to the new DAO-based spaces,
+ * but it's generally applicable across any space.
+ */
+message SuccessorSpaceCreated {
+  string predecessorSpace = 1;
+  string pluginAddress = 2;
+}
+
+message SuccessorSpacesCreated {
+  repeated SuccessorSpaceCreated spaces = 1;
+}
+
+/**
+ * The new DAO-based space contracts are based on Aragon's OSX architecture which uses
+ * plugins to define functionality assigned to a DAO (See the top level comment for more
+ * information on Aragon's DAO architecture).
+ *
+ * This event maps creation of the Space plugin and associates the Space plugin contract
+ * address with the address of the DAO contract.
+ */
+message GeoSpaceCreated {
+  string daoAddress = 1;
+  string spaceAddress = 2;
+}
+
+message GeoSpacesCreated {
+  repeated GeoSpaceCreated spaces = 1;
+}
+
+/**
+ * The new DAO-based space contracts are based on Aragon's OSX architecture which uses
+ * plugins to define functionality assigned to a DAO (See the top level comment for more
+ * information on Aragon's DAO architecture).
+ *
+ * This event maps creation of any governance plugins and associates the governance plugins
+ * contract addresses with the address of the DAO contract.
+ *
+ * As of January 23, 2024 there are two governance plugins:
+ * 1. Voting plugin – This defines the voting and proposal rules and behaviors for a DAO
+ * 2. Member access plugin – This defines the membership rules and behaviors for a DAO
+ */
+message GeoGovernancePluginCreated {
+  string daoAddress = 1;
+  string mainVotingAddress = 2;
+  string memberAccessAddress = 3;
+}
+
+message GeoGovernancePluginsCreated {
+  repeated GeoGovernancePluginCreated plugins = 1;
+}
+
+/**
+ * This event represents adding editors to a DAO-based space
+ *
+ * The data model for DAO-based spaces works slightly differently than in legacy spaces.
+ * This means there will be a period where we need to support both data models depending
+ * on which space/contract we are working with. Eventually these data models will be merged
+ * and usage of the legacy space contracts will be migrated to the DAO-based contracts, but
+ * for now we are appending "V2" to permissions data models to denote it's used for the
+ * DAO-based spaces.
+ *
+ * An editor has editing and voting permissions in a DAO-based space. Editors join a space
+ * one of two ways:
+ * 1. They submit a request to join the space as an editor which goes to a vote. The editors
+ *    in the space vote on whether to accept the new editor.
+ * 2. They are added as a set of initial editors when first creating the space. This allows
+ *    space deployers to bootstrap a set of editors on space creation.
+ */
+message EditorAdded {
+  // The event emits an array of addresses. We only emit multiple addresses
+  // when first creating the governance plugin. After that we only emit one
+  // address at a time via proposals.
+  repeated string addresses = 1;
+  string pluginAddress = 2;
+}
+
+message EditorsAdded {
+  repeated EditorAdded editors = 1;
+}
+
+/**
+ * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
+ * represent changes to content, membership (editor or member), governance changes, subspace
+ * membership, or anything else that can be executed by a DAO.
+ *
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ *
+ * Proposals require encoding a "callback" that represents the action to be taken if the proposal
+ * succeeds. For example, if a proposal is to add a new editor to the space, the callback would
+ * be the encoded function call to add the editor to the space.
+ *
+ * ```ts
+ * {
+ *   to: `0x123...`, // The address of the membership contract
+ *   data: `0x123...`, // The encoded function call parameters
+ * }
+ * ```
+ */
+message DaoAction {
+  string to = 1;
+  uint64 value = 2;
+  bytes data = 3;
+}
+
+message ProposalCreated {
+  string proposal_id = 1;
+  string creator = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string metadata_uri = 5;
+  repeated DaoAction actions = 6;
+  string allow_failure_map = 7;
+  string plugin_address = 8;
+}
+
+message ProposalsCreated {
+  repeated ProposalCreated proposals = 1;
+}
+
+/**
+ * Votes represent a vote on a proposal in a DAO-based space.
+ *
+ * Currently we use a simple majority voting model, where a proposal requires 51% of the
+ * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
+ * _and_ members can create them.
+ */
+message VoteCast {
+  string onchain_proposal_id = 1;
+  string voter = 2;
+  uint64 vote_option = 3;
+  string plugin_address = 5;
+}
+
+message VotesCast {
+  repeated VoteCast votes = 1;
+}
+
+message GeoOutput {
+  repeated EntryAdded entries = 1;
+  repeated RoleChange role_changes = 2;
+  // repeated GeoProfileRegistered profiles_registered = 3;
+  // repeated GeoSpaceCreated spaces_created = 4;
+  // repeated GeoGovernancePluginCreated governance_plugins_created = 5;
+  // repeated EditorAdded editors_added = 6;
+  // repeated ProposalCreated proposals_created = 7;
+  // repeated VoteCast votes_cast = 8;
+  // repeated SuccessorSpaceCreated successor_spaces_created = 6;
+}

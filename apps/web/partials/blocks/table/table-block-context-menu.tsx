@@ -10,6 +10,7 @@ import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
+import * as Dropdown from '@radix-ui/react-dropdown-menu'
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
@@ -18,7 +19,6 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useMigrateHub } from '~/core/migrate/migrate';
-import { Services } from '~/core/services';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
@@ -51,6 +51,8 @@ import { AttributeConfigurationMenu } from '~/partials/entity-page/attribute-con
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
 
+const MotionContent = motion(Dropdown.Content);
+
 // We keep track of the attributes in local state in order to quickly render
 // the changes the user has made to the schema. Otherwise there will be loading
 // states for several actions which will make the UI feel slow.
@@ -67,7 +69,6 @@ function useOptimisticAttributes({
 }) {
   const [optimisticAttributes, setOptimisticAttributes] = useAtom(optimisticAttributesAtom);
   const merged = useMergedData();
-  const { config } = Services.useServices();
   const { create, remove } = useActionsStore();
   const migrateHub = useMigrateHub();
 
@@ -127,6 +128,8 @@ function useOptimisticAttributes({
 
   const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: IEntity) => {
     const attributeValueTypeTriple = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE);
+    // This _should_ only be one space, but there may be a situation now where it's multiple spaces. Need to monitor this.
+    const attributeSpace = attribute.nameTripleSpaces?.[0];
 
     if (attributeValueTypeTriple) {
       remove(attributeValueTypeTriple);
@@ -150,13 +153,13 @@ function useOptimisticAttributes({
       }
     }
 
-    if (attribute.nameTripleSpace) {
+    if (attributeSpace) {
       const newTriple = Triple.withId({
         entityId: attribute.id,
         entityName: attribute.name,
         attributeId: SYSTEM_IDS.VALUE_TYPE,
         attributeName: 'Value type',
-        space: attribute.nameTripleSpace,
+        space: attributeSpace,
         value: {
           type: 'entity',
           id: newValueTypeId,
@@ -188,7 +191,6 @@ function useOptimisticAttributes({
     queryFn: async () => {
       // Fetch the triples representing the Attributes for the type
       const attributeTriples = await merged.fetchTriples({
-        endpoint: config.subgraph,
         query: '',
         first: 100,
         skip: 0,
@@ -206,7 +208,7 @@ function useOptimisticAttributes({
 
       // Fetch the the entities for each of the Attribute in the type
       const maybeAttributeEntities = await Promise.all(
-        attributeTriples.map(t => merged.fetchEntity({ id: t.value.id, endpoint: config.subgraph }))
+        attributeTriples.map(t => merged.fetchEntity({ id: t.value.id }))
       );
 
       return maybeAttributeEntities.filter(Entity.isNonNull);
@@ -245,65 +247,73 @@ export function TableBlockContextMenu() {
     }
   };
 
+  const spaceImage = space?.spaceConfig?.image ?? null;
+
   return (
-    <Menu
-      // using modal will prevent the menu from closing when opening up another dialog or popover
-      // from within the menu
-      modal
+    <Dropdown.Root
       open={isMenuOpen}
       onOpenChange={setIsMenuOpen}
-      align="end"
-      trigger={isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-      className="max-w-[180px] bg-white"
     >
-      <MenuItem>
-        <button onClick={onCopyViewId} className="inline-flex w-full items-center gap-2 px-3 py-2">
-          <Copy /> <span>Copy view ID</span>
-        </button>
-      </MenuItem>
-      <MenuItem>
-        <Link href={NavUtils.toEntity(spaceId, entityId)} className="inline-flex w-full items-center gap-2 px-3 py-2">
-          <Cog /> <span>View config</span>
-        </Link>
-      </MenuItem>
-      {isEditing && (
-        <TableBlockSchemaConfigurationDialog
-          trigger={
-            <MenuItem>
-              <div className="inline-flex items-center gap-2 px-3 py-2">
-                <FilteredTableView />
-                <span className="text-button">Edit type</span>
-              </div>
-            </MenuItem>
-          }
-          content={
-            <div className="flex flex-col gap-6 p-4">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                    <Image
-                      layout="fill"
-                      objectFit="cover"
-                      src={getImagePath(space?.attributes[SYSTEM_IDS.IMAGE_ATTRIBUTE] ?? '')}
-                    />
+      <Dropdown.Trigger>
+        {isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
+      </Dropdown.Trigger>
+      <Dropdown.Portal>
+        <MotionContent
+          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+          transition={{
+            duration: 0.1,
+            ease: 'easeInOut',
+          }}
+          sideOffset={8}
+          className='max-w-[180px] bg-white z-100 divide-y divide-grey-02 overflow-hidden rounded-lg border border-grey-02 shadow-lg' align="end">
+          <MenuItem>
+            <button onClick={onCopyViewId} className="inline-flex w-full items-center gap-2 px-3 py-2">
+              <Copy /> <span>Copy view ID</span>
+            </button>
+          </MenuItem>
+          <MenuItem>
+            <Link href={NavUtils.toEntity(spaceId, entityId)} className="inline-flex w-full items-center gap-2 px-3 py-2">
+              <Cog /> <span>View config</span>
+            </Link>
+          </MenuItem>
+          {isEditing && (
+            <TableBlockSchemaConfigurationDialog
+              trigger={
+                <MenuItem>
+                  <div className="inline-flex items-center gap-2 px-3 py-2">
+                    <FilteredTableView />
+                    <span className="text-button">Edit type</span>
                   </div>
-                  <h1 className="text-mediumTitle">{type.entityName}</h1>
+                </MenuItem>
+              }
+              content={
+                <div className="flex flex-col gap-6 p-4">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="relative h-4 w-4 overflow-hidden rounded-sm">
+                        <Image layout="fill" objectFit="cover" src={getImagePath(spaceImage ?? '')} />
+                      </div>
+                      <h1 className="text-mediumTitle">{type.entityName}</h1>
+                    </div>
+
+                    <h2 className="text-metadata text-grey-04">
+                      Making changes to this type it will affect everywhere that this type is referenced.
+                    </h2>
+                  </div>
+
+                  <React.Suspense fallback={<AddAttributeLoading />}>
+                    <AddAttribute />
+                    <SchemaAttributes />
+                  </React.Suspense>
                 </div>
-
-                <h2 className="text-metadata text-grey-04">
-                  Making changes to this type it will affect everywhere that this type is referenced.
-                </h2>
-              </div>
-
-              <React.Suspense fallback={<AddAttributeLoading />}>
-                <AddAttribute />
-                <SchemaAttributes />
-              </React.Suspense>
-            </div>
-          }
-        />
-      )}
-    </Menu>
+              }
+            />
+          )}
+        </MotionContent>
+      </Dropdown.Portal>
+    </Dropdown.Root>
   );
 }
 
@@ -444,8 +454,11 @@ function SchemaAttributes() {
     spaceId: type.space,
   });
 
-  const onChangeAttributeName = (newName: string, entity: IEntity, oldNameTriple?: ITriple) => {
-    if (!entity.nameTripleSpace) {
+  const onChangeAttributeName = (newName: string, attribute: IEntity, oldNameTriple?: ITriple) => {
+    // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
+    const attributeSpace = attribute.nameTripleSpaces?.[0];
+
+    if (!attributeSpace) {
       console.error("The entity doesn't have a name triple space");
       return;
     }
@@ -455,9 +468,9 @@ function SchemaAttributes() {
         Triple.withId({
           attributeId: SYSTEM_IDS.NAME,
           attributeName: 'Name',
-          entityId: entity.id,
-          entityName: entity.name,
-          space: entity.nameTripleSpace,
+          entityId: attribute.id,
+          entityName: attribute.name,
+          space: attributeSpace,
           value: {
             type: 'string',
             id: ID.createValueId(),

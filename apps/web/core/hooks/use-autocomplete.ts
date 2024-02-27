@@ -8,7 +8,6 @@ import * as Either from 'effect/Either';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
-import { Services } from '~/core/services';
 
 import { FilterState } from '../types';
 import { useMergedData } from './use-merged-data';
@@ -19,7 +18,6 @@ interface AutocompleteOptions {
 }
 
 export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = {}) {
-  const { config } = Services.useServices();
   const merged = useMergedData();
 
   const [query, setQuery] = React.useState('');
@@ -33,11 +31,11 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
         Effect.tryPromise({
           try: () =>
             merged.fetchEntities({
-              endpoint: config.subgraph,
               query,
               signal,
               filter: filter ?? [],
               typeIds: allowedTypes,
+              first: 10,
             }),
           catch: () => new Subgraph.Errors.AbortError(),
         })

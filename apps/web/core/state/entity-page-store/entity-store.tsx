@@ -18,7 +18,7 @@ import { ValueTypeId } from '~/core/value-types';
 
 import { useEntityStoreInstance } from './entity-store-provider';
 
-export const createInitialDefaultTriples = (spaceId: string, entityId: string): ITriple[] => {
+export const createInitialSchemaTriples = (spaceId: string, entityId: string): ITriple[] => {
   const nameTriple = Triple.withId({
     space: spaceId,
     entityId,
@@ -69,7 +69,7 @@ const DEFAULT_PAGE_SIZE = 100;
 export function useEntityPageStore() {
   const { spaceId, id, initialTriples } = useEntityStoreInstance();
   const { allActions } = useActionsStore();
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
 
   const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: id });
 
@@ -101,7 +101,7 @@ export function useEntityPageStore() {
   }, [triples]);
 
   const { data: schemaTriples } = useQuery({
-    initialData: createInitialDefaultTriples(spaceId, id),
+    initialData: createInitialSchemaTriples(spaceId, id),
     queryKey: ['entity-page-schema-triples', spaceId, id, typeTriples],
     queryFn: async ({ signal }) => {
       if (typeTriples.length === 0) {
@@ -111,7 +111,6 @@ export function useEntityPageStore() {
       const attributesOnType = await Promise.all(
         typeTriples.map(triple => {
           return subgraph.fetchTriples({
-            endpoint: config.subgraph,
             query: '',
             first: DEFAULT_PAGE_SIZE,
             signal,
@@ -132,10 +131,11 @@ export function useEntityPageStore() {
 
       const attributeTriples = attributesOnType.flatMap(triples => triples);
 
+      // @TODO: We can get the value type in the above query and parse it here instead
+      // of making another query.
       const valueTypesForAttributes = await Promise.all(
         attributeTriples.map(attribute => {
           return subgraph.fetchTriples({
-            endpoint: config.subgraph,
             query: '',
             first: DEFAULT_PAGE_SIZE,
             skip: 0,

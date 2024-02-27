@@ -2,11 +2,12 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { Environment } from '~/core/environment';
 import { Entity as IEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { NetworkEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 // this differs from the fetchEntities method in that we pass in a custom graphql string that represents
 // the set of custom Table filters set on the table. These filters have small differences from the other
@@ -16,29 +17,34 @@ import { NetworkEntity, fromNetworkTriples } from './network-local-mapping';
 // following the pre-existing pattern.
 function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
   return `query {
-    geoEntities(where: ${filter}, first: ${first}, skip: ${skip}) {
-      id,
-      name
-      entityOf {
+    geoEntities(filter: ${filter} first: ${first} offset: ${skip}) {
+      nodes {
         id
-        stringValue
-        valueId
-        valueType
-        numberValue
-        space {
-          id
-        }
-        entityValue {
-          id
-          name
-        }
-        attribute {
-          id
-          name
-        }
-        entity {
-          id
-          name
+        name
+        triplesByEntityId(filter: { isStale: { equalTo: false } }) {
+          nodes {
+            id
+            attribute {
+              id
+              name
+            }
+            entity {
+              id
+              name
+            }
+            entityValue {
+              id
+              name
+            }
+            numberValue
+            stringValue
+            valueType
+            valueId
+            isProtected
+            space {
+              id
+            }
+          }
         }
       }
     }
@@ -46,24 +52,22 @@ function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
 }
 
 export interface FetchTableRowEntitiesOptions {
-  endpoint: string;
-  query?: string;
-  typeIds?: string[];
   first?: number;
   skip?: number;
+  typeIds?: string[];
   filter: string; // this is a graphql query string
   signal?: AbortController['signal'];
 }
 
 interface NetworkResult {
-  geoEntities: NetworkEntity[];
+  geoEntities: { nodes: SubstreamEntity[] };
 }
 
 export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<IEntity[]> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: options.endpoint,
+    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
     query: getFetchTableRowsQuery(options.filter, options.first, options.skip),
     signal: options?.signal,
   });
@@ -82,11 +86,9 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchTableRowEntities. queryId: ${queryId} endpoint: ${
-              options.endpoint
-            } query: ${options.query} typeIds: ${options.typeIds} skip: ${options.skip} first: ${
-              options.first
-            } filter: ${options.filter}
+            `Encountered runtime graphql error in fetchTableRowEntities. queryId: ${queryId} skip: ${
+              options.skip
+            } first: ${options.first} filter: ${options.filter}
             
             queryString: ${getFetchTableRowsQuery(options.filter, options.first, options.skip)}
             `,
@@ -94,16 +96,16 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
           );
 
           return {
-            geoEntities: [],
+            geoEntities: { nodes: [] },
           };
 
         default:
           console.error(
-            `${error._tag}: Unable to fetch table row entities, queryId: ${queryId} endpoint: ${options.endpoint} query: ${options.query} typeIds: ${options.typeIds} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
+            `${error._tag}: Unable to fetch table row entities, queryId: ${queryId} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
           );
 
           return {
-            geoEntities: [],
+            geoEntities: { nodes: [] },
           };
       }
     }
@@ -111,18 +113,31 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
     return resultOrError.right;
   });
 
-  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const { geoEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  return result.geoEntities.map(result => {
-    const triples = fromNetworkTriples(result.entityOf);
-    const nameTriple = Entity.nameTriple(triples);
+  return geoEntities.nodes.map(result => {
+    const networkTriples = result.triplesByEntityId.nodes;
+
+    // If there is no latest version just return an empty entity.
+    if (networkTriples.length === 0) {
+      return {
+        id: result.id,
+        name: result.name,
+        description: null,
+        types: [],
+        triples: [],
+      };
+    }
+
+    const triples = fromNetworkTriples(networkTriples);
+    const nameTriples = Entity.nameTriples(triples);
 
     return {
       id: result.id,
       name: result.name,
       description: Entity.description(triples),
-      nameTripleSpace: nameTriple?.space,
-      types: Entity.types(triples, nameTriple?.space),
+      nameTripleSpaces: nameTriples.map(t => t.space),
+      types: Entity.types(triples),
       triples,
     };
   });

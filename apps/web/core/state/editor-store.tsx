@@ -37,7 +37,7 @@ const markdownConverter = new Showdown.Converter();
  */
 export function useEditorStore() {
   const { id: entityId, spaceId, initialBlockIdsTriple, initialBlockTriples } = useEditorInstance();
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { create, update, remove, allActions } = useActionsStore();
   const { name } = useEntityPageStore();
 
@@ -417,7 +417,7 @@ export function useEditorStore() {
 
       // Fetch all the subgraph data for all the deleted block entities.
       const maybeRemoteBlocks = await Promise.all(
-        removedBlockIds.map(async blockId => subgraph.fetchEntity({ id: blockId, endpoint: config.subgraph }))
+        removedBlockIds.map(async blockId => subgraph.fetchEntity({ id: blockId }))
       );
       const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
 
@@ -451,7 +451,7 @@ export function useEditorStore() {
 
       return update(updatedTriple, existingBlockTriple);
     },
-    [allActions, blockIds, blockIdsTriple, config.subgraph, create, entityId, name, remove, subgraph, update, spaceId]
+    [allActions, blockIds, blockIdsTriple, create, entityId, name, remove, subgraph, update, spaceId]
   );
 
   // Iterate over the content's of a TipTap editor to create or update triple blocks
