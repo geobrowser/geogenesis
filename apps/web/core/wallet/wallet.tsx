@@ -1,6 +1,6 @@
 'use client';
 
-import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { ConnectedWallet, useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
 import { http } from 'viem';
@@ -8,8 +8,8 @@ import { polygon } from 'viem/chains';
 
 import * as React from 'react';
 
-import { useAccount, useDisconnect } from 'wagmi';
-import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
+import { useAccount, useConnect, useConnectors, useDisconnect } from 'wagmi';
+import { coinbaseWallet, injected, metaMask, mock, walletConnect } from 'wagmi/connectors';
 
 import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
@@ -25,7 +25,7 @@ import {
   stepAtom,
 } from '~/partials/onboarding/dialog';
 
-// import { Cookie } from '../cookie';
+import { Cookie } from '../cookie';
 
 // const LOCAL_CHAIN: Chain = {
 //   id: Number(Environment.options.development.chainId),
@@ -49,6 +49,7 @@ import {
 const getRealWalletConfig = (ethereum?: any) =>
   createConfig({
     chains: [polygon],
+    multiInjectedProviderDiscovery: true,
     transports: {
       [polygon.id]: http(process.env.NEXT_PUBLIC_RPC_URL!),
     },
@@ -56,10 +57,6 @@ const getRealWalletConfig = (ethereum?: any) =>
     // their default configuration.
     // https://github.com/family/connectkit/blob/47984040867a15ff8cbfdcdea534ad662c2d405e/packages/connectkit/src/defaultConfig.ts#L173
     connectors: [
-      injected({
-        target: 'metaMask',
-        shimDisconnect: true,
-      }),
       coinbaseWallet({
         chainId: 137,
         appName: 'Geo Genesis',
@@ -110,22 +107,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return isTestEnv ? mockConfig : getRealWalletConfig(ethereum);
   }, [isTestEnv, ethereum]);
 
-  return <WagmiProvider config={walletConfig}>{children}</WagmiProvider>;
+  return (
+    <WagmiProvider reconnectOnMount config={walletConfig}>
+      {children}
+    </WagmiProvider>
+  );
 }
 
 export function GeoConnectButton() {
   const { address } = useAccount();
-  const { login, logout, user } = usePrivy();
-  const { disconnect } = useDisconnect();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
-
-  const setAccountType = useSetAtom(accountTypeAtom);
-  const setName = useSetAtom(nameAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceAddress = useSetAtom(spaceAddressAtom);
-  const setProfileId = useSetAtom(profileIdAtom);
-  const setStep = useSetAtom(stepAtom);
 
   const resetOnboarding = () => {
     setAccountType(null);
@@ -144,43 +136,36 @@ export function GeoConnectButton() {
   // in the event handler we use for login/logout, but since there's lots of state
   // from both privy and wagmi that updates on login/logout, there's not a clean
   // way to have all of the data we need in one event handler without data being stale.
-  //
-  // @TODO: Maybe a state machine is better
-  React.useEffect(() => {
-    const addWalletToWagmi = async (address?: string) => {
-      const wallet = wallets.find(w => w.address === address);
+  const { login } = useLogin({
+    onComplete: user => {
+      const wallet = wallets.find(wallet => wallet.address === user?.wallet?.address);
 
-      if (wallet !== undefined) {
-        // Cookie.onConnectionChange('connect', wallet.address);
+      if (wallet) {
+        setActiveWallet(wallet);
         resetOnboarding();
-        await setActiveWallet(wallet);
       }
-    };
+    },
+  });
 
-    if (user?.wallet?.address) {
-      addWalletToWagmi(user.wallet.address);
-    } else {
-      // Cookie.onConnectionChange('disconnect', '');
+  const { disconnect } = useDisconnect();
+
+  const { logout } = useLogout({
+    onSuccess: () => {
       disconnect();
       resetOnboarding();
-    }
-  }, [user?.wallet?.address, wallets]);
+    },
+  });
+
+  const setAccountType = useSetAtom(accountTypeAtom);
+  const setName = useSetAtom(nameAtom);
+  const setAvatar = useSetAtom(avatarAtom);
+  const setSpaceAddress = useSetAtom(spaceAddressAtom);
+  const setProfileId = useSetAtom(profileIdAtom);
+  const setStep = useSetAtom(stepAtom);
 
   if (!address) {
     return (
-      <Button
-        onClick={
-          isTestEnv
-            ? () => {
-                console.log('Test environment detected: using mock wallet');
-                login();
-              }
-            : () => {
-                login();
-              }
-        }
-        variant="secondary"
-      >
+      <Button onClick={login} variant="secondary">
         <Wallet />
         Log in
       </Button>
@@ -188,12 +173,7 @@ export function GeoConnectButton() {
   }
 
   return (
-    <button
-      onClick={() => {
-        logout();
-      }}
-      className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0"
-    >
+    <button onClick={logout} className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0">
       <DisconnectWallet />
       <Spacer width={8} />
       <p className="text-button">Log out</p>

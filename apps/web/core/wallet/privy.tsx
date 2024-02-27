@@ -1,34 +1,18 @@
 'use client';
 
-import {
-  ConnectedWallet,
-  PrivyProvider as Privy,
-  PrivyClientConfig,
-  User,
-  usePrivy,
-  useWallets,
-} from '@privy-io/react-auth';
-import { useSetActiveWallet } from '@privy-io/wagmi';
+import { PrivyProvider as Privy, PrivyClientConfig, User } from '@privy-io/react-auth';
 import { zeroAddress } from 'viem';
+import { polygon } from 'viem/chains';
 
 import * as React from 'react';
 
-// import { polygon } from 'viem/chains';
-import { useAccount, useAccountEffect, useConfig, useDisconnect } from 'wagmi';
+import { useAccount, useConfig } from 'wagmi';
 
-import { Cookie } from '../cookie';
 import { registerGeoProfile } from '../io/publish';
 
 const config: PrivyClientConfig = {
-  embeddedWallets: {
-    createOnLogin: 'users-without-wallets',
-    requireUserPasswordOnCreate: true,
-    noPromptOnSignature: false,
-  },
-  loginMethods: ['wallet', 'email', 'sms'],
-  appearance: {
-    showWalletLoginFirst: true,
-  },
+  defaultChain: polygon,
+  supportedChains: [polygon],
 
   // These are handled by wagmi
   // defaultChain: polygon,

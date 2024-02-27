@@ -35,8 +35,6 @@ export function NavbarActions() {
   const { profile, isLoading: isProfileLoading } = useGeoProfile(address);
   const { person, isLoading: isPersonLoading } = usePerson(address);
 
-  console.log('address', address);
-
   if (!address) {
     return <GeoConnectButton />;
   }
