@@ -106,11 +106,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return isTestEnv ? mockConfig : getRealWalletConfig(ethereum);
   }, [isTestEnv, ethereum]);
 
-  return (
-    <WagmiProvider reconnectOnMount config={walletConfig}>
-      {children}
-    </WagmiProvider>
-  );
+  return <WagmiProvider config={walletConfig}>{children}</WagmiProvider>;
 }
 
 export function GeoConnectButton() {
