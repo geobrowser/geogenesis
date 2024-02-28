@@ -131,15 +131,16 @@ export function GeoConnectButton() {
   // we need to keep the wagmi wallet state in sync with Privy as the user logs
   // in and out.
   const { login } = useLogin({
-    onComplete: user => {
+    onComplete: async user => {
       const wallet = wallets.find(wallet => wallet.address === user?.wallet?.address);
 
       if (wallet) {
         // setActiveWallet is a privy-specific API for connecting any of the
         // privy-aware wallets to wagmi's store.
         // https://docs.privy.io/reference/sdk/wagmi/functions/useSetActiveWallet#setactivewallet%23function-usesetactivewallet
-        setActiveWallet(wallet);
         resetOnboarding();
+        await Cookie.onConnectionChange({ type: 'connect', address: wallet.address as `0x${string}` });
+        await setActiveWallet(wallet);
       }
     },
   });
@@ -147,9 +148,10 @@ export function GeoConnectButton() {
   const { disconnect } = useDisconnect();
 
   const { logout } = useLogout({
-    onSuccess: () => {
+    onSuccess: async () => {
       disconnect();
       resetOnboarding();
+      await Cookie.onConnectionChange({ type: 'disconnect' });
     },
   });
 
