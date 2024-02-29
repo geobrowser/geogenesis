@@ -24,8 +24,6 @@ export function WagmiPrivySyncProvider() {
     [wallets, user?.wallet?.address]
   );
 
-  // console.log('address -– hopefully work pls', address);
-
   React.useEffect(() => {
     async function syncWagmi(wallet: ConnectedWallet) {
       await setActiveWallet(wallet);
