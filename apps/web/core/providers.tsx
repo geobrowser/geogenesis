@@ -27,16 +27,14 @@ export function Providers({ children }: Props) {
     <PrivyProvider>
       <QueryClientProvider client={queryClient}>
         <WalletProvider>
+          <WagmiPrivySyncProvider />
+
           <JotaiProvider>
             <Services.Provider>
               <StatusBarContextProvider>
                 <DiffProvider>
                   <AragonSDKProvider>
-                    <ActiveProposalProvider>
-                      <WagmiPrivySyncProvider />
-
-                      {children}
-                    </ActiveProposalProvider>
+                    <ActiveProposalProvider>{children}</ActiveProposalProvider>
                   </AragonSDKProvider>
                 </DiffProvider>
               </StatusBarContextProvider>
