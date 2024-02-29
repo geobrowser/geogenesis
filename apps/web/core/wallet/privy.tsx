@@ -22,28 +22,11 @@ const config: PrivyClientConfig = {
     logo: '/static/favicon-320x180.png',
     walletList: ['rainbow', 'coinbase_wallet', 'wallet_connect', 'metamask'],
   },
-
-  // These are handled by wagmi
-  // embeddedWallets: {
-  //   noPromptOnSignature: false,
-  //   priceDisplay: {
-  //     primary: 'fiat-currency',
-  //     secondary: 'native-token',
-  //   },
-  // should enable this once we don't prompt on signature
-  // waitForTransactionConfirmation: true,
-  // },
-};
-
-// This method will be passed to the PrivyProvider as a callback
-// that runs after successful login.
-const onLogin = async (user: User) => {
-  console.log(`User ${user.id} logged in!`);
 };
 
 export function PrivyProvider({ children }: { children: React.ReactNode }) {
   return (
-    <Privy appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!} onSuccess={user => onLogin(user)} config={config}>
+    <Privy appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!} config={config}>
       {children}
     </Privy>
   );

@@ -9,7 +9,7 @@ import { polygon } from 'viem/chains';
 import * as React from 'react';
 
 import { useAccount, useDisconnect } from 'wagmi';
-import { coinbaseWallet, injected, metaMask, mock, walletConnect } from 'wagmi/connectors';
+import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
 
 import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
@@ -106,7 +106,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return isTestEnv ? mockConfig : getRealWalletConfig(ethereum);
   }, [isTestEnv, ethereum]);
 
-  return <WagmiProvider config={walletConfig}>{children}</WagmiProvider>;
+  return (
+    <WagmiProvider reconnectOnMount config={walletConfig}>
+      {children}
+    </WagmiProvider>
+  );
 }
 
 export function GeoConnectButton() {
@@ -135,18 +139,18 @@ export function GeoConnectButton() {
         // privy-aware wallets to wagmi's store.
         // https://docs.privy.io/reference/sdk/wagmi/functions/useSetActiveWallet#setactivewallet%23function-usesetactivewallet
         resetOnboarding();
-        await Cookie.onConnectionChange({ type: 'connect', address: wallet.address as `0x${string}` });
+        await Cookie.onConnectionChange({ type: 'connect', address: user?.wallet?.address as `0x${string}` });
         await setActiveWallet(wallet);
       }
     },
   });
 
-  const { disconnect } = useDisconnect();
+  const { disconnectAsync } = useDisconnect();
 
   const { logout } = useLogout({
     onSuccess: async () => {
-      disconnect();
       resetOnboarding();
+      await disconnectAsync();
       await Cookie.onConnectionChange({ type: 'disconnect' });
     },
   });

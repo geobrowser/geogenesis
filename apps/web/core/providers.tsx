@@ -14,6 +14,7 @@ import { JotaiProvider } from './state/jotai-provider';
 import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
 import { PrivyProvider } from './wallet/privy';
+import { WagmiPrivySyncProvider } from './wallet/wagmi-privy-sync-provider';
 
 interface Props {
   children: React.ReactNode;
@@ -31,7 +32,11 @@ export function Providers({ children }: Props) {
               <StatusBarContextProvider>
                 <DiffProvider>
                   <AragonSDKProvider>
-                    <ActiveProposalProvider>{children}</ActiveProposalProvider>
+                    <ActiveProposalProvider>
+                      <WagmiPrivySyncProvider />
+
+                      {children}
+                    </ActiveProposalProvider>
                   </AragonSDKProvider>
                 </DiffProvider>
               </StatusBarContextProvider>
