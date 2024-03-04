@@ -34,7 +34,7 @@ importers:
       '@next/bundle-analyzer': ^12.3.0
       '@openzeppelin/upgrades-core': ^1.30.0
       '@playwright/test': ^1.37.0
-      '@privy-io/react-auth': ^1.58.0
+      '@privy-io/react-auth': ^1.58.1
       '@privy-io/wagmi': ^0.2.1
       '@radix-ui/react-accordion': ^1.1.2
       '@radix-ui/react-dialog': ^1.0.4
@@ -148,8 +148,8 @@ importers:
       '@liveblocks/react': 1.0.0_react@18.2.0
       '@mobily/ts-belt': 4.0.0-rc.5
       '@openzeppelin/upgrades-core': 1.30.0
-      '@privy-io/react-auth': 1.58.0_72vofmg3f5qw6suv57fri4ctmm
-      '@privy-io/wagmi': 0.2.1_abjgkcgcvzs6ygfsey7ayld46q
+      '@privy-io/react-auth': 1.58.1_72vofmg3f5qw6suv57fri4ctmm
+      '@privy-io/wagmi': 0.2.1_edy3kjvmyaejyi5uivaiwhgapm
       '@radix-ui/react-accordion': 1.1.2_niceheoxzop6u6jvjqp6k2hesq
       '@radix-ui/react-dialog': 1.0.4_niceheoxzop6u6jvjqp6k2hesq
       '@radix-ui/react-dropdown-menu': 2.0.5_niceheoxzop6u6jvjqp6k2hesq
@@ -3230,7 +3230,7 @@ packages:
     resolution: {integrity: sha512-whiUMPlAOrVGmX8aKYVPvlKyG4CpQXiNNyt74vE1xb5sPvmx5oA7B/kOi/JdBvhGQq97U1/AVdXEdk2zkP8qyA==}
     engines: {node: '>=14.0.0'}
     dependencies:
-      '@metamask/json-rpc-engine': 7.3.2
+      '@metamask/json-rpc-engine': 7.3.3
       '@metamask/safe-event-emitter': 3.0.0
       '@metamask/utils': 5.0.2
     transitivePeerDependencies:
@@ -3263,8 +3263,8 @@ packages:
       - supports-color
     dev: false
 
-  /@metamask/json-rpc-engine/7.3.2:
-    resolution: {integrity: sha512-dVjBPlni4CoiBpESVqrxh6k4OR14w6GRXKSSXHFuITjuhALE42gNCkXTpL4cjNeOBUgTba3eGe5EI8cyc2QLRg==}
+  /@metamask/json-rpc-engine/7.3.3:
+    resolution: {integrity: sha512-dwZPq8wx9yV3IX2caLi9q9xZBw2XeIoYqdyihDDDpuHVCEiqadJLwqM3zy+uwf6F1QYQ65A8aOMQg1Uw7LMLNg==}
     engines: {node: '>=16.0.0'}
     dependencies:
       '@metamask/rpc-errors': 6.2.1
@@ -4369,8 +4369,8 @@ packages:
     resolution: {integrity: sha512-50/17A98tWUfQ176raKiOGXuYpLyyVMkxxG6oylzL3BPOlA6ADGdK7EYunSa4I064xerltq9TGXs8HmOk5E+vw==}
     dev: false
 
-  /@privy-io/react-auth/1.58.0_72vofmg3f5qw6suv57fri4ctmm:
-    resolution: {integrity: sha512-uqzdTqxpLY9QKsVzAOMTwdYIjH02BtcK7Du/dk8MyOPgM0IjX75OlsxDE7eGXd4oznZXAOnMf8P8TwcsaYVC8Q==}
+  /@privy-io/react-auth/1.58.1_72vofmg3f5qw6suv57fri4ctmm:
+    resolution: {integrity: sha512-RnXoGL8N/R3wS4HPDhZ3SE3XgPCO34Bsi48/oRFxqYAbHltb2h6o6uVa09Q5zV7xOMLKtRXX+CtQDjKcp3aZ+Q==}
     peerDependencies:
       react: ^18
       react-dom: ^18
@@ -4440,7 +4440,7 @@ packages:
       - zod
     dev: false
 
-  /@privy-io/wagmi/0.2.1_abjgkcgcvzs6ygfsey7ayld46q:
+  /@privy-io/wagmi/0.2.1_edy3kjvmyaejyi5uivaiwhgapm:
     resolution: {integrity: sha512-jQcMCDYNkSomcROpsLU9LXNP2vXqR+Bwlnt8HkH5GOetOrljC4gSP2lOCm1fPStEASv+0D0UJfuEjQ8rxJicow==}
     peerDependencies:
       '@privy-io/react-auth': ^1.56.1
@@ -4449,7 +4449,7 @@ packages:
       viem: ^2
       wagmi: ^2
     dependencies:
-      '@privy-io/react-auth': 1.58.0_72vofmg3f5qw6suv57fri4ctmm
+      '@privy-io/react-auth': 1.58.1_72vofmg3f5qw6suv57fri4ctmm
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       viem: 2.7.12_typescript@5.1.6
