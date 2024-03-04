@@ -32,6 +32,11 @@ export function WagmiPrivySyncProvider() {
     // we call setActiveWallet with the same wallet as the current active wallet, it
     // will disconnect it. I guess that somewhat makes sense, but it's not documented
     // anywhere and their implementation isn't open source. I just discovered it by luck.
+    //
+    // @WIP: This _might_ not be the reason. It seems like disconnecting a wallet then
+    // reconnecting _at all_, even to the same connector doesn't seem to work.
+    // Might be related to browser wallets not being able to be programatically disconnected
+    // https://docs.privy.io/guide/react/wallets/usage/wagmi#_4-use-wagmi-throughout-your-app
     if (walletForPrivy && !address) {
       console.log('Geo: Syncing wagmi with Privy for wallet address', walletForPrivy?.address);
       syncWagmi(walletForPrivy);
