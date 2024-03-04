@@ -5,16 +5,15 @@ import { useSetActiveWallet } from '@privy-io/wagmi';
 
 import * as React from 'react';
 
-import { useAccount, useConfig } from 'wagmi';
+import { useAccount } from 'wagmi';
+
+import { Cookie } from '../cookie';
 
 // This handles reconnecting the user to the wagmi store when they refresh the page.
 // Page refreshes can happen programatically either through fast refresh, data revalidation,
 // or just normal revisits to Geo.
 export function WagmiPrivySyncProvider() {
-  const config = useConfig();
-  const { address } = useAccount({
-    config,
-  });
+  const { address } = useAccount();
   const { user } = usePrivy();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
