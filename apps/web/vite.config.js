@@ -8,6 +8,7 @@ export default defineConfig({
   test: {
     env: {
       NEXT_PUBLIC_IS_TEST_ENV: 'true',
+      NEXT_PUBLIC_PRIVY_APP_ID: 'ccccccccccccccccccccccccc'
     },
     globals: true,
     environment: 'jsdom',
