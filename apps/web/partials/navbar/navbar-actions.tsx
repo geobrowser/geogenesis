@@ -1,5 +1,6 @@
 'use client';
 
+import { usePrivy } from '@privy-io/react-auth';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
@@ -15,7 +16,7 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePerson } from '~/core/hooks/use-person';
 import { useEditable } from '~/core/state/editable-store';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, formatShortAddress } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
@@ -31,11 +32,12 @@ export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
   const { showCreateProfile } = useCreateProfile();
 
+  const { user, authenticated } = usePrivy();
   const { address } = useAccount();
-  const { profile, isLoading: isProfileLoading } = useGeoProfile(address);
-  const { person, isLoading: isPersonLoading } = usePerson(address);
+  const { profile, isLoading: isProfileLoading } = useGeoProfile(user?.wallet?.address as `0x${string}` | undefined);
+  const { person, isLoading: isPersonLoading } = usePerson(user?.wallet?.address);
 
-  if (!address) {
+  if (!user?.wallet?.address) {
     return <GeoConnectButton />;
   }
 
@@ -47,6 +49,8 @@ export function NavbarActions() {
       </div>
     );
   }
+
+  console.log('user', { user, authenticated });
 
   return (
     <div className="flex items-center gap-4">
@@ -60,41 +64,58 @@ export function NavbarActions() {
         }
         open={open}
         onOpenChange={onOpenChange}
-        className="max-w-[165px]"
+        className="max-w-[300px]"
       >
-        {!person && profile ? (
-          <AvatarMenuItem>
-            <div className="flex items-center gap-2">
-              <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                <Avatar value={address} size={16} />
+        <AvatarMenuItemsContainer>
+          {!person && profile ? (
+            <AvatarMenuItem>
+              <div className="flex items-center gap-2">
+                <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                  <Avatar value={address} size={16} />
+                </div>
+                <button onClick={showCreateProfile}>Create profile</button>
               </div>
-              <button onClick={showCreateProfile}>Create profile</button>
-            </div>
-          </AvatarMenuItem>
-        ) : (
-          <>
-            {profile?.homeSpace && (
-              <>
-                <AvatarMenuItem>
-                  <div className="flex items-center gap-2">
-                    <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                      <Avatar value={address} avatarUrl={person?.avatarUrl} size={16} />
+            </AvatarMenuItem>
+          ) : (
+            <>
+              {profile?.homeSpace && (
+                <>
+                  <AvatarMenuItem>
+                    <div className="flex items-center gap-3">
+                      <div className="relative h-8 w-8 overflow-hidden rounded-full">
+                        <Avatar value={profile.account} avatarUrl={person?.avatarUrl} size={32} />
+                      </div>
+                      <div>
+                        <p className="text-text">{person?.name ?? profile.account}</p>
+                        {user.email ? (
+                          <p className="text-sm text-grey-04">{user.email.address}</p>
+                        ) : (
+                          <p className="text-sm text-grey-04">{formatShortAddress(profile.account)}</p>
+                        )}
+                      </div>
                     </div>
-                    <Link prefetch={false} href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
+                  </AvatarMenuItem>
+                  <AvatarMenuItem>
+                    <Link
+                      prefetch={false}
+                      onClick={() => onOpenChange(false)}
+                      href={NavUtils.toSpace(profile.homeSpace)}
+                      className="w-full text-button"
+                    >
                       Personal space
                     </Link>
-                  </div>
-                </AvatarMenuItem>
-                <AvatarMenuItem>
-                  <Link href="/home" className="flex items-center gap-2 grayscale">
-                    <Home />
-                    <p className="text-button">Personal home</p>
-                  </Link>
-                </AvatarMenuItem>
-              </>
-            )}
-          </>
-        )}
+                  </AvatarMenuItem>
+                  <AvatarMenuItem>
+                    <Link href="/home" className="w-full text-button" onClick={() => onOpenChange(false)}>
+                      Home
+                    </Link>
+                  </AvatarMenuItem>
+                </>
+              )}
+            </>
+          )}
+        </AvatarMenuItemsContainer>
+
         <AvatarMenuItem>
           <GeoConnectButton />
         </AvatarMenuItem>
@@ -104,7 +125,7 @@ export function NavbarActions() {
 }
 
 const avatarMenuItemStyles = cva(
-  'flex w-full select-none items-center justify-between bg-white px-3 py-2 text-button hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
+  'flex w-full select-none items-center justify-between rounded-md bg-white px-3 py-2 text-button text-text hover:bg-grey-01 hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
   {
     variants: {
       disabled: {
@@ -118,20 +139,12 @@ const avatarMenuItemStyles = cva(
   }
 );
 
-function AvatarMenuItem({
-  children,
-  onClick,
-  disabled = false,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button onClick={onClick} disabled={disabled} className={avatarMenuItemStyles({ disabled })}>
-      {children}
-    </button>
-  );
+function AvatarMenuItemsContainer({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col gap-1 p-1">{children}</div>;
+}
+
+function AvatarMenuItem({ children, disabled = false }: { children: React.ReactNode; disabled?: boolean }) {
+  return <div className={avatarMenuItemStyles({ disabled })}>{children}</div>;
 }
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];

@@ -1,6 +1,6 @@
 'use client';
 
-import { useLogin, useLogout, useWallets } from '@privy-io/react-auth';
+import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
 import { http } from 'viem';
@@ -114,7 +114,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function GeoConnectButton() {
-  const { address } = useAccount();
+  const { user } = usePrivy();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
 
@@ -162,7 +162,7 @@ export function GeoConnectButton() {
   const setProfileId = useSetAtom(profileIdAtom);
   const setStep = useSetAtom(stepAtom);
 
-  if (!address) {
+  if (!user) {
     return (
       <Button onClick={login} variant="secondary">
         <Wallet />
