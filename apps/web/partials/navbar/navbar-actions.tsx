@@ -59,7 +59,7 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={profile?.account} avatarUrl={person?.avatarUrl} size={28} />
+            <Avatar value={user.wallet.address} avatarUrl={person?.avatarUrl} size={28} />
           </div>
         }
         open={open}
@@ -67,6 +67,21 @@ export function NavbarActions() {
         className="max-w-[300px]"
       >
         <AvatarMenuItemsContainer>
+          <AvatarMenuItem>
+            <div className="flex items-center gap-3">
+              <div className="relative h-8 w-8 overflow-hidden rounded-full">
+                <Avatar value={profile?.account ?? user.wallet.address} avatarUrl={person?.avatarUrl} size={32} />
+              </div>
+              <div>
+                <p className="text-text">{person?.name ?? formatShortAddress(user.wallet.address)}</p>
+                {user.email ? (
+                  <p className="text-sm text-grey-04">{user.email.address}</p>
+                ) : (
+                  <p className="text-sm text-grey-04">{formatShortAddress(user.wallet.address)}</p>
+                )}
+              </div>
+            </div>
+          </AvatarMenuItem>
           {!person && profile ? (
             <AvatarMenuItem>
               <div className="flex items-center gap-2">
@@ -80,21 +95,6 @@ export function NavbarActions() {
             <>
               {profile?.homeSpace && (
                 <>
-                  <AvatarMenuItem>
-                    <div className="flex items-center gap-3">
-                      <div className="relative h-8 w-8 overflow-hidden rounded-full">
-                        <Avatar value={profile.account} avatarUrl={person?.avatarUrl} size={32} />
-                      </div>
-                      <div>
-                        <p className="text-text">{person?.name ?? profile.account}</p>
-                        {user.email ? (
-                          <p className="text-sm text-grey-04">{user.email.address}</p>
-                        ) : (
-                          <p className="text-sm text-grey-04">{formatShortAddress(profile.account)}</p>
-                        )}
-                      </div>
-                    </div>
-                  </AvatarMenuItem>
                   <AvatarMenuItem>
                     <Link
                       prefetch={false}
@@ -116,16 +116,16 @@ export function NavbarActions() {
           )}
         </AvatarMenuItemsContainer>
 
-        <AvatarMenuItem>
+        <div className="flex w-full select-none items-center justify-between bg-white px-4 py-2 text-button text-text hover:bg-grey-01">
           <GeoConnectButton />
-        </AvatarMenuItem>
+        </div>
       </Menu>
     </div>
   );
 }
 
 const avatarMenuItemStyles = cva(
-  'flex w-full select-none items-center justify-between rounded-md bg-white px-3 py-2 text-button text-text hover:bg-grey-01 hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
+  'flex w-full select-none items-center justify-between rounded-md bg-white px-3 py-2 text-button text-text hover:bg-grey-01 hover:outline-none',
   {
     variants: {
       disabled: {

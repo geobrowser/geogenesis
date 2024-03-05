@@ -126,7 +126,22 @@ export function GeoConnectButton() {
     setStep('start');
   };
 
-  const { login } = useLogin();
+  const { login } = useLogin({
+    onComplete: async user => {
+      const userWallet = user.wallet;
+
+      if (userWallet !== undefined) {
+        const embeddedWallet = wallets.find(w => w.address === userWallet.address);
+
+        await Cookie.onConnectionChange({ type: 'connect', address: userWallet.address as `0x${string}` });
+
+        if (embeddedWallet) {
+          await setActiveWallet(embeddedWallet);
+        }
+        resetOnboarding();
+      }
+    },
+  });
 
   const onLogin = () => {
     resetOnboarding();
@@ -135,8 +150,8 @@ export function GeoConnectButton() {
 
   const { logout } = useLogout({
     onSuccess: async () => {
-      resetOnboarding();
       await Cookie.onConnectionChange({ type: 'disconnect' });
+      resetOnboarding();
     },
   });
 
@@ -151,16 +166,18 @@ export function GeoConnectButton() {
     return (
       <Button onClick={onLogin} variant="secondary">
         <Wallet />
-        Log in
+        Sign in
       </Button>
     );
   }
 
   return (
-    <button onClick={logout} className="m-0 flex w-full cursor-pointer items-center border-none bg-transparent p-0">
+    <button
+      onClick={logout}
+      className="m-0 flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-0"
+    >
+      <p className="text-button">Sign out</p>
       <DisconnectWallet />
-      <Spacer width={8} />
-      <p className="text-button">Log out</p>
     </button>
   );
 }
