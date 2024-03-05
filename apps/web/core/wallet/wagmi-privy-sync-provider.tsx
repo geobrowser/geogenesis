@@ -5,7 +5,7 @@ import { useSetActiveWallet } from '@privy-io/wagmi';
 
 import * as React from 'react';
 
-import { useAccount } from 'wagmi';
+import { useAccount, useAccountEffect } from 'wagmi';
 
 import { Cookie } from '../cookie';
 
@@ -42,6 +42,18 @@ export function WagmiPrivySyncProvider() {
       syncWagmi(walletForPrivy);
     }
   }, [walletForPrivy?.address, address]);
+
+  useAccountEffect({
+    onConnect: async wallet => {
+      console.log('connected effect', { wallet, wallets, isReconnected: wallet.isReconnected });
+      await Cookie.onConnectionChange({ type: 'connect', address: wallet.address });
+      await setActiveWallet(wallets[0]);
+    },
+    onDisconnect: async () => {
+      console.log('disconnected effect');
+      await Cookie.onConnectionChange({ type: 'disconnect' });
+    },
+  });
 
   return null;
 }

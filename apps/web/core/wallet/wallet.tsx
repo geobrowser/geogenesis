@@ -8,7 +8,6 @@ import { polygon } from 'viem/chains';
 
 import * as React from 'react';
 
-import { useAccount, useDisconnect } from 'wagmi';
 import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
 
 import { Button } from '~/design-system/button';
@@ -127,30 +126,16 @@ export function GeoConnectButton() {
     setStep('start');
   };
 
-  // We're still using wagmi for contract calls instead of Privy. This means that
-  // we need to keep the wagmi wallet state in sync with Privy as the user logs
-  // in and out.
-  const { login } = useLogin({
-    onComplete: async user => {
-      const wallet = wallets.find(wallet => wallet.address === user?.wallet?.address);
+  const { login } = useLogin();
 
-      if (wallet) {
-        // setActiveWallet is a privy-specific API for connecting any of the
-        // privy-aware wallets to wagmi's store.
-        // https://docs.privy.io/reference/sdk/wagmi/functions/useSetActiveWallet#setactivewallet%23function-usesetactivewallet
-        resetOnboarding();
-        await Cookie.onConnectionChange({ type: 'connect', address: user?.wallet?.address as `0x${string}` });
-        await setActiveWallet(wallet);
-      }
-    },
-  });
-
-  const { disconnectAsync } = useDisconnect();
+  const onLogin = () => {
+    resetOnboarding();
+    login();
+  };
 
   const { logout } = useLogout({
     onSuccess: async () => {
       resetOnboarding();
-      await disconnectAsync();
       await Cookie.onConnectionChange({ type: 'disconnect' });
     },
   });
@@ -164,7 +149,7 @@ export function GeoConnectButton() {
 
   if (!user) {
     return (
-      <Button onClick={login} variant="secondary">
+      <Button onClick={onLogin} variant="secondary">
         <Wallet />
         Log in
       </Button>

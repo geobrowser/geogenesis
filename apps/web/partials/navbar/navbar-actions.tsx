@@ -50,7 +50,7 @@ export function NavbarActions() {
     );
   }
 
-  console.log('user', { user, authenticated });
+  console.log('user', { user, authenticated, address });
 
   return (
     <div className="flex items-center gap-4">
@@ -59,7 +59,7 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={person?.avatarUrl} size={28} />
+            <Avatar value={profile?.account} avatarUrl={person?.avatarUrl} size={28} />
           </div>
         }
         open={open}
@@ -71,7 +71,7 @@ export function NavbarActions() {
             <AvatarMenuItem>
               <div className="flex items-center gap-2">
                 <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                  <Avatar value={address} size={16} />
+                  <Avatar value={profile?.account} size={16} />
                 </div>
                 <button onClick={showCreateProfile}>Create profile</button>
               </div>
