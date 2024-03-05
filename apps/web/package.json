@@ -27,7 +27,7 @@
     "@liveblocks/react": "^1.0.0",
     "@mobily/ts-belt": "^4.0.0-rc.2",
     "@openzeppelin/upgrades-core": "^1.30.0",
-    "@privy-io/react-auth": "^1.58.1",
+    "@privy-io/react-auth": "1.58.2-beta-20240305141921",
     "@privy-io/wagmi": "^0.2.1",
     "@radix-ui/react-accordion": "^1.1.2",
     "@radix-ui/react-dialog": "^1.0.4",
