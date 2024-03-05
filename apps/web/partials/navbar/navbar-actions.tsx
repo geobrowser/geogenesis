@@ -1,6 +1,7 @@
 'use client';
 
-import { usePrivy } from '@privy-io/react-auth';
+import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
+import { useSetActiveWallet } from '@privy-io/wagmi';
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
@@ -22,20 +23,58 @@ import { GeoConnectButton } from '~/core/wallet';
 import { Avatar } from '~/design-system/avatar';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
-import { Home } from '~/design-system/icons/home';
 import { Menu } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { useCreateProfile } from '../onboarding/create-profile-dialog';
 
+interface MenuState {
+  isOpen: boolean;
+  // Profile switcher is a submenu within the menu
+  isProfileSwitcherOpen: boolean;
+}
+
+type MenuAction =
+  | {
+      type: 'SET_OPEN';
+      open: boolean;
+    }
+  | {
+      type: 'SET_PROFILE_SWITCHER_OPEN';
+      open: boolean;
+    };
+
+function menuReducer(state: MenuState, action: MenuAction): MenuState {
+  switch (action.type) {
+    case 'SET_OPEN':
+      return {
+        ...state,
+        isOpen: action.open,
+        // Close the profile switcher if we're closing the menu
+        isProfileSwitcherOpen: action.open ? state.isProfileSwitcherOpen : false,
+      };
+    case 'SET_PROFILE_SWITCHER_OPEN':
+      return {
+        ...state,
+        isProfileSwitcherOpen: action.open,
+      };
+  }
+}
+
 export function NavbarActions() {
-  const [open, onOpenChange] = React.useState(false);
+  const [menuState, dispatch] = React.useReducer(menuReducer, {
+    isOpen: false,
+    isProfileSwitcherOpen: false,
+  });
+
   const { showCreateProfile } = useCreateProfile();
 
   const { user, authenticated } = usePrivy();
   const { address } = useAccount();
   const { profile, isLoading: isProfileLoading } = useGeoProfile(user?.wallet?.address as `0x${string}` | undefined);
   const { person, isLoading: isPersonLoading } = usePerson(user?.wallet?.address);
+  const { wallets } = useWallets();
+  const { setActiveWallet } = useSetActiveWallet();
 
   if (!user?.wallet?.address) {
     return <GeoConnectButton />;
@@ -50,7 +89,7 @@ export function NavbarActions() {
     );
   }
 
-  console.log('user', { user, authenticated, address });
+  console.log('user', { wallets, user, authenticated, address });
 
   return (
     <div className="flex items-center gap-4">
@@ -62,63 +101,100 @@ export function NavbarActions() {
             <Avatar value={user.wallet.address} avatarUrl={person?.avatarUrl} size={28} />
           </div>
         }
-        open={open}
-        onOpenChange={onOpenChange}
+        open={menuState.isOpen}
+        onOpenChange={open => dispatch({ type: 'SET_OPEN', open })}
         className="max-w-[300px]"
       >
-        <AvatarMenuItemsContainer>
-          <AvatarMenuItem>
-            <div className="flex items-center gap-3">
-              <div className="relative h-8 w-8 overflow-hidden rounded-full">
-                <Avatar value={profile?.account ?? user.wallet.address} avatarUrl={person?.avatarUrl} size={32} />
-              </div>
-              <div>
-                <p className="text-text">{person?.name ?? formatShortAddress(user.wallet.address)}</p>
-                {user.email ? (
-                  <p className="text-sm text-grey-04">{user.email.address}</p>
-                ) : (
-                  <p className="text-sm text-grey-04">{formatShortAddress(user.wallet.address)}</p>
-                )}
-              </div>
-            </div>
-          </AvatarMenuItem>
-          {!person && profile ? (
-            <AvatarMenuItem>
-              <div className="flex items-center gap-2">
-                <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                  <Avatar value={profile?.account} size={16} />
-                </div>
-                <button onClick={showCreateProfile}>Create profile</button>
-              </div>
-            </AvatarMenuItem>
-          ) : (
-            <>
-              {profile?.homeSpace && (
+        {!menuState.isProfileSwitcherOpen ? (
+          <>
+            <AvatarMenuItemsContainer>
+              <AvatarMenuItem>
+                <button
+                  onClick={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: true })}
+                  className="flex w-full items-center gap-3"
+                >
+                  <div className="relative h-8 w-8 overflow-hidden rounded-full">
+                    <Avatar value={profile?.account ?? user.wallet.address} avatarUrl={person?.avatarUrl} size={32} />
+                  </div>
+                  <div>
+                    <p className="text-text">{person?.name ?? formatShortAddress(user.wallet.address)}</p>
+                    {user.email ? (
+                      <p className="text-sm text-grey-04">{user.email.address}</p>
+                    ) : (
+                      <p className="text-sm text-grey-04">{formatShortAddress(user.wallet.address)}</p>
+                    )}
+                  </div>
+                </button>
+              </AvatarMenuItem>
+              {!person && profile ? (
+                <AvatarMenuItem>
+                  <div className="flex items-center gap-2">
+                    <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                      <Avatar value={profile?.account} size={16} />
+                    </div>
+                    <button onClick={showCreateProfile}>Create profile</button>
+                  </div>
+                </AvatarMenuItem>
+              ) : (
                 <>
-                  <AvatarMenuItem>
-                    <Link
-                      prefetch={false}
-                      onClick={() => onOpenChange(false)}
-                      href={NavUtils.toSpace(profile.homeSpace)}
-                      className="w-full text-button"
-                    >
-                      Personal space
-                    </Link>
-                  </AvatarMenuItem>
-                  <AvatarMenuItem>
-                    <Link href="/home" className="w-full text-button" onClick={() => onOpenChange(false)}>
-                      Home
-                    </Link>
-                  </AvatarMenuItem>
+                  {profile?.homeSpace && (
+                    <>
+                      <AvatarMenuItem>
+                        <Link
+                          prefetch={false}
+                          onClick={() => dispatch({ type: 'SET_OPEN', open: false })}
+                          href={NavUtils.toSpace(profile.homeSpace)}
+                          className="w-full text-button"
+                        >
+                          Personal space
+                        </Link>
+                      </AvatarMenuItem>
+                      <AvatarMenuItem>
+                        <Link
+                          href="/home"
+                          className="w-full text-button"
+                          onClick={() => dispatch({ type: 'SET_OPEN', open: false })}
+                        >
+                          Home
+                        </Link>
+                      </AvatarMenuItem>
+                    </>
+                  )}
                 </>
               )}
-            </>
-          )}
-        </AvatarMenuItemsContainer>
+            </AvatarMenuItemsContainer>
 
-        <div className="flex w-full select-none items-center justify-between bg-white px-4 py-2 text-button text-text hover:bg-grey-01">
-          <GeoConnectButton />
-        </div>
+            <div className="flex w-full select-none items-center justify-between bg-white px-4 py-2 text-button text-text hover:bg-grey-01">
+              <GeoConnectButton />
+            </div>
+          </>
+        ) : (
+          <>
+            <button
+              className="w-full p-2 text-smallButton text-grey-04"
+              onClick={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: false })}
+            >
+              Switch profiles
+            </button>
+
+            <AvatarMenuItemsContainer>
+              {wallets.map(w => (
+                <div
+                  onClick={async () => {
+                    await setActiveWallet(w);
+
+                    // if (w.walletClientType !== 'privy') {
+                    //   w.loginOrLink();
+                    // }
+                  }}
+                  key={w.address}
+                >
+                  {formatShortAddress(w.address)}
+                </div>
+              ))}
+            </AvatarMenuItemsContainer>
+          </>
+        )}
       </Menu>
     </div>
   );
