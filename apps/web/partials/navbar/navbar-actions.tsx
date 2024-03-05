@@ -71,8 +71,8 @@ export function NavbarActions() {
 
   const { user, authenticated } = usePrivy();
   const { address } = useAccount();
-  const { profile, isLoading: isProfileLoading } = useGeoProfile(user?.wallet?.address as `0x${string}` | undefined);
-  const { person, isLoading: isPersonLoading } = usePerson(user?.wallet?.address);
+  const { profile, isLoading: isProfileLoading } = useGeoProfile(address as `0x${string}` | undefined);
+  const { person, isLoading: isPersonLoading } = usePerson(address);
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
 
@@ -98,7 +98,7 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={user.wallet.address} avatarUrl={person?.avatarUrl} size={28} />
+            <Avatar value={address} avatarUrl={person?.avatarUrl} size={28} />
           </div>
         }
         open={menuState.isOpen}
@@ -114,14 +114,14 @@ export function NavbarActions() {
                   className="flex w-full items-center gap-3"
                 >
                   <div className="relative h-8 w-8 overflow-hidden rounded-full">
-                    <Avatar value={profile?.account ?? user.wallet.address} avatarUrl={person?.avatarUrl} size={32} />
+                    <Avatar value={profile?.account ?? address} avatarUrl={person?.avatarUrl} size={32} />
                   </div>
                   <div>
                     <p className="text-text">{person?.name ?? formatShortAddress(user.wallet.address)}</p>
                     {user.email ? (
                       <p className="text-sm text-grey-04">{user.email.address}</p>
                     ) : (
-                      <p className="text-sm text-grey-04">{formatShortAddress(user.wallet.address)}</p>
+                      <p className="text-sm text-grey-04">{formatShortAddress(address ?? user.wallet.address)}</p>
                     )}
                   </div>
                 </button>
@@ -181,11 +181,8 @@ export function NavbarActions() {
               {wallets.map(w => (
                 <div
                   onClick={async () => {
+                    dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: false });
                     await setActiveWallet(w);
-
-                    // if (w.walletClientType !== 'privy') {
-                    //   w.loginOrLink();
-                    // }
                   }}
                   key={w.address}
                 >

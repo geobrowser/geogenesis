@@ -36,7 +36,12 @@ export function TransactionTest() {
   const config = useConfig();
   const { address } = useAccount();
 
-  // if (!address) return;
+  if (!address) return;
 
-  return <button onClick={() => registerGeoProfile(config, zeroAddress)}>Deploy</button>;
+  return (
+    <div>
+      <h1>{address}</h1>
+      <button onClick={() => registerGeoProfile(config, zeroAddress)}>Deploy</button>
+    </div>
+  );
 }

@@ -1,7 +1,7 @@
 'use client';
 
-import { useLogin, useLogout, usePrivy } from '@privy-io/react-auth';
-import { WagmiProvider, createConfig } from '@privy-io/wagmi';
+import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
+import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
 import { http } from 'viem';
 import { polygon } from 'viem/chains';
@@ -112,7 +112,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function GeoConnectButton() {
+  const { setActiveWallet } = useSetActiveWallet();
   const { user } = usePrivy();
+  const { wallets } = useWallets();
 
   const resetOnboarding = () => {
     setAccountType(null);
@@ -128,7 +130,14 @@ export function GeoConnectButton() {
       const userWallet = user.wallet;
 
       if (userWallet !== undefined) {
-        await Cookie.onConnectionChange({ type: 'connect', address: userWallet.address as `0x${string}` });
+        const wallet = wallets.find(wallet => wallet.address === userWallet.address);
+
+        if (wallet) {
+          console.log('wallet', wallet);
+          await setActiveWallet(wallet);
+          // await Cookie.onConnectionChange({ type: 'connect', address: wallet.address as `0x${string}` });
+        }
+
         resetOnboarding();
       }
     },
@@ -141,7 +150,7 @@ export function GeoConnectButton() {
 
   const { logout } = useLogout({
     onSuccess: async () => {
-      await Cookie.onConnectionChange({ type: 'disconnect' });
+      // await Cookie.onConnectionChange({ type: 'disconnect' });
       resetOnboarding();
     },
   });
