@@ -19,7 +19,6 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
-import { ClientOnly } from '~/design-system/client-only';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -327,40 +326,38 @@ const MembershipRequest = ({ request, onRequestProcessed }: MembershipRequestPro
   };
 
   return (
-    <ClientOnly>
-      <div className="space-y-4 rounded-lg border border-grey-02 p-4">
-        <Link href={profile?.profileLink ?? ''} className="flex items-center justify-between">
-          <div className="text-smallTitle">{profile?.name ?? profile.id}</div>
-          <div className="relative h-5 w-5 overflow-hidden rounded-full">
-            <Avatar value={profile.address} avatarUrl={profile?.avatarUrl} size={20} />
-          </div>
-        </Link>
-        <Link
-          href={NavUtils.toSpace(request.space.id)}
-          className="flex items-center gap-1.5 text-breadcrumb text-grey-04"
-        >
-          <span className="relative h-3 w-3 overflow-hidden rounded-sm">
-            <img
-              src={request.space.image ? getImagePath(request.space.image) : undefined}
-              className="absolute inset-0 h-full w-full object-cover object-center"
-              alt=""
-            />
-          </span>
-          <span>{request.space.name ?? 'Space'}</span>
-        </Link>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="gap-1.5 rounded bg-grey-01 px-1.5 py-1 text-breadcrumb text-xs leading-none">
-              Member request 0/1 votes needed
-            </div>
-          </div>
-          <div className="inline-flex items-center gap-2">
-            <SmallButton onClick={handleReject}>Reject</SmallButton>
-            <SmallButton onClick={handleAccept}>Accept</SmallButton>
+    <div className="space-y-4 rounded-lg border border-grey-02 p-4">
+      <Link href={profile?.profileLink ?? ''} className="flex items-center justify-between">
+        <div className="text-smallTitle">{profile?.name ?? profile.id}</div>
+        <div className="relative h-5 w-5 overflow-hidden rounded-full">
+          <Avatar value={profile.address} avatarUrl={profile?.avatarUrl} size={20} />
+        </div>
+      </Link>
+      <Link
+        href={NavUtils.toSpace(request.space.id)}
+        className="flex items-center gap-1.5 text-breadcrumb text-grey-04"
+      >
+        <span className="relative h-3 w-3 overflow-hidden rounded-sm">
+          <img
+            src={request.space.image ? getImagePath(request.space.image) : undefined}
+            className="absolute inset-0 h-full w-full object-cover object-center"
+            alt=""
+          />
+        </span>
+        <span>{request.space.name ?? 'Space'}</span>
+      </Link>
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="gap-1.5 rounded bg-grey-01 px-1.5 py-1 text-breadcrumb text-xs leading-none">
+            Member request 0/1 votes needed
           </div>
         </div>
+        <div className="inline-flex items-center gap-2">
+          <SmallButton onClick={handleReject}>Reject</SmallButton>
+          <SmallButton onClick={handleAccept}>Accept</SmallButton>
+        </div>
       </div>
-    </ClientOnly>
+    </div>
   );
 };
 
@@ -441,15 +438,14 @@ const LearnMore = () => {
 const Notices = () => {
   return (
     <div className="mb-2 space-y-2">
-      <ClientOnly>
-        <Notice
-          id="welcomeToYourHome"
-          color="grey"
-          title="Welcome to your home"
-          description="Your area to see any proposals, member requests, editor requests and all general activity across the spaces you are involved in."
-          media={<img src="/home.png" alt="" className="-mb-12" />}
-        />
-        {/* <Notice
+      <Notice
+        id="welcomeToYourHome"
+        color="grey"
+        title="Welcome to your home"
+        description="Your area to see any proposals, member requests, editor requests and all general activity across the spaces you are involved in."
+        media={<img src="/home.png" alt="" className="-mb-12" />}
+      />
+      {/* <Notice
           id="findOrCreateCompanySpace"
           color="green"
           title="Find / create your company space"
@@ -457,14 +453,14 @@ const Notices = () => {
           element={<FindOrCreateCompanySpace />}
           media={<img src="/company.png" alt="" className="-mb-12" />}
         /> */}
-        <Notice
-          id="findSpacesToJoin"
-          color="orange"
-          title="Find spaces to join"
-          description="Discover and join spaces where you can actively engagte with the topics and issues that captivate your interest."
-          element={<JoinSpaces />}
-        />
-        {/* <Notice
+      <Notice
+        id="findSpacesToJoin"
+        color="orange"
+        title="Find spaces to join"
+        description="Discover and join spaces where you can actively engagte with the topics and issues that captivate your interest."
+        element={<JoinSpaces />}
+      />
+      {/* <Notice
           id="learnMore"
           color="purple"
           title="Want to learn more?"
@@ -472,7 +468,6 @@ const Notices = () => {
           element={<LearnMore />}
           media={<img src="/videos.png" alt="" />}
         /> */}
-      </ClientOnly>
     </div>
   );
 };
