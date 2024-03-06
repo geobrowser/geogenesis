@@ -27,6 +27,7 @@ import { Avatar } from '~/design-system/avatar';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { Check } from '~/design-system/icons/check';
 import { EyeSmall } from '~/design-system/icons/eye-small';
+import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Menu } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -171,10 +172,11 @@ export function NavbarActions() {
         ) : (
           <>
             <button
-              className="w-full p-2 text-smallButton text-grey-04"
+              className="flex w-full items-center gap-2 p-2 text-smallButton text-grey-04"
               onClick={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: false })}
             >
-              Switch profiles
+              <LeftArrowLong color="grey-04" />
+              <p>Switch profiles</p>
             </button>
 
             <AvatarMenuItemsContainer>
@@ -218,7 +220,7 @@ function WalletsList({ onSelect }: { onSelect: () => void }) {
 
   const addresses = wallets.map(w => w.address);
 
-  const { data: persons } = useQuery({
+  const { data: persons, isLoading } = useQuery({
     queryKey: ['persons', addresses],
     queryFn: async () => {
       const maybePersons = await Promise.all(addresses.map(address => fetchProfile({ address })));
@@ -234,8 +236,12 @@ function WalletsList({ onSelect }: { onSelect: () => void }) {
     },
   });
 
-  if (!persons) {
-    return null;
+  if (isLoading || !persons) {
+    return (
+      <AvatarMenuItem>
+        <Skeleton className="h-8 w-8" radius="rounded-full" />
+      </AvatarMenuItem>
+    );
   }
 
   return wallets.map(w => {
