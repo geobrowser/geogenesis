@@ -25,6 +25,7 @@ import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
+import { Check } from '~/design-system/icons/check';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Menu } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
@@ -210,6 +211,7 @@ function AvatarMenuItem({ children, disabled = false }: { children: React.ReactN
 }
 
 function WalletsList({ onSelect }: { onSelect: () => void }) {
+  const { address } = useAccount();
   const { user } = usePrivy();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
@@ -239,28 +241,27 @@ function WalletsList({ onSelect }: { onSelect: () => void }) {
   return wallets.map(w => {
     const maybePerson = persons.get(w.address);
     const maybeUserEmail = user?.wallet?.address === w.address ? user?.email?.address : null;
+    const isCurrentWallet = address === w.address;
 
     return (
-      <button
-        onClick={async () => {
-          onSelect();
-          await setActiveWallet(w);
-        }}
-        key={w.address}
-        className="flex w-full items-center gap-3"
-      >
-        <div className="relative h-8 w-8 overflow-hidden rounded-full">
-          <Avatar value={maybePerson?.address ?? w.address} avatarUrl={maybePerson?.avatarUrl} size={32} />
-        </div>
-        <div>
-          <p className="text-button">{maybePerson?.name ?? maybeUserEmail ?? formatShortAddress(w.address)}</p>
-          {/* {user.email ? (
-            <p className="text-sm text-grey-04">{user.email.address}</p>
-          ) : (
-            <p className="text-sm text-grey-04">{formatShortAddress(address ?? user.wallet.address)}</p>
-          )} */}
-        </div>
-      </button>
+      <AvatarMenuItem>
+        <button
+          onClick={async () => {
+            onSelect();
+            await setActiveWallet(w);
+          }}
+          key={w.address}
+          className="flex w-full items-center justify-between"
+        >
+          <div className="flex w-full items-center gap-3">
+            <div className="relative h-8 w-8 overflow-hidden rounded-full">
+              <Avatar value={maybePerson?.address ?? w.address} avatarUrl={maybePerson?.avatarUrl} size={32} />d
+            </div>
+            <p className="text-button">{maybePerson?.name ?? maybeUserEmail ?? formatShortAddress(w.address)}</p>
+          </div>
+          {isCurrentWallet && <Check />}
+        </button>
+      </AvatarMenuItem>
     );
   });
 }
