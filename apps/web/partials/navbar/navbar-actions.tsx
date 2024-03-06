@@ -3,6 +3,7 @@
 import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
 import { useSetActiveWallet } from '@privy-io/wagmi';
 import * as Popover from '@radix-ui/react-popover';
+import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
 import Link from 'next/link';
@@ -16,7 +17,9 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePerson } from '~/core/hooks/use-person';
+import { fetchProfile } from '~/core/io/subgraph';
 import { useEditable } from '~/core/state/editable-store';
+import { Profile } from '~/core/types';
 import { NavUtils, formatShortAddress } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
@@ -69,12 +72,10 @@ export function NavbarActions() {
 
   const { showCreateProfile } = useCreateProfile();
 
-  const { user, authenticated } = usePrivy();
+  const { user } = usePrivy();
   const { address } = useAccount();
   const { profile, isLoading: isProfileLoading } = useGeoProfile(address as `0x${string}` | undefined);
   const { person, isLoading: isPersonLoading } = usePerson(address);
-  const { wallets } = useWallets();
-  const { setActiveWallet } = useSetActiveWallet();
 
   if (!user?.wallet?.address) {
     return <GeoConnectButton />;
@@ -88,8 +89,6 @@ export function NavbarActions() {
       </div>
     );
   }
-
-  console.log('user', { wallets, user, authenticated, address });
 
   return (
     <div className="flex items-center gap-4">
@@ -178,17 +177,7 @@ export function NavbarActions() {
             </button>
 
             <AvatarMenuItemsContainer>
-              {wallets.map(w => (
-                <div
-                  onClick={async () => {
-                    dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: false });
-                    await setActiveWallet(w);
-                  }}
-                  key={w.address}
-                >
-                  {formatShortAddress(w.address)}
-                </div>
-              ))}
+              <WalletsList onSelect={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: false })} />
             </AvatarMenuItemsContainer>
           </>
         )}
@@ -218,6 +207,62 @@ function AvatarMenuItemsContainer({ children }: { children: React.ReactNode }) {
 
 function AvatarMenuItem({ children, disabled = false }: { children: React.ReactNode; disabled?: boolean }) {
   return <div className={avatarMenuItemStyles({ disabled })}>{children}</div>;
+}
+
+function WalletsList({ onSelect }: { onSelect: () => void }) {
+  const { user } = usePrivy();
+  const { wallets } = useWallets();
+  const { setActiveWallet } = useSetActiveWallet();
+
+  const addresses = wallets.map(w => w.address);
+
+  const { data: persons } = useQuery({
+    queryKey: ['persons', addresses],
+    queryFn: async () => {
+      const maybePersons = await Promise.all(addresses.map(address => fetchProfile({ address })));
+
+      const personsByAddress = new Map<string, Profile | null>();
+
+      for (const [index, person] of maybePersons.entries()) {
+        if (person) personsByAddress.set(person[1].address, person[1]);
+        else personsByAddress.set(addresses[index], null);
+      }
+
+      return personsByAddress;
+    },
+  });
+
+  if (!persons) {
+    return null;
+  }
+
+  return wallets.map(w => {
+    const maybePerson = persons.get(w.address);
+    const maybeUserEmail = user?.wallet?.address === w.address ? user?.email?.address : null;
+
+    return (
+      <button
+        onClick={async () => {
+          onSelect();
+          await setActiveWallet(w);
+        }}
+        key={w.address}
+        className="flex w-full items-center gap-3"
+      >
+        <div className="relative h-8 w-8 overflow-hidden rounded-full">
+          <Avatar value={maybePerson?.address ?? w.address} avatarUrl={maybePerson?.avatarUrl} size={32} />
+        </div>
+        <div>
+          <p className="text-button">{maybePerson?.name ?? maybeUserEmail ?? formatShortAddress(w.address)}</p>
+          {/* {user.email ? (
+            <p className="text-sm text-grey-04">{user.email.address}</p>
+          ) : (
+            <p className="text-sm text-grey-04">{formatShortAddress(address ?? user.wallet.address)}</p>
+          )} */}
+        </div>
+      </button>
+    );
+  });
 }
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
