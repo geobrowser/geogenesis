@@ -65,17 +65,17 @@ export interface FullEntry extends z.infer<typeof ZodFullEntry> {
   uriData: OmitStrict<UriData, 'actions'> & { actions: Action[] };
 }
 
-/** Profile registrations */
-export const ZodProfileRegistered = z.object({
+/** Onchain Profile registrations */
+export const ZodOnchainProfileRegistered = z.object({
   requestor: z.string(),
   space: z.string(),
   id: z.string(),
 });
 
-export type ProfileRegistered = z.infer<typeof ZodProfileRegistered>;
+export type OnchainProfileRegistered = z.infer<typeof ZodOnchainProfileRegistered>;
 
-export const ZodProfilesRegisteredStreamResponse = z.object({
-  profilesRegistered: z.array(ZodProfileRegistered).min(1),
+export const ZodOnchainProfilesRegisteredStreamResponse = z.object({
+  profilesRegistered: z.array(ZodOnchainProfileRegistered).min(1),
 });
 
 /** Creating a space plugin on a DAO */

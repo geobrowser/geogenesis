@@ -47,12 +47,22 @@ CREATE TABLE public.geo_entity_types (
 
 CREATE TABLE public.profiles (
     id text PRIMARY KEY,
-    entity_id text REFERENCES public.geo_entities(id),
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    created_by_id text NOT NULL REFERENCES public.accounts(id),
+    entity_id text REFERENCES public.geo_entities(id) NOT NULL,
+    onchain_profile_id text REFERENCES public.onchain_profiles(id) NOT NULL,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL
 );
+
+CREATE TABLE public.onchain_profiles (
+    id text PRIMARY KEY,
+    account_id text REFERENCES public.accounts(id) NOT NULL,
+    home_space_id text REFERENCES public.spaces(id) NOT NULL,
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL
+);
+
+-- There's the onchain profile
+-- There's the Geo person entity that relates to the profile
 
 -- ALTER TABLE
 --     public.geo_entities
