@@ -110,7 +110,7 @@ export function NavbarActions() {
         {!menuState.isProfileSwitcherOpen ? (
           <>
             <AvatarMenuItemsContainer>
-              <AvatarMenuItem>
+              <AvatarMenuItem isCurrentlySelected>
                 <button
                   onClick={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: true })}
                   className="flex w-full items-center gap-3"
@@ -166,7 +166,7 @@ export function NavbarActions() {
               )}
             </AvatarMenuItemsContainer>
 
-            <div className="flex w-full select-none items-center justify-between bg-white px-4 py-2 text-button text-text hover:bg-grey-01">
+            <div className="flex w-full select-none items-center justify-between bg-white px-4 py-2 text-button text-text hover:bg-divider">
               <GeoConnectButton />
             </div>
           </>
@@ -191,12 +191,16 @@ export function NavbarActions() {
 }
 
 const avatarMenuItemStyles = cva(
-  'flex w-full select-none items-center justify-between rounded-md bg-white px-3 py-2 text-button text-text hover:bg-grey-01 hover:outline-none',
+  'flex w-full select-none items-center justify-between rounded-md px-3 py-2 text-button text-text hover:bg-divider hover:outline-none',
   {
     variants: {
       disabled: {
         true: 'cursor-not-allowed text-grey-03',
         false: 'cursor-pointer text-grey-04 hover:bg-bg hover:text-text',
+      },
+      isCurrentlySelected: {
+        true: 'bg-grey-01',
+        false: 'bg-white',
       },
     },
     defaultVariants: {
@@ -209,8 +213,16 @@ function AvatarMenuItemsContainer({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-col gap-1 p-1">{children}</div>;
 }
 
-function AvatarMenuItem({ children, disabled = false }: { children: React.ReactNode; disabled?: boolean }) {
-  return <div className={avatarMenuItemStyles({ disabled })}>{children}</div>;
+function AvatarMenuItem({
+  children,
+  isCurrentlySelected,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  isCurrentlySelected?: boolean;
+  disabled?: boolean;
+}) {
+  return <div className={avatarMenuItemStyles({ disabled, isCurrentlySelected })}>{children}</div>;
 }
 
 function WalletsList({ onSelect }: { onSelect: () => void }) {
@@ -251,7 +263,7 @@ function WalletsList({ onSelect }: { onSelect: () => void }) {
     const displayName = maybePerson?.name ?? maybeUserEmail ?? formatShortAddress(w.address);
 
     return (
-      <AvatarMenuItem key={`${w.address}-${w.connectorType}`}>
+      <AvatarMenuItem key={`${w.address}-${w.connectorType}`} isCurrentlySelected={isCurrentWallet}>
         <button
           onClick={() => {
             onSelect();
