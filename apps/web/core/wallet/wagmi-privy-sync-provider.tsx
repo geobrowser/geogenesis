@@ -1,6 +1,6 @@
 'use client';
 
-import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { useWallets } from '@privy-io/react-auth';
 import { useSetActiveWallet } from '@privy-io/wagmi';
 import { useCookies } from 'react-cookie';
 

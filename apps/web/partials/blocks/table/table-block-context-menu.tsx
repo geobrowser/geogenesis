@@ -1,7 +1,8 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { useQuery } from '@tanstack/react-query';
+import * as Dropdown from '@radix-ui/react-dropdown-menu';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom } from 'jotai';
@@ -10,7 +11,6 @@ import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
-import * as Dropdown from '@radix-ui/react-dropdown-menu'
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
@@ -185,8 +185,7 @@ function useOptimisticAttributes({
     }
   };
 
-  const { data } = useQuery({
-    suspense: true,
+  const { data } = useSuspenseQuery({
     queryKey: ['table-block-type-schema-configuration-attributes-list', entityId],
     queryFn: async () => {
       // Fetch the triples representing the Attributes for the type
@@ -250,13 +249,8 @@ export function TableBlockContextMenu() {
   const spaceImage = space?.spaceConfig?.image ?? null;
 
   return (
-    <Dropdown.Root
-      open={isMenuOpen}
-      onOpenChange={setIsMenuOpen}
-    >
-      <Dropdown.Trigger>
-        {isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-      </Dropdown.Trigger>
+    <Dropdown.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+      <Dropdown.Trigger>{isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}</Dropdown.Trigger>
       <Dropdown.Portal>
         <MotionContent
           initial={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -267,14 +261,19 @@ export function TableBlockContextMenu() {
             ease: 'easeInOut',
           }}
           sideOffset={8}
-          className='max-w-[180px] bg-white z-100 divide-y divide-grey-02 overflow-hidden rounded-lg border border-grey-02 shadow-lg' align="end">
+          className="z-100 max-w-[180px] divide-y divide-grey-02 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          align="end"
+        >
           <MenuItem>
             <button onClick={onCopyViewId} className="inline-flex w-full items-center gap-2 px-3 py-2">
               <Copy /> <span>Copy view ID</span>
             </button>
           </MenuItem>
           <MenuItem>
-            <Link href={NavUtils.toEntity(spaceId, entityId)} className="inline-flex w-full items-center gap-2 px-3 py-2">
+            <Link
+              href={NavUtils.toEntity(spaceId, entityId)}
+              className="inline-flex w-full items-center gap-2 px-3 py-2"
+            >
               <Cog /> <span>View config</span>
             </Link>
           </MenuItem>

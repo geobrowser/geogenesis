@@ -13,7 +13,7 @@ import * as React from 'react';
 
 import { useAccount } from 'wagmi';
 
-import { Cookie, WALLET_ADDRESS } from '~/core/cookie';
+import { Cookie } from '~/core/cookie';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
