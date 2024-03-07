@@ -106,7 +106,7 @@ export function NavbarActions() {
         }
         open={menuState.isOpen}
         onOpenChange={open => dispatch({ type: 'SET_OPEN', open })}
-        className="max-w-[300px]"
+        className="max-w-[300px] bg-white"
       >
         {!menuState.isProfileSwitcherOpen ? (
           <>
