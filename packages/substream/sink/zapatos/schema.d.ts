@@ -1501,9 +1501,15 @@ declare module 'zapatos/schema' {
       /**
       * **profiles.entity_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      entity_id: string | null;
+      entity_id: string;
+      /**
+      * **profiles.onchain_profile_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      onchain_profile_id: string;
       /**
       * **profiles.created_at**
       * - `int4` in database
@@ -1527,9 +1533,15 @@ declare module 'zapatos/schema' {
       /**
       * **profiles.entity_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      entity_id: string | null;
+      entity_id: string;
+      /**
+      * **profiles.onchain_profile_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      onchain_profile_id: string;
       /**
       * **profiles.created_at**
       * - `int4` in database
@@ -1553,9 +1565,15 @@ declare module 'zapatos/schema' {
       /**
       * **profiles.entity_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
       entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **profiles.onchain_profile_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      onchain_profile_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **profiles.created_at**
       * - `int4` in database
@@ -1579,9 +1597,15 @@ declare module 'zapatos/schema' {
       /**
       * **profiles.entity_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      entity_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      entity_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **profiles.onchain_profile_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      onchain_profile_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **profiles.created_at**
       * - `int4` in database
@@ -1605,9 +1629,15 @@ declare module 'zapatos/schema' {
       /**
       * **profiles.entity_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      entity_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **profiles.onchain_profile_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      onchain_profile_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **profiles.created_at**
       * - `int4` in database
