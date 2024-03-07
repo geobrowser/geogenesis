@@ -44,44 +44,44 @@ import { Cookie } from '../cookie';
 //   },
 // };
 
-const getRealWalletConfig = (ethereum?: any) =>
-  createConfig({
-    chains: [polygon],
-    // This enables us to use a single injected connector but handle multiple wallet
-    // extensions within the browser.
-    multiInjectedProviderDiscovery: true,
-    transports: {
-      [polygon.id]: http(process.env.NEXT_PUBLIC_RPC_URL!),
-    },
-    connectors: [
-      coinbaseWallet({
-        chainId: 137,
-        appName: 'Geo Genesis',
-        appLogoUrl: 'https://geobrowser.io/static/favicon-64x64.png',
-        headlessMode: true,
-      }),
-      walletConnect({
-        showQrModal: true,
-        projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
-        metadata: {
-          name: 'Geo Genesis',
-          description: "Browse and organize the world's public knowledge and information in a decentralized way.",
-          url: 'https://geobrowser.io',
-          icons: ['https://geobrowser.io/static/favicon-64x64.png'],
-        },
-      }),
-      injected({
-        target() {
-          return {
-            id: 'windowProvider',
-            name: 'Window Provider',
-            provider: ethereum ? ethereum : undefined,
-          };
-        },
-        shimDisconnect: true,
-      }),
-    ],
-  });
+const realWalletConfig = createConfig({
+  chains: [polygon],
+  // This enables us to use a single injected connector but handle multiple wallet
+  // extensions within the browser.
+  multiInjectedProviderDiscovery: true,
+  transports: {
+    [polygon.id]: http(process.env.NEXT_PUBLIC_RPC_URL!),
+  },
+  ssr: true,
+  connectors: [
+    coinbaseWallet({
+      chainId: 137,
+      appName: 'Geo Genesis',
+      appLogoUrl: 'https://geobrowser.io/static/favicon-64x64.png',
+      headlessMode: true,
+    }),
+    walletConnect({
+      showQrModal: true,
+      projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+      metadata: {
+        name: 'Geo Genesis',
+        description: "Browse and organize the world's public knowledge and information in a decentralized way.",
+        url: 'https://geobrowser.io',
+        icons: ['https://geobrowser.io/static/favicon-64x64.png'],
+      },
+    }),
+    injected({
+      target() {
+        return {
+          id: 'windowProvider',
+          name: 'Window Provider',
+          provider: w => w?.ethereum,
+        };
+      },
+      shimDisconnect: true,
+    }),
+  ],
+});
 
 const mockConfig = createConfig({
   chains: [polygon],
@@ -98,11 +98,9 @@ const mockConfig = createConfig({
 const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const ethereum = typeof window !== 'undefined' ? window?.ethereum : undefined;
-
   const walletConfig = React.useMemo(() => {
-    return isTestEnv ? mockConfig : getRealWalletConfig(ethereum);
-  }, [isTestEnv, ethereum]);
+    return isTestEnv ? mockConfig : realWalletConfig;
+  }, [isTestEnv]);
 
   return (
     <WagmiProvider reconnectOnMount config={walletConfig}>
@@ -133,9 +131,9 @@ export function GeoConnectButton() {
         const wallet = wallets.find(wallet => wallet.address === userWallet.address);
 
         if (wallet) {
-          console.log('wallet', wallet);
-          await setActiveWallet(wallet);
           await Cookie.onConnectionChange({ type: 'connect', address: wallet.address as `0x${string}` });
+          console.log('setting active wallet');
+          await setActiveWallet(wallet);
         }
 
         resetOnboarding();
@@ -149,8 +147,8 @@ export function GeoConnectButton() {
   };
 
   const { logout } = useLogout({
-    onSuccess: async () => {
-      await Cookie.onConnectionChange({ type: 'disconnect' });
+    onSuccess: () => {
+      Cookie.onConnectionChange({ type: 'disconnect' });
       resetOnboarding();
     },
   });
@@ -173,9 +171,7 @@ export function GeoConnectButton() {
 
   return (
     <button
-      onClick={async () => {
-        await logout();
-      }}
+      onClick={logout}
       className="m-0 flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-0"
     >
       <p className="text-button">Sign out</p>

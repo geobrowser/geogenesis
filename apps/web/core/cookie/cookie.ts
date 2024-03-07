@@ -25,7 +25,5 @@ export async function onConnectionChange(connectionChange: ConnectionChangeArgs)
       break;
   }
 
-  return connectionChange.type === 'connect'
-    ? { [WALLET_ADDRESS]: connectionChange.address }
-    : { [WALLET_ADDRESS]: null };
+  return connectionChange.type === 'connect' ? connectionChange.address : null;
 }

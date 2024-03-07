@@ -118,7 +118,6 @@ importers:
       prettier-plugin-tailwindcss: ^0.5.3
       raw-body: ^2.5.1
       react: ^18.2.0
-      react-cookie: ^7.1.0
       react-dom: ^18.2.0
       react-error-boundary: ^4.0.10
       react-medium-image-zoom: ^5.1.3
@@ -200,7 +199,6 @@ importers:
       pluralize: 8.0.0
       raw-body: 2.5.1
       react: 18.2.0
-      react-cookie: 7.1.0_react@18.2.0
       react-dom: 18.2.0_react@18.2.0
       react-error-boundary: 4.0.10_react@18.2.0
       react-medium-image-zoom: 5.1.3_biqbaboplfbrettd7655fr4n2y
@@ -6511,10 +6509,6 @@ packages:
       '@types/node': 17.0.45
     dev: true
 
-  /@types/cookie/0.6.0:
-    resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
-    dev: false
-
   /@types/cors/2.8.17:
     resolution: {integrity: sha512-8CGDvrBj1zgo2qE+oS3pOCyYNqCPryMWY2bGfwA0dcfopWGgxs+78df0Rs3rc9THP4JkOhLsAa+15VdpAqkcUA==}
     dependencies:
@@ -6577,13 +6571,6 @@ packages:
 
   /@types/har-format/1.2.15:
     resolution: {integrity: sha512-RpQH4rXLuvTXKR0zqHq3go0RVXYv/YVqv4TnPH95VbwUxZdQlK1EtcMvQvMpDngHbt13Csh9Z4qT9AbkiQH5BA==}
-    dev: false
-
-  /@types/hoist-non-react-statics/3.3.5:
-    resolution: {integrity: sha512-SbcrWzkKBw2cdwRTwQAswfpB9g9LJWfjtUeW/jvNwbhC8cpmmNYVePa+ncbUe0rGTQ7G3Ff6mYUN2VMfLVr+Sg==}
-    dependencies:
-      '@types/react': 18.2.33
-      hoist-non-react-statics: 3.3.2
     dev: false
 
   /@types/istanbul-lib-coverage/2.0.4:
@@ -10633,11 +10620,6 @@ packages:
   /cookie/0.5.0:
     resolution: {integrity: sha512-YZ3GUyn/o8gfKJlnlX7g7xq4gyO6OSuhGPKaaGssGB2qgDUS0gPgtTvoyZLTt9Ab6dC4hfc9dV5arkvc/OCmrw==}
     engines: {node: '>= 0.6'}
-
-  /cookie/0.6.0:
-    resolution: {integrity: sha512-U71cyTamuh1CRNCfpGY6to28lxvNwPG4Guz/EVjgf3Jmzv0vlDp1atT9eS5dDjMYHucpHbWns6Lwf3BKz6svdw==}
-    engines: {node: '>= 0.6'}
-    dev: false
 
   /cookiejar/2.1.3:
     resolution: {integrity: sha512-JxbCBUdrfr6AQjOXrxoTvAMJO4HBTUIlBzslcJPAz+/KT8yk53fXun51u+RenNYvad/+Vc2DIz5o9UxlCDymFQ==}
@@ -19861,17 +19843,6 @@ packages:
       strip-json-comments: 2.0.1
     dev: false
 
-  /react-cookie/7.1.0_react@18.2.0:
-    resolution: {integrity: sha512-n2+Gt07/xxuShXary+SImk1sw5l7a1UguQOQEN55YewEW5LoA0opbR4nbeo8sY6OYwR37iCFJtqJ0AGEywqAtg==}
-    peerDependencies:
-      react: '>= 16.3.0'
-    dependencies:
-      '@types/hoist-non-react-statics': 3.3.5
-      hoist-non-react-statics: 3.3.2
-      react: 18.2.0
-      universal-cookie: 7.1.0
-    dev: false
-
   /react-device-detect/2.2.3_biqbaboplfbrettd7655fr4n2y:
     resolution: {integrity: sha512-buYY3qrCnQVlIFHrC5UcUoAj7iANs/+srdkwsnNjI7anr3Tt7UY6MqNxtMLlr0tMBied0O49UZVK8XKs3ZIiPw==}
     peerDependencies:
@@ -23022,13 +22993,6 @@ packages:
     resolution: {integrity: sha512-N+TuJHJ3PjmzIRCE1d2N3VN4qg/P78eh/nxzwHnzpg3W2Mvf8Wvi7J1mvv6eNkb8neUeSdFSQsKna0eXVyF4+w==}
     dependencies:
       fs-monkey: 1.0.3
-    dev: false
-
-  /universal-cookie/7.1.0:
-    resolution: {integrity: sha512-LCLHwP0whxTqkBYMptW1dzNS0xxIVJmU6c51N5CfPNheVxuJW7fVxPa6MUGX7boUSyOlpMveBO96hMs5Gee6Fg==}
-    dependencies:
-      '@types/cookie': 0.6.0
-      cookie: 0.6.0
     dev: false
 
   /universalify/0.1.2:

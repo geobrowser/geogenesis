@@ -218,7 +218,6 @@ function WalletsList({ onSelect }: { onSelect: () => void }) {
   const { user } = usePrivy();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
-  // const [cookie, setCookie] = useCookies([WALLET_ADDRESS]);
 
   const addresses = wallets.map(w => w.address);
   const { data: persons, isLoading } = useQuery({
@@ -256,6 +255,7 @@ function WalletsList({ onSelect }: { onSelect: () => void }) {
         <button
           onClick={() => {
             onSelect();
+
             Cookie.onConnectionChange({ type: 'connect', address: w.address as `0x${string}` });
             setActiveWallet(w);
           }}
