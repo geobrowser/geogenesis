@@ -18,6 +18,7 @@ import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
+import { Copy } from '~/design-system/icons/copy';
 import { Create } from '~/design-system/icons/create';
 import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
@@ -25,7 +26,6 @@ import { Text } from '~/design-system/text';
 import { HistoryEmpty } from '../history/history-empty';
 import { HistoryItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
-import { Copy } from '~/design-system/icons/copy';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
@@ -34,7 +34,12 @@ interface SpacePageMetadataHeaderProps {
   entityId: string;
 }
 
-export function SpacePageMetadataHeader({ spaceId, membersComponent, typeNames, entityId }: SpacePageMetadataHeaderProps) {
+export function SpacePageMetadataHeader({
+  spaceId,
+  membersComponent,
+  typeNames,
+  entityId,
+}: SpacePageMetadataHeaderProps) {
   const isEditing = useUserIsEditing(spaceId);
   const [open, onOpenChange] = React.useState(false);
 
@@ -51,6 +56,7 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent, typeNames, 
     queryKey: [`space-proposals-for-space-${spaceId}`],
     queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
+    initialPageParam: 0,
   });
 
   const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
@@ -144,7 +150,8 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent, typeNames, 
         >
           <button
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
-            onClick={onCopyId}>
+            onClick={onCopyId}
+          >
             <Text variant="button" className="hover:!text-text">
               Copy ID
             </Text>

@@ -1,8 +1,8 @@
 'use client';
 
-import { QueryClient } from '@tanstack/query-core';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { CookiesProvider } from 'react-cookie';
 
 import * as React from 'react';
 
@@ -24,25 +24,29 @@ const queryClient = new QueryClient();
 
 export function Providers({ children }: Props) {
   return (
-    <PrivyProvider>
-      <QueryClientProvider client={queryClient}>
-        <WalletProvider>
-          <WagmiPrivySyncProvider />
+    <CookiesProvider defaultSetOptions={{ path: '/' }}>
+      <PrivyProvider>
+        <QueryClientProvider client={queryClient}>
+          <WalletProvider>
+            <JotaiProvider>
+              <Services.Provider>
+                <StatusBarContextProvider>
+                  <DiffProvider>
+                    <AragonSDKProvider>
+                      <ActiveProposalProvider>
+                        <WagmiPrivySyncProvider />
 
-          <JotaiProvider>
-            <Services.Provider>
-              <StatusBarContextProvider>
-                <DiffProvider>
-                  <AragonSDKProvider>
-                    <ActiveProposalProvider>{children}</ActiveProposalProvider>
-                  </AragonSDKProvider>
-                </DiffProvider>
-              </StatusBarContextProvider>
-            </Services.Provider>
-          </JotaiProvider>
-        </WalletProvider>
-        <ReactQueryDevtools initialIsOpen={false} />
-      </QueryClientProvider>
-    </PrivyProvider>
+                        {children}
+                      </ActiveProposalProvider>
+                    </AragonSDKProvider>
+                  </DiffProvider>
+                </StatusBarContextProvider>
+              </Services.Provider>
+            </JotaiProvider>
+          </WalletProvider>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </QueryClientProvider>
+      </PrivyProvider>
+    </CookiesProvider>
   );
 }

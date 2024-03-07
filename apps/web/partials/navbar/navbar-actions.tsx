@@ -1,6 +1,6 @@
 'use client';
 
-import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useSetActiveWallet } from '@privy-io/wagmi';
 import * as Popover from '@radix-ui/react-popover';
 import { useQuery } from '@tanstack/react-query';
@@ -13,6 +13,7 @@ import * as React from 'react';
 
 import { useAccount } from 'wagmi';
 
+import { Cookie, WALLET_ADDRESS } from '~/core/cookie';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -217,9 +218,9 @@ function WalletsList({ onSelect }: { onSelect: () => void }) {
   const { user } = usePrivy();
   const { wallets } = useWallets();
   const { setActiveWallet } = useSetActiveWallet();
+  // const [cookie, setCookie] = useCookies([WALLET_ADDRESS]);
 
   const addresses = wallets.map(w => w.address);
-
   const { data: persons, isLoading } = useQuery({
     queryKey: ['persons', addresses],
     queryFn: async () => {
@@ -248,22 +249,23 @@ function WalletsList({ onSelect }: { onSelect: () => void }) {
     const maybePerson = persons.get(w.address);
     const maybeUserEmail = user?.wallet?.address === w.address ? user?.email?.address : null;
     const isCurrentWallet = address === w.address;
+    const displayName = maybePerson?.name ?? maybeUserEmail ?? formatShortAddress(w.address);
 
     return (
-      <AvatarMenuItem>
+      <AvatarMenuItem key={`${w.address}-${w.connectorType}`}>
         <button
-          onClick={async () => {
+          onClick={() => {
             onSelect();
-            await setActiveWallet(w);
+            Cookie.onConnectionChange({ type: 'connect', address: w.address as `0x${string}` });
+            setActiveWallet(w);
           }}
-          key={w.address}
           className="flex w-full items-center justify-between"
         >
           <div className="flex w-full items-center gap-3">
             <div className="relative h-8 w-8 overflow-hidden rounded-full">
-              <Avatar value={maybePerson?.address ?? w.address} avatarUrl={maybePerson?.avatarUrl} size={32} />d
+              <Avatar value={w.address} avatarUrl={maybePerson?.avatarUrl} size={32} />
             </div>
-            <p className="text-button">{maybePerson?.name ?? maybeUserEmail ?? formatShortAddress(w.address)}</p>
+            <p className="text-button">{displayName}</p>
           </div>
           {isCurrentWallet && <Check />}
         </button>

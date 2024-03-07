@@ -135,7 +135,7 @@ export function GeoConnectButton() {
         if (wallet) {
           console.log('wallet', wallet);
           await setActiveWallet(wallet);
-          // await Cookie.onConnectionChange({ type: 'connect', address: wallet.address as `0x${string}` });
+          await Cookie.onConnectionChange({ type: 'connect', address: wallet.address as `0x${string}` });
         }
 
         resetOnboarding();
@@ -150,7 +150,7 @@ export function GeoConnectButton() {
 
   const { logout } = useLogout({
     onSuccess: async () => {
-      // await Cookie.onConnectionChange({ type: 'disconnect' });
+      await Cookie.onConnectionChange({ type: 'disconnect' });
       resetOnboarding();
     },
   });

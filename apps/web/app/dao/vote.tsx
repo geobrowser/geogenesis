@@ -20,8 +20,6 @@ export function Vote({ type, onchainProposalId, children }: Props) {
   const walletConfig = useConfig();
 
   const onClick = async () => {
-    console.log('data', { type, onchainProposalId });
-
     const config = await simulateContract(walletConfig, {
       // Main voting plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
       address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,

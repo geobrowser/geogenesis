@@ -1,29 +1,41 @@
 'use client';
 
 import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { useSetActiveWallet } from '@privy-io/wagmi';
+import { useCookies } from 'react-cookie';
 
-import { useAccountEffect } from 'wagmi';
+import * as React from 'react';
 
-// This handles reconnecting the user to the wagmi store when they refresh the page.
-// Page refreshes can happen programatically either through fast refresh, data revalidation,
-// or just normal revisits to Geo.
+import { useAccount } from 'wagmi';
+
+import { WALLET_ADDRESS } from '../cookie';
+
+// @NOTE: Privy currently doesn't reconnect the wallet in wagmi correctly whenever the app
+// router reloads or revalidates server data programatically. This can happen when revalidating
+// cache data, calling router.refresh, set cookies, in dev mode with fast-refresh, etc.
+//
+// The privy integration isn't open source so we're can't inspect what's actually going wrong.
+// Hopefully they eventually fix this and we don't have to manually reconnect the wallet.
 export function WagmiPrivySyncProvider() {
-  const { user } = usePrivy();
+  const { address } = useAccount();
   const { wallets } = useWallets();
+  const { setActiveWallet } = useSetActiveWallet();
+  const [cookie] = useCookies([WALLET_ADDRESS]);
 
-  useAccountEffect({
-    onConnect: async wallet => {
-      if (wallet.address === user?.wallet?.address) {
-        console.log('connected effect', { wallet, wallets, isReconnected: wallet.isReconnected });
-        // await Cookie.onConnectionChange({ type: 'connect', address: wallet.address });
-        // await setActiveWallet(wallets[0]);
+  const walletForConnectedAddress = React.useMemo(() => {
+    return wallets.find(w => w.address === cookie.walletAddress);
+  }, [cookie.walletAddress, wallets]);
+
+  React.useEffect(() => {
+    if (cookie.walletAddress !== address) {
+      if (walletForConnectedAddress) {
+        (async () => {
+          console.log('Geo: Synchronizing selected wallet with wagmi x Privy', walletForConnectedAddress);
+          await setActiveWallet(walletForConnectedAddress);
+        })();
       }
-    },
-    onDisconnect: async () => {
-      console.log('disconnected effect');
-      // await Cookie.onConnectionChange({ type: 'disconnect' });
-    },
-  });
+    }
+  }, [cookie.walletAddress, address, walletForConnectedAddress]);
 
   return null;
 }

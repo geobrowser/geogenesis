@@ -24,4 +24,8 @@ export async function onConnectionChange(connectionChange: ConnectionChangeArgs)
       cookies().delete(WALLET_ADDRESS);
       break;
   }
+
+  return connectionChange.type === 'connect'
+    ? { [WALLET_ADDRESS]: connectionChange.address }
+    : { [WALLET_ADDRESS]: null };
 }
