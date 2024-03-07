@@ -6,10 +6,8 @@ import { Environment } from '../environment';
 import { graphql } from './subgraph/graphql';
 
 const getFetchUserProposalCountQuery = (createdBy: string) => {
-  const where = [`createdById: { equalTo: "${createdBy}" }`];
-
   return `query {
-    proposals(filter: {${where}}) {
+    proposals(filter: { createdById: { equalTo: "${createdBy}" } }) {
       totalCount
     }
   }`;
