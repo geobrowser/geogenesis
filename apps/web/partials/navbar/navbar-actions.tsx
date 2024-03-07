@@ -29,6 +29,7 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { Check } from '~/design-system/icons/check';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
+import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
 import { Menu } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -113,19 +114,22 @@ export function NavbarActions() {
               <AvatarMenuItem isCurrentlySelected>
                 <button
                   onClick={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: true })}
-                  className="flex w-full items-center gap-3"
+                  className="flex w-full items-center justify-between"
                 >
-                  <div className="relative h-8 w-8 overflow-hidden rounded-full">
-                    <Avatar value={profile?.account ?? address} avatarUrl={person?.avatarUrl} size={32} />
+                  <div className="flex w-full items-center gap-3">
+                    <div className="relative h-8 w-8 overflow-hidden rounded-full">
+                      <Avatar value={profile?.account ?? address} avatarUrl={person?.avatarUrl} size={32} />
+                    </div>
+                    <div>
+                      <p className="text-text">{person?.name ?? formatShortAddress(user.wallet.address)}</p>
+                      {user.email ? (
+                        <p className="text-sm text-grey-04">{user.email.address}</p>
+                      ) : (
+                        <p className="text-sm text-grey-04">{formatShortAddress(address ?? user.wallet.address)}</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-text">{person?.name ?? formatShortAddress(user.wallet.address)}</p>
-                    {user.email ? (
-                      <p className="text-sm text-grey-04">{user.email.address}</p>
-                    ) : (
-                      <p className="text-sm text-grey-04">{formatShortAddress(address ?? user.wallet.address)}</p>
-                    )}
-                  </div>
+                  <RightArrowLong color="grey-04" />
                 </button>
               </AvatarMenuItem>
               {!person && profile ? (
@@ -177,7 +181,7 @@ export function NavbarActions() {
               onClick={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: false })}
             >
               <LeftArrowLong color="grey-04" />
-              <p>Switch profiles</p>
+              <p>Back</p>
             </button>
 
             <AvatarMenuItemsContainer>
