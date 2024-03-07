@@ -59,10 +59,6 @@ export class CouldNotGrantRoleError extends Error {
   _tag: 'CouldNotGrantRoleError' = 'CouldNotGrantRoleError';
 }
 
-export class CouldNotWriteOnchainProfileError extends Error {
-  _tag: 'CouldNotWriteOnchainProfileError' = 'CouldNotWriteOnchainProfileError';
-}
-
 export class InvalidStreamConfigurationError extends Error {
   _tag: 'InvalidStreamConfigurationError' = 'InvalidStreamConfigurationError';
 }

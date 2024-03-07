@@ -61,9 +61,6 @@ CREATE TABLE public.onchain_profiles (
     created_at_block integer NOT NULL
 );
 
--- There's the onchain profile
--- There's the Geo person entity that relates to the profile
-
 -- ALTER TABLE
 --     public.geo_entities
 -- ADD
