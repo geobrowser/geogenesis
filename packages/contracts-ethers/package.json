@@ -1,0 +1,34 @@
+{
+  "name": "@aragon/simple-storage-ethers",
+  "version": "1.0.0",
+  "description": "Plugin contract definitions for ethers.js",
+  "main": "dist/bundle-cjs.js",
+  "module": "dist/bundle-esm.js",
+  "types": "dist/bundle.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build:contracts": "cd ../contracts && yarn build",
+    "build": "find ../contracts/artifacts/src/ -name '*.json' -type f | grep -v '.dbg.json' | xargs typechain --target=ethers-v5 --out-dir ./types",
+    "build:npm": "rollup --config rollup.config.ts",
+    "prepublishOnly": "yarn build:contracts && yarn build && yarn build:npm",
+    "clean": "rimraf types"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aragon/osx.git"
+  },
+  "author": "",
+  "license": "AGPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/aragon/osx/issues"
+  },
+  "homepage": "https://github.com/aragon/osx#readme",
+  "devDependencies": {
+    "@typechain/ethers-v5": "^10.0.0"
+  },
+  "dependencies": {
+    "ethers": "^5.6.2"
+  }
+}

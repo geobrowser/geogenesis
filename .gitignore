@@ -7,3 +7,30 @@ build
 dist
 .env
 
+# directories
+.coverage_artifacts
+.coverage_cache
+.coverage_contracts
+artifacts
+build
+cache
+coverage
+dist
+node_modules
+typechain
+
+# files
+*.env
+*.log
+.DS_Store
+.pnp.*
+coverage.json
+
+packages/contracts/plugin-repo-info-dev.json
+
+packages/subgraph/deploy-output.txt
+packages/subgraph/subgraph.yaml
+packages/subgraph/tests/.latest.json
+packages/subgraph/tests/helpers/extended-schema.ts
+
+*.bkp
