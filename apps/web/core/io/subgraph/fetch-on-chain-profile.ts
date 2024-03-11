@@ -1,8 +1,10 @@
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
+import { getAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
+import { OnchainProfile } from '~/core/types';
 
 import { graphql } from './graphql';
 
@@ -13,12 +15,12 @@ export interface FetchOnchainProfileOptions {
 
 interface OnchainGeoProfile {
   id: string;
-  homeSpace: string;
-  account: string;
+  homeSpaceId: string;
+  accountId: string;
 }
 
 interface NetworkResult {
-  geoProfiles: OnchainGeoProfile[];
+  onchainProfiles: { nodes: OnchainGeoProfile[] };
 }
 
 // We fetch for geoEntities -> name because the id of the wallet entity might not be the
@@ -28,20 +30,22 @@ function getFetchProfileQuery(address: string) {
   // account_starts_with_nocase is also a hack since our subgraph does not store the account the same
   // way as the profiles. Profiles are a string but `createdBy` in our subgraph is stored as Bytes.
   return `query {
-    geoProfiles(where: {account_starts_with_nocase: "${address}"} first: 1) {
-      id
-      homeSpace
-      account
+    onchainProfiles(filter: { accountId: { equalTo: "${getAddress(address)}" } } first: 1) {
+      nodes {
+        id
+        accountId
+        homeSpaceId
+      }
     }
   }`;
 }
 
-export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): Promise<OnchainGeoProfile | null> {
+export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): Promise<OnchainProfile | null> {
   const queryId = uuid();
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
-    endpoint: config.profileSubgraph,
+    endpoint: config.api,
     query: getFetchProfileQuery(options.address),
     signal: options?.signal,
   });
@@ -70,7 +74,9 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
           );
 
           return {
-            geoProfiles: [],
+            onchainProfiles: {
+              nodes: [],
+            },
           };
         default:
           console.error(
@@ -78,7 +84,9 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
           );
 
           return {
-            geoProfiles: [],
+            onchainProfiles: {
+              nodes: [],
+            },
           };
       }
     }
@@ -88,9 +96,9 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  if (result.geoProfiles.length === 0) {
+  if (result.onchainProfiles.nodes.length === 0) {
     return null;
   }
 
-  return result.geoProfiles[0];
+  return result.onchainProfiles.nodes[0];
 }

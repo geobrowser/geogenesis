@@ -11,6 +11,7 @@ import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import { populateOnchainProfiles } from './profiles/populate-onchain-profiles';
 import { groupProposalsByType, mapContentProposalsToSchema } from './proposals/map-proposals';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { slog } from './utils';
@@ -27,6 +28,7 @@ import {
   ZodEditorsAddedStreamResponse,
   ZodEntryStreamResponse,
   ZodGovernancePluginsCreatedStreamResponse,
+  ZodOnchainProfilesRegisteredStreamResponse,
   ZodProposalStreamResponse,
   ZodRoleChangeStreamResponse,
   ZodSpacePluginCreatedStreamResponse,
@@ -194,6 +196,23 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
           const proposalResponse = ZodProposalStreamResponse.safeParse(jsonOutput);
           const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
+          const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
+
+          if (profilesRegistered.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${profilesRegistered.data.profilesRegistered.length} profiles to DB`,
+            });
+
+            yield* _(populateOnchainProfiles(profilesRegistered.data.profilesRegistered, timestamp, blockNumber));
+
+            slog({
+              requestId: message.cursor,
+              message: `Profiles written successfully`,
+            });
+          }
 
           /**
            * @TODO: De-duplicate any spaces being added with both the space plugin governance

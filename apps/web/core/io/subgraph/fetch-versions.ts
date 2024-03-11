@@ -30,25 +30,6 @@ const getVersionsQuery = (entityId: string, offset: number, proposalId?: string)
           id
           name
         }
-        actions {
-          nodes {
-            id
-            actionType
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue
-            numberValue
-            stringValue
-            valueType
-            valueId
-          }
-        }
         tripleVersions {
           nodes {
             triple {
@@ -158,7 +139,7 @@ export async function fetchVersions({
   const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
 
   return versions.map(v => {
-    const networkTriples = v.tripleVersions.nodes.map(n => n.triple);
+    const networkTriples = v.tripleVersions.nodes.flatMap(tv => tv.triple);
 
     return {
       ...v,
@@ -171,7 +152,6 @@ export async function fetchVersions({
         address: v.createdById as `0x${string}`,
         profileLink: null,
       },
-      actions: fromNetworkActions(v.actions.nodes, v.spaceId),
       triples: fromNetworkTriples(networkTriples),
     };
   });

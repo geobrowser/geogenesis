@@ -11,20 +11,19 @@ import { SubstreamVersion, fromNetworkActions, fromNetworkTriples } from './netw
 
 const getVersionsQuery = (versionId: string) => `query {
   version(id: ${JSON.stringify(versionId)}) {
+    id
+    name
+    createdAt
+    createdAtBlock
+    createdById
+    spaceId
+    entity {
       id
       name
-      createdAt
-      createdAtBlock
-      createdById
-      spaceId
-      entity {
-        id
-        name
-      }
-      actions {
-        nodes {
-          id
-          actionType
+    }
+    tripleVersions {
+      nodes {
+        triple {
           attribute {
             id
             name
@@ -33,39 +32,20 @@ const getVersionsQuery = (versionId: string) => `query {
             id
             name
           }
-          entityValue
+          entityValue {
+            id
+            name
+          }
           numberValue
           stringValue
           valueType
           valueId
-        }
-      }
-      tripleVersions {
-        nodes {
-          triple {
+          space {
             id
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-            space {
-              id
-            }
           }
         }
       }
+    }
   }
 }`;
 
@@ -138,8 +118,7 @@ export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersion
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
   const maybeProfile = await fetchProfile({ address: version.createdById });
-  const networkTriples = version.tripleVersions.nodes.map(n => n.triple);
-  const spaceId = version.spaceId;
+  const networkTriples = version.tripleVersions.nodes.flatMap(tv => tv.triple);
 
   return {
     ...version,
@@ -154,7 +133,6 @@ export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersion
           address: version.createdById as `0x${string}`,
           profileLink: null,
         },
-    actions: fromNetworkActions(version.actions.nodes, spaceId),
     triples: fromNetworkTriples(networkTriples),
   };
 }
