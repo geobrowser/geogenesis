@@ -8,7 +8,7 @@ function getFetchProfileQuery(entityId: string) {
   // account_starts_with_nocase is also a hack since our subgraph does not store the account the same
   // way as the profiles. Profiles are a string but `createdBy` in our subgraph is stored as Bytes.
   return `query {
-    geoProfile(id: "${entityId}") {
+    onchainProfiles(id: "${entityId}") {
       id
       homeSpaceId
       accountId

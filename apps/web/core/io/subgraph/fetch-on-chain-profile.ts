@@ -1,6 +1,7 @@
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
+import { getAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { OnchainProfile } from '~/core/types';
@@ -19,7 +20,7 @@ interface OnchainGeoProfile {
 }
 
 interface NetworkResult {
-  geoProfiles: { nodes: OnchainGeoProfile[] };
+  onchainProfiles: { nodes: OnchainGeoProfile[] };
 }
 
 // We fetch for geoEntities -> name because the id of the wallet entity might not be the
@@ -29,7 +30,7 @@ function getFetchProfileQuery(address: string) {
   // account_starts_with_nocase is also a hack since our subgraph does not store the account the same
   // way as the profiles. Profiles are a string but `createdBy` in our subgraph is stored as Bytes.
   return `query {
-    geoProfiles(filter: { accountId: { equalTo: "${address}" } } first: 1) {
+    onchainProfiles(filter: { accountId: { equalTo: "${getAddress(address)}" } } first: 1) {
       nodes {
         id
         accountId
@@ -73,7 +74,7 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
           );
 
           return {
-            geoProfiles: {
+            onchainProfiles: {
               nodes: [],
             },
           };
@@ -83,7 +84,7 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
           );
 
           return {
-            geoProfiles: {
+            onchainProfiles: {
               nodes: [],
             },
           };
@@ -95,9 +96,9 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  if (result.geoProfiles.nodes.length === 0) {
+  if (result.onchainProfiles.nodes.length === 0) {
     return null;
   }
 
-  return result.geoProfiles.nodes[0];
+  return result.onchainProfiles.nodes[0];
 }
