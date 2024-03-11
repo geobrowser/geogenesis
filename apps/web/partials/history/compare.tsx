@@ -93,7 +93,8 @@ const Versions = () => {
 
   const changedEntityIds = Object.keys(changes);
 
-  const selectedVersionChangeCount = Action.getChangeCount(versions.selected.actions);
+  // @TODO: Fix change count
+  const selectedVersionChangeCount = 0;
 
   const selectedVersionLastEditedDate = versions.selected.createdAt * 1000;
 
@@ -114,7 +115,8 @@ const Versions = () => {
   let previousVersionLastEditedTime;
 
   if (versions.previous) {
-    previousVersionChangeCount = Action.getChangeCount(versions.previous.actions);
+    // @TODO: Fix change count
+    previousVersionChangeCount = 0;
 
     previousVersionFormattedLastEditedDate = new Date(versions.previous.createdAt * 1000).toLocaleDateString(
       undefined,
@@ -774,8 +776,6 @@ const useChangesFromVersions = (selectedVersion: string, previousVersion: string
     queryKey: [`${selectedVersion}-changes-from-${previousVersion}`],
     queryFn: () => Change.fromVersion(selectedVersion, previousVersion, subgraph),
   });
-
-  console.log('error', error);
 
   // Typescript thinks is an array
   return [data, isLoading] as const;

@@ -73,14 +73,14 @@ export function NavbarActions() {
           </AvatarMenuItem>
         ) : (
           <>
-            {profile?.homeSpace && (
+            {profile?.homeSpaceId && (
               <>
                 <AvatarMenuItem>
                   <div className="flex items-center gap-2">
                     <div className="relative h-4 w-4 overflow-hidden rounded-full">
                       <Avatar value={address} avatarUrl={person?.avatarUrl} size={16} />
                     </div>
-                    <Link prefetch={false} href={NavUtils.toSpace(profile.homeSpace)} className="text-button">
+                    <Link prefetch={false} href={NavUtils.toSpace(profile.homeSpaceId)} className="text-button">
                       Personal space
                     </Link>
                   </div>
@@ -104,12 +104,12 @@ export function NavbarActions() {
 }
 
 const avatarMenuItemStyles = cva(
-  'flex w-full select-none items-center justify-between bg-white py-2 px-3 text-button hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
+  'flex w-full select-none items-center justify-between bg-white px-3 py-2 text-button hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
   {
     variants: {
       disabled: {
         true: 'cursor-not-allowed text-grey-03',
-        false: 'cursor-pointer text-grey-04 hover:text-text hover:bg-bg',
+        false: 'cursor-pointer text-grey-04 hover:bg-bg hover:text-text',
       },
     },
     defaultVariants: {

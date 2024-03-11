@@ -76,8 +76,8 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
         </div>
         <h2 className="text-largeTitle">{person?.name ?? 'Anonymous'}</h2>
       </div>
-      {onchainProfile?.homeSpace && (
-        <Link prefetch={false} href={NavUtils.toSpace(onchainProfile.homeSpace)}>
+      {onchainProfile?.homeSpaceId && (
+        <Link prefetch={false} href={NavUtils.toSpace(onchainProfile.homeSpaceId)}>
           <SmallButton className="!bg-transparent !text-text">View personal space</SmallButton>
         </Link>
       )}

@@ -40,7 +40,7 @@ modules:
 
   - name: map_profiles_registered
     kind: map
-    initialBlock: 53752626
+    initialBlock: 48833959
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -100,7 +100,7 @@ modules:
     inputs:
       - map: map_entries_added
       - map: map_roles
-      # - map: map_profiles_registered
+      - map: map_profiles_registered
       # - map: map_spaces_created
       # - map: map_governance_plugins_created
       # - map: map_editors_added
