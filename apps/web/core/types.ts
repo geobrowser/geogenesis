@@ -193,7 +193,6 @@ export type Version = {
   createdAt: number;
   createdAtBlock: string;
   spaceId: string;
-  actions: Action[];
   triples: Triple[];
   entity: {
     id: string;

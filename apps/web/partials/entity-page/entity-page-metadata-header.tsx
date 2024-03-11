@@ -79,7 +79,8 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
                     setSelectedVersion(v.id);
                     setIsCompareOpen(true);
                   }}
-                  changeCount={Action.getChangeCount(v.actions)}
+                  // @TODO: Fix change count
+                  changeCount={0}
                   createdAt={v.createdAt}
                   createdBy={v.createdBy}
                   name={v.name}
