@@ -85,9 +85,6 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
   );
 };
 
-// @HACK: (Jan 19, 2024) Right now this query uses the subgraph. Eventually this should move
-// to the substream. Right now there's an issue with the substream where it is not correctly
-// indexing roles, so for now we are using this workaround while we fix the substream.
 const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
   if (!address) return [];
 
