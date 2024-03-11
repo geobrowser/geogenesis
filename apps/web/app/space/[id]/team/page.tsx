@@ -98,7 +98,7 @@ const getTeamMembers = async (spaceId: string) => {
     const teamMemberIndex = teamMembers.findIndex(teamMember => teamMember.entityId === entityId);
 
     const profile = profiles.find(profile => profile && profile.id === entityId);
-    const profileSpaceId = profile?.homeSpace;
+    const profileSpaceId = profile?.homeSpaceId;
 
     const isLinked = !!profileSpaceId && spaceId !== profileSpaceId;
 

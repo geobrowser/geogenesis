@@ -226,8 +226,8 @@ export type Profile = {
 
 export type OnchainProfile = {
   id: string;
-  homeSpace: string;
-  account: string;
+  homeSpaceId: string;
+  accountId: string;
 };
 
 export type AppEnv = 'development' | 'testnet' | 'production';

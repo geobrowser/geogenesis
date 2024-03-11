@@ -10,16 +10,16 @@ function getFetchProfileQuery(entityId: string) {
   return `query {
     geoProfile(id: "${entityId}") {
       id
-      homeSpace
-      account
+      homeSpaceId
+      accountId
     }
   }`;
 }
 
 interface OnchainGeoProfile {
   id: string;
-  homeSpace: string;
-  account: string;
+  homeSpaceId: string;
+  accountId: string;
 }
 
 interface NetworkResult {
@@ -30,7 +30,7 @@ export async function fetchOnchainProfileByEntityId(entityId: string): Promise<O
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
-    endpoint: config.profileSubgraph,
+    endpoint: config.api,
     query: getFetchProfileQuery(entityId),
   });
 
