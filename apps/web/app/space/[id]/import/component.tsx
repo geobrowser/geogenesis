@@ -9,8 +9,11 @@ import { usePathname } from 'next/navigation';
 import * as React from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+// import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
+import { Subgraph } from '~/core/io';
+// import { useEditable } from '~/core/state/editable-store';
 import {
   DateValue,
   Entity as EntityType,
@@ -42,17 +45,22 @@ type Props = {
   spaceId: string;
 };
 
-type SupportedValueType = 'string' | 'date' | 'url' | 'entity';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type UnsupportedValueType = 'number' | 'image';
+export type SupportedValueType = 'string' | 'date' | 'url' | 'entity';
+
+export type UnsupportedValueType = 'number' | 'image';
 
 type EntityAttributesType = Record<string, { index: number; type: SupportedValueType; name: string }>;
 
 export const Component = ({ spaceId }: Props) => {
+  // const { isEditor } = useAccessControl(spaceId);
+  // const { editable } = useEditable();
+  // const isEditMode = isEditor && editable;
+
   const pathname = usePathname();
   const spacePath = pathname?.split('/import')[0] ?? '/spaces';
   const { create } = useActionsStore(spaceId);
 
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [step, setStep] = useState<string>('step1');
   const [entityType, setEntityType] = useState<EntityType | undefined>(undefined);
   const { supportedAttributes, unsupportedAttributes } = useMemo(() => getAttributes(entityType), [entityType]);
@@ -103,6 +111,7 @@ export const Component = ({ spaceId }: Props) => {
   }, []);
 
   const handleReset = useCallback(() => {
+    setStep('step1');
     setEntityType(undefined);
     setEntityNameIndex(undefined);
     setEntityAttributes({});
@@ -110,10 +119,41 @@ export const Component = ({ spaceId }: Props) => {
     setRecords([]);
   }, []);
 
-  const handleGenerateActions = useCallback(() => {
+  const handleGenerateActions = useCallback(async () => {
+    setIsLoading(true);
+
     const [, ...entities] = records;
 
-    const generateActions = () => {
+    const generateActions = async () => {
+      const attributes = Object.keys(entityAttributes);
+
+      const relationAttributes = Object.values(entityAttributes).filter(({ type }) => type === 'entity');
+      const relatedEntityIdsSet: Set<string> = new Set();
+
+      entities.forEach(entity => {
+        relationAttributes.forEach(relation => {
+          const values = entity[relation.index].split(',');
+          values.forEach(value => {
+            if (!relatedEntityIdsSet.has(value)) {
+              relatedEntityIdsSet.add(value);
+            }
+          });
+        });
+      });
+
+      const relatedEntityIds: Array<string> = [...relatedEntityIdsSet.values()];
+      const relatedEntities = await Promise.all(
+        relatedEntityIds.map((entityId: string) => {
+          return Subgraph.fetchEntity({ id: entityId });
+        })
+      );
+
+      const filteredRelatedEntities: Array<EntityType> = relatedEntities.filter(
+        entity => entity !== null
+      ) as Array<EntityType>;
+
+      const relatedEntitiesMap = new Map(filteredRelatedEntities.map(entity => [entity.id, entity.name ?? '']));
+
       entities.forEach(entity => {
         const newEntityId = entityIdIndex ? entity[entityIdIndex] : ID.createEntityId();
 
@@ -152,7 +192,7 @@ export const Component = ({ spaceId }: Props) => {
         );
 
         // Create entity attribute values
-        Object.keys(entityAttributes).forEach(attributeId => {
+        attributes.forEach(attributeId => {
           if (entityAttributes[attributeId]?.type === 'date') {
             const date = dayjs.utc(entity[entityAttributes[attributeId].index], 'MM/DD/YYYY');
 
@@ -183,20 +223,24 @@ export const Component = ({ spaceId }: Props) => {
               })
             );
           } else if (entityAttributes[attributeId]?.type === 'entity') {
-            create(
-              Triple.withId({
-                space: spaceId,
-                entityId: newEntityId,
-                entityName: entity[entityNameIndex],
-                attributeId,
-                attributeName: entityAttributes[attributeId]?.name ?? '',
-                value: {
-                  type: 'entity',
-                  id: entity[entityAttributes[attributeId].index],
-                  name: '',
-                } as EntityValue,
-              })
-            );
+            const values = entity[entityAttributes[attributeId].index].split(',');
+
+            values.forEach(value => {
+              create(
+                Triple.withId({
+                  space: spaceId,
+                  entityId: newEntityId,
+                  entityName: entity[entityNameIndex],
+                  attributeId,
+                  attributeName: entityAttributes[attributeId]?.name ?? '',
+                  value: {
+                    type: 'entity',
+                    id: value,
+                    name: relatedEntitiesMap.get(value),
+                  } as EntityValue,
+                })
+              );
+            });
           } else {
             create(
               Triple.withId({
@@ -217,10 +261,14 @@ export const Component = ({ spaceId }: Props) => {
       });
     };
 
-    generateActions();
+    await generateActions();
+
+    setIsLoading(false);
+    setStep('step4');
   }, [create, spaceId, records, entityNameIndex, entityIdIndex, entityType, entityAttributes]);
 
-  const isGenerationReady = !!entityType?.id && records.length > 0 && typeof entityNameIndex === 'number';
+  const isGenerationReady =
+    !!entityType?.id && records.length > 0 && typeof entityNameIndex === 'number' && step !== 'step4';
 
   return (
     <div className="mx-auto max-w-3xl space-y-16 overflow-visible">
@@ -235,7 +283,7 @@ export const Component = ({ spaceId }: Props) => {
               Reset form
             </Button>
             <Button onClick={handleGenerateActions} variant="primary" disabled={!isGenerationReady}>
-              Generate
+              {!isLoading ? 'Generate' : 'Generating...'}
             </Button>
           </div>
         </div>
@@ -244,7 +292,6 @@ export const Component = ({ spaceId }: Props) => {
         <Accordion.Item value="step1">
           <Accordion.Trigger>
             <div className="text-smallTitle">Step 1</div>
-
             <div className="mt-1 text-metadata">
               {!entityType ? `Choose a type to add data to` : `Type: ${entityType.name}`}
             </div>
@@ -307,7 +354,7 @@ export const Component = ({ spaceId }: Props) => {
           <Accordion.Trigger>
             <div className="text-smallTitle">Step 3</div>
             <div className="mt-1 text-metadata">
-              Match the type attributes with the corresponding columns in your csv and specify their data types
+              Match the attributes with the corresponding columns in your csv and specify their value types
             </div>
           </Accordion.Trigger>
           <Accordion.Content>
@@ -365,7 +412,7 @@ export const Component = ({ spaceId }: Props) => {
                 </div>
               </div>
               {supportedAttributes.map((attribute: TripleType) => (
-                <div key={attribute.id}>
+                <div key={attribute.value.id}>
                   <div className="flex items-center justify-between">
                     <div className="text-metadataMedium">
                       {attribute.value.type === 'entity' ? attribute.value.name : null}
@@ -374,20 +421,20 @@ export const Component = ({ spaceId }: Props) => {
                   </div>
                   <div className="mt-2 flex items-center gap-1">
                     <Select
-                      value={entityAttributes?.[attribute.id]?.type ?? 'string'}
+                      value={entityAttributes?.[attribute.value.id]?.type ?? 'string'}
                       onChange={(value: string) => {
                         const newEntityAttributes = {
                           ...entityAttributes,
                         };
 
                         if (value) {
-                          newEntityAttributes[attribute.id] = {
-                            ...newEntityAttributes[attribute.id],
+                          newEntityAttributes[attribute.value.id] = {
+                            ...newEntityAttributes[attribute.value.id],
                             type: value as SupportedValueType,
                           };
                         } else {
-                          newEntityAttributes[attribute.id] = {
-                            ...newEntityAttributes[attribute.id],
+                          newEntityAttributes[attribute.value.id] = {
+                            ...newEntityAttributes[attribute.value.id],
                             type: 'string' as SupportedValueType,
                           };
                         }
@@ -405,26 +452,26 @@ export const Component = ({ spaceId }: Props) => {
                           disabled: true,
                           className: `items-center`,
                         },
-                        { value: 'relation', label: 'Relation', render: <Relation />, className: `items-center` },
+                        { value: 'entity', label: 'Relation', render: <Relation />, className: `items-center` },
                       ]}
                       className="!flex-[0]"
                       position="popper"
                     />
                     <Select
-                      value={entityAttributes?.[attribute.id]?.index?.toString() ?? ''}
+                      value={entityAttributes?.[attribute.value.id]?.index?.toString() ?? ''}
                       onChange={(value: string) => {
                         const newEntityAttributes = {
                           ...entityAttributes,
                         };
 
                         if (value) {
-                          newEntityAttributes[attribute.id] = {
-                            ...newEntityAttributes[attribute.id],
+                          newEntityAttributes[attribute.value.id] = {
+                            ...newEntityAttributes[attribute.value.id],
                             index: parseInt(value, 10),
                             name: attribute.value.type === 'entity' ? attribute.value.name ?? '' : '',
                           };
                         } else {
-                          delete newEntityAttributes[attribute.id];
+                          delete newEntityAttributes[attribute.value.id];
                         }
 
                         setEntityAttributes(newEntityAttributes);
@@ -452,7 +499,7 @@ export const Component = ({ spaceId }: Props) => {
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-8">
                   {unsupportedAttributes.map((attribute: TripleType) => (
-                    <div key={attribute.id}>
+                    <div key={attribute.value.id}>
                       <div className="flex items-center justify-between">
                         <div className="text-metadataMedium">
                           {attribute.value.type === 'entity' && attribute.value.name}
@@ -461,7 +508,7 @@ export const Component = ({ spaceId }: Props) => {
                       </div>
                       <div className="mt-2 flex items-center gap-1">
                         <Select
-                          value={entityAttributes?.[attribute.id]?.type ?? 'string'}
+                          value={entityAttributes?.[attribute.value.id]?.type ?? 'string'}
                           onChange={() => null}
                           options={[
                             { value: 'string', label: 'Text', render: <Text />, className: `items-center` },
@@ -494,6 +541,13 @@ export const Component = ({ spaceId }: Props) => {
               </div>
             )}
           </Accordion.Content>
+        </Accordion.Item>
+        <Accordion.Item value="step4" disabled={step !== 'step4'}>
+          <Accordion.Trigger>
+            <div className="text-smallTitle">Step 4</div>
+            <div className="mt-1 text-metadata">Publish generated actions</div>
+          </Accordion.Trigger>
+          <Accordion.Content>Click &ldquo;Review edits&rdquo; and publish your CSV import</Accordion.Content>
         </Accordion.Item>
       </Accordion>
     </div>

@@ -19,7 +19,7 @@ import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
-import { CsvImport } from '~/design-system/icons/csv-import';
+// import { CsvImport } from '~/design-system/icons/csv-import';
 import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
@@ -155,7 +155,6 @@ export function SpacePageMetadataHeader({
               Copy ID
             </Text>
           </button>
-
           <Link
             href={`${pathname}/entities`}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
@@ -168,11 +167,11 @@ export function SpacePageMetadataHeader({
             href={`${pathname}/import`}
             className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
           >
-            <div className="flex-shrink-0">
+            {/* <div className="flex-shrink-0">
               <CsvImport />
-            </div>
+            </div> */}
             <Text variant="button" className="hover:!text-text">
-              Import CSV data
+              CSV import
             </Text>
           </Link>
         </Menu>
