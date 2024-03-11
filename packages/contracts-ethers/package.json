@@ -1,5 +1,5 @@
 {
-  "name": "@aragon/simple-storage-ethers",
+  "name": "@geogenesis/contracts-ethers",
   "version": "1.0.0",
   "description": "Plugin contract definitions for ethers.js",
   "main": "dist/bundle-cjs.js",
