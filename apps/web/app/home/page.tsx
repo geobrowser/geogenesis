@@ -88,8 +88,6 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
 const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
   if (!address) return [];
 
-  address = '0xE343E47d821a9bcE54F12237426A6ef391066b60';
-
   const substreamQuery = `{
     spaces(filter: { spaceEditorControllers: { some: { accountId: { equalTo: "${address}" } } } }) {
       nodes {
