@@ -26,11 +26,6 @@ typechain
 .pnp.*
 coverage.json
 
-packages/contracts/plugin-repo-info-dev.json
-
-packages/subgraph/deploy-output.txt
-packages/subgraph/subgraph.yaml
-packages/subgraph/tests/.latest.json
-packages/subgraph/tests/helpers/extended-schema.ts
+packages/contracts-v2/plugin-repo-info-dev.json
 
 *.bkp
