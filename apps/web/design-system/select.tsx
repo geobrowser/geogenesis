@@ -8,7 +8,7 @@ import { ChevronDownSmall } from './icons/chevron-down-small';
 type Props = {
   value: string | undefined;
   onChange: (value: string) => void;
-  options: { value: string; label: string; render?: React.ReactNode; disabled?: boolean }[];
+  options: { value: string; label: string; render?: React.ReactNode; disabled?: boolean; className?: string }[];
   variant?: 'primary' | 'secondary';
   placeholder?: React.ReactNode;
   className?: string;
@@ -66,7 +66,8 @@ export const Select = ({
               aria-label={option.label}
               className={cx(
                 'flex w-full select-none flex-col justify-center overflow-hidden truncate px-3 py-2.5 text-button text-grey-04 hover:cursor-pointer hover:bg-bg hover:text-text focus:bg-bg focus:text-text focus:outline-none [&[data-highlighted]]:bg-bg [&[data-highlighted]]:text-text',
-                option.disabled && '!cursor-not-allowed !text-opacity-25'
+                option.disabled && '!cursor-not-allowed !text-opacity-25',
+                option?.className
               )}
             >
               <SelectPrimitive.ItemText>{option.render ?? option.label}</SelectPrimitive.ItemText>
