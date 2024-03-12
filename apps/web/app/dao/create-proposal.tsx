@@ -111,7 +111,7 @@ export function CreateProposal({ type }: Props) {
             // Space plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
             to: TEST_SPACE_PLUGIN_ADDRESS,
             value: BigInt(0),
-            data: encodeAbiParameters(processProposalInputs, [1, 2, uri]),
+            data: encodeAbiParameters(processProposalInputs, [0, 0, uri]),
           },
         ],
         BigInt(0),

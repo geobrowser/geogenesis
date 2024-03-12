@@ -323,14 +323,20 @@ pub struct GeoOutput {
     pub entries: ::prost::alloc::vec::Vec<EntryAdded>,
     #[prost(message, repeated, tag="2")]
     pub role_changes: ::prost::alloc::vec::Vec<RoleChange>,
-    /// repeated GeoSpaceCreated spaces_created = 4;
-    /// repeated GeoGovernancePluginCreated governance_plugins_created = 5;
-    /// repeated EditorAdded editors_added = 6;
-    /// repeated ProposalCreated proposals_created = 7;
-    /// repeated VoteCast votes_cast = 8;
-    /// repeated SuccessorSpaceCreated successor_spaces_created = 6;
     #[prost(message, repeated, tag="3")]
     pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
+    #[prost(message, repeated, tag="4")]
+    pub spaces_created: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
+    #[prost(message, repeated, tag="5")]
+    pub governance_plugins_created: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
+    #[prost(message, repeated, tag="6")]
+    pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
+    #[prost(message, repeated, tag="7")]
+    pub proposals_created: ::prost::alloc::vec::Vec<ProposalCreated>,
+    #[prost(message, repeated, tag="8")]
+    pub votes_cast: ::prost::alloc::vec::Vec<VoteCast>,
+    #[prost(message, repeated, tag="9")]
+    pub successor_spaces_created: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
 }
 /// *
 /// Roles represent the permissions for a legacy space (See top level comment for more info

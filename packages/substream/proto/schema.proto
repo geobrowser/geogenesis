@@ -261,10 +261,10 @@ message GeoOutput {
   repeated EntryAdded entries = 1;
   repeated RoleChange role_changes = 2;
   repeated GeoProfileRegistered profiles_registered = 3;
-  // repeated GeoSpaceCreated spaces_created = 4;
-  // repeated GeoGovernancePluginCreated governance_plugins_created = 5;
-  // repeated EditorAdded editors_added = 6;
-  // repeated ProposalCreated proposals_created = 7;
-  // repeated VoteCast votes_cast = 8;
-  // repeated SuccessorSpaceCreated successor_spaces_created = 6;
+  repeated GeoSpaceCreated spaces_created = 4;
+  repeated GeoGovernancePluginCreated governance_plugins_created = 5;
+  repeated EditorAdded editors_added = 6;
+  repeated ProposalCreated proposals_created = 7;
+  repeated VoteCast votes_cast = 8;
+  repeated SuccessorSpaceCreated successor_spaces_created = 9;
 }
