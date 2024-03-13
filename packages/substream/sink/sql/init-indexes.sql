@@ -50,3 +50,6 @@ CREATE INDEX profile_entity_id
 
 CREATE INDEX profile_onchain_profile_id
     on profiles (onchain_profile_id);
+
+CREATE INDEX proposed_versions_actions
+    on actions (proposed_version_id);
