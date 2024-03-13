@@ -1,7 +1,6 @@
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
-import { getAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { OnchainProfile } from '~/core/types';
@@ -30,7 +29,7 @@ function getFetchProfileQuery(address: string) {
   // account_starts_with_nocase is also a hack since our subgraph does not store the account the same
   // way as the profiles. Profiles are a string but `createdBy` in our subgraph is stored as Bytes.
   return `query {
-    onchainProfiles(filter: { accountId: { equalTo: "${getAddress(address)}" } } first: 1) {
+    onchainProfiles(filter: { accountId: { equalTo: "${address}" } } first: 1) {
       nodes {
         id
         accountId
