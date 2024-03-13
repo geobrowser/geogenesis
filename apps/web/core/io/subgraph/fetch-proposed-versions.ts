@@ -83,7 +83,7 @@ export async function fetchProposedVersions({
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
+            `Encountered runtime graphql error in fetchProposedVersions. queryId: ${queryId} spaceId: ${spaceId} endpoint: ${endpoint} page: ${page}
             
             queryString: ${getProposedVersionsQuery(entityId, page * 10)}
             `,
