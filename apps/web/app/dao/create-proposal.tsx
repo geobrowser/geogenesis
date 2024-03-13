@@ -12,8 +12,8 @@ import { Services } from '~/core/services';
 
 import { Button } from '~/design-system/button';
 
+import { abi } from './abis/main-voting-abi';
 import { TEST_MAIN_VOTING_PLUGIN_ADDRESS, TEST_SPACE_PLUGIN_ADDRESS } from './constants';
-import { abi } from './main-voting-abi';
 
 const processProposalInputs = [
   {
@@ -80,7 +80,7 @@ export function CreateProposal({ type }: Props) {
       type: 'content',
       version: '1.0.0',
       proposalId: ID.createEntityId(),
-      name: 'Sixth proposal in the DAO',
+      name: 'Seventh proposal in the DAO',
       actions: [
         {
           entityId: ID.createEntityId(),
@@ -89,7 +89,7 @@ export function CreateProposal({ type }: Props) {
           value: {
             type: 'string',
             id: ID.createValueId(),
-            value: 'Fifth entity',
+            value: 'Seventh entity',
           },
         },
       ],

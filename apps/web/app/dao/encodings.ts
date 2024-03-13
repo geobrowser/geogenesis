@@ -1,8 +1,9 @@
 import { PluginInstallItem } from '@aragon/sdk-client-common';
 import { VotingMode } from '@geogenesis/sdk';
+import { GOVERNANCE_PLUGIN_REPO_ADDRESS, SPACE_PLUGIN_REPO_ADDRESS } from '@geogenesis/sdk/contracts';
 import { encodeAbiParameters, hexToBytes } from 'viem';
 
-import { GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS, GEO_SPACE_PLUGIN_REPO_ADDRESS, ZERO_ADDRESS } from '~/core/constants';
+import { ZERO_ADDRESS } from '~/core/constants';
 
 export function getSpacePluginInstallItem({
   firstBlockContentUri,
@@ -42,7 +43,7 @@ export function getSpacePluginInstallItem({
   ]);
 
   return {
-    id: GEO_SPACE_PLUGIN_REPO_ADDRESS,
+    id: SPACE_PLUGIN_REPO_ADDRESS,
     data: hexToBytes(encodedParams),
   };
 }
@@ -129,7 +130,7 @@ export function getGovernancePluginInstallItem(params: {
   ]);
 
   return {
-    id: GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS,
+    id: GOVERNANCE_PLUGIN_REPO_ADDRESS,
     data: hexToBytes(encodedParams),
   };
 }

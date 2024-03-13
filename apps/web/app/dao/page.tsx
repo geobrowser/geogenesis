@@ -12,8 +12,10 @@ import { Execute } from './execute';
 import { Refetch } from './refetch';
 import { Vote } from './vote';
 
+export const revalidate = 0;
+
 export default async function Page() {
-  const proposals = await fetchProposals({ spaceId: TEST_DAO_ADDRESS, tag: 'proposals' });
+  const proposals = await fetchProposals({ spaceId: TEST_DAO_ADDRESS });
 
   return (
     <div className="space-y-4">

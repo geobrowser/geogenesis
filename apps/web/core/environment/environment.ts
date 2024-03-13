@@ -36,7 +36,7 @@ export const options: Record<AppEnv, AppConfig> = {
     ipfs: 'https://api.thegraph.com/ipfs',
     membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-logs',
     profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry',
-    api: 'https://geobrowser.up.railway.app/graphql',
+    api: 'http://localhost:5001/graphql',
   },
 };
 

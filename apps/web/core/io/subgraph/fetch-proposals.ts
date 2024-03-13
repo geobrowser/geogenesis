@@ -74,7 +74,6 @@ export interface FetchProposalsOptions {
   signal?: AbortController['signal'];
   page?: number;
   first?: number;
-  tag?: string;
 }
 
 interface NetworkResult {
@@ -86,7 +85,6 @@ export async function fetchProposals({
   signal,
   page = 0,
   first = 5,
-  tag,
 }: FetchProposalsOptions): Promise<Proposal[]> {
   const queryId = uuid();
   const offset = page * first;
