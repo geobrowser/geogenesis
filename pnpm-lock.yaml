@@ -539,10 +539,16 @@ importers:
 
   packages/sdk:
     specifiers:
+      '@ethersproject/abi': ^5.6.4
+      '@ethersproject/providers': ^5.6.8
       '@geogenesis/action-schema': workspace:*
+      ethers: ^5.7.2
       typescript: ^5.1.6
     dependencies:
+      '@ethersproject/abi': 5.7.0
+      '@ethersproject/providers': 5.7.2
       '@geogenesis/action-schema': link:../action-schema
+      ethers: 5.7.2
     devDependencies:
       typescript: 5.3.3
 

@@ -17,7 +17,7 @@ binaries:
 modules:
   - name: map_entries_added
     kind: map
-    initialBlock: 36472424
+    initialBlock: 54614537
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -32,7 +32,7 @@ modules:
 
   - name: map_roles
     kind: map
-    initialBlock: 36472424
+    initialBlock: 54614537
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -40,7 +40,7 @@ modules:
 
   - name: map_profiles_registered
     kind: map
-    initialBlock: 48833959
+    initialBlock: 54614537
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -48,7 +48,7 @@ modules:
 
   - name: map_successor_spaces_created
     kind: map
-    initialBlock: 52513890
+    initialBlock: 54614537
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -56,7 +56,7 @@ modules:
 
   - name: map_spaces_created
     kind: map
-    initialBlock: 53752626
+    initialBlock: 54614537
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -64,7 +64,7 @@ modules:
 
   - name: map_governance_plugins_created
     kind: map
-    initialBlock: 53752626
+    initialBlock: 54614537
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -72,7 +72,7 @@ modules:
 
   - name: map_editors_added
     kind: map
-    initialBlock: 53752626
+    initialBlock: 54614537
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -80,7 +80,7 @@ modules:
 
   - name: map_proposals_created
     kind: map
-    initialBlock: 53752626
+    initialBlock: 54614537
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -88,7 +88,7 @@ modules:
 
   - name: map_votes_cast
     kind: map
-    initialBlock: 53752626
+    initialBlock: 54614537
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -96,7 +96,7 @@ modules:
 
   - name: geo_out
     kind: map
-    initialBlock: 36472424
+    initialBlock: 54614537
     inputs:
       - map: map_entries_added
       - map: map_roles
@@ -106,7 +106,7 @@ modules:
       - map: map_editors_added
       - map: map_proposals_created
       - map: map_votes_cast
-      - map: map_successor_spaces_created
+      # - map: map_successor_spaces_created
     output:
       type: proto:schema.GeoOutput
 

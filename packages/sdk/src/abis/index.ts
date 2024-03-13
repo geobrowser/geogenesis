@@ -1,2 +1,3 @@
-export { abi as SpaceAbi } from './space.js'
-export { abi as MainVotingAbi } from './main-voting.js'
+export { abi as SpaceAbi } from './space'
+export { abi as MainVotingAbi } from './main-voting'
+export { abi as DaoAbi } from './dao'

@@ -1,1 +1,1 @@
-export * from './src/abis/index.js'
+export * from './src/abis'
