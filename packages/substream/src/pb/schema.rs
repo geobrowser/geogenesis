@@ -351,7 +351,7 @@ pub struct GeoOutput {
     #[prost(message, repeated, tag="8")]
     pub votes_cast: ::prost::alloc::vec::Vec<VoteCast>,
     #[prost(message, repeated, tag="9")]
-    pub proposals_processed: ::prost::alloc::vec::Vec<ProposalsProcessed>,
+    pub proposals_processed: ::prost::alloc::vec::Vec<ProposalProcessed>,
     #[prost(message, repeated, tag="10")]
     pub successor_spaces_created: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
 }

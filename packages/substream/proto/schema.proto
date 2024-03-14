@@ -280,6 +280,6 @@ message GeoOutput {
   repeated EditorAdded editors_added = 6;
   repeated ProposalCreated proposals_created = 7;
   repeated VoteCast votes_cast = 8;
-  repeated ProposalsProcessed proposals_processed = 9;
+  repeated ProposalProcessed proposals_processed = 9;
   repeated SuccessorSpaceCreated successor_spaces_created = 10;
 }

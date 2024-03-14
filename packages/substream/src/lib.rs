@@ -2,7 +2,7 @@ pub mod helpers;
 mod pb;
 
 use pb::schema::{
-    DaoAction, EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
+    EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
     GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
     GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalProcessed, ProposalsCreated,
     ProposalsProcessed, RoleChange, RoleChanges, SuccessorSpaceCreated, SuccessorSpacesCreated,
@@ -356,6 +356,14 @@ fn map_proposals_created(
     Ok(ProposalsCreated { proposals })
 }
 
+/**
+ * Processed Proposals represent content that has been approved by a DAO
+ * and executed onchain.
+ *
+ * We use the content URI to represent the content that was approved. We
+ * only consume the `proposalId` in the content URI to map the processed
+ * data to an existing proposal onchain and in the sink.
+*/
 #[substreams::handlers::map]
 fn map_proposals_processed(
     block: eth::v2::Block,
