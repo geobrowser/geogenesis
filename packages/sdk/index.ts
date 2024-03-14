@@ -53,3 +53,11 @@ export type ProposalStatus =
   | 'REJECTED'
   | 'CANCELED'
   | 'EXECUTED'
+
+export {
+  getProcessGeoProposalArguments,
+  getAcceptSubspaceArguments,
+} from './src/encodings'
+
+export { createGeoId } from './src/id'
+export { createContentProposal } from './src/proposal'

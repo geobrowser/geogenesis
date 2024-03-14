@@ -1,47 +1,23 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { type ContentProposalMetadata, VoteOption } from '@geogenesis/sdk';
-import { MainVotingAbi, SpaceAbi } from '@geogenesis/sdk/abis';
-import { SpacePlugin, SpacePlugin__factory } from '@geogenesis/sdk/types';
-import { encodeAbiParameters, encodeFunctionData, stringToHex } from 'viem';
+import {
+  createContentProposal,
+  createGeoId,
+  getAcceptSubspaceArguments,
+  getProcessGeoProposalArguments,
+} from '@geogenesis/sdk';
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
 
 import { useWalletClient } from 'wagmi';
 import { prepareWriteContract, writeContract } from 'wagmi/actions';
 
 import { ZERO_ADDRESS } from '~/core/constants';
-import { ID } from '~/core/id';
 import { Services } from '~/core/services';
 
 import { Button } from '~/design-system/button';
 
-import { TEST_DAO_ADDRESS, TEST_MAIN_VOTING_PLUGIN_ADDRESS, TEST_SPACE_PLUGIN_ADDRESS } from './constants';
-
-const processProposalInputs = [
-  {
-    internalType: 'uint32',
-    name: '_blockIndex',
-    type: 'uint32',
-  },
-  {
-    internalType: 'uint32',
-    name: '_itemIndex',
-    type: 'uint32',
-  },
-  {
-    internalType: 'string',
-    name: '_contentUri',
-    type: 'string',
-  },
-] as const;
-
-const acceptSubspaceInputs = [
-  {
-    internalType: 'address',
-    name: '_dao',
-    type: 'address',
-  },
-] as const;
+import { TEST_MAIN_VOTING_PLUGIN_ADDRESS, TEST_SPACE_PLUGIN_ADDRESS } from './constants';
 
 interface Props {
   type:
@@ -56,9 +32,9 @@ interface Props {
 
 // @TODO: Add metadata to ipfs. this will include the root object. If the proposal is not a content proposal it will use
 // a new type of metadata object that has the proposal type and version object
-// 1. Create the proposal metadata for content
+// 1. Create the proposal metadata for content (DONE)
 // 2. Create the proposal metadata for a subspace
-//    - Add subspace
+//    - Add subspace (DONE)
 //    - Remove subspace
 // 3. Create the proposal metadata for a member
 //    - Add member
@@ -86,52 +62,33 @@ export function CreateProposal({ type }: Props) {
   }
 
   const onClick = async () => {
-    const proposal: ContentProposalMetadata = {
-      type: 'content',
-      version: '1.0.0',
-      proposalId: ID.createEntityId(),
-      name: 'Content proposal with viem + encodeFunctionData',
-      actions: [
-        {
-          entityId: ID.createEntityId(),
-          attributeId: SYSTEM_IDS.NAME,
-          type: 'createTriple',
-          value: {
-            type: 'string',
-            id: ID.createValueId(),
-            value: 'Content proposal with viem + encodeFunctionData',
-          },
+    const proposal = createContentProposal('Content proposal with viem + encodeFunctionData', [
+      {
+        entityId: createGeoId(),
+        attributeId: SYSTEM_IDS.NAME,
+        type: 'createTriple',
+        value: {
+          type: 'string',
+          id: createGeoId(),
+          value: 'Content proposal with viem + encodeFunctionData',
         },
-      ],
-    };
+      },
+    ]);
 
     const hash = await storageClient.uploadObject(proposal);
-    const uri = `ipfs://${hash}`;
+    const uri = `ipfs://${hash}` as const;
 
     const config = await prepareWriteContract({
       walletClient: wallet,
       address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
       abi: MainVotingAbi,
       functionName: 'createProposal',
-      args: [
-        stringToHex(uri),
-        [
-          {
-            to: TEST_SPACE_PLUGIN_ADDRESS,
-            value: BigInt(0),
-            data: encodeFunctionData({
-              abi: SpaceAbi,
-              functionName: 'processGeoProposal',
-              args: [0, 0, uri],
-            }),
-          },
-        ],
-        BigInt(0),
-        BigInt(0),
-        BigInt(0),
-        VoteOption.Yes,
-        true,
-      ],
+      // @TODO: We should abstract the proposal metadata creation and the proposal
+      // action callback args together somehow since right now you have to sync
+      // them both and ensure you're using the correct functions for each content
+      // proposal type.
+      // args: getProcessGeoProposalArguments(TEST_SPACE_PLUGIN_ADDRESS, uri),
+      args: getAcceptSubspaceArguments(TEST_SPACE_PLUGIN_ADDRESS, uri, ZERO_ADDRESS),
     });
 
     const writeResult = await writeContract(config);
