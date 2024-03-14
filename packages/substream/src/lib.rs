@@ -4,8 +4,9 @@ mod pb;
 use pb::schema::{
     DaoAction, EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
     GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
-    GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalsCreated, RoleChange, RoleChanges,
-    SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
+    GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalProcessed, ProposalsCreated,
+    ProposalsProcessed, RoleChange, RoleChanges, SuccessorSpaceCreated, SuccessorSpacesCreated,
+    VoteCast, VotesCast,
 };
 
 use substreams::store::*;
@@ -27,7 +28,7 @@ use main_voting_plugin::events::{
     MembersAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
     VoteCast as VoteCastEvent,
 };
-use space::events::SuccessorSpaceCreated as SuccessSpaceCreatedEvent;
+use space::events::{GeoProposalProcessed, SuccessorSpaceCreated as SuccessSpaceCreatedEvent};
 use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
 
 /**
@@ -339,16 +340,6 @@ fn map_proposals_created(
             if let Some(proposal_created) = ProposalCreatedEvent::match_and_decode(log) {
                 // @TODO: Should we return none if actions is empty?
                 return Some(ProposalCreated {
-                    actions: proposal_created
-                        .actions
-                        .iter()
-                        .map(|action| DaoAction {
-                            to: format_hex(&action.0),
-                            value: action.1.to_u64(),
-                            data: action.2.clone(),
-                        })
-                        .collect(),
-                    allow_failure_map: proposal_created.allow_failure_map.to_string(),
                     proposal_id: proposal_created.proposal_id.to_string(),
                     creator: format_hex(&proposal_created.creator),
                     start_time: proposal_created.start_date.to_string(),
@@ -363,6 +354,26 @@ fn map_proposals_created(
         .collect();
 
     Ok(ProposalsCreated { proposals })
+}
+
+#[substreams::handlers::map]
+fn map_proposals_processed(
+    block: eth::v2::Block,
+) -> Result<ProposalsProcessed, substreams::errors::Error> {
+    let proposals: Vec<ProposalProcessed> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(proposal_created) = GeoProposalProcessed::match_and_decode(log) {
+                return Some(ProposalProcessed {
+                    content_uri: proposal_created.content_uri,
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(ProposalsProcessed { proposals })
 }
 
 /**
@@ -407,6 +418,7 @@ fn geo_out(
     editors_added: EditorsAdded,
     proposals_created: ProposalsCreated,
     votes_cast: VotesCast,
+    geo_proposals_processed: ProposalsProcessed,
     successor_spaces_created: SuccessorSpacesCreated,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
@@ -417,6 +429,7 @@ fn geo_out(
     let editors_added = editors_added.editors;
     let proposals_created = proposals_created.proposals;
     let votes_cast = votes_cast.votes;
+    let proposals_processed = geo_proposals_processed.proposals;
     let successor_spaces_created = successor_spaces_created.spaces;
 
     Ok(GeoOutput {
@@ -428,6 +441,7 @@ fn geo_out(
         editors_added,
         proposals_created,
         votes_cast,
+        proposals_processed,
         successor_spaces_created,
     })
 }

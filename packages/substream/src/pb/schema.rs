@@ -279,11 +279,7 @@ pub struct ProposalCreated {
     pub end_time: ::prost::alloc::string::String,
     #[prost(string, tag="5")]
     pub metadata_uri: ::prost::alloc::string::String,
-    #[prost(message, repeated, tag="6")]
-    pub actions: ::prost::alloc::vec::Vec<DaoAction>,
-    #[prost(string, tag="7")]
-    pub allow_failure_map: ::prost::alloc::string::String,
-    #[prost(string, tag="8")]
+    #[prost(string, tag="6")]
     pub plugin_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -291,6 +287,25 @@ pub struct ProposalCreated {
 pub struct ProposalsCreated {
     #[prost(message, repeated, tag="1")]
     pub proposals: ::prost::alloc::vec::Vec<ProposalCreated>,
+}
+/// *
+/// Processed Proposals represent content that has been approved by a DAO
+/// and executed onchain.
+///
+/// We use the content URI to represent the content that was approved. We
+/// only consume the `proposalId` in the content URI to map the processed
+/// data to an existing proposal onchain and in the sink.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProposalProcessed {
+    #[prost(string, tag="1")]
+    pub content_uri: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProposalsProcessed {
+    #[prost(message, repeated, tag="1")]
+    pub proposals: ::prost::alloc::vec::Vec<ProposalProcessed>,
 }
 /// *
 /// Votes represent a vote on a proposal in a DAO-based space.
@@ -336,6 +351,8 @@ pub struct GeoOutput {
     #[prost(message, repeated, tag="8")]
     pub votes_cast: ::prost::alloc::vec::Vec<VoteCast>,
     #[prost(message, repeated, tag="9")]
+    pub proposals_processed: ::prost::alloc::vec::Vec<ProposalsProcessed>,
+    #[prost(message, repeated, tag="10")]
     pub successor_spaces_created: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
 }
 /// *
