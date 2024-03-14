@@ -2,9 +2,9 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { type ContentProposalMetadata, VoteOption } from '@geogenesis/sdk';
-import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { MainVotingAbi, SpaceAbi } from '@geogenesis/sdk/abis';
 import { SpacePlugin, SpacePlugin__factory } from '@geogenesis/sdk/types';
-import { encodeAbiParameters, stringToHex } from 'viem';
+import { encodeAbiParameters, encodeFunctionData, stringToHex } from 'viem';
 
 import { useWalletClient } from 'wagmi';
 import { prepareWriteContract, writeContract } from 'wagmi/actions';
@@ -90,7 +90,7 @@ export function CreateProposal({ type }: Props) {
       type: 'content',
       version: '1.0.0',
       proposalId: ID.createEntityId(),
-      name: 'Proposal with failure bitmap and space plugin as action target using typechain encoding',
+      name: 'Content proposal with viem + encodeFunctionData',
       actions: [
         {
           entityId: ID.createEntityId(),
@@ -99,7 +99,7 @@ export function CreateProposal({ type }: Props) {
           value: {
             type: 'string',
             id: ID.createValueId(),
-            value: 'Subspace proposal using typechain encoding',
+            value: 'Content proposal with viem + encodeFunctionData',
           },
         },
       ],
@@ -119,9 +119,11 @@ export function CreateProposal({ type }: Props) {
           {
             to: TEST_SPACE_PLUGIN_ADDRESS,
             value: BigInt(0),
-            data: SpacePlugin__factory.createInterface().encodeFunctionData('acceptSubspace', [
-              '0x1a39e2fe299ef8f855ce43abf7ac85d6e69e05f5',
-            ]) as `0x${string}`,
+            data: encodeFunctionData({
+              abi: SpaceAbi,
+              functionName: 'processGeoProposal',
+              args: [0, 0, uri],
+            }),
           },
         ],
         BigInt(0),
