@@ -247,6 +247,7 @@ message ProposalsCreated {
 */
 message ProposalProcessed {
   string content_uri = 1;
+  string plugin_address = 2;
 }
 
 message ProposalsProcessed {

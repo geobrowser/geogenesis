@@ -4,6 +4,7 @@ import { readPackageFromFile } from '@substreams/manifest';
 import { createSink, createStream } from '@substreams/sink';
 import { Effect, Stream } from 'effect';
 import * as db from 'zapatos/db';
+import type * as S from 'zapatos/schema';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
@@ -17,7 +18,7 @@ import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
-import { getEntryWithIpfsContent, getProposalFromMetadata } from './utils/ipfs';
+import { getEntryWithIpfsContent, getProposalFromMetadata, getProposalIdFromProcessedProposal } from './utils/ipfs';
 import { pool } from './utils/pool';
 import { mapVotes } from './votes/map-votes';
 import {
@@ -29,6 +30,7 @@ import {
   ZodEntryStreamResponse,
   ZodGovernancePluginsCreatedStreamResponse,
   ZodOnchainProfilesRegisteredStreamResponse,
+  ZodProposalProcessedStreamResponse,
   ZodProposalStreamResponse,
   ZodRoleChangeStreamResponse,
   ZodSpacePluginCreatedStreamResponse,
@@ -195,6 +197,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
           const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
           const proposalResponse = ZodProposalStreamResponse.safeParse(jsonOutput);
+          const proposalProcessedResponse = ZodProposalProcessedStreamResponse.safeParse(jsonOutput);
           const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
           const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
 
@@ -386,6 +389,92 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 })
               )
             );
+          }
+
+          if (proposalProcessedResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.log(
+              'proposalProcessedResponse',
+              JSON.stringify(proposalProcessedResponse.data.proposalsProcessed, null, 2)
+            );
+
+            /**
+             * 1. Fetch IPFS content
+             * 2. Find the proposal based on the proposalId
+             * 3. Update the proposal status to ACCEPTED
+             * 4. Write the proposal content as Versions, Triples, Entities, etc.
+             */
+            const maybeProposalIds = yield* _(
+              Effect.all(
+                proposalProcessedResponse.data.proposalsProcessed.map(proposal =>
+                  getProposalIdFromProcessedProposal({
+                    ipfsUri: proposal.contentUri,
+                    pluginAddress: proposal.pluginAddress,
+                  })
+                ),
+                {
+                  concurrency: 20,
+                }
+              )
+            );
+
+            const proposalIds = maybeProposalIds.filter(
+              (maybeProposal): maybeProposal is string => maybeProposal !== null
+            );
+
+            const maybeProposals = yield* _(
+              Effect.all(
+                proposalIds.map(id => {
+                  return Effect.tryPromise({
+                    try: () => db.selectOne('proposals', { id }).run(pool),
+                    catch: error => {
+                      slog({
+                        requestId: message.cursor,
+                        message: `Failed to read proposal from DB ${error}`,
+                        level: 'error',
+                      });
+                    },
+                  });
+                })
+              )
+            );
+
+            const proposals = maybeProposals.filter(
+              (maybeProposal): maybeProposal is S.proposals.Selectable => maybeProposal !== null
+            );
+
+            yield* _(
+              Effect.all(
+                proposals.map(proposal => {
+                  return Effect.tryPromise({
+                    try: () => db.update('proposals', { status: 'approved' }, { id: proposal.id }).run(pool),
+                    catch: () => {
+                      slog({
+                        requestId: message.cursor,
+                        message: `Failed to update proposal in DB ${proposal.id}`,
+                        level: 'error',
+                      });
+                    },
+                  });
+                })
+              )
+            );
+
+            console.log('executed proposals', proposals);
+
+            // 4. Write the proposal content as Versions, Triples, Triple Versions, Entities, etc.
+
+            // slog({
+            //   requestId: message.cursor,
+            //   message: `Processing ${proposalProcessedResponse.data.proposalsProcessed.length} processed proposals`,
+            // });
+
+            // const proposals = proposalProcessedResponse.data.proposalsProcessed;
+
+            // slog({
+            //   requestId: message.cursor,
+            //   message: `Writing ${proposals.length} processed proposals to DB`,
+            // });
           }
 
           if (votesCast.success) {

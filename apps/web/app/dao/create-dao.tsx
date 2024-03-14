@@ -21,18 +21,18 @@ export function CreateDao() {
   const client: Client = new Client(new Context(sdkContextParams));
 
   const handleCreateDao = async () => {
-    const metadata: DaoMetadata = {
-      name: 'Governance testing',
-      description: 'A personal test DAO for Hack the Planet',
-      avatar:
-        'https://legendary-digital-network-assets.s3.amazonaws.com/wp-content/uploads/2020/09/13021324/Hackers-cast-Featured.jpg',
-      links: [
-        {
-          name: 'Hackers (film) - Wikipedia',
-          url: 'https://en.wikipedia.org/wiki/Hackers_(film)',
-        },
-      ],
-    };
+    // const metadata: DaoMetadata = {
+    //   name: 'Governance testing',
+    //   description: 'A personal test DAO for Hack the Planet',
+    //   avatar:
+    //     'https://legendary-digital-network-assets.s3.amazonaws.com/wp-content/uploads/2020/09/13021324/Hackers-cast-Featured.jpg',
+    //   links: [
+    //     {
+    //       name: 'Hackers (film) - Wikipedia',
+    //       url: 'https://en.wikipedia.org/wiki/Hackers_(film)',
+    //     },
+    //   ],
+    // };
 
     if (!wallet) return;
     // const metadataUri = await client.methods.pinMetadata(metadata); // test Metadata -- change Metadata or DAO settings to summon another test DAO

@@ -19,6 +19,7 @@ import {
 } from '../zod.js';
 import { isValidAction } from './actions.js';
 import { getChecksumAddress } from './get-checksum-address.js';
+import { getSpaceForSpacePlugin } from './get-space-for-space-plugin.js';
 import { getSpaceForVotingPlugin } from './get-space-for-voting-plugin.js';
 
 class UnableToParseBase64Error extends Error {
@@ -154,11 +155,7 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry |
  */
 export function getProposalFromMetadata(
   proposal: SubstreamProposal
-): Effect.Effect<
-  ContentProposal | SubspaceProposal | MembershipProposal | null,
-  SpaceWithPluginAddressNotFoundError,
-  never
-> {
+): Effect.Effect<ContentProposal | SubspaceProposal | MembershipProposal | null, SpaceWithPluginAddressNotFoundError> {
   return Effect.gen(function* (unwrap) {
     const maybeSpaceIdForPlugin = yield* unwrap(getSpaceForVotingPlugin(getChecksumAddress(proposal.pluginAddress)));
 
@@ -285,5 +282,92 @@ export function getProposalFromMetadata(
         return mappedProposal;
       }
     }
+  });
+}
+
+class InvalidProcessedProposalContentTypeError extends Error {
+  _tag: 'InvalidProcessedProposalContentTypeError' = 'InvalidProcessedProposalContentTypeError';
+}
+
+export function getProposalIdFromProcessedProposal(processedProposal: {
+  ipfsUri: string;
+  pluginAddress: string;
+}): Effect.Effect<string | null, SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError> {
+  return Effect.gen(function* (unwrap) {
+    const maybeSpaceIdForPlugin = yield* unwrap(
+      getSpaceForSpacePlugin(getChecksumAddress(processedProposal.pluginAddress))
+    );
+
+    if (!maybeSpaceIdForPlugin) {
+      slog({
+        message: `Matching space in Proposal not found for plugin address ${processedProposal.pluginAddress}`,
+        requestId: '-1',
+      });
+
+      return null;
+    }
+
+    slog({
+      message: `Fetching IPFS content for processed proposal, ${JSON.stringify(processedProposal, null, 2)}`,
+      requestId: '-1',
+    });
+
+    const fetchIpfsContentEffect = getFetchIpfsContentEffect(processedProposal.ipfsUri);
+    const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
+
+    if (Either.isLeft(maybeIpfsContent)) {
+      const error = maybeIpfsContent.left;
+
+      switch (error._tag) {
+        case 'UnableToParseBase64Error':
+          console.error(`Unable to parse base64 string ${processedProposal.ipfsUri}`, error);
+          break;
+        case 'FailedFetchingIpfsContentError':
+          console.error(`Failed fetching IPFS content from uri ${processedProposal.ipfsUri}`, error);
+          break;
+        case 'UnableToParseJsonError':
+          console.error(`Unable to parse JSON when reading content from uri ${processedProposal.ipfsUri}`, error);
+          break;
+        case 'TimeoutException':
+          console.error(`Timed out when fetching IPFS content for uri ${processedProposal.ipfsUri}`, error);
+          break;
+        default:
+          console.error(`Unknown error when fetching IPFS content for uri ${processedProposal.ipfsUri}`, error);
+          break;
+      }
+
+      return null;
+    }
+
+    const ipfsContent = maybeIpfsContent.right;
+
+    if (!ipfsContent) {
+      return null;
+    }
+
+    const validIpfsMetadata = ZodProposalMetadata.safeParse(ipfsContent);
+
+    if (!validIpfsMetadata.success) {
+      // @TODO: Effectify error handling
+      console.error('Failed to parse IPFS metadata', validIpfsMetadata.error);
+      return null;
+    }
+
+    switch (validIpfsMetadata.data.type) {
+      case 'content':
+        const parsedContent = ZodContentProposal.safeParse(ipfsContent);
+
+        if (!parsedContent.success) {
+          return null;
+        }
+
+        return parsedContent.data.proposalId;
+    }
+
+    yield* unwrap(
+      Effect.fail(new InvalidProcessedProposalContentTypeError('Invalid processed proposal content type.'))
+    );
+
+    return null;
   });
 }

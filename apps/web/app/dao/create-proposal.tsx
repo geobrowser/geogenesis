@@ -62,15 +62,26 @@ export function CreateProposal({ type }: Props) {
   }
 
   const onClick = async () => {
-    const proposal = createContentProposal('Content proposal with viem + encodeFunctionData', [
+    const entityId = createGeoId();
+
+    const proposal = createContentProposal('Add space page to test DAO', [
       {
-        entityId: createGeoId(),
+        entityId,
         attributeId: SYSTEM_IDS.NAME,
         type: 'createTriple',
         value: {
           type: 'string',
           id: createGeoId(),
-          value: 'Content proposal with viem + encodeFunctionData',
+          value: 'Governance test space',
+        },
+      },
+      {
+        entityId,
+        attributeId: SYSTEM_IDS.TYPES,
+        type: 'createTriple',
+        value: {
+          type: 'entity',
+          id: SYSTEM_IDS.SPACE_CONFIGURATION,
         },
       },
     ]);
@@ -87,8 +98,12 @@ export function CreateProposal({ type }: Props) {
       // action callback args together somehow since right now you have to sync
       // them both and ensure you're using the correct functions for each content
       // proposal type.
-      // args: getProcessGeoProposalArguments(TEST_SPACE_PLUGIN_ADDRESS, uri),
-      args: getAcceptSubspaceArguments(TEST_SPACE_PLUGIN_ADDRESS, uri, ZERO_ADDRESS),
+      //
+      // What can happen is that you create a "CONTENT" proposal but pass a callback
+      // action that does some other action like "ADD_SUBSPACE" and it will fail since
+      // the substream won't index a mismatched proposal type and action callback args.
+      args: getProcessGeoProposalArguments(TEST_SPACE_PLUGIN_ADDRESS, uri),
+      // args: getAcceptSubspaceArguments(TEST_SPACE_PLUGIN_ADDRESS, uri, ZERO_ADDRESS),
     });
 
     const writeResult = await writeContract(config);

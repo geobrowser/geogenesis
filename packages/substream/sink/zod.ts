@@ -237,6 +237,17 @@ export const ZodProposalStreamResponse = z.object({
   proposalsCreated: z.array(ZodSubstreamProposal).min(1),
 });
 
+export const ZodProposalProcessed = z.object({
+  contentUri: z.string(),
+  pluginAddress: z.string(),
+});
+
+export type ProposalProcessed = z.infer<typeof ZodProposalProcessed>;
+
+export const ZodProposalProcessedStreamResponse = z.object({
+  proposalsProcessed: z.array(ZodProposalProcessed).min(1),
+});
+
 /**
  * Votes represent a vote on a proposal in a DAO-based space.
  *

@@ -374,6 +374,7 @@ fn map_proposals_processed(
             if let Some(proposal_created) = GeoProposalProcessed::match_and_decode(log) {
                 return Some(ProposalProcessed {
                     content_uri: proposal_created.content_uri,
+                    plugin_address: format_hex(&log.address()),
                 });
             }
 

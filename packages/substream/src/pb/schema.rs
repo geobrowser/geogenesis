@@ -300,6 +300,8 @@ pub struct ProposalsCreated {
 pub struct ProposalProcessed {
     #[prost(string, tag="1")]
     pub content_uri: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub plugin_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
