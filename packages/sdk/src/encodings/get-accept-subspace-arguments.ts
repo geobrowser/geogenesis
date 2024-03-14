@@ -25,5 +25,5 @@ export function getAcceptSubspaceArguments(
     BigInt(0),
     VoteOption.Yes,
     true,
-  ]
+  ] as const
 }

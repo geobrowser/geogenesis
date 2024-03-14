@@ -24,5 +24,5 @@ export function getProcessGeoProposalArguments(
     BigInt(0),
     VoteOption.Yes,
     true,
-  ]
+  ] as const
 }
