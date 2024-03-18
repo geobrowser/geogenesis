@@ -44,7 +44,7 @@ export function CreateDao() {
       },
       memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
       initialEditors: [
-        // getAddress(wallet.account.address),
+        getAddress(wallet.account.address),
         getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
         getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
       ], // @TODO: change to user's wallet address
@@ -55,8 +55,6 @@ export function CreateDao() {
 
     const createParams: CreateDaoParams = {
       metadataUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
-      // ensSubdomain: '',
-      // daoUri: 'https://geobrowser.io',
       plugins: [governancePluginInstallItem, spacePluginInstallItem],
     };
 
