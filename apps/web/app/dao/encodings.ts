@@ -53,8 +53,7 @@ export function getGovernancePluginInstallItem(params: {
     votingMode: VotingMode;
     supportThreshold: number;
     minParticipation: number;
-    minDuration: bigint;
-    minProposerVotingPower: bigint;
+    duration: BigInt;
   };
   initialEditors: `0x${string}`[];
   pluginUpgrader: `0x${string}`;
@@ -68,8 +67,7 @@ export function getGovernancePluginInstallItem(params: {
   //     VotingMode votingMode;
   //     uint32 supportThreshold;
   //     uint32 minParticipation;
-  //     uint64 minDuration;
-  //     uint256 minProposerVotingPower;
+  //     uint64 duration;
   // }
   // votingSettings: comes from the MainVotingPlugin
   const prepareInstallationInputs = [
@@ -92,13 +90,8 @@ export function getGovernancePluginInstallItem(params: {
         },
         {
           internalType: 'uint64',
-          name: 'minDuration',
+          name: 'duration',
           type: 'uint64',
-        },
-        {
-          internalType: 'uint256',
-          name: 'minProposerVotingPower',
-          type: 'uint256',
         },
       ],
       internalType: 'struct MajorityVotingBase.VotingSettings',

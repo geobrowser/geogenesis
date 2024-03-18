@@ -1,6 +1,6 @@
 'use client';
 
-import { Client, Context, CreateDaoParams, DaoCreationSteps, DaoMetadata } from '@aragon/sdk-client';
+import { Client, Context, CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-client';
 import { VotingMode } from '@geogenesis/sdk';
 import { getAddress } from 'viem';
 
@@ -21,25 +21,7 @@ export function CreateDao() {
   const client: Client = new Client(new Context(sdkContextParams));
 
   const handleCreateDao = async () => {
-    // const metadata: DaoMetadata = {
-    //   name: 'Governance testing',
-    //   description: 'A personal test DAO for Hack the Planet',
-    //   avatar:
-    //     'https://legendary-digital-network-assets.s3.amazonaws.com/wp-content/uploads/2020/09/13021324/Hackers-cast-Featured.jpg',
-    //   links: [
-    //     {
-    //       name: 'Hackers (film) - Wikipedia',
-    //       url: 'https://en.wikipedia.org/wiki/Hackers_(film)',
-    //     },
-    //   ],
-    // };
-
     if (!wallet) return;
-    // const metadataUri = await client.methods.pinMetadata(metadata); // test Metadata -- change Metadata or DAO settings to summon another test DAO
-
-    // const metadataUri = await new StorageClient(
-    //   Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs
-    // ).uploadObject(metadata);
 
     const spacePluginInstallItem = getSpacePluginInstallItem({
       firstBlockContentUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
@@ -49,18 +31,20 @@ export function CreateDao() {
       precedessorSpace: getAddress('0xd93A5fCf65b520BA24364682aCcf50dd2F9aC18B'), // Agriculture
     });
 
+    // const RATIO_BASE = ethers.BigNumber.from(10).pow(6); // 100% => 10**6
+    // const pctToRatio = (x: number) => RATIO_BASE.mul(x).div(100);
+
     const governancePluginConfig: Parameters<typeof getGovernancePluginInstallItem>[0] = {
       votingSettings: {
         votingMode: VotingMode.Standard,
         supportThreshold: 1, // example value
         minParticipation: 1, // example value
-        // minDuration: BigInt(60 * 60 * 24), // 1 day
-        minDuration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
-        minProposerVotingPower: BigInt(1000),
+        // duration: BigInt(60 * 60 * 24), // 1 day in seconds
+        duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
       },
-      memberAccessProposalDuration: BigInt(60 * 60 * 24), // one day in seconds
+      memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
       initialEditors: [
-        getAddress(wallet.account.address),
+        // getAddress(wallet.account.address),
         getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
         getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
       ], // @TODO: change to user's wallet address
@@ -71,13 +55,11 @@ export function CreateDao() {
 
     const createParams: CreateDaoParams = {
       metadataUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
-      ensSubdomain: '',
-      daoUri: 'https://geobrowser.io',
+      // ensSubdomain: '',
+      // daoUri: 'https://geobrowser.io',
       plugins: [governancePluginInstallItem, spacePluginInstallItem],
     };
 
-    // const estimatedGas: GasFeeEstimation = await client.estimation.createDao(createParams);
-    // console.log('estimation', estimatedGas);
     const steps = client.methods.createDao(createParams);
 
     for await (const step of steps) {

@@ -44,17 +44,6 @@ export const abi = [
   {
     inputs: [
       {
-        internalType: 'address',
-        name: 'member',
-        type: 'address',
-      },
-    ],
-    name: 'InvalidAddresslistUpdate',
-    type: 'error',
-  },
-  {
-    inputs: [
-      {
         internalType: 'uint64',
         name: 'limit',
         type: 'uint64',
@@ -65,7 +54,18 @@ export const abi = [
         type: 'uint64',
       },
     ],
-    name: 'MinDurationOutOfBounds',
+    name: 'DurationOutOfBounds',
+    type: 'error',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'member',
+        type: 'address',
+      },
+    ],
+    name: 'InvalidAddresslistUpdate',
     type: 'error',
   },
   {
@@ -201,6 +201,45 @@ export const abi = [
     inputs: [
       {
         indexed: false,
+        internalType: 'address',
+        name: 'editor',
+        type: 'address',
+      },
+    ],
+    name: 'EditorAdded',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: 'address',
+        name: 'editor',
+        type: 'address',
+      },
+    ],
+    name: 'EditorRemoved',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: 'address[]',
+        name: 'editors',
+        type: 'address[]',
+      },
+    ],
+    name: 'EditorsAdded',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
         internalType: 'uint8',
         name: 'version',
         type: 'uint8',
@@ -214,12 +253,12 @@ export const abi = [
     inputs: [
       {
         indexed: false,
-        internalType: 'address[]',
-        name: 'members',
-        type: 'address[]',
+        internalType: 'address',
+        name: 'member',
+        type: 'address',
       },
     ],
-    name: 'MembersAdded',
+    name: 'MemberAdded',
     type: 'event',
   },
   {
@@ -227,25 +266,12 @@ export const abi = [
     inputs: [
       {
         indexed: false,
-        internalType: 'address[]',
-        name: 'members',
-        type: 'address[]',
-      },
-    ],
-    name: 'MembersRemoved',
-    type: 'event',
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: true,
         internalType: 'address',
-        name: 'definingContract',
+        name: 'member',
         type: 'address',
       },
     ],
-    name: 'MembershipContractAnnounced',
+    name: 'MemberRemoved',
     type: 'event',
   },
   {
@@ -408,14 +434,8 @@ export const abi = [
       {
         indexed: false,
         internalType: 'uint64',
-        name: 'minDuration',
+        name: 'duration',
         type: 'uint64',
-      },
-      {
-        indexed: false,
-        internalType: 'uint256',
-        name: 'minProposerVotingPower',
-        type: 'uint256',
       },
     ],
     name: 'VotingSettingsUpdated',
@@ -463,12 +483,25 @@ export const abi = [
   {
     inputs: [
       {
-        internalType: 'address[]',
-        name: '_members',
-        type: 'address[]',
+        internalType: 'address',
+        name: '_account',
+        type: 'address',
       },
     ],
-    name: 'addAddresses',
+    name: 'addEditor',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: '_account',
+        type: 'address',
+      },
+    ],
+    name: 'addMember',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
@@ -601,16 +634,6 @@ export const abi = [
         type: 'uint256',
       },
       {
-        internalType: 'uint64',
-        name: '',
-        type: 'uint64',
-      },
-      {
-        internalType: 'uint64',
-        name: '',
-        type: 'uint64',
-      },
-      {
         internalType: 'enum IMajorityVoting.VoteOption',
         name: '_voteOption',
         type: 'uint8',
@@ -640,6 +663,19 @@ export const abi = [
         internalType: 'contract IDAO',
         name: '',
         type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'duration',
+    outputs: [
+      {
+        internalType: 'uint64',
+        name: '',
+        type: 'uint64',
       },
     ],
     stateMutability: 'view',
@@ -831,13 +867,8 @@ export const abi = [
           },
           {
             internalType: 'uint64',
-            name: 'minDuration',
+            name: 'duration',
             type: 'uint64',
-          },
-          {
-            internalType: 'uint256',
-            name: 'minProposerVotingPower',
-            type: 'uint256',
           },
         ],
         internalType: 'struct MajorityVotingBase.VotingSettings',
@@ -995,38 +1026,12 @@ export const abi = [
   },
   {
     inputs: [],
-    name: 'minDuration',
-    outputs: [
-      {
-        internalType: 'uint64',
-        name: '',
-        type: 'uint64',
-      },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
     name: 'minParticipation',
     outputs: [
       {
         internalType: 'uint32',
         name: '',
         type: 'uint32',
-      },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
-    name: 'minProposerVotingPower',
-    outputs: [
-      {
-        internalType: 'uint256',
-        name: '',
-        type: 'uint256',
       },
     ],
     stateMutability: 'view',
@@ -1074,12 +1079,25 @@ export const abi = [
   {
     inputs: [
       {
-        internalType: 'address[]',
-        name: '_members',
-        type: 'address[]',
+        internalType: 'address',
+        name: '_account',
+        type: 'address',
       },
     ],
-    name: 'removeAddresses',
+    name: 'removeEditor',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: '_account',
+        type: 'address',
+      },
+    ],
+    name: 'removeMember',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
@@ -1156,13 +1174,8 @@ export const abi = [
           },
           {
             internalType: 'uint64',
-            name: 'minDuration',
+            name: 'duration',
             type: 'uint64',
-          },
-          {
-            internalType: 'uint256',
-            name: 'minProposerVotingPower',
-            type: 'uint256',
           },
         ],
         internalType: 'struct MajorityVotingBase.VotingSettings',

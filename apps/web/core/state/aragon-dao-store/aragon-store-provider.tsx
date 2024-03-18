@@ -1,5 +1,6 @@
+import { SupportedNetworks } from '@aragon/osx-commons-configs';
+import { activeContractsList } from '@aragon/osx-ethers';
 import { ContextParams } from '@aragon/sdk-client';
-import { SupportedNetwork } from '@aragon/sdk-client-common';
 import { ethers } from 'ethers';
 
 import * as React from 'react';
@@ -18,11 +19,11 @@ export const AragonSDKProvider = ({ children }: { children: React.ReactNode }) =
 
   const sdkContextParams: ContextParams = useMemo(
     () => ({
-      network: SupportedNetwork.POLYGON,
+      network: SupportedNetworks.POLYGON,
       signer: ethersSigner,
       web3Providers: new ethers.providers.AlchemyProvider(137, 'Qu7BVFD8_NIRN7eTsGus0GW7LneRT4u_'),
-      daoFactoryAddress: '0x392f0FdfF3283b9f026CfFeC7f9c2De443af3E7C', // polygon mainnet dao factory address
-      ensRegistryAddress: '0x57bf333951967a0cC0afcD58FC7959Ca0Eae6905',
+      DAOFactory: activeContractsList.polygon.DAOFactory, // polygon mainnet dao factory address
+      ENSRegistry: activeContractsList.polygon.ENSRegistry,
     }),
     [ethersSigner]
   );
