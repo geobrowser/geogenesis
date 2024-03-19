@@ -8,6 +8,7 @@ import type * as S from 'zapatos/schema';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
+import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
 import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
@@ -462,19 +463,17 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
             console.log('executed proposals', proposals);
 
-            // 4. Write the proposal content as Versions, Triples, Triple Versions, Entities, etc.
+            yield* _(populateApprovedContentProposal(proposals, timestamp, blockNumber));
 
-            // slog({
-            //   requestId: message.cursor,
-            //   message: `Processing ${proposalProcessedResponse.data.proposalsProcessed.length} processed proposals`,
-            // });
+            slog({
+              requestId: message.cursor,
+              message: `Processing ${proposalProcessedResponse.data.proposalsProcessed.length} processed proposals`,
+            });
 
-            // const proposals = proposalProcessedResponse.data.proposalsProcessed;
-
-            // slog({
-            //   requestId: message.cursor,
-            //   message: `Writing ${proposals.length} processed proposals to DB`,
-            // });
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${proposals.length} processed proposals to DB`,
+            });
           }
 
           if (votesCast.success) {

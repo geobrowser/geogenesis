@@ -2,7 +2,7 @@ import type * as Schema from 'zapatos/schema';
 
 import { type OmitStrict, TripleAction, type TripleWithActionTuple } from '../types';
 import { generateActionId, generateProposalId, generateTripleId, generateVersionId } from '../utils/id';
-import type { FullEntry } from '../zod';
+import type { Action, FullEntry } from '../zod';
 
 // export function mapProfilesRegistered({
 //   profileRegistered,
@@ -172,19 +172,19 @@ export function mapSpaces(fullEntries: FullEntry[], blockNumber: number): Schema
 }
 
 export function mapTriplesWithActionType(
-  fullEntries: FullEntry[],
+  entries: { space: string; actions: Action[] }[],
   timestamp: number,
   blockNumber: number
 ): TripleWithActionTuple[] {
-  const triples: TripleWithActionTuple[] = fullEntries.flatMap(fullEntry => {
-    return fullEntry.uriData.actions.map(action => {
+  const triples: TripleWithActionTuple[] = entries.flatMap(e => {
+    return e.actions.map(action => {
       const action_type = action.type;
 
       const entity_id = action.entityId;
       const attribute_id = action.attributeId;
       const value_type = action.value.type;
       const value_id = action.value.id;
-      const space_id = fullEntry.space;
+      const space_id = e.space;
       const is_protected = false;
       const id = generateTripleId({
         space_id,

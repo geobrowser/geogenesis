@@ -29,9 +29,9 @@ export type SubspaceProposalMetadata = {
   type: 'add_subspace' | 'remove_subspace'
   version: '1.0.0'
   subspace: `0x${string}`
-  proposalId: string
   // We generate the proposal id on the client so we can pass it to the proposal
   // execution callback passed to a proposal.
+  proposalId: string
   name?: string
 }
 

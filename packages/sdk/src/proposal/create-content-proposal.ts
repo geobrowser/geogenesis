@@ -1,4 +1,4 @@
-import { Action, ContentProposalMetadata } from '../..'
+import type { Action, ContentProposalMetadata } from '../..'
 import { createGeoId } from '../id'
 
 export function createContentProposal(
