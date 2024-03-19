@@ -5,6 +5,7 @@ import { IPFS_GATEWAY } from '../constants/constants.js';
 import { SpaceWithPluginAddressNotFoundError } from '../errors.js';
 import { slog } from '../utils.js';
 import {
+  type Action,
   type ContentProposal,
   type Entry,
   type FullEntry,
@@ -292,7 +293,10 @@ class InvalidProcessedProposalContentTypeError extends Error {
 export function getProposalIdFromProcessedProposal(processedProposal: {
   ipfsUri: string;
   pluginAddress: string;
-}): Effect.Effect<string | null, SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError> {
+}): Effect.Effect<
+  { id: string; actions: Action[] } | null,
+  SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError
+> {
   return Effect.gen(function* (unwrap) {
     const maybeSpaceIdForPlugin = yield* unwrap(
       getSpaceForSpacePlugin(getChecksumAddress(processedProposal.pluginAddress))
@@ -361,7 +365,10 @@ export function getProposalIdFromProcessedProposal(processedProposal: {
           return null;
         }
 
-        return parsedContent.data.proposalId;
+        return {
+          id: parsedContent.data.proposalId,
+          actions: parsedContent.data.actions.filter(isValidAction),
+        };
     }
 
     yield* unwrap(

@@ -5,10 +5,16 @@ import type * as Schema from 'zapatos/schema';
 
 import { upsertChunked } from '../utils/db';
 import { pool } from '../utils/pool';
+import type { Action } from '../zod';
 import { mapTripleVersions } from './map-triple-versions';
+import { populateTriples } from './populate-triples';
 
 export function populateApprovedContentProposal(
   proposals: Schema.proposals.Selectable[],
+  // Since we read from IPFS to get the onchain id we also just pass in the actions
+  // so we don't have to query the DB. Also so we know we get the correct order
+  // of the actions from IPFS.
+  actions: Action[],
   timestamp: number,
   blockNumber: number
 ) {
@@ -90,6 +96,19 @@ export function populateApprovedContentProposal(
           catch: error => new Error(`Failed to insert bulk triple versions. ${(error as Error).message}`),
         }),
       ])
+    );
+
+    yield* awaited(
+      populateTriples({
+        entries: proposedVersions.map(e => ({
+          space: e.space_id,
+          actions: actions.filter(a => a.entityId === e.entity_id),
+        })),
+        blockNumber,
+        timestamp,
+        createdById: proposals[0]?.created_by_id!,
+        versions,
+      })
     );
   });
 }

@@ -23,6 +23,7 @@ import { getEntryWithIpfsContent, getProposalFromMetadata, getProposalIdFromProc
 import { pool } from './utils/pool';
 import { mapVotes } from './votes/map-votes';
 import {
+  type Action,
   type ContentProposal,
   type FullEntry,
   type MembershipProposal,
@@ -394,18 +395,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (proposalProcessedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-            console.log(
-              'proposalProcessedResponse',
-              JSON.stringify(proposalProcessedResponse.data.proposalsProcessed, null, 2)
-            );
-
             /**
              * 1. Fetch IPFS content
              * 2. Find the proposal based on the proposalId
              * 3. Update the proposal status to ACCEPTED
              * 4. Write the proposal content as Versions, Triples, Entities, etc.
              */
-            const maybeProposalIds = yield* _(
+            const maybeProposalsFromIpfs = yield* _(
               Effect.all(
                 proposalProcessedResponse.data.proposalsProcessed.map(proposal =>
                   getProposalIdFromProcessedProposal({
@@ -419,15 +415,15 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               )
             );
 
-            const proposalIds = maybeProposalIds.filter(
-              (maybeProposal): maybeProposal is string => maybeProposal !== null
+            const proposalsFromIpfs = maybeProposalsFromIpfs.filter(
+              (maybeProposal): maybeProposal is { id: string; actions: Action[] } => maybeProposal !== null
             );
 
             const maybeProposals = yield* _(
               Effect.all(
-                proposalIds.map(id => {
+                proposalsFromIpfs.map(p => {
                   return Effect.tryPromise({
-                    try: () => db.selectOne('proposals', { id }).run(pool),
+                    try: () => db.selectExactlyOne('proposals', { id: p.id }).run(pool),
                     catch: error => {
                       slog({
                         requestId: message.cursor,
@@ -461,9 +457,14 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               )
             );
 
-            console.log('executed proposals', proposals);
-
-            yield* _(populateApprovedContentProposal(proposals, timestamp, blockNumber));
+            yield* _(
+              populateApprovedContentProposal(
+                proposals,
+                proposalsFromIpfs.flatMap(p => p.actions),
+                timestamp,
+                blockNumber
+              )
+            );
 
             slog({
               requestId: message.cursor,
