@@ -20,6 +20,7 @@ import {
   mapSubspaceProposalsToSchema,
 } from './proposals/map-proposals';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
+import { mapSubspaces } from './spaces/map-subspaces';
 import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { invariant } from './utils/invariant';
@@ -79,6 +80,10 @@ export class CouldNotReadCursorError extends Error {
 
 export class CouldNotWriteSpacesError extends Error {
   _tag: 'CouldNotWriteSpacesError' = 'CouldNotWriteSpacesError';
+}
+
+export class CouldNotWriteSubspacesError extends Error {
+  _tag: 'CouldNotWriteSubspacesError' = 'CouldNotWriteSubspacesError';
 }
 
 export class CouldNotWriteProposalsError extends Error {
@@ -299,7 +304,28 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (subspacesAdded.success) {
             console.log('----------------- @BLOCK', blockNumber, '-----------------');
-            console.log('SUBSPACE ADDED', JSON.stringify(subspacesAdded.data.subspacesAdded, null, 2));
+
+            const subspaces = yield* _(
+              mapSubspaces({
+                subspacesAdded: subspacesAdded.data.subspacesAdded,
+                timestamp,
+                blockNumber,
+              })
+            );
+
+            yield* _(
+              Effect.tryPromise({
+                try: () => db.insert('space_subspaces', subspaces).run(pool),
+                catch: error => {
+                  slog({
+                    level: 'error',
+                    requestId: message.cursor,
+                    message: `Failed to write subspaces to DB ${error}`,
+                  });
+                  return new CouldNotWriteSubspacesError(String(error));
+                },
+              })
+            );
           }
 
           if (subspacesRemoved.success) {
@@ -371,8 +397,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 }
               )
             );
-
-            console.log('maybe proposals', maybeProposals.length);
 
             const proposals = maybeProposals.filter(
               (maybeProposal): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal =>

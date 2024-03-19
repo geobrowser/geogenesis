@@ -11,7 +11,7 @@ CREATE TYPE public.attribute_with_relation_value_type AS (
     type text, 
     entity_value_id text 
 );
-   
+
 CREATE TYPE public.attribute_with_unknown_value_type AS (
    type text,
    value text,

@@ -141,9 +141,12 @@ CREATE TABLE public.space_editor_controllers (
     CONSTRAINT space_editor_controllers_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
-CREATE TABLE public.subspaces (
-    id text PRIMARY KEY,
-    parent_space_id text NOT NULL REFERENCES public.spaces(id)
+CREATE TABLE public.space_subspaces (
+    subspace_id text NOT NULL REFERENCES public.spaces(id),
+    parent_space_id text NOT NULL REFERENCES public.spaces(id),
+    created_at_block integer NOT NULL,
+    created_at integer NOT NULL,
+    CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
 CREATE TABLE public.triples (
@@ -264,7 +267,7 @@ ALTER TABLE
     public.triples DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.subspaces DISABLE TRIGGER ALL;
+    public.space_subspaces DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.spaces DISABLE TRIGGER ALL;
