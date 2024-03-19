@@ -129,7 +129,7 @@ export function mapProposals({
       created_by_id: fullEntry.author,
       space_id: fullEntry.space,
       created_at: timestamp,
-      status: 'approved',
+      status: 'accepted',
       start_time: timestamp,
       end_time: timestamp,
     };

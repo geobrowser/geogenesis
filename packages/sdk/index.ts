@@ -35,6 +35,13 @@ export type SubspaceProposalMetadata = {
   name?: string
 }
 
+export type ProposalMetadata =
+  | ContentProposalMetadata
+  | MembershipProposalMetadata
+  | SubspaceProposalMetadata
+
+export type ProposalType = ProposalMetadata['type']
+
 export enum VoteOption {
   None = 0,
   Abstain = 1,
@@ -49,7 +56,7 @@ export enum VotingMode {
 
 export type ProposalStatus =
   | 'PROPOSED'
-  | 'APPROVED'
+  | 'ACCEPTED'
   | 'REJECTED'
   | 'CANCELED'
   | 'EXECUTED'
@@ -60,4 +67,4 @@ export {
 } from './src/encodings'
 
 export { createGeoId } from './src/id'
-export { createContentProposal } from './src/proposal'
+export { createContentProposal, createSubspaceProposal } from './src/proposal'

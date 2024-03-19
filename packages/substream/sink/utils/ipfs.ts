@@ -239,7 +239,10 @@ export function getProposalFromMetadata(
 
       case 'add_subspace':
       case 'remove_subspace': {
+        // @TODO: ipfs content type is not correct for non-content-type proposals
         const parsedSubspace = ZodSubspaceProposal.safeParse(ipfsContent);
+
+        console.log('ipfs content', JSON.stringify(ipfsContent, null, 2));
 
         if (!parsedSubspace.success) {
           return null;

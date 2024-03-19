@@ -310,6 +310,43 @@ pub struct ProposalsProcessed {
     pub proposals: ::prost::alloc::vec::Vec<ProposalProcessed>,
 }
 /// *
+/// Added or Removed Subspaces represent adding a space contracto to the hierarchy
+/// of the DAO-based space. This is useful to "link" Spaces together in a
+/// tree of spaces, allowing us to curate the graph of their knowledge and 
+/// permissions.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubspaceAdded {
+    #[prost(string, tag="1")]
+    pub subspace: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubspacesAdded {
+    #[prost(message, repeated, tag="1")]
+    pub subspaces: ::prost::alloc::vec::Vec<SubspaceAdded>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubspaceRemoved {
+    #[prost(string, tag="1")]
+    pub subspace: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubspacesRemoved {
+    #[prost(message, repeated, tag="1")]
+    pub subspaces: ::prost::alloc::vec::Vec<SubspaceRemoved>,
+}
+/// *
 /// Votes represent a vote on a proposal in a DAO-based space.
 ///
 /// Currently we use a simple majority voting model, where a proposal requires 51% of the
@@ -356,6 +393,10 @@ pub struct GeoOutput {
     pub proposals_processed: ::prost::alloc::vec::Vec<ProposalProcessed>,
     #[prost(message, repeated, tag="10")]
     pub successor_spaces_created: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
+    #[prost(message, repeated, tag="11")]
+    pub subspaces_added: ::prost::alloc::vec::Vec<SubspaceAdded>,
+    #[prost(message, repeated, tag="12")]
+    pub subspaces_removed: ::prost::alloc::vec::Vec<SubspaceRemoved>,
 }
 /// *
 /// Roles represent the permissions for a legacy space (See top level comment for more info

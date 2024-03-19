@@ -77,7 +77,7 @@ CREATE TABLE public.log_entries (
 );
 
 CREATE TYPE public.proposal_type as ENUM ('content', 'add_subspace', 'remove_subspace', 'add_editor', 'remove_editor', 'add_member', 'remove_member');
-CREATE TYPE public.proposal_status as ENUM ('proposed', 'approved', 'rejected', 'canceled', 'executed');
+CREATE TYPE public.proposal_status as ENUM ('proposed', 'accepted', 'rejected', 'canceled', 'executed');
 
 -- Maps to 2 or 3 onchain
 CREATE TYPE public.vote_type as ENUM ('yes', 'no');
@@ -143,8 +143,7 @@ CREATE TABLE public.space_editor_controllers (
 
 CREATE TABLE public.subspaces (
     id text PRIMARY KEY,
-    parent_space_id text NOT NULL REFERENCES public.spaces(id),
-    child_space_id text NOT NULL REFERENCES public.spaces(id)
+    parent_space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
 CREATE TABLE public.triples (
@@ -215,6 +214,20 @@ CREATE TABLE public.actions (
     -- version_id text REFERENCES public.versions(id) NOT NULL,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL
+);
+
+CREATE TYPE public.subspace_proposal_type as ENUM ('add_subspace', 'remove_subspace');
+
+-- @TODO: Some of these fields might break in a version of the protocol where
+-- indexers decide which spaces they index. A space not exist in their DB even
+-- though it exists somewhere in the global graph.
+CREATE TABLE public.proposed_subspaces (
+    id text PRIMARY KEY,
+    subspace text NOT NULL REFERENCES public.spaces(id),
+    parent_space text NOT NULL REFERENCES public.spaces(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    type subspace_proposal_type NOT NULL
 );
 
 CREATE TABLE public.triple_versions (

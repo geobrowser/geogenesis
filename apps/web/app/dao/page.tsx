@@ -30,8 +30,12 @@ export default async function Page() {
             return (
               <div key={p.id} className="py-4">
                 <p className="text-button">{p.name}</p>
-                <p>{isAwaitingExecution ? 'Pending execution' : toTitleCase(p.status)}</p>
-                <p>{isAwaitingExecution ? 'Voting concluded' : `${secondsRemaining} seconds remaining`} </p>
+                <p>{isAwaitingExecution && p.status !== 'ACCEPTED' ? 'Pending execution' : toTitleCase(p.status)}</p>
+                <p>
+                  {isAwaitingExecution || p.status === 'ACCEPTED'
+                    ? 'Voting concluded'
+                    : `${secondsRemaining} seconds remaining`}{' '}
+                </p>
                 <div className="flex items-center gap-2">
                   <p>Total votes: {p.proposalVotes.totalCount}</p>
                   <p>Yes: {p.proposalVotes.nodes.filter(p => p.vote === 'YES').length}</p>

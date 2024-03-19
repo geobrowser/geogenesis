@@ -19,13 +19,17 @@ declare module 'zapatos/schema' {
 
   /* --- enums --- */
 
-  export type proposal_status = 'approved' | 'canceled' | 'executed' | 'proposed' | 'rejected';
+  export type proposal_status = 'accepted' | 'canceled' | 'executed' | 'proposed' | 'rejected';
   export namespace every {
-    export type proposal_status = ['approved', 'canceled', 'executed', 'proposed', 'rejected'];
+    export type proposal_status = ['accepted', 'canceled', 'executed', 'proposed', 'rejected'];
   }
   export type proposal_type = 'add_editor' | 'add_member' | 'add_subspace' | 'content' | 'remove_editor' | 'remove_member' | 'remove_subspace';
   export namespace every {
     export type proposal_type = ['add_editor', 'add_member', 'add_subspace', 'content', 'remove_editor', 'remove_member', 'remove_subspace'];
+  }
+  export type subspace_proposal_type = 'add_subspace' | 'remove_subspace';
+  export namespace every {
+    export type subspace_proposal_type = ['add_subspace', 'remove_subspace'];
   }
   export type vote_type = 'no' | 'yes';
   export namespace every {
@@ -2275,6 +2279,209 @@ declare module 'zapatos/schema' {
   }
 
   /**
+   * **proposed_subspaces**
+   * - Table in database
+   */
+  export namespace proposed_subspaces {
+    export type Table = 'proposed_subspaces';
+    export interface Selectable {
+      /**
+      * **proposed_subspaces.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id: string;
+      /**
+      * **proposed_subspaces.subspace**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      subspace: string;
+      /**
+      * **proposed_subspaces.parent_space**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      parent_space: string;
+      /**
+      * **proposed_subspaces.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **proposed_subspaces.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+      /**
+      * **proposed_subspaces.type**
+      * - `subspace_proposal_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: subspace_proposal_type;
+    }
+    export interface JSONSelectable {
+      /**
+      * **proposed_subspaces.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id: string;
+      /**
+      * **proposed_subspaces.subspace**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      subspace: string;
+      /**
+      * **proposed_subspaces.parent_space**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      parent_space: string;
+      /**
+      * **proposed_subspaces.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **proposed_subspaces.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+      /**
+      * **proposed_subspaces.type**
+      * - `subspace_proposal_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: subspace_proposal_type;
+    }
+    export interface Whereable {
+      /**
+      * **proposed_subspaces.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposed_subspaces.subspace**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      subspace?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposed_subspaces.parent_space**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      parent_space?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposed_subspaces.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposed_subspaces.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposed_subspaces.type**
+      * - `subspace_proposal_type` in database
+      * - `NOT NULL`, no default
+      */
+      type?: subspace_proposal_type | db.Parameter<subspace_proposal_type> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, subspace_proposal_type | db.Parameter<subspace_proposal_type> | db.SQLFragment | db.ParentColumn>;
+    }
+    export interface Insertable {
+      /**
+      * **proposed_subspaces.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposed_subspaces.subspace**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      subspace: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposed_subspaces.parent_space**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      parent_space: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposed_subspaces.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **proposed_subspaces.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **proposed_subspaces.type**
+      * - `subspace_proposal_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: subspace_proposal_type | db.Parameter<subspace_proposal_type> | db.SQLFragment;
+    }
+    export interface Updatable {
+      /**
+      * **proposed_subspaces.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposed_subspaces.subspace**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      subspace?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposed_subspaces.parent_space**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      parent_space?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposed_subspaces.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **proposed_subspaces.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **proposed_subspaces.type**
+      * - `subspace_proposal_type` in database
+      * - `NOT NULL`, no default
+      */
+      type?: subspace_proposal_type | db.Parameter<subspace_proposal_type> | db.SQLFragment | db.SQLFragment<any, subspace_proposal_type | db.Parameter<subspace_proposal_type> | db.SQLFragment>;
+    }
+    export type UniqueIndex = 'proposed_subspaces_pkey';
+    export type Column = keyof Selectable;
+    export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
+    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQL = SQLExpression | SQLExpression[];
+  }
+
+  /**
    * **proposed_versions**
    * - Table in database
    */
@@ -3391,12 +3598,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       parent_space_id: string;
-      /**
-      * **subspaces.child_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      child_space_id: string;
     }
     export interface JSONSelectable {
       /**
@@ -3411,12 +3612,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       parent_space_id: string;
-      /**
-      * **subspaces.child_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      child_space_id: string;
     }
     export interface Whereable {
       /**
@@ -3431,12 +3626,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       parent_space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **subspaces.child_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      child_space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -3451,12 +3640,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       parent_space_id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **subspaces.child_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      child_space_id: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -3471,12 +3654,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       parent_space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **subspaces.child_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      child_space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'subspaces_pkey';
     export type Column = keyof Selectable;
@@ -4307,20 +4484,20 @@ declare module 'zapatos/schema' {
   /* --- aggregate types --- */
 
   export namespace public {  
-    export type Table = accounts.Table | actions.Table | cursors.Table | geo_entities.Table | geo_entity_types.Table | log_entries.Table | onchain_profiles.Table | profiles.Table | proposal_votes.Table | proposals.Table | proposed_versions.Table | space_admins.Table | space_editor_controllers.Table | space_editors.Table | space_editors_v2.Table | spaces.Table | subspaces.Table | triple_versions.Table | triples.Table | versions.Table;
-    export type Selectable = accounts.Selectable | actions.Selectable | cursors.Selectable | geo_entities.Selectable | geo_entity_types.Selectable | log_entries.Selectable | onchain_profiles.Selectable | profiles.Selectable | proposal_votes.Selectable | proposals.Selectable | proposed_versions.Selectable | space_admins.Selectable | space_editor_controllers.Selectable | space_editors.Selectable | space_editors_v2.Selectable | spaces.Selectable | subspaces.Selectable | triple_versions.Selectable | triples.Selectable | versions.Selectable;
-    export type JSONSelectable = accounts.JSONSelectable | actions.JSONSelectable | cursors.JSONSelectable | geo_entities.JSONSelectable | geo_entity_types.JSONSelectable | log_entries.JSONSelectable | onchain_profiles.JSONSelectable | profiles.JSONSelectable | proposal_votes.JSONSelectable | proposals.JSONSelectable | proposed_versions.JSONSelectable | space_admins.JSONSelectable | space_editor_controllers.JSONSelectable | space_editors.JSONSelectable | space_editors_v2.JSONSelectable | spaces.JSONSelectable | subspaces.JSONSelectable | triple_versions.JSONSelectable | triples.JSONSelectable | versions.JSONSelectable;
-    export type Whereable = accounts.Whereable | actions.Whereable | cursors.Whereable | geo_entities.Whereable | geo_entity_types.Whereable | log_entries.Whereable | onchain_profiles.Whereable | profiles.Whereable | proposal_votes.Whereable | proposals.Whereable | proposed_versions.Whereable | space_admins.Whereable | space_editor_controllers.Whereable | space_editors.Whereable | space_editors_v2.Whereable | spaces.Whereable | subspaces.Whereable | triple_versions.Whereable | triples.Whereable | versions.Whereable;
-    export type Insertable = accounts.Insertable | actions.Insertable | cursors.Insertable | geo_entities.Insertable | geo_entity_types.Insertable | log_entries.Insertable | onchain_profiles.Insertable | profiles.Insertable | proposal_votes.Insertable | proposals.Insertable | proposed_versions.Insertable | space_admins.Insertable | space_editor_controllers.Insertable | space_editors.Insertable | space_editors_v2.Insertable | spaces.Insertable | subspaces.Insertable | triple_versions.Insertable | triples.Insertable | versions.Insertable;
-    export type Updatable = accounts.Updatable | actions.Updatable | cursors.Updatable | geo_entities.Updatable | geo_entity_types.Updatable | log_entries.Updatable | onchain_profiles.Updatable | profiles.Updatable | proposal_votes.Updatable | proposals.Updatable | proposed_versions.Updatable | space_admins.Updatable | space_editor_controllers.Updatable | space_editors.Updatable | space_editors_v2.Updatable | spaces.Updatable | subspaces.Updatable | triple_versions.Updatable | triples.Updatable | versions.Updatable;
-    export type UniqueIndex = accounts.UniqueIndex | actions.UniqueIndex | cursors.UniqueIndex | geo_entities.UniqueIndex | geo_entity_types.UniqueIndex | log_entries.UniqueIndex | onchain_profiles.UniqueIndex | profiles.UniqueIndex | proposal_votes.UniqueIndex | proposals.UniqueIndex | proposed_versions.UniqueIndex | space_admins.UniqueIndex | space_editor_controllers.UniqueIndex | space_editors.UniqueIndex | space_editors_v2.UniqueIndex | spaces.UniqueIndex | subspaces.UniqueIndex | triple_versions.UniqueIndex | triples.UniqueIndex | versions.UniqueIndex;
-    export type Column = accounts.Column | actions.Column | cursors.Column | geo_entities.Column | geo_entity_types.Column | log_entries.Column | onchain_profiles.Column | profiles.Column | proposal_votes.Column | proposals.Column | proposed_versions.Column | space_admins.Column | space_editor_controllers.Column | space_editors.Column | space_editors_v2.Column | spaces.Column | subspaces.Column | triple_versions.Column | triples.Column | versions.Column;
+    export type Table = accounts.Table | actions.Table | cursors.Table | geo_entities.Table | geo_entity_types.Table | log_entries.Table | onchain_profiles.Table | profiles.Table | proposal_votes.Table | proposals.Table | proposed_subspaces.Table | proposed_versions.Table | space_admins.Table | space_editor_controllers.Table | space_editors.Table | space_editors_v2.Table | spaces.Table | subspaces.Table | triple_versions.Table | triples.Table | versions.Table;
+    export type Selectable = accounts.Selectable | actions.Selectable | cursors.Selectable | geo_entities.Selectable | geo_entity_types.Selectable | log_entries.Selectable | onchain_profiles.Selectable | profiles.Selectable | proposal_votes.Selectable | proposals.Selectable | proposed_subspaces.Selectable | proposed_versions.Selectable | space_admins.Selectable | space_editor_controllers.Selectable | space_editors.Selectable | space_editors_v2.Selectable | spaces.Selectable | subspaces.Selectable | triple_versions.Selectable | triples.Selectable | versions.Selectable;
+    export type JSONSelectable = accounts.JSONSelectable | actions.JSONSelectable | cursors.JSONSelectable | geo_entities.JSONSelectable | geo_entity_types.JSONSelectable | log_entries.JSONSelectable | onchain_profiles.JSONSelectable | profiles.JSONSelectable | proposal_votes.JSONSelectable | proposals.JSONSelectable | proposed_subspaces.JSONSelectable | proposed_versions.JSONSelectable | space_admins.JSONSelectable | space_editor_controllers.JSONSelectable | space_editors.JSONSelectable | space_editors_v2.JSONSelectable | spaces.JSONSelectable | subspaces.JSONSelectable | triple_versions.JSONSelectable | triples.JSONSelectable | versions.JSONSelectable;
+    export type Whereable = accounts.Whereable | actions.Whereable | cursors.Whereable | geo_entities.Whereable | geo_entity_types.Whereable | log_entries.Whereable | onchain_profiles.Whereable | profiles.Whereable | proposal_votes.Whereable | proposals.Whereable | proposed_subspaces.Whereable | proposed_versions.Whereable | space_admins.Whereable | space_editor_controllers.Whereable | space_editors.Whereable | space_editors_v2.Whereable | spaces.Whereable | subspaces.Whereable | triple_versions.Whereable | triples.Whereable | versions.Whereable;
+    export type Insertable = accounts.Insertable | actions.Insertable | cursors.Insertable | geo_entities.Insertable | geo_entity_types.Insertable | log_entries.Insertable | onchain_profiles.Insertable | profiles.Insertable | proposal_votes.Insertable | proposals.Insertable | proposed_subspaces.Insertable | proposed_versions.Insertable | space_admins.Insertable | space_editor_controllers.Insertable | space_editors.Insertable | space_editors_v2.Insertable | spaces.Insertable | subspaces.Insertable | triple_versions.Insertable | triples.Insertable | versions.Insertable;
+    export type Updatable = accounts.Updatable | actions.Updatable | cursors.Updatable | geo_entities.Updatable | geo_entity_types.Updatable | log_entries.Updatable | onchain_profiles.Updatable | profiles.Updatable | proposal_votes.Updatable | proposals.Updatable | proposed_subspaces.Updatable | proposed_versions.Updatable | space_admins.Updatable | space_editor_controllers.Updatable | space_editors.Updatable | space_editors_v2.Updatable | spaces.Updatable | subspaces.Updatable | triple_versions.Updatable | triples.Updatable | versions.Updatable;
+    export type UniqueIndex = accounts.UniqueIndex | actions.UniqueIndex | cursors.UniqueIndex | geo_entities.UniqueIndex | geo_entity_types.UniqueIndex | log_entries.UniqueIndex | onchain_profiles.UniqueIndex | profiles.UniqueIndex | proposal_votes.UniqueIndex | proposals.UniqueIndex | proposed_subspaces.UniqueIndex | proposed_versions.UniqueIndex | space_admins.UniqueIndex | space_editor_controllers.UniqueIndex | space_editors.UniqueIndex | space_editors_v2.UniqueIndex | spaces.UniqueIndex | subspaces.UniqueIndex | triple_versions.UniqueIndex | triples.UniqueIndex | versions.UniqueIndex;
+    export type Column = accounts.Column | actions.Column | cursors.Column | geo_entities.Column | geo_entity_types.Column | log_entries.Column | onchain_profiles.Column | profiles.Column | proposal_votes.Column | proposals.Column | proposed_subspaces.Column | proposed_versions.Column | space_admins.Column | space_editor_controllers.Column | space_editors.Column | space_editors_v2.Column | spaces.Column | subspaces.Column | triple_versions.Column | triples.Column | versions.Column;
   
-    export type AllBaseTables = [accounts.Table, actions.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, profiles.Table, proposal_votes.Table, proposals.Table, proposed_versions.Table, space_admins.Table, space_editor_controllers.Table, space_editors.Table, space_editors_v2.Table, spaces.Table, subspaces.Table, triple_versions.Table, triples.Table, versions.Table];
+    export type AllBaseTables = [accounts.Table, actions.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, profiles.Table, proposal_votes.Table, proposals.Table, proposed_subspaces.Table, proposed_versions.Table, space_admins.Table, space_editor_controllers.Table, space_editors.Table, space_editors_v2.Table, spaces.Table, subspaces.Table, triple_versions.Table, triples.Table, versions.Table];
     export type AllForeignTables = [];
     export type AllViews = [];
     export type AllMaterializedViews = [];
-    export type AllTablesAndViews = [accounts.Table, actions.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, profiles.Table, proposal_votes.Table, proposals.Table, proposed_versions.Table, space_admins.Table, space_editor_controllers.Table, space_editors.Table, space_editors_v2.Table, spaces.Table, subspaces.Table, triple_versions.Table, triples.Table, versions.Table];
+    export type AllTablesAndViews = [accounts.Table, actions.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, profiles.Table, proposal_votes.Table, proposals.Table, proposed_subspaces.Table, proposed_versions.Table, space_admins.Table, space_editor_controllers.Table, space_editors.Table, space_editors_v2.Table, spaces.Table, subspaces.Table, triple_versions.Table, triples.Table, versions.Table];
   }
 
 
@@ -4852,6 +5029,7 @@ declare module 'zapatos/schema' {
     "profiles": profiles.Selectable;
     "proposal_votes": proposal_votes.Selectable;
     "proposals": proposals.Selectable;
+    "proposed_subspaces": proposed_subspaces.Selectable;
     "proposed_versions": proposed_versions.Selectable;
     "space_admins": space_admins.Selectable;
     "space_editor_controllers": space_editor_controllers.Selectable;
@@ -4877,6 +5055,7 @@ declare module 'zapatos/schema' {
     "profiles": profiles.JSONSelectable;
     "proposal_votes": proposal_votes.JSONSelectable;
     "proposals": proposals.JSONSelectable;
+    "proposed_subspaces": proposed_subspaces.JSONSelectable;
     "proposed_versions": proposed_versions.JSONSelectable;
     "space_admins": space_admins.JSONSelectable;
     "space_editor_controllers": space_editor_controllers.JSONSelectable;
@@ -4902,6 +5081,7 @@ declare module 'zapatos/schema' {
     "profiles": profiles.Whereable;
     "proposal_votes": proposal_votes.Whereable;
     "proposals": proposals.Whereable;
+    "proposed_subspaces": proposed_subspaces.Whereable;
     "proposed_versions": proposed_versions.Whereable;
     "space_admins": space_admins.Whereable;
     "space_editor_controllers": space_editor_controllers.Whereable;
@@ -4927,6 +5107,7 @@ declare module 'zapatos/schema' {
     "profiles": profiles.Insertable;
     "proposal_votes": proposal_votes.Insertable;
     "proposals": proposals.Insertable;
+    "proposed_subspaces": proposed_subspaces.Insertable;
     "proposed_versions": proposed_versions.Insertable;
     "space_admins": space_admins.Insertable;
     "space_editor_controllers": space_editor_controllers.Insertable;
@@ -4952,6 +5133,7 @@ declare module 'zapatos/schema' {
     "profiles": profiles.Updatable;
     "proposal_votes": proposal_votes.Updatable;
     "proposals": proposals.Updatable;
+    "proposed_subspaces": proposed_subspaces.Updatable;
     "proposed_versions": proposed_versions.Updatable;
     "space_admins": space_admins.Updatable;
     "space_editor_controllers": space_editor_controllers.Updatable;
@@ -4977,6 +5159,7 @@ declare module 'zapatos/schema' {
     "profiles": profiles.UniqueIndex;
     "proposal_votes": proposal_votes.UniqueIndex;
     "proposals": proposals.UniqueIndex;
+    "proposed_subspaces": proposed_subspaces.UniqueIndex;
     "proposed_versions": proposed_versions.UniqueIndex;
     "space_admins": space_admins.UniqueIndex;
     "space_editor_controllers": space_editor_controllers.UniqueIndex;
@@ -5002,6 +5185,7 @@ declare module 'zapatos/schema' {
     "profiles": profiles.Column;
     "proposal_votes": proposal_votes.Column;
     "proposals": proposals.Column;
+    "proposed_subspaces": proposed_subspaces.Column;
     "proposed_versions": proposed_versions.Column;
     "space_admins": space_admins.Column;
     "space_editor_controllers": space_editor_controllers.Column;
@@ -5027,6 +5211,7 @@ declare module 'zapatos/schema' {
     "profiles": profiles.SQL;
     "proposal_votes": proposal_votes.SQL;
     "proposals": proposals.SQL;
+    "proposed_subspaces": proposed_subspaces.SQL;
     "proposed_versions": proposed_versions.SQL;
     "space_admins": space_admins.SQL;
     "space_editor_controllers": space_editor_controllers.SQL;

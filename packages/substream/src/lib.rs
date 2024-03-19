@@ -5,8 +5,8 @@ use pb::schema::{
     EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
     GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
     GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalProcessed, ProposalsCreated,
-    ProposalsProcessed, RoleChange, RoleChanges, SuccessorSpaceCreated, SuccessorSpacesCreated,
-    VoteCast, VotesCast,
+    ProposalsProcessed, RoleChange, RoleChanges, SubspaceAdded, SubspaceRemoved, SubspacesAdded,
+    SubspacesRemoved, SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
 };
 
 use substreams::store::*;
@@ -28,7 +28,10 @@ use main_voting_plugin::events::{
     MembersAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
     VoteCast as VoteCastEvent,
 };
-use space::events::{GeoProposalProcessed, SuccessorSpaceCreated as SuccessSpaceCreatedEvent};
+use space::events::{
+    GeoProposalProcessed, SubspaceAccepted, SubspaceRemoved as GeoSubspaceRemoved,
+    SuccessorSpaceCreated as SuccessSpaceCreatedEvent,
+};
 use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
 
 /**
@@ -232,6 +235,48 @@ fn map_spaces_created(
     Ok(GeoSpacesCreated { spaces })
 }
 
+#[substreams::handlers::map]
+fn map_subspaces_added(block: eth::v2::Block) -> Result<SubspacesAdded, substreams::errors::Error> {
+    let subspaces: Vec<SubspaceAdded> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(space_created) = SubspaceAccepted::match_and_decode(log) {
+                return Some(SubspaceAdded {
+                    change_type: "added".to_string(),
+                    subspace: format_hex(&space_created.subspace_dao),
+                    plugin_address: format_hex(&log.address()),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(SubspacesAdded { subspaces })
+}
+
+#[substreams::handlers::map]
+fn map_subspaces_removed(
+    block: eth::v2::Block,
+) -> Result<SubspacesRemoved, substreams::errors::Error> {
+    let subspaces: Vec<SubspaceRemoved> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(space_created) = GeoSubspaceRemoved::match_and_decode(log) {
+                return Some(SubspaceRemoved {
+                    change_type: "removed".to_string(),
+                    subspace: format_hex(&space_created.subspace_dao),
+                    plugin_address: format_hex(&log.address()),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(SubspacesRemoved { subspaces })
+}
+
 /**
  * The new DAO-based space contracts are based on Aragon's OSX architecture which uses
  * plugins to define functionality assigned to a DAO (See the top level comment for more
@@ -429,6 +474,8 @@ fn geo_out(
     votes_cast: VotesCast,
     geo_proposals_processed: ProposalsProcessed,
     successor_spaces_created: SuccessorSpacesCreated,
+    subspaces_added: SubspacesAdded,
+    subspaces_removed: SubspacesRemoved,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
     let role_changes = role_changes.changes;
@@ -440,6 +487,8 @@ fn geo_out(
     let votes_cast = votes_cast.votes;
     let proposals_processed = geo_proposals_processed.proposals;
     let successor_spaces_created = successor_spaces_created.spaces;
+    let added_subspaces = subspaces_added.subspaces;
+    let removed_subspaces = subspaces_removed.subspaces;
 
     Ok(GeoOutput {
         entries,
@@ -452,5 +501,7 @@ fn geo_out(
         votes_cast,
         proposals_processed,
         successor_spaces_created,
+        subspaces_added: added_subspaces,
+        subspaces_removed: removed_subspaces,
     })
 }

@@ -14,7 +14,11 @@ import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { populateOnchainProfiles } from './profiles/populate-onchain-profiles';
-import { groupProposalsByType, mapContentProposalsToSchema } from './proposals/map-proposals';
+import {
+  groupProposalsByType,
+  mapContentProposalsToSchema,
+  mapSubspaceProposalsToSchema,
+} from './proposals/map-proposals';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
@@ -36,6 +40,8 @@ import {
   ZodProposalStreamResponse,
   ZodRoleChangeStreamResponse,
   ZodSpacePluginCreatedStreamResponse,
+  ZodSubspacesAddedStreamResponse,
+  ZodSubspacesRemovedStreamResponse,
   ZodVotesCastStreamResponse,
 } from './zod';
 
@@ -197,6 +203,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
           const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
+          const subspacesAdded = ZodSubspacesAddedStreamResponse.safeParse(jsonOutput);
+          const subspacesRemoved = ZodSubspacesRemovedStreamResponse.safeParse(jsonOutput);
           const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
           const proposalResponse = ZodProposalStreamResponse.safeParse(jsonOutput);
           const proposalProcessedResponse = ZodProposalProcessedStreamResponse.safeParse(jsonOutput);
@@ -289,6 +297,16 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             });
           }
 
+          if (subspacesAdded.success) {
+            console.log('----------------- @BLOCK', blockNumber, '-----------------');
+            console.log('SUBSPACE ADDED', JSON.stringify(subspacesAdded.data.subspacesAdded, null, 2));
+          }
+
+          if (subspacesRemoved.success) {
+            console.log('----------------- @BLOCK', blockNumber, '-----------------');
+            console.log('SUBSPACE REMOVED', JSON.stringify(subspacesRemoved.data.subspacesRemoved, null, 2));
+          }
+
           /**
            * The data model for DAO-based spaces works slightly differently than in legacy spaces.
            * This means there will be a period where we need to support both data models depending
@@ -354,17 +372,25 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               )
             );
 
+            console.log('maybe proposals', maybeProposals.length);
+
             const proposals = maybeProposals.filter(
               (maybeProposal): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal =>
                 maybeProposal !== null
             );
 
-            const { contentProposals } = groupProposalsByType(proposals);
-            const schemaContentProposals = yield* _(mapContentProposalsToSchema(contentProposals, blockNumber, cursor));
+            const { contentProposals, subspaceProposals } = groupProposalsByType(proposals);
+            const schemaContentProposals = mapContentProposalsToSchema(contentProposals, blockNumber, cursor);
+            const schemaSubspaceProposals = mapSubspaceProposalsToSchema(subspaceProposals, blockNumber);
 
             slog({
               requestId: message.cursor,
-              message: `Writing ${contentProposals.length} proposals to DB`,
+              message: `Writing ${contentProposals.length} content proposals to DB`,
+            });
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${subspaceProposals.length} subspace proposals to DB`,
             });
 
             // @TODO: Put this in a transaction since all these writes are related
@@ -374,9 +400,16 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   try: async () => {
                     // @TODO: Batch since there might be postgres byte limits. See upsertChunked
                     await Promise.all([
+                      // @TODO: Should we only attempt to write to the db for the correct content type?
+                      // What if we get multiple proposals in the same block with different content types?
+                      // Content proposals
                       db.insert('proposals', schemaContentProposals.proposals).run(pool),
                       db.insert('proposed_versions', schemaContentProposals.proposedVersions).run(pool),
                       db.insert('actions', schemaContentProposals.actions).run(pool),
+
+                      // Subspace proposals
+                      db.insert('proposals', schemaSubspaceProposals.proposals).run(pool),
+                      db.insert('proposed_subspaces', schemaSubspaceProposals.proposedSubspaces).run(pool),
                     ]);
                   },
                   catch: error => {
@@ -444,7 +477,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               Effect.all(
                 proposals.map(proposal => {
                   return Effect.tryPromise({
-                    try: () => db.update('proposals', { status: 'approved' }, { id: proposal.id }).run(pool),
+                    try: () => db.update('proposals', { status: 'accepted' }, { id: proposal.id }).run(pool),
                     catch: () => {
                       slog({
                         requestId: message.cursor,

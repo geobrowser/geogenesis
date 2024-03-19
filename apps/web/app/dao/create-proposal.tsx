@@ -2,8 +2,10 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import {
+  ProposalType,
   createContentProposal,
   createGeoId,
+  createSubspaceProposal,
   getAcceptSubspaceArguments,
   getProcessGeoProposalArguments,
 } from '@geogenesis/sdk';
@@ -12,7 +14,6 @@ import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { useWalletClient } from 'wagmi';
 import { prepareWriteContract, writeContract } from 'wagmi/actions';
 
-import { ZERO_ADDRESS } from '~/core/constants';
 import { Services } from '~/core/services';
 
 import { Button } from '~/design-system/button';
@@ -20,14 +21,7 @@ import { Button } from '~/design-system/button';
 import { TEST_MAIN_VOTING_PLUGIN_ADDRESS, TEST_SPACE_PLUGIN_ADDRESS } from './constants';
 
 interface Props {
-  type:
-    | 'content'
-    | 'add-member'
-    | 'remove-member'
-    | 'add-editor'
-    | 'remove-editor'
-    | 'add-subspace'
-    | 'remove-subspace';
+  type: ProposalType;
 }
 
 // @TODO: Add metadata to ipfs. this will include the root object. If the proposal is not a content proposal it will use
@@ -64,27 +58,33 @@ export function CreateProposal({ type }: Props) {
   const onClick = async () => {
     const entityId = createGeoId();
 
-    const proposal = createContentProposal('Add space page to test DAO', [
-      {
-        entityId,
-        attributeId: SYSTEM_IDS.NAME,
-        type: 'createTriple',
-        value: {
-          type: 'string',
-          id: createGeoId(),
-          value: 'Governance test space',
-        },
-      },
-      {
-        entityId,
-        attributeId: SYSTEM_IDS.TYPES,
-        type: 'createTriple',
-        value: {
-          type: 'entity',
-          id: SYSTEM_IDS.SPACE_CONFIGURATION,
-        },
-      },
-    ]);
+    // const proposal = createContentProposal('Add space page to test DAO', [
+    //   {
+    //     entityId,
+    //     attributeId: SYSTEM_IDS.NAME,
+    //     type: 'createTriple',
+    //     value: {
+    //       type: 'string',
+    //       id: createGeoId(),
+    //       value: 'Governance test space',
+    //     },
+    //   },
+    //   {
+    //     entityId,
+    //     attributeId: SYSTEM_IDS.TYPES,
+    //     type: 'createTriple',
+    //     value: {
+    //       type: 'entity',
+    //       id: SYSTEM_IDS.SPACE_CONFIGURATION,
+    //     },
+    //   },
+    // ]);
+
+    const proposal = createSubspaceProposal({
+      name: 'Add subspace to test DAO',
+      type: 'add_subspace',
+      spaceAddress: '0x1A39E2Fe299Ef8f855ce43abF7AC85D6e69E05F5', // Crypto
+    });
 
     const hash = await storageClient.uploadObject(proposal);
     const uri = `ipfs://${hash}` as const;
@@ -102,8 +102,12 @@ export function CreateProposal({ type }: Props) {
       // What can happen is that you create a "CONTENT" proposal but pass a callback
       // action that does some other action like "ADD_SUBSPACE" and it will fail since
       // the substream won't index a mismatched proposal type and action callback args.
-      args: getProcessGeoProposalArguments(TEST_SPACE_PLUGIN_ADDRESS, uri),
-      // args: getAcceptSubspaceArguments(TEST_SPACE_PLUGIN_ADDRESS, uri, ZERO_ADDRESS),
+      // args: getProcessGeoProposalArguments(TEST_SPACE_PLUGIN_ADDRESS, uri),
+      args: getAcceptSubspaceArguments({
+        spacePluginAddress: TEST_SPACE_PLUGIN_ADDRESS,
+        ipfsUri: uri,
+        subspaceToAccept: '0x1A39E2Fe299Ef8f855ce43abF7AC85D6e69E05F5', // Crypto
+      }),
     });
 
     const writeResult = await writeContract(config);

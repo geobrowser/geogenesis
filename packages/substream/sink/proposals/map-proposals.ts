@@ -48,102 +48,143 @@ export function mapContentProposalsToSchema(
   proposals: ContentProposal[],
   blockNumber: number,
   cursor: string
-): Effect.Effect<
-  {
-    proposals: S.proposals.Insertable[];
-    proposedVersions: S.proposed_versions.Insertable[];
-    actions: S.actions.Insertable[];
-  },
-  SpaceWithPluginAddressNotFoundError,
-  never
-> {
-  return Effect.gen(function* (unwrap) {
-    const proposalsToWrite: S.proposals.Insertable[] = [];
-    const proposedVersionsToWrite: S.proposed_versions.Insertable[] = [];
-    const actionsToWrite: S.actions.Insertable[] = [];
+): {
+  proposals: S.proposals.Insertable[];
+  proposedVersions: S.proposed_versions.Insertable[];
+  actions: S.actions.Insertable[];
+} {
+  const proposalsToWrite: S.proposals.Insertable[] = [];
+  const proposedVersionsToWrite: S.proposed_versions.Insertable[] = [];
+  const actionsToWrite: S.actions.Insertable[] = [];
 
-    for (const p of proposals) {
-      const spaceId = p.space;
+  for (const p of proposals) {
+    const spaceId = p.space;
 
-      const proposalToWrite: S.proposals.Insertable = {
-        id: p.proposalId,
-        onchain_proposal_id: p.onchainProposalId,
-        name: p.name,
-        type: 'content',
+    const proposalToWrite: S.proposals.Insertable = {
+      id: p.proposalId,
+      onchain_proposal_id: p.onchainProposalId,
+      name: p.name,
+      type: 'content',
+      created_at: Number(p.startTime),
+      created_at_block: blockNumber,
+      created_by_id: p.creator,
+      start_time: Number(p.startTime),
+      end_time: Number(p.endTime),
+      space_id: spaceId,
+      status: 'proposed',
+    };
+
+    proposalsToWrite.push(proposalToWrite);
+
+    p.actions.forEach((action, index) => {
+      const string_value =
+        action.value.type === 'string' ||
+        action.value.type === 'image' ||
+        action.value.type === 'url' ||
+        action.value.type === 'date'
+          ? action.value.value
+          : null;
+      const entity_value = action.value.type === 'entity' ? action.value.id : null;
+
+      const proposed_version_id = generateVersionId({
+        entryIndex: index,
+        entityId: action.entityId,
+        cursor,
+      });
+
+      const action_id = generateActionId({
+        space_id: spaceId,
+        entity_id: action.entityId,
+        attribute_id: action.attributeId,
+        value_id: action.value.id,
+        cursor,
+      });
+
+      const mappedAction: S.actions.Insertable = {
+        id: action_id,
+        action_type: action.type,
+        entity_id: action.entityId,
+        attribute_id: action.attributeId,
+        value_type: action.value.type,
+        value_id: action.value.id,
+        string_value,
+        entity_value_id: entity_value,
+        proposed_version_id,
         created_at: Number(p.startTime),
         created_at_block: blockNumber,
-        created_by_id: p.creator,
-        start_time: Number(p.startTime),
-        end_time: Number(p.endTime),
-        space_id: spaceId,
-        status: 'proposed',
       };
 
-      proposalsToWrite.push(proposalToWrite);
+      return actionsToWrite.push(mappedAction);
+    });
 
-      p.actions.forEach((action, index) => {
-        const string_value =
-          action.value.type === 'string' ||
-          action.value.type === 'image' ||
-          action.value.type === 'url' ||
-          action.value.type === 'date'
-            ? action.value.value
-            : null;
-        const entity_value = action.value.type === 'entity' ? action.value.id : null;
+    const uniqueEntityIds = new Set(p.actions.map(action => action.entityId));
 
-        const proposed_version_id = generateVersionId({
-          entryIndex: index,
-          entityId: action.entityId,
-          cursor,
-        });
+    [...uniqueEntityIds.values()].forEach((entityId, entryIndex) => {
+      const mappedProposedVersion: S.proposed_versions.Insertable = {
+        id: generateVersionId({ entryIndex, entityId, cursor }),
+        entity_id: entityId,
+        created_at_block: blockNumber,
+        created_at: Number(p.startTime),
+        name: p.name,
+        created_by_id: p.creator,
+        proposal_id: p.proposalId,
+        space_id: spaceId,
+      };
 
-        const action_id = generateActionId({
-          space_id: spaceId,
-          entity_id: action.entityId,
-          attribute_id: action.attributeId,
-          value_id: action.value.id,
-          cursor,
-        });
+      proposedVersionsToWrite.push(mappedProposedVersion);
+    });
+  }
 
-        const mappedAction: S.actions.Insertable = {
-          id: action_id,
-          action_type: action.type,
-          entity_id: action.entityId,
-          attribute_id: action.attributeId,
-          value_type: action.value.type,
-          value_id: action.value.id,
-          string_value,
-          entity_value_id: entity_value,
-          proposed_version_id,
-          created_at: Number(p.startTime),
-          created_at_block: blockNumber,
-        };
+  return {
+    proposals: proposalsToWrite,
+    proposedVersions: proposedVersionsToWrite,
+    actions: actionsToWrite,
+  };
+}
 
-        return actionsToWrite.push(mappedAction);
-      });
+export function mapSubspaceProposalsToSchema(
+  proposals: SubspaceProposal[],
+  blockNumber: number
+): {
+  proposals: S.proposals.Insertable[];
+  proposedSubspaces: S.proposed_subspaces.Insertable[];
+} {
+  const proposalsToWrite: S.proposals.Insertable[] = [];
+  const proposedSubspacesToWrite: S.proposed_subspaces.Insertable[] = [];
 
-      const uniqueEntityIds = new Set(p.actions.map(action => action.entityId));
+  for (const p of proposals) {
+    const spaceId = p.space;
 
-      [...uniqueEntityIds.values()].forEach((entityId, entryIndex) => {
-        const mappedProposedVersion: S.proposed_versions.Insertable = {
-          id: generateVersionId({ entryIndex, entityId, cursor }),
-          entity_id: entityId,
-          created_at_block: blockNumber,
-          created_at: Number(p.startTime),
-          name: p.name,
-          created_by_id: p.creator,
-          proposal_id: p.proposalId,
-          space_id: spaceId,
-        };
-
-        proposedVersionsToWrite.push(mappedProposedVersion);
-      });
-    }
-
-    return {
-      proposals: proposalsToWrite,
-      proposedVersions: proposedVersionsToWrite,
-      actions: actionsToWrite,
+    const proposalToWrite: S.proposals.Insertable = {
+      id: p.proposalId,
+      onchain_proposal_id: p.onchainProposalId,
+      name: p.name,
+      type: 'content',
+      created_at: Number(p.startTime),
+      created_at_block: blockNumber,
+      created_by_id: p.creator,
+      start_time: Number(p.startTime),
+      end_time: Number(p.endTime),
+      space_id: spaceId,
+      status: 'proposed',
     };
-  });
+
+    proposalsToWrite.push(proposalToWrite);
+
+    const proposedSubspace: S.proposed_subspaces.Insertable = {
+      id: p.proposalId,
+      type: p.type,
+      parent_space: p.space,
+      subspace: p.subspace,
+      created_at: Number(p.startTime),
+      created_at_block: blockNumber,
+    };
+
+    proposedSubspacesToWrite.push(proposedSubspace);
+  }
+
+  return {
+    proposals: proposalsToWrite,
+    proposedSubspaces: proposedSubspacesToWrite,
+  };
 }

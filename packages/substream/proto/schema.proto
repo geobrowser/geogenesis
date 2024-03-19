@@ -255,6 +255,32 @@ message ProposalsProcessed {
 }
 
 /**
+ * Added or Removed Subspaces represent adding a space contracto to the hierarchy
+ * of the DAO-based space. This is useful to "link" Spaces together in a
+ * tree of spaces, allowing us to curate the graph of their knowledge and 
+ * permissions.
+*/
+message SubspaceAdded {
+  string subspace = 1;
+  string plugin_address = 2;
+  string change_type = 3;
+}
+
+message SubspacesAdded {
+  repeated SubspaceAdded subspaces = 1;
+}
+
+message SubspaceRemoved {
+  string subspace = 1;
+  string plugin_address = 2;
+  string change_type = 3;
+}
+
+message SubspacesRemoved {
+  repeated SubspaceRemoved subspaces = 1;
+}
+
+/**
  * Votes represent a vote on a proposal in a DAO-based space.
  *
  * Currently we use a simple majority voting model, where a proposal requires 51% of the
@@ -283,4 +309,6 @@ message GeoOutput {
   repeated VoteCast votes_cast = 8;
   repeated ProposalProcessed proposals_processed = 9;
   repeated SuccessorSpaceCreated successor_spaces_created = 10;
+  repeated SubspaceAdded subspaces_added = 11;
+  repeated SubspaceRemoved subspaces_removed = 12;
 }

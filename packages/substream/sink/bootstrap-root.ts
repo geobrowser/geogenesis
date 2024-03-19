@@ -275,7 +275,7 @@ const proposal: s.proposals.Insertable = {
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
   type: 'content',
-  status: 'approved',
+  status: 'accepted',
   start_time: ROOT_SPACE_CREATED_AT,
   end_time: ROOT_SPACE_CREATED_AT,
 };
