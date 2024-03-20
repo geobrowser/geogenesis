@@ -1,0 +1,307 @@
+{
+  "goerli": {
+    "repo": "test-2",
+    "address": "0xE56a8AfAE1F31013E41B08ce71d43f3008E50fd2",
+    "args": [],
+    "blockNumberOfDeployment": 9418499,
+    "releases": {
+      "1": {
+        "builds": {
+          "1": {
+            "setup": {
+              "name": "MyPluginSetup",
+              "address": "0x5F186fDFc79f890A3C01acFc1EE5c8e8c2977881",
+              "args": [],
+              "blockNumberOfDeployment": 9418501
+            },
+            "implementation": {
+              "name": "MyPlugin",
+              "address": "0x5BF9D9CB63741C76d58765659a9Ce9405e5322cB",
+              "args": [],
+              "blockNumberOfDeployment": 9418501
+            },
+            "helpers": [],
+            "buildMetadataURI": "ipfs://QmY919VZ9gkeF6L169qQo89ucsUB9ScTaJVbGn8vMGGHxr",
+            "blockNumberOfPublication": 9418503
+          }
+        },
+        "releaseMetadataURI": "ipfs://QmVD1gtE5PdjhLuuRcjhiUqmnFXScVZbZ2oXEvXcKnd3b4"
+      }
+    }
+  },
+  "baseGoerli": {
+    "repo": "test-2",
+    "address": "0xE3Bb449856e0A2A60f16e6bB7E59cEfB073DdAa1",
+    "args": [],
+    "blockNumberOfDeployment": 7850354,
+    "releases": {
+      "1": {
+        "builds": {
+          "1": {
+            "setup": {
+              "name": "MyPluginSetup",
+              "address": "0x604570fA0f83785ea925575d165725170eC316Cc",
+              "args": [],
+              "blockNumberOfDeployment": 7850358
+            },
+            "implementation": {
+              "name": "MyPlugin",
+              "address": "0x634a771777b306ba1B5F4ec85853b997d2Bf6827",
+              "args": [],
+              "blockNumberOfDeployment": 7850358
+            },
+            "helpers": [],
+            "buildMetadataURI": "ipfs://QmY919VZ9gkeF6L169qQo89ucsUB9ScTaJVbGn8vMGGHxr",
+            "blockNumberOfPublication": 7850362
+          }
+        },
+        "releaseMetadataURI": "ipfs://QmVD1gtE5PdjhLuuRcjhiUqmnFXScVZbZ2oXEvXcKnd3b4"
+      }
+    }
+  },
+  "polygon": [
+    {
+      "ensName": "geo-space-contract",
+      "address": "0x9D464D74a5c5CB1025f5EC692F278b0398Da996b",
+      "blockNumberOfDeployment": 52359912,
+      "releases": {
+        "1": {
+          "builds": {
+            "1": {
+              "setup": {
+                "name": "SpacePluginSetup",
+                "address": "0x3faAFdE7685DF7b771094eB3dc4029E8606f6208",
+                "blockNumberOfDeployment": 52359922
+              },
+              "implementation": {
+                "name": "SpacePlugin",
+                "address": "0xE0050eC05C0F55E39ef7D137A23d9249BCC0Dd53",
+                "blockNumberOfDeployment": 52359922
+              },
+              "helpers": [],
+              "buildMetadataURI": "ipfs://QmcAUbh4UmhwZp4b7aQf9nkpemhCfTVms2eSVng1bZUmmo",
+              "blockNumberOfPublication": 52359978
+            }
+          },
+          "releaseMetadataURI": "ipfs://QmcBZc3GMsw587ZdJD2EfGXrJjmHTjtdHY21VaUqwmiG9z"
+        }
+      }
+    },
+    {
+      "ensName": "geo-personal-space-contract",
+      "address": "0x7eD515d0E1d7B0B74826b8B5AC7a245c9Ee80e5a",
+      "blockNumberOfDeployment": 52359914,
+      "releases": {
+        "1": {
+          "builds": {
+            "1": {
+              "setup": {
+                "name": "PersonalSpaceAdminPluginSetup",
+                "address": "0x230De4FcE3c478e4Cf9A40cE441A48e3E1CE621A",
+                "blockNumberOfDeployment": 52359927
+              },
+              "implementation": {
+                "name": "PersonalSpaceAdminPlugin",
+                "address": "0x7448DD8D5cBEe237DAeF4b14d9781CA33fd04Bca",
+                "blockNumberOfDeployment": 52359927
+              },
+              "helpers": [],
+              "buildMetadataURI": "ipfs://QmYKrFvNmsEzZmtGGBfUJXzevR6YLk7a16VEAeuPDhwzCJ",
+              "blockNumberOfPublication": 52359983
+            }
+          },
+          "releaseMetadataURI": "ipfs://QmRPXd9dppZuzeDwriNTJW7qn5wbvB5pycbxbKuqohGxE6"
+        }
+      }
+    },
+    {
+      "ensName": "geo-main-governance-contract",
+      "address": "0x56A90bA666117c8268840CA179Fc4b35158E6964",
+      "blockNumberOfDeployment": 52359919,
+      "releases": {
+        "1": {
+          "builds": {
+            "1": {
+              "setup": {
+                "name": "GovernancePluginsSetup",
+                "address": "0xc60735f40a23538dF665615Af4ae94AE334B7310",
+                "blockNumberOfDeployment": 52359931
+              },
+              "implementation": {
+                "name": "MainVotingPlugin and MemberAccessPlugin",
+                "address": "0x1fa2172e1eeFcF0b56e443b21E75C00FeF0cFCb2",
+                "blockNumberOfDeployment": 52359931
+              },
+              "helpers": [],
+              "buildMetadataURI": "ipfs://QmNh5KHv167RKZgD8zb6d3CvRE7mNT8AZYZkwrmvyRt1YD",
+              "blockNumberOfPublication": 52359988
+            }
+          },
+          "releaseMetadataURI": "ipfs://QmRyrnPbLgjympjwAdSxHAJdHvevRMu3FUH2E7S18ooHHn"
+        }
+      }
+    },
+    {
+      "ensName": "geo-spaces-plugin",
+      "address": "0xA2c4dFF49ccfA45E5d36a4E63ADE29642128538a",
+      "blockNumberOfDeployment": 52406119,
+      "releases": {
+        "1": {
+          "builds": {
+            "1": {
+              "setup": {
+                "name": "SpacePluginSetup",
+                "address": "0x3faAFdE7685DF7b771094eB3dc4029E8606f6208",
+                "blockNumberOfDeployment": 52359922
+              },
+              "implementation": {
+                "name": "SpacePlugin",
+                "address": "0xE0050eC05C0F55E39ef7D137A23d9249BCC0Dd53",
+                "blockNumberOfDeployment": 52359922
+              },
+              "helpers": [],
+              "buildMetadataURI": "ipfs://QmcAUbh4UmhwZp4b7aQf9nkpemhCfTVms2eSVng1bZUmmo",
+              "blockNumberOfPublication": 52406174
+            }
+          },
+          "releaseMetadataURI": "ipfs://QmcBZc3GMsw587ZdJD2EfGXrJjmHTjtdHY21VaUqwmiG9z"
+        }
+      }
+    },
+    {
+      "ensName": "geo-nonvoting-space-plugin",
+      "address": "0xF9bAB97A463F2b3CD07FfC3FA78e776C5eF74113",
+      "blockNumberOfDeployment": 52406122,
+      "releases": {
+        "1": {
+          "builds": {
+            "1": {
+              "setup": {
+                "name": "PersonalSpaceAdminPluginSetup",
+                "address": "0x230De4FcE3c478e4Cf9A40cE441A48e3E1CE621A",
+                "blockNumberOfDeployment": 52359927
+              },
+              "implementation": {
+                "name": "PersonalSpaceAdminPlugin",
+                "address": "0x7448DD8D5cBEe237DAeF4b14d9781CA33fd04Bca",
+                "blockNumberOfDeployment": 52359927
+              },
+              "helpers": [],
+              "buildMetadataURI": "ipfs://QmYKrFvNmsEzZmtGGBfUJXzevR6YLk7a16VEAeuPDhwzCJ",
+              "blockNumberOfPublication": 52406178
+            }
+          },
+          "releaseMetadataURI": "ipfs://QmRPXd9dppZuzeDwriNTJW7qn5wbvB5pycbxbKuqohGxE6"
+        }
+      }
+    },
+    {
+      "ensName": "geo-voting-plugin",
+      "address": "0xAB76D26dAa65A840D4e858c899F6C72dB99528C5",
+      "blockNumberOfDeployment": 52406125,
+      "releases": {
+        "1": {
+          "builds": {
+            "1": {
+              "setup": {
+                "name": "GovernancePluginsSetup",
+                "address": "0xc60735f40a23538dF665615Af4ae94AE334B7310",
+                "blockNumberOfDeployment": 52359931
+              },
+              "implementation": {
+                "name": "MainVotingPlugin and MemberAccessPlugin",
+                "address": "0x1fa2172e1eeFcF0b56e443b21E75C00FeF0cFCb2",
+                "blockNumberOfDeployment": 52359931
+              },
+              "helpers": [],
+              "buildMetadataURI": "ipfs://QmNh5KHv167RKZgD8zb6d3CvRE7mNT8AZYZkwrmvyRt1YD",
+              "blockNumberOfPublication": 52406184
+            }
+          },
+          "releaseMetadataURI": "ipfs://QmRyrnPbLgjympjwAdSxHAJdHvevRMu3FUH2E7S18ooHHn"
+        }
+      }
+    },
+    {
+      "ensName": "geobrowser-contracts-space-plugin",
+      "address": "0x4187cEe4C8e6b356c3f61724B41b6af5F3c59E81",
+      "blockNumberOfDeployment": 52630101,
+      "releases": {
+        "1": {
+          "builds": {
+            "1": {
+              "setup": {
+                "name": "SpacePluginSetup",
+                "address": "0x2D291A80B3f3d6cb4c51a22AE5A69a4fFe0731e6",
+                "blockNumberOfDeployment": 52630110
+              },
+              "implementation": {
+                "name": "SpacePlugin",
+                "address": "0xD8c35a296F9D996E34db9D28427935ad196C4c61",
+                "blockNumberOfDeployment": 52630110
+              },
+              "helpers": [],
+              "buildMetadataURI": "ipfs://QmcAUbh4UmhwZp4b7aQf9nkpemhCfTVms2eSVng1bZUmmo",
+              "blockNumberOfPublication": 52630161
+            }
+          },
+          "releaseMetadataURI": "ipfs://QmcBZc3GMsw587ZdJD2EfGXrJjmHTjtdHY21VaUqwmiG9z"
+        }
+      }
+    },
+    {
+      "ensName": "geobrowser-contracts-personal-space-plugin",
+      "address": "0xbcD299B86D2F1DDfb1097d0aAC52c12ebf32B7b3",
+      "blockNumberOfDeployment": 52630104,
+      "releases": {
+        "1": {
+          "builds": {
+            "1": {
+              "setup": {
+                "name": "PersonalSpaceAdminPluginSetup",
+                "address": "0x230De4FcE3c478e4Cf9A40cE441A48e3E1CE621A",
+                "blockNumberOfDeployment": 52359927
+              },
+              "implementation": {
+                "name": "PersonalSpaceAdminPlugin",
+                "address": "0x7448DD8D5cBEe237DAeF4b14d9781CA33fd04Bca",
+                "blockNumberOfDeployment": 52359927
+              },
+              "helpers": [],
+              "buildMetadataURI": "ipfs://QmYKrFvNmsEzZmtGGBfUJXzevR6YLk7a16VEAeuPDhwzCJ",
+              "blockNumberOfPublication": 52630166
+            }
+          },
+          "releaseMetadataURI": "ipfs://QmRPXd9dppZuzeDwriNTJW7qn5wbvB5pycbxbKuqohGxE6"
+        }
+      }
+    },
+    {
+      "ensName": "geobrowser-contracts-governance-plugin",
+      "address": "0x14E1a65f19FCEF217048D2F07EEBE6a8BC49901f",
+      "blockNumberOfDeployment": 52630107,
+      "releases": {
+        "1": {
+          "builds": {
+            "1": {
+              "setup": {
+                "name": "GovernancePluginsSetup",
+                "address": "0xdb293D49c6135095b76610D1bde679CAEd3A9970",
+                "blockNumberOfDeployment": 52630113
+              },
+              "implementation": {
+                "name": "MainVotingPlugin and MemberAccessPlugin",
+                "address": "0xDA5e376357c39D3A2F2B59D3D39e758e0af22191",
+                "blockNumberOfDeployment": 52630113
+              },
+              "helpers": [],
+              "buildMetadataURI": "ipfs://QmNh5KHv167RKZgD8zb6d3CvRE7mNT8AZYZkwrmvyRt1YD",
+              "blockNumberOfPublication": 52630172
+            }
+          },
+          "releaseMetadataURI": "ipfs://QmRyrnPbLgjympjwAdSxHAJdHvevRMu3FUH2E7S18ooHHn"
+        }
+      }
+    }
+  ]
+}

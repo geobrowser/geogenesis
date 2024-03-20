@@ -1,0 +1,22 @@
+{
+  "ui": {},
+  "change": "Initial build.",
+  "pluginSetup": {
+    "prepareInstallation": {
+      "description": "The information required for the installation of build 1.",
+      "inputs": [
+        {
+          "name": "_initialEditorAddress",
+          "type": "address",
+          "internalType": "address",
+          "description": "The address of the first address to be granted the editor permission."
+        }
+      ]
+    },
+    "prepareUpdate": {},
+    "prepareUninstallation": {
+      "description": "The information required for the uninstallation of build 1.",
+      "inputs": []
+    }
+  }
+}

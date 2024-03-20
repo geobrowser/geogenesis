@@ -1,0 +1,64 @@
+{
+  "ui": {},
+  "change": "Initial build.",
+  "pluginSetup": {
+    "prepareInstallation": {
+      "description": "The information required for the installation of build 1.",
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "enum MajorityVotingBase.VotingMode",
+              "name": "votingMode",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint32",
+              "name": "supportThreshold",
+              "type": "uint32"
+            },
+            {
+              "internalType": "uint32",
+              "name": "minParticipation",
+              "type": "uint32"
+            },
+            {
+              "internalType": "uint64",
+              "name": "duration",
+              "type": "uint64"
+            }
+          ],
+          "internalType": "struct MajorityVotingBase.VotingSettings",
+          "name": "votingSettings",
+          "type": "tuple"
+        },
+        {
+          "internalType": "address[]",
+          "name": "initialEditors",
+          "type": "address[]"
+        },
+        {
+          "internalType": "uint64",
+          "name": "memberAccessProposalDuration",
+          "type": "uint64"
+        },
+        {
+          "internalType": "address",
+          "name": "pluginUpgrader",
+          "type": "address"
+        }
+      ]
+    },
+    "prepareUpdate": {},
+    "prepareUninstallation": {
+      "description": "The information required for the uninstallation of build 1.",
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "pluginUpgrader",
+          "type": "address"
+        }
+      ]
+    }
+  }
+}

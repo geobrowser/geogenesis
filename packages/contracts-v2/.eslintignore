@@ -1,12 +1,3 @@
-node_modules
-build
-.DS_Store
-.vscode
-.vercel
-.turbo
-dist
-.env
-
 # directories
 .coverage_artifacts
 .coverage_cache
@@ -25,7 +16,3 @@ typechain
 .DS_Store
 .pnp.*
 coverage.json
-
-packages/contracts-v2/plugin-repo-info-dev.json
-
-*.bkp
