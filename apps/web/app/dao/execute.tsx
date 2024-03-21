@@ -1,14 +1,13 @@
 'use client';
 
-import { DaoAbi, MainVotingAbi, SpaceAbi } from '@geogenesis/sdk/abis';
-import { decodeErrorResult, decodeFunctionResult } from 'viem';
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
 
 import * as React from 'react';
 
 import { useWalletClient } from 'wagmi';
 import { prepareWriteContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
-import { TEST_DAO_ADDRESS, TEST_MAIN_VOTING_PLUGIN_ADDRESS } from './constants';
+import { TEST_MAIN_VOTING_PLUGIN_ADDRESS } from './constants';
 
 interface Props {
   onchainProposalId: string;

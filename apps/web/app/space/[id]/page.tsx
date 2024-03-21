@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -6,7 +5,6 @@ import * as React from 'react';
 import type { Metadata } from 'next';
 
 import { Subgraph } from '~/core/io';
-import { fetchEntities } from '~/core/io/subgraph';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
