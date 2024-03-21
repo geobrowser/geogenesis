@@ -21,7 +21,7 @@ const passThreshold = '51%';
 const rejectedProposalsCount = 0;
 
 export default async function GovernancePage({ params }: Props) {
-  const acceptedProposalsCount = await getProposalsCount({ params });
+  const { acceptedProposals, rejectedProposals } = await getProposalsCount({ params });
 
   return (
     <div className="space-y-4">
@@ -41,9 +41,9 @@ export default async function GovernancePage({ params }: Props) {
         <GovernanceMetadataBox>
           <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
           <div className="flex items-center gap-3 text-mediumTitle">
-            <span>{acceptedProposalsCount}</span>
+            <span>{acceptedProposals.totalCount}</span>
             <div className="h-4 w-px bg-grey-02" />
-            <span>{rejectedProposalsCount}</span>
+            <span>{rejectedProposals.totalCount}</span>
           </div>
         </GovernanceMetadataBox>
       </div>
@@ -66,7 +66,10 @@ function GovernanceMetadataBox({ children }: { children: React.ReactNode }) {
 }
 
 interface NetworkResult {
-  proposals: {
+  acceptedProposals: {
+    totalCount: number;
+  };
+  rejectedProposals: {
     totalCount: number;
   };
 }
@@ -75,11 +78,25 @@ async function getProposalsCount({ params }: Props) {
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
     query: `
-      query {
-        proposals(filter: { spaceId: { equalToInsensitive: "${params.id}" } }) {
-          totalCount
+    query {
+      acceptedProposals: proposals(
+        filter: {
+          spaceId: { equalToInsensitive: "${params.id}" }
+          status: { equalTo: ACCEPTED }
         }
-      }`,
+      ) {
+        totalCount
+      }
+  
+      rejectedProposals: proposals(
+        filter: {
+          spaceId: { equalToInsensitive: "${params.id}" }
+          status: { equalTo: REJECTED }
+        }
+      ) {
+        totalCount
+      }
+    }`,
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -97,14 +114,20 @@ async function getProposalsCount({ params }: Props) {
         case 'GraphqlRuntimeError':
           console.error(`Encountered runtime graphql error in governance/page. spaceId: ${params.id}`, error.message);
           return {
-            proposals: {
+            acceptedProposals: {
+              totalCount: 0,
+            },
+            rejectedProposals: {
               totalCount: 0,
             },
           };
         default:
           console.error(`${error._tag}: Unable to fetch proposals count, spaceId: ${params.id}`);
           return {
-            proposals: {
+            acceptedProposals: {
+              totalCount: 0,
+            },
+            rejectedProposals: {
               totalCount: 0,
             },
           };
@@ -115,5 +138,5 @@ async function getProposalsCount({ params }: Props) {
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  return result.proposals.totalCount;
+  return result;
 }
