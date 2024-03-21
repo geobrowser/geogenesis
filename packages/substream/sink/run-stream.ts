@@ -11,6 +11,7 @@ import { readCursor, writeCursor } from './cursor';
 import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
 import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
+import { ZodProposalExecutedStreamResponse } from './parsers/proposal-executed';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
 import { populateOnchainProfiles } from './profiles/populate-onchain-profiles';
@@ -23,6 +24,7 @@ import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { mapSubspaces } from './spaces/map-subspaces';
 import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
+import { getSpaceForVotingPlugin } from './utils/get-space-for-voting-plugin';
 import { invariant } from './utils/invariant';
 import { getEntryWithIpfsContent, getProposalFromMetadata, getProposalIdFromProcessedProposal } from './utils/ipfs';
 import { pool } from './utils/pool';
@@ -215,6 +217,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const proposalProcessedResponse = ZodProposalProcessedStreamResponse.safeParse(jsonOutput);
           const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
           const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
+          const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
 
           if (profilesRegistered.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
@@ -531,6 +534,54 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             slog({
               requestId: message.cursor,
               message: `Writing ${proposals.length} processed proposals to DB`,
+            });
+          }
+
+          if (executedProposals.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info('EXECUTED PROPOSALS', executedProposals.data.executedProposals);
+            const proposals = executedProposals.data.executedProposals;
+
+            slog({
+              requestId: message.cursor,
+              message: `Updating ${proposals.length} proposals after execution`,
+            });
+
+            yield* _(
+              Effect.all(
+                proposals.map(proposal => {
+                  return Effect.tryPromise({
+                    try: async () => {
+                      const spaceEffect = getSpaceForVotingPlugin(proposal.pluginAddress as `0x${string}`);
+                      const space = await Effect.runPromise(spaceEffect);
+
+                      if (space) {
+                        return await db
+                          .update(
+                            'proposals',
+                            { status: 'accepted' },
+                            { onchain_proposal_id: proposal.proposalId, space_id: space }
+                          )
+                          .run(pool);
+                      }
+                    },
+                    catch: error => {
+                      slog({
+                        requestId: message.cursor,
+                        message: `Failed to update executed proposal ${proposal.proposalId} from voting plugin ${
+                          proposal.pluginAddress
+                        } ${String(error)}`,
+                        level: 'error',
+                      });
+                    },
+                  });
+                })
+              )
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `${proposals.length} proposals updated successfully!`,
             });
           }
 

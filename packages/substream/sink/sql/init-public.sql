@@ -230,6 +230,7 @@ CREATE TABLE public.proposed_subspaces (
     parent_space text NOT NULL REFERENCES public.spaces(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
     type subspace_proposal_type NOT NULL
 );
 

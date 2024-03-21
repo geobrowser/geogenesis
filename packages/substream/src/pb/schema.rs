@@ -288,6 +288,24 @@ pub struct ProposalsCreated {
     #[prost(message, repeated, tag="1")]
     pub proposals: ::prost::alloc::vec::Vec<ProposalCreated>,
 }
+/// Executed proposals have been approved and executed onchain in a DAO-based
+/// space's main voting plugin. The DAO itself also emits the executed event,
+/// but the ABI/interface is different. We really only care about the one
+/// from our plugins.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProposalExecuted {
+    #[prost(string, tag="1")]
+    pub proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub plugin_address: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProposalsExecuted {
+    #[prost(message, repeated, tag="1")]
+    pub executed_proposals: ::prost::alloc::vec::Vec<ProposalExecuted>,
+}
 /// *
 /// Processed Proposals represent content that has been approved by a DAO
 /// and executed onchain.
@@ -397,6 +415,8 @@ pub struct GeoOutput {
     pub subspaces_added: ::prost::alloc::vec::Vec<SubspaceAdded>,
     #[prost(message, repeated, tag="12")]
     pub subspaces_removed: ::prost::alloc::vec::Vec<SubspaceRemoved>,
+    #[prost(message, repeated, tag="13")]
+    pub executed_proposals: ::prost::alloc::vec::Vec<ProposalExecuted>,
 }
 /// *
 /// Roles represent the permissions for a legacy space (See top level comment for more info

@@ -4,9 +4,10 @@ mod pb;
 use pb::schema::{
     EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
     GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
-    GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalProcessed, ProposalsCreated,
-    ProposalsProcessed, RoleChange, RoleChanges, SubspaceAdded, SubspaceRemoved, SubspacesAdded,
-    SubspacesRemoved, SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
+    GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalExecuted, ProposalProcessed,
+    ProposalsCreated, ProposalsExecuted, ProposalsProcessed, RoleChange, RoleChanges,
+    SubspaceAdded, SubspaceRemoved, SubspacesAdded, SubspacesRemoved, SuccessorSpaceCreated,
+    SuccessorSpacesCreated, VoteCast, VotesCast,
 };
 
 use substreams::store::*;
@@ -26,7 +27,7 @@ use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePlugin
 use legacy_space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
 use main_voting_plugin::events::{
     MembersAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
-    VoteCast as VoteCastEvent,
+    ProposalExecuted as ProposalExecutedEvent, VoteCast as VoteCastEvent,
 };
 use space::events::{
     GeoProposalProcessed, SubspaceAccepted, SubspaceRemoved as GeoSubspaceRemoved,
@@ -401,6 +402,27 @@ fn map_proposals_created(
     Ok(ProposalsCreated { proposals })
 }
 
+#[substreams::handlers::map]
+fn map_proposals_executed(
+    block: eth::v2::Block,
+) -> Result<ProposalsExecuted, substreams::errors::Error> {
+    let executed_proposals: Vec<ProposalExecuted> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(proposal_created) = ProposalExecutedEvent::match_and_decode(log) {
+                return Some(ProposalExecuted {
+                    plugin_address: format_hex(&log.address()),
+                    proposal_id: proposal_created.proposal_id.to_string(),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(ProposalsExecuted { executed_proposals })
+}
+
 /**
  * Processed Proposals represent content that has been approved by a DAO
  * and executed onchain.
@@ -476,6 +498,7 @@ fn geo_out(
     successor_spaces_created: SuccessorSpacesCreated,
     subspaces_added: SubspacesAdded,
     subspaces_removed: SubspacesRemoved,
+    proposals_executed: ProposalsExecuted,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
     let role_changes = role_changes.changes;
@@ -489,6 +512,7 @@ fn geo_out(
     let successor_spaces_created = successor_spaces_created.spaces;
     let added_subspaces = subspaces_added.subspaces;
     let removed_subspaces = subspaces_removed.subspaces;
+    let executed_proposals = proposals_executed.executed_proposals;
 
     Ok(GeoOutput {
         entries,
@@ -503,5 +527,6 @@ fn geo_out(
         successor_spaces_created,
         subspaces_added: added_subspaces,
         subspaces_removed: removed_subspaces,
+        executed_proposals,
     })
 }

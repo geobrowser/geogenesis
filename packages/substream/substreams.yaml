@@ -118,6 +118,14 @@ modules:
     output:
       type: proto:schema.VotesCast
 
+  - name: map_proposals_executed
+    kind: map
+    initialBlock: 54812863
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.ProposalsExecuted
+
   - name: geo_out
     kind: map
     initialBlock: 36472424
@@ -134,6 +142,7 @@ modules:
       - map: map_successor_spaces_created
       - map: map_subspaces_added
       - map: map_subspaces_removed
+      - map: map_proposals_executed
     output:
       type: proto:schema.GeoOutput
 

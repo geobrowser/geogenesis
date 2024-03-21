@@ -2316,6 +2316,12 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number;
       /**
+      * **proposed_subspaces.proposal_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      proposal_id: string;
+      /**
       * **proposed_subspaces.type**
       * - `subspace_proposal_type` in database
       * - `NOT NULL`, no default
@@ -2353,6 +2359,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **proposed_subspaces.proposal_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      proposal_id: string;
       /**
       * **proposed_subspaces.type**
       * - `subspace_proposal_type` in database
@@ -2392,6 +2404,12 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposed_subspaces.proposal_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposed_subspaces.type**
       * - `subspace_proposal_type` in database
       * - `NOT NULL`, no default
@@ -2430,6 +2448,12 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
+      * **proposed_subspaces.proposal_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      proposal_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **proposed_subspaces.type**
       * - `subspace_proposal_type` in database
       * - `NOT NULL`, no default
@@ -2467,6 +2491,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **proposed_subspaces.proposal_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_subspaces.type**
       * - `subspace_proposal_type` in database
@@ -3356,15 +3386,15 @@ declare module 'zapatos/schema' {
       /**
       * **space_subspaces.subspace_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      subspace_id: string | null;
+      subspace_id: string;
       /**
       * **space_subspaces.parent_space_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      parent_space_id: string | null;
+      parent_space_id: string;
       /**
       * **space_subspaces.created_at_block**
       * - `int4` in database
@@ -3382,15 +3412,15 @@ declare module 'zapatos/schema' {
       /**
       * **space_subspaces.subspace_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      subspace_id: string | null;
+      subspace_id: string;
       /**
       * **space_subspaces.parent_space_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      parent_space_id: string | null;
+      parent_space_id: string;
       /**
       * **space_subspaces.created_at_block**
       * - `int4` in database
@@ -3408,13 +3438,13 @@ declare module 'zapatos/schema' {
       /**
       * **space_subspaces.subspace_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
       subspace_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **space_subspaces.parent_space_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
       parent_space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
@@ -3434,15 +3464,15 @@ declare module 'zapatos/schema' {
       /**
       * **space_subspaces.subspace_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      subspace_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      subspace_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_subspaces.parent_space_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      parent_space_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      parent_space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_subspaces.created_at_block**
       * - `int4` in database
@@ -3460,15 +3490,15 @@ declare module 'zapatos/schema' {
       /**
       * **space_subspaces.subspace_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      subspace_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      subspace_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_subspaces.parent_space_id**
       * - `text` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      parent_space_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      parent_space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_subspaces.created_at_block**
       * - `int4` in database

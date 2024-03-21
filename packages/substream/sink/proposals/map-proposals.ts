@@ -178,6 +178,7 @@ export function mapSubspaceProposalsToSchema(
       subspace: p.subspace,
       created_at: Number(p.startTime),
       created_at_block: blockNumber,
+      proposal_id: p.proposalId,
     };
 
     proposedSubspacesToWrite.push(proposedSubspace);

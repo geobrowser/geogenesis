@@ -63,7 +63,6 @@ export function mapSubspaces({
       );
 
     return subspacesAdded.map(({ subspace, pluginAddress }) => {
-      console.log('subspace to add', getChecksumAddress(subspace));
       const newSubspace: S.space_subspaces.Insertable = {
         // Can safely assert that spacesForPlugins.get(pluginAddress) is not null here
         // since we set up the mapping based on the plugin address previously

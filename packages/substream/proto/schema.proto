@@ -237,6 +237,19 @@ message ProposalsCreated {
   repeated ProposalCreated proposals = 1;
 }
 
+// Executed proposals have been approved and executed onchain in a DAO-based
+// space's main voting plugin. The DAO itself also emits the executed event,
+// but the ABI/interface is different. We really only care about the one
+// from our plugins.
+message ProposalExecuted {
+  string proposal_id = 1;
+  string plugin_address = 2;
+}
+
+message ProposalsExecuted {
+  repeated ProposalExecuted executed_proposals = 1;
+}
+
 /**
  * Processed Proposals represent content that has been approved by a DAO
  * and executed onchain.
@@ -311,4 +324,5 @@ message GeoOutput {
   repeated SuccessorSpaceCreated successor_spaces_created = 10;
   repeated SubspaceAdded subspaces_added = 11;
   repeated SubspaceRemoved subspaces_removed = 12;
+  repeated ProposalExecuted executed_proposals = 13;
 }
