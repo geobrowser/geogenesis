@@ -10,6 +10,7 @@ import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
+import { GovernanceProposalsListInfiniteScroll } from '~/partials/governance/governance-proposals-list-infinite-scroll';
 
 interface Props {
   params: { id: string };
@@ -49,9 +50,11 @@ export default async function GovernancePage({ params }: Props) {
       <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
         All Proposals
       </SmallButton>
-      <React.Suspense>
-        <GovernanceProposalsList spaceId={params.id} />
+      <React.Suspense fallback="Loading initial...">
+        <GovernanceProposalsList page={0} spaceId={params.id} />
       </React.Suspense>
+
+      <GovernanceProposalsListInfiniteScroll spaceId={params.id} page={0} />
     </div>
   );
 }

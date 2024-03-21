@@ -2,6 +2,8 @@ import { cookies } from 'next/headers';
 import Link from 'next/link';
 import pluralize from 'pluralize';
 
+import React from 'react';
+
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Subgraph } from '~/core/io';
 import { Action as IAction } from '~/core/types';
@@ -15,13 +17,14 @@ import { GovernanceStatusChip } from './governance-status-chip';
 
 interface Props {
   spaceId: string;
+  page: number;
 }
 
-export async function GovernanceProposalsList({ spaceId }: Props) {
+export async function GovernanceProposalsList({ spaceId, page }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
   const [proposals, isEditor] = await Promise.all([
-    Subgraph.fetchProposals({ spaceId, first: 5 }),
+    Subgraph.fetchProposals({ spaceId, first: 5, page }),
     getIsEditorForSpace(spaceId, connectedAddress),
   ]);
 
