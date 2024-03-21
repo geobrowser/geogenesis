@@ -1,23 +1,29 @@
+import { ProposalStatus } from '@geogenesis/sdk';
+
 import { GeoDate } from '~/core/utils/utils';
 
 interface Props {
-  status: 'ACCEPTED' | 'REJECTED';
-  date: number; // UNIX timestamp
+  status: ProposalStatus;
+  startTime: number; // UNIX timestamp
+  endTime: number; // UNIX timestamp
 }
 
-export function GovernanceStatusChip({ status, date }: Props) {
-  const formattedDate = GeoDate.fromGeoTime(date).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-
+export function GovernanceStatusChip({ status, startTime, endTime }: Props) {
   switch (status) {
-    case 'ACCEPTED':
+    case 'ACCEPTED': {
+      return <span className="rounded-sm bg-green px-2 py-1.5 text-smallButton text-white">Accepted</span>;
+    }
+    case 'PROPOSED': {
+      const timeRemaining = Math.floor(endTime - Date.now() / 1000);
+      const isAwaitingExecution = timeRemaining <= 0;
+
       return (
-        <span className="rounded-sm bg-green px-2 py-1.5 text-smallButton text-white">Accepted · {formattedDate}</span>
+        <span className="rounded-sm bg-divider px-2 py-1.5 text-smallButton text-grey-04">
+          {isAwaitingExecution ? 'Pending execution' : `${timeRemaining} seconds remaining`}
+        </span>
       );
-    case 'REJECTED':
-      throw new Error('Rejected proposal not implemented yet');
+    }
+    default:
+      throw new Error(`${status} proposal status not implemented yet`);
   }
 }

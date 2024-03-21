@@ -63,9 +63,9 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex-[1]">
-                  <GovernanceStatusChip date={p.createdAt} status="ACCEPTED" />
+                  <GovernanceStatusChip startTime={p.startTime} endTime={p.endTime} status={p.status} />
                 </div>
-                <GovernanceProposalVoteState isEditor={isEditor} />
+                <GovernanceProposalVoteState status={p.status} endTime={p.endTime} isEditor={isEditor} />
               </div>
             </div>
           </div>

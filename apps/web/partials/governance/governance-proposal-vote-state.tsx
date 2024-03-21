@@ -1,18 +1,17 @@
+import { ProposalStatus } from '@geogenesis/sdk';
+
 import { SmallButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Tick } from '~/design-system/icons/tick';
 
 interface Props {
   isEditor: boolean;
-  // vote: "ACCEPTED" | 'REJECTED';
+  status: ProposalStatus;
+  endTime: number; // UNIX timestamp
 }
 
-export function GovernanceProposalVoteState({ isEditor }: Props) {
-  // @TODO add real isActive value
-  const isActive = false;
-
-  // @TODO add real status value
-  const status = 'ACCEPTED';
+export function GovernanceProposalVoteState({ isEditor, status, endTime }: Props) {
+  const isActive = status !== 'ACCEPTED' && status !== 'REJECTED' && endTime > Date.now() / 1000;
 
   return (
     <>
@@ -36,9 +35,8 @@ export function GovernanceProposalVoteState({ isEditor }: Props) {
           <div>0%</div>
         </div>
       </div>
-      {/* @TODO restore */}
       <div className="inline-flex flex-[1] items-center justify-end gap-2 !opacity-0">
-        {isActive ? (
+        {isEditor && isActive ? (
           <>
             <SmallButton>Reject</SmallButton>
             <SmallButton>Accept</SmallButton>
@@ -52,7 +50,7 @@ export function GovernanceProposalVoteState({ isEditor }: Props) {
 }
 
 type StatusBadgeProps = {
-  status: 'ACCEPTED' | 'REJECTED';
+  status: ProposalStatus;
 };
 
 const StatusBadge = ({ status }: StatusBadgeProps) => {
