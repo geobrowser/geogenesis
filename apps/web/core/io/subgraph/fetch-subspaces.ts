@@ -4,7 +4,7 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity, OmitStrict, Space, SpaceConfigEntity, Triple } from '~/core/types';
+import { OmitStrict, Space, SpaceConfigEntity } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
 
 import { fetchEntities } from './fetch-entities';
@@ -83,8 +83,6 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-
-  console.log('result', result);
 
   // @TODO: This should be tied to the space config entity in the substream
   // eventually.
