@@ -65,7 +65,15 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
                 <div className="flex-[1]">
                   <GovernanceStatusChip startTime={p.startTime} endTime={p.endTime} status={p.status} />
                 </div>
-                <GovernanceProposalVoteState status={p.status} endTime={p.endTime} isEditor={isEditor} />
+                <GovernanceProposalVoteState
+                  status={p.status}
+                  endTime={p.endTime}
+                  isEditor={isEditor}
+                  votes={{
+                    totalCount: p.proposalVotes.totalCount,
+                    votes: p.proposalVotes.nodes,
+                  }}
+                />
               </div>
             </div>
           </div>
