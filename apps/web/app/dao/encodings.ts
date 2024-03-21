@@ -53,7 +53,7 @@ export function getGovernancePluginInstallItem(params: {
     votingMode: VotingMode;
     supportThreshold: number;
     minParticipation: number;
-    duration: BigInt;
+    duration: bigint;
   };
   initialEditors: `0x${string}`[];
   pluginUpgrader: `0x${string}`;
