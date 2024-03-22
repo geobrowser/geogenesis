@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
-import { useActiveProposal } from '~/core/state/active-proposal-store';
-
 import { Avatar } from '~/design-system/avatar';
 import { Button, SquareButton } from '~/design-system/button';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';

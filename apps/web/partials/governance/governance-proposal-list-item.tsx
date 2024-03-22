@@ -2,8 +2,6 @@
 
 import Link from 'next/link';
 
-import { useActiveProposal } from '~/core/state/active-proposal-store';
-
 interface Props {
   proposalId: string;
   spaceId: string;
