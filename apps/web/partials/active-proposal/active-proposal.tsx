@@ -26,6 +26,7 @@ import { colors } from '~/design-system/theme/colors';
 import { cva } from 'class-variance-authority';
 import { Change } from '~/core/utils/change';
 import { Subgraph } from '~/core/io';
+import { ShowVoters } from './active-proposal-show-voters';
 
 interface Props {
   proposalId?: string;
@@ -48,15 +49,17 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
     return null;
   }
 
-  console.log('proposalId', proposalId);
-
   const proposal = await fetchProposal({ id: proposalId });
 
   if (!proposal) {
     redirect(`/space/${spaceId}/governance`);
   }
 
-  console.log('proposal', proposal.name);
+  const votes = proposal.proposalVotes.nodes;
+  const votesCount = proposal.proposalVotes.totalCount;
+
+  const yesVotesPercentage = Math.floor((votes.filter(v => v.vote === 'YES').length / votesCount) * 100);
+  const noVotesPercentage = Math.floor((votes.filter(v => v.vote === 'NO').length / votesCount) * 100);
 
   return (
     <>
@@ -100,20 +103,23 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
                   <Tick />
                 </div>
                 <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-                  <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: '75%' }} />
+                  <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: `${yesVotesPercentage}%` }} />
                 </div>
-                <div>75%</div>
+                <div>{yesVotesPercentage}%</div>
               </div>
               <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
                 <div className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
                   <Close />
                 </div>
                 <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-                  <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: '25%' }} />
+                  <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: `${noVotesPercentage}%` }} />
                 </div>
-                <div>25%</div>
+                <div>{noVotesPercentage}%</div>
               </div>
+
             </div>
+
+            <ShowVoters />
           </div>
         </div>
       </div>
@@ -174,7 +180,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border first:rounded-t-lg last:rounded-b-lg border-grey-02 p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {differences
@@ -186,7 +192,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 first:rounded-b-lg last:rounded-t-lg p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {differences
@@ -208,7 +214,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 first:rounded-b-lg last:rounded-t-lg p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {diffs
@@ -226,7 +232,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
                 })}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 first:rounded-t-lg last:rounded-b-lg p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {diffs
@@ -250,7 +256,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
     case 'image': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 first:rounded-t-lg last:rounded-b-lg p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {/* @TODO: When can this be object? */}
@@ -261,7 +267,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
               )}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 first:rounded-t-lg last:rounded-b-lg p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {/* @TODO: When can this be object? */}
@@ -278,13 +284,13 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
     case 'date': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 first:rounded-t-lg last:rounded-b-lg p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {before && <DateTimeDiff mode="before" before={before as string | null} after={after as string | null} />}
             </div>
           </div>
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 first:rounded-t-lg last:rounded-b-lg p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {after && <DateTimeDiff mode="after" before={before as string | null} after={after as string | null} />}
@@ -300,7 +306,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 first:rounded-t-lg last:rounded-b-lg p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="truncate text-ctaPrimary no-underline">
               {differences
@@ -312,7 +318,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 first:rounded-t-lg last:rounded-b-lg p-4">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="truncate text-ctaPrimary no-underline">
               {differences

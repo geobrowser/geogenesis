@@ -19,6 +19,14 @@ export const getFetchProposalQuery = (id: string) => `query {
     createdById
     createdAt
     status
+
+    proposalVotes {
+      totalCount
+      nodes {
+        vote
+      }
+    }
+
     proposedVersions {
       nodes {
         id
