@@ -18,10 +18,9 @@ interface Props {
 
 const votingPeriod = '24h';
 const passThreshold = '51%';
-const rejectedProposalsCount = 0;
 
 export default async function GovernancePage({ params }: Props) {
-  const { acceptedProposals, rejectedProposals } = await getProposalsCount({ params });
+  const { acceptedProposals, rejectedProposals, activeProposals } = await getProposalsCount({ params });
 
   return (
     <div className="space-y-4">
@@ -36,7 +35,7 @@ export default async function GovernancePage({ params }: Props) {
         </GovernanceMetadataBox>
         <GovernanceMetadataBox>
           <h2 className="text-metadata text-grey-04">Active proposals</h2>
-          <p className="text-mediumTitle">0</p>
+          <p className="text-mediumTitle">{activeProposals.totalCount}</p>
         </GovernanceMetadataBox>
         <GovernanceMetadataBox>
           <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
@@ -66,6 +65,9 @@ function GovernanceMetadataBox({ children }: { children: React.ReactNode }) {
 }
 
 interface NetworkResult {
+  activeProposals: {
+    totalCount: number;
+  };
   acceptedProposals: {
     totalCount: number;
   };
@@ -79,6 +81,15 @@ async function getProposalsCount({ params }: Props) {
     endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
     query: `
     query {
+      activeProposals: proposals(
+        filter: {
+          spaceId: { equalToInsensitive: "${params.id}" }
+          status: { equalTo: PROPOSED }
+        }
+      ) {
+        totalCount
+      }
+
       acceptedProposals: proposals(
         filter: {
           spaceId: { equalToInsensitive: "${params.id}" }
@@ -114,6 +125,9 @@ async function getProposalsCount({ params }: Props) {
         case 'GraphqlRuntimeError':
           console.error(`Encountered runtime graphql error in governance/page. spaceId: ${params.id}`, error.message);
           return {
+            activeProposals: {
+              totalCount: 0,
+            },
             acceptedProposals: {
               totalCount: 0,
             },
@@ -124,6 +138,9 @@ async function getProposalsCount({ params }: Props) {
         default:
           console.error(`${error._tag}: Unable to fetch proposals count, spaceId: ${params.id}`);
           return {
+            activeProposals: {
+              totalCount: 0,
+            },
             acceptedProposals: {
               totalCount: 0,
             },
