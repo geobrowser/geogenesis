@@ -12,6 +12,7 @@ import { Action } from '~/core/utils/action';
 import { Avatar } from '~/design-system/avatar';
 
 import { getIsEditorForSpace } from '../space-page/get-is-editor-for-space';
+import { GovernanceProposalsListItem } from './governance-proposal-list-item';
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceStatusChip } from './governance-status-chip';
 
@@ -36,7 +37,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
         );
 
         return (
-          <div key={p.id} className="w-full py-6">
+          <GovernanceProposalsListItem proposalId={p.id} key={p.id}>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <h3 className="text-smallTitle">{p.name}</h3>
@@ -76,7 +77,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
                 />
               </div>
             </div>
-          </div>
+          </GovernanceProposalsListItem>
         );
       })}
     </div>
