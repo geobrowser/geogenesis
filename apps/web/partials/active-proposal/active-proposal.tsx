@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -14,19 +15,34 @@ import { Tick } from '~/design-system/icons/tick';
 import { Time } from '~/design-system/icons/time';
 import { SlideUp } from '~/design-system/slide-up';
 
-export const ActiveProposal = () => {
-  const { isActiveProposalOpen, setIsActiveProposalOpen } = useActiveProposal();
+interface Props {
+  proposalId?: string;
+  spaceId: string;
+  reviewComponent?: React.ReactNode;
+}
+
+export const ActiveProposal = ({ proposalId, spaceId }: Props) => {
+  const router = useRouter();
 
   return (
-    <SlideUp isOpen={isActiveProposalOpen} setIsOpen={setIsActiveProposalOpen}>
+    <SlideUp
+      isOpen={Boolean(proposalId)}
+      setIsOpen={open => {
+        if (!open) {
+          router.push(`/space/${spaceId}/governance`);
+        }
+      }}
+    >
       <div className="h-full overflow-y-auto overscroll-contain">
-        <ReviewActiveProposal />
+        <React.Suspense fallback="Loading...">
+          <ReviewActiveProposal proposalId={proposalId} spaceId={spaceId} />
+        </React.Suspense>
       </div>
     </SlideUp>
   );
 };
 
-const ReviewActiveProposal = () => {
+async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
   const { setIsActiveProposalOpen, activeProposalId } = useActiveProposal();
 
   // @TODO client-side fetch proposal data
@@ -35,26 +51,15 @@ const ReviewActiveProposal = () => {
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 text-button text-text shadow-big md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
-          <SquareButton icon="close" onClick={() => setIsActiveProposalOpen(false)} />
-          <div className="inline-flex items-center gap-2">
-            <span>Review proposal in</span>
-
-            <span className="inline-flex items-center gap-2">
-              <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-                <img src="/mosaic.png" className="absolute inset-0 h-full w-full object-cover object-center" alt="" />
-              </span>
-              <span>Crypto</span>
-            </span>
-          </div>
+          <Link href={`/space/${spaceId}/governance`}>
+            <SquareButton icon={<Close />} />
+          </Link>
+          <p>Review proposal</p>
         </div>
         <div className="inline-flex items-center gap-4">
-          <Button variant="error" onClick={() => setIsActiveProposalOpen(false)}>
-            Reject
-          </Button>
+          <Button variant="error">Reject</Button>
           <span>or</span>
-          <Button variant="success" onClick={() => setIsActiveProposalOpen(false)}>
-            Accept
-          </Button>
+          <Button variant="success">Accept</Button>
         </div>
       </div>
       <div className="my-3 bg-bg shadow-big">
@@ -115,7 +120,7 @@ const ReviewActiveProposal = () => {
       </div>
     </>
   );
-};
+}
 
 const Proposal = () => {
   const { activeProposalId } = useActiveProposal();

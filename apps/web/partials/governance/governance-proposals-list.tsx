@@ -40,7 +40,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
     <div className="flex flex-col divide-y divide-grey-01">
       {proposals.map(p => {
         return (
-          <GovernanceProposalsListItem proposalId={p.id} key={p.id}>
+          <GovernanceProposalsListItem proposalId={p.id} spaceId={spaceId} key={p.id}>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <h3 className="text-smallTitle">{p.name}</h3>
