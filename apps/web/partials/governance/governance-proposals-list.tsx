@@ -14,7 +14,6 @@ import { OmitStrict, Vote } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 
-import { GovernanceProposalsListItem } from './governance-proposal-list-item';
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceStatusChip } from './governance-status-chip';
 
@@ -40,7 +39,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
     <div className="flex flex-col divide-y divide-grey-01">
       {proposals.map(p => {
         return (
-          <GovernanceProposalsListItem proposalId={p.id} spaceId={spaceId} key={p.id}>
+          <Link key={p.id} href={`/space/${spaceId}/governance?proposalId=${p.id}`} className="w-full py-6">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <h3 className="text-smallTitle">{p.name}</h3>
@@ -78,7 +77,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
                 <GovernanceStatusChip endTime={p.endTime} status={p.status} />
               </div>
             </div>
-          </GovernanceProposalsListItem>
+          </Link>
         );
       })}
     </div>

@@ -21,6 +21,8 @@ interface Props {
 const votingPeriod = '24h';
 const passThreshold = '51%';
 
+export const dynamic = 'force-dynamic';
+
 export default async function GovernancePage({ params, searchParams }: Props) {
   const { acceptedProposals, rejectedProposals, activeProposals } = await getProposalsCount({ id: params.id });
 
