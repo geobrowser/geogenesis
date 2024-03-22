@@ -7,7 +7,6 @@ import * as React from 'react';
 
 import { ReactQueryProvider } from './query-client';
 import { Services } from './services';
-import { ActiveProposalProvider } from './state/active-proposal-store';
 import { DiffProvider } from './state/diff-store';
 import { store } from './state/jotai-store';
 import { StatusBarContextProvider } from './state/status-bar-store';
@@ -24,9 +23,7 @@ export function Providers({ children }: Props) {
         <WalletProvider>
           <Services.Provider>
             <StatusBarContextProvider>
-              <DiffProvider>
-                <ActiveProposalProvider>{children}</ActiveProposalProvider>
-              </DiffProvider>
+              <DiffProvider>{children}</DiffProvider>
             </StatusBarContextProvider>
           </Services.Provider>
         </WalletProvider>

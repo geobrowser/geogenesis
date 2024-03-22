@@ -43,10 +43,6 @@ export const ActiveProposal = ({ proposalId, spaceId }: Props) => {
 };
 
 async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
-  const { setIsActiveProposalOpen, activeProposalId } = useActiveProposal();
-
-  // @TODO client-side fetch proposal data
-
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 text-button text-text shadow-big md:px-4 md:py-3">
@@ -123,13 +119,11 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
 }
 
 const Proposal = () => {
-  const { activeProposalId } = useActiveProposal();
-
   // @TODO add markup + logic from <Proposals /> in partials/history/compare.tsx
 
   return (
     <div>
-      <div>Reviewing: {activeProposalId}</div>
+      <div>Reviewing proposal</div>
     </div>
   );
 };
