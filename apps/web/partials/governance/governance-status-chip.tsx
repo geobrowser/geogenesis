@@ -1,26 +1,38 @@
 import { ProposalStatus } from '@geogenesis/sdk';
 
+import { Vote } from '~/core/types';
 import { GeoDate } from '~/core/utils/utils';
+
+import { Avatar } from '~/design-system/avatar';
+
+import { CheckSuccess } from './check-success';
 
 interface Props {
   status: ProposalStatus;
-  startTime: number; // UNIX timestamp
   endTime: number; // UNIX timestamp
 }
 
-export function GovernanceStatusChip({ status, startTime, endTime }: Props) {
+export function GovernanceStatusChip({ status, endTime }: Props) {
   switch (status) {
     case 'ACCEPTED': {
-      return <span className="rounded-sm bg-green px-2 py-1.5 text-smallButton text-white">Accepted</span>;
+      return (
+        <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium text-green">
+          {/* Optically align the icon */}
+          <div className="mt-[0.75px]">
+            <CheckSuccess />
+          </div>
+          Accepted
+        </div>
+      );
     }
     case 'PROPOSED': {
       const timeRemaining = Math.floor(endTime - Date.now() / 1000);
       const isAwaitingExecution = timeRemaining <= 0;
 
       return (
-        <span className="rounded-sm bg-divider px-2 py-1.5 text-smallButton text-grey-04">
+        <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">
           {isAwaitingExecution ? 'Pending execution' : `${timeRemaining} seconds remaining`}
-        </span>
+        </div>
       );
     }
     default:

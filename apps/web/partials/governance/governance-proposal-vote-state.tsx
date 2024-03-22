@@ -2,57 +2,58 @@ import { ProposalStatus } from '@geogenesis/sdk';
 
 import { Vote } from '~/core/types';
 
-import { SmallButton } from '~/design-system/button';
-import { Close } from '~/design-system/icons/close';
-import { Tick } from '~/design-system/icons/tick';
+import { Avatar } from '~/design-system/avatar';
+import { CloseSmall } from '~/design-system/icons/close-small';
+import { TickSmall } from '~/design-system/icons/tick-small';
 
 interface Props {
-  isEditor: boolean;
-  status: ProposalStatus;
-  endTime: number; // UNIX timestamp
   votes: {
     totalCount: number;
     votes: Vote[];
   };
+
+  userVote?: Vote['vote'];
+  user?: {
+    address?: string;
+    avatarUrl: string | null;
+  };
 }
 
-export function GovernanceProposalVoteState({ isEditor, status, endTime, votes }: Props) {
-  const isActive = status !== 'ACCEPTED' && status !== 'REJECTED' && endTime > Date.now() / 1000;
-
+export function GovernanceProposalVoteState({ votes, user, userVote }: Props) {
   const yesVotesPercentage = Math.floor((votes.votes.filter(v => v.vote === 'YES').length / votes.totalCount) * 100);
   const noVotesPercentage = Math.floor((votes.votes.filter(v => v.vote === 'NO').length / votes.totalCount) * 100);
 
   return (
     <>
-      <div className="inline-flex flex-[2] items-center justify-center gap-8">
-        <div className="flex items-center gap-2 text-metadataMedium">
-          <div className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
-            <Tick />
+      <div className="flex items-center gap-2 text-metadataMedium">
+        {userVote === 'YES' ? (
+          <div className="relative h-3 w-3 overflow-hidden rounded-full">
+            <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
           </div>
-          <div className="relative h-1 w-24 overflow-clip rounded-full bg-grey-02">
-            <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: `${yesVotesPercentage}%` }} />
-          </div>
-          <div>{yesVotesPercentage}%</div>
-        </div>
-        <div className="flex items-center gap-2 text-metadataMedium">
-          <div className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
-            <Close />
-          </div>
-          <div className="relative h-1 w-24 overflow-clip rounded-full bg-grey-02">
-            <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: `${noVotesPercentage}%` }} />
-          </div>
-          <div>{noVotesPercentage}%</div>
-        </div>
-      </div>
-      <div className="inline-flex flex-[1] items-center justify-end gap-2 !opacity-0">
-        {isEditor && isActive ? (
-          <>
-            <SmallButton>Reject</SmallButton>
-            <SmallButton>Accept</SmallButton>
-          </>
         ) : (
-          <StatusBadge status={status} />
+          <div className="inline-flex h-3 w-3 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+            <TickSmall />
+          </div>
         )}
+        <div className="relative h-1 w-[180px] overflow-clip rounded-full bg-grey-02">
+          <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: `${yesVotesPercentage}%` }} />
+        </div>
+        <div>{yesVotesPercentage}%</div>
+      </div>
+      <div className="flex items-center gap-2 text-metadataMedium">
+        {userVote === 'NO' ? (
+          <div className="relative h-3 w-3 overflow-hidden rounded-full">
+            <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
+          </div>
+        ) : (
+          <div className="inline-flex h-3 w-3 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+            <CloseSmall />
+          </div>
+        )}
+        <div className="relative h-1 w-[180px] overflow-clip rounded-full bg-grey-02">
+          <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: `${noVotesPercentage}%` }} />
+        </div>
+        <div>{noVotesPercentage}%</div>
       </div>
     </>
   );
