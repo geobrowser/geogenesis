@@ -397,7 +397,7 @@ const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
         <div className="mt-2">
           {attributeIds.map((attributeId: AttributeId) => (
             <ChangedAttribute
-              key={attributeId}
+              key={`${entityId}-${attributeId}`}
               attributeId={attributeId}
               attribute={attributes[attributeId]}
               entityId={entityId}

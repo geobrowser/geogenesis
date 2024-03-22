@@ -1,6 +1,7 @@
 'use client';
 
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { Provider as JotaiProvider, createStore } from 'jotai';
 
 import * as React from 'react';
 
@@ -9,9 +10,10 @@ import { Services } from './services';
 import { ActiveProposalProvider } from './state/active-proposal-store';
 import { AragonSDKProvider } from './state/aragon-dao-store';
 import { DiffProvider } from './state/diff-store';
-import { JotaiProvider } from './state/jotai-provider';
 import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
+
+const store = createStore();
 
 interface Props {
   children: React.ReactNode;
@@ -20,7 +22,7 @@ interface Props {
 export function Providers({ children }: Props) {
   return (
     <ReactQueryProvider>
-      <JotaiProvider>
+      <JotaiProvider store={store}>
         <WalletProvider>
           <Services.Provider>
             <StatusBarContextProvider>

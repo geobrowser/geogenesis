@@ -403,7 +403,7 @@ const ChangedEntity = ({
         <div className="mt-2">
           {attributeIds.map((attributeId: AttributeId) => (
             <ChangedAttribute
-              key={attributeId}
+              key={`${entityId}-${attributeId}`}
               spaceId={spaceId}
               attributeId={attributeId}
               attribute={attributes[attributeId]}

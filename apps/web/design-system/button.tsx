@@ -17,27 +17,27 @@ type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
 
 const buttonClassNames = (className = '') =>
   cva(
-    `relative inline-flex justify-center items-center border rounded-sm focus:outline-none transition ease-in-out duration-200 tracking-[-0.17px] font-medium shadow-light ${className}`,
+    `relative inline-flex items-center justify-center rounded-sm border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-none ${className}`,
 
     {
       variants: {
         variant: {
           primary:
-            'text-white bg-ctaPrimary hover:bg-ctaHover border-transparent focus:border-ctaHover focus:shadow-inner-ctaHover',
+            'border-transparent bg-ctaPrimary text-white hover:bg-ctaHover focus:border-ctaHover focus:shadow-inner-ctaHover',
           secondary:
-            '!text-grey-04 hover:!text-text bg-white hover:bg-bg border-grey-02 hover:border-text focus:border-text focus:shadow-inner-text shadow-button',
-          tertiary: 'text-white bg-text border-white shadow-none',
+            'border-grey-02 bg-white !text-grey-04 shadow-button hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text',
+          tertiary: 'border-white bg-text text-white shadow-none',
           ghost:
-            '!text-grey-04 hover:!text-text bg-white hover:bg-bg border-transparent hover:border-text focus:border-text focus:shadow-inner-text shadow-none hover:shadow-button',
-          success: 'text-white bg-green border-white shadow-none',
-          error: 'text-white bg-red-01 border-white shadow-none',
-          done: 'text-text bg-green border-green',
+            'border-transparent bg-white !text-grey-04 shadow-none hover:border-text hover:bg-bg hover:!text-text hover:shadow-button focus:border-text focus:shadow-inner-text',
+          success: 'border-white bg-green text-white shadow-none',
+          error: 'border-white bg-red-01 text-white shadow-none',
+          done: 'border-green bg-green text-text',
           // using a variant for disabled to overwrite the background/text styles
-          disabled: 'text-grey-03 bg-divider hover:bg-divider border-transparent',
+          disabled: 'border-transparent bg-divider text-grey-03 hover:bg-divider',
         },
         small: {
-          false: 'px-3 py-2 gap-2 text-[1.0625rem] leading-[1.125rem] text-button',
-          true: 'px-1.5 py-1 gap-1.5 leading-none text-smallButton',
+          false: 'gap-2 px-3 py-2 text-[1.0625rem] text-button leading-[1.125rem]',
+          true: 'gap-1.5 px-1.5 py-1 text-smallButton leading-none',
         },
         disabled: {
           true: 'cursor-not-allowed',
@@ -80,8 +80,8 @@ export const SquareButton = forwardRef(function SquareButton(
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   const squareButtonClassNames = cva([
-    'box-border relative flex justify-center items-center w-6 h-6 p-1 border rounded-sm focus:outline-none transition ease-in-out duration-200 text-text bg-white hover:bg-bg hover:border-text focus:border-text !text-grey-04 hover:!text-text focus:shadow-inner-text',
-    !isActive ? 'border-grey-02' : 'border-text !text-text !bg-bg',
+    'relative box-border flex h-6 w-6 items-center justify-center rounded-sm border bg-white p-1 text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
+    !isActive ? 'border-grey-02' : 'border-text !bg-bg !text-text',
     !disabled ? 'cursor-pointer' : 'cursor-not-allowed',
   ]);
 
@@ -106,7 +106,7 @@ export const IconButton = forwardRef(function IconButton(
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   const iconButtonClassNames = cva([
-    'border-none background-transparent',
+    'background-transparent border-none',
     !disabled ? 'cursor-pointer' : 'cursor-not-allowed',
   ]);
 

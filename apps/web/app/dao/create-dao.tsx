@@ -6,7 +6,7 @@ import { getAddress } from 'viem';
 
 import { useWalletClient } from 'wagmi';
 
-import { useAragonSDKContext } from '~/core/state/aragon-dao-store';
+import { useAragon } from '~/core/hooks/use-aragon';
 
 import { Button } from '~/design-system/button';
 
@@ -14,7 +14,7 @@ import { getGovernancePluginInstallItem, getSpacePluginInstallItem } from './enc
 
 // this route is only for testing creating a DAO on the frontend
 export function CreateDao() {
-  const { sdkContextParams } = useAragonSDKContext();
+  const sdkContextParams = useAragon();
   const { data: wallet } = useWalletClient();
 
   if (!sdkContextParams) throw new Error('geoPluginContext is undefined');
