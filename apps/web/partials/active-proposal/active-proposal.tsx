@@ -33,6 +33,8 @@ import { TableBlockFilter } from '~/core/state/table-block-store';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
 import { getActiveProposalDiff } from './get-active-proposal-diff';
 import { getEndedProposalDiff } from './get-ended-proposal-diff';
+import { AcceptOrReject } from './accept-or-reject';
+import { TEST_MAIN_VOTING_PLUGIN_ADDRESS } from '~/app/dao/constants';
 
 interface Props {
   proposalId?: string;
@@ -82,7 +84,8 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
           <p>Review proposal</p>
         </div>
 
-        <AcceptOrReject isProposalDone={isProposalDone} userVote={userVote} />
+        {/* @TODO: Use actual voting address from substream */}
+        <AcceptOrReject onchainProposalId={proposal.onchainProposalId} votingContractAddress={TEST_MAIN_VOTING_PLUGIN_ADDRESS} isProposalDone={isProposalDone} userVote={userVote} />
       </div>
       <MetadataMotionContainer>
         <div className="mx-auto max-w-[1200px] py-10 xl:pl-[2ch] xl:pr-[2ch]">
@@ -138,28 +141,6 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
       </div>
     </>
   );
-}
-
-export function AcceptOrReject({ isProposalDone, userVote }: { isProposalDone: boolean; userVote: Vote | undefined }) {
-  if (userVote) {
-    if (userVote.vote === 'ACCEPT') {
-      return <div className="text-button bg-successTertiary text-green px-3 py-2 rounded">You accepted</div>;
-    }
-
-    return (
-      <div className="text-button bg-errorTertiary text-red-01 px-3 py-2 rounded">You rejected</div>
-    );
-  }
-
-  if (!isProposalDone) {
-    return <div className="inline-flex items-center gap-4">
-      <Button variant="error">Reject</Button>
-      <span>or</span>
-      <Button variant="success">Accept</Button>
-    </div>
-  }
-
-  return null;
 }
 
 async function Proposal({ proposal }: { proposal: Proposal }) {
