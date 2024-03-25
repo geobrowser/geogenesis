@@ -20,8 +20,6 @@ export function Vote({ type, onchainProposalId, children }: Props) {
   const { data: wallet } = useWalletClient();
 
   const onClick = async () => {
-    console.log('data', { type, onchainProposalId });
-
     const config = await prepareWriteContract({
       walletClient: wallet,
       address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
