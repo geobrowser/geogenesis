@@ -1,6 +1,7 @@
 import { ProposalStatus } from '@geogenesis/sdk';
 
 import { Vote } from '~/core/types';
+import { getNoVotePercentage, getYesVotePercentage } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -20,13 +21,13 @@ interface Props {
 }
 
 export function GovernanceProposalVoteState({ votes, user, userVote }: Props) {
-  const yesVotesPercentage = Math.floor((votes.votes.filter(v => v.vote === 'YES').length / votes.totalCount) * 100);
-  const noVotesPercentage = Math.floor((votes.votes.filter(v => v.vote === 'NO').length / votes.totalCount) * 100);
+  const yesVotesPercentage = getYesVotePercentage(votes.votes, votes.totalCount);
+  const noVotesPercentage = getNoVotePercentage(votes.votes, votes.totalCount);
 
   return (
     <>
       <div className="flex items-center gap-2 text-metadataMedium">
-        {userVote === 'YES' ? (
+        {userVote === 'ACCEPT' ? (
           <div className="relative h-3 w-3 overflow-hidden rounded-full">
             <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
           </div>
@@ -41,7 +42,7 @@ export function GovernanceProposalVoteState({ votes, user, userVote }: Props) {
         <div>{yesVotesPercentage}%</div>
       </div>
       <div className="flex items-center gap-2 text-metadataMedium">
-        {userVote === 'NO' ? (
+        {userVote === 'REJECT' ? (
           <div className="relative h-3 w-3 overflow-hidden rounded-full">
             <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
           </div>
