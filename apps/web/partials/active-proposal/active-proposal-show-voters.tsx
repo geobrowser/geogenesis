@@ -23,6 +23,7 @@ export function ShowVoters({ votes, votesCount }: Props) {
     .filter(vote => vote.vote === 'ACCEPT')
     .map(v => (
       <Link
+        key={v.voter.address}
         href={v.voter.profileLink ?? ''}
         className="flex items-center gap-2 transition-colors duration-75 hover:text-text"
       >
@@ -37,6 +38,7 @@ export function ShowVoters({ votes, votesCount }: Props) {
     .filter(vote => vote.vote === 'REJECT')
     .map(v => (
       <Link
+        key={v.voter.address}
         href={v.voter.profileLink ?? ''}
         className="flex items-center gap-2 transition-colors duration-75 hover:text-text"
       >

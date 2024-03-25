@@ -86,4 +86,4 @@ const PUBLIC_SUBSPACES = [
 
 export const ALL_PUBLIC_SPACES = [...PUBLIC_SPACES, ...PUBLIC_SUBSPACES];
 
-export const PROPOSAL_DURATION = GeoDate.toGeoTime(60 * 60 * 24 * 1); // 1 day
+export const PROPOSAL_DURATION = 60 * 60 * 24 * 1; // 1 day

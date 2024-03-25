@@ -39,43 +39,40 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
     <div className="flex flex-col divide-y divide-grey-01">
       {proposals.map(p => {
         return (
-          <Link key={p.id} href={`/space/${spaceId}/governance?proposalId=${p.id}`} className="w-full py-6">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <h3 className="text-smallTitle">{p.name}</h3>
-                <div className="flex items-center gap-5 text-breadcrumb text-grey-04">
-                  <Link
-                    href={p.createdBy?.profileLink ?? ''}
-                    className="flex items-center gap-2 transition-colors duration-75 hover:text-text"
-                  >
-                    <div className="relative h-3 w-3 overflow-hidden rounded-full">
-                      <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.address} />
-                    </div>
-                    <p>{p.createdBy.name ?? p.createdBy.id}</p>
-                  </Link>
+          <Link
+            key={p.id}
+            href={`/space/${spaceId}/governance?proposalId=${p.id}`}
+            className="flex w-full flex-col gap-4 py-6"
+          >
+            <div className="flex flex-col gap-2">
+              <h3 className="text-smallTitle">{p.name}</h3>
+              <div className="flex items-center gap-2 text-breadcrumb text-grey-04">
+                <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                  <Avatar avatarUrl={p.createdBy.avatarUrl} value={p.createdBy.address} />
                 </div>
+                <p>{p.createdBy.name ?? p.createdBy.id}</p>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="inline-flex flex-[3] items-center gap-8">
-                  <GovernanceProposalVoteState
-                    votes={{
-                      totalCount: p.proposalVotes.totalCount,
-                      votes: p.proposalVotes.nodes,
-                    }}
-                    userVote={userVotesByProposalId.get(p.id)}
-                    user={
-                      profile || connectedAddress
-                        ? {
-                            address: connectedAddress,
-                            avatarUrl: profile?.avatarUrl ?? null,
-                          }
-                        : undefined
-                    }
-                  />
-                </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="inline-flex flex-[3] items-center gap-8">
+                <GovernanceProposalVoteState
+                  votes={{
+                    totalCount: p.proposalVotes.totalCount,
+                    votes: p.proposalVotes.nodes,
+                  }}
+                  userVote={userVotesByProposalId.get(p.id)}
+                  user={
+                    profile || connectedAddress
+                      ? {
+                          address: connectedAddress,
+                          avatarUrl: profile?.avatarUrl ?? null,
+                        }
+                      : undefined
+                  }
+                />
+              </div>
 
-                <GovernanceStatusChip endTime={p.endTime} status={p.status} />
-              </div>
+              <GovernanceStatusChip endTime={p.endTime} status={p.status} />
             </div>
           </Link>
         );
