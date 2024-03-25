@@ -785,6 +785,7 @@ const useChangesFromProposals = (selectedProposal: string, previousProposal: str
   const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${selectedProposal}-changes-from-${previousProposal}`],
+    // @TODO: Use `getEndedProposalDiff` function instead.
     queryFn: () => Change.fromProposal(selectedProposal, previousProposal, subgraph),
   });
 
