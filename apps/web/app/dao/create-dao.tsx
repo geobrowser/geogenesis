@@ -47,8 +47,8 @@ export function CreateDao() {
         getAddress(wallet.account.address),
         getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
         getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
-      ], // @TODO: change to user's wallet address
-      pluginUpgrader: getAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // @TODO: Use deployer wallet
+      ],
+      pluginUpgrader: getAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'),
     };
 
     const governancePluginInstallItem = getGovernancePluginInstallItem(governancePluginConfig);
