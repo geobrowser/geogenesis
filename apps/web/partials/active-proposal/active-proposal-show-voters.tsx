@@ -49,7 +49,7 @@ export function ShowVoters({ votes, votesCount }: Props) {
 
   return (
     <div className="flex w-full flex-col items-center gap-8">
-      <AnimatePresence mode="popLayout">
+      <AnimatePresence initial={false} mode="popLayout">
         {showingVoters && (
           <motion.div
             layout="size"
