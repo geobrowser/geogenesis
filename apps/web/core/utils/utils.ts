@@ -281,3 +281,13 @@ export function getYesVotePercentage(votes: Vote[], votesCount: number) {
 export function getNoVotePercentage(votes: Vote[], votesCount: number) {
   return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
 }
+
+export function getProposalTimeRemaining(endTime: number) {
+  const timeRemaining = endTime - GeoDate.toGeoTime(Date.now());
+  const days = Math.floor(timeRemaining / 86400);
+  const hours = Math.floor((timeRemaining % 86400) / 3600);
+  const minutes = Math.floor((timeRemaining % 3600) / 60);
+  const seconds = Math.floor(timeRemaining % 60);
+
+  return { days, hours, minutes, seconds };
+}

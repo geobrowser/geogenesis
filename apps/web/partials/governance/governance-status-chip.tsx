@@ -1,7 +1,7 @@
 import { ProposalStatus } from '@geogenesis/sdk';
 
 import { Vote } from '~/core/types';
-import { GeoDate } from '~/core/utils/utils';
+import { GeoDate, getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -26,12 +26,12 @@ export function GovernanceStatusChip({ status, endTime }: Props) {
       );
     }
     case 'PROPOSED': {
-      const timeRemaining = Math.floor(endTime - Date.now() / 1000);
-      const isAwaitingExecution = timeRemaining <= 0;
+      const { hours, minutes, seconds } = getProposalTimeRemaining(endTime);
+      const isAwaitingExecution = seconds <= 0;
 
       return (
         <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">
-          {isAwaitingExecution ? 'Pending execution' : `${timeRemaining} seconds remaining`}
+          {isAwaitingExecution ? 'Pending execution' : `${hours}h ${minutes}m remaining`}
         </div>
       );
     }

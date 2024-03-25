@@ -15,7 +15,7 @@ import { Tick } from '~/design-system/icons/tick';
 
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { Proposal, EntityId, SpaceId, AttributeId, Vote } from '~/core/types';
-import { GeoDate, getImagePath, getNoVotePercentage, getYesVotePercentage, isProposalEnded, toTitleCase } from '~/core/utils/utils';
+import { GeoDate, getImagePath, getNoVotePercentage, getProposalTimeRemaining, getYesVotePercentage, isProposalEnded, toTitleCase } from '~/core/utils/utils';
 import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { diffArrays, diffWords } from 'diff';
 import { DateTimeDiff } from '../review/review';
@@ -72,7 +72,9 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
 
   const isProposalDone = isProposalEnded(proposal);
   const userVote = connectedAddress ? votes.find(v => v.accountId === getAddress(connectedAddress)) : undefined;
-  const timeRemaining = proposal.endTime - GeoDate.toGeoTime(Date.now());
+
+  const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
+
 
   return (
     <>
@@ -104,7 +106,7 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
                     <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
                   </Link>
                   <span className="text-grey-04">·</span>
-                  <span className="text-text">{isProposalDone ? toTitleCase(proposal.status) : `${timeRemaining} seconds remaining`}</span>
+                  <span className="text-text">{isProposalDone ? toTitleCase(proposal.status) : `${hours}h ${minutes}m remaining`}</span>
                 </div>
               </div>
             </div>
@@ -148,7 +150,7 @@ async function Proposal({ proposal }: { proposal: Proposal }) {
   // Depending on whether the proposal is active or ended we need to compare against 
   // either the live versions of entities in the proposal or against the state of 
   // entities in the proposal as they existed at the time the proposal ended.
-  const { changes, proposals } = isProposalEnded(proposal) ? await getEndedProposalDiff(proposal, '', Subgraph) : await getActiveProposalDiff(proposal, '', Subgraph)
+  const { changes, proposals } = isProposalEnded(proposal) ? await getEndedProposalDiff(proposal, '', Subgraph) : await getActiveProposalDiff(proposal, '8c183a00-ed8f-406c-9b18-2b7ddfc9434e', Subgraph)
 
   if (!proposals.selected) {
     return <div className="text-metadataMedium">Selected proposal not found.</div>;

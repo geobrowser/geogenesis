@@ -18,6 +18,8 @@ export const getFetchProposalQuery = (id: string) => `query {
     createdAtBlock
     createdById
     createdAt
+    startTime
+    endTime
     status
 
     proposalVotes {
