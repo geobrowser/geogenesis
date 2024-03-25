@@ -34,6 +34,7 @@ import { fetchColumns } from '~/core/io/fetch-columns';
 import { Entity } from '~/core/utils/entity';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
+import { getActiveProposalDiff } from './get-active-proposal-diff';
 
 interface Props {
   proposalId?: string;
@@ -166,9 +167,7 @@ export function AcceptOrReject({ isProposalDone, userVote }: { isProposalDone: b
 
 async function Proposal({ proposal }: { proposal: Proposal }) {
   // @TODO: Get last proposal
-  const data = await Change.fromProposal(proposal.id, '', Subgraph)
-
-  const { changes, proposals } = data;
+  const {changes, proposals} = await getActiveProposalDiff(proposal, '', Subgraph)
 
   if (!proposals.selected) {
     return <div className="text-metadataMedium">Selected proposal not found.</div>;
