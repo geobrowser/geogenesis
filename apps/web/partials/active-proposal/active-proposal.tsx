@@ -15,7 +15,7 @@ import { Tick } from '~/design-system/icons/tick';
 
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { Proposal, Action, EntityId, SpaceId, AttributeId, Vote } from '~/core/types';
-import { GeoDate, formatShortAddress, getImagePath, isProposalEnded } from '~/core/utils/utils';
+import { GeoDate, formatShortAddress, getImagePath, getNoVotePercentage, getYesVotePercentage, isProposalEnded } from '~/core/utils/utils';
 import pluralize from 'pluralize';
 import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { diffArrays, diffWords } from 'diff';
@@ -63,8 +63,8 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
 
-  const yesVotesPercentage = Math.floor((votes.filter(v => v.vote === 'ACCEPT').length / votesCount) * 100);
-  const noVotesPercentage = Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
+  const yesVotesPercentage = getYesVotePercentage(votes, votesCount);
+  const noVotesPercentage = getNoVotePercentage(votes, votesCount);
 
   const isProposalDone = isProposalEnded(proposal);
   const userVote = connectedAddress ? votes.find(v => v.accountId === getAddress(connectedAddress)) : undefined;
@@ -78,6 +78,7 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
           </Link>
           <p>Review proposal</p>
         </div>
+
         <AcceptOrReject isProposalDone={isProposalDone} userVote={userVote} />
       </div>
       <div className="my-3 bg-bg shadow-big">
