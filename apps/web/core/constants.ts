@@ -1,3 +1,5 @@
+import { GeoDate } from './utils/utils';
+
 export const ZERO_WIDTH_SPACE = '\u200b';
 
 export const PLACEHOLDER_IMAGES = {
@@ -83,3 +85,5 @@ const PUBLIC_SUBSPACES = [
 ];
 
 export const ALL_PUBLIC_SPACES = [...PUBLIC_SPACES, ...PUBLIC_SUBSPACES];
+
+export const PROPOSAL_DURATION = GeoDate.toGeoTime(60 * 60 * 24 * 1); // 1 day

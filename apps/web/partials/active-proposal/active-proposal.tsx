@@ -35,6 +35,7 @@ import { Entity } from '~/core/utils/entity';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
 import { getActiveProposalDiff } from './get-active-proposal-diff';
+import { getEndedProposalDiff } from './get-ended-proposal-diff';
 
 interface Props {
   proposalId?: string;
@@ -167,7 +168,10 @@ export function AcceptOrReject({ isProposalDone, userVote }: { isProposalDone: b
 
 async function Proposal({ proposal }: { proposal: Proposal }) {
   // @TODO: Get last proposal
-  const {changes, proposals} = await getActiveProposalDiff(proposal, '', Subgraph)
+  // Depending on whether the proposal is active or ended we need to compare against 
+  // either the live versions of entities in the proposal or against the state of 
+  // entities in the proposal as they existed at the time the proposal ended.
+  const { changes, proposals } = isProposalEnded(proposal) ? await getEndedProposalDiff(proposal, '', Subgraph) : await getActiveProposalDiff(proposal, '', Subgraph)
 
   if (!proposals.selected) {
     return <div className="text-metadataMedium">Selected proposal not found.</div>;

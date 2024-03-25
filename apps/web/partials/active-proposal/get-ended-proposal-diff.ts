@@ -1,5 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
+import { PROPOSAL_DURATION } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { fetchProposal } from '~/core/io/subgraph';
 import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
@@ -10,7 +11,9 @@ import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
-export async function getActiveProposalDiff(
+import { fetchVersionsByCreatedAt } from './fetch-version-by-created-at';
+
+export async function getEndedProposalDiff(
   selectedProposal: Proposal,
   previousProposalId: string,
   subgraph: Subgraph.ISubgraph
@@ -34,24 +37,25 @@ export async function getActiveProposalDiff(
     return [...acc, ...proposedVersion.actions];
   }, [] as Action[]);
 
+  const createdAt = selectedProposal.createdAt + PROPOSAL_DURATION;
+
   for (const entityId of entityIds) {
     // Fetch the entity versions that correlate with the selected and previous proposals
-    // from the currently live version of each entity.
-    //
-    // We want to compare against the live version of the entity so we can see the changes
-    // that the proposal introduces.
+    // from the version of each entity at the time the proposal ended.
     //
     // There's no way to fetch a specific version by proposal id so we need to fetch all
     // versions by proposal id and select the first one. There should only ever be one
     // version for an entity for a proposal.
     const [maybeSelectedVersions, maybePreviousVersions] = await Promise.all([
-      fetchVersions({
+      fetchVersionsByCreatedAt({
         entityId: entityId,
+        createdAt,
         proposalId: selectedProposal.id,
       }),
       previousProposal
-        ? fetchVersions({
+        ? fetchVersionsByCreatedAt({
             entityId: entityId,
+            createdAt,
             proposalId: previousProposal.id,
           })
         : [],
@@ -60,6 +64,11 @@ export async function getActiveProposalDiff(
     const selectedRemoteVersion: Version | undefined = maybeSelectedVersions[0];
     const previousVersion: Version | undefined = maybePreviousVersions[0];
 
+    // We merge the actions from the proposal for each entity with the state of the entity
+    // at the time the proposal was ended. We compare the merged entity with the state of
+    // the entity before the proposal was ended to determine the changes that the proposal
+    // introduces.
+    //
     // Entity.mergeActionsWithEntity gives us the state of the entity after the actions in
     // the proposal are applied.
     const selectedVersion = Entity.mergeActionsWithEntity(allActionsInProposal, {
