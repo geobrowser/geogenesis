@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
+import pluralize from 'pluralize';
 
 import * as React from 'react';
 
@@ -12,9 +13,10 @@ import { SmallButton } from '~/design-system/button';
 
 interface Props {
   votes: Vote[];
+  votesCount: number;
 }
 
-export function ShowVoters({ votes }: Props) {
+export function ShowVoters({ votes, votesCount }: Props) {
   const [showingVoters, showVoters] = React.useState(false);
 
   const yesVoters = votes
@@ -69,7 +71,9 @@ export function ShowVoters({ votes }: Props) {
       </AnimatePresence>
       <motion.div transition={{ duration: 0.1 }} layout="position">
         <SmallButton onClick={() => showVoters(!showingVoters)}>
-          {showingVoters ? 'Show voters' : 'Hide voters'}
+          {showingVoters
+            ? `Hide ${votesCount} ${pluralize('voter', votesCount)}`
+            : `Show ${votesCount} ${pluralize('voter', votesCount)}`}
         </SmallButton>
       </motion.div>
     </div>

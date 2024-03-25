@@ -129,7 +129,7 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
 
             </div>
 
-            <ShowVoters votes={proposal.proposalVotes.nodes} />
+            <ShowVoters votes={proposal.proposalVotes.nodes} votesCount={votesCount} />
           </div>
         </div>
       </MetadataMotionContainer>
