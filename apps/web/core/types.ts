@@ -164,6 +164,7 @@ export type Row = Record<string, Cell>;
 export type Vote = {
   vote: 'ACCEPT' | 'REJECT';
   accountId: string;
+  voter: Profile;
 };
 
 export type Proposal = {

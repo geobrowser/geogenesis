@@ -127,6 +127,17 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   const maybeProfile = await fetchProfile({ address: proposal.createdById });
 
+  // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
+  // of the user and fetch the Profile for the user with the matching wallet address.
+  const maybeVoterProfiles = await Promise.all(
+    proposal.proposalVotes.nodes.map(v => fetchProfile({ address: v.accountId }))
+  );
+
+  // Create a map of wallet address -> profile so we can look it up when creating the application
+  // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile
+  // of the user who created the ProposedVersion.
+  const voterProfiles = Object.fromEntries(maybeVoterProfiles.flatMap(profile => (profile ? [profile] : [])));
+
   return {
     ...proposal,
     space: proposal.spaceId,
@@ -141,6 +152,23 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
             address: proposal.createdById as `0x${string}`,
             profileLink: null,
           },
+    proposalVotes: {
+      totalCount: proposal.proposalVotes.totalCount,
+      nodes: proposal.proposalVotes.nodes.map(v => {
+        return {
+          ...v,
+          vote: v.vote,
+          voter: voterProfiles[v.accountId] ?? {
+            id: v.accountId,
+            name: null,
+            avatarUrl: null,
+            coverUrl: null,
+            address: v.accountId as `0x${string}`,
+            profileLink: null,
+          },
+        };
+      }),
+    },
     proposedVersions: proposal.proposedVersions.nodes.map(v => {
       return {
         ...v,

@@ -6,7 +6,7 @@ import type { Change as Difference } from 'diff';
 
 import * as React from 'react';
 
-import { fetchProposal } from '~/core/io/subgraph';
+import { fetchEntity, fetchProposal, fetchTriples } from '~/core/io/subgraph';
 
 import { Avatar } from '~/design-system/avatar';
 import { Button, SquareButton } from '~/design-system/button';
@@ -14,9 +14,8 @@ import { Close } from '~/design-system/icons/close';
 import { Tick } from '~/design-system/icons/tick';
 
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
-import { Proposal, Action, EntityId, SpaceId, AttributeId, Vote } from '~/core/types';
-import { GeoDate, formatShortAddress, getImagePath, getNoVotePercentage, getYesVotePercentage, isProposalEnded } from '~/core/utils/utils';
-import pluralize from 'pluralize';
+import { Proposal, EntityId, SpaceId, AttributeId, Vote } from '~/core/types';
+import { getImagePath, getNoVotePercentage, getYesVotePercentage, isProposalEnded } from '~/core/utils/utils';
 import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { diffArrays, diffWords } from 'diff';
 import { DateTimeDiff } from '../review/review';
@@ -30,6 +29,11 @@ import { ShowVoters } from './active-proposal-show-voters';
 import { cookies } from 'next/headers';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { getAddress } from 'viem';
+import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
+import { fetchColumns } from '~/core/io/fetch-columns';
+import { Entity } from '~/core/utils/entity';
+import { TableBlockFilter } from '~/core/state/table-block-store';
+import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
 
 interface Props {
   proposalId?: string;
@@ -81,7 +85,7 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
 
         <AcceptOrReject isProposalDone={isProposalDone} userVote={userVote} />
       </div>
-      <div className="my-3 bg-bg shadow-big">
+      <MetadataMotionContainer>
         <div className="mx-auto max-w-[1200px] py-10 xl:pl-[2ch] xl:pr-[2ch]">
           <div className="flex flex-col items-center gap-8">
             <div className="flex flex-col items-center gap-3">
@@ -124,10 +128,10 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
 
             </div>
 
-            <ShowVoters />
+            <ShowVoters votes={proposal.proposalVotes.nodes} />
           </div>
         </div>
-      </div>
+      </MetadataMotionContainer>
       <div className="rounded-t-4 mt-3 h-full overflow-y-auto overscroll-contain bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] pb-20 pt-10 xl:pb-[4ch] xl:pl-[2ch] xl:pr-[2ch] xl:pt-[40px]">
           <Proposal proposal={proposal} />
@@ -575,8 +579,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
 
       return (
         <div key={blockId} className="flex gap-8">
-          {/* @TODO: BAIIRUN */}
-          {/* <div className="flex-1 py-4">
+          <div className="flex-1 py-4">
             {!isNewTableFilter && (
               <div className="flex flex-wrap gap-2">
                 <TableFilters rawFilter={before} />
@@ -589,7 +592,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
                 <TableFilters rawFilter={after} />
               </div>
             )}
-          </div> */}
+          </div>
         </div>
       );
     }
@@ -652,3 +655,77 @@ function parseMarkdown(markdownString: string) {
 
   return { markdownType, markdownContent };
 }
+
+type TableFiltersProps = {
+  rawFilter: string;
+};
+
+const TableFilters = async ({ rawFilter }: TableFiltersProps) => {
+  const filters = await getFilters(rawFilter);
+
+  if (filters.length === 0) return null;
+
+  return (
+    <>
+      {filters.map((filter, index) => (
+        <TableFilter key={index} filter={filter} />
+      ))}
+    </>
+  );
+};
+
+type TableFilterProps = {
+  filter: TableBlockFilter & { columnName: string };
+};
+
+const TableFilter = ({ filter }: TableFilterProps) => {
+  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
+
+  return (
+    <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 12 12"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="flex-shrink-0"
+      >
+        <path
+          d="M9.12976 0L2.87024 0C1.6588 0 0.947091 1.36185 1.63876 2.35643L4.45525 6.40634C4.48438 6.44823 4.5 6.49804 4.5 6.54907L4.5 10.5C4.5 11.3284 5.17157 12 6 12C6.82843 12 7.5 11.3284 7.5 10.5L7.5 6.54907C7.5 6.49804 7.51562 6.44823 7.54475 6.40634L10.3612 2.35642C11.0529 1.36185 10.3412 0 9.12976 0Z"
+          fill={colors.light['text']}
+        />
+      </svg>
+      <div className="flex items-center gap-1">
+        <span>{filter.columnName ?? `[ID]`} is</span>
+        <span>·</span>
+        <span>{value}</span>
+      </div>
+    </div>
+  );
+};
+
+const getFilters = async (rawFilter: string) => {
+  const filters = await createFiltersFromGraphQLString(rawFilter, async id => await fetchEntity({ id }));
+  const serverColumns = await fetchColumns({
+    params: { skip: 0, first: 0, filter: '' },
+    api: {
+      fetchEntity: fetchEntity,
+      fetchTriples: fetchTriples,
+    },
+  });
+  const filtersWithColumnName = filters.map(f => {
+    if (f.columnId === SYSTEM_IDS.NAME) {
+      return {
+        ...f,
+        columnName: 'Name',
+      };
+    }
+    return {
+      ...f,
+      columnName: Entity.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+    };
+  });
+
+  return filtersWithColumnName;
+};

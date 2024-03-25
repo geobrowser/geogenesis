@@ -275,9 +275,9 @@ export function isProposalEnded(proposal: Proposal) {
 }
 
 export function getYesVotePercentage(votes: Vote[], votesCount: number) {
-  return Math.floor((votes.filter(v => v.vote === 'YES').length / votesCount) * 100);
+  return Math.floor((votes.filter(v => v.vote === 'ACCEPT').length / votesCount) * 100);
 }
 
 export function getNoVotePercentage(votes: Vote[], votesCount: number) {
-  return Math.floor((votes.filter(v => v.vote === 'NO').length / votesCount) * 100);
+  return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
 }
