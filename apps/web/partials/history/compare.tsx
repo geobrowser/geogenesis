@@ -610,7 +610,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {differences
@@ -622,7 +622,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {differences
@@ -644,7 +644,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {diffs
@@ -662,7 +662,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
                 })}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {diffs
@@ -686,7 +686,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
     case 'image': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {/* @TODO: When can this be object? */}
@@ -697,7 +697,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
               )}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {/* @TODO: When can this be object? */}
@@ -714,13 +714,13 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
     case 'date': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {before && <DateTimeDiff mode="before" before={before as string | null} after={after as string | null} />}
             </div>
           </div>
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {after && <DateTimeDiff mode="after" before={before as string | null} after={after as string | null} />}
@@ -736,7 +736,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="truncate text-ctaPrimary no-underline">
               {differences
@@ -748,7 +748,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="truncate text-ctaPrimary no-underline">
               {differences
