@@ -47,7 +47,6 @@ export async function getActiveProposalDiff(
     const [maybeSelectedVersions, maybePreviousVersions] = await Promise.all([
       fetchVersions({
         entityId: entityId,
-        proposalId: selectedProposal.id,
       }),
       previousProposal
         ? fetchVersions({
