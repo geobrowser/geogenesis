@@ -31,9 +31,9 @@ declare module 'zapatos/schema' {
   export namespace every {
     export type subspace_proposal_type = ['add_subspace', 'remove_subspace'];
   }
-  export type vote_type = 'no' | 'yes';
+  export type vote_type = 'accept' | 'reject';
   export namespace every {
-    export type vote_type = ['no', 'yes'];
+    export type vote_type = ['accept', 'reject'];
   }
 
   /* --- tables --- */

@@ -24,6 +24,7 @@ export const getFetchProposalQuery = (id: string) => `query {
       totalCount
       nodes {
         vote
+        accountId
       }
     }
 
@@ -96,7 +97,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id}
-            
+
             queryString: ${getFetchProposalQuery(options.id)}
             `,
             error.message

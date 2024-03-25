@@ -80,7 +80,7 @@ CREATE TYPE public.proposal_type as ENUM ('content', 'add_subspace', 'remove_sub
 CREATE TYPE public.proposal_status as ENUM ('proposed', 'accepted', 'rejected', 'canceled', 'executed');
 
 -- Maps to 2 or 3 onchain
-CREATE TYPE public.vote_type as ENUM ('yes', 'no');
+CREATE TYPE public.vote_type as ENUM ('accept', 'reject');
 
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,

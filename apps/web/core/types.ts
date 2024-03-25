@@ -162,7 +162,7 @@ export interface Cell {
 export type Row = Record<string, Cell>;
 
 export type Vote = {
-  vote: 'YES' | 'NO';
+  vote: 'ACCEPT' | 'REJECT';
   accountId: string;
 };
 

@@ -14,8 +14,8 @@ import { Close } from '~/design-system/icons/close';
 import { Tick } from '~/design-system/icons/tick';
 
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
-import { Proposal, Action, EntityId, SpaceId, AttributeId } from '~/core/types';
-import { formatShortAddress, getImagePath } from '~/core/utils/utils';
+import { Proposal, Action, EntityId, SpaceId, AttributeId, Vote } from '~/core/types';
+import { GeoDate, formatShortAddress, getImagePath, isProposalEnded } from '~/core/utils/utils';
 import pluralize from 'pluralize';
 import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { diffArrays, diffWords } from 'diff';
@@ -27,6 +27,9 @@ import { cva } from 'class-variance-authority';
 import { Change } from '~/core/utils/change';
 import { Subgraph } from '~/core/io';
 import { ShowVoters } from './active-proposal-show-voters';
+import { cookies } from 'next/headers';
+import { WALLET_ADDRESS } from '~/core/cookie';
+import { getAddress } from 'viem';
 
 interface Props {
   proposalId?: string;
@@ -49,32 +52,33 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
     return null;
   }
 
+  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+
   const proposal = await fetchProposal({ id: proposalId });
 
   if (!proposal) {
-    redirect(`/space/${spaceId}/governance`);
+    redirect(`/space/${ spaceId }/governance`);
   }
 
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
 
-  const yesVotesPercentage = Math.floor((votes.filter(v => v.vote === 'YES').length / votesCount) * 100);
-  const noVotesPercentage = Math.floor((votes.filter(v => v.vote === 'NO').length / votesCount) * 100);
+  const yesVotesPercentage = Math.floor((votes.filter(v => v.vote === 'ACCEPT').length / votesCount) * 100);
+  const noVotesPercentage = Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
+
+  const isProposalDone = isProposalEnded(proposal);
+  const userVote = connectedAddress ? votes.find(v => v.accountId === getAddress(connectedAddress)) : undefined;
 
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 text-button text-text shadow-big md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
-          <Link href={`/space/${spaceId}/governance`}>
+          <Link href={`/space/${ spaceId }/governance`}>
             <SquareButton icon={<Close />} />
           </Link>
           <p>Review proposal</p>
         </div>
-        <div className="inline-flex items-center gap-4">
-          <Button variant="error">Reject</Button>
-          <span>or</span>
-          <Button variant="success">Accept</Button>
-        </div>
+        <AcceptOrReject isProposalDone={isProposalDone} userVote={userVote} />
       </div>
       <div className="my-3 bg-bg shadow-big">
         <div className="mx-auto max-w-[1200px] py-10 xl:pl-[2ch] xl:pr-[2ch]">
@@ -103,7 +107,7 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
                   <Tick />
                 </div>
                 <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-                  <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: `${yesVotesPercentage}%` }} />
+                  <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: `${ yesVotesPercentage }%` }} />
                 </div>
                 <div>{yesVotesPercentage}%</div>
               </div>
@@ -112,7 +116,7 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
                   <Close />
                 </div>
                 <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-                  <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: `${noVotesPercentage}%` }} />
+                  <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: `${ noVotesPercentage }%` }} />
                 </div>
                 <div>{noVotesPercentage}%</div>
               </div>
@@ -132,7 +136,29 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
   );
 }
 
-async function Proposal({proposal}: {proposal: Proposal}) {
+export function AcceptOrReject({ isProposalDone, userVote }: { isProposalDone: boolean; userVote: Vote | undefined }) {
+  if (userVote) {
+    if (userVote.vote === 'ACCEPT') {
+      return <div className="text-button bg-successTertiary text-green px-3 py-2 rounded">You accepted</div>;
+    }
+
+    return (
+      <div className="text-button bg-errorTertiary text-red-01 px-3 py-2 rounded">You rejected</div>
+    );
+  }
+
+  if (!isProposalDone) {
+    return <div className="inline-flex items-center gap-4">
+      <Button variant="error">Reject</Button>
+      <span>or</span>
+      <Button variant="success">Accept</Button>
+    </div>
+  }
+
+  return null;
+}
+
+async function Proposal({ proposal }: { proposal: Proposal }) {
   // @TODO: Get last proposal
   const data = await Change.fromProposal(proposal.id, '', Subgraph)
 
@@ -384,7 +410,7 @@ const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
         <div className="mt-2">
           {attributeIds.map((attributeId: AttributeId) => (
             <ChangedAttribute
-              key={`${entityId}-${attributeId}`}
+              key={`${ entityId }-${ attributeId }`}
               attributeId={attributeId}
               attribute={attributes[attributeId]}
               entityId={entityId}
