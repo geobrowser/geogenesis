@@ -1,8 +1,10 @@
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
+import { cookies } from 'next/headers';
 
 import * as React from 'react';
 
+import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { graphql } from '~/core/io/subgraph/graphql';
 
@@ -24,6 +26,7 @@ const passThreshold = '51%';
 export const dynamic = 'force-dynamic';
 
 export default async function GovernancePage({ params, searchParams }: Props) {
+  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
   const { acceptedProposals, rejectedProposals, activeProposals } = await getProposalsCount({ id: params.id });
 
   return (
@@ -61,7 +64,7 @@ export default async function GovernancePage({ params, searchParams }: Props) {
         <GovernanceProposalsListInfiniteScroll spaceId={params.id} page={0} />
       </div>
 
-      <ActiveProposal spaceId={params.id} proposalId={searchParams.proposalId} />
+      <ActiveProposal connectedAddress={connectedAddress} spaceId={params.id} proposalId={searchParams.proposalId} />
     </>
   );
 }

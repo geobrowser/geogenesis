@@ -38,8 +38,8 @@ export default async function Page() {
                 </p>
                 <div className="flex items-center gap-2">
                   <p>Total votes: {p.proposalVotes.totalCount}</p>
-                  <p>Yes: {p.proposalVotes.nodes.filter(p => p.vote === 'YES').length}</p>
-                  <p>No: {p.proposalVotes.nodes.filter(p => p.vote === 'NO').length}</p>
+                  <p>Yes: {p.proposalVotes.nodes.filter(p => p.vote === 'ACCEPT').length}</p>
+                  <p>No: {p.proposalVotes.nodes.filter(p => p.vote === 'REJECT').length}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Vote onchainProposalId={p.onchainProposalId} type={VoteOption.Yes}>

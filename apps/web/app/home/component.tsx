@@ -14,7 +14,6 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Publish } from '~/core/io';
 import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
-import { useActiveProposal } from '~/core/state/active-proposal-store';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -58,7 +57,6 @@ export const Component = ({ header, activeProposals, membershipRequests, accepte
           acceptedProposalsCount={acceptedProposalsCount}
         />
       </div>
-      <ActiveProposal />
     </>
   );
 };
@@ -202,16 +200,9 @@ type PendingProposalProps = {
 };
 
 const PendingProposal = ({ proposal }: PendingProposalProps) => {
-  const { setIsActiveProposalOpen, setActiveProposalId } = useActiveProposal();
-
-  const handleOpenActiveProposal = () => {
-    setActiveProposalId('someId');
-    setIsActiveProposalOpen(true);
-  };
-
   return (
     <div className="space-y-4 rounded-lg border border-grey-02 p-4">
-      <button onClick={handleOpenActiveProposal}>
+      <button>
         <div className="text-smallTitle">Changes to x, y, and z across several pages</div>
       </button>
       <Link href="" className="flex items-center gap-1.5 text-breadcrumb text-grey-04">

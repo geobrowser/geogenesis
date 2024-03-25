@@ -23,11 +23,8 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { TableBlockPlaceholder } from '../blocks/table/table-block';
 import { colors } from '~/design-system/theme/colors';
 import { cva } from 'class-variance-authority';
-import { Change } from '~/core/utils/change';
 import { Subgraph } from '~/core/io';
 import { ShowVoters } from './active-proposal-show-voters';
-import { cookies } from 'next/headers';
-import { WALLET_ADDRESS } from '~/core/cookie';
 import { getAddress } from 'viem';
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { fetchColumns } from '~/core/io/fetch-columns';
@@ -39,26 +36,25 @@ import { getEndedProposalDiff } from './get-ended-proposal-diff';
 
 interface Props {
   proposalId?: string;
+  connectedAddress: string | undefined;
   spaceId: string;
   reviewComponent?: React.ReactNode;
 }
 
-export const ActiveProposal = ({ proposalId, spaceId }: Props) => {
+export const ActiveProposal = ({ proposalId, spaceId, connectedAddress }: Props) => {
   return (
     <ActiveProposalSlideUp proposalId={proposalId} spaceId={spaceId}>
       <React.Suspense fallback="Loading...">
-        <ReviewActiveProposal proposalId={proposalId} spaceId={spaceId} />
+        <ReviewActiveProposal connectedAddress={connectedAddress} proposalId={proposalId} spaceId={spaceId} />
       </React.Suspense>
     </ActiveProposalSlideUp>
   );
 };
 
-async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
+async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: Props) {
   if (!proposalId) {
     return null;
   }
-
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
   const proposal = await fetchProposal({ id: proposalId });
 
