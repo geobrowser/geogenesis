@@ -106,7 +106,7 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
                 </div>
               </div>
             </div>
-            <div className="flex w-full gap-8">
+            <div className="flex w-full gap-[60px]">
               <div className="flex w-1/2 items-center gap-2 text-metadataMedium">
                 <div className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
                   <Tick />
