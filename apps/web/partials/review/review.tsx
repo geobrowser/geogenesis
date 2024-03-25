@@ -15,7 +15,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useWalletClient } from 'wagmi';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
-import { Environment } from '~/core/environment';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
@@ -654,7 +653,7 @@ const ChangedAttribute = ({
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {differences
@@ -666,7 +665,7 @@ const ChangedAttribute = ({
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}
@@ -692,7 +691,7 @@ const ChangedAttribute = ({
     case 'entity': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {entity?.triples
@@ -713,7 +712,7 @@ const ChangedAttribute = ({
               )}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}
@@ -753,7 +752,7 @@ const ChangedAttribute = ({
     case 'image': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {typeof before !== 'object' && (
@@ -763,7 +762,7 @@ const ChangedAttribute = ({
               )}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}
@@ -787,13 +786,13 @@ const ChangedAttribute = ({
     case 'date': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {before && <DateTimeDiff mode="before" before={before as string | null} after={after as string | null} />}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}
@@ -817,7 +816,7 @@ const ChangedAttribute = ({
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="truncate text-ctaPrimary no-underline">
               {differences
@@ -829,7 +828,7 @@ const ChangedAttribute = ({
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 first:rounded-t-lg last:rounded-b-lg p-4">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}
