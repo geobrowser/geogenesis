@@ -15,7 +15,7 @@ import { Tick } from '~/design-system/icons/tick';
 
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { Proposal, EntityId, SpaceId, AttributeId, Vote } from '~/core/types';
-import { getImagePath, getNoVotePercentage, getYesVotePercentage, isProposalEnded } from '~/core/utils/utils';
+import { GeoDate, getImagePath, getNoVotePercentage, getYesVotePercentage, isProposalEnded, toTitleCase } from '~/core/utils/utils';
 import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { diffArrays, diffWords } from 'diff';
 import { DateTimeDiff } from '../review/review';
@@ -72,6 +72,7 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
 
   const isProposalDone = isProposalEnded(proposal);
   const userVote = connectedAddress ? votes.find(v => v.accountId === getAddress(connectedAddress)) : undefined;
+  const timeRemaining = proposal.endTime - GeoDate.toGeoTime(Date.now());
 
   return (
     <>
@@ -102,7 +103,7 @@ async function ReviewActiveProposal({ proposalId, spaceId }: Props) {
                     <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
                   </Link>
                   <span className="text-grey-04">·</span>
-                  <span className="text-text">23h 58m remaining</span>
+                  <span className="text-text">{isProposalDone ? toTitleCase(proposal.status) : `${timeRemaining} seconds remaining`}</span>
                 </div>
               </div>
             </div>

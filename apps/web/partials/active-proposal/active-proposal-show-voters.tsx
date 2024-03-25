@@ -47,18 +47,21 @@ export function ShowVoters({ votes }: Props) {
 
   return (
     <div className="flex w-full flex-col items-center gap-8">
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="popLayout">
         {showingVoters && (
           <motion.div
-            animate={{ height: '100%' }}
-            transition={{ duration: 0.5, delay: 1 }}
+            layout="size"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ height: '100%', opacity: 1 }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.1 }}
             className="flex h-auto w-full gap-[60px]"
           >
-            <div className="flex w-full items-center gap-3 rounded-lg bg-grey-01 px-3 py-4 text-grey-04">
+            <div className="flex w-full flex-wrap items-center gap-3 rounded-lg bg-grey-01 px-3 py-4 text-grey-04">
               {yesVoters}
             </div>
 
-            <div className="flex w-full items-center gap-3 rounded-lg bg-grey-01 px-3 py-4 text-grey-04">
+            <div className="flex w-full flex-wrap items-center gap-3 rounded-lg bg-grey-01 px-3 py-4 text-grey-04">
               {noVoters}
             </div>
           </motion.div>
