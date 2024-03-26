@@ -1,6 +1,9 @@
 'use client';
 
+import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { useSetActiveWallet } from '@privy-io/wagmi';
 import * as Popover from '@radix-ui/react-popover';
+import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
 import Link from 'next/link';
@@ -10,32 +13,75 @@ import * as React from 'react';
 
 import { useAccount } from 'wagmi';
 
+import { Cookie } from '~/core/cookie';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePerson } from '~/core/hooks/use-person';
+import { fetchProfile } from '~/core/io/subgraph';
 import { useEditable } from '~/core/state/editable-store';
-import { NavUtils } from '~/core/utils/utils';
+import { Profile } from '~/core/types';
+import { NavUtils, formatShortAddress } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
+import { Check } from '~/design-system/icons/check';
 import { EyeSmall } from '~/design-system/icons/eye-small';
-import { Home } from '~/design-system/icons/home';
+import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
+import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
 import { Menu } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { useCreateProfile } from '../onboarding/create-profile-dialog';
 
+interface MenuState {
+  isOpen: boolean;
+  // Profile switcher is a submenu within the menu
+  isProfileSwitcherOpen: boolean;
+}
+
+type MenuAction =
+  | {
+      type: 'SET_OPEN';
+      open: boolean;
+    }
+  | {
+      type: 'SET_PROFILE_SWITCHER_OPEN';
+      open: boolean;
+    };
+
+function menuReducer(state: MenuState, action: MenuAction): MenuState {
+  switch (action.type) {
+    case 'SET_OPEN':
+      return {
+        ...state,
+        isOpen: action.open,
+        // Close the profile switcher if we're closing the menu
+        isProfileSwitcherOpen: action.open ? state.isProfileSwitcherOpen : false,
+      };
+    case 'SET_PROFILE_SWITCHER_OPEN':
+      return {
+        ...state,
+        isProfileSwitcherOpen: action.open,
+      };
+  }
+}
+
 export function NavbarActions() {
-  const [open, onOpenChange] = React.useState(false);
+  const [menuState, dispatch] = React.useReducer(menuReducer, {
+    isOpen: false,
+    isProfileSwitcherOpen: false,
+  });
+
   const { showCreateProfile } = useCreateProfile();
 
+  const { user } = usePrivy();
   const { address } = useAccount();
-  const { profile, isLoading: isProfileLoading } = useGeoProfile(address);
+  const { profile, isLoading: isProfileLoading } = useGeoProfile(address as `0x${string}` | undefined);
   const { person, isLoading: isPersonLoading } = usePerson(address);
 
-  if (!address) {
+  if (!user?.wallet?.address) {
     return <GeoConnectButton />;
   }
 
@@ -58,58 +104,107 @@ export function NavbarActions() {
             <Avatar value={address} avatarUrl={person?.avatarUrl} size={28} />
           </div>
         }
-        open={open}
-        onOpenChange={onOpenChange}
-        className="max-w-[165px]"
+        open={menuState.isOpen}
+        onOpenChange={open => dispatch({ type: 'SET_OPEN', open })}
+        className="max-w-[300px] bg-white"
       >
-        {!person && profile ? (
-          <AvatarMenuItem>
-            <div className="flex items-center gap-2">
-              <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                <Avatar value={address} size={16} />
-              </div>
-              <button onClick={showCreateProfile}>Create profile</button>
-            </div>
-          </AvatarMenuItem>
-        ) : (
+        {!menuState.isProfileSwitcherOpen ? (
           <>
-            {profile?.homeSpaceId && (
-              <>
+            <AvatarMenuItemsContainer>
+              <AvatarMenuItem isCurrentlySelected>
+                <button
+                  onClick={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: true })}
+                  className="flex w-full items-center justify-between"
+                >
+                  <div className="flex w-full items-center gap-3">
+                    <div className="relative h-8 w-8 overflow-hidden rounded-full">
+                      <Avatar value={profile?.accountId ?? address} avatarUrl={person?.avatarUrl} size={32} />
+                    </div>
+                    <div>
+                      <p className="text-text">{person?.name ?? formatShortAddress(user.wallet.address)}</p>
+                      {user.email ? (
+                        <p className="text-sm text-grey-04">{user.email.address}</p>
+                      ) : (
+                        <p className="text-sm text-grey-04">{formatShortAddress(address ?? user.wallet.address)}</p>
+                      )}
+                    </div>
+                  </div>
+                  <RightArrowLong color="grey-04" />
+                </button>
+              </AvatarMenuItem>
+              {!person && profile ? (
                 <AvatarMenuItem>
                   <div className="flex items-center gap-2">
                     <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                      <Avatar value={address} avatarUrl={person?.avatarUrl} size={16} />
+                      <Avatar value={profile?.accountId} size={16} />
                     </div>
-                    <Link prefetch={false} href={NavUtils.toSpace(profile.homeSpaceId)} className="text-button">
-                      Personal space
-                    </Link>
+                    <button onClick={showCreateProfile}>Create profile</button>
                   </div>
                 </AvatarMenuItem>
-                <AvatarMenuItem>
-                  <Link href="/home" className="flex items-center gap-2 grayscale">
-                    <Home />
-                    <p className="text-button">Personal home</p>
-                  </Link>
-                </AvatarMenuItem>
-              </>
-            )}
+              ) : (
+                <>
+                  {profile?.homeSpaceId && (
+                    <>
+                      <AvatarMenuItem>
+                        <Link
+                          prefetch={false}
+                          onClick={() => dispatch({ type: 'SET_OPEN', open: false })}
+                          href={NavUtils.toSpace(profile.homeSpaceId)}
+                          className="w-full text-button"
+                        >
+                          Personal space
+                        </Link>
+                      </AvatarMenuItem>
+                      <AvatarMenuItem>
+                        <Link
+                          href="/home"
+                          className="w-full text-button"
+                          onClick={() => dispatch({ type: 'SET_OPEN', open: false })}
+                        >
+                          Home
+                        </Link>
+                      </AvatarMenuItem>
+                    </>
+                  )}
+                </>
+              )}
+            </AvatarMenuItemsContainer>
+
+            <div className="flex w-full select-none items-center justify-between bg-white px-4 py-2 text-button text-text hover:bg-divider">
+              <GeoConnectButton />
+            </div>
+          </>
+        ) : (
+          <>
+            <button
+              className="flex w-full items-center gap-2 p-2 text-smallButton text-grey-04"
+              onClick={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: false })}
+            >
+              <LeftArrowLong color="grey-04" />
+              <p>Back</p>
+            </button>
+
+            <AvatarMenuItemsContainer>
+              <WalletsList onSelect={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: false })} />
+            </AvatarMenuItemsContainer>
           </>
         )}
-        <AvatarMenuItem>
-          <GeoConnectButton />
-        </AvatarMenuItem>
       </Menu>
     </div>
   );
 }
 
 const avatarMenuItemStyles = cva(
-  'flex w-full select-none items-center justify-between bg-white px-3 py-2 text-button hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
+  'flex w-full select-none items-center justify-between rounded-md px-3 py-2 text-button text-text hover:bg-divider hover:outline-none',
   {
     variants: {
       disabled: {
         true: 'cursor-not-allowed text-grey-03',
         false: 'cursor-pointer text-grey-04 hover:bg-bg hover:text-text',
+      },
+      isCurrentlySelected: {
+        true: 'bg-grey-01',
+        false: 'bg-white',
       },
     },
     defaultVariants: {
@@ -118,20 +213,81 @@ const avatarMenuItemStyles = cva(
   }
 );
 
+function AvatarMenuItemsContainer({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col gap-1 p-1">{children}</div>;
+}
+
 function AvatarMenuItem({
   children,
-  onClick,
+  isCurrentlySelected,
   disabled = false,
 }: {
   children: React.ReactNode;
-  onClick?: () => void;
+  isCurrentlySelected?: boolean;
   disabled?: boolean;
 }) {
-  return (
-    <button onClick={onClick} disabled={disabled} className={avatarMenuItemStyles({ disabled })}>
-      {children}
-    </button>
-  );
+  return <div className={avatarMenuItemStyles({ disabled, isCurrentlySelected })}>{children}</div>;
+}
+
+function WalletsList({ onSelect }: { onSelect: () => void }) {
+  const { address } = useAccount();
+  const { user } = usePrivy();
+  const { wallets } = useWallets();
+  const { setActiveWallet } = useSetActiveWallet();
+
+  const addresses = wallets.map(w => w.address);
+  const { data: persons, isLoading } = useQuery({
+    queryKey: ['persons', addresses],
+    queryFn: async () => {
+      const maybePersons = await Promise.all(addresses.map(address => fetchProfile({ address })));
+
+      const personsByAddress = new Map<string, Profile | null>();
+
+      for (const [index, person] of maybePersons.entries()) {
+        if (person) personsByAddress.set(person[1].address, person[1]);
+        else personsByAddress.set(addresses[index], null);
+      }
+
+      return personsByAddress;
+    },
+  });
+
+  if (isLoading || !persons) {
+    return (
+      <AvatarMenuItem>
+        <Skeleton className="h-8 w-8" radius="rounded-full" />
+      </AvatarMenuItem>
+    );
+  }
+
+  return wallets.map(w => {
+    const maybePerson = persons.get(w.address);
+    const maybeUserEmail = user?.wallet?.address === w.address ? user?.email?.address : null;
+    const isCurrentWallet = address === w.address;
+    const displayName = maybePerson?.name ?? maybeUserEmail ?? formatShortAddress(w.address);
+
+    return (
+      <AvatarMenuItem key={`${w.address}-${w.connectorType}`} isCurrentlySelected={isCurrentWallet}>
+        <button
+          onClick={() => {
+            onSelect();
+
+            Cookie.onConnectionChange({ type: 'connect', address: w.address as `0x${string}` });
+            setActiveWallet(w);
+          }}
+          className="flex w-full items-center justify-between"
+        >
+          <div className="flex w-full items-center gap-3">
+            <div className="relative h-8 w-8 overflow-hidden rounded-full">
+              <Avatar value={w.address} avatarUrl={maybePerson?.avatarUrl} size={32} />
+            </div>
+            <p className="text-button">{displayName}</p>
+          </div>
+          {isCurrentWallet && <Check />}
+        </button>
+      </AvatarMenuItem>
+    );
+  });
 }
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];

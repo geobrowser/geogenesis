@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import * as React from 'react';
 import { FormEvent } from 'react';
 
-import { useWalletClient } from 'wagmi';
+import { useConfig } from 'wagmi';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSpaces } from '~/core/hooks/use-spaces';
@@ -19,23 +19,23 @@ export default function AccessControl() {
   const spaceId = params?.['id'] as string | undefined;
 
   const { isAdmin, isEditorController } = useAccessControl(spaceId);
-  const { data: wallet } = useWalletClient();
+  const config = useConfig();
 
   const onSubmit = (type: RoleType) => async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const address = formData.get('address');
 
-    if (wallet && spaceId && address) {
-      const roleToChange = await Publish.getRole(spaceId, type);
-      await Publish.grantRole({ spaceId, role: roleToChange, wallet, userAddress: address as string });
+    if (spaceId && address) {
+      const roleToChange = await Publish.getRole(config, spaceId, type);
+      await Publish.grantRole({ spaceId, role: roleToChange, walletConfig: config, userAddress: address as string });
     }
   };
 
   const onRevoke = async (address: string, type: RoleType) => {
-    if (wallet && spaceId && address) {
-      const roleToChange = await Publish.getRole(spaceId, type);
-      await Publish.revokeRole({ spaceId, role: roleToChange, wallet, userAddress: address as string });
+    if (spaceId && address) {
+      const roleToChange = await Publish.getRole(config, spaceId, type);
+      await Publish.revokeRole({ spaceId, role: roleToChange, walletConfig: config, userAddress: address as string });
     }
   };
 

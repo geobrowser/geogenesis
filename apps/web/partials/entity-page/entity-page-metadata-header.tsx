@@ -38,6 +38,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
     queryKey: [`entity-versions-for-entityId-${id}`],
     queryFn: ({ signal, pageParam = 0 }) => fetchVersions({ entityId: id, page: pageParam, signal }),
     getNextPageParam: (_lastPage, pages) => pages.length,
+    initialPageParam: 0,
   });
 
   const { actionsFromSpace } = useActionsStore();

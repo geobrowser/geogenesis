@@ -13,7 +13,7 @@ import { getAddress } from 'viem';
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount, useConfig, useWalletClient } from 'wagmi';
 
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { type AccountType, createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
@@ -57,6 +57,7 @@ export const OnboardingDialog = () => {
   const { isOnboardingVisible } = useOnboarding();
 
   const { address } = useAccount();
+  const config = useConfig();
   const { data: wallet } = useWalletClient();
   const { publish } = Services.useServices();
   const queryClient = useQueryClient();
@@ -103,7 +104,7 @@ export const OnboardingDialog = () => {
     if (!address || !wallet || !accountType) return;
 
     try {
-      const profileId = await publish.registerGeoProfile(wallet, spaceAddress);
+      const profileId = await publish.registerGeoProfile(config, spaceAddress);
 
       if (!profileId) {
         throw new Error(`Registering profile failed`);

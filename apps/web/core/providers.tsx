@@ -1,10 +1,10 @@
 'use client';
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
 import * as React from 'react';
 
-import { ReactQueryProvider } from './query-client';
 import { Services } from './services';
 import { ActiveProposalProvider } from './state/active-proposal-store';
 import { AragonSDKProvider } from './state/aragon-dao-store';
@@ -12,28 +12,33 @@ import { DiffProvider } from './state/diff-store';
 import { JotaiProvider } from './state/jotai-provider';
 import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
+import { PrivyProvider } from './wallet/privy';
 
 interface Props {
   children: React.ReactNode;
 }
 
+const queryClient = new QueryClient();
+
 export function Providers({ children }: Props) {
   return (
-    <ReactQueryProvider>
-      <JotaiProvider>
+    <PrivyProvider>
+      <QueryClientProvider client={queryClient}>
         <WalletProvider>
-          <Services.Provider>
-            <StatusBarContextProvider>
-              <DiffProvider>
-                <AragonSDKProvider>
-                  <ActiveProposalProvider>{children}</ActiveProposalProvider>
-                </AragonSDKProvider>
-              </DiffProvider>
-            </StatusBarContextProvider>
-          </Services.Provider>
+          <JotaiProvider>
+            <Services.Provider>
+              <StatusBarContextProvider>
+                <DiffProvider>
+                  <AragonSDKProvider>
+                    <ActiveProposalProvider>{children}</ActiveProposalProvider>
+                  </AragonSDKProvider>
+                </DiffProvider>
+              </StatusBarContextProvider>
+            </Services.Provider>
+          </JotaiProvider>
         </WalletProvider>
-      </JotaiProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
-    </ReactQueryProvider>
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+    </PrivyProvider>
   );
 }

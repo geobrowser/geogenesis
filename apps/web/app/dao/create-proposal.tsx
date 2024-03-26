@@ -4,8 +4,8 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { type ContentProposalMetadata, VoteOption } from '@geogenesis/sdk';
 import { encodeAbiParameters, stringToHex } from 'viem';
 
-import { useWalletClient } from 'wagmi';
-import { prepareWriteContract, writeContract } from 'wagmi/actions';
+import { useConfig, useWalletClient } from 'wagmi';
+import { simulateContract, writeContract } from 'wagmi/actions';
 
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
@@ -69,6 +69,7 @@ interface Props {
 export function CreateProposal({ type }: Props) {
   const { storageClient } = Services.useServices();
 
+  const walletConfig = useConfig();
   const { data: wallet } = useWalletClient();
 
   if (!wallet) {
@@ -98,8 +99,7 @@ export function CreateProposal({ type }: Props) {
     const hash = await storageClient.uploadObject(proposal);
     const uri = `ipfs://${hash}`;
 
-    const config = await prepareWriteContract({
-      walletClient: wallet,
+    const config = await simulateContract(walletConfig, {
       // Main voting plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
       address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
       abi,
@@ -122,7 +122,7 @@ export function CreateProposal({ type }: Props) {
       ],
     });
 
-    const writeResult = await writeContract(config);
+    const writeResult = await writeContract(walletConfig, config.request);
     console.log('writeResult', writeResult);
   };
 
