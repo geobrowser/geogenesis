@@ -118,7 +118,7 @@ export function NavbarActions() {
                 >
                   <div className="flex w-full items-center gap-3">
                     <div className="relative h-8 w-8 overflow-hidden rounded-full">
-                      <Avatar value={profile?.account ?? address} avatarUrl={person?.avatarUrl} size={32} />
+                      <Avatar value={profile?.accountId ?? address} avatarUrl={person?.avatarUrl} size={32} />
                     </div>
                     <div>
                       <p className="text-text">{person?.name ?? formatShortAddress(user.wallet.address)}</p>
@@ -136,20 +136,20 @@ export function NavbarActions() {
                 <AvatarMenuItem>
                   <div className="flex items-center gap-2">
                     <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                      <Avatar value={profile?.account} size={16} />
+                      <Avatar value={profile?.accountId} size={16} />
                     </div>
                     <button onClick={showCreateProfile}>Create profile</button>
                   </div>
                 </AvatarMenuItem>
               ) : (
                 <>
-                  {profile?.homeSpace && (
+                  {profile?.homeSpaceId && (
                     <>
                       <AvatarMenuItem>
                         <Link
                           prefetch={false}
                           onClick={() => dispatch({ type: 'SET_OPEN', open: false })}
-                          href={NavUtils.toSpace(profile.homeSpace)}
+                          href={NavUtils.toSpace(profile.homeSpaceId)}
                           className="w-full text-button"
                         >
                           Personal space

@@ -8,6 +8,7 @@ import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
 import { CreateTripleAction, OmitStrict, SpaceType, Triple } from '~/core/types';
+import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
 import { slog } from '~/core/utils/utils';
 
 import { CreateSpaceEntitiesFailedError } from '../../errors';
@@ -168,6 +169,10 @@ export function makeCreateEntitiesEffect(
           id: ID.createTripleId(projectTypeTriple),
           ...projectTypeTriple,
         });
+
+        const nonprofitActions = generateTriplesForNonprofit(newEntityId, spaceName, spaceAddress);
+
+        actions.push(...nonprofitActions);
       }
 
       slog({

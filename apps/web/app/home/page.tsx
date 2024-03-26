@@ -76,8 +76,8 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
         </div>
         <h2 className="text-largeTitle">{person?.name ?? 'Anonymous'}</h2>
       </div>
-      {onchainProfile?.homeSpace && (
-        <Link prefetch={false} href={NavUtils.toSpace(onchainProfile.homeSpace)}>
+      {onchainProfile?.homeSpaceId && (
+        <Link prefetch={false} href={NavUtils.toSpace(onchainProfile.homeSpaceId)}>
           <SmallButton className="!bg-transparent !text-text">View personal space</SmallButton>
         </Link>
       )}
@@ -85,47 +85,26 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
   );
 };
 
-// @HACK: (Jan 19, 2024) Right now this query uses the subgraph. Eventually this should move
-// to the substream. Right now there's an issue with the substream where it is not correctly
-// indexing roles, so for now we are using this workaround while we fix the substream.
 const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
   if (!address) return [];
 
-  const subgraphQuery = `{
-      spaces(
-        where: {
-            editorControllers_contains: ["${address}"]
-        }
-      ) {
+  const substreamQuery = `{
+    spaces(filter: { spaceEditorControllers: { some: { accountId: { equalTo: "${address}" } } } }) {
+      nodes {
         id
       }
-    }`;
-
-  const substreamQuery = `{
-  spaces(filter: { spaceEditors: { some: { accountId: { equalTo: "${address}" } } } }) {
-    nodes {
-      id
     }
-  }
-}`;
-
-  const permissionedSpacesEffect = graphql<{ spaces: { id: string }[] }>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).subgraph,
-    query: subgraphQuery,
-  });
+  }`;
 
   const permissionlessSpacesEffect = graphql<{ spaces: { nodes: { id: string }[] } }>({
     endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
     query: substreamQuery,
   });
 
-  const [permissioned, permissionless] = await Promise.all([
-    Effect.runPromise(Effect.either(permissionedSpacesEffect)),
-    Effect.runPromise(Effect.either(permissionlessSpacesEffect)),
-  ]);
+  const spacesWhereEditorController = await Effect.runPromise(Effect.either(permissionlessSpacesEffect));
 
-  if (Either.isLeft(permissioned)) {
-    const error = permissioned.left;
+  if (Either.isLeft(spacesWhereEditorController)) {
+    const error = spacesWhereEditorController.left;
 
     switch (error._tag) {
       case 'GraphqlRuntimeError':
@@ -133,28 +112,12 @@ const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
         break;
 
       default:
-        console.error(`${error._tag}: Unable to fetch permissioned spaces where editor controller`);
+        console.error(`${error._tag}: Unable to fetch spaces where editor controller`);
         break;
     }
+
+    return [];
   }
 
-  if (Either.isLeft(permissionless)) {
-    const error = permissionless.left;
-
-    switch (error._tag) {
-      case 'GraphqlRuntimeError':
-        console.error(`Encountered runtime graphql error in getSpacesWhereModerator.`, error.message);
-        break;
-
-      default:
-        console.error(`${error._tag}: Unable to fetch permissionless spaces where editor controller`);
-        break;
-    }
-  }
-
-  const permissionedSpaces: { id: string }[] = Either.isLeft(permissioned) ? [] : permissioned.right.spaces;
-  const permissionlessSpaces = Either.isLeft(permissionless) ? [] : permissionless.right.spaces.nodes;
-
-  const spaces = [...permissionedSpaces, ...permissionlessSpaces].map(space => space.id);
-  return spaces;
+  return spacesWhereEditorController.right.spaces.nodes.map(space => space.id);
 };

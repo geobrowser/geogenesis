@@ -8,29 +8,29 @@ function getFetchProfileQuery(entityId: string) {
   // account_starts_with_nocase is also a hack since our subgraph does not store the account the same
   // way as the profiles. Profiles are a string but `createdBy` in our subgraph is stored as Bytes.
   return `query {
-    geoProfile(id: "${entityId}") {
+    onchainProfile(id: "${entityId}") {
       id
-      homeSpace
-      account
+      homeSpaceId
+      accountId
     }
   }`;
 }
 
 interface OnchainGeoProfile {
   id: string;
-  homeSpace: string;
-  account: string;
+  homeSpaceId: string;
+  accountId: string;
 }
 
 interface NetworkResult {
-  geoProfile: OnchainGeoProfile | null;
+  onchainProfile: OnchainGeoProfile | null;
 }
 
 export async function fetchOnchainProfileByEntityId(entityId: string): Promise<OnchainGeoProfile | null> {
   const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
-    endpoint: config.profileSubgraph,
+    endpoint: config.api,
     query: getFetchProfileQuery(entityId),
   });
 
@@ -58,7 +58,7 @@ export async function fetchOnchainProfileByEntityId(entityId: string): Promise<O
           );
 
           return {
-            geoProfile: null,
+            onchainProfile: null,
           };
         default:
           console.error(
@@ -66,7 +66,7 @@ export async function fetchOnchainProfileByEntityId(entityId: string): Promise<O
           );
 
           return {
-            geoProfile: null,
+            onchainProfile: null,
           };
       }
     }
@@ -76,5 +76,5 @@ export async function fetchOnchainProfileByEntityId(entityId: string): Promise<O
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  return result.geoProfile;
+  return result.onchainProfile;
 }

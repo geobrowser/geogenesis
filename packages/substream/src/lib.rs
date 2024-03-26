@@ -401,7 +401,7 @@ fn map_votes_cast(block: eth::v2::Block) -> Result<VotesCast, substreams::errors
 fn geo_out(
     entries: EntriesAdded,
     role_changes: RoleChanges,
-    // profiles_registered: GeoProfilesRegistered,
+    profiles_registered: GeoProfilesRegistered,
     // spaces_created: GeoSpacesCreated,
     // governance_plugins_created: GeoGovernancePluginsCreated,
     // editors_added: EditorsAdded,
@@ -411,7 +411,7 @@ fn geo_out(
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
     let role_changes = role_changes.changes;
-    // let profiles_registered = profiles_registered.profiles;
+    let profiles_registered = profiles_registered.profiles;
     // let spaces_created = spaces_created.spaces;
     // let governance_plugins_created = governance_plugins_created.plugins;
     // let editors_added = editors_added.editors;
@@ -422,7 +422,7 @@ fn geo_out(
     Ok(GeoOutput {
         entries,
         role_changes,
-        // profiles_registered,
+        profiles_registered,
         // spaces_created,
         // governance_plugins_created,
         // editors_added,

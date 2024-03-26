@@ -11,6 +11,7 @@ import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
 import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
+import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
 import { slog } from '~/core/utils/utils';
 
 import { makeProposalServer } from '../../make-proposal-server';
@@ -194,6 +195,10 @@ export async function makeNonprofitEffect(
         id: ID.createTripleId(spaceTypeTriple),
         ...spaceTypeTriple,
       });
+
+      const nonprofitActions = generateTriplesForNonprofit(profileId, username ?? '', spaceAddress);
+
+      actions.push(...nonprofitActions);
 
       slog({
         requestId,

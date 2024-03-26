@@ -1,6 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io/';
 import { fetchVersion } from '~/core/io/subgraph/fetch-version';
 import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
@@ -633,8 +632,6 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
 
     const selectedVersion: Version | undefined = maybeSelectedVersions[0];
     const previousVersion: Version | undefined = maybePreviousVersions[0];
-
-    console.log('versions', { selectedVersion, previousVersion });
 
     const selectedEntityBlockIdsTriple =
       selectedVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;

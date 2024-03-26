@@ -68,14 +68,14 @@ export const CreateProfileDialog = () => {
   const { isCreateProfileVisible } = useCreateProfile();
 
   const { data: profile } = useQuery({
-    queryKey: ['profile-triples-in-space', onchainProfile?.homeSpace, onchainProfile?.id],
+    queryKey: ['profile-triples-in-space', onchainProfile?.homeSpaceId, onchainProfile?.id],
     queryFn: async () => {
       if (!onchainProfile) {
         return null;
       }
 
       const result = await fetchProfilePermissionless({
-        address: onchainProfile.account,
+        address: onchainProfile.accountId,
       });
 
       return result ?? null;
@@ -102,7 +102,7 @@ export const CreateProfileDialog = () => {
           entityName: name ?? '',
           attributeId: SYSTEM_IDS.NAME,
           attributeName: 'Name',
-          space: onchainProfile.homeSpace,
+          space: onchainProfile.homeSpaceId,
           value: {
             type: 'string',
             value: name,
@@ -124,7 +124,7 @@ export const CreateProfileDialog = () => {
           entityName: name ?? '',
           attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
           attributeName: 'Avatar',
-          space: onchainProfile.homeSpace,
+          space: onchainProfile.homeSpaceId,
           value: {
             type: 'image',
             value: avatar,
@@ -144,7 +144,7 @@ export const CreateProfileDialog = () => {
         attributeName: 'Types',
         entityId: onchainProfile.id,
         entityName: name ?? '',
-        space: onchainProfile.homeSpace,
+        space: onchainProfile.homeSpaceId,
         value: {
           type: 'entity',
           name: 'Person',
@@ -157,7 +157,7 @@ export const CreateProfileDialog = () => {
         attributeName: 'Types',
         entityId: onchainProfile.id,
         entityName: name ?? '',
-        space: onchainProfile.homeSpace,
+        space: onchainProfile.homeSpaceId,
         value: {
           type: 'entity',
           name: 'Space',
@@ -183,11 +183,14 @@ export const CreateProfileDialog = () => {
         await makeProposal({
           actions,
           name: `Creating profile for ${address}`,
-          spaceId: onchainProfile.homeSpace,
+          spaceId: onchainProfile.homeSpaceId,
           onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
         });
 
-        console.log('Profile created:', { profileEntityId: onchainProfile.id, spaceAddress: onchainProfile.homeSpace });
+        console.log('Profile created:', {
+          profileEntityId: onchainProfile.id,
+          spaceAddress: onchainProfile.homeSpaceId,
+        });
 
         dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
         setStatus('done');
@@ -234,7 +237,7 @@ export const CreateProfileDialog = () => {
                 avatar={avatar}
                 setAvatar={setAvatar}
                 status={status}
-                space={onchainProfile?.homeSpace ?? null}
+                space={onchainProfile?.homeSpaceId ?? null}
               />
             </ModalCard>
           </motion.div>

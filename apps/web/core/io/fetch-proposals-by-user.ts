@@ -48,7 +48,10 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
                   id
                   name
                 }
-                entityValue
+                entityValue {
+                  id
+                  name
+                }
                 numberValue
                 stringValue
                 valueType
@@ -105,7 +108,7 @@ export async function fetchProposalsByUser({
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} userId: ${userId} page: ${page}
+            `Encountered runtime graphql error in fetchProposalsByUser. queryId: ${queryId} userId: ${userId} page: ${page}
             
             queryString: ${getFetchUserProposalsQuery(userId, offset)}
             `,

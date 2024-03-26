@@ -321,15 +321,16 @@ pub struct VotesCast {
 pub struct GeoOutput {
     #[prost(message, repeated, tag="1")]
     pub entries: ::prost::alloc::vec::Vec<EntryAdded>,
-    /// repeated GeoProfileRegistered profiles_registered = 3;
+    #[prost(message, repeated, tag="2")]
+    pub role_changes: ::prost::alloc::vec::Vec<RoleChange>,
     /// repeated GeoSpaceCreated spaces_created = 4;
     /// repeated GeoGovernancePluginCreated governance_plugins_created = 5;
     /// repeated EditorAdded editors_added = 6;
     /// repeated ProposalCreated proposals_created = 7;
     /// repeated VoteCast votes_cast = 8;
     /// repeated SuccessorSpaceCreated successor_spaces_created = 6;
-    #[prost(message, repeated, tag="2")]
-    pub role_changes: ::prost::alloc::vec::Vec<RoleChange>,
+    #[prost(message, repeated, tag="3")]
+    pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
 }
 /// *
 /// Roles represent the permissions for a legacy space (See top level comment for more info
