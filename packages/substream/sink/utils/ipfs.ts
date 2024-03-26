@@ -105,7 +105,6 @@ function getFetchIpfsContentEffect(
 export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry | null> {
   return Effect.gen(function* (unwrap) {
     const fetchIpfsContentEffect = getFetchIpfsContentEffect(entry.uri);
-
     const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
 
     if (Either.isLeft(maybeIpfsContent)) {
@@ -138,6 +137,8 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry |
     return {
       ...entry,
       uriData: ipfsContent,
+      json: JSON.stringify(ipfsContent),
+      uri: entry.uri,
     };
   });
 }
@@ -234,6 +235,8 @@ export function getProposalFromMetadata(
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForPlugin),
+          json: JSON.stringify(ipfsContent),
+          uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -256,6 +259,8 @@ export function getProposalFromMetadata(
           subspace: getChecksumAddress(parsedSubspace.data.subspace),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForPlugin),
+          json: JSON.stringify(ipfsContent),
+          uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -280,6 +285,8 @@ export function getProposalFromMetadata(
           userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForPlugin),
+          json: JSON.stringify(ipfsContent),
+          uri: proposal.metadataUri,
         };
 
         return mappedProposal;

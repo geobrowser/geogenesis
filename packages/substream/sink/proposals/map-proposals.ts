@@ -77,6 +77,8 @@ export function mapContentProposalsToSchema(
         end_time: Number(p.endTime),
         space_id: spaceId,
         status: 'proposed',
+        uri: p.uri,
+        json: p.json,
       };
 
       proposalsToWrite.push(proposalToWrite);
