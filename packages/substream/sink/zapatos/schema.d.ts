@@ -1929,6 +1929,18 @@ declare module 'zapatos/schema' {
       */
       description: string | null;
       /**
+      * **proposals.uri**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      uri: string | null;
+      /**
+      * **proposals.json**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      json: string | null;
+      /**
       * **proposals.type**
       * - `proposal_type` in database
       * - `NOT NULL`, no default
@@ -2002,6 +2014,18 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       description: string | null;
+      /**
+      * **proposals.uri**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      uri: string | null;
+      /**
+      * **proposals.json**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      json: string | null;
       /**
       * **proposals.type**
       * - `proposal_type` in database
@@ -2077,6 +2101,18 @@ declare module 'zapatos/schema' {
       */
       description?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposals.uri**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      uri?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposals.json**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      json?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposals.type**
       * - `proposal_type` in database
       * - `NOT NULL`, no default
@@ -2151,6 +2187,18 @@ declare module 'zapatos/schema' {
       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
+      * **proposals.uri**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      uri?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **proposals.json**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      json?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
       * **proposals.type**
       * - `proposal_type` in database
       * - `NOT NULL`, no default
@@ -2224,6 +2272,18 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **proposals.uri**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      uri?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **proposals.json**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      json?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **proposals.type**
       * - `proposal_type` in database
