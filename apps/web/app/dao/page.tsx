@@ -61,7 +61,7 @@ export default async function Page() {
           <CreateDao />
         </ClientOnly>
         <ClientOnly>
-          <CreateProposal type="content" />
+          <CreateProposal />
         </ClientOnly>
       </div>
     </div>

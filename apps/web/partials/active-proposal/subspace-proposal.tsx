@@ -14,9 +14,8 @@ interface Props {
 export async function SubspaceProposal({ proposal }: Props) {
   const subspace = await fetchSubspace(proposal.id, proposal.space);
 
-  console.log('subspace', subspace);
-
   if (!subspace) {
+    // @TODO: Error handle though this should never happen
     return null;
   }
 

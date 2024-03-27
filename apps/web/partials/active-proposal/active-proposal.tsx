@@ -65,8 +65,6 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
 
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
-  console.log('proposal type', proposal.type);
-
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 text-button text-text shadow-big md:px-4 md:py-3">
