@@ -28,7 +28,7 @@ const getVersionsQuery = ({
     .join(' ');
 
   return `query {
-    versions(filter: {${filter}}, orderBy: CREATED_AT_DESC, first: 5, offset: ${offset}) {
+    versions(filter: {${filter}}, orderBy: CREATED_AT_DESC, first: 1, offset: ${offset}) {
       nodes {
         id
         name
@@ -154,7 +154,13 @@ export async function fetchVersionsByCreatedAt({
     const networkTriples = v.tripleVersions.nodes.flatMap(tv => tv.triple);
 
     return {
-      ...v,
+      id: v.id,
+      name: v.name,
+      description: null,
+      entity: v.entity,
+      createdAt: v.createdAt,
+      createdAtBlock: v.createdAtBlock,
+      spaceId: v.spaceId,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
       createdBy: profiles[v.createdById] ?? {
         id: v.createdById,

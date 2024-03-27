@@ -15,6 +15,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
   )}}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
     nodes {
       id
+      type
       onchainProposalId
       name
       spaceId

@@ -2,7 +2,7 @@ import {
   CreateTripleAction as CreateTripleActionSchema,
   DeleteTripleAction as DeleteTripleActionSchema,
 } from '@geogenesis/action-schema';
-import { ProposalStatus } from '@geogenesis/sdk';
+import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
@@ -169,6 +169,7 @@ export type Vote = {
 
 export type Proposal = {
   id: string;
+  type: ProposalType;
   onchainProposalId: string;
   name: string | null;
   description: string | null;

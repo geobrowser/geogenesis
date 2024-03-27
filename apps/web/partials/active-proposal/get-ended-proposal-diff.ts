@@ -33,10 +33,9 @@ export async function getEndedProposalDiff(
 
   const entityIds = [...entitySet.values()];
 
-  const allActionsInProposal = selectedProposal.proposedVersions.reduce((acc, proposedVersion) => {
-    return [...acc, ...proposedVersion.actions];
-  }, [] as Action[]);
+  const allActionsInProposal = selectedProposal.proposedVersions.flatMap(pv => pv.actions);
 
+  // @TODO: is this correct?
   const createdAt = selectedProposal.createdAt + PROPOSAL_DURATION;
 
   for (const entityId of entityIds) {
@@ -61,8 +60,8 @@ export async function getEndedProposalDiff(
         : [],
     ]);
 
-    const selectedRemoteVersion: Version | undefined = maybeSelectedVersions[0];
-    const previousVersion: Version | undefined = maybePreviousVersions[0];
+    const selectedRemoteVersion = maybeSelectedVersions[0] as Version | undefined;
+    const previousVersion = maybePreviousVersions[0] as Version | undefined;
 
     // We merge the actions from the proposal for each entity with the state of the entity
     // at the time the proposal was ended. We compare the merged entity with the state of
@@ -73,10 +72,10 @@ export async function getEndedProposalDiff(
     // the proposal are applied.
     const selectedVersion = Entity.mergeActionsWithEntity(allActionsInProposal, {
       id: entityId,
-      description: Entity.description(selectedRemoteVersion.triples),
-      name: Entity.name(selectedRemoteVersion.triples),
-      triples: selectedRemoteVersion.triples,
-      types: Entity.types(selectedRemoteVersion.triples),
+      description: Entity.description(selectedRemoteVersion?.triples ?? []),
+      name: Entity.name(selectedRemoteVersion?.triples ?? []),
+      triples: selectedRemoteVersion?.triples ?? [],
+      types: Entity.types(selectedRemoteVersion?.triples ?? []),
     });
 
     const selectedEntityBlockIdsTriple =

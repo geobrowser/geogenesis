@@ -159,7 +159,7 @@ export function mapSubspaceProposalsToSchema(
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
       name: p.name,
-      type: 'content',
+      type: p.type,
       created_at: Number(p.startTime),
       created_at_block: blockNumber,
       created_by_id: p.creator,
