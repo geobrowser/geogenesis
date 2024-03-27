@@ -40,7 +40,7 @@ export type ProposalMetadata =
   | MembershipProposalMetadata
   | SubspaceProposalMetadata
 
-export type ProposalType = ProposalMetadata['type']
+export type ProposalType = Uppercase<ProposalMetadata['type']>
 
 export enum VoteOption {
   None = 0,

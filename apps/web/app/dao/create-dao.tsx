@@ -1,12 +1,15 @@
 'use client';
 
 import { Client, Context, CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-client';
-import { VotingMode } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { VotingMode, createContentProposal, createGeoId } from '@geogenesis/sdk';
 import { getAddress } from 'viem';
 
 import { useWalletClient } from 'wagmi';
 
+import { Environment } from '~/core/environment';
 import { useAragon } from '~/core/hooks/use-aragon';
+import { StorageClient } from '~/core/io/storage/storage';
 
 import { Button } from '~/design-system/button';
 
@@ -23,8 +26,34 @@ export function CreateDao() {
   const handleCreateDao = async () => {
     if (!wallet) return;
 
+    const entityId = createGeoId();
+    const initialContent = createContentProposal('Initial proposal for space', [
+      {
+        entityId,
+        attributeId: SYSTEM_IDS.NAME,
+        type: 'createTriple',
+        value: {
+          type: 'string',
+          id: createGeoId(),
+          value: 'Governance test space',
+        },
+      },
+      {
+        entityId,
+        attributeId: SYSTEM_IDS.TYPES,
+        type: 'createTriple',
+        value: {
+          type: 'entity',
+          id: SYSTEM_IDS.SPACE_CONFIGURATION,
+        },
+      },
+    ]);
+
+    const storage = new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs);
+    const firstBlockContentUri = await storage.uploadObject(initialContent);
+
     const spacePluginInstallItem = getSpacePluginInstallItem({
-      firstBlockContentUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
+      firstBlockContentUri: `ipfs://${firstBlockContentUri}`,
       // @HACK: Using a different upgrader from the governance plugin to work around
       // a limitation in Aragon.
       pluginUpgrader: getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),

@@ -293,11 +293,11 @@ class InvalidProcessedProposalContentTypeError extends Error {
   _tag: 'InvalidProcessedProposalContentTypeError' = 'InvalidProcessedProposalContentTypeError';
 }
 
-export function getProposalIdFromProcessedProposal(processedProposal: {
+export function getProposalFromProcessedProposal(processedProposal: {
   ipfsUri: string;
   pluginAddress: string;
 }): Effect.Effect<
-  { id: string; actions: Action[] } | null,
+  ContentProposal | null,
   SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError
 > {
   return Effect.gen(function* (unwrap) {
@@ -368,10 +368,22 @@ export function getProposalIdFromProcessedProposal(processedProposal: {
           return null;
         }
 
-        return {
-          id: parsedContent.data.proposalId,
+        const now = Math.floor(Date.now() / 1000);
+
+        const contentProposal: ContentProposal = {
+          type: validIpfsMetadata.data.type,
+          name: validIpfsMetadata.data.name ?? null,
+          proposalId: parsedContent.data.proposalId,
+          onchainProposalId: '-1',
           actions: parsedContent.data.actions.filter(isValidAction),
+          creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // Geobot
+          space: getChecksumAddress(maybeSpaceIdForPlugin),
+          endTime: now.toString(),
+          startTime: now.toString(),
+          metadataUri: processedProposal.ipfsUri,
         };
+
+        return contentProposal;
     }
 
     yield* unwrap(

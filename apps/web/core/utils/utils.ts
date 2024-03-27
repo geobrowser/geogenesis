@@ -275,10 +275,18 @@ export function isProposalEnded(proposal: Proposal) {
 }
 
 export function getYesVotePercentage(votes: Vote[], votesCount: number) {
+  if (votesCount === 0) {
+    return 0;
+  }
+
   return Math.floor((votes.filter(v => v.vote === 'ACCEPT').length / votesCount) * 100);
 }
 
 export function getNoVotePercentage(votes: Vote[], votesCount: number) {
+  if (votesCount === 0) {
+    return 0;
+  }
+
   return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
 }
 

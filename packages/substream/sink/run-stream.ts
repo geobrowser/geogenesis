@@ -26,7 +26,7 @@ import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
 import { getSpaceForVotingPlugin } from './utils/get-space-for-voting-plugin';
 import { invariant } from './utils/invariant';
-import { getEntryWithIpfsContent, getProposalFromMetadata, getProposalIdFromProcessedProposal } from './utils/ipfs';
+import { getEntryWithIpfsContent, getProposalFromMetadata, getProposalFromProcessedProposal } from './utils/ipfs';
 import { pool } from './utils/pool';
 import { mapVotes } from './votes/map-votes';
 import {
@@ -453,18 +453,33 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
-          if (proposalProcessedResponse.success) {
+          // A proposal might be processed as part of the initial space creation. If this happens we
+          // need to special case writing to the DB. Proposal processing alone assumes that there was
+          // an existing proposal created before executing the proposal.
+          //
+          // When publishing data as part of space creation there's no prior proposal, so we need to
+          // create it.
+          if (spacePluginCreatedResponse.success && proposalProcessedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            const onchainProposals = proposalProcessedResponse.data.proposalsProcessed;
+
             /**
-             * 1. Fetch IPFS content
-             * 2. Find the proposal based on the proposalId
-             * 3. Update the proposal status to ACCEPTED
-             * 4. Write the proposal content as Versions, Triples, Entities, etc.
+             * Write the proposal data for a "proposed" proposal
              */
+            slog({
+              requestId: message.cursor,
+              message: `Processing ${onchainProposals.length} initial space proposals`,
+            });
+
+            slog({
+              requestId: message.cursor,
+              message: `Gathering IPFS content for ${onchainProposals.length} initial space proposals`,
+            });
+
             const maybeProposalsFromIpfs = yield* _(
               Effect.all(
                 proposalProcessedResponse.data.proposalsProcessed.map(proposal =>
-                  getProposalIdFromProcessedProposal({
+                  getProposalFromProcessedProposal({
                     ipfsUri: proposal.contentUri,
                     pluginAddress: proposal.pluginAddress,
                   })
@@ -476,14 +491,135 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
 
             const proposalsFromIpfs = maybeProposalsFromIpfs.filter(
-              (maybeProposal): maybeProposal is { id: string; actions: Action[] } => maybeProposal !== null
+              (maybeProposal): maybeProposal is ContentProposal => maybeProposal !== null
+            );
+
+            const { contentProposals } = groupProposalsByType(proposalsFromIpfs);
+            const schemaContentProposals = mapContentProposalsToSchema(contentProposals, blockNumber, cursor);
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${contentProposals.length} initial content proposals to DB`,
+            });
+
+            // @TODO: Put this in a transaction since all these writes are related
+            yield* _(
+              Effect.either(
+                Effect.tryPromise({
+                  try: async () => {
+                    // @TODO: Batch since there might be postgres byte limits. See upsertChunked
+                    await Promise.all([
+                      // @TODO: Should we only attempt to write to the db for the correct content type?
+                      // What if we get multiple proposals in the same block with different content types?
+                      // Content proposals
+                      db.insert('proposals', schemaContentProposals.proposals).run(pool),
+                      db.insert('proposed_versions', schemaContentProposals.proposedVersions).run(pool),
+                      db.insert('actions', schemaContentProposals.actions).run(pool),
+                    ]);
+                  },
+                  catch: error => {
+                    slog({
+                      requestId: message.cursor,
+                      message: `Failed to write proposals to DB ${error}`,
+                      level: 'error',
+                    });
+
+                    return error;
+                  },
+                })
+              )
+            );
+
+            /**
+             * Write the proposal data for an "accepted" proposal
+             */
+            const maybeProposals = yield* _(
+              Effect.all(
+                proposalsFromIpfs.map(p => {
+                  return Effect.tryPromise({
+                    try: () => db.selectExactlyOne('proposals', { id: p.proposalId }).run(pool),
+                    catch: error => {
+                      slog({
+                        requestId: message.cursor,
+                        message: `Failed to read proposal from DB ${error}`,
+                        level: 'error',
+                      });
+                    },
+                  });
+                })
+              )
+            );
+
+            const proposals = maybeProposals.filter(
+              (maybeProposal): maybeProposal is S.proposals.Selectable => maybeProposal !== null
+            );
+
+            yield* _(
+              Effect.all(
+                proposals.map(proposal => {
+                  return Effect.tryPromise({
+                    try: () => db.update('proposals', { status: 'accepted' }, { id: proposal.id }).run(pool),
+                    catch: () => {
+                      slog({
+                        requestId: message.cursor,
+                        message: `Failed to update proposal in DB ${proposal.id}`,
+                        level: 'error',
+                      });
+                    },
+                  });
+                })
+              )
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `Processing ${proposalProcessedResponse.data.proposalsProcessed.length} processed proposals for initial space proposals`,
+            });
+
+            yield* _(
+              populateApprovedContentProposal(
+                proposals,
+                proposalsFromIpfs.flatMap(p => p.actions),
+                timestamp,
+                blockNumber
+              )
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `Wrote ${proposals.length} processed proposals to DB for initial space proposals`,
+            });
+          } else if (proposalProcessedResponse.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            /**
+             * 1. Fetch IPFS content
+             * 2. Find the proposal based on the proposalId
+             * 3. Update the proposal status to ACCEPTED
+             * 4. Write the proposal content as Versions, Triples, Entities, etc.
+             */
+            const maybeProposalsFromIpfs = yield* _(
+              Effect.all(
+                proposalProcessedResponse.data.proposalsProcessed.map(proposal =>
+                  getProposalFromProcessedProposal({
+                    ipfsUri: proposal.contentUri,
+                    pluginAddress: proposal.pluginAddress,
+                  })
+                ),
+                {
+                  concurrency: 20,
+                }
+              )
+            );
+
+            const proposalsFromIpfs = maybeProposalsFromIpfs.filter(
+              (maybeProposal): maybeProposal is ContentProposal => maybeProposal !== null
             );
 
             const maybeProposals = yield* _(
               Effect.all(
                 proposalsFromIpfs.map(p => {
                   return Effect.tryPromise({
-                    try: () => db.selectExactlyOne('proposals', { id: p.id }).run(pool),
+                    try: () => db.selectExactlyOne('proposals', { id: p.proposalId }).run(pool),
                     catch: error => {
                       slog({
                         requestId: message.cursor,
@@ -539,7 +675,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (executedProposals.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-            console.info('EXECUTED PROPOSALS', executedProposals.data.executedProposals);
             const proposals = executedProposals.data.executedProposals;
 
             slog({
