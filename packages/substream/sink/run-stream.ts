@@ -479,10 +479,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             const maybeProposalsFromIpfs = yield* _(
               Effect.all(
                 proposalProcessedResponse.data.proposalsProcessed.map(proposal =>
-                  getProposalFromProcessedProposal({
-                    ipfsUri: proposal.contentUri,
-                    pluginAddress: proposal.pluginAddress,
-                  })
+                  getProposalFromProcessedProposal(
+                    {
+                      ipfsUri: proposal.contentUri,
+                      pluginAddress: proposal.pluginAddress,
+                    },
+                    timestamp
+                  )
                 ),
                 {
                   concurrency: 20,
@@ -600,10 +603,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             const maybeProposalsFromIpfs = yield* _(
               Effect.all(
                 proposalProcessedResponse.data.proposalsProcessed.map(proposal =>
-                  getProposalFromProcessedProposal({
-                    ipfsUri: proposal.contentUri,
-                    pluginAddress: proposal.pluginAddress,
-                  })
+                  getProposalFromProcessedProposal(
+                    {
+                      ipfsUri: proposal.contentUri,
+                      pluginAddress: proposal.pluginAddress,
+                    },
+                    timestamp
+                  )
                 ),
                 {
                   concurrency: 20,

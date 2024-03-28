@@ -139,8 +139,8 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry |
     return {
       ...entry,
       uriData: ipfsContent,
-      json: JSON.stringify(ipfsContent),
-      uri: entry.uri,
+      // json: JSON.stringify(ipfsContent),
+      // uri: entry.uri,
     };
   });
 }
@@ -233,8 +233,8 @@ export function getProposalFromMetadata(
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForPlugin),
-          json: JSON.stringify(ipfsContent),
-          uri: proposal.metadataUri,
+          // json: JSON.stringify(ipfsContent),
+          // uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -260,8 +260,8 @@ export function getProposalFromMetadata(
           subspace: getChecksumAddress(parsedSubspace.data.subspace),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForPlugin),
-          json: JSON.stringify(ipfsContent),
-          uri: proposal.metadataUri,
+          // json: JSON.stringify(ipfsContent),
+          // uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -286,8 +286,8 @@ export function getProposalFromMetadata(
           userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForPlugin),
-          json: JSON.stringify(ipfsContent),
-          uri: proposal.metadataUri,
+          // json: JSON.stringify(ipfsContent),
+          // uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -300,10 +300,13 @@ class InvalidProcessedProposalContentTypeError extends Error {
   _tag: 'InvalidProcessedProposalContentTypeError' = 'InvalidProcessedProposalContentTypeError';
 }
 
-export function getProposalFromProcessedProposal(processedProposal: {
-  ipfsUri: string;
-  pluginAddress: string;
-}): Effect.Effect<
+export function getProposalFromProcessedProposal(
+  processedProposal: {
+    ipfsUri: string;
+    pluginAddress: string;
+  },
+  timestamp: number
+): Effect.Effect<
   ContentProposal | null,
   SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError
 > {
@@ -375,8 +378,6 @@ export function getProposalFromProcessedProposal(processedProposal: {
           return null;
         }
 
-        const now = Math.floor(Date.now() / 1000);
-
         const contentProposal: ContentProposal = {
           type: validIpfsMetadata.data.type,
           name: validIpfsMetadata.data.name ?? null,
@@ -385,8 +386,8 @@ export function getProposalFromProcessedProposal(processedProposal: {
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // Geobot
           space: getChecksumAddress(maybeSpaceIdForPlugin),
-          endTime: now.toString(),
-          startTime: now.toString(),
+          endTime: timestamp.toString(),
+          startTime: timestamp.toString(),
           metadataUri: processedProposal.ipfsUri,
         };
 
