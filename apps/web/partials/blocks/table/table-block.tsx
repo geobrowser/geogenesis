@@ -106,7 +106,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   return (
     <div>
       <div className="mb-2 flex h-8 items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex grow items-center gap-2">
           <span className="shrink-0 overflow-hidden rounded">
             <BoringAvatar
               size={16}

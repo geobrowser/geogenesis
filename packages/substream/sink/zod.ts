@@ -63,6 +63,8 @@ export interface FullEntry extends z.infer<typeof ZodFullEntry> {
   // Set the real Action type. We only use z.any() in ZodUriData to avoid
   // rejecting the entire array of actions if one of them is invalid.
   uriData: OmitStrict<UriData, 'actions'> & { actions: Action[] };
+  json: string;
+  uri: string;
 }
 
 /** Onchain Profile registrations */
@@ -205,6 +207,8 @@ export type ContentProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   actions: Action[];
+  uri: string;
+  json: string;
 };
 
 export const ZodMembershipProposal = z.object({
@@ -218,6 +222,8 @@ export type MembershipProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   userAddress: `0x${string}`;
+  uri: string;
+  json: string;
 };
 
 export const ZodSubspaceProposal = z.object({
@@ -231,6 +237,8 @@ export type SubspaceProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   subspace: `0x${string}`;
+  uri: string;
+  json: string;
 };
 
 export const ZodProposalStreamResponse = z.object({
