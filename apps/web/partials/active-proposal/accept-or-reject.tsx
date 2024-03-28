@@ -41,7 +41,7 @@ export function AcceptOrReject({
   };
 
   if (process.env.NODE_ENV === 'development' && isProposalDone) {
-    return <Execute onchainProposalId={onchainProposalId}>Execute </Execute>;
+    return <Execute onchainProposalId={onchainProposalId}>Execute</Execute>;
   }
 
   if (userVote) {
