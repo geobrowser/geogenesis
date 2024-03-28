@@ -120,7 +120,7 @@ $$ LANGUAGE plpgsql STRICT STABLE;
 -- END;
 -- $$ LANGUAGE plpgsql STRICT STABLE;
 
-CREATE FUNCTION public.spaces_configuration(e_row spaces)
+CREATE FUNCTION public.spaces_metadata(e_row spaces)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN
     -- Using CTE to first fetch all types of the given entity
