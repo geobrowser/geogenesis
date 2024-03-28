@@ -21,7 +21,7 @@ CREATE TYPE public.attribute_with_unknown_value_type AS (
 COMMENT ON TYPE public.attribute_with_relation_value_type IS
   E'@foreignKey (entity_value_id) references public.geo_entities (id)';
 
-   
+
 COMMENT ON TYPE public.attribute_with_unknown_value_type IS
   E'@foreignKey (entity_value_id) references public.geo_entities (id)';
 
@@ -89,6 +89,53 @@ BEGIN
     INTO attribute_count
     FROM geo_entities_type_schema(e_row);
     RETURN attribute_count;
+END;
+$$ LANGUAGE plpgsql STRICT STABLE;
+
+-- CREATE FUNCTION public.space_space_configurations(e_row geo_entities)
+-- RETURNS SETOF public.geo_entities AS $$
+-- BEGIN
+--     -- Using CTE to first fetch all types of the given entity
+--     RETURN QUERY 
+--     WITH space_configuration_types AS (
+--         SELECT t.value_id AS type_id
+--         FROM triples t
+--         WHERE t.entity_id = e_row.id 
+--         AND t.attribute_id = 'type'
+--         AND t.value_id = '1d5d0c2a-db23-466c-a0b0-9abe879df457'
+--     ),
+
+--     -- Get all space configuration types
+--     -- Return entities where the triple for the space config space id is the same as
+--     -- a space id
+--     space_type_triples AS (
+--         -- For each type, fetch the associated attributes
+--         SELECT DISTINCT t.value_id AS attribute_id
+--         FROM space_configuration_types sct
+--         JOIN spaces s ON t.space_id = sct.space_id
+--     )
+--     SELECT e.*
+--     FROM geo_entities e
+--     JOIN space_type_triples ta ON e.id = ta.attribute_id;
+-- END;
+-- $$ LANGUAGE plpgsql STRICT STABLE;
+
+CREATE FUNCTION public.spaces_configuration(e_row spaces)
+RETURNS SETOF public.geo_entities AS $$
+BEGIN
+    -- Using CTE to first fetch all types of the given entity
+    RETURN QUERY 
+    -- Get the entity id 
+    WITH space_configuration_entity_ids AS (
+        SELECT t.*
+        FROM triples t
+        WHERE t.space_id = e_row.id
+        AND t.attribute_id = 'type'
+        AND t.value_id = '1d5d0c2a-db23-466c-a0b0-9abe879df457' -- space configuration
+    )
+    SELECT e.*
+    FROM geo_entities e
+    JOIN space_configuration_entity_ids eids ON e.id = eids.entity_id;
 END;
 $$ LANGUAGE plpgsql STRICT STABLE;
 

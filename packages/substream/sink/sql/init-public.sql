@@ -32,8 +32,7 @@ CREATE TABLE public.spaces (
     is_root_space boolean NOT NULL,
     space_plugin_address text,
     main_voting_plugin_address text,
-    member_access_plugin_address text,
-    configuration_id text REFERENCES public.geo_entities(id)
+    member_access_plugin_address text
 );
 
 CREATE TABLE public.geo_entity_types (
@@ -189,7 +188,6 @@ CREATE TABLE public.versions (
 
 -- @TODO: Proposed Member
 -- @TODO: Proposed Editor
--- @TODO: Proposed Subspace
 
 CREATE TABLE public.proposal_votes (
     PRIMARY KEY (onchain_proposal_id, space_id, account_id),
