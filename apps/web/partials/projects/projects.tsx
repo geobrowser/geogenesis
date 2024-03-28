@@ -95,7 +95,7 @@ const Project = ({ spaceName, spaceAvatar, spaceId, project, isEditing }: Projec
   };
 
   return (
-    <div className="group flex items-center gap-5">
+    <div className="group flex w-full items-center gap-5">
       {project.avatar && (
         <Link
           href={NavUtils.toEntity(spaceId, project.id)}
@@ -104,7 +104,7 @@ const Project = ({ spaceName, spaceAvatar, spaceId, project, isEditing }: Projec
           <Avatar avatarUrl={project.avatar} size={80} square />
         </Link>
       )}
-      <div>
+      <div className="flex-grow">
         <div className="flex items-center justify-between">
           <Link href={NavUtils.toEntity(spaceId, project.id)} className="text-tableCell font-medium">
             {project.name}

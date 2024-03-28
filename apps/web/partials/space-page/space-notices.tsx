@@ -79,7 +79,7 @@ const Notice = ({ id, color, media, title, action }: NoticeProps) => {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
 
   const classNames = cva(
-    'group relative mb-8 flex aspect-square w-full flex-col justify-between overflow-clip rounded-lg p-4',
+    'group relative flex aspect-square w-full flex-col justify-between overflow-clip rounded-lg p-4',
     {
       variants: {
         color: {

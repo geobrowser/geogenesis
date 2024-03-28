@@ -94,7 +94,7 @@ const Post = ({ spaceName, spaceAvatar, spaceId, post, isEditing }: PostProps) =
   };
 
   return (
-    <div className="group flex items-center gap-5">
+    <div className="group flex w-full items-center gap-5">
       {post.avatar && (
         <Link
           href={NavUtils.toEntity(spaceId, post.id)}
@@ -103,7 +103,7 @@ const Post = ({ spaceName, spaceAvatar, spaceId, post, isEditing }: PostProps) =
           <Avatar avatarUrl={post.avatar} size={80} square />
         </Link>
       )}
-      <div>
+      <div className="flex-grow">
         <div className="flex items-center justify-between">
           <Link href={NavUtils.toEntity(spaceId, post.id)} className="text-tableCell font-medium">
             {post.name}
