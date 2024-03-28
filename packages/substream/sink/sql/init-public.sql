@@ -32,7 +32,8 @@ CREATE TABLE public.spaces (
     is_root_space boolean NOT NULL,
     space_plugin_address text,
     main_voting_plugin_address text,
-    member_access_plugin_address text
+    member_access_plugin_address text,
+    configuration_id text REFERENCES public.geo_entities(id)
 );
 
 CREATE TABLE public.geo_entity_types (
@@ -76,10 +77,10 @@ CREATE TABLE public.log_entries (
 );
 
 CREATE TYPE public.proposal_type as ENUM ('content', 'add_subspace', 'remove_subspace', 'add_editor', 'remove_editor', 'add_member', 'remove_member');
-CREATE TYPE public.proposal_status as ENUM ('proposed', 'approved', 'rejected', 'canceled', 'executed');
+CREATE TYPE public.proposal_status as ENUM ('proposed', 'accepted', 'rejected', 'canceled', 'executed');
 
 -- Maps to 2 or 3 onchain
-CREATE TYPE public.vote_type as ENUM ('yes', 'no');
+CREATE TYPE public.vote_type as ENUM ('accept', 'reject');
 
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,
@@ -87,8 +88,6 @@ CREATE TABLE public.proposals (
     space_id text NOT NULL REFERENCES public.spaces(id),
     name text,
     description text,
-    uri text,
-    json text,
     type proposal_type NOT NULL,
     status proposal_status NOT NULL,
     created_at integer NOT NULL,
@@ -142,10 +141,12 @@ CREATE TABLE public.space_editor_controllers (
     CONSTRAINT space_editor_controllers_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
-CREATE TABLE public.subspaces (
-    id text PRIMARY KEY,
+CREATE TABLE public.space_subspaces (
+    subspace_id text NOT NULL REFERENCES public.spaces(id),
     parent_space_id text NOT NULL REFERENCES public.spaces(id),
-    child_space_id text NOT NULL REFERENCES public.spaces(id)
+    created_at_block integer NOT NULL,
+    created_at integer NOT NULL,
+    CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
 CREATE TABLE public.triples (
@@ -188,6 +189,7 @@ CREATE TABLE public.versions (
 
 -- @TODO: Proposed Member
 -- @TODO: Proposed Editor
+-- @TODO: Proposed Subspace
 
 CREATE TABLE public.proposal_votes (
     PRIMARY KEY (onchain_proposal_id, space_id, account_id),
@@ -215,6 +217,21 @@ CREATE TABLE public.actions (
     -- version_id text REFERENCES public.versions(id) NOT NULL,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL
+);
+
+CREATE TYPE public.subspace_proposal_type as ENUM ('add_subspace', 'remove_subspace');
+
+-- @TODO: Some of these fields might break in a version of the protocol where
+-- indexers decide which spaces they index. A space not exist in their DB even
+-- though it exists somewhere in the global graph.
+CREATE TABLE public.proposed_subspaces (
+    id text PRIMARY KEY,
+    subspace text NOT NULL REFERENCES public.spaces(id),
+    parent_space text NOT NULL REFERENCES public.spaces(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
+    type subspace_proposal_type NOT NULL
 );
 
 CREATE TABLE public.triple_versions (
@@ -251,7 +268,7 @@ ALTER TABLE
     public.triples DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.subspaces DISABLE TRIGGER ALL;
+    public.space_subspaces DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.spaces DISABLE TRIGGER ALL;
