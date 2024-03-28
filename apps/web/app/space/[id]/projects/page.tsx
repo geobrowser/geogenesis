@@ -1,4 +1,4 @@
-import { PROJECT_TYPE } from '@geogenesis/ids/system-ids';
+import { NONPROFIT_TYPE, PROJECT_TYPE } from '@geogenesis/ids/system-ids';
 
 import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/utils/entity';
@@ -33,14 +33,19 @@ const getProjects = async (spaceId: string) => {
     filter: [],
   });
 
-  projectEntities.forEach(project => {
-    projects.push({
-      id: project.id,
-      name: project.name,
-      description: project.description,
-      avatar: Entity.avatar(project.triples),
+  projectEntities
+    .filter(
+      project =>
+        project.nameTripleSpaces?.includes(spaceId) && !project.types.some((type: any) => type.id === NONPROFIT_TYPE)
+    )
+    .forEach(project => {
+      projects.push({
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        avatar: Entity.avatar(project.triples),
+      });
     });
-  });
 
   return projects;
 };

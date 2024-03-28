@@ -56,7 +56,7 @@ export const Projects = ({ spaceName, spaceAvatar, spaceId, projects }: Projects
         </div>
       </div>
       <div className="mt-5 space-y-5">
-        {projects.length > 0 ? (
+        {projects.length > 0 && (
           <>
             {projects.map(project => (
               <Project
@@ -69,8 +69,6 @@ export const Projects = ({ spaceName, spaceAvatar, spaceId, projects }: Projects
               />
             ))}
           </>
-        ) : (
-          <div>temp</div>
         )}
       </div>
     </div>
