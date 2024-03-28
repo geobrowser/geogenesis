@@ -16,7 +16,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Close } from '~/design-system/icons/close';
+import { CloseSmall } from '~/design-system/icons/close-small';
 
 import { SpacePageType } from '~/app/space/[id]/page';
 import { dismissedNoticesAtom } from '~/atoms';
@@ -79,7 +79,7 @@ const Notice = ({ id, color, media, title, action }: NoticeProps) => {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
 
   const classNames = cva(
-    'relative mb-8 flex aspect-square w-full flex-col justify-between overflow-clip rounded-lg p-4',
+    'group relative mb-8 flex aspect-square w-full flex-col justify-between overflow-clip rounded-lg p-4',
     {
       variants: {
         color: {
@@ -108,9 +108,12 @@ const Notice = ({ id, color, media, title, action }: NoticeProps) => {
         <div className="text-balance text-smallTitle">{title}</div>
         {action && <div className="mt-4">{action}</div>}
       </div>
-      <div className="absolute right-0 top-0 p-4">
-        <button onClick={handleDismissNotice} className="rounded border p-1">
-          <Close />
+      <div className="absolute right-0 top-0 p-3">
+        <button
+          onClick={handleDismissNotice}
+          className="p-1 opacity-50 transition duration-300 ease-in-out hover:opacity-100"
+        >
+          <CloseSmall />
         </button>
       </div>
     </div>
