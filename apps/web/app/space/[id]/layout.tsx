@@ -126,7 +126,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     {
       label: 'Overview',
       href: `${NavUtils.toSpace(params.id)}`,
-      priority: 3 as const,
+      priority: 1 as const,
     },
     {
       label: 'Governance',
