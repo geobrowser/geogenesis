@@ -37,6 +37,8 @@ import { Text } from '~/design-system/text';
 
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
 
+import { dismissedNoticesAtom } from '~/atoms';
+
 const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
 
 type Props = {
@@ -480,8 +482,6 @@ type NoticeProps = {
   element?: React.ReactNode;
   media?: React.ReactNode;
 };
-
-const dismissedNoticesAtom = atomWithStorage<Array<string>>('dismissedNotices', []);
 
 const Notice = ({ id, color, title, description, element, media }: NoticeProps) => {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
