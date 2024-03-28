@@ -12,6 +12,8 @@ import { Vote } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 
+import { Execute } from './execute';
+
 export function AcceptOrReject({
   isProposalDone,
   userVote,
@@ -25,17 +27,7 @@ export function AcceptOrReject({
 }) {
   const { data: wallet } = useWalletClient();
 
-  if (userVote) {
-    if (userVote.vote === 'ACCEPT') {
-      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
-    }
-
-    return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
-  }
-
   const onClick = async (option: Vote['vote']) => {
-    console.log('address', wallet?.account);
-
     const config = await prepareWriteContract({
       walletClient: wallet,
       address: votingContractAddress,
@@ -47,6 +39,18 @@ export function AcceptOrReject({
     const writeResult = await writeContract(config);
     console.log('writeResult', writeResult);
   };
+
+  if (process.env.NODE_ENV === 'development' && isProposalDone) {
+    return <Execute onchainProposalId={onchainProposalId}>Execute </Execute>;
+  }
+
+  if (userVote) {
+    if (userVote.vote === 'ACCEPT') {
+      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">You accepted</div>;
+    }
+
+    return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
+  }
 
   if (!isProposalDone && wallet) {
     return (
