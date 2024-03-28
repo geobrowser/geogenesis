@@ -90,6 +90,26 @@ export function generateTriplesForNonprofit(
     ...projectForeignTypeTriple,
   });
 
+  // Add Finance Overview foreign type
+  const financeOverviewForeignTypeTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: SYSTEM_IDS.FOREIGN_TYPES,
+    attributeName: 'Foreign Types',
+    entityId: spaceConfigEntityId,
+    entityName: spaceName,
+    space: spaceAddress,
+    value: {
+      type: 'entity',
+      name: 'Finance Overview',
+      id: '2cc9d244-59ea-427f-9257-f1362a5fa952',
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(financeOverviewForeignTypeTriple),
+    ...financeOverviewForeignTypeTriple,
+  });
+
   // Add Finance Summary foreign type
   const financeSummaryForeignTypeTriple: OmitStrict<Triple, 'id'> = {
     attributeId: SYSTEM_IDS.FOREIGN_TYPES,
@@ -110,38 +130,12 @@ export function generateTriplesForNonprofit(
     ...financeSummaryForeignTypeTriple,
   });
 
-  // Add space page table block entity
-  const spacePageTableBlockEntityId = ID.createEntityId();
+  // Add space page headline block
+  const spacePageHeadlineBlockEntityId = ID.createEntityId();
 
-  const rowTypeSpacePageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: '577bd9fb-b29e-4e2b-b5f8-f48aedbd26ac',
-    attributeName: 'Row Type',
-    entityId: spacePageTableBlockEntityId,
-    entityName: 'Pages',
-    space: spaceAddress,
-    value: {
-      type: 'entity',
-      name: 'Page',
-      id: '1a9fc4a0-0fec-4eea-a075-eec7ebd0d043',
-    },
-  };
-
-  const filterSpacePageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'b0f2d71a-79ca-4dc4-9218-e3e40dfed103',
-    attributeName: 'Filter',
-    entityId: spacePageTableBlockEntityId,
-    entityName: 'Pages',
-    space: spaceAddress,
-    value: {
-      type: 'string',
-      value: `{typeIds_contains_nocase: ["1a9fc4a0-0fec-4eea-a075-eec7ebd0d043"], entityOf_: {space: "${spaceAddress}"}}`,
-      id: ID.createValueId(),
-    },
-  };
-
-  const parentEntitySpacePageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    entityId: spacePageTableBlockEntityId,
-    entityName: 'Pages',
+  const parentEntitySpacePageHeadlineBlockTriple: OmitStrict<Triple, 'id'> = {
+    entityId: spacePageHeadlineBlockEntityId,
+    entityName: 'Welcome to our nonpr',
     attributeId: 'dd4999b9-77f0-4c2b-a02b-5a26b233854e',
     attributeName: 'Parent Entity',
     space: spaceAddress,
@@ -152,24 +146,117 @@ export function generateTriplesForNonprofit(
     },
   };
 
-  const nameSpacePageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'name',
-    attributeName: 'Name',
-    entityId: spacePageTableBlockEntityId,
-    entityName: 'Pages',
+  const markdownContentSpacePageHeadlineBlockTriple: OmitStrict<Triple, 'id'> = {
+    entityId: spacePageHeadlineBlockEntityId,
+    entityName: 'Welcome to our nonpr',
+    attributeId: 'f88047ce-bd8d-4fbf-83f6-58e84ee533e4',
+    attributeName: 'Markdown Content',
     space: spaceAddress,
     value: {
       type: 'string',
-      value: 'Pages',
+      id: ID.createValueId(),
+      value: '## Welcome to our nonprofit!\n\n',
+    },
+  };
+
+  const nameSpacePageHeadlineBlockTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'name',
+    attributeName: 'Name',
+    entityId: spacePageHeadlineBlockEntityId,
+    entityName: 'Welcome to our nonpr',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: 'Welcome to our nonpr',
       id: ID.createValueId(),
     },
   };
 
-  const typesSpacePageTableBlockTriple: OmitStrict<Triple, 'id'> = {
+  const typesSpacePageHeadlineBlockTriple: OmitStrict<Triple, 'id'> = {
     attributeId: 'type',
     attributeName: 'Types',
-    entityId: spacePageTableBlockEntityId,
-    entityName: 'Pages',
+    entityId: spacePageHeadlineBlockEntityId,
+    entityName: 'Welcome to our nonpr',
+    space: spaceAddress,
+    value: {
+      type: 'entity',
+      name: 'Text Block',
+      id: '8426caa1-43d6-47d4-a6f1-00c7c1a9a320',
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(parentEntitySpacePageHeadlineBlockTriple),
+    ...parentEntitySpacePageHeadlineBlockTriple,
+  });
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(markdownContentSpacePageHeadlineBlockTriple),
+    ...markdownContentSpacePageHeadlineBlockTriple,
+  });
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(nameSpacePageHeadlineBlockTriple),
+    ...nameSpacePageHeadlineBlockTriple,
+  });
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(typesSpacePageHeadlineBlockTriple),
+    ...typesSpacePageHeadlineBlockTriple,
+  });
+
+  // Add space page body block
+  const spacePageBodyBlockEntityId = ID.createEntityId();
+
+  const parentEntitySpacePageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    entityId: spacePageBodyBlockEntityId,
+    entityName: "We're thrilled to ha",
+    attributeId: 'dd4999b9-77f0-4c2b-a02b-5a26b233854e',
+    attributeName: 'Parent Entity',
+    space: spaceAddress,
+    value: {
+      type: 'entity',
+      name: spaceName,
+      id: spaceConfigEntityId,
+    },
+  };
+
+  const markdownContentSpacePageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    entityId: spacePageBodyBlockEntityId,
+    entityName: "We're thrilled to ha",
+    attributeId: 'f88047ce-bd8d-4fbf-83f6-58e84ee533e4',
+    attributeName: 'Markdown Content',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      id: ID.createValueId(),
+      value:
+        "We're thrilled to have you here. At our core, we are driven by a passionate commitment to positive change. As a community, we believe in the power of collective action to make a difference, no matter how big or small. Together, we can create meaningful impact and contribute to a better world. Thank you for joining us on this journey towards a brighter future.\n\n",
+    },
+  };
+
+  const nameSpacePageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'name',
+    attributeName: 'Name',
+    entityId: spacePageBodyBlockEntityId,
+    entityName: "We're thrilled to ha",
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: "We're thrilled to ha",
+      id: ID.createValueId(),
+    },
+  };
+
+  const typesSpacePageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'type',
+    attributeName: 'Types',
+    entityId: spacePageBodyBlockEntityId,
+    entityName: "We're thrilled to ha",
     space: spaceAddress,
     value: {
       type: 'entity',
@@ -180,32 +267,26 @@ export function generateTriplesForNonprofit(
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(rowTypeSpacePageTableBlockTriple),
-    ...rowTypeSpacePageTableBlockTriple,
+    id: ID.createTripleId(parentEntitySpacePageBodyBlockTriple),
+    ...parentEntitySpacePageBodyBlockTriple,
   });
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(filterSpacePageTableBlockTriple),
-    ...filterSpacePageTableBlockTriple,
+    id: ID.createTripleId(markdownContentSpacePageBodyBlockTriple),
+    ...markdownContentSpacePageBodyBlockTriple,
   });
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(parentEntitySpacePageTableBlockTriple),
-    ...parentEntitySpacePageTableBlockTriple,
+    id: ID.createTripleId(nameSpacePageBodyBlockTriple),
+    ...nameSpacePageBodyBlockTriple,
   });
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(nameSpacePageTableBlockTriple),
-    ...nameSpacePageTableBlockTriple,
-  });
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(typesSpacePageTableBlockTriple),
-    ...typesSpacePageTableBlockTriple,
+    id: ID.createTripleId(typesSpacePageBodyBlockTriple),
+    ...typesSpacePageBodyBlockTriple,
   });
 
   // Add space page blocks
@@ -217,7 +298,7 @@ export function generateTriplesForNonprofit(
     space: spaceAddress,
     value: {
       type: 'string',
-      value: `["${spacePageTableBlockEntityId}"]`,
+      value: `["${spacePageHeadlineBlockEntityId}","${spacePageBodyBlockEntityId}"]`,
       id: ID.createValueId(),
     },
   };
@@ -226,165 +307,6 @@ export function generateTriplesForNonprofit(
     type: 'createTriple',
     id: ID.createTripleId(spacePageBlocksTriple),
     ...spacePageBlocksTriple,
-  });
-
-  // Add posts page
-  const postsPageEntityId = ID.createEntityId();
-
-  const namePostsPageTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'name',
-    attributeName: 'Name',
-    entityId: postsPageEntityId,
-    entityName: 'Posts',
-    space: spaceAddress,
-    value: {
-      type: 'string',
-      value: 'Posts',
-      id: ID.createValueId(),
-    },
-  };
-
-  const typesPostsPageTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'type',
-    attributeName: 'Types',
-    entityId: postsPageEntityId,
-    entityName: 'Posts',
-    space: spaceAddress,
-    value: {
-      type: 'entity',
-      name: 'Page',
-      id: '1a9fc4a0-0fec-4eea-a075-eec7ebd0d043',
-    },
-  };
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(namePostsPageTriple),
-    ...namePostsPageTriple,
-  });
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(typesPostsPageTriple),
-    ...typesPostsPageTriple,
-  });
-
-  // Add posts page table block
-  const postsPageTableBlockEntityId = ID.createEntityId();
-
-  const rowTypePostsPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: '577bd9fb-b29e-4e2b-b5f8-f48aedbd26ac',
-    attributeName: 'Row Type',
-    entityId: postsPageTableBlockEntityId,
-    entityName: 'Posts',
-    space: spaceAddress,
-    value: {
-      type: 'entity',
-      name: 'Post',
-      id: '682fbeff-41e2-42cd-a7f9-c4909136a8c5',
-    },
-  };
-
-  const filterPostsPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'b0f2d71a-79ca-4dc4-9218-e3e40dfed103',
-    attributeName: 'Filter',
-    entityId: postsPageTableBlockEntityId,
-    entityName: 'Posts',
-    space: spaceAddress,
-    value: {
-      type: 'string',
-      value: `{typeIds_contains_nocase: ["682fbeff-41e2-42cd-a7f9-c4909136a8c5"], entityOf_: {space: "${spaceAddress}"}}`,
-      id: ID.createValueId(),
-    },
-  };
-
-  const parentEntityPostsPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    entityId: spacePageTableBlockEntityId,
-    entityName: 'Posts',
-    attributeId: 'dd4999b9-77f0-4c2b-a02b-5a26b233854e',
-    attributeName: 'Parent Entity',
-    space: spaceAddress,
-    value: {
-      type: 'entity',
-      name: spaceName,
-      id: postsPageEntityId,
-    },
-  };
-
-  const namePostsPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'name',
-    attributeName: 'Name',
-    entityId: postsPageTableBlockEntityId,
-    entityName: 'Posts',
-    space: spaceAddress,
-    value: {
-      type: 'string',
-      value: 'Posts',
-      id: ID.createValueId(),
-    },
-  };
-
-  const typesPostsPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'type',
-    attributeName: 'Types',
-    entityId: spacePageTableBlockEntityId,
-    entityName: 'Posts',
-    space: spaceAddress,
-    value: {
-      type: 'entity',
-      name: 'Table Block',
-      id: '88d59252-17ae-4d9a-a367-24710129eb47',
-    },
-  };
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(rowTypePostsPageTableBlockTriple),
-    ...rowTypePostsPageTableBlockTriple,
-  });
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(filterPostsPageTableBlockTriple),
-    ...filterPostsPageTableBlockTriple,
-  });
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(parentEntityPostsPageTableBlockTriple),
-    ...parentEntityPostsPageTableBlockTriple,
-  });
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(namePostsPageTableBlockTriple),
-    ...namePostsPageTableBlockTriple,
-  });
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(typesPostsPageTableBlockTriple),
-    ...typesPostsPageTableBlockTriple,
-  });
-
-  // Add posts page blocks
-  const postsPageBlocksTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'beaba5cb-a677-41a8-b353-77030613fc70',
-    attributeName: 'Blocks',
-    entityId: postsPageEntityId,
-    entityName: spaceName,
-    space: spaceAddress,
-    value: {
-      type: 'string',
-      value: `["${postsPageTableBlockEntityId}"]`,
-      id: ID.createValueId(),
-    },
-  };
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(postsPageBlocksTriple),
-    ...postsPageBlocksTriple,
   });
 
   // Add finances page
@@ -411,8 +333,8 @@ export function generateTriplesForNonprofit(
     space: spaceAddress,
     value: {
       type: 'entity',
-      name: 'Page',
-      id: '1a9fc4a0-0fec-4eea-a075-eec7ebd0d043',
+      name: 'Finance Overview',
+      id: '2cc9d244-59ea-427f-9257-f1362a5fa952',
     },
   };
 
@@ -426,6 +348,85 @@ export function generateTriplesForNonprofit(
     type: 'createTriple',
     id: ID.createTripleId(typesFinancesPageTriple),
     ...typesFinancesPageTriple,
+  });
+
+  // Add finances page body block
+  const financesPageBodyBlockEntityId = ID.createEntityId();
+
+  const parentEntityFinancesPageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    entityId: financesPageBodyBlockEntityId,
+    entityName: 'Welcome to the finan',
+    attributeId: 'dd4999b9-77f0-4c2b-a02b-5a26b233854e',
+    attributeName: 'Parent Entity',
+    space: spaceAddress,
+    value: {
+      type: 'entity',
+      name: spaceName,
+      id: spaceConfigEntityId,
+    },
+  };
+
+  const markdownContentFinancesPageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    entityId: financesPageBodyBlockEntityId,
+    entityName: 'Welcome to the finan',
+    attributeId: 'f88047ce-bd8d-4fbf-83f6-58e84ee533e4',
+    attributeName: 'Markdown Content',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      id: ID.createValueId(),
+      value: 'Welcome to the finance summary of this nonprofit.\n\n',
+    },
+  };
+
+  const nameFinancesPageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'name',
+    attributeName: 'Name',
+    entityId: financesPageBodyBlockEntityId,
+    entityName: 'Welcome to the finan',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: 'Welcome to the finan',
+      id: ID.createValueId(),
+    },
+  };
+
+  const typesFinancesPageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'type',
+    attributeName: 'Types',
+    entityId: financesPageBodyBlockEntityId,
+    entityName: 'Welcome to the finan',
+    space: spaceAddress,
+    value: {
+      type: 'entity',
+      name: 'Table Block',
+      id: '88d59252-17ae-4d9a-a367-24710129eb47',
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(parentEntityFinancesPageBodyBlockTriple),
+    ...parentEntityFinancesPageBodyBlockTriple,
+  });
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(markdownContentFinancesPageBodyBlockTriple),
+    ...markdownContentFinancesPageBodyBlockTriple,
+  });
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(nameFinancesPageBodyBlockTriple),
+    ...nameFinancesPageBodyBlockTriple,
+  });
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(typesFinancesPageBodyBlockTriple),
+    ...typesFinancesPageBodyBlockTriple,
   });
 
   // Add finances page table block
@@ -575,10 +576,10 @@ export function generateTriplesForNonprofit(
   };
 
   const parentEntityFinancesPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    entityId: spacePageTableBlockEntityId,
-    entityName: 'Finance Summaries',
     attributeId: 'dd4999b9-77f0-4c2b-a02b-5a26b233854e',
     attributeName: 'Parent Entity',
+    entityId: financesPageTableBlockEntityId,
+    entityName: 'Finance Summaries',
     space: spaceAddress,
     value: {
       type: 'entity',
@@ -706,7 +707,7 @@ export function generateTriplesForNonprofit(
     space: spaceAddress,
     value: {
       type: 'string',
-      value: `["${financesPageTableBlockEntityId}"]`,
+      value: `["${financesPageBodyBlockEntityId}","${financesPageTableBlockEntityId}"]`,
       id: ID.createValueId(),
     },
   };
@@ -717,245 +718,411 @@ export function generateTriplesForNonprofit(
     ...financesPageBlocksTriple,
   });
 
-  // Add projects page
-  const projectsPageEntityId = ID.createEntityId();
+  // Add sample summary page
+  const sampleSummaryPageEntityId = ID.createEntityId();
 
-  const nameProjectsPageTriple: OmitStrict<Triple, 'id'> = {
+  const constructionCostsSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: '5572bb78-1e9b-4752-8333-72e7c2c90c8b',
+    attributeName: 'Construction costs',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: '$0.00',
+      id: ID.createValueId(),
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(constructionCostsSampleSummaryPageTriple),
+    ...constructionCostsSampleSummaryPageTriple,
+  });
+
+  const contributionsSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: '9e94fc0c-2f6e-4fd6-894b-eef6bfe64d49',
+    attributeName: 'Contributions',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: '$0.00',
+      id: ID.createValueId(),
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(contributionsSampleSummaryPageTriple),
+    ...contributionsSampleSummaryPageTriple,
+  });
+
+  const grantsSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: '73984ff3-11e6-4b42-bd09-07f34d4be0e2',
+    attributeName: 'Grants',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: '$0.00',
+      id: ID.createValueId(),
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(grantsSampleSummaryPageTriple),
+    ...grantsSampleSummaryPageTriple,
+  });
+
+  const nonFinancialAssetsSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: '15645106-d203-4db1-8692-012a6e06349f',
+    attributeName: 'Non-financial assets',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: '$0.00',
+      id: ID.createValueId(),
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(nonFinancialAssetsSampleSummaryPageTriple),
+    ...nonFinancialAssetsSampleSummaryPageTriple,
+  });
+
+  const otherExpensesSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: '6c90a975-5da7-4f5a-9401-514d30dd9926',
+    attributeName: 'Other expenses',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: '$0.00',
+      id: ID.createValueId(),
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(otherExpensesSampleSummaryPageTriple),
+    ...otherExpensesSampleSummaryPageTriple,
+  });
+
+  const otherRevenueSourcesSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: '0b623cb1-ba1d-407a-b9cc-58becb52b531',
+    attributeName: 'Other revenue sources',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: '$0.00',
+      id: ID.createValueId(),
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(otherRevenueSourcesSampleSummaryPageTriple),
+    ...otherRevenueSourcesSampleSummaryPageTriple,
+  });
+
+  const programServicesFeesSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: '8a573366-1d86-48b6-b861-c48aad11486f',
+    attributeName: 'Program services fees',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: '$0.00',
+      id: ID.createValueId(),
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(programServicesFeesSampleSummaryPageTriple),
+    ...programServicesFeesSampleSummaryPageTriple,
+  });
+
+  const salariesAndBenefitsSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'bc6d8191-1626-42b2-a8fc-6d639535306c',
+    attributeName: 'Salaries + Benefits',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: '$0.00',
+      id: ID.createValueId(),
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(salariesAndBenefitsSampleSummaryPageTriple),
+    ...salariesAndBenefitsSampleSummaryPageTriple,
+  });
+
+  const totalRevenueSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'e769b6ac-2387-4b37-919b-9cab193868fd',
+    attributeName: 'Total revenue',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: '$0.00',
+      id: ID.createValueId(),
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(totalRevenueSampleSummaryPageTriple),
+    ...totalRevenueSampleSummaryPageTriple,
+  });
+
+  const nameSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
     attributeId: 'name',
     attributeName: 'Name',
-    entityId: projectsPageEntityId,
-    entityName: 'Projects',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
     space: spaceAddress,
     value: {
       type: 'string',
-      value: 'Projects',
+      id: 'b9f9193a-f831-4b91-b7a6-52d5ac2a2548',
+      value: 'Sample summary',
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(nameSampleSummaryPageTriple),
+    ...nameSampleSummaryPageTriple,
+  });
+
+  const descriptionSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'Description',
+    attributeName: 'Description',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: 'This page is an example of a finance summary',
       id: ID.createValueId(),
     },
   };
 
-  const typesProjectsPageTriple: OmitStrict<Triple, 'id'> = {
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(descriptionSampleSummaryPageTriple),
+    ...descriptionSampleSummaryPageTriple,
+  });
+
+  const typesSampleSummaryPageTriple: OmitStrict<Triple, 'id'> = {
     attributeId: 'type',
     attributeName: 'Types',
-    entityId: projectsPageEntityId,
-    entityName: 'Projects',
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
     space: spaceAddress,
     value: {
       type: 'entity',
-      name: 'Page',
-      id: '1a9fc4a0-0fec-4eea-a075-eec7ebd0d043',
+      name: 'Finance Summary',
+      id: 'ce59ccc1-2ac5-4ace-8f82-09322434733d',
     },
   };
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(nameProjectsPageTriple),
-    ...nameProjectsPageTriple,
+    id: ID.createTripleId(typesSampleSummaryPageTriple),
+    ...typesSampleSummaryPageTriple,
   });
 
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(typesProjectsPageTriple),
-    ...typesProjectsPageTriple,
-  });
+  // Add sample summary blocks
+  const sampleSummaryPageHeadlineBlockEntityId = ID.createEntityId();
 
-  // Add projects page table block
-  const projectsPageTableBlockEntityId = ID.createEntityId();
-
-  const rowTypeProjectsPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: '577bd9fb-b29e-4e2b-b5f8-f48aedbd26ac',
-    attributeName: 'Row Type',
-    entityId: projectsPageTableBlockEntityId,
-    entityName: 'Projects',
-    space: spaceAddress,
-    value: {
-      type: 'entity',
-      name: 'Project',
-      id: '682fbeff-41e2-42cd-a7f9-c4909136a8c5',
-    },
-  };
-
-  const filterProjectsPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'b0f2d71a-79ca-4dc4-9218-e3e40dfed103',
-    attributeName: 'Filter',
-    entityId: projectsPageTableBlockEntityId,
-    entityName: 'Projects',
-    space: spaceAddress,
-    value: {
-      type: 'string',
-      value: `{typeIds_contains_nocase: ["682fbeff-41e2-42cd-a7f9-c4909136a8c5"], entityOf_: {space: "${spaceAddress}"}}`,
-      id: ID.createValueId(),
-    },
-  };
-
-  const parentEntityProjectsPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    entityId: projectsPageTableBlockEntityId,
-    entityName: 'Projects',
+  const parentEntitySampleSummaryPageHeadlineBlockTriple: OmitStrict<Triple, 'id'> = {
+    entityId: sampleSummaryPageHeadlineBlockEntityId,
+    entityName: 'Welcome to this exam',
     attributeId: 'dd4999b9-77f0-4c2b-a02b-5a26b233854e',
     attributeName: 'Parent Entity',
     space: spaceAddress,
     value: {
       type: 'entity',
-      name: 'Projects',
-      id: projectsPageEntityId,
+      name: 'Sample summary',
+      id: sampleSummaryPageEntityId,
     },
   };
 
-  const nameProjectsPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'name',
-    attributeName: 'Name',
-    entityId: projectsPageTableBlockEntityId,
-    entityName: 'Projects',
+  const markdownContentSampleSummaryPageHeadlineBlockTriple: OmitStrict<Triple, 'id'> = {
+    entityId: sampleSummaryPageHeadlineBlockEntityId,
+    entityName: 'Welcome to this exam',
+    attributeId: 'f88047ce-bd8d-4fbf-83f6-58e84ee533e4',
+    attributeName: 'Markdown Content',
     space: spaceAddress,
     value: {
       type: 'string',
-      value: 'Projects',
+      id: ID.createValueId(),
+      value: '**Welcome to this example finance summary.**\n\n',
+    },
+  };
+
+  const nameSampleSummaryPageHeadlineBlockTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'name',
+    attributeName: 'Name',
+    entityId: sampleSummaryPageHeadlineBlockEntityId,
+    entityName: 'Welcome to this exam',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: 'Welcome to this exam',
       id: ID.createValueId(),
     },
   };
 
-  const typesProjectsPageTableBlockTriple: OmitStrict<Triple, 'id'> = {
+  const typesSampleSummaryPageHeadlineBlockTriple: OmitStrict<Triple, 'id'> = {
     attributeId: 'type',
     attributeName: 'Types',
-    entityId: spacePageTableBlockEntityId,
-    entityName: 'Projects',
+    entityId: sampleSummaryPageHeadlineBlockEntityId,
+    entityName: 'Welcome to this exam',
     space: spaceAddress,
     value: {
       type: 'entity',
-      name: 'Table Block',
-      id: '88d59252-17ae-4d9a-a367-24710129eb47',
+      name: 'Text Block',
+      id: '8426caa1-43d6-47d4-a6f1-00c7c1a9a320',
     },
   };
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(rowTypeProjectsPageTableBlockTriple),
-    ...rowTypeProjectsPageTableBlockTriple,
+    id: ID.createTripleId(parentEntitySampleSummaryPageHeadlineBlockTriple),
+    ...parentEntitySampleSummaryPageHeadlineBlockTriple,
   });
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(filterProjectsPageTableBlockTriple),
-    ...filterProjectsPageTableBlockTriple,
+    id: ID.createTripleId(markdownContentSampleSummaryPageHeadlineBlockTriple),
+    ...markdownContentSampleSummaryPageHeadlineBlockTriple,
   });
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(parentEntityProjectsPageTableBlockTriple),
-    ...parentEntityProjectsPageTableBlockTriple,
+    id: ID.createTripleId(nameSampleSummaryPageHeadlineBlockTriple),
+    ...nameSampleSummaryPageHeadlineBlockTriple,
   });
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(nameProjectsPageTableBlockTriple),
-    ...nameProjectsPageTableBlockTriple,
+    id: ID.createTripleId(typesSampleSummaryPageHeadlineBlockTriple),
+    ...typesSampleSummaryPageHeadlineBlockTriple,
+  });
+
+  const sampleSummaryPageBodyBlockEntityId = ID.createEntityId();
+
+  const parentEntitySampleSummaryPageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    entityId: sampleSummaryPageBodyBlockEntityId,
+    entityName: 'Add your financial d',
+    attributeId: 'dd4999b9-77f0-4c2b-a02b-5a26b233854e',
+    attributeName: 'Parent Entity',
+    space: spaceAddress,
+    value: {
+      type: 'entity',
+      name: 'Sample summary',
+      id: sampleSummaryPageEntityId,
+    },
+  };
+
+  const markdownContentSampleSummaryPageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    entityId: sampleSummaryPageBodyBlockEntityId,
+    entityName: 'Add your financial d',
+    attributeId: 'f88047ce-bd8d-4fbf-83f6-58e84ee533e4',
+    attributeName: 'Markdown Content',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      id: ID.createValueId(),
+      value: 'Add your financial details below, and any other information on this entity for this financial year.\n\n',
+    },
+  };
+
+  const nameSampleSummaryPageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'name',
+    attributeName: 'Name',
+    entityId: sampleSummaryPageBodyBlockEntityId,
+    entityName: 'Add your financial d',
+    space: spaceAddress,
+    value: {
+      type: 'string',
+      value: 'Add your financial d',
+      id: ID.createValueId(),
+    },
+  };
+
+  const typesSampleSummaryPageBodyBlockTriple: OmitStrict<Triple, 'id'> = {
+    attributeId: 'type',
+    attributeName: 'Types',
+    entityId: sampleSummaryPageBodyBlockEntityId,
+    entityName: 'Add your financial d',
+    space: spaceAddress,
+    value: {
+      type: 'entity',
+      name: 'Text Block',
+      id: '8426caa1-43d6-47d4-a6f1-00c7c1a9a320',
+    },
+  };
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(parentEntitySampleSummaryPageBodyBlockTriple),
+    ...parentEntitySampleSummaryPageBodyBlockTriple,
   });
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(typesProjectsPageTableBlockTriple),
-    ...typesProjectsPageTableBlockTriple,
+    id: ID.createTripleId(markdownContentSampleSummaryPageBodyBlockTriple),
+    ...markdownContentSampleSummaryPageBodyBlockTriple,
   });
 
-  // Add projects page blocks
-  const projectsPageBlocksTriple: OmitStrict<Triple, 'id'> = {
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(nameSampleSummaryPageBodyBlockTriple),
+    ...nameSampleSummaryPageBodyBlockTriple,
+  });
+
+  actions.push({
+    type: 'createTriple',
+    id: ID.createTripleId(typesSampleSummaryPageBodyBlockTriple),
+    ...typesSampleSummaryPageBodyBlockTriple,
+  });
+
+  const sampleSummaryPageBlocksTriple: OmitStrict<Triple, 'id'> = {
     attributeId: 'beaba5cb-a677-41a8-b353-77030613fc70',
     attributeName: 'Blocks',
-    entityId: projectsPageEntityId,
-    entityName: spaceName,
+    entityId: sampleSummaryPageEntityId,
+    entityName: 'Sample summary',
     space: spaceAddress,
     value: {
       type: 'string',
-      value: `["${projectsPageTableBlockEntityId}"]`,
-      id: ID.createValueId(),
+      value: `["${sampleSummaryPageHeadlineBlockEntityId}","${sampleSummaryPageBodyBlockEntityId}"]`,
+      id: '341d2e1b-eb8f-4b14-8b04-071ba273ba18',
     },
   };
 
   actions.push({
     type: 'createTriple',
-    id: ID.createTripleId(projectsPageBlocksTriple),
-    ...projectsPageBlocksTriple,
-  });
-
-  // Add about us page
-  const aboutUsPageEntityId = ID.createEntityId();
-
-  const nameAboutUsPageTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'name',
-    attributeName: 'Name',
-    entityId: aboutUsPageEntityId,
-    entityName: 'About Us',
-    space: spaceAddress,
-    value: {
-      type: 'string',
-      value: 'About Us',
-      id: ID.createValueId(),
-    },
-  };
-
-  const typesAboutUsPageTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'type',
-    attributeName: 'Types',
-    entityId: aboutUsPageEntityId,
-    entityName: 'About Us',
-    space: spaceAddress,
-    value: {
-      type: 'entity',
-      name: 'Page',
-      id: '1a9fc4a0-0fec-4eea-a075-eec7ebd0d043',
-    },
-  };
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(nameAboutUsPageTriple),
-    ...nameAboutUsPageTriple,
-  });
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(typesAboutUsPageTriple),
-    ...typesAboutUsPageTriple,
-  });
-
-  // Add get involved page
-  const getInvolvedPageEntityId = ID.createEntityId();
-
-  const nameGetInvolvedPageTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'name',
-    attributeName: 'Name',
-    entityId: getInvolvedPageEntityId,
-    entityName: 'Get Involved',
-    space: spaceAddress,
-    value: {
-      type: 'string',
-      value: 'Get Involved',
-      id: ID.createValueId(),
-    },
-  };
-
-  const typesGetInvolvedPageTriple: OmitStrict<Triple, 'id'> = {
-    attributeId: 'type',
-    attributeName: 'Types',
-    entityId: getInvolvedPageEntityId,
-    entityName: 'Get Involved',
-    space: spaceAddress,
-    value: {
-      type: 'entity',
-      name: 'Page',
-      id: '1a9fc4a0-0fec-4eea-a075-eec7ebd0d043',
-    },
-  };
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(nameGetInvolvedPageTriple),
-    ...nameGetInvolvedPageTriple,
-  });
-
-  actions.push({
-    type: 'createTriple',
-    id: ID.createTripleId(typesGetInvolvedPageTriple),
-    ...typesGetInvolvedPageTriple,
+    id: ID.createTripleId(sampleSummaryPageBlocksTriple),
+    ...sampleSummaryPageBlocksTriple,
   });
 
   return actions;
