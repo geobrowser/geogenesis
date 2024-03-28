@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -6,7 +5,7 @@ import * as React from 'react';
 import type { Metadata } from 'next';
 
 import { Subgraph } from '~/core/io';
-import { fetchEntities } from '~/core/io/subgraph';
+import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -72,7 +71,7 @@ export default async function SpacePage({ params }: Props) {
   return (
     <>
       <React.Suspense fallback={<SubspacesSkeleton />}>
-        <SubspacesContainer entityId={props.id} />
+        <SubspacesContainer spaceId={params.id} />
       </React.Suspense>
       <Editor shouldHandleOwnSpacing />
       <ToggleEntityPage {...props} />
@@ -99,23 +98,13 @@ const SubspacesSkeleton = () => {
 };
 
 type SubspacesContainerProps = {
-  entityId: string;
+  spaceId: string;
 };
 
-const SubspacesContainer = async ({ entityId }: SubspacesContainerProps) => {
-  const subspaces = await fetchEntities({
-    typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
-    filter: [
-      {
-        field: 'attribute-id',
-        value: SYSTEM_IDS.BROADER_SPACES,
-      },
-      {
-        field: 'linked-to',
-        value: entityId,
-      },
-    ],
-  });
+const SubspacesContainer = async ({ spaceId }: SubspacesContainerProps) => {
+  const subspaces = await fetchSubspacesBySpaceId(spaceId);
+
+  console.log('subspaces', subspaces);
 
   return <Subspaces subspaces={subspaces} />;
 };
@@ -134,5 +123,6 @@ const getData = async (spaceId: string) => {
     triples: entity?.triples ?? [],
     id: entity.id,
     spaceId,
+    subspaces: [],
   };
 };

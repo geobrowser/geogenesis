@@ -101,9 +101,9 @@ function getVoteTypeAsText(voteType: Vote['voteOption']): S.vote_type | null {
     case 1:
       return null;
     case 2:
-      return 'yes';
+      return 'accept';
     case 3:
-      return 'no';
+      return 'reject';
     default:
       return null;
   }

@@ -63,8 +63,8 @@ export interface FullEntry extends z.infer<typeof ZodFullEntry> {
   // Set the real Action type. We only use z.any() in ZodUriData to avoid
   // rejecting the entire array of actions if one of them is invalid.
   uriData: OmitStrict<UriData, 'actions'> & { actions: Action[] };
-  json: string;
-  uri: string;
+  // json: string;
+  // uri: string;
 }
 
 /** Onchain Profile registrations */
@@ -207,8 +207,8 @@ export type ContentProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   actions: Action[];
-  uri: string;
-  json: string;
+  // uri: string;
+  // json: string;
 };
 
 export const ZodMembershipProposal = z.object({
@@ -222,8 +222,8 @@ export type MembershipProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   userAddress: `0x${string}`;
-  uri: string;
-  json: string;
+  // uri: string;
+  // json: string;
 };
 
 export const ZodSubspaceProposal = z.object({
@@ -237,12 +237,23 @@ export type SubspaceProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   subspace: `0x${string}`;
-  uri: string;
-  json: string;
+  // uri: string;
+  // json: string;
 };
 
 export const ZodProposalStreamResponse = z.object({
   proposalsCreated: z.array(ZodSubstreamProposal).min(1),
+});
+
+export const ZodProposalProcessed = z.object({
+  contentUri: z.string(),
+  pluginAddress: z.string(),
+});
+
+export type ProposalProcessed = z.infer<typeof ZodProposalProcessed>;
+
+export const ZodProposalProcessedStreamResponse = z.object({
+  proposalsProcessed: z.array(ZodProposalProcessed).min(1),
 });
 
 /**
@@ -263,6 +274,41 @@ export type Vote = z.infer<typeof ZodVote>;
 
 export const ZodVotesCastStreamResponse = z.object({
   votesCast: z.array(ZodVote).min(1),
+});
+
+/**
+ * Added or Removed Subspaces represent adding a space contracto to the hierarchy
+ * of the DAO-based space. This is useful to "link" Spaces together in a
+ * tree of spaces, allowing us to curate the graph of their knowledge and
+ * permissions.
+ */
+export const ZodSubspaceAdded = z.object({
+  subspace: z.string(),
+  pluginAddress: z.string(),
+  // We add the type to the changeType to ensure we can validate the data
+  // independently of a subspace removal. Otherwise we'll parse both
+  // events as if they are the same.
+  changeType: z.string().refine(data => data === 'added'),
+});
+
+export const ZodSubspaceRemoved = z.object({
+  subspace: z.string(),
+  pluginAddress: z.string(),
+  // We add the type to the changeType to ensure we can validate the data
+  // independently of a subspace removal. Otherwise we'll parse both
+  // events as if they are the same.
+  changeType: z.string().refine(data => data === 'removed'),
+});
+
+export type SubspaceAdded = z.infer<typeof ZodSubspaceAdded>;
+export type SubspaceRemoved = z.infer<typeof ZodSubspaceRemoved>;
+
+export const ZodSubspacesAddedStreamResponse = z.object({
+  subspacesAdded: z.array(ZodSubspaceAdded).min(1),
+});
+
+export const ZodSubspacesRemovedStreamResponse = z.object({
+  subspacesRemoved: z.array(ZodSubspaceRemoved).min(1),
 });
 
 /**

@@ -10,7 +10,7 @@ import { pool } from './pool';
  * voting-related events might come from the MainVoting plugin. We need to map these
  * events to the actual space_id (the DAO contract address).
  *
- * This function looks up the space-id for a given plugin address.
+ * This function looks up the space-id for a given voting plugin address.
  *
  * @TODO: We should only emit events from the substream that map to spaces we track. We
  * can store the association between plugins and spaces in a substream store and emit it

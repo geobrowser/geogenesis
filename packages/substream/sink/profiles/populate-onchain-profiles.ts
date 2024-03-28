@@ -1,8 +1,8 @@
 import { Effect, Schedule } from 'effect';
-import { getAddress } from 'viem';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
+import { getChecksumAddress } from '../utils/get-checksum-address';
 import { pool } from '../utils/pool';
 import type { OnchainProfileRegistered } from '../zod';
 
@@ -14,7 +14,7 @@ export function populateOnchainProfiles(profiles: OnchainProfileRegistered[], ti
   return Effect.gen(function* (unwrap) {
     const accounts = profiles.map(p => {
       const newAccount: S.accounts.Insertable = {
-        id: getAddress(p.requestor),
+        id: getChecksumAddress(p.requestor),
       };
 
       return newAccount;
@@ -22,7 +22,7 @@ export function populateOnchainProfiles(profiles: OnchainProfileRegistered[], ti
 
     const spaces = profiles.map(p => {
       const newSpace: S.spaces.Insertable = {
-        id: getAddress(p.space),
+        id: getChecksumAddress(p.space),
         created_at_block: blockNumber,
         is_root_space: false,
       };
@@ -32,9 +32,9 @@ export function populateOnchainProfiles(profiles: OnchainProfileRegistered[], ti
 
     const onchainProfiles = profiles.map(p => {
       const newOnchainProfile: S.onchain_profiles.Insertable = {
-        id: `${getAddress(p.requestor)}–${p.id}`,
-        account_id: getAddress(p.requestor),
-        home_space_id: getAddress(p.space),
+        id: `${getChecksumAddress(p.requestor)}–${p.id}`,
+        account_id: getChecksumAddress(p.requestor),
+        home_space_id: getChecksumAddress(p.space),
         created_at: timestamp,
         created_at_block: blockNumber,
       };

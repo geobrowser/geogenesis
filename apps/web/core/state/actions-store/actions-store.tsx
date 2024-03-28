@@ -15,7 +15,7 @@ import {
 import { Action } from '~/core/utils/action';
 import { Triple } from '~/core/utils/triple';
 
-import { store } from '../jotai-provider';
+import { store } from '../jotai-store';
 import { db } from './indexeddb';
 
 const atomWithAsyncStorage = (initialValue: ActionType[] = []) => {

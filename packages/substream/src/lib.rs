@@ -2,10 +2,12 @@ pub mod helpers;
 mod pb;
 
 use pb::schema::{
-    DaoAction, EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
+    EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
     GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
-    GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalsCreated, RoleChange, RoleChanges,
-    SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
+    GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalExecuted, ProposalProcessed,
+    ProposalsCreated, ProposalsExecuted, ProposalsProcessed, RoleChange, RoleChanges,
+    SubspaceAdded, SubspaceRemoved, SubspacesAdded, SubspacesRemoved, SuccessorSpaceCreated,
+    SuccessorSpacesCreated, VoteCast, VotesCast,
 };
 
 use substreams::store::*;
@@ -25,9 +27,12 @@ use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePlugin
 use legacy_space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
 use main_voting_plugin::events::{
     MembersAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
-    VoteCast as VoteCastEvent,
+    ProposalExecuted as ProposalExecutedEvent, VoteCast as VoteCastEvent,
 };
-use space::events::SuccessorSpaceCreated as SuccessSpaceCreatedEvent;
+use space::events::{
+    GeoProposalProcessed, SubspaceAccepted, SubspaceRemoved as GeoSubspaceRemoved,
+    SuccessorSpaceCreated as SuccessSpaceCreatedEvent,
+};
 use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
 
 /**
@@ -231,6 +236,48 @@ fn map_spaces_created(
     Ok(GeoSpacesCreated { spaces })
 }
 
+#[substreams::handlers::map]
+fn map_subspaces_added(block: eth::v2::Block) -> Result<SubspacesAdded, substreams::errors::Error> {
+    let subspaces: Vec<SubspaceAdded> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(space_created) = SubspaceAccepted::match_and_decode(log) {
+                return Some(SubspaceAdded {
+                    change_type: "added".to_string(),
+                    subspace: format_hex(&space_created.subspace_dao),
+                    plugin_address: format_hex(&log.address()),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(SubspacesAdded { subspaces })
+}
+
+#[substreams::handlers::map]
+fn map_subspaces_removed(
+    block: eth::v2::Block,
+) -> Result<SubspacesRemoved, substreams::errors::Error> {
+    let subspaces: Vec<SubspaceRemoved> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(space_created) = GeoSubspaceRemoved::match_and_decode(log) {
+                return Some(SubspaceRemoved {
+                    change_type: "removed".to_string(),
+                    subspace: format_hex(&space_created.subspace_dao),
+                    plugin_address: format_hex(&log.address()),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(SubspacesRemoved { subspaces })
+}
+
 /**
  * The new DAO-based space contracts are based on Aragon's OSX architecture which uses
  * plugins to define functionality assigned to a DAO (See the top level comment for more
@@ -339,16 +386,6 @@ fn map_proposals_created(
             if let Some(proposal_created) = ProposalCreatedEvent::match_and_decode(log) {
                 // @TODO: Should we return none if actions is empty?
                 return Some(ProposalCreated {
-                    actions: proposal_created
-                        .actions
-                        .iter()
-                        .map(|action| DaoAction {
-                            to: format_hex(&action.0),
-                            value: action.1.to_u64(),
-                            data: action.2.clone(),
-                        })
-                        .collect(),
-                    allow_failure_map: proposal_created.allow_failure_map.to_string(),
                     proposal_id: proposal_created.proposal_id.to_string(),
                     creator: format_hex(&proposal_created.creator),
                     start_time: proposal_created.start_date.to_string(),
@@ -363,6 +400,56 @@ fn map_proposals_created(
         .collect();
 
     Ok(ProposalsCreated { proposals })
+}
+
+#[substreams::handlers::map]
+fn map_proposals_executed(
+    block: eth::v2::Block,
+) -> Result<ProposalsExecuted, substreams::errors::Error> {
+    let executed_proposals: Vec<ProposalExecuted> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(proposal_created) = ProposalExecutedEvent::match_and_decode(log) {
+                return Some(ProposalExecuted {
+                    plugin_address: format_hex(&log.address()),
+                    proposal_id: proposal_created.proposal_id.to_string(),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(ProposalsExecuted { executed_proposals })
+}
+
+/**
+ * Processed Proposals represent content that has been approved by a DAO
+ * and executed onchain.
+ *
+ * We use the content URI to represent the content that was approved. We
+ * only consume the `proposalId` in the content URI to map the processed
+ * data to an existing proposal onchain and in the sink.
+*/
+#[substreams::handlers::map]
+fn map_proposals_processed(
+    block: eth::v2::Block,
+) -> Result<ProposalsProcessed, substreams::errors::Error> {
+    let proposals: Vec<ProposalProcessed> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(proposal_created) = GeoProposalProcessed::match_and_decode(log) {
+                return Some(ProposalProcessed {
+                    content_uri: proposal_created.content_uri,
+                    plugin_address: format_hex(&log.address()),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(ProposalsProcessed { proposals })
 }
 
 /**
@@ -402,32 +489,44 @@ fn geo_out(
     entries: EntriesAdded,
     role_changes: RoleChanges,
     profiles_registered: GeoProfilesRegistered,
-    // spaces_created: GeoSpacesCreated,
-    // governance_plugins_created: GeoGovernancePluginsCreated,
-    // editors_added: EditorsAdded,
-    // proposals_created: ProposalsCreated,
-    // votes_cast: VotesCast,
-    // successor_spaces_created: SuccessorSpacesCreated,
+    spaces_created: GeoSpacesCreated,
+    governance_plugins_created: GeoGovernancePluginsCreated,
+    editors_added: EditorsAdded,
+    proposals_created: ProposalsCreated,
+    votes_cast: VotesCast,
+    geo_proposals_processed: ProposalsProcessed,
+    successor_spaces_created: SuccessorSpacesCreated,
+    subspaces_added: SubspacesAdded,
+    subspaces_removed: SubspacesRemoved,
+    proposals_executed: ProposalsExecuted,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
     let role_changes = role_changes.changes;
     let profiles_registered = profiles_registered.profiles;
-    // let spaces_created = spaces_created.spaces;
-    // let governance_plugins_created = governance_plugins_created.plugins;
-    // let editors_added = editors_added.editors;
-    // let proposals_created = proposals_created.proposals;
-    // let votes_cast = votes_cast.votes;
-    // let successor_spaces_created = successor_spaces_created.spaces;
+    let spaces_created = spaces_created.spaces;
+    let governance_plugins_created = governance_plugins_created.plugins;
+    let editors_added = editors_added.editors;
+    let proposals_created = proposals_created.proposals;
+    let votes_cast = votes_cast.votes;
+    let proposals_processed = geo_proposals_processed.proposals;
+    let successor_spaces_created = successor_spaces_created.spaces;
+    let added_subspaces = subspaces_added.subspaces;
+    let removed_subspaces = subspaces_removed.subspaces;
+    let executed_proposals = proposals_executed.executed_proposals;
 
     Ok(GeoOutput {
         entries,
         role_changes,
         profiles_registered,
-        // spaces_created,
-        // governance_plugins_created,
-        // editors_added,
-        // proposals_created,
-        // votes_cast,
-        // successor_spaces_created,
+        spaces_created,
+        governance_plugins_created,
+        editors_added,
+        proposals_created,
+        votes_cast,
+        proposals_processed,
+        successor_spaces_created,
+        subspaces_added: added_subspaces,
+        subspaces_removed: removed_subspaces,
+        executed_proposals,
     })
 }

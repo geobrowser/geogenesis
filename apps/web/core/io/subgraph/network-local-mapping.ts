@@ -1,3 +1,5 @@
+import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
+
 import { Action, Entity, OmitStrict, ProposedVersion, Space, Triple, Value, Vote } from '~/core/types';
 
 type NetworkNumberValue = { valueType: 'number'; numberValue: string };
@@ -67,6 +69,7 @@ export type SubstreamVersion = {
 
 export type SubstreamProposal = {
   id: string;
+  type: ProposalType;
   onchainProposalId: string;
   createdById: string;
   createdAt: number;
@@ -76,7 +79,7 @@ export type SubstreamProposal = {
   spaceId: string;
   startTime: number;
   endTime: number;
-  status: 'APPROVED';
+  status: ProposalStatus;
   proposalVotes: { nodes: Vote[]; totalCount: number };
   proposedVersions: { nodes: SubstreamProposedVersion[] };
 };

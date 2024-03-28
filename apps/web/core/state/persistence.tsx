@@ -5,7 +5,7 @@ import * as React from 'react';
 import { Action } from '../utils/action';
 import { actionsAtom } from './actions-store/actions-store';
 import { db } from './actions-store/indexeddb';
-import { store } from './jotai-provider';
+import { store } from './jotai-store';
 
 export const Persistence = () => {
   React.useEffect(() => {

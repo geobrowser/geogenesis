@@ -279,11 +279,7 @@ pub struct ProposalCreated {
     pub end_time: ::prost::alloc::string::String,
     #[prost(string, tag="5")]
     pub metadata_uri: ::prost::alloc::string::String,
-    #[prost(message, repeated, tag="6")]
-    pub actions: ::prost::alloc::vec::Vec<DaoAction>,
-    #[prost(string, tag="7")]
-    pub allow_failure_map: ::prost::alloc::string::String,
-    #[prost(string, tag="8")]
+    #[prost(string, tag="6")]
     pub plugin_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -291,6 +287,82 @@ pub struct ProposalCreated {
 pub struct ProposalsCreated {
     #[prost(message, repeated, tag="1")]
     pub proposals: ::prost::alloc::vec::Vec<ProposalCreated>,
+}
+/// Executed proposals have been approved and executed onchain in a DAO-based
+/// space's main voting plugin. The DAO itself also emits the executed event,
+/// but the ABI/interface is different. We really only care about the one
+/// from our plugins.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProposalExecuted {
+    #[prost(string, tag="1")]
+    pub proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub plugin_address: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProposalsExecuted {
+    #[prost(message, repeated, tag="1")]
+    pub executed_proposals: ::prost::alloc::vec::Vec<ProposalExecuted>,
+}
+/// *
+/// Processed Proposals represent content that has been approved by a DAO
+/// and executed onchain.
+///
+/// We use the content URI to represent the content that was approved. We
+/// only consume the `proposalId` in the content URI to map the processed
+/// data to an existing proposal onchain and in the sink.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProposalProcessed {
+    #[prost(string, tag="1")]
+    pub content_uri: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub plugin_address: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProposalsProcessed {
+    #[prost(message, repeated, tag="1")]
+    pub proposals: ::prost::alloc::vec::Vec<ProposalProcessed>,
+}
+/// *
+/// Added or Removed Subspaces represent adding a space contracto to the hierarchy
+/// of the DAO-based space. This is useful to "link" Spaces together in a
+/// tree of spaces, allowing us to curate the graph of their knowledge and 
+/// permissions.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubspaceAdded {
+    #[prost(string, tag="1")]
+    pub subspace: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubspacesAdded {
+    #[prost(message, repeated, tag="1")]
+    pub subspaces: ::prost::alloc::vec::Vec<SubspaceAdded>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubspaceRemoved {
+    #[prost(string, tag="1")]
+    pub subspace: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubspacesRemoved {
+    #[prost(message, repeated, tag="1")]
+    pub subspaces: ::prost::alloc::vec::Vec<SubspaceRemoved>,
 }
 /// *
 /// Votes represent a vote on a proposal in a DAO-based space.
@@ -323,14 +395,28 @@ pub struct GeoOutput {
     pub entries: ::prost::alloc::vec::Vec<EntryAdded>,
     #[prost(message, repeated, tag="2")]
     pub role_changes: ::prost::alloc::vec::Vec<RoleChange>,
-    /// repeated GeoSpaceCreated spaces_created = 4;
-    /// repeated GeoGovernancePluginCreated governance_plugins_created = 5;
-    /// repeated EditorAdded editors_added = 6;
-    /// repeated ProposalCreated proposals_created = 7;
-    /// repeated VoteCast votes_cast = 8;
-    /// repeated SuccessorSpaceCreated successor_spaces_created = 6;
     #[prost(message, repeated, tag="3")]
     pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
+    #[prost(message, repeated, tag="4")]
+    pub spaces_created: ::prost::alloc::vec::Vec<GeoSpaceCreated>,
+    #[prost(message, repeated, tag="5")]
+    pub governance_plugins_created: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
+    #[prost(message, repeated, tag="6")]
+    pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
+    #[prost(message, repeated, tag="7")]
+    pub proposals_created: ::prost::alloc::vec::Vec<ProposalCreated>,
+    #[prost(message, repeated, tag="8")]
+    pub votes_cast: ::prost::alloc::vec::Vec<VoteCast>,
+    #[prost(message, repeated, tag="9")]
+    pub proposals_processed: ::prost::alloc::vec::Vec<ProposalProcessed>,
+    #[prost(message, repeated, tag="10")]
+    pub successor_spaces_created: ::prost::alloc::vec::Vec<SuccessorSpaceCreated>,
+    #[prost(message, repeated, tag="11")]
+    pub subspaces_added: ::prost::alloc::vec::Vec<SubspaceAdded>,
+    #[prost(message, repeated, tag="12")]
+    pub subspaces_removed: ::prost::alloc::vec::Vec<SubspaceRemoved>,
+    #[prost(message, repeated, tag="13")]
+    pub executed_proposals: ::prost::alloc::vec::Vec<ProposalExecuted>,
 }
 /// *
 /// Roles represent the permissions for a legacy space (See top level comment for more info

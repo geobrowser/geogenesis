@@ -1,5 +1,5 @@
 import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_PATH } from '~/core/constants';
-import { Entity as IEntity } from '~/core/types';
+import { Entity as IEntity, Proposal, Vote } from '~/core/types';
 
 import { Entity } from './entity';
 
@@ -87,6 +87,10 @@ export class GeoDate {
    */
   static fromGeoTime(value: number) {
     return new Date(value * 1000);
+  }
+
+  static toGeoTime(value: number) {
+    return value / 1000;
   }
 
   static isValidDate(date: Date): date is Date {
@@ -262,4 +266,36 @@ export function isPermissionlessSpace(spaceId: string) {
 
 export function toTitleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+export function isProposalEnded(proposal: Proposal) {
+  return (
+    proposal.status === 'REJECTED' || proposal.status === 'ACCEPTED' || proposal.endTime < GeoDate.toGeoTime(Date.now())
+  );
+}
+
+export function getYesVotePercentage(votes: Vote[], votesCount: number) {
+  if (votesCount === 0) {
+    return 0;
+  }
+
+  return Math.floor((votes.filter(v => v.vote === 'ACCEPT').length / votesCount) * 100);
+}
+
+export function getNoVotePercentage(votes: Vote[], votesCount: number) {
+  if (votesCount === 0) {
+    return 0;
+  }
+
+  return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
+}
+
+export function getProposalTimeRemaining(endTime: number) {
+  const timeRemaining = endTime - GeoDate.toGeoTime(Date.now());
+  const days = Math.floor(timeRemaining / 86400);
+  const hours = Math.floor((timeRemaining % 86400) / 3600);
+  const minutes = Math.floor((timeRemaining % 3600) / 60);
+  const seconds = Math.floor(timeRemaining % 60);
+
+  return { days, hours, minutes, seconds };
 }

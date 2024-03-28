@@ -21,6 +21,7 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
     proposals(first: 5, filter: {${filter}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
       nodes {
         id
+        type
         name
         spaceId
         createdAtBlock
