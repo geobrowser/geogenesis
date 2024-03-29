@@ -73,7 +73,7 @@ textarea::placeholder {
     background: linear-gradient(64deg, #f0f3ff 0%, #f0f3ff 100%);
   }
   .bg-gradient-blue {
-    background: linear-gradient(64deg, rgba(57, 99, 254, 0.3) 0%, rgba(70, 245, 245, 0.3) 100%);
+    background: linear-gradient(109deg, #b0d4ff 12.96%, #bdefff 87.04%);
   }
   .bg-gradient-green {
     background: linear-gradient(64deg, #9fffbf 0%, #ccfcff 100%);
@@ -88,6 +88,9 @@ textarea::placeholder {
       rgba(243, 32, 184, 0.3) 31.69%,
       rgba(91, 36, 246, 0.3) 100%
     );
+  }
+  .bg-gradient-yellow {
+    background: linear-gradient(109deg, #ffcdb0 12.96%, #f9f6a8 87.04%);
   }
 }
 

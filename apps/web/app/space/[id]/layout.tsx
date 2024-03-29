@@ -47,7 +47,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
 
   let teamCount = 0;
 
-  if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
+  if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE) || typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
     const roleTriples = await Subgraph.fetchTriples({
       space: params.id,
       query: '',
@@ -77,6 +77,35 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       label: 'Activity',
       href: `${NavUtils.toSpace(params.id)}/activity`,
       priority: 3 as const,
+    },
+  ];
+
+  const NONPROFIT_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Projects',
+      href: `${NavUtils.toSpace(params.id)}/projects`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Posts',
+      href: `${NavUtils.toSpace(params.id)}/posts`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Team',
+      href: `${NavUtils.toSpace(params.id)}/team`,
+      priority: 1 as const,
+      badge: <>{teamCount.toString()}</>,
+    },
+    {
+      label: 'Finances',
+      href: `${NavUtils.toSpace(params.id)}/finances`,
+      priority: 1 as const,
     },
   ];
 
@@ -110,6 +139,10 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   // show "content-based" tabs first, then "space-based" tabs.
   if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
     tabs.push(...COMPANY_TABS);
+  }
+
+  if (typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
+    tabs.push(...NONPROFIT_TABS);
   }
 
   if (typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
