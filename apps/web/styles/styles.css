@@ -94,13 +94,6 @@ textarea::placeholder {
   }
 }
 
-/* @TODO remove after upgrading to Tailwind 3.4.1+ */
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
-
 @tailwind utilities;
 
 [data-rmiz-btn-unzoom] {
