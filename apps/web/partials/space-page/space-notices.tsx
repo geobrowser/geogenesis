@@ -2,21 +2,19 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { cva } from 'class-variance-authority';
-import cx from 'classnames';
-import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import Link from 'next/link';
 import type { LinkProps } from 'next/link';
 
 import * as React from 'react';
 import { useCallback } from 'react';
-import { useEffect, useRef, useState } from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { ResizableContainer } from '~/design-system/resizable-container';
 
 import { SpacePageType } from '~/app/space/[id]/page';
 import { dismissedNoticesAtom } from '~/atoms';
@@ -34,7 +32,7 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
   switch (spaceType) {
     case 'nonprofit':
       return (
-        <AnimatedHeight className="grid grid-cols-3 gap-8">
+        <ResizableContainer className="grid grid-cols-3 gap-8">
           <Notice
             id="nonprofitFirstPost"
             color="purple"
@@ -60,7 +58,7 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
             title={`Add team members to your nonprofit`}
             action={<SimpleButton href={`/space/${spaceId}/team`}>Add team members</SimpleButton>}
           />
-        </AnimatedHeight>
+        </ResizableContainer>
       );
     default:
       return null;
@@ -124,39 +122,4 @@ type SimpleButtonProps = LinkProps & { children: React.ReactNode };
 
 const SimpleButton = ({ href = '', ...rest }: SimpleButtonProps) => {
   return <Link href={href} className="rounded border border-text px-2 py-1 text-smallButton text-text" {...rest} />;
-};
-
-type AnimatedHeightProps = { wrapperClassName?: string } & React.ComponentPropsWithoutRef<'div'>;
-
-export const AnimatedHeight = ({ wrapperClassName = '', className = '', children }: AnimatedHeightProps) => {
-  const [height, setHeight] = useState<number | 'auto'>('auto');
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (ref.current) {
-      const resizeObserver = new ResizeObserver(entries => {
-        const observedHeight = entries[0].contentRect.height;
-        setHeight(observedHeight);
-      });
-
-      resizeObserver.observe(ref.current);
-
-      return () => {
-        resizeObserver.disconnect();
-      };
-    }
-  }, []);
-
-  return (
-    <motion.div
-      className={cx('overflow-hidden', wrapperClassName)}
-      style={{ height }}
-      animate={{ height }}
-      transition={{ ease: 'easeInOut', duration: 0.3 }}
-    >
-      <div ref={ref} className={className}>
-        {children}
-      </div>
-    </motion.div>
-  );
 };

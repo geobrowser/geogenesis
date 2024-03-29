@@ -10,7 +10,6 @@ import { useState } from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { Triple } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -20,19 +19,13 @@ import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
 import { Menu } from '~/design-system/menu';
 
+import type { ProjectType } from '~/app/space/[id]/projects/page';
+
 type ProjectsProps = {
   spaceName: string;
   spaceAvatar: string | null;
   spaceId: string;
   projects: Array<ProjectType>;
-};
-
-export type ProjectType = {
-  id: string;
-  name: string;
-  description: string;
-  avatar: string | null;
-  triples: Array<Triple>;
 };
 
 export const Projects = ({ spaceName, spaceAvatar, spaceId, projects }: ProjectsProps) => {
