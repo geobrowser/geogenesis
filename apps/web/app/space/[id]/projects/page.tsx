@@ -1,6 +1,7 @@
 import { NONPROFIT_TYPE, PROJECT_TYPE } from '@geogenesis/ids/system-ids';
 
 import { Subgraph } from '~/core/io';
+import { Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { Projects } from '~/partials/projects/projects';
@@ -24,8 +25,16 @@ export default async function ProjectsPage({ params }: ProjectsPageProps) {
   return <Projects spaceName={spaceName} spaceAvatar={spaceAvatar} spaceId={spaceId} projects={projects} />;
 }
 
+export type ProjectType = {
+  id: string;
+  name: string;
+  description: string;
+  avatar: string | null;
+  triples: Array<Triple>;
+};
+
 const getProjects = async (spaceId: string) => {
-  const projects: Array<any> = [];
+  const projects: Array<ProjectType> = [];
 
   const projectEntities = await Subgraph.fetchEntities({
     spaceId,
@@ -41,9 +50,10 @@ const getProjects = async (spaceId: string) => {
     .forEach(project => {
       projects.push({
         id: project.id,
-        name: project.name,
-        description: project.description,
+        name: project.name ?? '',
+        description: project.description ?? '',
         avatar: Entity.avatar(project.triples),
+        triples: project.triples,
       });
     });
 
