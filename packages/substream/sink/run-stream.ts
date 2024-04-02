@@ -454,11 +454,12 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           // A proposal might be processed as part of the initial space creation. If this happens we
-          // need to special case writing to the DB. Proposal processing alone assumes that there was
-          // an existing proposal created before executing the proposal.
+          // need to write any DB dependencies that normally exist when processing a proposal, like
+          // proposed versions, the proposal, actions, etc.
           //
-          // When publishing data as part of space creation there's no prior proposal, so we need to
-          // create it.
+          // @TODO: This actually doesn't handle the case where there are processed proposals
+          // _and_ spaces created in the same block that aren't related. We need to be able to check
+          // that a proposal being processed is for a given space here or not
           if (spacePluginCreatedResponse.success && proposalProcessedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
             const onchainProposals = proposalProcessedResponse.data.proposalsProcessed;
