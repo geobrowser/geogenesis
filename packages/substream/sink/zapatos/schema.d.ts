@@ -23,13 +23,13 @@ declare module 'zapatos/schema' {
   export namespace every {
     export type proposal_status = ['accepted', 'canceled', 'executed', 'proposed', 'rejected'];
   }
-  export type proposal_type = 'add_editor' | 'add_member' | 'add_subspace' | 'content' | 'remove_editor' | 'remove_member' | 'remove_subspace';
+  export type proposal_type = 'ADD_EDITOR' | 'ADD_MEMBER' | 'ADD_SUBSPACE' | 'CONTENT' | 'REMOVE_EDITOR' | 'REMOVE_MEMBER' | 'REMOVE_SUBSPACE';
   export namespace every {
-    export type proposal_type = ['add_editor', 'add_member', 'add_subspace', 'content', 'remove_editor', 'remove_member', 'remove_subspace'];
+    export type proposal_type = ['ADD_EDITOR', 'ADD_MEMBER', 'ADD_SUBSPACE', 'CONTENT', 'REMOVE_EDITOR', 'REMOVE_MEMBER', 'REMOVE_SUBSPACE'];
   }
-  export type subspace_proposal_type = 'add_subspace' | 'remove_subspace';
+  export type subspace_proposal_type = 'ADD_SUBSPACE' | 'REMOVE_SUBSPACE';
   export namespace every {
-    export type subspace_proposal_type = ['add_subspace', 'remove_subspace'];
+    export type subspace_proposal_type = ['ADD_SUBSPACE', 'REMOVE_SUBSPACE'];
   }
   export type vote_type = 'accept' | 'reject';
   export namespace every {

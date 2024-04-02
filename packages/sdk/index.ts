@@ -6,7 +6,7 @@ import type {
 export type Action = CreateTripleAction | DeleteTripleAction
 
 export type ContentProposalMetadata = {
-  type: 'content'
+  type: 'CONTENT'
   version: '1.0.0'
   actions: Action[]
   // We generate the proposal id on the client so we can pass it to the proposal
@@ -16,7 +16,7 @@ export type ContentProposalMetadata = {
 }
 
 export type MembershipProposalMetadata = {
-  type: 'add_member' | 'remove_member' | 'add_editor' | 'remove_editor'
+  type: 'ADD_MEMBER' | 'REMOVE_MEMBER' | 'ADD_EDITOR' | 'REMOVE_EDITOR'
   version: '1.0.0'
   userAddress: `0x${string}`
   // We generate the proposal id on the client so we can pass it to the proposal
@@ -26,7 +26,7 @@ export type MembershipProposalMetadata = {
 }
 
 export type SubspaceProposalMetadata = {
-  type: 'add_subspace' | 'remove_subspace'
+  type: 'ADD_SUBSPACE' | 'REMOVE_SUBSPACE'
   version: '1.0.0'
   subspace: `0x${string}`
   // We generate the proposal id on the client so we can pass it to the proposal

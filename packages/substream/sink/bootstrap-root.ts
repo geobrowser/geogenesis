@@ -274,7 +274,7 @@ const proposal: s.proposals.Insertable = {
   space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
-  type: 'content',
+  type: 'CONTENT',
   status: 'accepted',
   start_time: ROOT_SPACE_CREATED_AT,
   end_time: ROOT_SPACE_CREATED_AT,

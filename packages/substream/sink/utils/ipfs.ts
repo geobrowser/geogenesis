@@ -217,7 +217,7 @@ export function getProposalFromMetadata(
     }
 
     switch (validIpfsMetadata.data.type) {
-      case 'content': {
+      case 'CONTENT': {
         const parsedContent = ZodContentProposal.safeParse(ipfsContent);
 
         if (!parsedContent.success) {
@@ -240,8 +240,8 @@ export function getProposalFromMetadata(
         return mappedProposal;
       }
 
-      case 'add_subspace':
-      case 'remove_subspace': {
+      case 'ADD_SUBSPACE':
+      case 'REMOVE_SUBSPACE': {
         // @TODO: ipfs content type is not correct for non-content-type proposals
         const parsedSubspace = ZodSubspaceProposal.safeParse(ipfsContent);
 
@@ -267,10 +267,10 @@ export function getProposalFromMetadata(
         return mappedProposal;
       }
 
-      case 'add_editor':
-      case 'remove_editor':
-      case 'add_member':
-      case 'remove_member': {
+      case 'ADD_EDITOR':
+      case 'REMOVE_EDITOR':
+      case 'ADD_MEMBER':
+      case 'REMOVE_MEMBER': {
         const parsedMembership = ZodMembershipProposal.safeParse(ipfsContent);
 
         if (!parsedMembership.success) {
@@ -371,7 +371,7 @@ export function getProposalFromProcessedProposal(
     }
 
     switch (validIpfsMetadata.data.type) {
-      case 'content':
+      case 'CONTENT':
         const parsedContent = ZodContentProposal.safeParse(ipfsContent);
 
         if (!parsedContent.success) {

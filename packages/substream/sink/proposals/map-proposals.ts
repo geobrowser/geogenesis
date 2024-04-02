@@ -29,11 +29,11 @@ export function groupProposalsByType(proposals: (ContentProposal | MembershipPro
   editorProposals: MembershipProposal[];
   subspaceProposals: SubspaceProposal[];
 } {
-  const contentProposals = proposals.flatMap(p => (p.type === 'content' ? p : []));
-  const memberProposals = proposals.flatMap(p => (p.type === 'add_member' || p.type === 'remove_member' ? p : []));
-  const editorProposals = proposals.flatMap(p => (p.type === 'add_editor' || p.type === 'remove_editor' ? p : []));
+  const contentProposals = proposals.flatMap(p => (p.type === 'CONTENT' ? p : []));
+  const memberProposals = proposals.flatMap(p => (p.type === 'ADD_MEMBER' || p.type === 'REMOVE_MEMBER' ? p : []));
+  const editorProposals = proposals.flatMap(p => (p.type === 'ADD_EDITOR' || p.type === 'REMOVE_EDITOR' ? p : []));
   const subspaceProposals = proposals.flatMap(p =>
-    p.type === 'add_subspace' || p.type === 'remove_subspace' ? p : []
+    p.type === 'ADD_SUBSPACE' || p.type === 'REMOVE_SUBSPACE' ? p : []
   );
 
   return {
@@ -64,7 +64,7 @@ export function mapContentProposalsToSchema(
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
       name: p.name,
-      type: 'content',
+      type: 'CONTENT',
       created_at: Number(p.startTime),
       created_at_block: blockNumber,
       created_by_id: p.creator,

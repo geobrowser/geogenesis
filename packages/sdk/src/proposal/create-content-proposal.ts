@@ -6,7 +6,7 @@ export function createContentProposal(
   actions: Action[]
 ): ContentProposalMetadata {
   return {
-    type: 'content',
+    type: 'CONTENT',
     version: '1.0.0',
     actions,
     proposalId: createGeoId(),

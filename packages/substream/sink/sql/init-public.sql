@@ -76,7 +76,7 @@ CREATE TABLE public.log_entries (
     json text
 );
 
-CREATE TYPE public.proposal_type as ENUM ('content', 'add_subspace', 'remove_subspace', 'add_editor', 'remove_editor', 'add_member', 'remove_member');
+CREATE TYPE public.proposal_type as ENUM ('CONTENT', 'ADD_SUBSPACE', 'REMOVE_SUBSPACE', 'ADD_EDITOR', 'REMOVE_EDITOR', 'ADD_MEMBER', 'REMOVE_MEMBER');
 CREATE TYPE public.proposal_status as ENUM ('proposed', 'accepted', 'rejected', 'canceled', 'executed');
 
 -- Maps to 2 or 3 onchain
@@ -219,7 +219,7 @@ CREATE TABLE public.actions (
     created_at_block integer NOT NULL
 );
 
-CREATE TYPE public.subspace_proposal_type as ENUM ('add_subspace', 'remove_subspace');
+CREATE TYPE public.subspace_proposal_type as ENUM ('ADD_SUBSPACE', 'REMOVE_SUBSPACE');
 
 -- @TODO: Some of these fields might break in a version of the protocol where
 -- indexers decide which spaces they index. A space not exist in their DB even

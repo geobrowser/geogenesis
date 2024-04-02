@@ -176,13 +176,13 @@ export const ZodProposal = z.object({
 // proposal and write to the sink correctly.
 export const ZodProposalMetadata = z.object({
   type: z.enum([
-    'content',
-    'add_subspace',
-    'remove_subspace',
-    'add_editor',
-    'remove_editor',
-    'add_member',
-    'remove_member',
+    'CONTENT',
+    'ADD_SUBSPACE',
+    'REMOVE_SUBSPACE',
+    'ADD_EDITOR',
+    'REMOVE_EDITOR',
+    'ADD_MEMBER',
+    'REMOVE_MEMBER',
   ]),
   name: z.string().optional(),
   // We version the data structured used to represent proposal metadata. Each
@@ -202,7 +202,7 @@ export const ZodContentProposal = z.object({
 });
 
 export type ContentProposal = Proposal & {
-  type: 'content';
+  type: 'CONTENT';
   name: string | null;
   proposalId: string;
   onchainProposalId: string;
@@ -217,7 +217,7 @@ export const ZodMembershipProposal = z.object({
 });
 
 export type MembershipProposal = Proposal & {
-  type: 'add_member' | 'remove_member' | 'add_editor' | 'remove_editor';
+  type: 'ADD_MEMBER' | 'REMOVE_MEMBER' | 'ADD_EDITOR' | 'REMOVE_EDITOR';
   name: string | null;
   proposalId: string;
   onchainProposalId: string;
@@ -232,7 +232,7 @@ export const ZodSubspaceProposal = z.object({
 });
 
 export type SubspaceProposal = Proposal & {
-  type: 'add_subspace' | 'remove_subspace';
+  type: 'ADD_SUBSPACE' | 'REMOVE_SUBSPACE';
   name: string | null;
   proposalId: string;
   onchainProposalId: string;
