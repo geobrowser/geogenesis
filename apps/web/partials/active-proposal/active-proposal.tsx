@@ -33,7 +33,7 @@ interface Props {
   reviewComponent?: React.ReactNode;
 }
 
-export const ActiveProposal = ({ proposalId, spaceId, connectedAddress }: Props) => {
+export function ActiveProposal({ proposalId, spaceId, connectedAddress }: Props) {
   return (
     <ActiveProposalSlideUp proposalId={proposalId} spaceId={spaceId}>
       <React.Suspense fallback="Loading...">
@@ -41,7 +41,7 @@ export const ActiveProposal = ({ proposalId, spaceId, connectedAddress }: Props)
       </React.Suspense>
     </ActiveProposalSlideUp>
   );
-};
+}
 
 async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: Props) {
   if (!proposalId) {
