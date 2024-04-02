@@ -734,30 +734,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               message: `Writing ${votesCast.data.votesCast.length} votes to DB in block`,
             });
 
-            const accounts = votesCast.data.votesCast.map(vote => ({
-              id: getChecksumAddress(vote.voter),
-            }));
-
-            // Voters may not have done anything onchain yet, so we make sure to create their account
-            // in the db before writing their vote.
-            yield* _(
-              Effect.tryPromise({
-                try: () =>
-                  db
-                    .upsert('accounts', accounts, 'id', {
-                      updateColumns: db.doNothing,
-                    })
-                    .run(pool),
-                catch: error => {
-                  slog({
-                    requestId: message.cursor,
-                    message: `Failed to write accounts for voters to DB ${error}`,
-                    level: 'error',
-                  });
-                },
-              })
-            );
-
             const schemaVotes = yield* _(mapVotes(votesCast.data.votesCast, blockNumber, timestamp));
 
             yield* _(
