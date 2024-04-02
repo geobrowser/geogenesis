@@ -14,12 +14,12 @@ import { fetchVersionsByCreatedAt } from './fetch-version-by-created-at';
 
 export async function getEndedProposalDiff(
   selectedProposal: Proposal,
-  previousProposalId: string,
+  previousProposalId: string | null,
   subgraph: Subgraph.ISubgraph
 ) {
   const changes: Record<EntityId, Changeset> = {};
 
-  const previousProposal = await fetchProposal({ id: previousProposalId });
+  const previousProposal = previousProposalId ? await fetchProposal({ id: previousProposalId }) : null;
 
   const proposals = {
     selected: selectedProposal,

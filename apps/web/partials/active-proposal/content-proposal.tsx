@@ -21,17 +21,19 @@ import { colors } from '~/design-system/theme/colors';
 
 import { TableBlockPlaceholder } from '../blocks/table/table-block';
 import { DateTimeDiff } from '../review/review';
+import { fetchPreviousProposalId } from './fetch-previous-proposal-id';
 import { getActiveProposalDiff } from './get-active-proposal-diff';
 import { getEndedProposalDiff } from './get-ended-proposal-diff';
 
 export async function ContentProposal({ proposal }: { proposal: Proposal }) {
-  // @TODO: Get last proposal
+  const previousProposalId = await fetchPreviousProposalId({ spaceId: proposal.space, createdAt: proposal.createdAt });
+
   // Depending on whether the proposal is active or ended we need to compare against
   // either the live versions of entities in the proposal or against the state of
   // entities in the proposal as they existed at the time the proposal ended.
   const { changes, proposals } = isProposalEnded(proposal)
-    ? await getEndedProposalDiff(proposal, '8c183a00-ed8f-406c-9b18-2b7ddfc9434e', Subgraph)
-    : await getActiveProposalDiff(proposal, '8c183a00-ed8f-406c-9b18-2b7ddfc9434e', Subgraph);
+    ? await getEndedProposalDiff(proposal, previousProposalId, Subgraph)
+    : await getActiveProposalDiff(proposal, previousProposalId, Subgraph);
 
   if (!proposals.selected) {
     return <div className="text-metadataMedium">Selected proposal not found.</div>;
