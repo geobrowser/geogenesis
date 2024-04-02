@@ -46,7 +46,7 @@ export async function SubspaceProposal({ proposal }: Props) {
               />
             </div>
             <div className="space-y-5">
-              <h2 className="text-mainPage">{subspace?.spaceConfig?.name ?? subspace?.id}</h2>
+              <h2 className="break-all text-mainPage">{subspace?.spaceConfig?.name ?? subspace?.id}</h2>
               <div className="flex items-center justify-center gap-2">
                 <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">
                   Space
