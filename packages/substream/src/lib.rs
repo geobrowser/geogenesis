@@ -26,7 +26,7 @@ use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEv
 use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
 use legacy_space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
 use main_voting_plugin::events::{
-    MembersAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
+    EditorsAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
     ProposalExecuted as ProposalExecutedEvent, VoteCast as VoteCastEvent,
 };
 use space::events::{
@@ -341,7 +341,7 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
             if let Some(editors_added) = EditorsAddedEvent::match_and_decode(log) {
                 return Some(EditorAdded {
                     addresses: editors_added
-                        .members // contract event calls them members, but conceptually they are editors
+                        .editors // contract event calls them members, but conceptually they are editors
                         .iter()
                         .map(|address| format_hex(address))
                         .collect(),
