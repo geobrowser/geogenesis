@@ -56,34 +56,34 @@ export function CreateProposal({ type }: Props) {
   }
 
   const onClick = async () => {
-    const entityId = createGeoId();
+    // const entityId = createGeoId();
 
     // const proposal = createContentProposal('Add space page to test DAO', [
     //   {
-    //     entityId,
+    //     entityId: '97a5909c-58e7-4da2-933a-2ce941f0701e',
     //     attributeId: SYSTEM_IDS.NAME,
     //     type: 'createTriple',
     //     value: {
     //       type: 'string',
     //       id: createGeoId(),
-    //       value: 'Governance test space',
+    //       value: 'Governance Space A',
     //     },
     //   },
-    //   {
-    //     entityId,
-    //     attributeId: SYSTEM_IDS.TYPES,
-    //     type: 'createTriple',
-    //     value: {
-    //       type: 'entity',
-    //       id: SYSTEM_IDS.SPACE_CONFIGURATION,
-    //     },
-    //   },
+    //   // {
+    //   //   entityId: '',
+    //   //   attributeId: SYSTEM_IDS.TYPES,
+    //   //   type: 'createTriple',
+    //   //   value: {
+    //   //     type: 'entity',
+    //   //     id: SYSTEM_IDS.SPACE_CONFIGURATION,
+    //   //   },
+    //   // },
     // ]);
 
     const proposal = createSubspaceProposal({
       name: 'Add subspace to test DAO',
-      type: 'add_subspace',
-      spaceAddress: '0x1A39E2Fe299Ef8f855ce43abF7AC85D6e69E05F5', // Crypto
+      type: 'ADD_SUBSPACE',
+      spaceAddress: '0x9c19615715a1B465EDf0146D36d803C3a8FC351A', // Some governance space
     });
 
     const hash = await storageClient.uploadObject(proposal);
@@ -106,7 +106,7 @@ export function CreateProposal({ type }: Props) {
       args: getAcceptSubspaceArguments({
         spacePluginAddress: TEST_SPACE_PLUGIN_ADDRESS,
         ipfsUri: uri,
-        subspaceToAccept: '0x1A39E2Fe299Ef8f855ce43abF7AC85D6e69E05F5', // Crypto
+        subspaceToAccept: '0x170b749413328ac9a94762031a7A05b00c1D2e34', // Root
       }),
     });
 
