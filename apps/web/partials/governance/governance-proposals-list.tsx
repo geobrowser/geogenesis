@@ -98,9 +98,19 @@ const getFetchSpaceProposalsQuery = (
   skip: number,
   connectedAddress: string | undefined
 ) => `query {
-  proposals(first: ${first}, filter: {spaceId: {equalTo: ${JSON.stringify(
-    spaceId
-  )}}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
+  proposals(
+    first: ${first}
+    offset: ${skip}
+    orderBy: CREATED_AT_DESC
+    filter: {
+      spaceId: { equalTo: "${spaceId}" }
+      or: [
+        { type: { equalTo: CONTENT } }
+        { type: { equalTo: ADD_SUBSPACE } }
+        { type: { equalTo: REMOVE_SUBSPACE } }
+      ]
+    }
+  ) {
     nodes {
       id
       onchainProposalId
