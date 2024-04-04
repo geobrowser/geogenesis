@@ -198,9 +198,11 @@ export function mapEditorshipProposalsToSchema(
 ): {
   proposals: S.proposals.Insertable[];
   proposedEditors: S.proposed_editors.Insertable[];
+  accounts: S.accounts.Insertable[];
 } {
   const proposalsToWrite: S.proposals.Insertable[] = [];
   const proposedEditorsToWrite: S.proposed_editors.Insertable[] = [];
+  const accountsToWrite: S.accounts.Insertable[] = [];
 
   for (const p of proposals) {
     const spaceId = p.space;
@@ -232,11 +234,18 @@ export function mapEditorshipProposalsToSchema(
     };
 
     proposedEditorsToWrite.push(proposedEditor);
+
+    const newAccount: S.accounts.Insertable = {
+      id: p.userAddress,
+    };
+
+    accountsToWrite.push(newAccount);
   }
 
   return {
     proposals: proposalsToWrite,
     proposedEditors: proposedEditorsToWrite,
+    accounts: accountsToWrite,
   };
 }
 
@@ -246,9 +255,11 @@ export function mapMembershipProposalsToSchema(
 ): {
   proposals: S.proposals.Insertable[];
   proposedMembers: S.proposed_members.Insertable[];
+  accounts: S.accounts.Insertable[];
 } {
   const proposalsToWrite: S.proposals.Insertable[] = [];
   const proposedMembersToWrite: S.proposed_members.Insertable[] = [];
+  const accountsToWrite: S.accounts.Insertable[] = [];
 
   for (const p of proposals) {
     const spaceId = p.space;
@@ -280,10 +291,17 @@ export function mapMembershipProposalsToSchema(
     };
 
     proposedMembersToWrite.push(proposedMember);
+
+    const newAccount: S.accounts.Insertable = {
+      id: p.userAddress,
+    };
+
+    accountsToWrite.push(newAccount);
   }
 
   return {
     proposals: proposalsToWrite,
     proposedMembers: proposedMembersToWrite,
+    accounts: accountsToWrite,
   };
 }

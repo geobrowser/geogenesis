@@ -9,6 +9,8 @@ import type * as S from 'zapatos/schema';
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
 import { Proposals } from './db';
+import { Accounts } from './db/accounts';
+import { ProposedVersions } from './db/proposed-versions';
 import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
 import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
@@ -436,40 +438,56 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               message: `Writing ${subspaceProposals.length} subspace proposals to DB`,
             });
 
+            // This might be the very first onchain interaction for a wallet address,
+            // so we need to make sure that any accounts are already created when we
+            // process the proposals below, particularly for editor and member requests.
+            yield* _(
+              Effect.tryPromise({
+                try: async () => Accounts.upsert(schemaEditorshipProposals.accounts),
+                catch: error => {
+                  slog({
+                    requestId: message.cursor,
+                    message: `Failed to write accounts to DB when processing new proposals ${error}`,
+                    level: 'error',
+                  });
+
+                  return error;
+                },
+              })
+            );
+
             // @TODO: Put this in a transaction since all these writes are related
             yield* _(
-              Effect.either(
-                Effect.tryPromise({
-                  try: async () => {
-                    // @TODO: Batch since there might be postgres byte limits. See upsertChunked
-                    await Promise.all([
-                      // @TODO: Should we only attempt to write to the db for the correct content type?
-                      // What if we get multiple proposals in the same block with different content types?
-                      // Content proposals
-                      Proposals.insert(schemaContentProposals.proposals),
-                      db.insert('proposed_versions', schemaContentProposals.proposedVersions).run(pool),
-                      db.insert('actions', schemaContentProposals.actions).run(pool),
+              Effect.tryPromise({
+                try: async () => {
+                  // @TODO: Batch since there might be postgres byte limits. See upsertChunked
+                  await Promise.all([
+                    // @TODO: Should we only attempt to write to the db for the correct content type?
+                    // What if we get multiple proposals in the same block with different content types?
+                    // Content proposals
+                    Proposals.upsert(schemaContentProposals.proposals),
+                    ProposedVersions.upsert(schemaContentProposals.proposedVersions),
+                    db.insert('actions', schemaContentProposals.actions).run(pool),
 
-                      // Subspace proposals
-                      Proposals.insert(schemaSubspaceProposals.proposals),
-                      db.insert('proposed_subspaces', schemaSubspaceProposals.proposedSubspaces).run(pool),
+                    // Subspace proposals
+                    Proposals.upsert(schemaSubspaceProposals.proposals),
+                    db.insert('proposed_subspaces', schemaSubspaceProposals.proposedSubspaces).run(pool),
 
-                      // Editorship proposals
-                      Proposals.insert(schemaEditorshipProposals.proposals),
-                      db.insert('proposed_editors', schemaEditorshipProposals.proposedEditors).run(pool),
-                    ]);
-                  },
-                  catch: error => {
-                    slog({
-                      requestId: message.cursor,
-                      message: `Failed to write proposals to DB ${error}`,
-                      level: 'error',
-                    });
+                    // Editorship proposals
+                    Proposals.upsert(schemaEditorshipProposals.proposals),
+                    db.insert('proposed_editors', schemaEditorshipProposals.proposedEditors).run(pool),
+                  ]);
+                },
+                catch: error => {
+                  slog({
+                    requestId: message.cursor,
+                    message: `Failed to write proposals to DB ${error}`,
+                    level: 'error',
+                  });
 
-                    return error;
-                  },
-                })
-              )
+                  return error;
+                },
+              })
             );
           }
 

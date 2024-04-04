@@ -3,10 +3,10 @@ import type * as S from 'zapatos/schema';
 
 import { pool } from '../utils/pool';
 
-export class Proposals {
-  static upsert(proposals: S.proposals.Insertable[]) {
+export class ProposedVersions {
+  static upsert(proposedVersions: S.proposed_versions.Insertable[]) {
     return db
-      .upsert('proposals', proposals, ['id'], {
+      .upsert('proposed_versions', proposedVersions, ['id'], {
         updateColumns: db.doNothing,
       })
       .run(pool);
