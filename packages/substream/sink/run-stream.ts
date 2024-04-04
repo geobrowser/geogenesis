@@ -8,6 +8,7 @@ import type * as S from 'zapatos/schema';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
+import { Proposals } from './db';
 import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
 import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
@@ -18,6 +19,8 @@ import { populateOnchainProfiles } from './profiles/populate-onchain-profiles';
 import {
   groupProposalsByType,
   mapContentProposalsToSchema,
+  mapEditorshipProposalsToSchema,
+  mapMembershipProposalsToSchema,
   mapSubspaceProposalsToSchema,
 } from './proposals/map-proposals';
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
@@ -32,6 +35,7 @@ import { mapVotes } from './votes/map-votes';
 import {
   type Action,
   type ContentProposal,
+  type EditorshipProposal,
   type FullEntry,
   type MembershipProposal,
   type SubspaceProposal,
@@ -402,13 +406,25 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
 
             const proposals = maybeProposals.filter(
-              (maybeProposal): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal =>
+              (
+                maybeProposal
+              ): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal | EditorshipProposal =>
                 maybeProposal !== null
             );
 
-            const { contentProposals, subspaceProposals } = groupProposalsByType(proposals);
+            console.log('proposals', proposals);
+
+            const { contentProposals, subspaceProposals, memberProposals, editorProposals } =
+              groupProposalsByType(proposals);
             const schemaContentProposals = mapContentProposalsToSchema(contentProposals, blockNumber, cursor);
             const schemaSubspaceProposals = mapSubspaceProposalsToSchema(subspaceProposals, blockNumber);
+            const schemaMembershipProposals = mapMembershipProposalsToSchema(memberProposals, blockNumber);
+            const schemaEditorshipProposals = mapEditorshipProposalsToSchema(editorProposals, blockNumber);
+
+            console.log('editorship proposals', {
+              editorProposals,
+              schemaEditorshipProposals,
+            });
 
             slog({
               requestId: message.cursor,
@@ -430,13 +446,17 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                       // @TODO: Should we only attempt to write to the db for the correct content type?
                       // What if we get multiple proposals in the same block with different content types?
                       // Content proposals
-                      db.insert('proposals', schemaContentProposals.proposals).run(pool),
+                      Proposals.insert(schemaContentProposals.proposals),
                       db.insert('proposed_versions', schemaContentProposals.proposedVersions).run(pool),
                       db.insert('actions', schemaContentProposals.actions).run(pool),
 
                       // Subspace proposals
-                      db.insert('proposals', schemaSubspaceProposals.proposals).run(pool),
+                      Proposals.insert(schemaSubspaceProposals.proposals),
                       db.insert('proposed_subspaces', schemaSubspaceProposals.proposedSubspaces).run(pool),
+
+                      // Editorship proposals
+                      Proposals.insert(schemaEditorshipProposals.proposals),
+                      db.insert('proposed_editors', schemaEditorshipProposals.proposedEditors).run(pool),
                     ]);
                   },
                   catch: error => {

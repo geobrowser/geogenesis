@@ -3,7 +3,7 @@ import type * as S from 'zapatos/schema';
 
 import { SpaceWithPluginAddressNotFoundError } from '../errors';
 import { generateActionId, generateVersionId } from '../utils/id';
-import type { ContentProposal, MembershipProposal, SubspaceProposal } from '../zod';
+import type { ContentProposal, EditorshipProposal, MembershipProposal, SubspaceProposal } from '../zod';
 
 /**
  * We currently index two sets of contracts representing spaces:
@@ -23,10 +23,12 @@ import type { ContentProposal, MembershipProposal, SubspaceProposal } from '../z
  * proposals and track the status of the proposal for the duration of the voting period.
  */
 
-export function groupProposalsByType(proposals: (ContentProposal | MembershipProposal | SubspaceProposal)[]): {
+export function groupProposalsByType(
+  proposals: (ContentProposal | MembershipProposal | SubspaceProposal | EditorshipProposal)[]
+): {
   contentProposals: ContentProposal[];
   memberProposals: MembershipProposal[];
-  editorProposals: MembershipProposal[];
+  editorProposals: EditorshipProposal[];
   subspaceProposals: SubspaceProposal[];
 } {
   const contentProposals = proposals.flatMap(p => (p.type === 'CONTENT' ? p : []));
@@ -187,5 +189,101 @@ export function mapSubspaceProposalsToSchema(
   return {
     proposals: proposalsToWrite,
     proposedSubspaces: proposedSubspacesToWrite,
+  };
+}
+
+export function mapEditorshipProposalsToSchema(
+  proposals: EditorshipProposal[],
+  blockNumber: number
+): {
+  proposals: S.proposals.Insertable[];
+  proposedEditors: S.proposed_editors.Insertable[];
+} {
+  const proposalsToWrite: S.proposals.Insertable[] = [];
+  const proposedEditorsToWrite: S.proposed_editors.Insertable[] = [];
+
+  for (const p of proposals) {
+    const spaceId = p.space;
+
+    const proposalToWrite: S.proposals.Insertable = {
+      id: p.proposalId,
+      onchain_proposal_id: p.onchainProposalId,
+      name: p.name,
+      type: p.type,
+      created_at: Number(p.startTime),
+      created_at_block: blockNumber,
+      created_by_id: p.creator,
+      start_time: Number(p.startTime),
+      end_time: Number(p.endTime),
+      space_id: spaceId,
+      status: 'proposed',
+    };
+
+    proposalsToWrite.push(proposalToWrite);
+
+    const proposedEditor: S.proposed_editors.Insertable = {
+      id: p.proposalId,
+      type: p.type,
+      account_id: p.userAddress,
+      space_id: spaceId,
+      created_at: Number(p.startTime),
+      created_at_block: blockNumber,
+      proposal_id: p.proposalId,
+    };
+
+    proposedEditorsToWrite.push(proposedEditor);
+  }
+
+  return {
+    proposals: proposalsToWrite,
+    proposedEditors: proposedEditorsToWrite,
+  };
+}
+
+export function mapMembershipProposalsToSchema(
+  proposals: MembershipProposal[],
+  blockNumber: number
+): {
+  proposals: S.proposals.Insertable[];
+  proposedMembers: S.proposed_members.Insertable[];
+} {
+  const proposalsToWrite: S.proposals.Insertable[] = [];
+  const proposedMembersToWrite: S.proposed_members.Insertable[] = [];
+
+  for (const p of proposals) {
+    const spaceId = p.space;
+
+    const proposalToWrite: S.proposals.Insertable = {
+      id: p.proposalId,
+      onchain_proposal_id: p.onchainProposalId,
+      name: p.name,
+      type: p.type,
+      created_at: Number(p.startTime),
+      created_at_block: blockNumber,
+      created_by_id: p.creator,
+      start_time: Number(p.startTime),
+      end_time: Number(p.endTime),
+      space_id: spaceId,
+      status: 'proposed',
+    };
+
+    proposalsToWrite.push(proposalToWrite);
+
+    const proposedMember: S.proposed_members.Insertable = {
+      id: p.proposalId,
+      type: p.type,
+      account_id: p.userAddress,
+      space_id: spaceId,
+      created_at: Number(p.startTime),
+      created_at_block: blockNumber,
+      proposal_id: p.proposalId,
+    };
+
+    proposedMembersToWrite.push(proposedMember);
+  }
+
+  return {
+    proposals: proposalsToWrite,
+    proposedMembers: proposedMembersToWrite,
   };
 }

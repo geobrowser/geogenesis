@@ -7,6 +7,7 @@ import { slog } from '../utils.js';
 import {
   type Action,
   type ContentProposal,
+  type EditorshipProposal,
   type Entry,
   type FullEntry,
   type MembershipProposal,
@@ -20,6 +21,7 @@ import {
 } from '../zod.js';
 import { isValidAction } from './actions.js';
 import { getChecksumAddress } from './get-checksum-address.js';
+import { getSpaceForMembershipPlugin } from './get-space-for-membership-plugin.js';
 import { getSpaceForSpacePlugin } from './get-space-for-space-plugin.js';
 import { getSpaceForVotingPlugin } from './get-space-for-voting-plugin.js';
 
@@ -157,11 +159,19 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry |
  */
 export function getProposalFromMetadata(
   proposal: SubstreamProposal
-): Effect.Effect<ContentProposal | SubspaceProposal | MembershipProposal | null, SpaceWithPluginAddressNotFoundError> {
+): Effect.Effect<
+  ContentProposal | SubspaceProposal | MembershipProposal | EditorshipProposal | null,
+  SpaceWithPluginAddressNotFoundError
+> {
   return Effect.gen(function* (unwrap) {
-    const maybeSpaceIdForPlugin = yield* unwrap(getSpaceForVotingPlugin(getChecksumAddress(proposal.pluginAddress)));
+    const maybeSpaceIdForVotingPlugin = yield* unwrap(
+      getSpaceForVotingPlugin(getChecksumAddress(proposal.pluginAddress))
+    );
+    const maybeSpaceIdForMembershipPlugin = yield* unwrap(
+      getSpaceForMembershipPlugin(getChecksumAddress(proposal.pluginAddress))
+    );
 
-    if (!maybeSpaceIdForPlugin) {
+    if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForMembershipPlugin) {
       slog({
         message: `Matching space in Proposal not found for plugin address ${proposal.pluginAddress}`,
         requestId: '-1',
@@ -216,11 +226,14 @@ export function getProposalFromMetadata(
       return null;
     }
 
+    console.log('validIpfsMetadata', validIpfsMetadata.data);
+
     switch (validIpfsMetadata.data.type) {
       case 'CONTENT': {
         const parsedContent = ZodContentProposal.safeParse(ipfsContent);
 
-        if (!parsedContent.success) {
+        // Subspace proposals are only emitted by the voting plugin
+        if (!parsedContent.success || !maybeSpaceIdForVotingPlugin) {
           return null;
         }
 
@@ -232,7 +245,7 @@ export function getProposalFromMetadata(
           onchainProposalId: proposal.proposalId,
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress(proposal.creator),
-          space: getChecksumAddress(maybeSpaceIdForPlugin),
+          space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
           // json: JSON.stringify(ipfsContent),
           // uri: proposal.metadataUri,
         };
@@ -245,9 +258,8 @@ export function getProposalFromMetadata(
         // @TODO: ipfs content type is not correct for non-content-type proposals
         const parsedSubspace = ZodSubspaceProposal.safeParse(ipfsContent);
 
-        console.log('ipfs content', JSON.stringify(ipfsContent, null, 2));
-
-        if (!parsedSubspace.success) {
+        // Subspace proposals are only emitted by the voting plugin
+        if (!parsedSubspace.success || !maybeSpaceIdForVotingPlugin) {
           return null;
         }
 
@@ -259,7 +271,7 @@ export function getProposalFromMetadata(
           onchainProposalId: proposal.proposalId,
           subspace: getChecksumAddress(parsedSubspace.data.subspace),
           creator: getChecksumAddress(proposal.creator),
-          space: getChecksumAddress(maybeSpaceIdForPlugin),
+          space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
           // json: JSON.stringify(ipfsContent),
           // uri: proposal.metadataUri,
         };
@@ -269,6 +281,31 @@ export function getProposalFromMetadata(
 
       case 'ADD_EDITOR':
       case 'REMOVE_EDITOR':
+        const parsedMembership = ZodMembershipProposal.safeParse(ipfsContent);
+
+        if (!parsedMembership.success) {
+          return null;
+        }
+
+        // If both of these are null then we already early exit out of this function, so it's safe to cast
+        // to the correct type here.
+        const spaceAddress = (maybeSpaceIdForMembershipPlugin ?? maybeSpaceIdForVotingPlugin) as `0x${string}`;
+
+        const mappedProposal: EditorshipProposal = {
+          ...proposal,
+          type: validIpfsMetadata.data.type,
+          name: validIpfsMetadata.data.name ?? null,
+          proposalId: parsedMembership.data.proposalId,
+          onchainProposalId: proposal.proposalId,
+          userAddress: getChecksumAddress(parsedMembership.data.userAddress),
+          creator: getChecksumAddress(proposal.creator),
+          space: getChecksumAddress(spaceAddress),
+          // json: JSON.stringify(ipfsContent),
+          // uri: proposal.metadataUri,
+        };
+
+        return mappedProposal;
+
       case 'ADD_MEMBER':
       case 'REMOVE_MEMBER': {
         const parsedMembership = ZodMembershipProposal.safeParse(ipfsContent);
@@ -276,6 +313,10 @@ export function getProposalFromMetadata(
         if (!parsedMembership.success) {
           return null;
         }
+
+        // If both of these are null then we already early exit out of this function, so it's safe to cast
+        // to the correct type here.
+        const spaceAddress = (maybeSpaceIdForMembershipPlugin ?? maybeSpaceIdForVotingPlugin) as `0x${string}`;
 
         const mappedProposal: MembershipProposal = {
           ...proposal,
@@ -285,7 +326,7 @@ export function getProposalFromMetadata(
           onchainProposalId: proposal.proposalId,
           userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
-          space: getChecksumAddress(maybeSpaceIdForPlugin),
+          space: getChecksumAddress(spaceAddress),
           // json: JSON.stringify(ipfsContent),
           // uri: proposal.metadataUri,
         };
@@ -311,11 +352,11 @@ export function getProposalFromProcessedProposal(
   SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError
 > {
   return Effect.gen(function* (unwrap) {
-    const maybeSpaceIdForPlugin = yield* unwrap(
+    const maybeSpaceIdForVotingPlugin = yield* unwrap(
       getSpaceForSpacePlugin(getChecksumAddress(processedProposal.pluginAddress))
     );
 
-    if (!maybeSpaceIdForPlugin) {
+    if (!maybeSpaceIdForVotingPlugin) {
       slog({
         message: `Matching space in Proposal not found for plugin address ${processedProposal.pluginAddress}`,
         requestId: '-1',
@@ -385,7 +426,7 @@ export function getProposalFromProcessedProposal(
           onchainProposalId: '-1',
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // Geobot
-          space: getChecksumAddress(maybeSpaceIdForPlugin),
+          space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
           endTime: timestamp.toString(),
           startTime: timestamp.toString(),
           metadataUri: processedProposal.ipfsUri,

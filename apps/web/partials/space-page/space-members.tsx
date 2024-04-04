@@ -24,6 +24,7 @@ export async function SpaceMembers({ spaceId }: Props) {
   const [isEditor, space] = await Promise.all([
     getIsEditorForSpace(spaceId, connectedAddress),
     cachedFetchSpace(spaceId),
+    // @TODO: Check if the user has already requested to be a member
   ]);
 
   const memberAccessPlugin = space?.memberAccessPluginAddress ?? null;

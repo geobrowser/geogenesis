@@ -75,7 +75,7 @@ export function CreateDao() {
       initialEditors: [
         getAddress(wallet.account.address),
         getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
-        getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
+        // getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
       ],
       pluginUpgrader: getAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'),
     };

@@ -217,7 +217,22 @@ export const ZodMembershipProposal = z.object({
 });
 
 export type MembershipProposal = Proposal & {
-  type: 'ADD_MEMBER' | 'REMOVE_MEMBER' | 'ADD_EDITOR' | 'REMOVE_EDITOR';
+  type: 'ADD_MEMBER' | 'REMOVE_MEMBER';
+  name: string | null;
+  proposalId: string;
+  onchainProposalId: string;
+  userAddress: `0x${string}`;
+  // uri: string;
+  // json: string;
+};
+
+export const ZodEditorshipProposal = z.object({
+  proposalId: z.string(),
+  editorAddress: z.string(),
+});
+
+export type EditorshipProposal = Proposal & {
+  type: 'ADD_EDITOR' | 'REMOVE_EDITOR';
   name: string | null;
   proposalId: string;
   onchainProposalId: string;

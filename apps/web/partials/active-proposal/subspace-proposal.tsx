@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { ProposalType, SubspaceProposalMetadata } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 import Image from 'next/legacy/image';
 

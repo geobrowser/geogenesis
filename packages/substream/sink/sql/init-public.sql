@@ -234,6 +234,31 @@ CREATE TABLE public.proposed_subspaces (
     type subspace_proposal_type NOT NULL
 );
 
+CREATE TYPE public.member_proposal_type as ENUM ('ADD_MEMBER', 'REMOVE_MEMBER');
+
+CREATE TABLE public.proposed_members (
+    id text PRIMARY KEY,
+    account_id text NOT NULL REFERENCES public.accounts(id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
+    type member_proposal_type NOT NULL
+);
+
+CREATE TYPE public.editor_proposal_type as ENUM ('ADD_EDITOR', 'REMOVE_EDITOR');
+
+CREATE TABLE public.proposed_editors (
+    id text PRIMARY KEY,
+    account_id text NOT NULL REFERENCES public.accounts(id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
+    type editor_proposal_type NOT NULL
+);
+
+
 CREATE TABLE public.triple_versions (
     PRIMARY KEY (triple_id, version_id),
     triple_id text NOT NULL REFERENCES public.triples(id),
