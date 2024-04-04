@@ -13,6 +13,7 @@ import { SpaceMembersJoinButton } from './space-members-join-button';
 import { SpaceMembersMenu } from './space-members-menu';
 import { SpaceMembersPopover } from './space-members-popover';
 import { SpaceMembersContent } from './space-members-popover-content';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   spaceId: string;
@@ -20,7 +21,12 @@ interface Props {
 
 export async function SpaceMembers({ spaceId }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
-  const isEditor = await getIsEditorForSpace(spaceId, connectedAddress);
+  const [isEditor, space] = await Promise.all([
+    getIsEditorForSpace(spaceId, connectedAddress),
+    cachedFetchSpace(spaceId),
+  ]);
+
+  const memberAccessPlugin = space?.memberAccessPluginAddress ?? null;
 
   if (isEditor) {
     return (
@@ -58,7 +64,7 @@ export async function SpaceMembers({ spaceId }: Props) {
       />
       <div className="h-4 w-px bg-divider" />
 
-      <SpaceMembersJoinButton spaceId={spaceId} />
+      <SpaceMembersJoinButton spaceId={spaceId} memberAccessPluginAddress={memberAccessPlugin} />
     </div>
   );
 }

@@ -67,4 +67,4 @@ export {
 } from './src/encodings'
 
 export { createGeoId } from './src/id'
-export { createContentProposal, createSubspaceProposal } from './src/proposal'
+export { createContentProposal, createSubspaceProposal, createMembershipProposal } from './src/proposals'

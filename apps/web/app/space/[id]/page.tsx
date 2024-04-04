@@ -104,8 +104,6 @@ type SubspacesContainerProps = {
 const SubspacesContainer = async ({ spaceId }: SubspacesContainerProps) => {
   const subspaces = await fetchSubspacesBySpaceId(spaceId);
 
-  console.log('subspaces', subspaces);
-
   return <Subspaces subspaces={subspaces} />;
 };
 

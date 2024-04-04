@@ -14,6 +14,10 @@ const getFetchSpaceQuery = (id: string) => `query {
   space(id: "${id}") {
     id
     isRootSpace
+    mainVotingPluginAddress
+    memberAccessPluginAddress
+    spacePluginAddress
+
     spaceAdmins {
       nodes {
         accountId
@@ -41,6 +45,9 @@ type NetworkResult = {
   space: {
     id: string;
     isRootSpace: boolean;
+    mainVotingPluginAddress: string | null;
+    memberAccessPluginAddress: string | null;
+    spacePluginAddress: string | null;
     spaceAdmins: { nodes: { accountId: string }[] };
     spaceEditors: { nodes: { accountId: string }[] };
     spaceEditorControllers: { nodes: { accountId: string }[] };
@@ -135,5 +142,9 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     // @TODO: Map the name and image of a space from the space configuration
     spaceConfig: spaceConfigWithImage,
     createdAtBlock: networkSpace.createdAtBlock,
+
+    mainVotingPluginAddress: networkSpace.mainVotingPluginAddress,
+    memberAccessPluginAddress: networkSpace.memberAccessPluginAddress,
+    spacePluginAddress: networkSpace.spacePluginAddress,
   };
 }

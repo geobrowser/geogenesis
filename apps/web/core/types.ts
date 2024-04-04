@@ -65,6 +65,9 @@ export type SpaceConfigEntity = Entity & {
 export type Space = {
   id: string;
   isRootSpace: boolean;
+  mainVotingPluginAddress: string | null;
+  memberAccessPluginAddress: string | null;
+  spacePluginAddress: string | null;
   editors: string[];
   editorControllers: string[];
   admins: string[];
