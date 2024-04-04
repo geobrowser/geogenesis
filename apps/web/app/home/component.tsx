@@ -8,12 +8,8 @@ import Link from 'next/link';
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 
-import { useWalletClient } from 'wagmi';
-
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Publish } from '~/core/io';
-import type { MembershipRequestWithProfile } from '~/core/io/subgraph/fetch-interim-membership-requests';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -34,28 +30,26 @@ import { Menu } from '~/design-system/menu';
 import { TabGroup } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
-import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
+import {
+  ActiveProposalsForSpacesWhereEditor,
+  getActiveProposalsForSpacesWhereEditor,
+} from './fetch-active-proposals-in-editor-spaces';
 
 const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
 
 type Props = {
   header: React.ReactNode;
-  activeProposals: any[];
-  membershipRequests: MembershipRequestWithProfile[];
+  activeProposals: ActiveProposalsForSpacesWhereEditor;
   acceptedProposalsCount: number;
 };
 
-export const Component = ({ header, activeProposals, membershipRequests, acceptedProposalsCount }: Props) => {
+export const Component = ({ header, activeProposals, acceptedProposalsCount }: Props) => {
   return (
     <>
       <div className="mx-auto max-w-[784px]">
         {header}
         <PersonalHomeNavigation />
-        <PersonalHomeDashboard
-          activeProposals={activeProposals}
-          membershipRequests={membershipRequests}
-          acceptedProposalsCount={acceptedProposalsCount}
-        />
+        <PersonalHomeDashboard activeProposals={activeProposals} acceptedProposalsCount={acceptedProposalsCount} />
       </div>
     </>
   );
@@ -79,12 +73,6 @@ const PersonalHomeNavigation = () => {
   );
 };
 
-type PersonalHomeDashboardProps = {
-  activeProposals: any[];
-  membershipRequests: MembershipRequestWithProfile[];
-  acceptedProposalsCount: number;
-};
-
 type PersonalHomeView = 'all' | 'requests' | 'proposals';
 
 const viewLabel: Record<PersonalHomeView, string> = {
@@ -93,18 +81,18 @@ const viewLabel: Record<PersonalHomeView, string> = {
   requests: 'Membership Requests',
 };
 
+type PersonalHomeDashboardProps = {
+  activeProposals: ActiveProposalsForSpacesWhereEditor;
+  acceptedProposalsCount: number;
+};
+
 const personalHomeViewAtom = atomWithStorage<PersonalHomeView>('personalHomeView', 'all');
 
-const PersonalHomeDashboard = ({
-  activeProposals,
-  membershipRequests,
-  acceptedProposalsCount,
-}: PersonalHomeDashboardProps) => {
+const PersonalHomeDashboard = ({ activeProposals, acceptedProposalsCount }: PersonalHomeDashboardProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const hasNoActivity = activeProposals.length + membershipRequests.length === 0;
-
   const [personalHomeView, setPersonalHomeView] = useAtom(personalHomeViewAtom);
+
+  const hasNoActivity = activeProposals.totalCount === 0;
 
   return (
     <>
@@ -159,10 +147,7 @@ const PersonalHomeDashboard = ({
           {hasNoActivity && <NoActivity />}
           <Notices />
           {!hasNoActivity && (
-            <>
-              {personalHomeView !== 'requests' && <PendingProposals activeProposals={activeProposals} />}
-              {personalHomeView !== 'proposals' && <PendingRequests membershipRequests={membershipRequests} />}
-            </>
+            <>{personalHomeView === 'proposals' && <PendingProposals activeProposals={activeProposals} />}</>
           )}
         </div>
         <div className="w-1/3">
@@ -178,25 +163,25 @@ const NoActivity = () => {
 };
 
 type PendingProposalsProps = {
-  activeProposals: any[];
+  activeProposals: ActiveProposalsForSpacesWhereEditor;
 };
 
 const PendingProposals = ({ activeProposals }: PendingProposalsProps) => {
-  if (activeProposals.length === 0) {
+  if (activeProposals.proposals.length === 0) {
     return null;
   }
 
   return (
     <div className="space-y-2">
-      {activeProposals.map(proposal => (
-        <PendingProposal key={proposal} proposal={proposal} />
+      {activeProposals.proposals.map(proposal => (
+        <PendingProposal key={proposal.id} proposal={proposal} />
       ))}
     </div>
   );
 };
 
 type PendingProposalProps = {
-  proposal: any;
+  proposal: ActiveProposalsForSpacesWhereEditor['proposals'][number];
 };
 
 const PendingProposal = ({ proposal }: PendingProposalProps) => {
@@ -257,98 +242,98 @@ const PendingProposal = ({ proposal }: PendingProposalProps) => {
   );
 };
 
-type PendingRequestsProps = {
-  membershipRequests: MembershipRequestWithProfile[];
-};
+// type PendingRequestsProps = {
+//   membershipRequests: MembershipRequestWithProfile[];
+// };
 
-const dismissedRequestsAtom = atomWithStorage<Array<string>>('dismissedRequests', []);
+// const dismissedRequestsAtom = atomWithStorage<Array<string>>('dismissedRequests', []);
 
-const PendingRequests = ({ membershipRequests }: PendingRequestsProps) => {
-  const [dismissedRequests, setDismissedRequests] = useAtom(dismissedRequestsAtom);
+// const PendingRequests = ({ membershipRequests }: PendingRequestsProps) => {
+//   const [dismissedRequests, setDismissedRequests] = useAtom(dismissedRequestsAtom);
 
-  if (membershipRequests.length === 0) {
-    return null;
-  }
+//   if (membershipRequests.length === 0) {
+//     return null;
+//   }
 
-  const dismissedSet = new Set(dismissedRequests);
+//   const dismissedSet = new Set(dismissedRequests);
 
-  const onRequestProcessed = (requestId: string) => {
-    if (!dismissedSet.has(requestId)) {
-      const newDismissedRequests = [...dismissedRequests, requestId];
-      setDismissedRequests(newDismissedRequests);
-    }
-  };
+//   const onRequestProcessed = (requestId: string) => {
+//     if (!dismissedSet.has(requestId)) {
+//       const newDismissedRequests = [...dismissedRequests, requestId];
+//       setDismissedRequests(newDismissedRequests);
+//     }
+//   };
 
-  return (
-    <div className="space-y-2">
-      {membershipRequests
-        .filter(r => !dismissedSet.has(r.id))
-        .map(request => (
-          <MembershipRequest key={request.id} request={request} onRequestProcessed={onRequestProcessed} />
-        ))}
-    </div>
-  );
-};
+//   return (
+//     <div className="space-y-2">
+//       {membershipRequests
+//         .filter(r => !dismissedSet.has(r.id))
+//         .map(request => (
+//           <MembershipRequest key={request.id} request={request} onRequestProcessed={onRequestProcessed} />
+//         ))}
+//     </div>
+//   );
+// };
 
-type MembershipRequestProps = {
-  request: MembershipRequestWithProfile;
-  onRequestProcessed: (requestId: string) => void;
-};
+// type MembershipRequestProps = {
+//   request: MembershipRequestWithProfile;
+//   onRequestProcessed: (requestId: string) => void;
+// };
 
-const MembershipRequest = ({ request, onRequestProcessed }: MembershipRequestProps) => {
-  const profile = request.requestor;
+// const MembershipRequest = ({ request, onRequestProcessed }: MembershipRequestProps) => {
+//   const profile = request.requestor;
 
-  const { data: wallet } = useWalletClient();
+//   const { data: wallet } = useWalletClient();
 
-  const handleAccept = async () => {
-    if (wallet && request.space && profile.id) {
-      const roleToChange = await Publish.getRole(request.space.id, 'EDITOR_ROLE');
-      await Publish.grantRole({ spaceId: request.space.id, role: roleToChange, wallet, userAddress: profile.address });
-      onRequestProcessed(request.id);
-    }
-  };
+//   const handleAccept = async () => {
+//     if (wallet && request.space && profile.id) {
+//       const roleToChange = await Publish.getRole(request.space.id, 'EDITOR_ROLE');
+//       await Publish.grantRole({ spaceId: request.space.id, role: roleToChange, wallet, userAddress: profile.address });
+//       onRequestProcessed(request.id);
+//     }
+//   };
 
-  const handleReject = () => {
-    onRequestProcessed(request.id);
-  };
+//   const handleReject = () => {
+//     onRequestProcessed(request.id);
+//   };
 
-  return (
-    <ClientOnly>
-      <div className="space-y-4 rounded-lg border border-grey-02 p-4">
-        <Link href={profile?.profileLink ?? ''} className="flex items-center justify-between">
-          <div className="text-smallTitle">{profile?.name ?? profile.id}</div>
-          <div className="relative h-5 w-5 overflow-hidden rounded-full">
-            <Avatar value={profile.address} avatarUrl={profile?.avatarUrl} size={20} />
-          </div>
-        </Link>
-        <Link
-          href={NavUtils.toSpace(request.space.id)}
-          className="flex items-center gap-1.5 text-breadcrumb text-grey-04"
-        >
-          <span className="relative h-3 w-3 overflow-hidden rounded-sm">
-            <img
-              src={request.space.image ? getImagePath(request.space.image) : undefined}
-              className="absolute inset-0 h-full w-full object-cover object-center"
-              alt=""
-            />
-          </span>
-          <span>{request.space.name ?? 'Space'}</span>
-        </Link>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="gap-1.5 rounded bg-grey-01 px-1.5 py-1 text-breadcrumb text-xs leading-none">
-              Member request 0/1 votes needed
-            </div>
-          </div>
-          <div className="inline-flex items-center gap-2">
-            <SmallButton onClick={handleReject}>Reject</SmallButton>
-            <SmallButton onClick={handleAccept}>Accept</SmallButton>
-          </div>
-        </div>
-      </div>
-    </ClientOnly>
-  );
-};
+//   return (
+//     <ClientOnly>
+//       <div className="space-y-4 rounded-lg border border-grey-02 p-4">
+//         <Link href={profile?.profileLink ?? ''} className="flex items-center justify-between">
+//           <div className="text-smallTitle">{profile?.name ?? profile.id}</div>
+//           <div className="relative h-5 w-5 overflow-hidden rounded-full">
+//             <Avatar value={profile.address} avatarUrl={profile?.avatarUrl} size={20} />
+//           </div>
+//         </Link>
+//         <Link
+//           href={NavUtils.toSpace(request.space.id)}
+//           className="flex items-center gap-1.5 text-breadcrumb text-grey-04"
+//         >
+//           <span className="relative h-3 w-3 overflow-hidden rounded-sm">
+//             <img
+//               src={request.space.image ? getImagePath(request.space.image) : undefined}
+//               className="absolute inset-0 h-full w-full object-cover object-center"
+//               alt=""
+//             />
+//           </span>
+//           <span>{request.space.name ?? 'Space'}</span>
+//         </Link>
+//         <div className="flex items-center justify-between">
+//           <div>
+//             <div className="gap-1.5 rounded bg-grey-01 px-1.5 py-1 text-breadcrumb text-xs leading-none">
+//               Member request 0/1 votes needed
+//             </div>
+//           </div>
+//           <div className="inline-flex items-center gap-2">
+//             <SmallButton onClick={handleReject}>Reject</SmallButton>
+//             <SmallButton onClick={handleAccept}>Accept</SmallButton>
+//           </div>
+//         </div>
+//       </div>
+//     </ClientOnly>
+//   );
+// };
 
 const FindOrCreateCompanySpace = () => {
   return (

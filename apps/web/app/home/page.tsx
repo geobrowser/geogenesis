@@ -1,4 +1,3 @@
-import { Effect, Either } from 'effect';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
 
@@ -6,8 +5,6 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { fetchProposalCountByUser } from '~/core/io/fetch-proposal-count-by-user';
 import { fetchOnchainProfile, fetchProfile } from '~/core/io/subgraph';
-import { fetchInterimMembershipRequests } from '~/core/io/subgraph/fetch-interim-membership-requests';
-import { graphql } from '~/core/io/subgraph/graphql';
 import { OnchainProfile, Profile } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -15,15 +12,19 @@ import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
 
 import { Component } from './component';
+import { getActiveProposalsForSpacesWhereEditor } from './fetch-active-proposals-in-editor-spaces';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PersonalHomePage() {
-  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+interface Props {
+  searchParams: { proposalType?: 'member' | 'editor' | 'content' };
+}
 
-  const [spaces, person, profile, proposalsCount] = await Promise.all([
-    getSpacesWhereModerator(connectedAddress),
+export default async function PersonalHomePage(props: Props) {
+  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
+
+  const [proposals, person, profile, proposalsCount] = await Promise.all([
+    getActiveProposalsForSpacesWhereEditor(connectedAddress),
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
     connectedAddress ? fetchOnchainProfile({ address: connectedAddress }) : null,
     connectedAddress
@@ -32,12 +33,6 @@ export default async function PersonalHomePage() {
         })
       : null,
   ]);
-
-  const membershipRequestsBySpace = await Promise.all(
-    spaces.map(spaceId => fetchInterimMembershipRequests({ endpoint: config.membershipSubgraph, spaceId }))
-  );
-
-  const membershipRequests = membershipRequestsBySpace.flat().sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
 
   const acceptedProposalsCount = proposalsCount ?? 0;
 
@@ -50,8 +45,7 @@ export default async function PersonalHomePage() {
           onchainProfile={profile}
         />
       }
-      activeProposals={[]}
-      membershipRequests={membershipRequests}
+      activeProposals={proposals}
       acceptedProposalsCount={acceptedProposalsCount}
     />
   );
@@ -83,41 +77,4 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
       )}
     </div>
   );
-};
-
-const getSpacesWhereModerator = async (address?: string): Promise<string[]> => {
-  if (!address) return [];
-
-  const substreamQuery = `{
-    spaces(filter: { spaceEditorControllers: { some: { accountId: { equalTo: "${address}" } } } }) {
-      nodes {
-        id
-      }
-    }
-  }`;
-
-  const permissionlessSpacesEffect = graphql<{ spaces: { nodes: { id: string }[] } }>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
-    query: substreamQuery,
-  });
-
-  const spacesWhereEditorController = await Effect.runPromise(Effect.either(permissionlessSpacesEffect));
-
-  if (Either.isLeft(spacesWhereEditorController)) {
-    const error = spacesWhereEditorController.left;
-
-    switch (error._tag) {
-      case 'GraphqlRuntimeError':
-        console.error(`Encountered runtime graphql error in getSpacesWhereModerator.`, error.message);
-        break;
-
-      default:
-        console.error(`${error._tag}: Unable to fetch spaces where editor controller`);
-        break;
-    }
-
-    return [];
-  }
-
-  return spacesWhereEditorController.right.spaces.nodes.map(space => space.id);
 };
