@@ -311,6 +311,16 @@ message VotesCast {
   repeated VoteCast votes = 1;
 }
 
+message MemberApproved {
+  string onchain_proposal_id = 1;
+  string approver = 2;
+  string membership_plugin_address = 3;
+}
+
+message MembersApproved {
+  repeated MemberApproved members = 1;
+}
+
 message GeoOutput {
   repeated EntryAdded entries = 1;
   repeated RoleChange role_changes = 2;
@@ -325,4 +335,5 @@ message GeoOutput {
   repeated SubspaceAdded subspaces_added = 11;
   repeated SubspaceRemoved subspaces_removed = 12;
   repeated ProposalExecuted executed_proposals = 13;
+  repeated MemberApproved members_approved = 14;
 }

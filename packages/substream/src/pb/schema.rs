@@ -390,6 +390,22 @@ pub struct VotesCast {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MemberApproved {
+    #[prost(string, tag="1")]
+    pub onchain_proposal_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub approver: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub membership_plugin_address: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MembersApproved {
+    #[prost(message, repeated, tag="1")]
+    pub members: ::prost::alloc::vec::Vec<MemberApproved>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoOutput {
     #[prost(message, repeated, tag="1")]
     pub entries: ::prost::alloc::vec::Vec<EntryAdded>,
@@ -417,6 +433,8 @@ pub struct GeoOutput {
     pub subspaces_removed: ::prost::alloc::vec::Vec<SubspaceRemoved>,
     #[prost(message, repeated, tag="13")]
     pub executed_proposals: ::prost::alloc::vec::Vec<ProposalExecuted>,
+    #[prost(message, repeated, tag="14")]
+    pub members_approved: ::prost::alloc::vec::Vec<MemberApproved>,
 }
 /// *
 /// Roles represent the permissions for a legacy space (See top level comment for more info

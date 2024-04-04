@@ -7,22 +7,21 @@ import * as React from 'react';
 import { useWalletClient } from 'wagmi';
 import { prepareWriteContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
-import { TEST_MAIN_VOTING_PLUGIN_ADDRESS } from '~/app/dao/constants';
+import { Button } from '~/design-system/button';
 
 interface Props {
   onchainProposalId: string;
+  contractAddress: `0x${string}`;
   children: React.ReactNode;
 }
 
-export function Execute({ onchainProposalId, children }: Props) {
+export function Execute({ onchainProposalId, contractAddress, children }: Props) {
   const { data: wallet } = useWalletClient();
 
   const onClick = async () => {
-    console.log('data', { onchainProposalId });
-
     const config = await prepareWriteContract({
       walletClient: wallet,
-      address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
+      address: contractAddress,
       abi: MainVotingAbi,
       functionName: 'execute',
       args: [BigInt(onchainProposalId)],
@@ -34,8 +33,11 @@ export function Execute({ onchainProposalId, children }: Props) {
 
     console.log('writeResult', writeResult);
     const idk = await waitForTransaction(writeResult);
-    console.log('idk', idk);
   };
 
-  return <button onClick={onClick}>{children}</button>;
+  return (
+    <Button variant="secondary" onClick={onClick}>
+      {children}
+    </Button>
+  );
 }

@@ -4,10 +4,10 @@ mod pb;
 use pb::schema::{
     EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
     GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
-    GeoSpaceCreated, GeoSpacesCreated, ProposalCreated, ProposalExecuted, ProposalProcessed,
-    ProposalsCreated, ProposalsExecuted, ProposalsProcessed, RoleChange, RoleChanges,
-    SubspaceAdded, SubspaceRemoved, SubspacesAdded, SubspacesRemoved, SuccessorSpaceCreated,
-    SuccessorSpacesCreated, VoteCast, VotesCast,
+    GeoSpaceCreated, GeoSpacesCreated, MemberApproved, MembersApproved, ProposalCreated,
+    ProposalExecuted, ProposalProcessed, ProposalsCreated, ProposalsExecuted, ProposalsProcessed,
+    RoleChange, RoleChanges, SubspaceAdded, SubspaceRemoved, SubspacesAdded, SubspacesRemoved,
+    SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
 };
 
 use substreams::store::*;
@@ -21,6 +21,7 @@ use_contract!(geo_profile_registry, "abis/geo-profile-registry.json");
 use_contract!(space_setup, "abis/space-setup.json");
 use_contract!(governance_setup, "abis/governance-setup.json");
 use_contract!(main_voting_plugin, "abis/main-voting-plugin.json");
+use_contract!(member_access_plugin, "abis/member-access-plugin.json");
 
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
@@ -29,6 +30,7 @@ use main_voting_plugin::events::{
     EditorsAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
     ProposalExecuted as ProposalExecutedEvent, VoteCast as VoteCastEvent,
 };
+use member_access_plugin::events::Approved as MemberApprovedEvent;
 use space::events::{
     GeoProposalProcessed, SubspaceAccepted, SubspaceRemoved as GeoSubspaceRemoved,
     SuccessorSpaceCreated as SuccessSpaceCreatedEvent,
@@ -356,6 +358,28 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
     Ok(EditorsAdded { editors })
 }
 
+#[substreams::handlers::map]
+fn map_members_approved(
+    block: eth::v2::Block,
+) -> Result<MembersApproved, substreams::errors::Error> {
+    let members: Vec<MemberApproved> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(members_approved) = MemberApprovedEvent::match_and_decode(log) {
+                return Some(MemberApproved {
+                    membership_plugin_address: format_hex(&log.address()),
+                    approver: format_hex(&members_approved.editor),
+                    onchain_proposal_id: members_approved.proposal_id.to_string(),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(MembersApproved { members })
+}
+
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
  * represent changes to content, membership (editor or member), governance changes, subspace
@@ -499,6 +523,7 @@ fn geo_out(
     subspaces_added: SubspacesAdded,
     subspaces_removed: SubspacesRemoved,
     proposals_executed: ProposalsExecuted,
+    members_approved: MembersApproved,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let entries = entries.entries;
     let role_changes = role_changes.changes;
@@ -513,6 +538,7 @@ fn geo_out(
     let added_subspaces = subspaces_added.subspaces;
     let removed_subspaces = subspaces_removed.subspaces;
     let executed_proposals = proposals_executed.executed_proposals;
+    let members_approved = members_approved.members;
 
     Ok(GeoOutput {
         entries,
@@ -528,5 +554,6 @@ fn geo_out(
         subspaces_added: added_subspaces,
         subspaces_removed: removed_subspaces,
         executed_proposals,
+        members_approved,
     })
 }

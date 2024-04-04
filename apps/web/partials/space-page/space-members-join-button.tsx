@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useRequestToBeMember } from './use-request-to-be-editor';
+import { useRequestToBeMember } from './use-request-to-be-member';
 
 interface Props {
   spaceId: string;

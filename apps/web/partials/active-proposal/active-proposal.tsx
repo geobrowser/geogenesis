@@ -25,6 +25,7 @@ import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { ContentProposal } from './content-proposal';
 import { SubspaceProposal } from './subspace-proposal';
 import { TEST_MAIN_VOTING_PLUGIN_ADDRESS } from '~/app/dao/constants';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   proposalId?: string;
@@ -48,7 +49,7 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
     return null;
   }
 
-  const proposal = await fetchProposal({ id: proposalId });
+  const [proposal, space] = await Promise.all([fetchProposal({ id: proposalId }), cachedFetchSpace(spaceId)]);
 
   if (!proposal) {
     redirect(`/space/${spaceId}/governance`);
@@ -78,9 +79,13 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
         {/* @TODO: Use actual voting address from substream */}
         <AcceptOrReject
           onchainProposalId={proposal.onchainProposalId}
-          votingContractAddress={TEST_MAIN_VOTING_PLUGIN_ADDRESS}
           isProposalDone={isProposalDone}
           userVote={userVote}
+          proposalType={proposal.type}
+          // We know that the space isn't null here, so casting is safe. If the space
+          // doesn't exist we redirect the user
+          membershipContractAddress={space?.memberAccessPluginAddress as `0x${string}`}
+          votingContractAddress={space?.mainVotingPluginAddress as `0x${string}`}
         />
       </div>
       <MetadataMotionContainer>

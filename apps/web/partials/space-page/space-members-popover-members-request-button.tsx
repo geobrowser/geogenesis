@@ -1,6 +1,6 @@
 'use client';
 
-import { useInterimSpaceMembershipRequest } from './use-request-to-be-editor';
+import { useInterimSpaceMembershipRequest } from './use-request-to-be-member';
 
 interface Props {
   spaceId: string;

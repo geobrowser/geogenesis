@@ -8,10 +8,21 @@ import type * as S from 'zapatos/schema';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
-import { Accounts, Actions, Proposals, ProposedEditors, ProposedSubspaces, ProposedVersions } from './db';
+import {
+  Accounts,
+  Actions,
+  Proposals,
+  ProposedEditors,
+  ProposedMembers,
+  ProposedSubspaces,
+  ProposedVersions,
+  SpaceMembers,
+} from './db';
 import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
 import { populateWithFullEntries } from './entries/populate-entries';
+import { mapMembers } from './members/map-members';
 import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
+import { ZodMembersApprovedStreamResponse } from './parsers/members-approved';
 import { ZodProposalExecutedStreamResponse } from './parsers/proposal-executed';
 import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
 import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
@@ -222,6 +233,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
           const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
           const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
+          const membersApproved = ZodMembersApprovedStreamResponse.safeParse(jsonOutput);
+
+          if (blockNumber === 55447697) {
+            console.info('output', jsonOutput);
+          }
 
           if (profilesRegistered.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
@@ -429,6 +445,16 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               message: `Writing ${subspaceProposals.length} subspace proposals to DB`,
             });
 
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${memberProposals.length} membership proposals to DB`,
+            });
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${editorProposals.length} editorship proposals to DB`,
+            });
+
             // This might be the very first onchain interaction for a wallet address,
             // so we need to make sure that any accounts are already created when we
             // process the proposals below, particularly for editor and member requests.
@@ -465,6 +491,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                     // Editorship proposals
                     Proposals.upsert(schemaEditorshipProposals.proposals),
                     ProposedEditors.upsert(schemaEditorshipProposals.proposedEditors),
+
+                    // Membership proposals
+                    Proposals.upsert(schemaMembershipProposals.proposals),
+                    ProposedMembers.upsert(schemaMembershipProposals.proposedMembers),
                   ]);
                 },
                 catch: error => {
@@ -707,6 +737,39 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             });
           }
 
+          if (membersApproved.success) {
+            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info('MEMBERS APPROVED', JSON.stringify(membersApproved.data.membersApproved, null, 2));
+
+            const schemaMembers = yield* _(
+              mapMembers({ membersApproved: membersApproved.data.membersApproved, blockNumber, timestamp })
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `Writing ${schemaMembers.length} approved members to DB`,
+            });
+
+            yield* _(
+              Effect.tryPromise({
+                try: () => SpaceMembers.upsert(schemaMembers),
+                catch: error => {
+                  slog({
+                    level: 'error',
+                    requestId: message.cursor,
+                    message: `Failed to write approved members to DB ${error}`,
+                  });
+                  return error;
+                },
+              })
+            );
+
+            slog({
+              requestId: message.cursor,
+              message: `Members written successfully`,
+            });
+          }
+
           if (executedProposals.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
             const proposals = executedProposals.data.executedProposals;
@@ -721,6 +784,12 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 proposals.map(proposal => {
                   return Effect.tryPromise({
                     try: async () => {
+                      // @TODO: There might be executed proposals coming from both the member access plugin
+                      // and the voting plugin, so we need to handle both cases.
+                      //
+                      // Alternatively we use the `Approved` event to update events coming from the member
+                      // access plugin. I'm not sure if overloading the ProposalExecuted event for multiple
+                      // proposal types is better than using unique events for each proposal type.
                       const spaceEffect = getSpaceForVotingPlugin(proposal.pluginAddress as `0x${string}`);
                       const space = await Effect.runPromise(spaceEffect);
 
@@ -729,7 +798,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                           .update(
                             'proposals',
                             { status: 'accepted' },
-                            { onchain_proposal_id: proposal.proposalId, space_id: space }
+                            // @TODO: There might be multiple proposals with the same onchain_proposal_id
+                            // if there are proposals from both the voting plugin and the member access plugin.
+                            { onchain_proposal_id: proposal.proposalId, space_id: space, type: 'CONTENT' }
                           )
                           .run(pool);
                       }

@@ -126,6 +126,14 @@ modules:
     output:
       type: proto:schema.ProposalsExecuted
 
+  - name: map_members_approved
+    kind: map
+    initialBlock: 55367658
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.MembersApproved
+
   - name: geo_out
     kind: map
     initialBlock: 36472424
@@ -143,6 +151,7 @@ modules:
       - map: map_subspaces_added
       - map: map_subspaces_removed
       - map: map_proposals_executed
+      - map: map_members_approved
     output:
       type: proto:schema.GeoOutput
 

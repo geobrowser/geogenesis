@@ -19,13 +19,12 @@ export function useRequestToBeMember(memberAccessPluginAddress: string | null) {
   // @TODO(baiirun): What should this API look like in the SDK?
   const write = async () => {
     if (!memberAccessPluginAddress || !requestorAddress) {
-      console.error('something missing', { memberAccessPluginAddress, requestorAddress });
       return null;
     }
 
     const membershipProposalMetadata = createMembershipProposal({
-      name: 'Request to be an editor',
-      type: 'ADD_EDITOR',
+      name: 'Request to be a member',
+      type: 'ADD_MEMBER',
       userAddress: requestorAddress,
     });
 

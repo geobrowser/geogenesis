@@ -133,6 +133,14 @@ CREATE TABLE public.space_editors_v2 (
     CONSTRAINT space_editors_v2_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
+CREATE TABLE public.space_members (
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    account_id text NOT NULL REFERENCES public.accounts(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    CONSTRAINT space_members_unique_account_space_pair UNIQUE (account_id, space_id)
+);
+
 CREATE TABLE public.space_editor_controllers (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
