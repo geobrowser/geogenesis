@@ -8,9 +8,7 @@ import type * as S from 'zapatos/schema';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
-import { Proposals } from './db';
-import { Accounts } from './db/accounts';
-import { ProposedVersions } from './db/proposed-versions';
+import { Accounts, Actions, Proposals, ProposedEditors, ProposedSubspaces, ProposedVersions } from './db';
 import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
 import { populateWithFullEntries } from './entries/populate-entries';
 import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
@@ -414,19 +412,12 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 maybeProposal !== null
             );
 
-            console.log('proposals', proposals);
-
             const { contentProposals, subspaceProposals, memberProposals, editorProposals } =
               groupProposalsByType(proposals);
             const schemaContentProposals = mapContentProposalsToSchema(contentProposals, blockNumber, cursor);
             const schemaSubspaceProposals = mapSubspaceProposalsToSchema(subspaceProposals, blockNumber);
             const schemaMembershipProposals = mapMembershipProposalsToSchema(memberProposals, blockNumber);
             const schemaEditorshipProposals = mapEditorshipProposalsToSchema(editorProposals, blockNumber);
-
-            console.log('editorship proposals', {
-              editorProposals,
-              schemaEditorshipProposals,
-            });
 
             slog({
               requestId: message.cursor,
@@ -462,20 +453,18 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 try: async () => {
                   // @TODO: Batch since there might be postgres byte limits. See upsertChunked
                   await Promise.all([
-                    // @TODO: Should we only attempt to write to the db for the correct content type?
-                    // What if we get multiple proposals in the same block with different content types?
                     // Content proposals
                     Proposals.upsert(schemaContentProposals.proposals),
                     ProposedVersions.upsert(schemaContentProposals.proposedVersions),
-                    db.insert('actions', schemaContentProposals.actions).run(pool),
+                    Actions.upsert(schemaContentProposals.actions),
 
                     // Subspace proposals
                     Proposals.upsert(schemaSubspaceProposals.proposals),
-                    db.insert('proposed_subspaces', schemaSubspaceProposals.proposedSubspaces).run(pool),
+                    ProposedSubspaces.upsert(schemaSubspaceProposals.proposedSubspaces),
 
                     // Editorship proposals
                     Proposals.upsert(schemaEditorshipProposals.proposals),
-                    db.insert('proposed_editors', schemaEditorshipProposals.proposedEditors).run(pool),
+                    ProposedEditors.upsert(schemaEditorshipProposals.proposedEditors),
                   ]);
                 },
                 catch: error => {
@@ -554,9 +543,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                       // @TODO: Should we only attempt to write to the db for the correct content type?
                       // What if we get multiple proposals in the same block with different content types?
                       // Content proposals
-                      db.insert('proposals', schemaContentProposals.proposals).run(pool),
-                      db.insert('proposed_versions', schemaContentProposals.proposedVersions).run(pool),
-                      db.insert('actions', schemaContentProposals.actions).run(pool),
+                      Proposals.upsert(schemaContentProposals.proposals),
+                      ProposedVersions.upsert(schemaContentProposals.proposedVersions),
+                      Actions.upsert(schemaContentProposals.actions),
                     ]);
                   },
                   catch: error => {
