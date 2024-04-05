@@ -23,8 +23,6 @@ interface Props {
 export default async function PersonalHomePage(props: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
-  console.log('proposalType', props.searchParams.proposalType);
-
   const [proposals, person, profile, proposalsCount] = await Promise.all([
     getActiveProposalsForSpacesWhereEditor(connectedAddress, props.searchParams.proposalType),
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
