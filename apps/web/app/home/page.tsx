@@ -17,14 +17,16 @@ import { getActiveProposalsForSpacesWhereEditor } from './fetch-active-proposals
 export const dynamic = 'force-dynamic';
 
 interface Props {
-  searchParams: { proposalType?: 'member' | 'editor' | 'content' };
+  searchParams: { proposalType?: 'membership' | 'content' };
 }
 
 export default async function PersonalHomePage(props: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
+  console.log('proposalType', props.searchParams.proposalType);
+
   const [proposals, person, profile, proposalsCount] = await Promise.all([
-    getActiveProposalsForSpacesWhereEditor(connectedAddress),
+    getActiveProposalsForSpacesWhereEditor(connectedAddress, props.searchParams.proposalType),
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
     connectedAddress ? fetchOnchainProfile({ address: connectedAddress }) : null,
     connectedAddress
@@ -45,6 +47,7 @@ export default async function PersonalHomePage(props: Props) {
           onchainProfile={profile}
         />
       }
+      proposalType={props.searchParams.proposalType}
       activeProposals={proposals}
       acceptedProposalsCount={acceptedProposalsCount}
     />

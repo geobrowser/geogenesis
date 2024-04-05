@@ -11,11 +11,19 @@ export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getA
 interface NetworkResult {
   proposals: {
     totalCount: number;
-    nodes: OmitStrict<SubstreamProposal & { userVotes: { nodes: Vote[] } }, 'proposedVersions'>[];
+    nodes: OmitStrict<
+      SubstreamProposal & {
+        userVotes: { nodes: Vote[] };
+      },
+      'proposedVersions'
+    >[];
   };
 }
 
-export async function getActiveProposalsForSpacesWhereEditor(address?: string) {
+export async function getActiveProposalsForSpacesWhereEditor(
+  address?: string,
+  proposalType?: 'membership' | 'content'
+) {
   if (!address) {
     return {
       totalCount: 0,
@@ -23,11 +31,30 @@ export async function getActiveProposalsForSpacesWhereEditor(address?: string) {
     };
   }
 
+  let proposalTypeFilter: string | null = null;
+
+  if (proposalType === 'content') {
+    proposalTypeFilter = `type: { equalTo: CONTENT }`;
+  }
+
+  if (proposalType === 'membership') {
+    proposalTypeFilter = `or: [{
+      type: { equalTo: ADD_EDITOR }
+    }, {
+      type: { equalTo: ADD_MEMBER }
+    }, {
+      type: { equalTo: REMOVE_EDITOR }
+    }, {
+      type: { equalTo: REMOVE_MEMBER }
+    }]`;
+  }
+
   const substreamQuery = `query {
     proposals(
       first: 10
       orderBy: CREATED_AT_DESC
       filter: {
+        ${proposalTypeFilter ?? ''}
         status: { equalTo: PROPOSED }
         endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
         space: {

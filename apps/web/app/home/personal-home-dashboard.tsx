@@ -26,12 +26,12 @@ import { Text } from '~/design-system/text';
 
 import { ActiveProposalsForSpacesWhereEditor } from './fetch-active-proposals-in-editor-spaces';
 
-type PersonalHomeView = 'all' | 'requests' | 'proposals';
+type PersonalHomeView = 'all' | 'membership' | 'content';
 
 const viewLabel: Record<PersonalHomeView, string> = {
   all: 'All',
-  proposals: 'Active Proposals',
-  requests: 'Membership Requests',
+  content: 'Active Proposals',
+  membership: 'Membership Requests',
 };
 
 type PersonalHomeDashboardProps = {
@@ -63,7 +63,7 @@ export function PersonalHomeDashboard({
           align="start"
         >
           <Link
-            href="/"
+            href="/home"
             onClick={() => {
               setPersonalHomeView('all');
               setIsMenuOpen(false);
@@ -75,9 +75,9 @@ export function PersonalHomeDashboard({
             </Text>
           </Link>
           <Link
-            href="/"
+            href="/home?proposalType=content"
             onClick={() => {
-              setPersonalHomeView('proposals');
+              setPersonalHomeView('content');
               setIsMenuOpen(false);
             }}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
@@ -87,9 +87,9 @@ export function PersonalHomeDashboard({
             </Text>
           </Link>
           <Link
-            href="/"
+            href="/home?proposalType=membership"
             onClick={() => {
-              setPersonalHomeView('requests');
+              setPersonalHomeView('membership');
               setIsMenuOpen(false);
             }}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"

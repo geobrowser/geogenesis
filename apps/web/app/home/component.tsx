@@ -17,6 +17,7 @@ import { Close } from '~/design-system/icons/close';
 import { Member } from '~/design-system/icons/member';
 import { Tick } from '~/design-system/icons/tick';
 import { Time } from '~/design-system/icons/time';
+import { Skeleton } from '~/design-system/skeleton';
 import { TabGroup } from '~/design-system/tab-group';
 
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
@@ -31,9 +32,10 @@ type Props = {
   header: React.ReactNode;
   activeProposals: ActiveProposalsForSpacesWhereEditor;
   acceptedProposalsCount: number;
+  proposalType?: 'membership' | 'content';
 };
 
-export function Component({ header, activeProposals, acceptedProposalsCount }: Props) {
+export function Component({ header, activeProposals, acceptedProposalsCount, proposalType }: Props) {
   return (
     <>
       <div className="mx-auto max-w-[784px]">
@@ -41,7 +43,7 @@ export function Component({ header, activeProposals, acceptedProposalsCount }: P
         <PersonalHomeNavigation />
         <PersonalHomeDashboard
           proposalsList={
-            <React.Suspense fallback="Loading...">
+            <React.Suspense key={proposalType} fallback={<LoadingSkeleton />}>
               <PendingProposals activeProposals={activeProposals} />
             </React.Suspense>
           }
@@ -50,6 +52,18 @@ export function Component({ header, activeProposals, acceptedProposalsCount }: P
         />
       </div>
     </>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-4 rounded-lg border border-grey-02 p-4">
+      <div className="space-y-2">
+        <Skeleton className="h-6 w-20" />
+
+        <Skeleton className="h-6 w-8" />
+      </div>
+    </div>
   );
 }
 
@@ -112,17 +126,30 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
     return null;
   }
 
+  const ProfileHeader = proposedMember.profileLink ? (
+    <Link href={proposedMember.profileLink} className="w-full">
+      <div className="flex items-center justify-between">
+        <div className="text-smallTitle">{proposedMember.name ?? proposedMember.id}</div>
+        <div className="relative h-5 w-5 overflow-hidden rounded-full">
+          <Avatar avatarUrl={proposedMember.avatarUrl} value={proposedMember.id} size={20} />
+        </div>
+      </div>
+    </Link>
+  ) : (
+    <div className="w-full">
+      <div className="flex items-center justify-between">
+        <div className="text-smallTitle">{proposedMember.name ?? proposedMember.id}</div>
+        <div className="relative h-5 w-5 overflow-hidden rounded-full">
+          <Avatar avatarUrl={proposedMember.avatarUrl} value={proposedMember.id} size={20} />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-4 rounded-lg border border-grey-02 p-4">
       <div className="space-y-2">
-        <Link href={proposedMember.profileLink ?? ''} className="w-full">
-          <div className="flex items-center justify-between">
-            <div className="text-smallTitle">{proposedMember.name ?? proposedMember.id}</div>
-            <div className="relative h-5 w-5 overflow-hidden rounded-full">
-              <Avatar avatarUrl={proposedMember.avatarUrl} value={proposedMember.id} size={20} />
-            </div>
-          </div>
-        </Link>
+        {ProfileHeader}
 
         <Link
           href={NavUtils.toSpace(proposal.spaceId)}
@@ -162,6 +189,8 @@ const PendingContentProposal = ({ proposal }: PendingMembershipProposalProps) =>
 
   const yesVotesPercentage = getYesVotePercentage(votes.nodes, votes.totalCount);
   const noVotesPercentage = getNoVotePercentage(votes.nodes, votes.totalCount);
+
+  return null;
 
   return (
     <div className="space-y-4 rounded-lg border border-grey-02 p-4">
