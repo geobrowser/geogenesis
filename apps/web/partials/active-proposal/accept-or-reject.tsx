@@ -1,7 +1,7 @@
 'use client';
 
-import { ProposalType, VoteOption } from '@geogenesis/sdk';
-import { MainVotingAbi, MemberAccessAbi } from '@geogenesis/sdk/abis';
+import { VoteOption } from '@geogenesis/sdk';
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
 
 import * as React from 'react';
 
