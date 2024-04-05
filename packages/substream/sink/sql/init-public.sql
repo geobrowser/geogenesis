@@ -53,14 +53,6 @@ CREATE TABLE public.onchain_profiles (
     created_at_block integer NOT NULL
 );
 
-CREATE TABLE public.profiles (
-    id text PRIMARY KEY,
-    entity_id text REFERENCES public.geo_entities(id) NOT NULL,
-    onchain_profile_id text REFERENCES public.onchain_profiles(id) NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
-);
-
 -- ALTER TABLE
 --     public.geo_entities
 -- ADD

@@ -139,6 +139,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STRICT STABLE;
 
+-- Map the account id to a geo profile based on the entity id of
+-- the account's onchain profile if it exists
+CREATE FUNCTION public.accounts_geo_profiles(e_row accounts)
+RETURNS SETOF public.geo_entities AS $$
+BEGIN
+    RETURN QUERY 
+    -- Get the onchain profile that matches the account id
+    WITH onchain_profiles_ids AS (
+        SELECT op.*
+        FROM onchain_profiles op
+        WHERE op.account_id = e_row.id
+    )
+    SELECT e.*
+    FROM geo_entities e
+    -- Return the entity id that matches the onchain profile id
+    INNER JOIN onchain_profiles_ids opids ON e.id = opids.id;
+END;
+$$ LANGUAGE plpgsql STRICT STABLE;
+
 -- 
 -- Query "schema" on an instance of a type entity (e.g. San Francisco) to get it's inferred type attributes
 -- "schemaCount" can be used for filtering
