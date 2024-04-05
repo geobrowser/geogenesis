@@ -2,7 +2,6 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import {
-  ProposalType,
   createContentProposal,
   createGeoId,
   createSubspaceProposal,
@@ -19,10 +18,6 @@ import { Services } from '~/core/services';
 import { Button } from '~/design-system/button';
 
 import { TEST_MAIN_VOTING_PLUGIN_ADDRESS, TEST_SPACE_PLUGIN_ADDRESS } from './constants';
-
-interface Props {
-  type: ProposalType;
-}
 
 // @TODO: Add metadata to ipfs. this will include the root object. If the proposal is not a content proposal it will use
 // a new type of metadata object that has the proposal type and version object
@@ -46,7 +41,7 @@ interface Props {
 // 8. Create action for processing an editor proposal
 //    - Add editor
 //    - Remove editor
-export function CreateProposal({ type }: Props) {
+export function CreateProposal() {
   const { storageClient } = Services.useServices();
 
   const { data: wallet } = useWalletClient();
