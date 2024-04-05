@@ -19,7 +19,7 @@ interface Props {
 
 export async function SubspaceProposal({ proposal }: Props) {
   const [subspace, space] = await Promise.all([
-    fetchSubspace(proposal.id, proposal.space),
+    fetchProposedSubspace(proposal.id, proposal.space),
     fetchSpace({ id: proposal.space }),
   ]);
 
@@ -135,7 +135,7 @@ interface NetworkResult {
   };
 }
 
-async function fetchSubspace(proposalId: string, spaceId: string) {
+async function fetchProposedSubspace(proposalId: string, spaceId: string) {
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
@@ -157,7 +157,7 @@ async function fetchSubspace(proposalId: string, spaceId: string) {
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchSubspace. spaceId: ${spaceId} proposalId: ${proposalId} endpoint: ${endpoint}
+            `Encountered runtime graphql error in fetchProposedSubspace. spaceId: ${spaceId} proposalId: ${proposalId} endpoint: ${endpoint}
 
             queryString: ${getSubspaceInProposalQuery(proposalId)}
             `,
