@@ -21,7 +21,10 @@ import { Skeleton } from '~/design-system/skeleton';
 import { TabGroup } from '~/design-system/tab-group';
 
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
-import { ActiveProposalsForSpacesWhereEditor } from './fetch-active-proposals-in-editor-spaces';
+import {
+  ActiveProposalsForSpacesWhereEditor,
+  getActiveProposalsForSpacesWhereEditor,
+} from './fetch-active-proposals-in-editor-spaces';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
 import { AcceptOrRejectMember } from './membership/accept-or-reject-member';
 import { PersonalHomeDashboard } from './personal-home-dashboard';
@@ -30,12 +33,12 @@ const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as
 
 type Props = {
   header: React.ReactNode;
-  activeProposals: ActiveProposalsForSpacesWhereEditor;
   acceptedProposalsCount: number;
   proposalType?: 'membership' | 'content';
+  connectedAddress?: string;
 };
 
-export function Component({ header, activeProposals, acceptedProposalsCount, proposalType }: Props) {
+export async function Component({ header, acceptedProposalsCount, proposalType, connectedAddress }: Props) {
   return (
     <>
       <div className="mx-auto max-w-[784px]">
@@ -43,11 +46,19 @@ export function Component({ header, activeProposals, acceptedProposalsCount, pro
         <PersonalHomeNavigation />
         <PersonalHomeDashboard
           proposalsList={
-            <React.Suspense key={proposalType} fallback={<LoadingSkeleton />}>
-              <PendingProposals activeProposals={activeProposals} />
+            <React.Suspense
+              key={`${proposalType}-${connectedAddress}`}
+              fallback={
+                <div className="space-y-2">
+                  <LoadingSkeleton />
+                  <LoadingSkeleton />
+                  <LoadingSkeleton />
+                </div>
+              }
+            >
+              <PendingProposals connectedAddress={connectedAddress} proposalType={proposalType} />
             </React.Suspense>
           }
-          activeProposals={activeProposals}
           acceptedProposalsCount={acceptedProposalsCount}
         />
       </div>
@@ -55,16 +66,19 @@ export function Component({ header, activeProposals, acceptedProposalsCount, pro
   );
 }
 
-function LoadingSkeleton() {
+export function LoadingSkeleton() {
   return (
     <div className="space-y-4 rounded-lg border border-grey-02 p-4">
       <div className="space-y-2">
-        <Skeleton className="h-6 w-20" />
-
-        <Skeleton className="h-6 w-8" />
+        <Skeleton className="h-5 w-36" />
+        <Skeleton className="h-4 w-20" />
       </div>
     </div>
   );
+}
+
+function NoActivity() {
+  return <p className="mb-4 text-body text-grey-04">You have no pending requests or proposals.</p>;
 }
 
 function PersonalHomeNavigation() {
@@ -86,12 +100,15 @@ function PersonalHomeNavigation() {
 }
 
 type PendingProposalsProps = {
-  activeProposals: ActiveProposalsForSpacesWhereEditor;
+  proposalType?: 'membership' | 'content';
+  connectedAddress?: string;
 };
 
-function PendingProposals({ activeProposals }: PendingProposalsProps) {
+async function PendingProposals({ proposalType, connectedAddress }: PendingProposalsProps) {
+  const activeProposals = await getActiveProposalsForSpacesWhereEditor(connectedAddress, proposalType);
+
   if (activeProposals.proposals.length === 0) {
-    return null;
+    return <NoActivity />;
   }
 
   return (

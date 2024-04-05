@@ -25,8 +25,6 @@ import { VideoSmall } from '~/design-system/icons/video-small';
 import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
-import { ActiveProposalsForSpacesWhereEditor } from './fetch-active-proposals-in-editor-spaces';
-
 type PersonalHomeView = 'all' | 'membership' | 'content';
 
 const viewLabel: Record<PersonalHomeView, string> = {
@@ -36,21 +34,14 @@ const viewLabel: Record<PersonalHomeView, string> = {
 };
 
 type PersonalHomeDashboardProps = {
-  activeProposals: ActiveProposalsForSpacesWhereEditor;
   acceptedProposalsCount: number;
   proposalsList: React.ReactNode;
 };
 
-export function PersonalHomeDashboard({
-  activeProposals,
-  acceptedProposalsCount,
-  proposalsList,
-}: PersonalHomeDashboardProps) {
+export function PersonalHomeDashboard({ acceptedProposalsCount, proposalsList }: PersonalHomeDashboardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const params = useSearchParams();
   const proposalType = params?.get('proposalType');
-
-  const hasNoActivity = activeProposals.totalCount === 0;
 
   const label = proposalType ? viewLabel[proposalType as 'membership' | 'content'] : viewLabel['all'];
 
@@ -101,9 +92,8 @@ export function PersonalHomeDashboard({
       </div>
       <div className="mt-8 flex gap-8">
         <div className="w-2/3">
-          {hasNoActivity && <NoActivity />}
           <Notices />
-          {!hasNoActivity && proposalsList}
+          {proposalsList}
         </div>
         <div className="w-1/3">
           <Sidebar acceptedProposalsCount={acceptedProposalsCount} />
@@ -111,10 +101,6 @@ export function PersonalHomeDashboard({
       </div>
     </>
   );
-}
-
-function NoActivity() {
-  return <p className="mb-4 text-body text-grey-04">You have no pending requests or proposals.</p>;
 }
 
 const Notices = () => {

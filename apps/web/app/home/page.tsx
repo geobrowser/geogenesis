@@ -1,8 +1,9 @@
 import { cookies } from 'next/headers';
 import Link from 'next/link';
 
+import * as React from 'react';
+
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { Environment } from '~/core/environment';
 import { fetchProposalCountByUser } from '~/core/io/fetch-proposal-count-by-user';
 import { fetchOnchainProfile, fetchProfile } from '~/core/io/subgraph';
 import { OnchainProfile, Profile } from '~/core/types';
@@ -12,7 +13,6 @@ import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
 
 import { Component } from './component';
-import { getActiveProposalsForSpacesWhereEditor } from './fetch-active-proposals-in-editor-spaces';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +23,7 @@ interface Props {
 export default async function PersonalHomePage(props: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
-  const [proposals, person, profile, proposalsCount] = await Promise.all([
-    getActiveProposalsForSpacesWhereEditor(connectedAddress, props.searchParams.proposalType),
+  const [person, profile, proposalsCount] = await Promise.all([
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
     connectedAddress ? fetchOnchainProfile({ address: connectedAddress }) : null,
     connectedAddress
@@ -46,8 +45,8 @@ export default async function PersonalHomePage(props: Props) {
         />
       }
       proposalType={props.searchParams.proposalType}
-      activeProposals={proposals}
       acceptedProposalsCount={acceptedProposalsCount}
+      connectedAddress={connectedAddress}
     />
   );
 }
