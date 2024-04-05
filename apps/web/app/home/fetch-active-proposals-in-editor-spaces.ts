@@ -42,6 +42,7 @@ export async function getActiveProposalsForSpacesWhereEditor(address?: string) {
       totalCount
       nodes {
         id
+        type
         onchainProposalId
         name
         spaceId

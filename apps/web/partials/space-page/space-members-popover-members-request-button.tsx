@@ -1,13 +1,14 @@
 'use client';
 
-import { useInterimSpaceMembershipRequest } from './use-request-to-be-member';
+import { useRequestToBeMember } from './use-request-to-be-member';
 
 interface Props {
   spaceId: string;
 }
 
 export function SpaceMembersPopoverMemberRequestButton({ spaceId }: Props) {
-  const { requestMembership } = useInterimSpaceMembershipRequest(spaceId);
+  // @TODO: Needs correct contract address
+  const { requestMembership } = useRequestToBeMember(spaceId);
 
   const onClick = () => {
     requestMembership?.();

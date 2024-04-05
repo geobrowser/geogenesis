@@ -61,7 +61,7 @@ interface HeaderProps {
   address: string | null;
 }
 
-const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) => {
+function PersonalHomeHeader({ onchainProfile, person, address }: HeaderProps) {
   return (
     <div className="flex w-full items-center justify-between">
       <div className="flex items-center gap-4">
@@ -77,4 +77,4 @@ const PersonalHomeHeader = ({ onchainProfile, person, address }: HeaderProps) =>
       )}
     </div>
   );
-};
+}
