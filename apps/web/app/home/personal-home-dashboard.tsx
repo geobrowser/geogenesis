@@ -4,6 +4,7 @@ import { cva } from 'class-variance-authority';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 import { useCallback, useState } from 'react';
 
@@ -40,17 +41,18 @@ type PersonalHomeDashboardProps = {
   proposalsList: React.ReactNode;
 };
 
-const personalHomeViewAtom = atomWithStorage<PersonalHomeView>('personalHomeView', 'all');
-
 export function PersonalHomeDashboard({
   activeProposals,
   acceptedProposalsCount,
   proposalsList,
 }: PersonalHomeDashboardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [personalHomeView, setPersonalHomeView] = useAtom(personalHomeViewAtom);
+  const params = useSearchParams();
+  const proposalType = params?.get('proposalType');
 
   const hasNoActivity = activeProposals.totalCount === 0;
+
+  const label = proposalType ? viewLabel[proposalType as 'membership' | 'content'] : viewLabel['all'];
 
   return (
     <>
@@ -59,13 +61,12 @@ export function PersonalHomeDashboard({
           open={isMenuOpen}
           onOpenChange={setIsMenuOpen}
           asChild
-          trigger={<SmallButton icon={<ChevronDownSmall />}>{viewLabel[personalHomeView]}</SmallButton>}
+          trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
           align="start"
         >
           <Link
             href="/home"
             onClick={() => {
-              setPersonalHomeView('all');
               setIsMenuOpen(false);
             }}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
@@ -77,7 +78,6 @@ export function PersonalHomeDashboard({
           <Link
             href="/home?proposalType=content"
             onClick={() => {
-              setPersonalHomeView('content');
               setIsMenuOpen(false);
             }}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
@@ -89,7 +89,6 @@ export function PersonalHomeDashboard({
           <Link
             href="/home?proposalType=membership"
             onClick={() => {
-              setPersonalHomeView('membership');
               setIsMenuOpen(false);
             }}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
