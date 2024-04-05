@@ -190,7 +190,12 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
       <div className="flex items-center justify-between">
         <div className="inline-flex items-center gap-1.5 rounded bg-grey-01 px-2 py-1.5 text-breadcrumb text-grey-04">
           <Member />
-          <span>Member request · 0/1 votes needed</span>
+          {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && (
+            <span>Editor request · majority votes needed</span>
+          )}
+          {(proposal.type === 'ADD_MEMBER' || proposal.type === 'REMOVE_MEMBER') && (
+            <span>Member request · 0/1 votes needed</span>
+          )}
         </div>
         {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && (
           <AcceptOrRejectEditor
