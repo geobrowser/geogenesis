@@ -34,7 +34,13 @@ export async function getActiveProposalsForSpacesWhereEditor(
   let proposalTypeFilter: string | null = null;
 
   if (proposalType === 'content') {
-    proposalTypeFilter = `type: { equalTo: CONTENT }`;
+    proposalTypeFilter = `or: [{
+      type: { equalTo: CONTENT }
+    }, {
+      type: { equalTo: ADD_SUBSPACE }
+    }, {
+      type: { equalTo: REMOVE_SUBSPACE }
+    }]`;
   }
 
   if (proposalType === 'membership') {

@@ -73,6 +73,7 @@ export function LoadingSkeleton() {
         <Skeleton className="h-5 w-36" />
         <Skeleton className="h-4 w-20" />
       </div>
+      <Skeleton className="h-5 w-48" />
     </div>
   );
 }
@@ -207,24 +208,22 @@ const PendingContentProposal = ({ proposal }: PendingMembershipProposalProps) =>
   const yesVotesPercentage = getYesVotePercentage(votes.nodes, votes.totalCount);
   const noVotesPercentage = getNoVotePercentage(votes.nodes, votes.totalCount);
 
-  return null;
-
   return (
-    <div className="space-y-4 rounded-lg border border-grey-02 p-4">
+    <Link
+      href={NavUtils.toProposal(proposal.spaceId, proposal.id)}
+      className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4"
+    >
       <button>
         <div className="text-smallTitle">{proposal.name}</div>
       </button>
-      <Link
-        href={`/space/${proposal.spaceId}/governance?proposalId=${proposal.id}`}
-        className="flex items-center gap-1.5 text-breadcrumb text-grey-04"
-      >
+      <div className="flex w-full items-center gap-1.5 text-breadcrumb text-grey-04">
         <div className="inline-flex items-center gap-3 text-breadcrumb text-grey-04">
-          <Link href={''} className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
+          <p className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
             <div className="relative h-3 w-3 overflow-hidden rounded-full">
-              <Avatar avatarUrl={''} value={''} />
+              <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.id} />
             </div>
             <p>{proposal.createdBy.name}</p>
-          </Link>
+          </p>
           <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
             <div className="relative h-3 w-3 overflow-hidden rounded-full">
               <img src="/mosaic.png" alt="" className="h-full w-full object-cover" />
@@ -232,7 +231,7 @@ const PendingContentProposal = ({ proposal }: PendingMembershipProposalProps) =>
             <p>{proposal.spaceId}</p>
           </div>
         </div>
-      </Link>
+      </div>
       <div className="flex w-full flex-col gap-4">
         <div className="flex items-center gap-2 text-metadataMedium">
           <div className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
@@ -257,6 +256,6 @@ const PendingContentProposal = ({ proposal }: PendingMembershipProposalProps) =>
         <Time />
         <span>{`${hours}h ${minutes}m remaining`}</span>
       </div>
-    </div>
+    </Link>
   );
 };
