@@ -21,12 +21,13 @@ import { Skeleton } from '~/design-system/skeleton';
 import { TabGroup } from '~/design-system/tab-group';
 
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
+import { AcceptOrRejectEditor } from './accept-or-reject-editor';
+import { AcceptOrRejectMember } from './accept-or-reject-member';
 import {
   ActiveProposalsForSpacesWhereEditor,
   getActiveProposalsForSpacesWhereEditor,
 } from './fetch-active-proposals-in-editor-spaces';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
-import { AcceptOrRejectMember } from './membership/accept-or-reject-member';
 import { PersonalHomeDashboard } from './personal-home-dashboard';
 
 const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
@@ -191,11 +192,18 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
           <Member />
           <span>Member request · 0/1 votes needed</span>
         </div>
-        {/* @TODO: AcceptOrRejectEditor */}
-        <AcceptOrRejectMember
-          onchainProposalId={proposal.onchainProposalId}
-          membershipContractAddress={space.memberAccessPluginAddress}
-        />
+        {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && (
+          <AcceptOrRejectEditor
+            onchainProposalId={proposal.onchainProposalId}
+            votingContractAddress={space.mainVotingPluginAddress}
+          />
+        )}
+        {(proposal.type === 'ADD_MEMBER' || proposal.type === 'REMOVE_MEMBER') && (
+          <AcceptOrRejectMember
+            onchainProposalId={proposal.onchainProposalId}
+            membershipContractAddress={space.memberAccessPluginAddress}
+          />
+        )}
       </div>
     </div>
   );
