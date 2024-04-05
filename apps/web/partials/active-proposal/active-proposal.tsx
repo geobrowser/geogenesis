@@ -24,7 +24,6 @@ import { ShowVoters } from './active-proposal-show-voters';
 import { ActiveProposalSlideUp } from './active-proposal-slide-up';
 import { ContentProposal } from './content-proposal';
 import { SubspaceProposal } from './subspace-proposal';
-import { TEST_MAIN_VOTING_PLUGIN_ADDRESS } from '~/app/dao/constants';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
@@ -81,10 +80,9 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
           onchainProposalId={proposal.onchainProposalId}
           isProposalDone={isProposalDone}
           userVote={userVote}
-          proposalType={proposal.type}
           // We know that the space isn't null here, so casting is safe. If the space
-          // doesn't exist we redirect the user
-          membershipContractAddress={space?.memberAccessPluginAddress as `0x${string}`}
+          // doesn't exist we redirect the user. Eventually every space with governance
+          // will have a main voting plugin address
           votingContractAddress={space?.mainVotingPluginAddress as `0x${string}`}
         />
       </div>

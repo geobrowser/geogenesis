@@ -1,3 +1,5 @@
+'use client';
+
 import { cva } from 'class-variance-authority';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';

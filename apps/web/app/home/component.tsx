@@ -1,5 +1,3 @@
-'use client';
-
 import Image from 'next/legacy/image';
 import Link from 'next/link';
 
@@ -15,7 +13,6 @@ import {
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { SmallButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Member } from '~/design-system/icons/member';
 import { Tick } from '~/design-system/icons/tick';
@@ -25,6 +22,7 @@ import { TabGroup } from '~/design-system/tab-group';
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
 import { ActiveProposalsForSpacesWhereEditor } from './fetch-active-proposals-in-editor-spaces';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
+import { AcceptOrRejectMember } from './membership/accept-or-reject-member';
 import { PersonalHomeDashboard } from './personal-home-dashboard';
 
 const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
@@ -148,10 +146,11 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
           <Member />
           <span>Member request · 0/1 votes needed</span>
         </div>
-        <div className="flex items-center gap-2">
-          <SmallButton variant="secondary">Reject</SmallButton>
-          <SmallButton variant="secondary">Approve</SmallButton>
-        </div>
+        {/* @TODO: AcceptOrRejectEditor */}
+        <AcceptOrRejectMember
+          onchainProposalId={proposal.onchainProposalId}
+          membershipContractAddress={space.memberAccessPluginAddress}
+        />
       </div>
     </div>
   );

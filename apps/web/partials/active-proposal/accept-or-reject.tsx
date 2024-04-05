@@ -19,37 +19,13 @@ export function AcceptOrReject({
   userVote,
   onchainProposalId,
   votingContractAddress,
-  membershipContractAddress,
-  proposalType,
 }: {
   isProposalDone: boolean;
   userVote: Vote | undefined;
   onchainProposalId: string;
-  proposalType: ProposalType;
   votingContractAddress: `0x${string}`;
-
-  // Our Debug execution function requires either the main voting plugin address
-  // or the membership access plugin address depending on the type of proposal.
-  // e.g., a membership proposal requires the membership access plugin address.
-  membershipContractAddress: `0x${string}`;
 }) {
   const { data: wallet } = useWalletClient();
-
-  const isMembershipProposal = proposalType === 'ADD_MEMBER' || proposalType === 'REMOVE_MEMBER';
-
-  // @TODO: This will go to the /home page instead of here
-  const onApprove = async () => {
-    const config = await prepareWriteContract({
-      walletClient: wallet,
-      address: membershipContractAddress,
-      abi: MemberAccessAbi,
-      functionName: 'approve',
-      args: [BigInt(onchainProposalId)],
-    });
-
-    const writeResult = await writeContract(config);
-    console.log('writeResult', writeResult);
-  };
 
   const onClick = async (option: Vote['vote']) => {
     const config = await prepareWriteContract({
@@ -66,10 +42,7 @@ export function AcceptOrReject({
 
   if (process.env.NODE_ENV === 'development' && isProposalDone) {
     return (
-      <Execute
-        contractAddress={isMembershipProposal ? membershipContractAddress : votingContractAddress}
-        onchainProposalId={onchainProposalId}
-      >
+      <Execute contractAddress={votingContractAddress} onchainProposalId={onchainProposalId}>
         Execute
       </Execute>
     );
@@ -90,7 +63,7 @@ export function AcceptOrReject({
           Reject
         </Button>
         <span>or</span>
-        <Button onClick={() => (isMembershipProposal ? onApprove() : onClick('ACCEPT'))} variant="success">
+        <Button onClick={() => onClick('ACCEPT')} variant="success">
           Accept
         </Button>
       </div>
