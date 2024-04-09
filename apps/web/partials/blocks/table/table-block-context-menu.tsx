@@ -13,7 +13,6 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 import { useCallback } from 'react';
-import { useEffect } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
@@ -255,11 +254,9 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownInd
 
   const isEditing = useUserIsEditing(spaceId);
 
-  useEffect(() => {
-    if (!isEditing) {
-      setIsEditingColumns(false);
-    }
-  }, [isEditing, setIsEditingColumns]);
+  if (!isEditing) {
+    setIsEditingColumns(false);
+  }
 
   const { spaces } = useSpaces();
   const space = spaces.find(s => s.id === type.space);
@@ -366,7 +363,9 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownInd
                 </button>
               </MenuItem>
               {allColumns.map((column: Column, index: number) => {
+                // do not show name column
                 if (index === 0) return null;
+
                 const shownColumnTriple = shownColumnTriples.find(triple => triple.value.id === column.id) ?? null;
 
                 return (
@@ -415,7 +414,7 @@ const ToggleColumn = ({
   const isShown = shownIndexes.includes(index);
 
   const onToggleColumn = useCallback(async () => {
-    const attributeId = '388ad59b-1cc7-413c-a0bb-34a4de48c758';
+    const attributeId = SYSTEM_IDS.SHOWN_COLUMNS;
     const attributeName = 'Shown Columns';
 
     if (!isShown) {
