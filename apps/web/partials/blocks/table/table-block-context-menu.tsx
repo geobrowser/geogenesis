@@ -1,8 +1,10 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom } from 'jotai';
 import Image from 'next/legacy/image';
@@ -10,7 +12,8 @@ import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
-import * as Dropdown from '@radix-ui/react-dropdown-menu'
+import { useCallback } from 'react';
+import { useEffect } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
@@ -29,13 +32,17 @@ import { ValueTypeId, valueTypeNames, valueTypes } from '~/core/value-types';
 import { ResultContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { Date } from '~/design-system/icons/date';
+import { Eye } from '~/design-system/icons/eye';
+import { EyeHide } from '~/design-system/icons/eye-hide';
 import { FilteredTableView } from '~/design-system/icons/filtered-table-view';
 import { Image as ImageIcon } from '~/design-system/icons/image';
+import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
@@ -50,6 +57,7 @@ import { TextButton } from '~/design-system/text-button';
 import { AttributeConfigurationMenu } from '~/partials/entity-page/attribute-configuration-menu';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
+import { editingColumnsAtom } from '~/atoms';
 
 const MotionContent = motion(Dropdown.Content);
 
@@ -229,11 +237,29 @@ function useOptimisticAttributes({
   };
 }
 
-export function TableBlockContextMenu() {
+type Column = {
+  id: string;
+  name: string | null;
+};
+
+type TableBlockContextMenuProps = {
+  allColumns: Array<Column>;
+  shownColumnTriples: Array<ITriple>;
+  shownIndexes: Array<number>;
+};
+
+export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownIndexes }: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { type, spaceId, entityId } = useTableBlock();
+  const { type, spaceId, entityId, name } = useTableBlock();
+  const [isEditingColumns, setIsEditingColumns] = useAtom(editingColumnsAtom);
 
   const isEditing = useUserIsEditing(spaceId);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setIsEditingColumns(false);
+    }
+  }, [isEditing, setIsEditingColumns]);
 
   const { spaces } = useSpaces();
   const space = spaces.find(s => s.id === type.space);
@@ -242,6 +268,7 @@ export function TableBlockContextMenu() {
     try {
       await navigator.clipboard.writeText(entityId);
       setIsMenuOpen(false);
+      setIsEditingColumns(false);
     } catch (err) {
       console.error('Failed to copy table block entity ID for: ', entityId);
     }
@@ -250,13 +277,8 @@ export function TableBlockContextMenu() {
   const spaceImage = space?.spaceConfig?.image ?? null;
 
   return (
-    <Dropdown.Root
-      open={isMenuOpen}
-      onOpenChange={setIsMenuOpen}
-    >
-      <Dropdown.Trigger>
-        {isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-      </Dropdown.Trigger>
+    <Dropdown.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+      <Dropdown.Trigger>{isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}</Dropdown.Trigger>
       <Dropdown.Portal>
         <MotionContent
           initial={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -267,55 +289,169 @@ export function TableBlockContextMenu() {
             ease: 'easeInOut',
           }}
           sideOffset={8}
-          className='max-w-[180px] bg-white z-100 divide-y divide-grey-02 overflow-hidden rounded-lg border border-grey-02 shadow-lg' align="end">
-          <MenuItem>
-            <button onClick={onCopyViewId} className="inline-flex w-full items-center gap-2 px-3 py-2">
-              <Copy /> <span>Copy view ID</span>
-            </button>
-          </MenuItem>
-          <MenuItem>
-            <Link href={NavUtils.toEntity(spaceId, entityId)} className="inline-flex w-full items-center gap-2 px-3 py-2">
-              <Cog /> <span>View config</span>
-            </Link>
-          </MenuItem>
-          {isEditing && (
-            <TableBlockSchemaConfigurationDialog
-              trigger={
-                <MenuItem>
-                  <div className="inline-flex items-center gap-2 px-3 py-2">
-                    <FilteredTableView />
-                    <span className="text-button">Edit type</span>
-                  </div>
-                </MenuItem>
-              }
-              content={
-                <div className="flex flex-col gap-6 p-4">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="relative h-4 w-4 overflow-hidden rounded-sm">
-                        <Image layout="fill" objectFit="cover" src={getImagePath(spaceImage ?? '')} />
+          className="z-100 block !w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          align="end"
+        >
+          {!isEditingColumns ? (
+            <>
+              <MenuItem>
+                <button onClick={onCopyViewId} className="flex w-full items-center justify-between gap-2 px-3 py-2.5">
+                  <span>Copy view ID</span>
+                  <Copy />
+                </button>
+              </MenuItem>
+              <MenuItem>
+                <Link
+                  href={NavUtils.toEntity(spaceId, entityId)}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
+                >
+                  <span>View config</span>
+                  <Cog />
+                </Link>
+              </MenuItem>
+              {isEditing && (
+                <>
+                  <TableBlockSchemaConfigurationDialog
+                    trigger={
+                      <MenuItem>
+                        <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+                          <span className="text-button">Edit type</span>
+                          <FilteredTableView />
+                        </div>
+                      </MenuItem>
+                    }
+                    content={
+                      <div className="flex flex-col gap-6 p-4">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="relative h-4 w-4 overflow-hidden rounded-sm">
+                              <Image layout="fill" objectFit="cover" src={getImagePath(spaceImage ?? '')} />
+                            </div>
+                            <h1 className="text-mediumTitle">{type.entityName}</h1>
+                          </div>
+
+                          <h2 className="text-metadata text-grey-04">
+                            Making changes to this type it will affect everywhere that this type is referenced.
+                          </h2>
+                        </div>
+
+                        <React.Suspense fallback={<AddAttributeLoading />}>
+                          <AddAttribute />
+                          <SchemaAttributes />
+                        </React.Suspense>
                       </div>
-                      <h1 className="text-mediumTitle">{type.entityName}</h1>
-                    </div>
+                    }
+                  />
+                  <MenuItem>
+                    <button
+                      onClick={() => setIsEditingColumns(true)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
+                    >
+                      <span>Edit columns</span>
+                      <ChevronRight />
+                    </button>
+                  </MenuItem>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <MenuItem className="border-b border-grey-02">
+                <button
+                  onClick={() => setIsEditingColumns(false)}
+                  className="flex w-full items-center gap-2 p-2 text-smallButton"
+                >
+                  <LeftArrowLong />
+                  <span>Back</span>
+                </button>
+              </MenuItem>
+              {allColumns.map((column: Column, index: number) => {
+                if (index === 0) return null;
+                const shownColumnTriple = shownColumnTriples.find(triple => triple.value.id === column.id) ?? null;
 
-                    <h2 className="text-metadata text-grey-04">
-                      Making changes to this type it will affect everywhere that this type is referenced.
-                    </h2>
-                  </div>
-
-                  <React.Suspense fallback={<AddAttributeLoading />}>
-                    <AddAttribute />
-                    <SchemaAttributes />
-                  </React.Suspense>
-                </div>
-              }
-            />
+                return (
+                  <ToggleColumn
+                    key={column.id}
+                    column={column}
+                    index={index}
+                    shownIndexes={shownIndexes}
+                    shownColumnTriple={shownColumnTriple}
+                    space={spaceId}
+                    entityId={entityId}
+                    entityName={name ?? null}
+                  />
+                );
+              })}
+            </>
           )}
         </MotionContent>
       </Dropdown.Portal>
     </Dropdown.Root>
   );
 }
+
+type ToggleColumnProps = {
+  column: Column;
+  index: number;
+  shownIndexes: Array<number>;
+  shownColumnTriple: ITriple | null;
+  space: string;
+  entityId: string;
+  entityName: string | null;
+};
+
+const ToggleColumn = ({
+  column,
+  index,
+  shownIndexes,
+  shownColumnTriple,
+  space,
+  entityId,
+  entityName,
+}: ToggleColumnProps) => {
+  const { create, remove } = useActionsStore(space);
+
+  const { id, name } = column;
+  const isShown = shownIndexes.includes(index);
+
+  const onToggleColumn = useCallback(async () => {
+    const attributeId = '388ad59b-1cc7-413c-a0bb-34a4de48c758';
+    const attributeName = 'Shown Columns';
+
+    if (!isShown) {
+      create(
+        Triple.withId({
+          space,
+          entityId,
+          entityName,
+          attributeId,
+          attributeName,
+          value: {
+            type: 'entity',
+            id,
+            name,
+          },
+        })
+      );
+    } else {
+      if (shownColumnTriple) {
+        remove(shownColumnTriple);
+      }
+    }
+  }, [create, entityId, entityName, id, isShown, name, remove, shownColumnTriple, space]);
+
+  return (
+    <MenuItem>
+      <button
+        onClick={onToggleColumn}
+        className={cx('flex w-full items-center justify-between gap-2 px-3 py-2.5', !isShown && 'text-grey-03')}
+      >
+        <span>{column.name}</span>
+        {isShown ? <Eye /> : <EyeHide />}
+      </button>
+    </MenuItem>
+  );
+};
 
 function AddAttributeLoading() {
   return (
@@ -546,7 +682,7 @@ function AttributeRowContextMenu({ onRemoveAttribute }: { onRemoveAttribute: () 
       className="max-w-[180px] bg-white"
     >
       <MenuItem>
-        <button onClick={onRemoveAttribute} className="inline-flex w-full items-center gap-2 px-3 py-2">
+        <button onClick={onRemoveAttribute} className="inline-flex w-full items-center justify-between gap-2 px-3 py-2">
           <Trash /> <span>Remove attribute</span>
         </button>
       </MenuItem>
@@ -634,7 +770,7 @@ function AttributeValueTypeDropdown({
     >
       {options.map(option => (
         <MenuItem key={option.value}>
-          <button onClick={option.onClick} className="inline-flex w-full items-center gap-2 px-3 py-2">
+          <button onClick={option.onClick} className="flex w-full items-center justify-between gap-2 px-3 py-2">
             {option.label}
           </button>
         </MenuItem>
