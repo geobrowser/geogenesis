@@ -1,8 +1,8 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Effect, Schedule } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
-import { DESCRIPTION, NAME, TYPES } from '../constants/system-ids';
 import { TripleAction } from '../types';
 import { upsertChunked } from '../utils/db';
 import { pool } from '../utils/pool';
@@ -204,10 +204,10 @@ export async function populateWithFullEntries({
     for (const [actionType, triple] of triplesDatabaseTuples) {
       const isCreateTriple = actionType === TripleAction.Create;
       const isDeleteTriple = actionType === TripleAction.Delete;
-      const isAddType = triple.attribute_id === TYPES && isCreateTriple;
-      const isDeleteType = triple.attribute_id === TYPES && isDeleteTriple;
-      const isNameAttribute = triple.attribute_id === NAME;
-      const isDescriptionAttribute = triple.attribute_id === DESCRIPTION;
+      const isAddType = triple.attribute_id === SYSTEM_IDS.TYPES && isCreateTriple;
+      const isDeleteType = triple.attribute_id === SYSTEM_IDS.TYPES && isDeleteTriple;
+      const isNameAttribute = triple.attribute_id === SYSTEM_IDS.NAME;
+      const isDescriptionAttribute = triple.attribute_id === SYSTEM_IDS.DESCRIPTION;
       const isStringValueType = triple.value_type === 'string';
 
       const isNameCreateAction = isCreateTriple && isNameAttribute && isStringValueType;
@@ -354,7 +354,7 @@ export async function populateWithFullEntries({
             db
               .selectOne('triples', {
                 entity_id: triple.entity_id,
-                attribute_id: NAME,
+                attribute_id: SYSTEM_IDS.NAME,
                 // @TODO: should be a typed enum instead of `text`
                 value_type: 'string',
                 is_stale: false,
