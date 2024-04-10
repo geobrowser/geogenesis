@@ -1935,12 +1935,6 @@ declare module 'zapatos/schema' {
       */
       uri: string | null;
       /**
-      * **proposals.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json: string | null;
-      /**
       * **proposals.type**
       * - `proposal_type` in database
       * - `NOT NULL`, no default
@@ -2020,12 +2014,6 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       uri: string | null;
-      /**
-      * **proposals.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json: string | null;
       /**
       * **proposals.type**
       * - `proposal_type` in database
@@ -2107,12 +2095,6 @@ declare module 'zapatos/schema' {
       */
       uri?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **proposals.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
       * **proposals.type**
       * - `proposal_type` in database
       * - `NOT NULL`, no default
@@ -2193,12 +2175,6 @@ declare module 'zapatos/schema' {
       */
       uri?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **proposals.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
-      /**
       * **proposals.type**
       * - `proposal_type` in database
       * - `NOT NULL`, no default
@@ -2278,12 +2254,6 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       uri?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
-      /**
-      * **proposals.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **proposals.type**
       * - `proposal_type` in database

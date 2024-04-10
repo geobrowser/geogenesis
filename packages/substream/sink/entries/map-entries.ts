@@ -132,7 +132,6 @@ export function mapProposals({
       status: 'approved',
       start_time: timestamp,
       end_time: timestamp,
-      // json: fullEntry.json,
       uri: fullEntry.uri,
     };
   });

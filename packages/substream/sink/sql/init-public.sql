@@ -89,7 +89,6 @@ CREATE TABLE public.proposals (
     name text,
     description text,
     uri text,
-    json text,
     type proposal_type NOT NULL,
     status proposal_status NOT NULL,
     created_at integer NOT NULL,
