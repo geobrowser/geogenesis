@@ -228,7 +228,6 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
   const noVotesPercentage = getNoVotePercentage(votes.nodes, votes.totalCount);
 
   const userVote = proposal.userVotes.nodes.length !== 0 ? proposal.userVotes.nodes[0].vote : null;
-  console.log('user', user);
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
@@ -280,7 +279,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
       <div className="flex w-full items-center justify-between">
         <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
 
-        {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && (
+        {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && !userVote && (
           <AcceptOrRejectEditor
             onchainProposalId={proposal.onchainProposalId}
             votingContractAddress={space?.mainVotingPluginAddress}
