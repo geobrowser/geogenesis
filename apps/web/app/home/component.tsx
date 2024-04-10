@@ -240,7 +240,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
             <div className="relative h-3 w-3 overflow-hidden rounded-full">
               <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.id} />
             </div>
-            <p>{proposal.createdBy.name}</p>
+            <p>{proposal.createdBy.name ?? proposal.createdBy.id}</p>
           </p>
         </div>
       </div>
