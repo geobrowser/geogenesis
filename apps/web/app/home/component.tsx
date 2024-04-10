@@ -4,6 +4,7 @@ import Link from 'next/link';
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { fetchProfilePermissionless } from '~/core/io/subgraph/fetch-profile-permissionless';
 import {
   NavUtils,
   getImagePath,
@@ -13,10 +14,8 @@ import {
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { Close } from '~/design-system/icons/close';
-import { Member } from '~/design-system/icons/member';
-import { Tick } from '~/design-system/icons/tick';
-import { Time } from '~/design-system/icons/time';
+import { CloseSmall } from '~/design-system/icons/close-small';
+import { TickSmall } from '~/design-system/icons/tick-small';
 import { Skeleton } from '~/design-system/skeleton';
 import { TabGroup } from '~/design-system/tab-group';
 
@@ -107,11 +106,22 @@ type PendingProposalsProps = {
 };
 
 async function PendingProposals({ proposalType, connectedAddress }: PendingProposalsProps) {
-  const activeProposals = await getActiveProposalsForSpacesWhereEditor(connectedAddress, proposalType);
+  const [activeProposals, profile] = await Promise.all([
+    getActiveProposalsForSpacesWhereEditor(connectedAddress, proposalType),
+    connectedAddress ? fetchProfilePermissionless({ address: connectedAddress }) : null,
+  ]);
 
   if (activeProposals.proposals.length === 0) {
     return <NoActivity />;
   }
+
+  const user =
+    profile || connectedAddress
+      ? {
+          address: connectedAddress,
+          avatarUrl: profile?.avatarUrl ?? undefined,
+        }
+      : null;
 
   return (
     <div className="space-y-2">
@@ -119,11 +129,11 @@ async function PendingProposals({ proposalType, connectedAddress }: PendingPropo
         switch (proposal.type) {
           case 'ADD_MEMBER':
           case 'REMOVE_MEMBER':
-            return <PendingMembershipProposal key={proposal.id} proposal={proposal} />;
+            return <PendingMembershipProposal key={proposal.id} proposal={proposal} user={user} />;
           case 'ADD_EDITOR':
           case 'REMOVE_EDITOR':
           default:
-            return <PendingContentProposal key={proposal.id} proposal={proposal} />;
+            return <PendingContentProposal key={proposal.id} proposal={proposal} user={user} />;
         }
       })}
     </div>
@@ -132,6 +142,10 @@ async function PendingProposals({ proposalType, connectedAddress }: PendingPropo
 
 type PendingMembershipProposalProps = {
   proposal: ActiveProposalsForSpacesWhereEditor['proposals'][number];
+  user: {
+    address: string | undefined;
+    avatarUrl: string | undefined;
+  } | null;
 };
 
 async function PendingMembershipProposal({ proposal }: PendingMembershipProposalProps) {
@@ -199,7 +213,7 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
   );
 }
 
-async function PendingContentProposal({ proposal }: PendingMembershipProposalProps) {
+async function PendingContentProposal({ proposal, user }: PendingMembershipProposalProps) {
   const space = await cachedFetchSpace(proposal.spaceId);
 
   if (!space) {
@@ -212,6 +226,9 @@ async function PendingContentProposal({ proposal }: PendingMembershipProposalPro
 
   const yesVotesPercentage = getYesVotePercentage(votes.nodes, votes.totalCount);
   const noVotesPercentage = getNoVotePercentage(votes.nodes, votes.totalCount);
+
+  const userVote = proposal.userVotes.nodes.length !== 0 ? proposal.userVotes.nodes[0].vote : null;
+  console.log('user', user);
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
@@ -230,18 +247,30 @@ async function PendingContentProposal({ proposal }: PendingMembershipProposalPro
       </div>
       <div className="flex w-full flex-col gap-4">
         <div className="flex items-center gap-2 text-metadataMedium">
-          <div className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
-            <Tick />
-          </div>
+          {userVote === 'ACCEPT' ? (
+            <div className="relative h-3 w-3 overflow-hidden rounded-full">
+              <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
+            </div>
+          ) : (
+            <div className="inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+              <TickSmall />
+            </div>
+          )}
           <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
             <div className="absolute bottom-0 left-0 top-0 bg-green" style={{ width: `${yesVotesPercentage}%` }} />
           </div>
           <p>{yesVotesPercentage}%</p>
         </div>
         <div className="flex items-center gap-2 text-metadataMedium">
-          <div className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
-            <Close />
-          </div>
+          {userVote === 'REJECT' ? (
+            <div className="relative h-3 w-3 overflow-hidden rounded-full">
+              <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
+            </div>
+          ) : (
+            <div className="inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border border-grey-04 [&>*]:!h-2 [&>*]:w-auto">
+              <CloseSmall />
+            </div>
+          )}
           <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
             <div className="absolute bottom-0 left-0 top-0 bg-red-01" style={{ width: `${noVotesPercentage}%` }} />
           </div>
