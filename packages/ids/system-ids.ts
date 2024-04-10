@@ -5,6 +5,50 @@ export const SPACE = 'space'
 export const INDEXED_SPACE = '30659852-2df5-42f6-9ad7-2921c33ad84b'
 export const ATTRIBUTE = 'attribute'
 
+/**
+ * Collections are a data model that enable us to create references between some
+ * arbitrary id and a set of entity ids.
+ *
+ * They act similarly to Join Tables in a relational database, but are designed
+ * around the graph-based nature of the Geo data model.
+ *
+ * A collection is primarily just an id. These can exist as a value in a triple or
+ * as an Entire entity. Collection items create a reference between a collection and
+ * an entity.
+ *
+ * ┌─────────────────────┐       ┌────────────────────┐      ┌──────────────────────┐
+ * │                     │       │                    │      │                      │
+ * │      Collection     │◄──────┤   Collection Item  │─────►│        Entity        │
+ * │                     │       │                    │      │                      │
+ * └─────────────────────┘       └────────────────────┘      └──────────────────────┘
+ */
+
+/**
+ * Collection entity type. This is used when the Collection itself is an entity
+ * vs. being a value in a Triple
+ */
+export const COLLECTION_TYPE = 'debbf9ff-62c6-40aa-9b2c-672e3bb15d0e'
+
+/**
+ * Collection item type. This is the entity representing the Join between the
+ * the Collection and the Entity
+ */
+export const COLLECTION_ITEM_TYPE = '0e8d692b-94d7-4c64-bcb3-0eb4d55503ef'
+
+/**
+ * Collection item's collection reference. This is the attribute that references
+ * the Collection id
+ */
+export const COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE =
+  '487e084b-4132-4b05-b15a-b6e147d58244'
+
+/**
+ * Collection item's entity reference. This is the attribute that references
+ * the Entity id for a given Collection item entry
+ */
+export const COLLECTION_ITEM_ENTITY_REFERENCE =
+  '53d1e5f2-6f23-4bf2-9e88-42b02f437970'
+
 /*
   Example Usage: Rhonda Patrick -> TYPES -> Person
   Note that we should probably convert "type" to "types" or a UUID in the future.
