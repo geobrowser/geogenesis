@@ -117,11 +117,11 @@ async function PendingProposals({ proposalType, connectedAddress }: PendingPropo
     <div className="space-y-2">
       {activeProposals.proposals.map(proposal => {
         switch (proposal.type) {
-          case 'ADD_EDITOR':
           case 'ADD_MEMBER':
-          case 'REMOVE_EDITOR':
           case 'REMOVE_MEMBER':
             return <PendingMembershipProposal key={proposal.id} proposal={proposal} />;
+          case 'ADD_EDITOR':
+          case 'REMOVE_EDITOR':
           default:
             return <PendingContentProposal key={proposal.id} proposal={proposal} />;
         }
@@ -188,33 +188,25 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
         </Link>
       </div>
       <div className="flex items-center justify-between">
-        <div className="inline-flex items-center gap-1.5 rounded bg-grey-01 px-2 py-1.5 text-breadcrumb text-grey-04">
-          <Member />
-          {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && (
-            <span>Editor request · majority votes needed</span>
-          )}
-          {(proposal.type === 'ADD_MEMBER' || proposal.type === 'REMOVE_MEMBER') && (
-            <span>Member request · 0/1 votes needed</span>
-          )}
-        </div>
-        {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && (
-          <AcceptOrRejectEditor
-            onchainProposalId={proposal.onchainProposalId}
-            votingContractAddress={space.mainVotingPluginAddress}
-          />
-        )}
-        {(proposal.type === 'ADD_MEMBER' || proposal.type === 'REMOVE_MEMBER') && (
-          <AcceptOrRejectMember
-            onchainProposalId={proposal.onchainProposalId}
-            membershipContractAddress={space.memberAccessPluginAddress}
-          />
-        )}
+        <p className="text-metadataMedium">1 vote required</p>
+
+        <AcceptOrRejectMember
+          onchainProposalId={proposal.onchainProposalId}
+          membershipContractAddress={space.memberAccessPluginAddress}
+        />
       </div>
     </div>
   );
 }
 
-const PendingContentProposal = ({ proposal }: PendingMembershipProposalProps) => {
+async function PendingContentProposal({ proposal }: PendingMembershipProposalProps) {
+  const space = await cachedFetchSpace(proposal.spaceId);
+
+  if (!space) {
+    // @TODO: Should never happen but we should error handle
+    return null;
+  }
+
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
   const votes = proposal.proposalVotes;
 
@@ -222,13 +214,10 @@ const PendingContentProposal = ({ proposal }: PendingMembershipProposalProps) =>
   const noVotesPercentage = getNoVotePercentage(votes.nodes, votes.totalCount);
 
   return (
-    <Link
-      href={NavUtils.toProposal(proposal.spaceId, proposal.id)}
-      className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4"
-    >
-      <button>
+    <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
+      <Link href={NavUtils.toProposal(proposal.spaceId, proposal.id)}>
         <div className="text-smallTitle">{proposal.name}</div>
-      </button>
+      </Link>
       <div className="flex w-full items-center gap-1.5 text-breadcrumb text-grey-04">
         <div className="inline-flex items-center gap-3 text-breadcrumb text-grey-04">
           <p className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
@@ -237,12 +226,6 @@ const PendingContentProposal = ({ proposal }: PendingMembershipProposalProps) =>
             </div>
             <p>{proposal.createdBy.name}</p>
           </p>
-          <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
-            <div className="relative h-3 w-3 overflow-hidden rounded-full">
-              <img src="/mosaic.png" alt="" className="h-full w-full object-cover" />
-            </div>
-            <p>{proposal.spaceId}</p>
-          </div>
         </div>
       </div>
       <div className="flex w-full flex-col gap-4">
@@ -265,10 +248,16 @@ const PendingContentProposal = ({ proposal }: PendingMembershipProposalProps) =>
           <p>{noVotesPercentage}%</p>
         </div>
       </div>
-      <div className="inline-flex items-center gap-1.5 rounded bg-grey-01 px-2 py-1.5 text-smallButton">
-        <Time />
-        <span>{`${hours}h ${minutes}m remaining`}</span>
+      <div className="flex w-full items-center justify-between">
+        <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+
+        {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && (
+          <AcceptOrRejectEditor
+            onchainProposalId={proposal.onchainProposalId}
+            votingContractAddress={space?.mainVotingPluginAddress}
+          />
+        )}
       </div>
-    </Link>
+    </div>
   );
-};
+}

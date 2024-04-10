@@ -20,7 +20,7 @@ export function useRequestToBeMember(memberAccessPluginAddress: string | null) {
     }
 
     const membershipProposalMetadata = createMembershipProposal({
-      name: 'Request to be a member',
+      name: 'Member request',
       type: 'ADD_MEMBER',
       userAddress: requestorAddress,
     });

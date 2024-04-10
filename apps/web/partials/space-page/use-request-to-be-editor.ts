@@ -19,7 +19,7 @@ export function useRequestToBeEditor(votingPluginAddress: string | null) {
     }
 
     const proposal = createMembershipProposal({
-      name: 'Request to be an editor',
+      name: 'Editor request',
       type: 'ADD_EDITOR',
       userAddress: requestorAddress,
     });
