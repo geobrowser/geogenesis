@@ -158,6 +158,7 @@ CREATE TABLE public.triples (
             'number',
             'string',
             'entity',
+            'collection',
             'image',
             'date',
             'url'
