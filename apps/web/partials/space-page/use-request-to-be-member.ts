@@ -4,14 +4,11 @@ import { createMembershipProposal } from '@geogenesis/sdk';
 import { MemberAccessAbi } from '@geogenesis/sdk/abis';
 import { stringToHex } from 'viem';
 
-import { useAccount, useContractWrite, usePrepareContractWrite } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { prepareWriteContract, writeContract } from 'wagmi/actions';
 
 import { Services } from '~/core/services';
 
-// Request access to a space. Right now we use an intermin mechanism
-// via a standalone membership request contract. This will eventually
-// be replaced by our aragon governance contracts.
 export function useRequestToBeMember(memberAccessPluginAddress: string | null) {
   const { storageClient } = Services.useServices();
   const { address: requestorAddress } = useAccount();
@@ -43,6 +40,6 @@ export function useRequestToBeMember(memberAccessPluginAddress: string | null) {
   };
 
   return {
-    requestMembership: write,
+    requestToBeMember: write,
   };
 }

@@ -5,12 +5,12 @@ import { OmitStrict, Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
-type EditorsForSpace = {
-  firstThreeEditors: OmitStrict<Profile, 'coverUrl'>[];
-  totalEditors: number;
+type MembersForSpace = {
+  firstThreeMembers: OmitStrict<Profile, 'coverUrl'>[];
+  totalMembers: number;
 };
 
-export const getFirstThreeEditorsForSpace = cache(async (spaceId: string): Promise<EditorsForSpace> => {
+export const getFirstThreeMembersForSpace = cache(async (spaceId: string): Promise<MembersForSpace> => {
   const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
@@ -20,10 +20,10 @@ export const getFirstThreeEditorsForSpace = cache(async (spaceId: string): Promi
   // For now we use editors for both editors and members until we have the new membership
   // model in place.
   const maybeEditorsProfiles = await Promise.all(
-    space.editorsV2.slice(0, 3).map(editor => Subgraph.fetchProfile({ address: editor }))
+    space.members.slice(0, 3).map(editor => Subgraph.fetchProfile({ address: editor }))
   );
 
-  const firstThreeEditors = maybeEditorsProfiles.map((profile, i) => {
+  const firstThreeMembers = maybeEditorsProfiles.map((profile, i) => {
     if (!profile) {
       return {
         id: space.editors[i],
@@ -44,8 +44,8 @@ export const getFirstThreeEditorsForSpace = cache(async (spaceId: string): Promi
   });
 
   return {
-    firstThreeEditors,
+    firstThreeMembers,
     // @TODO: Use total count from graphql
-    totalEditors: space.editorsV2.length,
+    totalMembers: space.members.length,
   };
 });

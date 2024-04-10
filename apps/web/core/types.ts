@@ -71,6 +71,8 @@ export type Space = {
   editors: string[];
   editorControllers: string[];
   admins: string[];
+  editorsV2: string[];
+  members: string[];
   spaceConfig: SpaceConfigEntity | null;
   createdAtBlock: string;
 };

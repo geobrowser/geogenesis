@@ -64,6 +64,7 @@ export type ProposalStatus =
 export {
   getProcessGeoProposalArguments,
   getAcceptSubspaceArguments,
+  getAcceptEditorArguments
 } from './src/encodings'
 
 export { createGeoId } from './src/id'

@@ -11,10 +11,10 @@ interface Props {
 
 export function SpaceMembersJoinButton({ memberAccessPluginAddress }: Props) {
   const [hasRequested, setHasRequested] = React.useState(false);
-  const { requestMembership } = useRequestToBeMember(memberAccessPluginAddress);
+  const { requestToBeMember } = useRequestToBeMember(memberAccessPluginAddress);
 
   const onClick = async () => {
-    await requestMembership();
+    await requestToBeMember();
     setHasRequested(true);
   };
 

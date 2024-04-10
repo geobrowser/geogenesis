@@ -33,6 +33,16 @@ const getFetchSpaceQuery = (id: string) => `query {
         accountId
       }
     }
+    spaceEditorsV2s {
+      nodes {
+        accountId
+      }
+    }
+    spaceMembers {
+      nodes {
+        accountId
+      }
+    }
     createdAtBlock
   }
 }`;
@@ -51,6 +61,8 @@ type NetworkResult = {
     spaceAdmins: { nodes: { accountId: string }[] };
     spaceEditors: { nodes: { accountId: string }[] };
     spaceEditorControllers: { nodes: { accountId: string }[] };
+    spaceEditorsV2s: { nodes: { accountId: string }[] };
+    spaceMembers: { nodes: { accountId: string }[] };
     createdAtBlock: string;
   } | null;
 };
@@ -139,6 +151,8 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     admins: networkSpace.spaceAdmins.nodes.map(account => account.accountId),
     editorControllers: networkSpace.spaceEditorControllers.nodes.map(account => account.accountId),
     editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
+    editorsV2: networkSpace.spaceEditorsV2s.nodes.map(account => account.accountId),
+    members: networkSpace.spaceMembers.nodes.map(account => account.accountId),
     // @TODO: Map the name and image of a space from the space configuration
     spaceConfig: spaceConfigWithImage,
     createdAtBlock: networkSpace.createdAtBlock,

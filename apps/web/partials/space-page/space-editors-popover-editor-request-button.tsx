@@ -1,17 +1,16 @@
 'use client';
 
-import { useRequestToBeMember } from './use-request-to-be-member';
+import { useRequestToBeEditor } from './use-request-to-be-editor';
 
 interface Props {
-  spaceId: string;
+  votingContractAddress: string | null;
 }
 
-export function SpaceEditorsPopoverEditorRequestButton({ spaceId }: Props) {
-  // @TODO: Needs correct contract address
-  const { requestMembership } = useRequestToBeMember(spaceId);
+export function SpaceEditorsPopoverEditorRequestButton({ votingContractAddress }: Props) {
+  const { requestToBeEditor } = useRequestToBeEditor(votingContractAddress);
 
   const onClick = () => {
-    requestMembership?.();
+    requestToBeEditor?.();
   };
 
   return <button onClick={onClick}>Request to be an editor</button>;

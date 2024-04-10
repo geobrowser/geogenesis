@@ -3,12 +3,11 @@
 import { useRequestToBeMember } from './use-request-to-be-member';
 
 interface Props {
-  spaceId: string;
+  memberContractAddress: string | null;
 }
 
-export function SpaceMembersPopoverMemberRequestButton({ spaceId }: Props) {
-  // @TODO: Needs correct contract address
-  const { requestMembership } = useRequestToBeMember(spaceId);
+export function SpaceMembersPopoverMemberRequestButton({ memberContractAddress }: Props) {
+  const { requestToBeMember: requestMembership } = useRequestToBeMember(memberContractAddress);
 
   const onClick = () => {
     requestMembership?.();

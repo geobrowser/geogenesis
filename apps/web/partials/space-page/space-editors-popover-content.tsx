@@ -15,7 +15,7 @@ interface Props {
 export async function SpaceEditorsContent({ spaceId }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
-  const [{ allEditors: allMembers, totalEditors }, isEditor] = await Promise.all([
+  const [{ allEditors: allMembers, totalEditors, votingPluginAddress }, isEditor] = await Promise.all([
     getEditorsForSpace(spaceId),
     getIsEditorForSpace(spaceId, connectedAddress),
   ]);
@@ -38,7 +38,11 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
           </button>
         ) : (
           <div className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            {connectedAddress ? <SpaceEditorsPopoverEditorRequestButton spaceId={spaceId} /> : 'Connect wallet'}
+            {connectedAddress ? (
+              <SpaceEditorsPopoverEditorRequestButton votingContractAddress={votingPluginAddress} />
+            ) : (
+              'Connect wallet'
+            )}
           </div>
         )}
       </div>

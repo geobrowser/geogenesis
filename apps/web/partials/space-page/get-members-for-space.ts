@@ -5,26 +5,26 @@ import { OmitStrict, Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
-type EditorsForSpace = {
-  allEditors: OmitStrict<Profile, 'coverUrl'>[];
-  totalEditors: number;
+type MembersForSpace = {
+  allMembers: OmitStrict<Profile, 'coverUrl'>[];
+  totalMembers: number;
   votingPluginAddress: string | null;
   spacePluginAddress: string | null;
   memberPluginAddress: string | null;
 };
 
-export const getEditorsForSpace = cache(async (spaceId: string): Promise<EditorsForSpace> => {
+export const getMembersForSpace = cache(async (spaceId: string): Promise<MembersForSpace> => {
   const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
     throw new Error("Space doesn't exist");
   }
 
-  const maybeEditorsProfiles = await Promise.all(
-    space.editorsV2.map(editor => Subgraph.fetchProfile({ address: editor }))
+  const maybeMembersProfiles = await Promise.all(
+    space.members.map(editor => Subgraph.fetchProfile({ address: editor }))
   );
 
-  const allEditors = maybeEditorsProfiles.map(profile => {
+  const allMembers = maybeMembersProfiles.map(profile => {
     if (!profile) {
       return null;
     }
@@ -38,11 +38,11 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
     };
   });
 
-  const allEditorsWithProfiles = allEditors.filter((editor): editor is Profile => editor !== null);
+  const allMembersWithProfiles = allMembers.filter((editor): editor is Profile => editor !== null);
 
   return {
-    allEditors: allEditorsWithProfiles,
-    totalEditors: space.editors.length,
+    allMembers: allMembersWithProfiles,
+    totalMembers: space.editors.length,
     votingPluginAddress: space.mainVotingPluginAddress,
     spacePluginAddress: space.spacePluginAddress,
     memberPluginAddress: space.memberAccessPluginAddress,

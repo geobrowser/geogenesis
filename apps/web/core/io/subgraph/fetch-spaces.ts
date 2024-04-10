@@ -15,6 +15,10 @@ const getFetchSpacesQuery = () => `query {
     nodes {
       id
       isRootSpace
+      mainVotingPluginAddress
+      memberAccessPluginAddress
+      spacePluginAddress
+
       spaceAdmins {
         nodes {
           accountId
@@ -30,6 +34,16 @@ const getFetchSpacesQuery = () => `query {
           accountId
         }
       }
+      spaceEditorsV2s {
+        nodes {
+          accountId
+        }
+      }
+      spaceMembers {
+        nodes {
+          accountId
+        }
+      }
       createdAtBlock
     }
   }
@@ -40,9 +54,14 @@ interface NetworkResult {
     nodes: {
       id: string;
       isRootSpace: boolean;
+      mainVotingPluginAddress: string | null;
+      memberAccessPluginAddress: string | null;
+      spacePluginAddress: string | null;
       spaceAdmins: { nodes: { accountId: string }[] };
       spaceEditors: { nodes: { accountId: string }[] };
       spaceEditorControllers: { nodes: { accountId: string }[] };
+      spaceEditorsV2s: { nodes: { accountId: string }[] };
+      spaceMembers: { nodes: { accountId: string }[] };
       createdAtBlock: string;
     }[];
   };
@@ -144,8 +163,14 @@ export async function fetchSpaces() {
       admins: space.spaceAdmins.nodes.map(account => account.accountId),
       editorControllers: space.spaceEditorControllers.nodes.map(account => account.accountId),
       editors: space.spaceEditors.nodes.map(account => account.accountId),
+      editorsV2: space.spaceEditorsV2s.nodes.map(account => account.accountId),
+      members: space.spaceMembers.nodes.map(account => account.accountId),
       spaceConfig: spaceConfigWithImage,
       createdAtBlock: space.createdAtBlock,
+
+      mainVotingPluginAddress: space.mainVotingPluginAddress,
+      memberAccessPluginAddress: space.memberAccessPluginAddress,
+      spacePluginAddress: space.spacePluginAddress,
     };
   });
 

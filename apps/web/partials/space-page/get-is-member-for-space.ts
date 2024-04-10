@@ -2,7 +2,7 @@ import { cache } from 'react';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
-export const getIsEditorForSpace = cache(async (spaceId: string, connectedAddress?: string): Promise<boolean> => {
+export const getIsMemberForSpace = cache(async (spaceId: string, connectedAddress?: string): Promise<boolean> => {
   const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
@@ -10,5 +10,5 @@ export const getIsEditorForSpace = cache(async (spaceId: string, connectedAddres
   }
 
   // @HACK to get around incorrect checksum addresses in substream
-  return connectedAddress ? space.editors.map(e => e.toLowerCase()).includes(connectedAddress?.toLowerCase()) : false;
+  return connectedAddress ? space.members.map(e => e.toLowerCase()).includes(connectedAddress?.toLowerCase()) : false;
 });
