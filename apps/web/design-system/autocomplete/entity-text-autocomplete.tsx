@@ -31,6 +31,8 @@ interface Props {
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
   attributeId?: string;
+  wrapperClassName?: string;
+  containerClassName?: string;
   className?: string;
 }
 
@@ -41,6 +43,8 @@ export function EntityTextAutocomplete({
   allowedTypes,
   spaceId,
   attributeId,
+  wrapperClassName = '',
+  containerClassName = '',
   className = '',
 }: Props) {
   const [, setToast] = useToast();
@@ -119,7 +123,7 @@ export function EntityTextAutocomplete({
   // @TODO: implement keyboard navigation
 
   return (
-    <div className="relative w-full">
+    <div className={cx('relative w-full', wrapperClassName)}>
       <input
         value={query}
         onChange={e => onQueryChange(e.target.value)}
@@ -132,7 +136,10 @@ export function EntityTextAutocomplete({
       {query && (
         <div
           ref={containerRef}
-          className="absolute top-[36px] z-[1] flex max-h-[400px] w-[384px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02"
+          className={cx(
+            'absolute top-[36px] z-[1] flex max-h-[400px] w-[384px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02',
+            containerClassName
+          )}
         >
           <ResizableContainer duration={0.125}>
             <ResultsList>
