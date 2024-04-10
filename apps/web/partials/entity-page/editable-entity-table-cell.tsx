@@ -235,6 +235,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
           allowedTypes={typesToFilter}
           attributeId={attributeId}
+          containerClassName="!z-50"
         />
       )}
 

@@ -43,7 +43,7 @@ export function TableCell({
     <td
       className={cx(
         !isShown ? (!isEditingColumns || !isEditMode ? 'hidden' : '!bg-grey-01 !text-grey-03') : null,
-        'min-h-[40px] overflow-clip border border-grey-02 bg-transparent p-[10px] align-top'
+        'min-h-[40px] border border-grey-02 bg-transparent p-[10px] align-top'
       )}
       style={{
         maxWidth: width,
