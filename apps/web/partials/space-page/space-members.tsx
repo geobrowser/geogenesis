@@ -6,7 +6,7 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
-import { getIsEditorForSpace } from './get-is-editor-for-space';
+import { getIsMemberForSpace } from './get-is-member-for-space';
 import { SpaceMembersChip } from './space-members-chip';
 import { SpaceMembersDialogServerContainer } from './space-members-dialog-server-container';
 import { SpaceMembersJoinButton } from './space-members-join-button';
@@ -22,7 +22,7 @@ interface Props {
 export async function SpaceMembers({ spaceId }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
   const [isEditor, space] = await Promise.all([
-    getIsEditorForSpace(spaceId, connectedAddress),
+    getIsMemberForSpace(spaceId, connectedAddress),
     cachedFetchSpace(spaceId),
     // @TODO: Check if the user has already requested to be a member
   ]);
