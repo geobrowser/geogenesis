@@ -51,7 +51,6 @@ export function NavbarActions() {
   return (
     <div className="flex items-center gap-4">
       <ModeToggle />
-
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
@@ -149,30 +148,55 @@ const variants = {
 
 const MotionPopoverContent = motion(Popover.Content);
 
-function ModeToggle() {
+const useSpaceId = () => {
   const params = useParams();
   const spaceId = params?.['id'] as string | undefined;
 
-  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
-  const { setEditable, editable } = useEditable();
+  return spaceId;
+};
 
-  const controls = useAnimation();
+const useCanUserEdit = (spaceId: string | null | undefined) => {
+  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const canUserEdit = isEditor || isAdmin || isEditorController;
-  const isUserEditing = isEditor && editable;
+
+  return canUserEdit;
+};
+
+function ModeToggle() {
+  const controls = useAnimation();
+  const { editable, setEditable } = useEditable();
+
+  const spaceId = useSpaceId();
+  const canUserEdit = useCanUserEdit(spaceId);
+
+  React.useEffect(() => {
+    // If a user doesn't have edit access on the page, make sure we set the toggle
+    // state to false. This can happen if a user is in edit mode in a space they
+    // have edit access in, then they navigate to a space they don't have edit
+    // access in.
+    if (!canUserEdit) {
+      setEditable(false);
+    }
+  }, [canUserEdit, setEditable]);
 
   const [attemptCount, setAttemptCount] = React.useState(0);
   const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
 
-  // If a user doesn't have edit access on the page, make sure we set the toggle
-  // state to false. This can happen if a user is in edit mode in a space they
-  // have edit access in, then they navigate to a space they don't have edit
-  // access in.
-  if (!isEditor && !isAdmin && !isEditorController) setEditable(false);
-
   const onToggle = React.useCallback(() => {
+    if (!spaceId) {
+      setEditable(false);
+      return;
+    }
+
     // If they are signed in and not an editor, shake the toggle to indicate that they can't edit,
     // otherwise toggle the edit mode. Only handle shaking and attempt logic in the context of a space.
-    if (!canUserEdit && spaceId) {
+    if (!canUserEdit) {
+      if (editable) {
+        // Make sure they can always escape edit mode
+        setEditable(false);
+        return;
+      }
+
       controls.start('shake');
 
       // Allow the user two attempts to toggle edit mode before showing the tooltip.
@@ -203,28 +227,27 @@ function ModeToggle() {
       className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
     >
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {!isUserEditing && <AnimatedTogglePill controls={controls} />}
+        {!editable && <AnimatedTogglePill controls={controls} />}
         <motion.div
           animate={controls}
           variants={variants}
-          className={`z-10 transition-colors duration-300 ${!isUserEditing ? 'text-text' : 'text-grey-03'}`}
+          className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}
         >
           <EyeSmall />
         </motion.div>
       </div>
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {isUserEditing && <AnimatedTogglePill controls={controls} />}
+        {editable && <AnimatedTogglePill controls={controls} />}
         <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
           <Popover.Anchor asChild>
             <div
               className={`z-10 transition-colors duration-300 ${
-                showEditAccessTooltip ? 'text-red-01' : isUserEditing ? 'text-text' : 'text-grey-03'
+                showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
               }`}
             >
               <BulkEdit />
             </div>
           </Popover.Anchor>
-
           <Popover.Portal>
             <AnimatePresence mode="popLayout">
               {showEditAccessTooltip && (
