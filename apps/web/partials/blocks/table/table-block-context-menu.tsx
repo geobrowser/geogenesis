@@ -271,10 +271,19 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownInd
     }
   };
 
+  const onOpenChange = () => {
+    if (isMenuOpen) {
+      setIsMenuOpen(false);
+      setIsEditingColumns(false);
+    } else {
+      setIsMenuOpen(true);
+    }
+  };
+
   const spaceImage = space?.spaceConfig?.image ?? null;
 
   return (
-    <Dropdown.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+    <Dropdown.Root open={isMenuOpen} onOpenChange={onOpenChange}>
       <Dropdown.Trigger>{isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}</Dropdown.Trigger>
       <Dropdown.Portal>
         <MotionContent
