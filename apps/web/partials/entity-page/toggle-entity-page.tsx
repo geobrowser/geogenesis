@@ -1,24 +1,24 @@
 'use client';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { Triple } from '~/core/types';
+import type { Triple } from '~/core/types';
 
 import { EditableEntityPage } from './editable-entity-page';
 import { ReadableEntityPage } from './readable-entity-page';
 
-interface Props {
+type EntityPageProps = {
   triples: Triple[];
   id: string;
   spaceId: string;
   typeId?: string | null;
   filters?: Array<Filter> | null;
-}
+};
 
 type Filter = [FilterId, FilterValue];
 type FilterId = string;
 type FilterValue = string;
 
-export function ToggleEntityPage(props: Props) {
+export function ToggleEntityPage(props: EntityPageProps) {
   const renderEditablePage = useUserIsEditing(props.spaceId);
 
   const Page = renderEditablePage ? EditableEntityPage : ReadableEntityPage;
