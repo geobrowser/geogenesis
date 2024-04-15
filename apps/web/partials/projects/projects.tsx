@@ -19,6 +19,7 @@ import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
 import { Menu } from '~/design-system/menu';
 
+import { NoContent } from '../space-tabs/no-content';
 import type { ProjectType } from '~/app/space/[id]/projects/page';
 
 type ProjectsProps = {
@@ -33,23 +34,29 @@ export const Projects = ({ spaceName, spaceAvatar, spaceId, projects }: Projects
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div className="text-smallTitle">
-          {projects.length} {pluralize('project', projects.length)}
+      {(projects.length > 0 || isEditing) && (
+        <div className="mb-5 flex items-center justify-between">
+          <div className="text-smallTitle">
+            {projects.length ? (
+              <>
+                {projects.length} {pluralize('project', projects.length)}
+              </>
+            ) : null}
+          </div>
+          <div>
+            {isEditing && (
+              <Link
+                href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.PROJECT_TYPE)}
+                className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+              >
+                <Create />
+              </Link>
+            )}
+          </div>
         </div>
-        <div>
-          {isEditing && (
-            <Link
-              href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.PROJECT_TYPE)}
-              className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
-            >
-              <Create />
-            </Link>
-          )}
-        </div>
-      </div>
-      <div className="mt-5 space-y-5">
-        {projects.length > 0 && (
+      )}
+      <div className="space-y-5">
+        {projects.length > 0 ? (
           <>
             {projects.map(project => (
               <Project
@@ -62,6 +69,24 @@ export const Projects = ({ spaceName, spaceAvatar, spaceId, projects }: Projects
               />
             ))}
           </>
+        ) : (
+          <NoContent
+            isEditing={isEditing}
+            options={{
+              browse: {
+                title: 'There aren’t any projects listed here yet',
+                description: 'Switch to edit mode to add projects if you’re an editor of this space!',
+                image: '/projects.png',
+              },
+              edit: {
+                title: 'Add projects that you’re involved with',
+                description: 'Involved with a cool project? Add it here!',
+                image: '/projects.png',
+                href: NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.PROJECT_TYPE),
+                color: 'purple',
+              },
+            }}
+          />
         )}
       </div>
     </div>

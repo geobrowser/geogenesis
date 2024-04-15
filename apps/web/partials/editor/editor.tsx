@@ -19,6 +19,7 @@ import { SquareButton } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';
 import { Spacer } from '~/design-system/spacer';
 
+import { NoContent } from '../space-tabs/no-content';
 import { ConfiguredCommandExtension } from './command-extension';
 import { removeIdAttributes } from './editor-utils';
 import { HeadingNode } from './heading-node';
@@ -29,6 +30,7 @@ import { TableNode } from './table-node';
 interface Props {
   placeholder?: React.ReactNode;
   shouldHandleOwnSpacing?: boolean;
+  spacePage?: boolean;
 }
 
 export const tiptapExtensions = [
@@ -71,7 +73,11 @@ export const tiptapExtensions = [
   }),
 ];
 
-export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, placeholder = null }: Props) {
+export const Editor = React.memo(function Editor({
+  shouldHandleOwnSpacing,
+  placeholder = null,
+  spacePage = false,
+}: Props) {
   const { spaceId } = useEntityPageStore();
   const { editorJson, blockIds, updateEditorBlocks } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
@@ -134,8 +140,26 @@ export const Editor = React.memo(function Editor({ shouldHandleOwnSpacing, place
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorJson, hasUpdatedEditorJson]);
 
-  // We are in edit mode and there is no content.
-  if (!editable && blockIds.length === 0) return <span>{placeholder}</span>;
+  // We are in browse mode and there is no content.
+  if (!editable && blockIds.length === 0) {
+    return (
+      <>
+        {spacePage && (
+          <NoContent
+            isEditing={false}
+            options={{
+              browse: {
+                title: 'There’s no space overview here yet',
+                description: 'Switch to edit mode to add an overview if you’re an editor of this space!',
+                image: '/overview.png',
+              },
+            }}
+          />
+        )}
+        <span>{placeholder}</span>
+      </>
+    );
+  }
 
   if (!editor) return null;
 
