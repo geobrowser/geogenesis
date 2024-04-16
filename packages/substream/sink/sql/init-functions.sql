@@ -1,27 +1,27 @@
 
--- 
+--
 -- Custom Postgraphile Query Results for Attribute Functions
--- 
+--
 CREATE TYPE public.attribute_with_scalar_value_type AS (
     type text,
     value text
 );
 
 CREATE TYPE public.attribute_with_relation_value_type AS (
-    type text, 
-    entity_value_id text 
+    type text,
+    entity_value_id text
 );
-   
+
 CREATE TYPE public.attribute_with_unknown_value_type AS (
    type text,
    value text,
-   entity_value_id text 
+   entity_value_id text
 );
 
 COMMENT ON TYPE public.attribute_with_relation_value_type IS
   E'@foreignKey (entity_value_id) references public.geo_entities (id)';
 
-   
+
 COMMENT ON TYPE public.attribute_with_unknown_value_type IS
   E'@foreignKey (entity_value_id) references public.geo_entities (id)';
 
@@ -30,10 +30,10 @@ COMMENT ON TYPE public.attribute_with_unknown_value_type IS
 -- Note that attribute_id is hardcoded to '01412f83-8189-4ab1-8365-65c7fd358cc1' and type_id is 'type'
 --
 
--- 
+--
 -- Query "types" on entities to get the types of an entity or "typeCount" to get the number of types
--- "typeCount" can be used for filtering 
--- 
+-- "typeCount" can be used for filtering
+--
 CREATE FUNCTION public.geo_entities_types(e_row geo_entities)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN
@@ -43,11 +43,11 @@ BEGIN
     WHERE e.id IN (
         SELECT t.value_id
         FROM triples t
-        WHERE t.entity_id = e_row.id 
-        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1' 
+        WHERE t.entity_id = e_row.id
+        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1'
     );
 END;
-$$ LANGUAGE plpgsql STRICT STABLE;  
+$$ LANGUAGE plpgsql STRICT STABLE;
 
 CREATE FUNCTION public.geo_entities_types_count(e_row geo_entities)
 RETURNS integer AS $$
@@ -59,9 +59,9 @@ BEGIN
     FROM geo_entities_types(e_row);
     RETURN type_count;
 END;
-$$ LANGUAGE plpgsql STRICT STABLE;    
+$$ LANGUAGE plpgsql STRICT STABLE;
 
--- 
+--
 -- Query "typeSchema" on a type entity (e.g. Place) to get it's attributes
 -- "typeSchemaCount" can be used for filtering
 --
@@ -92,7 +92,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STRICT STABLE;
 
--- 
+--
 -- Query "schema" on an instance of a type entity (e.g. San Francisco) to get it's inferred type attributes
 -- "schemaCount" can be used for filtering
 --
@@ -100,20 +100,19 @@ CREATE FUNCTION public.geo_entities_schema(e_row geo_entities)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN
     -- Using CTE to first fetch all types of the given entity
-    RETURN QUERY 
+    RETURN QUERY
     WITH entity_types AS (
         SELECT t.value_id AS type_id
         FROM triples t
-        WHERE t.entity_id = e_row.id 
+        WHERE t.entity_id = e_row.id
         AND t.attribute_id = 'type'
     ),
     type_attributes AS (
         -- For each type, fetch the associated attributes
         SELECT DISTINCT t.value_id AS attribute_id
         FROM entity_types et
-        JOIN triples t ON t.entity_id = et.type_id 
-        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1' 
-
+        JOIN triples t ON t.entity_id = et.type_id
+        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1'
     )
     SELECT e.*
     FROM geo_entities e
@@ -137,8 +136,8 @@ CREATE FUNCTION public.spaces_metadata(e_row spaces)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN
     -- Using CTE to first fetch all types of the given entity
-    RETURN QUERY 
-    -- Get the entity id 
+    RETURN QUERY
+    -- Get the entity id
     WITH space_configuration_entity_ids AS (
         SELECT t.*
         FROM triples t
@@ -157,7 +156,7 @@ $$ LANGUAGE plpgsql STRICT STABLE;
 CREATE FUNCTION public.accounts_geo_profiles(e_row accounts)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN
-    RETURN QUERY 
+    RETURN QUERY
     -- Get the onchain profile that matches the account id
     WITH onchain_profiles_ids AS (
         SELECT op.*
@@ -171,19 +170,32 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STRICT STABLE;
 
--- CREATE FUNCTION public.geo_entities_collection_items(e_row entities)
--- RETURNS SETOF public.geo_entities AS $$
--- BEGIN
---     RETURN QUERY 
---     -- Get the onchain profile that matches the account id
---    WITH collection_entities AS (
---         SELECT t.*
---         FROM triples t
---         WHERE t.attribute_id = 'type'
---         AND t.value_id = 'debbf9ff-62c6-40aa-9b2c-672e3bb15d0e' -- collection type
---     )
---     SELECT e.*
---     FROM geo_entities e
---     JOIN collection_entities cids ON e.id = cids.entity_id;
--- END;
--- $$ LANGUAGE plpgsql STRICT STABLE;
+-- if an entity is a collection, return all the items in the collection
+-- with links to the entities themselves
+
+CREATE TYPE public.collection_item AS (
+   entity_id text,
+   collection_id text
+);
+
+COMMENT ON TYPE public.collection_item_1 IS
+  E'@foreignKey (collection_id) references public.collections(entity_id)';
+
+COMMENT ON TYPE public.collection_item_1 IS
+  E'@foreignKey (entity_id) references public.geo_entities(id)';
+
+CREATE OR REPLACE FUNCTION public.collections_items(e_row collections)
+RETURNS SETOF public.collection_item AS $$
+BEGIN
+    RETURN QUERY
+    SELECT t3.entity_value_id as collection_id, t2.entity_value_id as entity_id
+    FROM triples t1
+        WHERE t1.entity_id = e_row.entity_id
+    JOIN triples t2 ON t1.entity_id = t2.entity_id
+    JOIN triples t3 ON t1.entity_id = t3.entity_id
+    WHERE t1.attribute_id = 'types'
+      AND t1.entity_value_id = '0e8d692b-94d7-4c64-bcb3-0eb4d55503ef' -- Collection Item type
+      AND t2.attribute_id = '53d1e5f2-6f23-4bf2-9e88-42b02f437970' -- entity id of the collection item's entity value
+      AND t3.attribute_id = '487e084b-4132-4b05-b15a-b6e147d58244'; -- entity id of the collection
+END;
+$$ LANGUAGE plpgsql STRICT STABLE;
