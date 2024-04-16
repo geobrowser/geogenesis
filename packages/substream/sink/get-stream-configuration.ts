@@ -6,7 +6,6 @@ type GetStreamConfigurationFn = (
 ) => { shouldUseCursor: boolean; startBlockNumber: number | undefined };
 
 export const getStreamConfiguration: GetStreamConfigurationFn = (options, blockNumberFromCache) => {
-  let shouldUseCursor = true;
   let startBlockNumber: number | undefined;
 
   if (options.fromCache && options.startBlock) {
@@ -39,6 +38,6 @@ export const getStreamConfiguration: GetStreamConfigurationFn = (options, blockN
     startBlockNumber: START_BLOCK,
 
     // We should always use cursor unless we specify a block number or have used the cache.
-    shouldUseCursor,
+    shouldUseCursor: true,
   };
 };
