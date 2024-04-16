@@ -58,14 +58,16 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     type,
   } = useTableBlock();
 
-  const shownColumns = [
-    ...(blockEntity?.triples
-      .filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS)
-      .flatMap(item => item.value.id) ?? []),
-    'name',
+  const allColumns = columns.map(column => ({
+    id: column.id,
+    name: Entity.name(column.triples),
+  }));
+
+  const shownColumnTriples = [
+    ...(blockEntity?.triples ?? []).filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS),
   ];
 
-  const renderedColumns = columns.filter(item => shownColumns.includes(item.id));
+  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.id) ?? []), 'name'];
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -103,10 +105,14 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const filters: Array<[string, string]> =
     filterState && filterState.length > 0 ? filterState.map(filter => [filter.columnId, filter.value]) : [];
 
+  const shownIndexes = columns
+    .map((item, index) => (shownColumnIds.includes(item.id) ? index : null))
+    .filter(item => typeof item === 'number') as Array<number>;
+
   return (
     <div>
       <div className="mb-2 flex h-8 items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex grow items-center gap-2">
           <span className="shrink-0 overflow-hidden rounded">
             <BoringAvatar
               size={16}
@@ -158,7 +164,11 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
               </motion.div>
             )}
           </AnimatePresence>
-          <TableBlockContextMenu />
+          <TableBlockContextMenu
+            allColumns={allColumns}
+            shownColumnTriples={shownColumnTriples}
+            shownIndexes={shownIndexes}
+          />
 
           {isEditing && (
             <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters)}>
@@ -208,7 +218,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           {isLoading ? (
             <TableBlockPlaceholder />
           ) : (
-            <TableBlockTable space={spaceId} columns={renderedColumns} rows={rows} />
+            <TableBlockTable space={spaceId} columns={columns} rows={rows} shownIndexes={shownIndexes} />
           )}
         </div>
 

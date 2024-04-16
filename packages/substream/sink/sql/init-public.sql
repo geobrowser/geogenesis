@@ -88,6 +88,8 @@ CREATE TABLE public.proposals (
     space_id text NOT NULL REFERENCES public.spaces(id),
     name text,
     description text,
+    uri text,
+    json text,
     type proposal_type NOT NULL,
     status proposal_status NOT NULL,
     created_at integer NOT NULL,
