@@ -574,7 +574,8 @@ function EntityAttributes({
             )}
             {isEntityGroup && <Spacer height={4} />}
             <div className="flex flex-wrap items-center gap-1">
-              {triples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
+              {/* Only render one editable field per attributeId */}
+              {tripleToEditableField(attributeId, triples[0], isEmptyEntity)}
               {/* This is the + button next to attribute ids with existing entity values */}
               {isEntityGroup && !isEmptyEntity && (
                 <EntityAutocompleteDialog
