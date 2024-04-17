@@ -556,6 +556,9 @@ function EntityAttributes({
         const isPlaceholder = triples[0].placeholder;
         const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
 
+        // only show multiple editable fields for relations
+        const renderedTriples = tripleType === 'entity' ? triples : [triples[0]];
+
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
             {attributeId === '' ? (
@@ -574,8 +577,7 @@ function EntityAttributes({
             )}
             {isEntityGroup && <Spacer height={4} />}
             <div className="flex flex-wrap items-center gap-1">
-              {/* Only render one editable field per attributeId */}
-              {tripleToEditableField(attributeId, triples[0], isEmptyEntity)}
+              {renderedTriples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
               {/* This is the + button next to attribute ids with existing entity values */}
               {isEntityGroup && !isEmptyEntity && (
                 <EntityAutocompleteDialog
