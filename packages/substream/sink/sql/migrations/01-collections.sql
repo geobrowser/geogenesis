@@ -14,6 +14,8 @@ ALTER TABLE public.triples ADD CHECK (value_type in (
     )
 );
 
+ALTER TABLE public.triples ADD COLUMN collection_value_id text REFERENCES public.collections(id);
+
 CREATE FUNCTION public.spaces_metadata(e_row spaces)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN
