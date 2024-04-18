@@ -47,6 +47,12 @@ export const COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE = '487e084b-4132-
  */
 export const COLLECTION_ITEM_ENTITY_REFERENCE = '53d1e5f2-6f23-4bf2-9e88-42b02f437970';
 
+/**
+ * Collection item's ordering within the collection. Collections are unordered by
+ * default, but we set all collection items to a default index value of 0.
+ */
+export const COLLECTION_ITEM_INDEX = 'ede47e69-30b0-4499-8ea4-aafbda449609';
+
 /*
   Example Usage: Rhonda Patrick -> TYPES -> Person
   Note that we should probably convert "type" to "types" or a UUID in the future.
