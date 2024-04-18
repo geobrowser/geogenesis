@@ -72,10 +72,10 @@ BEGIN
     RETURN QUERY
     SELECT t3.entity_value_id as collection_id, t2.entity_value_id as entity_id
     FROM triples t1
-        WHERE t1.entity_id = e_row.entity_id
     JOIN triples t2 ON t1.entity_id = t2.entity_id
     JOIN triples t3 ON t1.entity_id = t3.entity_id
-    WHERE t1.attribute_id = 'types'
+    WHERE t1.entity_id = e_row.entity_id
+      AND t1.attribute_id = 'types'
       AND t1.entity_value_id = '0e8d692b-94d7-4c64-bcb3-0eb4d55503ef' -- Collection Item type
       AND t2.attribute_id = '53d1e5f2-6f23-4bf2-9e88-42b02f437970' -- entity id of the collection item's entity value
       AND t3.attribute_id = '487e084b-4132-4b05-b15a-b6e147d58244'; -- entity id of the collection
