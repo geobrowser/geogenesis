@@ -225,17 +225,6 @@ CREATE TABLE public.triple_versions (
     version_id text NOT NULL REFERENCES public.versions(id)
 );
 
-CREATE TABLE public.collections (
-    id text PRIMARY KEY NOT NULL,
-    entity_id text REFERENCES public.geo_entities(id) NOT NULL
-);
-
--- CREATE TABLE public.collection_items (
---     collection_id text REFERENCES public.collections(id) NOT NULL,
---     entity_id text REFERENCES public.geo_entities(id) NOT NULL,
---     CONSTRAINT collections_collection_item_id_pair UNIQUE (collection_id, entity_id)
--- );
-
 --
 -- Disable Foreign Key Constraints to allow for bulk loading + unordered inserts
 --
