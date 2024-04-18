@@ -3772,6 +3772,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_stale: boolean;
+      /**
+      * **triples.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id: string | null;
     }
     export interface JSONSelectable {
       /**
@@ -3858,6 +3864,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_stale: boolean;
+      /**
+      * **triples.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id: string | null;
     }
     export interface Whereable {
       /**
@@ -3944,6 +3956,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_stale?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triples.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -4030,6 +4048,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_stale: boolean | db.Parameter<boolean> | db.SQLFragment;
+      /**
+      * **triples.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -4116,6 +4140,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_stale?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
+      /**
+      * **triples.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
     }
     export type UniqueIndex = 'triples_pkey';
     export type Column = keyof Selectable;

@@ -62,10 +62,10 @@ CREATE TYPE public.collection_item AS (
    collection_id text
 );
 
-COMMENT ON TYPE public.collection_item_1 IS
+COMMENT ON TYPE public.collection_item IS
   E'@foreignKey (collection_id) references public.collections(entity_id)';
 
-COMMENT ON TYPE public.collection_item_1 IS
+COMMENT ON TYPE public.collection_item IS
   E'@foreignKey (entity_id) references public.geo_entities(id)';
 
 CREATE OR REPLACE FUNCTION public.collections_items(e_row collections)
