@@ -1,8 +1,8 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Effect, Schedule } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
+import { SYSTEM_IDS } from '../constants/system-ids';
 import { TripleAction } from '../types';
 import { upsertChunked } from '../utils/db';
 import { pool } from '../utils/pool';

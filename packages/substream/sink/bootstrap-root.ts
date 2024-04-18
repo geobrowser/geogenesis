@@ -1,10 +1,9 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { PERMISSIONED_SPACE_REGISTRY_ADDRESS } from '@geogenesis/ids/system-ids';
 import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as s from 'zapatos/schema';
 
 import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
+import { SYSTEM_IDS } from './constants/system-ids';
 import { generateTripleId } from './utils/id';
 import { pool } from './utils/pool';
 
@@ -120,7 +119,7 @@ const geoEntities: s.geo_entities.Insertable[] = entities.map(entity => ({
 
 const namesTriples: s.triples.Insertable[] = Object.entries(names).map(([id, name]) => ({
   id: generateTripleId({
-    space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+    space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
     entity_id: id,
     attribute_id: SYSTEM_IDS.NAME,
     value_id: name,
@@ -131,7 +130,7 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(([id, nam
   value_id: id,
   string_value: name,
   is_protected: true,
-  space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+  space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   created_at: ROOT_SPACE_CREATED_AT,
   is_stale: false,
@@ -142,7 +141,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
     /* Giving these entities a type of attribute */
     {
       id: generateTripleId({
-        space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+        space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
         entity_id: id,
         attribute_id: SYSTEM_IDS.TYPES,
         value_id: SYSTEM_IDS.ATTRIBUTE,
@@ -153,7 +152,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       value_id: SYSTEM_IDS.ATTRIBUTE,
       entity_value_id: SYSTEM_IDS.ATTRIBUTE,
       is_protected: true,
-      space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+      space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
       is_stale: false,
@@ -161,7 +160,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
     /* Giving these attributes a value type of the type they are */
     {
       id: generateTripleId({
-        space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+        space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
         entity_id: id,
         attribute_id: SYSTEM_IDS.VALUE_TYPE,
         value_id: SYSTEM_IDS.ATTRIBUTE,
@@ -172,7 +171,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       value_id: SYSTEM_IDS.ATTRIBUTE,
       entity_value_id,
       is_protected: true,
-      space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+      space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
       is_stale: false,
@@ -185,7 +184,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
     /* Giving these entities a type of type */
     {
       id: generateTripleId({
-        space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+        space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
         entity_id: id,
         attribute_id: SYSTEM_IDS.TYPES,
         value_id: SYSTEM_IDS.SCHEMA_TYPE,
@@ -196,7 +195,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       value_id: SYSTEM_IDS.SCHEMA_TYPE,
       entity_value_id: SYSTEM_IDS.SCHEMA_TYPE,
       is_protected: true,
-      space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+      space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
       is_stale: false,
@@ -204,7 +203,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
     /* Giving these entities an attribute of attribute */
     ...attributes.map(attribute => ({
       id: generateTripleId({
-        space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+        space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
         entity_id: id,
         attribute_id: SYSTEM_IDS.ATTRIBUTES,
         value_id: attribute,
@@ -215,7 +214,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       value_id: attribute,
       entity_value_id: attribute,
       is_protected: true,
-      space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+      space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
       is_stale: false,
@@ -224,7 +223,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
   .flat();
 
 const space: s.spaces.Insertable = {
-  id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+  id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
   is_root_space: true,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
 };
@@ -238,7 +237,7 @@ const proposal: s.proposals.Insertable = {
   onchain_proposal_id: '-1',
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
   created_at: ROOT_SPACE_CREATED_AT,
-  space_id: PERMISSIONED_SPACE_REGISTRY_ADDRESS,
+  space_id: SYSTEM_IDS.PERMISSIONED_SPACE_REGISTRY_ADDRESS,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
   type: 'content',
