@@ -28,7 +28,7 @@ export const options: Record<AppEnv, AppConfig> = {
     ipfs: 'https://api.thegraph.com/ipfs',
     membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-mumbai',
     profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry-mumbai',
-    api: 'https://geobrowser-amoy.up.railway.app',
+    api: 'https://geobrowser-amoy.up.railway.app/graphql',
   },
   production: {
     chainId: '137',
