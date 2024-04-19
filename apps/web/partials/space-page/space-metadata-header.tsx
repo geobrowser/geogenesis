@@ -43,6 +43,7 @@ export function SpacePageMetadataHeader({
   const isEditing = useUserIsEditing(spaceId);
   const [open, onOpenChange] = React.useState(false);
 
+  // @TODO pathname might already include `/entities` or `/import`, resulting in a broken behavior in the context menu
   const pathname = usePathname();
 
   const { subgraph } = Services.useServices();
@@ -139,7 +140,6 @@ export function SpacePageMetadataHeader({
             </div>
           )}
         </HistoryPanel>
-
         <Menu
           open={open}
           onOpenChange={onOpenChange}
@@ -157,6 +157,7 @@ export function SpacePageMetadataHeader({
           </button>
           <Link
             href={`${pathname}/entities`}
+            onClick={() => onOpenChange(false)}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
           >
             <Text variant="button" className="hover:!text-text">
@@ -165,11 +166,9 @@ export function SpacePageMetadataHeader({
           </Link>
           <Link
             href={`${pathname}/import`}
+            onClick={() => onOpenChange(false)}
             className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
           >
-            {/* <div className="flex-shrink-0">
-              <CsvImport />
-            </div> */}
             <Text variant="button" className="hover:!text-text">
               CSV import
             </Text>

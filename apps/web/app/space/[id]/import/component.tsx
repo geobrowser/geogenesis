@@ -154,8 +154,14 @@ export const Component = ({ spaceId }: Props) => {
 
       const relatedEntitiesMap = new Map(filteredRelatedEntities.map(entity => [entity.id, entity.name ?? '']));
 
+      if (typeof entityNameIndex === 'number' && typeof entityIdIndex === 'number') {
+        entities.forEach(entity => {
+          relatedEntitiesMap.set(entity[entityIdIndex], entity[entityNameIndex]);
+        });
+      }
+
       entities.forEach(entity => {
-        const newEntityId = entityIdIndex ? entity[entityIdIndex] : ID.createEntityId();
+        const newEntityId = typeof entityIdIndex === 'number' ? entity[entityIdIndex] : ID.createEntityId();
 
         if (!entityNameIndex || !entityType) return;
 
