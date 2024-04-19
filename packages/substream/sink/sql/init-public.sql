@@ -21,7 +21,7 @@ CREATE TABLE public.geo_entities (
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     updated_at integer,
-    updated_at_block integer 
+    updated_at_block integer
     -- is_attribute boolean DEFAULT false,
     -- attribute_value_type_id text
 );
@@ -89,7 +89,6 @@ CREATE TABLE public.proposals (
     name text,
     description text,
     uri text,
-    json text,
     type proposal_type NOT NULL,
     status proposal_status NOT NULL,
     created_at integer NOT NULL,
@@ -158,6 +157,7 @@ CREATE TABLE public.triples (
             'number',
             'string',
             'entity',
+            'collection',
             'image',
             'date',
             'url'
@@ -225,9 +225,9 @@ CREATE TABLE public.triple_versions (
     version_id text NOT NULL REFERENCES public.versions(id)
 );
 
--- 
+--
 -- Disable Foreign Key Constraints to allow for bulk loading + unordered inserts
--- 
+--
 ALTER TABLE
     public.accounts DISABLE TRIGGER ALL;
 
