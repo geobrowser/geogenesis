@@ -2,6 +2,8 @@ import { FINANCE_OVERVIEW_TYPE } from '@geogenesis/ids/system-ids';
 
 import { Subgraph } from '~/core/io';
 
+import { NoContent } from '~/partials/space-tabs/no-content';
+
 import DefaultEntityPage from '../../(entity)/[id]/[entityId]/default-entity-page';
 
 type FinancesPageProps = {
@@ -16,7 +18,20 @@ export default async function FinancesPage({ params, searchParams }: FinancesPag
   const spaceId = params.id;
   const finances = await getFinances(spaceId);
 
-  if (!finances) return null;
+  if (!finances) {
+    return (
+      <NoContent
+        isEditing={false}
+        options={{
+          browse: {
+            title: 'There are no financial summaries here yet',
+            description: 'Switch to edit mode to add your finances if you’re an editor of this space!',
+            image: '/finances.png',
+          },
+        }}
+      />
+    );
+  }
 
   return (
     <DefaultEntityPage

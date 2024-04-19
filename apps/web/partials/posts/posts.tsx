@@ -18,6 +18,7 @@ import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
 import { Menu } from '~/design-system/menu';
 
+import { NoContent } from '../space-tabs/no-content';
 import type { PostType } from '~/app/space/[id]/posts/page';
 
 type PostsProps = {
@@ -32,22 +33,28 @@ export const Posts = ({ spaceName, spaceAvatar, spaceId, posts }: PostsProps) =>
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div className="text-smallTitle">
-          {posts.length} {pluralize('post', posts.length)}
+      {(posts.length > 0 || isEditing) && (
+        <div className="mb-5 flex items-center justify-between">
+          <div className="text-smallTitle">
+            {posts.length ? (
+              <>
+                {posts.length} {pluralize('post', posts.length)}
+              </>
+            ) : null}
+          </div>
+          <div>
+            {isEditing && (
+              <Link
+                href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.POST_TYPE)}
+                className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+              >
+                <Create />
+              </Link>
+            )}
+          </div>
         </div>
-        <div>
-          {isEditing && (
-            <Link
-              href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.POST_TYPE)}
-              className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
-            >
-              <Create />
-            </Link>
-          )}
-        </div>
-      </div>
-      <div className="mt-5 space-y-5">
+      )}
+      <div className="space-y-5">
         {posts.length > 0 ? (
           <>
             {posts.map(post => (
@@ -62,7 +69,23 @@ export const Posts = ({ spaceName, spaceAvatar, spaceId, posts }: PostsProps) =>
             ))}
           </>
         ) : (
-          <NewPost spaceId={spaceId} />
+          <NoContent
+            isEditing={isEditing}
+            options={{
+              browse: {
+                title: 'There are no posts here yet',
+                description: 'Switch to edit mode to create your first post if you’re an editor of this space!',
+                image: '/posts.png',
+              },
+              edit: {
+                title: 'Write and publish your first post',
+                description: 'Let everyone on Geo know what you’re thinking about, working on or anything else!',
+                image: '/posts.png',
+                href: NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.POST_TYPE),
+                color: 'purple',
+              },
+            }}
+          />
         )}
       </div>
     </div>
@@ -134,28 +157,5 @@ const Post = ({ spaceName, spaceAvatar, spaceId, post, isEditing }: PostProps) =
         {post.description && <div className="mt-1 line-clamp-1 text-metadata text-grey-04">{post.description}</div>}
       </div>
     </div>
-  );
-};
-
-type NewPostProps = {
-  spaceId: string;
-};
-
-const NewPost = ({ spaceId }: NewPostProps) => {
-  return (
-    <Link
-      href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.POST_TYPE)}
-      className="bg-gradient-purple mb-8 flex items-center gap-8 overflow-clip rounded-lg p-4"
-    >
-      <div className="shrink-0relative relative top-1.5 -mx-4">
-        <img src="/posts.png" alt="" className="-my-3 h-24 w-auto object-contain" />
-      </div>
-      <div>
-        <div className="text-smallTitle text-text">Write and publish your first post</div>
-        <div className="mt-1 text-metadata text-text">
-          Let everyone on Geo know what you&rsquo;re thinking about, working on or anything else!
-        </div>
-      </div>
-    </Link>
   );
 };
