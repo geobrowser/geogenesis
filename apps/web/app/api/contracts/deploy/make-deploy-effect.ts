@@ -25,10 +25,6 @@ class SpaceProxyContractAddressNullError extends Error {
   readonly _tag = 'SpaceProxyContractAddressNullError';
 }
 
-class AddToSpaceRegistryError extends Error {
-  readonly _tag = 'AddToSpaceRegistryError';
-}
-
 interface UserConfig {
   account: `0x${string}`;
 }
