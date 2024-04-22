@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 
 import { Component } from './component';

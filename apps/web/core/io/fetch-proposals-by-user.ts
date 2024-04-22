@@ -258,6 +258,7 @@ export async function fetchProposalsByUser({
       proposedVersions: p.proposedVersions.nodes.map(v => {
         return {
           ...v,
+          space: spaceWithMetadata,
           createdBy: profile,
           actions: fromNetworkActions(v.actions.nodes, userId),
         };

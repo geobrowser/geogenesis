@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 
-import { DEFAULT_OPENGRAPH_IMAGE, PLACEHOLDER_SPACE_IMAGE, PUBLIC_SPACES } from '~/core/constants';
+import { DEFAULT_OPENGRAPH_IMAGE, PUBLIC_SPACES } from '~/core/constants';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
 import { Entity, Space } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';

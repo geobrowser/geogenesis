@@ -259,6 +259,7 @@ export async function fetchProposals({
       proposedVersions: p.proposedVersions.nodes.map(v => {
         return {
           ...v,
+          space: spaceWithMetadata,
           createdBy: profile,
           actions: fromNetworkActions(v.actions.nodes, spaceId),
         };

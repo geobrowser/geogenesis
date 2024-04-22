@@ -2,8 +2,9 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, Proposal } from '~/core/types';
+import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -181,15 +182,25 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
         profileLink: null,
       };
 
+  const spaceConfig = proposal.space.metadata.nodes[0] as SubstreamEntity | undefined;
+  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+
+  const spaceWithMetadata: SpaceWithMetadata = {
+    id: proposal.space.id,
+    name: spaceConfig?.name ?? null,
+    image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+  };
+
   return {
     ...proposal,
-    space: proposal.spaceId,
+    space: spaceWithMetadata,
     createdBy: profile,
     proposedVersions: proposal.proposedVersions.nodes.map(v => {
       return {
         ...v,
         createdBy: profile,
-        actions: fromNetworkActions(v.actions.nodes, proposal.spaceId),
+        space: spaceWithMetadata,
+        actions: fromNetworkActions(v.actions.nodes, proposal.space.id),
       };
     }),
   };
