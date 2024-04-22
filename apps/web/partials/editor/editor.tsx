@@ -6,8 +6,10 @@ import HardBreak from '@tiptap/extension-hard-break';
 import Image from '@tiptap/extension-image';
 import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
-import { EditorContent, FloatingMenu, Editor as TiptapEditor, useEditor } from '@tiptap/react';
+import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
+// import {FloatingMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import cx from 'classnames';
 
 import * as React from 'react';
 
@@ -15,8 +17,8 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 
-import { SquareButton } from '~/design-system/button';
-import { Plus } from '~/design-system/icons/plus';
+// import { SquareButton } from '~/design-system/button';
+// import { Plus } from '~/design-system/icons/plus';
 import { Spacer } from '~/design-system/spacer';
 
 import { NoContent } from '../space-tabs/no-content';
@@ -26,6 +28,7 @@ import { HeadingNode } from './heading-node';
 import { createIdExtension } from './id-extension';
 import { ParagraphNode } from './paragraph-node';
 import { TableNode } from './table-node';
+import { TrailingNode } from './trailing-node';
 
 interface Props {
   placeholder?: React.ReactNode;
@@ -42,7 +45,6 @@ export const tiptapExtensions = [
   ParagraphNode,
   HeadingNode,
   ConfiguredCommandExtension,
-  Gapcursor,
   HardBreak.extend({
     addKeyboardShortcuts() {
       // Make hard breaks behave like normal paragraphs
@@ -61,6 +63,8 @@ export const tiptapExtensions = [
       };
     },
   }),
+  Gapcursor,
+  TrailingNode,
   BulletList,
   ListItem,
   TableNode,
@@ -163,16 +167,16 @@ export const Editor = React.memo(function Editor({
 
   if (!editor) return null;
 
-  const openCommandMenu = () => editor?.chain().focus().insertContent('/').run();
+  // const openCommandMenu = () => editor?.chain().focus().insertContent('/').run();
 
   return (
-    <div>
+    <div className={cx(editable ? 'editable' : 'not-editable')}>
       <EditorContent editor={editor} />
-      <FloatingMenu editor={editor}>
+      {/* <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">
           <SquareButton onClick={openCommandMenu} icon={<Plus />} />
         </div>
-      </FloatingMenu>
+      </FloatingMenu> */}
       {shouldHandleOwnSpacing && <Spacer height={60} />}
     </div>
   );
