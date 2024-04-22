@@ -16,7 +16,7 @@ ALTER TABLE public.triples ADD CHECK (value_type in (
 
 ALTER TABLE public.triples ADD COLUMN collection_value_id text REFERENCES public.collections(id);
 
-CREATE FUNCTION public.spaces_metadata(e_row spaces)
+CREATE OR REPLACE FUNCTION public.spaces_metadata(e_row spaces)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN
     -- Using CTE to first fetch all types of the given entity
@@ -28,6 +28,7 @@ BEGIN
         WHERE t.space_id = e_row.id
         AND t.attribute_id = 'type'
         AND t.value_id = '1d5d0c2a-db23-466c-a0b0-9abe879df457' -- space configuration
+        AND t.is_stale = FALSE
     )
     SELECT e.*
     FROM geo_entities e
@@ -37,7 +38,7 @@ $$ LANGUAGE plpgsql STRICT STABLE;
 
 -- Map the account id to a geo profile based on the entity id of
 -- the account's onchain profile if it exists
-CREATE FUNCTION public.accounts_geo_profiles(e_row accounts)
+CREATE OR REPLACE FUNCTION public.accounts_geo_profiles(e_row accounts)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN
     RETURN QUERY
