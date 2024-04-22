@@ -59,7 +59,7 @@ export type Triple = {
 };
 
 export type SpaceConfigEntity = Entity & {
-  image: string | null;
+  image: string;
 };
 
 export type Space = {

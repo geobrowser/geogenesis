@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 
-import { DEFAULT_OPENGRAPH_IMAGE, PUBLIC_SPACES } from '~/core/constants';
+import { DEFAULT_OPENGRAPH_IMAGE, PLACEHOLDER_SPACE_IMAGE, PUBLIC_SPACES } from '~/core/constants';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
 import { Entity, Space } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
@@ -69,7 +69,7 @@ export default async function Spaces() {
     return {
       id: space.id,
       name: EntityModule.name(entity.triples) ?? null,
-      image: EntityModule.cover(entity.triples) ?? null,
+      image: space?.spaceConfig.image,
     };
   });
 

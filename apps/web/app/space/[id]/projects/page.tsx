@@ -6,13 +6,15 @@ import { Entity } from '~/core/utils/entity';
 
 import { Projects } from '~/partials/projects/projects';
 
+import { cachedFetchSpace } from '../cached-fetch-space';
+
 type ProjectsPageProps = {
   params: { id: string; entityId: string };
 };
 
 export default async function ProjectsPage({ params }: ProjectsPageProps) {
   const spaceId = params.id;
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
   const entity = space?.spaceConfig;
 
   if (!space || !entity) return null;

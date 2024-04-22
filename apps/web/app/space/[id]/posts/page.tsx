@@ -6,13 +6,15 @@ import { Entity } from '~/core/utils/entity';
 
 import { Posts } from '~/partials/posts/posts';
 
+import { cachedFetchSpace } from '../cached-fetch-space';
+
 type PostsPageProps = {
   params: { id: string; entityId: string };
 };
 
 export default async function PostsPage({ params }: PostsPageProps) {
   const spaceId = params.id;
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
   const entity = space?.spaceConfig;
 
   if (!space || !entity) return null;

@@ -70,7 +70,7 @@ async function ActivityList({ searchParams, entityId }: Props) {
 
           const configEntity = space?.spaceConfig;
           const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
-          const spaceImage = configEntity ? Entity.cover(configEntity.triples) : PLACEHOLDER_SPACE_IMAGE;
+          const spaceImage = configEntity ? configEntity.image : PLACEHOLDER_SPACE_IMAGE;
 
           const lastEditedDate = GeoDate.fromGeoTime(p.createdAt);
           const proposalChangeCount = Action.getChangeCount(

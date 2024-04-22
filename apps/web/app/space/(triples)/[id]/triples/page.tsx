@@ -5,6 +5,7 @@ import { Subgraph } from '~/core/io';
 import { Params } from '~/core/params';
 
 import { Component } from './component';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   params: { id: string };
@@ -22,7 +23,7 @@ export default async function TriplesPage({ params, searchParams }: Props) {
 
 const getData = async ({ params, searchParams }: Props) => {
   const spaceId = params.id;
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
   const initialParams = Params.parseTripleQueryFilterFromParams(searchParams);
   const configEntity = space?.spaceConfig;
 
