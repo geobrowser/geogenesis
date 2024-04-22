@@ -12,7 +12,7 @@ import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 function getFetchEntityQuery(id: string) {
   return `query {
     geoEntity(id: ${JSON.stringify(id)}) {
-      id,
+      id
       name
       triplesByEntityId(filter: {isStale: {equalTo: false}}) {
         nodes {

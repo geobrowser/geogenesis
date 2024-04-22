@@ -1,3 +1,4 @@
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/utils/entity';
 import { getRandomArrayItem } from '~/core/utils/utils';
@@ -28,7 +29,7 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
     const space = spaces.find(s => s.id === spaceId);
     const spaceName = space?.spaceConfig?.name ?? null;
-    const spaceImage = Entity.avatar(space?.spaceConfig?.triples) ?? Entity.cover(space?.spaceConfig?.triples) ?? null;
+    const spaceImage = space?.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE;
 
     return {
       id: e.id,

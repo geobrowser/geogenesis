@@ -16,7 +16,7 @@ import { useAccount, useWalletClient } from 'wagmi';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePublish } from '~/core/hooks/use-publish';
 import { ID } from '~/core/id';
-import { fetchProfilePermissionless } from '~/core/io/subgraph/fetch-profile-permissionless';
+import { fetchProfile } from '~/core/io/subgraph';
 import { Services } from '~/core/services';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
@@ -74,11 +74,9 @@ export const CreateProfileDialog = () => {
         return null;
       }
 
-      const result = await fetchProfilePermissionless({
+      return await fetchProfile({
         address: onchainProfile.accountId,
       });
-
-      return result ?? null;
     },
   });
 

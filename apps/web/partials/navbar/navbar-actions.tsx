@@ -11,9 +11,8 @@ import * as React from 'react';
 import { useAccount } from 'wagmi';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useGeoProfile } from '~/core/hooks/use-geo-profile';
+import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
-import { usePerson } from '~/core/hooks/use-person';
 import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -32,14 +31,13 @@ export function NavbarActions() {
   const { showCreateProfile } = useCreateProfile();
 
   const { address } = useAccount();
-  const { profile, isLoading: isProfileLoading } = useGeoProfile(address);
-  const { person, isLoading: isPersonLoading } = usePerson(address);
+  const { isLoading, account } = useGeoAccount(address);
 
   if (!address) {
     return <GeoConnectButton />;
   }
 
-  if (isProfileLoading || isPersonLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center gap-4">
         <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
@@ -54,14 +52,14 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={person?.avatarUrl} size={28} />
+            <Avatar value={address} avatarUrl={account?.profile?.avatarUrl} size={28} />
           </div>
         }
         open={open}
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {!person && profile ? (
+        {!account?.profile && account?.onchainProfile ? (
           <AvatarMenuItem>
             <div className="flex items-center gap-2">
               <div className="relative h-4 w-4 overflow-hidden rounded-full">
@@ -72,14 +70,18 @@ export function NavbarActions() {
           </AvatarMenuItem>
         ) : (
           <>
-            {profile?.homeSpaceId && (
+            {account?.onchainProfile?.homeSpaceId && (
               <>
                 <AvatarMenuItem>
                   <div className="flex items-center gap-2">
                     <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                      <Avatar value={address} avatarUrl={person?.avatarUrl} size={16} />
+                      <Avatar value={address} avatarUrl={account.profile?.avatarUrl} size={16} />
                     </div>
-                    <Link prefetch={false} href={NavUtils.toSpace(profile.homeSpaceId)} className="text-button">
+                    <Link
+                      prefetch={false}
+                      href={NavUtils.toSpace(account.onchainProfile.homeSpaceId)}
+                      className="text-button"
+                    >
                       Personal space
                     </Link>
                   </div>
