@@ -7,6 +7,7 @@ import Image from '@tiptap/extension-image';
 import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
+// import {FloatingMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import cx from 'classnames';
 
@@ -16,6 +17,8 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 
+// import { SquareButton } from '~/design-system/button';
+// import { Plus } from '~/design-system/icons/plus';
 import { Spacer } from '~/design-system/spacer';
 
 import { NoContent } from '../space-tabs/no-content';
@@ -164,9 +167,16 @@ export const Editor = React.memo(function Editor({
 
   if (!editor) return null;
 
+  // const openCommandMenu = () => editor?.chain().focus().insertContent('/').run();
+
   return (
     <div className={cx(editable ? 'editable' : 'not-editable')}>
       <EditorContent editor={editor} />
+      {/* <FloatingMenu editor={editor}>
+        <div className="absolute -left-12 -top-3">
+          <SquareButton onClick={openCommandMenu} icon={<Plus />} />
+        </div>
+      </FloatingMenu> */}
       {shouldHandleOwnSpacing && <Spacer height={60} />}
     </div>
   );
