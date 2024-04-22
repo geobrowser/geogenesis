@@ -202,7 +202,7 @@ export async function makeNonprofitEffect(
 
       slog({
         requestId,
-        message: `Adding profile to space ${spaceAddress}`,
+        message: `Adding nonprofit entity to space ${spaceAddress}`,
         account: userAccount,
       });
 
