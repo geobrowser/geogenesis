@@ -133,17 +133,6 @@ export async function GET(request: Request) {
             statusText: error.message,
           }
         );
-      case 'AddToSpaceRegistryError':
-        return new Response(
-          JSON.stringify({
-            error: 'Could not add contract to space registry',
-            reason: `Could not add space to space registry for user: ${userAccount}`,
-          }),
-          {
-            status: 500,
-            statusText: error.message,
-          }
-        );
       case 'CreateSpaceEntitiesFailedError':
         return new Response(
           JSON.stringify({
