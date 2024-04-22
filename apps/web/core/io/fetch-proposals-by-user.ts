@@ -35,7 +35,7 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
             nodes {
               id
               name
-              triplesByEntityId {
+              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
                 nodes {
                   id
                   attribute {
@@ -80,7 +80,7 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
             nodes {
               id
               name
-              triplesByEntityId {
+              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
                 nodes {
                   id
                   attribute {

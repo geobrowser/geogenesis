@@ -34,7 +34,7 @@ export const getFetchProposalQuery = (id: string) => `query {
         nodes {
           id
           name
-          triplesByEntityId {
+          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
             nodes {
               id
               attribute {

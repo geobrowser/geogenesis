@@ -39,7 +39,7 @@ const getVersionsQuery = (entityId: string, offset: number, proposalId?: string)
             nodes {
               id
               name
-              triplesByEntityId {
+              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
                 nodes {
                   id
                   attribute {
@@ -74,7 +74,7 @@ const getVersionsQuery = (entityId: string, offset: number, proposalId?: string)
             nodes {
               id
               name
-              triplesByEntityId {
+              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
                 nodes {
                   id
                   attribute {
@@ -102,7 +102,7 @@ const getVersionsQuery = (entityId: string, offset: number, proposalId?: string)
             }
           }
         }
-        
+
         entity {
           id
           name

@@ -35,7 +35,7 @@ export const getProposedVersionQuery = (id: string) => `query {
         nodes {
           id
           name
-          triplesByEntityId {
+          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
             nodes {
               id
               attribute {
@@ -70,7 +70,7 @@ export const getProposedVersionQuery = (id: string) => `query {
         nodes {
           id
           name
-          triplesByEntityId {
+          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
             nodes {
               id
               attribute {

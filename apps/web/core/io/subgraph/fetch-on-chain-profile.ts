@@ -23,8 +23,6 @@ interface NetworkResult {
   onchainProfiles: { nodes: OnchainGeoProfile[] };
 }
 
-// We fetch for geoEntities -> name because the id of the wallet entity might not be the
-// same as the actual wallet address.
 function getFetchProfileQuery(address: string) {
   // Have to fetch the profiles as an array as we can't query an individual profile by it's account.
   // account_starts_with_nocase is also a hack since our subgraph does not store the account the same

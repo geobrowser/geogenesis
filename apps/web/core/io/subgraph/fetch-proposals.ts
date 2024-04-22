@@ -26,7 +26,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
           nodes {
             id
             name
-            triplesByEntityId {
+            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
               nodes {
                 id
                 attribute {
@@ -68,7 +68,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
           nodes {
             id
             name
-            triplesByEntityId {
+            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
               nodes {
                 id
                 attribute {

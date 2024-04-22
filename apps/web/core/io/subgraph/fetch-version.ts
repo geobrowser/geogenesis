@@ -30,7 +30,7 @@ const getVersionsQuery = (versionId: string) => `query {
         nodes {
           id
           name
-          triplesByEntityId {
+          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
             nodes {
               id
               attribute {
@@ -65,7 +65,7 @@ const getVersionsQuery = (versionId: string) => `query {
         nodes {
           id
           name
-          triplesByEntityId {
+          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
             nodes {
               id
               attribute {
