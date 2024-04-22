@@ -2,8 +2,9 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, Version } from '~/core/types';
+import { Profile, SpaceWithMetadata, Version } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -58,7 +59,41 @@ const getVersionsQuery = (versionId: string) => `query {
       }
     }
 
-    spaceId
+    space {
+      id
+      metadata {
+        nodes {
+          id
+          name
+          triplesByEntityId {
+            nodes {
+              id
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+              entityValue {
+                id
+                name
+              }
+              numberValue
+              stringValue
+              valueType
+              valueId
+              isProtected
+              space {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+
     entity {
       id
       name
@@ -183,10 +218,19 @@ export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersion
 
   const networkTriples = version.tripleVersions.nodes.flatMap(tv => tv.triple);
 
+  const spaceConfig = version.space.metadata.nodes[0] as SubstreamEntity | undefined;
+  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+
+  const spaceWithMetadata: SpaceWithMetadata = {
+    id: version.space.id,
+    name: spaceConfig?.name ?? null,
+    image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+  };
+
   return {
     ...version,
-    // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
     createdBy: profile,
+    space: spaceWithMetadata,
     triples: fromNetworkTriples(networkTriples),
   };
 }

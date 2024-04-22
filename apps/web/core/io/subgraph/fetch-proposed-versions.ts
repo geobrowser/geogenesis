@@ -2,8 +2,9 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, ProposedVersion } from '~/core/types';
+import { Profile, ProposedVersion, SpaceWithMetadata } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -66,7 +67,41 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
         }
       }
 
-      spaceId
+      space {
+        id
+        metadata {
+          nodes {
+            id
+            name
+            triplesByEntityId {
+              nodes {
+                id
+                attribute {
+                  id
+                  name
+                }
+                entity {
+                  id
+                  name
+                }
+                entityValue {
+                  id
+                  name
+                }
+                numberValue
+                stringValue
+                valueType
+                valueId
+                isProtected
+                space {
+                  id
+                }
+              }
+            }
+          }
+        }
+      }
+
       actions {
         nodes {
           actionType
@@ -181,9 +216,19 @@ export async function fetchProposedVersions({
           profileLink: null,
         };
 
+    const spaceConfig = v.space.metadata.nodes[0] as SubstreamEntity | undefined;
+    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+
+    const spaceWithMetadata: SpaceWithMetadata = {
+      id: v.space.id,
+      name: spaceConfig?.name ?? null,
+      image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+    };
+
     return {
       ...v,
       createdBy: profile,
+      space: spaceWithMetadata,
       actions: fromNetworkActions(v.actions.nodes, spaceId),
     };
   });

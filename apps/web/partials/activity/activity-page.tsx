@@ -7,7 +7,6 @@ import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { Action as IAction } from '~/core/types';
 import { Action } from '~/core/utils/action';
-import { Entity } from '~/core/utils/entity';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -44,16 +43,10 @@ async function ActivityList({ searchParams, entityId }: Props) {
   // the address associated with the on-chain profile. But this works.
   const address = id.split('–')[0];
 
-  const [proposals, spaces] = await Promise.all([
-    fetchProposalsByUser({
-      userId: address,
-      spaceId: searchParams.spaceId,
-      api: {
-        fetchProfile: Subgraph.fetchProfile,
-      },
-    }),
-    Subgraph.fetchSpaces(),
-  ]);
+  const proposals = await fetchProposalsByUser({
+    userId: address,
+    spaceId: searchParams.spaceId,
+  });
 
   if (proposals.length === 0) return <p className="pt-1 text-body text-grey-04">There is no information here yet.</p>;
 
@@ -66,11 +59,9 @@ async function ActivityList({ searchParams, entityId }: Props) {
         </>
       ) : (
         proposals.map(p => {
-          const space = spaces.find(s => s.id === p.space);
-
-          const configEntity = space?.spaceConfig;
-          const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
-          const spaceImage = configEntity ? configEntity.image : PLACEHOLDER_SPACE_IMAGE;
+          const space = p.space;
+          const spaceName = space.name ?? space.id;
+          const spaceImage = space.image ?? PLACEHOLDER_SPACE_IMAGE;
 
           const lastEditedDate = GeoDate.fromGeoTime(p.createdAt);
           const proposalChangeCount = Action.getChangeCount(

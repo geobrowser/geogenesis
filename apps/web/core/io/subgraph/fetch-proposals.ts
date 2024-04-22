@@ -2,8 +2,9 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, Proposal } from '~/core/types';
+import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -18,7 +19,42 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
       id
       onchainProposalId
       name
-      spaceId
+
+      space {
+        id
+        metadata {
+          nodes {
+            id
+            name
+            triplesByEntityId {
+              nodes {
+                id
+                attribute {
+                  id
+                  name
+                }
+                entity {
+                  id
+                  name
+                }
+                entityValue {
+                  id
+                  name
+                }
+                numberValue
+                stringValue
+                valueType
+                valueId
+                isProtected
+                space {
+                  id
+                }
+              }
+            }
+          }
+        }
+      }
+
       createdAtBlock
       createdBy {
         id
@@ -204,11 +240,20 @@ export async function fetchProposals({
           profileLink: null,
         };
 
+    const spaceConfig = p.space.metadata.nodes[0] as SubstreamEntity | undefined;
+    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+
+    const spaceWithMetadata: SpaceWithMetadata = {
+      id: p.space.id,
+      name: spaceConfig?.name ?? null,
+      image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+    };
+
     return {
       ...p,
       name: p.name,
       description: p.description,
-      space: p.spaceId,
+      space: spaceWithMetadata,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
       createdBy: profile,
       proposedVersions: p.proposedVersions.nodes.map(v => {

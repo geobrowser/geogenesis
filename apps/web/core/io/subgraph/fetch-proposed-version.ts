@@ -2,8 +2,9 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, ProposedVersion } from '~/core/types';
+import { Profile, ProposedVersion, SpaceWithMetadata } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -63,7 +64,41 @@ export const getProposedVersionQuery = (id: string) => `query {
       }
     }
 
-    spaceId
+    space {
+      id
+      metadata {
+        nodes {
+          id
+          name
+          triplesByEntityId {
+            nodes {
+              id
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+              entityValue {
+                id
+                name
+              }
+              numberValue
+              stringValue
+              valueType
+              valueId
+              isProtected
+              space {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+    
     actions {
       nodes {
         actionType
@@ -177,9 +212,19 @@ export async function fetchProposedVersion({
         profileLink: null,
       };
 
+  const spaceConfig = proposedVersion.space.metadata.nodes[0] as SubstreamEntity | undefined;
+  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+
+  const spaceWithMetadata: SpaceWithMetadata = {
+    id: proposedVersion.space.id,
+    name: spaceConfig?.name ?? null,
+    image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+  };
+
   return {
     ...proposedVersion,
-    actions: fromNetworkActions(proposedVersion.actions.nodes, proposedVersion.spaceId),
+    space: spaceWithMetadata,
+    actions: fromNetworkActions(proposedVersion.actions.nodes, proposedVersion.space.id),
     createdBy: profile,
   };
 }

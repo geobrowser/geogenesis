@@ -42,7 +42,7 @@ export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
   triplesByEntityId: { nodes: SubstreamTriple[] };
 };
 
-export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> & {
+export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy' | 'space'> & {
   actions: { nodes: SubstreamAction[] };
 
   createdBy: {
@@ -50,6 +50,7 @@ export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> 
     geoProfiles: { nodes: SubstreamEntity[] };
     onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
   };
+  space: { id: string; metadata: { nodes: SubstreamEntity[] } };
 };
 
 export type SubstreamVersion = {
@@ -63,7 +64,7 @@ export type SubstreamVersion = {
   };
   createdAt: number;
   createdAtBlock: string;
-  spaceId: string;
+  space: { id: string; metadata: { nodes: SubstreamEntity[] } };
   tripleVersions: { nodes: { triple: SubstreamTriple }[] };
   entity: {
     id: string;
@@ -83,7 +84,7 @@ export type SubstreamProposal = {
   createdAtBlock: string;
   name: string | null;
   description: string | null;
-  spaceId: string;
+  space: { id: string; metadata: { nodes: SubstreamEntity[] } };
   startTime: number;
   endTime: number;
   status: 'APPROVED';
