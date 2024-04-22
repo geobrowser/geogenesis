@@ -29,7 +29,3 @@ export class ProxyBeaconDeploymentFailedError extends Error {
 export class SpaceProxyContractAddressNullError extends Error {
   readonly _tag = 'SpaceProxyContractAddressNullError';
 }
-
-export class AddToSpaceRegistryError extends Error {
-  readonly _tag = 'AddToSpaceRegistryError';
-}
