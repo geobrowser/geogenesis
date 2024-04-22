@@ -3,11 +3,12 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Proposal } from '~/core/types';
+import { Profile, Proposal } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { NavUtils } from '~/core/utils/utils';
 
-import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { SubstreamProposal, fromNetworkActions } from './network-local-mapping';
+import { SubstreamEntity, SubstreamProposal, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
 
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
@@ -19,6 +20,48 @@ export const getFetchProposalQuery = (id: string) => `query {
     createdById
     createdAt
     status
+
+    createdBy {
+      id
+      onchainProfiles {
+        nodes {
+          id
+          homeSpaceId
+        }
+      }
+      geoProfiles {
+        nodes {
+          id
+          name
+          triplesByEntityId {
+            nodes {
+              id
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+              entityValue {
+                id
+                name
+              }
+              numberValue
+              stringValue
+              valueType
+              valueId
+              isProtected
+              space {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+
     proposedVersions {
       nodes {
         id
@@ -116,36 +159,36 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
-  const maybeProfile = await fetchProfile({ address: proposal.createdById });
+  const maybeProfile = proposal.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
+  const onchainProfile = proposal.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
+  const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+
+  const profile: Profile = maybeProfile
+    ? {
+        id: proposal.createdBy.id,
+        address: proposal.createdBy.id as `0x${string}`,
+        avatarUrl: Entity.avatar(profileTriples),
+        coverUrl: Entity.cover(profileTriples),
+        name: maybeProfile.name,
+        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
+      }
+    : {
+        id: proposal.createdBy.id,
+        name: null,
+        avatarUrl: null,
+        coverUrl: null,
+        address: proposal.createdBy.id as `0x${string}`,
+        profileLink: null,
+      };
 
   return {
     ...proposal,
     space: proposal.spaceId,
-    createdBy:
-      maybeProfile !== null
-        ? maybeProfile[1]
-        : {
-            id: proposal.createdById,
-            name: null,
-            avatarUrl: null,
-            coverUrl: null,
-            address: proposal.createdById as `0x${string}`,
-            profileLink: null,
-          },
+    createdBy: profile,
     proposedVersions: proposal.proposedVersions.nodes.map(v => {
       return {
         ...v,
-        createdBy:
-          maybeProfile !== null
-            ? maybeProfile[1]
-            : {
-                id: proposal.createdById,
-                name: null,
-                avatarUrl: null,
-                coverUrl: null,
-                address: proposal.createdById as `0x${string}`,
-                profileLink: null,
-              },
+        createdBy: profile,
         actions: fromNetworkActions(v.actions.nodes, proposal.spaceId),
       };
     }),

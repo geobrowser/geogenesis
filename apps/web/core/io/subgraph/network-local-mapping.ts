@@ -68,7 +68,11 @@ export type SubstreamVersion = {
 export type SubstreamProposal = {
   id: string;
   onchainProposalId: string;
-  createdById: string;
+  createdBy: {
+    id: string;
+    geoProfiles: { nodes: SubstreamEntity[] };
+    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
+  };
   createdAt: number;
   createdAtBlock: string;
   name: string | null;
