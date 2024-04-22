@@ -3,11 +3,12 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Version } from '~/core/types';
+import { Profile, Version } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { NavUtils } from '~/core/utils/utils';
 
-import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { SubstreamVersion, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from './network-local-mapping';
 
 const getVersionsQuery = (entityId: string, offset: number, proposalId?: string) => {
   const filter = [
@@ -24,7 +25,48 @@ const getVersionsQuery = (entityId: string, offset: number, proposalId?: string)
         name
         createdAt
         createdAtBlock
-        createdById
+
+        createdBy {
+          id
+          onchainProfiles {
+            nodes {
+              homeSpaceId
+              id
+            }
+          }
+          geoProfiles {
+            nodes {
+              id
+              name
+              triplesByEntityId {
+                nodes {
+                  id
+                  attribute {
+                    id
+                    name
+                  }
+                  entity {
+                    id
+                    name
+                  }
+                  entityValue {
+                    id
+                    name
+                  }
+                  numberValue
+                  stringValue
+                  valueType
+                  valueId
+                  isProtected
+                  space {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+
         spaceId
         entity {
           id
@@ -129,29 +171,34 @@ export async function fetchVersions({
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const versions = result.versions.nodes;
 
-  // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
-  // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfiles = await Promise.all(versions.map(v => fetchProfile({ address: v.createdById })));
-
-  // Create a map of wallet address -> profile so we can look it up when creating the application
-  // ProposedVersions data structure. ProposedVersions have a `createdById` field that should map to the Profile
-  // of the user who created the ProposedVersion.
-  const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
-
   return versions.map(v => {
     const networkTriples = v.tripleVersions.nodes.flatMap(tv => tv.triple);
+    const maybeProfile = v.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
+    const onchainProfile = v.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
+    const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+
+    const profile: Profile = maybeProfile
+      ? {
+          id: v.createdBy.id,
+          address: v.createdBy.id as `0x${string}`,
+          avatarUrl: Entity.avatar(profileTriples),
+          coverUrl: Entity.cover(profileTriples),
+          name: maybeProfile.name,
+          profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
+        }
+      : {
+          id: v.createdBy.id,
+          name: null,
+          avatarUrl: null,
+          coverUrl: null,
+          address: v.createdBy.id as `0x${string}`,
+          profileLink: null,
+        };
 
     return {
       ...v,
       // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profiles[v.createdById] ?? {
-        id: v.createdById,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: v.createdById as `0x${string}`,
-        profileLink: null,
-      },
+      createdBy: profile,
       triples: fromNetworkTriples(networkTriples),
     };
   });

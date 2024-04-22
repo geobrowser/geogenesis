@@ -3,11 +3,17 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { ProposedVersion } from '~/core/types';
+import { Profile, ProposedVersion } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { NavUtils } from '~/core/utils/utils';
 
-import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { SubstreamProposedVersion, fromNetworkActions } from './network-local-mapping';
+import {
+  SubstreamEntity,
+  SubstreamProposedVersion,
+  fromNetworkActions,
+  fromNetworkTriples,
+} from './network-local-mapping';
 
 export const getProposedVersionQuery = (id: string) => `query {
   proposedVersion(id: ${JSON.stringify(id)}) {
@@ -15,7 +21,48 @@ export const getProposedVersionQuery = (id: string) => `query {
     name
     createdAt
     createdAtBlock
-    createdById
+
+    createdBy {
+      id
+      onchainProfiles {
+        nodes {
+          homeSpaceId
+          id
+        }
+      }
+      geoProfiles {
+        nodes {
+          id
+          name
+          triplesByEntityId {
+            nodes {
+              id
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+              entityValue {
+                id
+                name
+              }
+              numberValue
+              stringValue
+              valueType
+              valueId
+              isProtected
+              space {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+
     spaceId
     actions {
       nodes {
@@ -106,21 +153,33 @@ export async function fetchProposedVersion({
     return null;
   }
 
-  const maybeProfile = await fetchProfile({ address: proposedVersion.createdById });
+  const maybeProfile = proposedVersion.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
+  const onchainProfile = proposedVersion.createdBy.onchainProfiles.nodes[0] as
+    | { homeSpaceId: string; id: string }
+    | undefined;
+  const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+
+  const profile: Profile = maybeProfile
+    ? {
+        id: proposedVersion.createdBy.id,
+        address: proposedVersion.createdBy.id as `0x${string}`,
+        avatarUrl: Entity.avatar(profileTriples),
+        coverUrl: Entity.cover(profileTriples),
+        name: maybeProfile.name,
+        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
+      }
+    : {
+        id: proposedVersion.createdBy.id,
+        name: null,
+        avatarUrl: null,
+        coverUrl: null,
+        address: proposedVersion.createdBy.id as `0x${string}`,
+        profileLink: null,
+      };
 
   return {
     ...proposedVersion,
     actions: fromNetworkActions(proposedVersion.actions.nodes, proposedVersion.spaceId),
-    createdBy:
-      maybeProfile !== null
-        ? maybeProfile[1]
-        : {
-            id: proposedVersion.createdById,
-            name: null,
-            avatarUrl: null,
-            coverUrl: null,
-            address: proposedVersion.createdById as `0x${string}`,
-            profileLink: null,
-          },
+    createdBy: profile,
   };
 }

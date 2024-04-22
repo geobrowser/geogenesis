@@ -45,16 +45,22 @@ export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
 export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> & {
   actions: { nodes: SubstreamAction[] };
 
-  // The NetworkVersion does not have a name or avatar associated
-  // with the createdBy field
-  createdById: string;
+  createdBy: {
+    id: string;
+    geoProfiles: { nodes: SubstreamEntity[] };
+    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
+  };
 };
 
 export type SubstreamVersion = {
   id: string;
   name: string | null;
   description: string | null;
-  createdById: string; // wallet address
+  createdBy: {
+    id: string;
+    geoProfiles: { nodes: SubstreamEntity[] };
+    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
+  };
   createdAt: number;
   createdAtBlock: string;
   spaceId: string;
