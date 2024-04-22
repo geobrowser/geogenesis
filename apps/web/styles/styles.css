@@ -65,6 +65,10 @@ textarea::placeholder {
   opacity: 0.75;
 }
 
+.not-editable .is-empty {
+  @apply !invisible;
+}
+
 @tailwind components;
 
 /* Gradients */
