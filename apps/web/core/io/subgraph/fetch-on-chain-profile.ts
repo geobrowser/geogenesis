@@ -30,7 +30,7 @@ function getFetchProfileQuery(address: string) {
   // account_starts_with_nocase is also a hack since our subgraph does not store the account the same
   // way as the profiles. Profiles are a string but `createdBy` in our subgraph is stored as Bytes.
   return `query {
-    onchainProfiles(filter: { accountId: { equalTo: "${address}" } } first: 1) {
+    onchainProfiles(filter: { accountId: { equalTo: "${address}" } } orderBy: CREATED_AT_DESC) {
       nodes {
         id
         accountId
