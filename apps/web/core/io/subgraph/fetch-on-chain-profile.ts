@@ -1,6 +1,7 @@
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
+import { getAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { OnchainProfile } from '~/core/types';
@@ -45,7 +46,7 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
     endpoint: config.api,
-    query: getFetchProfileQuery(options.address),
+    query: getFetchProfileQuery(getAddress(options.address)),
     signal: options?.signal,
   });
 

@@ -43,13 +43,7 @@ export default async function PersonalHomePage() {
 
   return (
     <Component
-      header={
-        <PersonalHomeHeader
-          person={person ? person[1] : null}
-          address={connectedAddress ?? null}
-          onchainProfile={profile}
-        />
-      }
+      header={<PersonalHomeHeader person={person} address={connectedAddress ?? null} onchainProfile={profile} />}
       activeProposals={[]}
       membershipRequests={membershipRequests}
       acceptedProposalsCount={acceptedProposalsCount}
