@@ -38,7 +38,6 @@ export type SubstreamAction = OmitStrict<SubstreamTriple, 'space' | 'isProtected
   };
 
 export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
-  // versionsByEntityId: { nodes: { tripleVersions: { nodes: { triple: NetworkTriple }[] } }[] };
   triplesByEntityId: { nodes: SubstreamTriple[] };
 };
 

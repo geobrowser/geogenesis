@@ -21,9 +21,11 @@ interface OnchainProfile {
 }
 
 interface NetworkResult {
-  id: string;
-  geoProfiles: { nodes: SubstreamEntity[] };
-  onchainProfiles: { nodes: OnchainProfile[] };
+  account: {
+    id: string;
+    geoProfiles: { nodes: SubstreamEntity[] };
+    onchainProfiles: { nodes: OnchainProfile[] };
+  } | null;
 }
 
 function getAccountQuery(address: string) {
@@ -83,6 +85,8 @@ export async function fetchAccount(
     signal: options?.signal,
   });
 
+  console.log('account query', getAccountQuery(options.address));
+
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(fetchWalletsGraphqlEffect));
 
@@ -119,12 +123,13 @@ export async function fetchAccount(
     return resultOrError.right;
   });
 
-  const account = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const networkResult = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  if (!account) {
+  if (!networkResult?.account) {
     return null;
   }
 
+  const account = networkResult.account;
   const maybeProfile = account.geoProfiles.nodes[0] as SubstreamEntity | undefined;
   const onchainProfile = account.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
   const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
