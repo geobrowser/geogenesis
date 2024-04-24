@@ -85,8 +85,6 @@ export async function fetchAccount(
     signal: options?.signal,
   });
 
-  console.log('account query', getAccountQuery(options.address));
-
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(fetchWalletsGraphqlEffect));
 
