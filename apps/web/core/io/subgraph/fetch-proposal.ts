@@ -16,7 +16,42 @@ export const getFetchProposalQuery = (id: string) => `query {
     id
     onchainProposalId
     name
-    spaceId
+
+    space {
+      id
+      metadata {
+        nodes {
+          id
+          name
+          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+            nodes {
+              id
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+              entityValue {
+                id
+                name
+              }
+              numberValue
+              stringValue
+              valueType
+              valueId
+              isProtected
+              space {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+
     createdAtBlock
     createdById
     createdAt
