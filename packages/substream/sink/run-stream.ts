@@ -44,7 +44,6 @@ import {
   ZodProposalStreamResponse,
 } from './parsers/proposals';
 import { ZodVotesCastStreamResponse } from './parsers/votes';
-import { getEditorsGrantedV2Effect } from './populate-roles';
 import {
   groupProposalsByType,
   mapContentProposalsToSchema,
