@@ -369,7 +369,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
             slog({
               requestId: message.cursor,
-              message: `Writing editor role for accounts ${editorsAddedResponse.data.editorsAdded
+              message: `Writing initial editor and member role for accounts ${editorsAddedResponse.data.editorsAdded
                 .map(e => e.addresses)
                 .join(', ')} to space with plugin ${editorsAddedResponse.data.editorsAdded.map(
                 e => e.pluginAddress
@@ -386,7 +386,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
             slog({
               requestId: message.cursor,
-              message: `Editor roles written successfully`,
+              message: `Initial editor and member roles written successfully`,
             });
           }
 

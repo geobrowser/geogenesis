@@ -4,8 +4,8 @@ import type * as S from 'zapatos/schema';
 import { pool } from '../utils/pool';
 
 export class Proposals {
-  static upsert(proposals: S.proposals.Insertable[]) {
-    return db
+  static async upsert(proposals: S.proposals.Insertable[]) {
+    return await db
       .upsert('proposals', proposals, ['id'], {
         updateColumns: db.doNothing,
       })

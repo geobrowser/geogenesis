@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
+import { SpaceEditors, SpaceMembers } from './db';
 import { SpaceWithPluginAddressNotFoundError } from './errors';
 import { slog } from './utils';
 import { getChecksumAddress } from './utils/get-checksum-address';
@@ -147,13 +148,47 @@ export function getEditorsGrantedV2Effect({
         .filter(e => e.space_id !== undefined)
     );
 
+    const newMembers = editorsAdded.flatMap(({ addresses, pluginAddress }) =>
+      addresses
+        .map(a => {
+          const member: S.space_members.Insertable = {
+            // Can safely assert that spacesForPlugins.get(pluginAddress) is not null here
+            // since we set up the mapping based on the plugin address previously
+            //
+            // @NOTE: This might break if we start indexing at a block that occurs after the
+            // space was created.
+            space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress))!,
+            account_id: getChecksumAddress(a),
+            created_at: timestamp,
+            created_at_block: blockNumber,
+          };
+
+          return member;
+        })
+        // Handle the edge case where we might start indexing at a block that occurs after
+        // the space was created.
+        .map(e => {
+          if (e.space_id === undefined) {
+            slog({
+              level: 'error',
+              message: `Could not find space for plugin address, ${pluginAddress}`,
+              requestId: '0',
+            });
+          }
+
+          return e;
+        })
+        .filter(e => e.space_id !== undefined)
+    );
+
     yield* _(
       Effect.tryPromise({
-        try: () =>
-          db
-            .upsert('space_editors_v2', newEditors, ['space_id', 'account_id'], { updateColumns: db.doNothing })
-            .run(pool),
-        catch: error => new CouldNotWriteEditorsV2Error(String(error)),
+        try: async () => {
+          await Promise.all([SpaceEditors.upsert(newEditors), SpaceMembers.upsert(newMembers)]);
+        },
+        catch: error => {
+          return new CouldNotWriteEditorsV2Error(String(error));
+        },
       })
     );
   });

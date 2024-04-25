@@ -6,3 +6,4 @@ export * from './proposed-members';
 export * from './proposed-subspaces';
 export * from './proposed-versions';
 export * from './space-members';
+export * from './space-editors';
