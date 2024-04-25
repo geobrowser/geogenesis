@@ -6,3 +6,9 @@ export enum TripleAction {
 }
 
 export type TripleWithActionTuple = [TripleAction, s.triples.Insertable];
+
+export interface BlockEvent {
+  cursor: string;
+  blockNumber: number;
+  timestamp: number;
+}

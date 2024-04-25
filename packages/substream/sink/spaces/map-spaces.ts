@@ -1,6 +1,6 @@
 import type * as S from 'zapatos/schema';
 
-import type { GovernancePluginsCreated, SpacePluginCreated } from '../parsers/spaces-created';
+import type { GovernancePluginsCreated, SpacePluginCreated } from '../events/spaces-created/parser';
 import { getChecksumAddress } from '../utils/get-checksum-address';
 
 export function mapSpaces(spaces: SpacePluginCreated[], createdAtBlock: number): S.spaces.Insertable[] {
@@ -24,12 +24,3 @@ export function mapGovernanceToSpaces(
     member_access_plugin_address: getChecksumAddress(s.memberAccessAddress),
   }));
 }
-
-/**
- * @TODO: It might make sense to have a separate function that takes the mapSpaces and
- * mapGovernanceToSpaces functions and merges any duplicate entries into a single DB call.
- * Otherwise we're making multiple writes to the DB with duplicate data which is blocking
- * and slow.
- *
- * Maybe this can happen when we create the Queue implementation.
- */

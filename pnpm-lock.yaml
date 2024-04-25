@@ -595,7 +595,7 @@ importers:
       '@bufbuild/protobuf': ^1.7.2
       '@connectrpc/connect': ^1.3.0
       '@connectrpc/connect-node': ^1.3.0
-      '@effect/schema': ^0.62.6
+      '@effect/schema': ^0.62.9
       '@substreams/core': ^0.15.1
       '@substreams/manifest': ^0.14.1
       '@substreams/node': ^0.6.2
@@ -609,7 +609,7 @@ importers:
       commander: latest
       dotenv: latest
       dotenv-cli: ^7.3.0
-      effect: ^2.3.5
+      effect: ^2.4.19
       esbuild: ^0.19.5
       eslint: ^8.21.0
       eslint-config-prettier: ^8.5.0
@@ -636,14 +636,14 @@ importers:
       '@bufbuild/protobuf': 1.7.2
       '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.2
       '@connectrpc/connect-node': 1.3.0_bxtizuvznsbuo3vepj6cj6snqi
-      '@effect/schema': 0.62.6_4guqwn6xtccv4qrkgrvab5r4jm
+      '@effect/schema': 0.62.9_erf3cmnagdeps7hbuxrann6j3m
       '@substreams/core': 0.15.1_bxtizuvznsbuo3vepj6cj6snqi
-      '@substreams/manifest': 0.14.1_4u75gul3ner4hsltffhqfmc2xe
+      '@substreams/manifest': 0.14.1_42emqkcsw6jjnlerekabrisx4m
       '@substreams/node': 0.6.2
-      '@substreams/sink': 0.13.1_xwbrhnovn7ls6etgs7j4wvaj4e
+      '@substreams/sink': 0.13.1_7llnctuv5p42fyxhpcp5ed2sqm
       commander: 12.0.0
       dotenv: 16.4.5
-      effect: 2.3.5
+      effect: 2.4.19
       fast-check: 3.14.0
       node-fetch: 3.3.2
       pg: 8.11.3
@@ -1441,7 +1441,7 @@ packages:
     dependencies:
       '@bufbuild/protobuf': 1.9.0
       '@connectrpc/connect': 1.4.0_@bufbuild+protobuf@1.9.0
-      undici: 5.28.3
+      undici: 5.28.4
     dev: false
 
   /@connectrpc/connect-web/1.4.0_wut4uockfj6xglxbg7ougowgb4:
@@ -1477,13 +1477,13 @@ packages:
       '@jridgewell/trace-mapping': 0.3.9
     dev: true
 
-  /@effect/schema/0.62.6_4guqwn6xtccv4qrkgrvab5r4jm:
-    resolution: {integrity: sha512-Y/vkQ63EXcQUiJM01lbZ5lb7wCEK8gTcM5wZ1L20TvqFuAXHLp0cs66L3Sk3eIbiX0mv4aYxBWSKhwvhWAhc6g==}
+  /@effect/schema/0.62.9_erf3cmnagdeps7hbuxrann6j3m:
+    resolution: {integrity: sha512-u5LJqk3MClXr8DxiN/AGUBUxVnsl8o6glOTfToFECn3I+slVW/vbzLMRyUqbNNp2uBpdP6UGwmp9VVYxd72bBg==}
     peerDependencies:
-      effect: ^2.3.5
+      effect: ^2.3.8
       fast-check: ^3.13.2
     dependencies:
-      effect: 2.3.5
+      effect: 2.4.19
       fast-check: 3.14.0
     dev: false
 
@@ -2709,6 +2709,11 @@ packages:
     engines: {node: '>=14'}
     dev: false
 
+  /@fastify/busboy/2.1.1:
+    resolution: {integrity: sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==}
+    engines: {node: '>=14'}
+    dev: false
+
   /@float-capital/float-subgraph-uncrashable/0.0.0-internal-testing.5:
     resolution: {integrity: sha512-yZ0H5e3EpAYKokX/AbtplzlvSxEJY7ZfpvQyDzyODkks0hakAAlDG6fQu1SlDJMWorY7bbq1j7fCiFeTWci6TA==}
     dependencies:
@@ -3695,8 +3700,8 @@ packages:
       - typescript
     dev: true
 
-  /@opentelemetry/api/1.7.0:
-    resolution: {integrity: sha512-AdY5wvN0P2vXBi3b29hxZgSFvdhdxPB9+f0B6s//P9Q8nibRWeA3cHm8UmLpio9ABigkVHJ5NMPk+Mz8VCCyrw==}
+  /@opentelemetry/api/1.8.0:
+    resolution: {integrity: sha512-I/s6F7yKUDdtMsoBWXJe8Qz40Tui5vsuKCWJEWVL+5q9sSWRzzx6v2KeNsOBEwd94j0eWkpWCH4yB6rZg9Mf0w==}
     engines: {node: '>=8.0.0'}
     dev: false
 
@@ -5217,7 +5222,7 @@ packages:
       '@connectrpc/connect': 1.4.0_@bufbuild+protobuf@1.9.0
     dev: false
 
-  /@substreams/manifest/0.14.1_4u75gul3ner4hsltffhqfmc2xe:
+  /@substreams/manifest/0.14.1_42emqkcsw6jjnlerekabrisx4m:
     resolution: {integrity: sha512-NKxNmiVki41wPGmGewQBkpzDc6HOMkK2JIZR4mPczSA3tRIxwiTcK027X5Na3mpaxJawbzAOHGSuJNbS+IBYJQ==}
     peerDependencies:
       '@bufbuild/buf': ^1.29.0
@@ -5228,9 +5233,9 @@ packages:
     dependencies:
       '@bufbuild/buf': 1.29.0
       '@bufbuild/protobuf': 1.7.2
-      '@effect/schema': 0.62.6_4guqwn6xtccv4qrkgrvab5r4jm
+      '@effect/schema': 0.62.9_erf3cmnagdeps7hbuxrann6j3m
       '@substreams/core': 0.15.1_bxtizuvznsbuo3vepj6cj6snqi
-      effect: 2.3.5
+      effect: 2.4.19
       yaml: 2.3.4
     transitivePeerDependencies:
       - '@connectrpc/connect'
@@ -5248,7 +5253,7 @@ packages:
       eventemitter3: 5.0.1
     dev: false
 
-  /@substreams/sink/0.13.1_xwbrhnovn7ls6etgs7j4wvaj4e:
+  /@substreams/sink/0.13.1_7llnctuv5p42fyxhpcp5ed2sqm:
     resolution: {integrity: sha512-+IF3MK8mViUQ4X1xfeDuj+O/HGzU1fV/oC4YcULY5dSsvtDRV82ddsvhsC1ddRfn3Nne5oJV0EXXzDkc6YM5/Q==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.7.2
@@ -5258,7 +5263,7 @@ packages:
       '@bufbuild/protobuf': 1.7.2
       '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.2
       '@substreams/core': 0.15.1_bxtizuvznsbuo3vepj6cj6snqi
-      effect: 2.3.5
+      effect: 2.4.19
     dev: false
 
   /@swc/helpers/0.5.2:
@@ -10857,8 +10862,8 @@ packages:
     resolution: {integrity: sha512-vwMIl39m8fMBeXoGIdSwMi2lrg7NltyrGMK0N/liGDl7G9LXvERKOCipNcobSIGO0V7hjaXEWgL6W/KEWEww+g==}
     dev: false
 
-  /effect/2.3.5:
-    resolution: {integrity: sha512-qarp/WBRty4VM//ZEKDY8Bu3Tolr1afEIwFVZtU3eMOtBZpRIQkLVQMTOjUTt3qeJAAIHfYfEk7GiKg6ABCWlg==}
+  /effect/2.4.19:
+    resolution: {integrity: sha512-z/rn878Po3n522g/AYUDHD1SsZaZdvRxlTCLQ8xl8H6xA82nBwwooD1mdn/73Uywmp7d84oay3w3528r0Uyd0w==}
     dev: false
 
   /ejs/3.1.6:
@@ -18335,7 +18340,7 @@ packages:
     resolution: {integrity: sha512-on3h1iXb04QFLLThrmVYg1SChBQ9N1c+nKAjebBjokBqipddH3uxmOUcEkTnzmJ8Jh/5TSUnUqS40i2QB2dJHQ==}
     engines: {node: ^16 || ^18 || >=20}
     dependencies:
-      '@opentelemetry/api': 1.7.0
+      '@opentelemetry/api': 1.8.0
       tdigest: 0.1.2
     dev: false
 
@@ -21671,6 +21676,13 @@ packages:
     engines: {node: '>=14.0'}
     dependencies:
       '@fastify/busboy': 2.1.0
+    dev: false
+
+  /undici/5.28.4:
+    resolution: {integrity: sha512-72RFADWFqKmUb2hmmvNODKL3p9hcB6Gt2DOQMis1SEBaV6a4MH8soBvzg+95CYhCKPFedut2JY9bMfrDl9D23g==}
+    engines: {node: '>=14.0'}
+    dependencies:
+      '@fastify/busboy': 2.1.1
     dev: false
 
   /undici/5.8.0:

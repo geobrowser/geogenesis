@@ -7,3 +7,4 @@ export * from './proposed-subspaces';
 export * from './proposed-versions';
 export * from './space-members';
 export * from './space-editors';
+export * from './spaces';

@@ -19,10 +19,16 @@ import {
   SpaceMembers,
 } from './db';
 import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
+import { handleOnchainProfilesRegistered } from './events/onchain-profile-registered/handler';
+import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profile-registered/parser';
+import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
+import {
+  ZodGovernancePluginsCreatedStreamResponse,
+  ZodSpacePluginCreatedStreamResponse,
+} from './events/spaces-created/parser';
 import { mapMembers } from './members/map-members';
 import { ZodEditorsAddedStreamResponse } from './parsers/editors-added';
 import { ZodMembersApprovedStreamResponse } from './parsers/members-approved';
-import { ZodOnchainProfilesRegisteredStreamResponse } from './parsers/onchain-profile-registered';
 import { ZodProposalExecutedStreamResponse } from './parsers/proposal-executed';
 import {
   type ContentProposal,
@@ -32,14 +38,9 @@ import {
   ZodProposalProcessedStreamResponse,
   ZodProposalStreamResponse,
 } from './parsers/proposals';
-import {
-  ZodGovernancePluginsCreatedStreamResponse,
-  ZodSpacePluginCreatedStreamResponse,
-} from './parsers/spaces-created';
 import { ZodSubspacesAddedStreamResponse, ZodSubspacesRemovedStreamResponse } from './parsers/subspaces';
 import { ZodVotesCastStreamResponse } from './parsers/votes';
 import { getEditorsGrantedV2Effect } from './populate-roles';
-import { populateOnchainProfiles } from './profiles/populate-onchain-profiles';
 import {
   groupProposalsByType,
   mapContentProposalsToSchema,
@@ -64,32 +65,12 @@ export class CouldNotWriteCursorError extends Error {
   _tag: 'CouldNotWriteCursorError' = 'CouldNotWriteCursorError';
 }
 
-export class CouldNotWriteCachedEntryError extends Error {
-  _tag: 'CouldNotWriteCachedEntryError' = 'CouldNotWriteCachedEntryError';
-}
-
-export class CouldNotWriteCachedRoleError extends Error {
-  _tag: 'CouldNotWriteCachedRoleError' = 'CouldNotWriteCachedRoleError';
-}
-
-export class CouldNotRevokeRoleError extends Error {
-  _tag: 'CouldNotRevokeRoleError' = 'CouldNotRevokeRoleError';
-}
-
-export class CouldNotGrantRoleError extends Error {
-  _tag: 'CouldNotGrantRoleError' = 'CouldNotGrantRoleError';
-}
-
 export class InvalidStreamConfigurationError extends Error {
   _tag: 'InvalidStreamConfigurationError' = 'InvalidStreamConfigurationError';
 }
 
 export class CouldNotReadCursorError extends Error {
   _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
-}
-
-export class CouldNotWriteSpacesError extends Error {
-  _tag: 'CouldNotWriteSpacesError' = 'CouldNotWriteSpacesError';
 }
 
 export class CouldNotWriteSubspacesError extends Error {
@@ -229,17 +210,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           if (profilesRegistered.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
 
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${profilesRegistered.data.profilesRegistered.length} profiles to DB`,
-            });
-
-            yield* _(populateOnchainProfiles(profilesRegistered.data.profilesRegistered, timestamp, blockNumber));
-
-            slog({
-              requestId: message.cursor,
-              message: `Profiles written successfully`,
-            });
+            yield* _(
+              handleOnchainProfilesRegistered(profilesRegistered.data.profilesRegistered, {
+                blockNumber,
+                cursor,
+                timestamp,
+              })
+            );
           }
 
           /**
@@ -262,54 +239,25 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           if (spacePluginCreatedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
 
-            const spaces = mapSpaces(spacePluginCreatedResponse.data.spacesCreated, blockNumber);
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${spaces.length} spaces to DB`,
-            });
-
             yield* _(
-              Effect.tryPromise({
-                try: async () => {
-                  await db.upsert('spaces', spaces, ['id']).run(pool);
-                },
-                catch: error => new CouldNotWriteSpacesError(String(error)),
+              handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
+                blockNumber,
+                cursor,
+                timestamp,
               })
             );
-
-            slog({
-              requestId: message.cursor,
-              message: `Spaces written successfully`,
-            });
           }
 
           if (governancePluginsCreatedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
 
-            const spaces = mapGovernanceToSpaces(
-              governancePluginsCreatedResponse.data.governancePluginsCreated,
-              blockNumber
-            );
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${spaces.length} spaces with governance to DB`,
-            });
-
             yield* _(
-              Effect.tryPromise({
-                try: async () => {
-                  await db.upsert('spaces', spaces, ['id']).run(pool);
-                },
-                catch: error => new CouldNotWriteSpacesError(String(error)),
+              handleGovernancePluginCreated(governancePluginsCreatedResponse.data.governancePluginsCreated, {
+                blockNumber,
+                cursor,
+                timestamp,
               })
             );
-
-            slog({
-              requestId: message.cursor,
-              message: `Spaces with governance written successfully`,
-            });
           }
 
           if (subspacesAdded.success) {
