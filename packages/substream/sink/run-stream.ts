@@ -57,7 +57,6 @@ import { getSpaceForVotingPlugin } from './utils/get-space-for-voting-plugin';
 import { invariant } from './utils/invariant';
 import { getProposalFromMetadata, getProposalFromProcessedProposal } from './utils/ipfs';
 import { pool } from './utils/pool';
-import { mapVotes } from './votes/map-votes';
 
 export class InvalidPackageError extends Error {
   _tag: 'InvalidPackageError' = 'InvalidPackageError';
