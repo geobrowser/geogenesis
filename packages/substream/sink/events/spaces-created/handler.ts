@@ -84,7 +84,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
       slog({
         level: 'error',
         requestId: block.cursor,
-        message: `Could not governance plugins to spaces
+        message: `Could not write governance plugins for spaces
           Cause: ${error.cause}
           Message: ${error.message}
         `,

@@ -16,11 +16,12 @@ import {
   ProposedMembers,
   ProposedSubspaces,
   ProposedVersions,
-  SpaceMembers,
 } from './db';
 import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
 import { handleEditorsAdded } from './events/editors-added/handler';
 import { ZodEditorsAddedStreamResponse } from './events/editors-added/parser';
+import { handleMembersApproved } from './events/members-approved/handler';
+import { ZodMembersApprovedStreamResponse } from './events/members-approved/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profile-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profile-registered/parser';
 import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
@@ -34,8 +35,6 @@ import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
 import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
-import { mapMembers } from './members/map-members';
-import { ZodMembersApprovedStreamResponse } from './parsers/members-approved';
 import { ZodProposalExecutedStreamResponse } from './parsers/proposal-executed';
 import {
   type ContentProposal,
@@ -625,35 +624,14 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (membersApproved.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-            console.info('MEMBERS APPROVED', JSON.stringify(membersApproved.data.membersApproved, null, 2));
-
-            const schemaMembers = yield* _(
-              mapMembers({ membersApproved: membersApproved.data.membersApproved, blockNumber, timestamp })
-            );
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${schemaMembers.length} approved members to DB`,
-            });
 
             yield* _(
-              Effect.tryPromise({
-                try: () => SpaceMembers.upsert(schemaMembers),
-                catch: error => {
-                  slog({
-                    level: 'error',
-                    requestId: message.cursor,
-                    message: `Failed to write approved members to DB ${error}`,
-                  });
-                  return error;
-                },
+              handleMembersApproved(membersApproved.data.membersApproved, {
+                blockNumber,
+                cursor,
+                timestamp,
               })
             );
-
-            slog({
-              requestId: message.cursor,
-              message: `Members written successfully`,
-            });
           }
 
           if (executedProposals.success) {
