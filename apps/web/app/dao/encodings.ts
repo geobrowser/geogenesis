@@ -1,6 +1,9 @@
 import { PluginInstallItem } from '@aragon/sdk-client-common';
 import { VotingMode } from '@geogenesis/sdk';
-import { GOVERNANCE_PLUGIN_REPO_ADDRESS, SPACE_PLUGIN_REPO_ADDRESS } from '@geogenesis/sdk/contracts';
+import {
+  GOVERNANCE_PLUGIN_REPO_ADDRESS,
+  SPACE_PLUGIN_REPO_ADDRESS,
+} from '@geogenesis/sdk/contracts';
 import { encodeAbiParameters, hexToBytes } from 'viem';
 
 import { ZERO_ADDRESS } from '~/core/constants';

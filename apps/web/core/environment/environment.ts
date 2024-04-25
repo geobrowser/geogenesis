@@ -1,13 +1,11 @@
 import { AppEnv } from '../types';
 
-type SupportedChainId = '137' | '1337' | '80001' | '31337';
+type SupportedChainId = '137' |  '80001' | '31337' | '19411';
 
 export type AppConfig = {
   chainId: SupportedChainId;
   rpc: string;
   ipfs: string;
-  membershipSubgraph: string;
-  profileSubgraph: string;
   api: string;
 };
 
@@ -18,25 +16,19 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '31337',
     rpc: 'http://localhost:8545',
     ipfs: 'https://api.thegraph.com/ipfs',
-    membershipSubgraph: '',
-    profileSubgraph: '',
-    api: 'http://localhost:5001/graphql',
-  },
-  testnet: {
-    chainId: '80001',
-    rpc: 'https://rpc-mumbai.maticvigil.com',
-    ipfs: 'https://api.thegraph.com/ipfs',
-    membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-mumbai',
-    profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry-mumbai',
     api: 'http://localhost:5001/graphql',
   },
   production: {
-    chainId: '137',
-    rpc: 'https://polygon-rpc.com',
+    chainId: '19411',
+    rpc: process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!,
     ipfs: 'https://api.thegraph.com/ipfs',
-    membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-logs',
-    profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry',
-    api: 'http://localhost:5001/graphql',
+    api: 'https://geo-conduit.up.railway.app/graphql',
+  },
+  testnet: {
+    chainId: '19411',
+    rpc: process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!,
+    ipfs: 'https://api.thegraph.com/ipfs',
+    api: 'https://geo-conduit.up.railway.app/graphql',
   },
 };
 

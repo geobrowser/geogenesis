@@ -7,7 +7,6 @@ import { createPublicClient, createWalletClient, http } from 'viem';
 import * as React from 'react';
 
 import { Chain, WagmiConfig, configureChains, createConfig, useConnect, useDisconnect } from 'wagmi';
-import { goerli, polygon, polygonMumbai } from 'wagmi/chains';
 import { CoinbaseWalletConnector } from 'wagmi/connectors/coinbaseWallet';
 import { InjectedConnector } from 'wagmi/connectors/injected';
 import { MetaMaskConnector } from 'wagmi/connectors/metaMask';
@@ -34,10 +33,29 @@ import {
 import { Cookie } from '../cookie';
 import { Environment } from '../environment';
 
-const LOCAL_CHAIN: Chain = {
-  id: Number(Environment.options.development.chainId),
-  name: 'Geo Genesis Dev', // Human-readable name
-  network: 'ethereum', // Internal network name
+// const LOCAL_CHAIN: Chain = {
+//   id: Number(Environment.options.development.chainId),
+//   name: 'Geo Genesis Dev', // Human-readable name
+//   network: 'ethereum', // Internal network name
+//   nativeCurrency: {
+//     name: 'Ethereum',
+//     symbol: 'ETH',
+//     decimals: 18,
+//   },
+//   rpcUrls: {
+//     default: {
+//       http: [Environment.options.development.rpc],
+//     },
+//     public: {
+//       http: [Environment.options.development.rpc],
+//     },
+//   },
+// };
+
+const CONDUIT_TESTNET: Chain = {
+  id: Number(Environment.options.production.chainId),
+  name: 'Geo Genesis Conduit Dev',
+  network: 'Arbitrum Orbit L3',
   nativeCurrency: {
     name: 'Ethereum',
     symbol: 'ETH',
@@ -45,44 +63,21 @@ const LOCAL_CHAIN: Chain = {
   },
   rpcUrls: {
     default: {
-      http: [Environment.options.development.rpc],
+      http: [Environment.options.production.rpc],
     },
     public: {
-      http: [Environment.options.development.rpc],
+      http: [Environment.options.production.rpc],
     },
   },
-};
+}
 
 const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [
-    polygon,
-    // Only make the dev chains available in development
-    ...(process.env.NODE_ENV !== 'production' ? [polygonMumbai, LOCAL_CHAIN] : []),
-  ],
+  [CONDUIT_TESTNET],
   [
     jsonRpcProvider({
       rpc: (chain: Chain): { http: string; webSocket?: string } => {
-        if (chain.id === polygon.id) {
-          return {
-            http: process.env.NEXT_PUBLIC_RPC_URL!,
-            webSocket: process.env.NEXT_PUBLIC_WSS_URL!,
-          };
-        }
-
-        if (chain.id === polygonMumbai.id) {
-          return {
-            http: polygonMumbai.rpcUrls.default.http[0],
-          };
-        }
-
-        if (chain.id === LOCAL_CHAIN.id) {
-          return {
-            http: LOCAL_CHAIN.rpcUrls.default.http[0],
-          };
-        }
-
         return {
-          http: polygon.rpcUrls.default.http[0],
+          http: CONDUIT_TESTNET.rpcUrls.default.http[0],
         };
       },
     }),
@@ -94,8 +89,8 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
 
 const getMockWalletClient = () =>
   createWalletClient({
-    transport: http(polygon.rpcUrls.default.http[0]),
-    chain: polygon,
+    transport: http(CONDUIT_TESTNET.rpcUrls.default.http[0]),
+    chain: CONDUIT_TESTNET,
     account: '0x66703c058795B9Cb215fbcc7c6b07aee7D216F24',
     key: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
     pollingInterval: 100,
@@ -103,8 +98,8 @@ const getMockWalletClient = () =>
 
 const getMockPublicClient = () => {
   return createPublicClient({
-    transport: http(polygon.rpcUrls.default.http[0]),
-    chain: polygon,
+    transport: http(CONDUIT_TESTNET.rpcUrls.default.http[0]),
+    chain: CONDUIT_TESTNET,
     pollingInterval: 100,
   });
 };
@@ -160,7 +155,7 @@ const createRealWalletConfig = () => {
 
 const mockConnector = new MockConnector({
   chains,
-  options: { chainId: polygon.id, walletClient: getMockWalletClient() },
+  options: { chainId: CONDUIT_TESTNET.id, walletClient: getMockWalletClient() },
 });
 
 const createMockWalletConfig = () => {
@@ -238,7 +233,7 @@ export function GeoConnectButton() {
                       console.log('Test environment detected: using mock wallet');
                       connect({
                         connector: mockConnector,
-                        chainId: polygon.id,
+                        chainId: CONDUIT_TESTNET.id,
                       });
                     }
                   : () => {
