@@ -5,10 +5,6 @@ import { pool } from '../utils/pool';
 
 export class ProposalVotes {
   static async upsert(proposalVotes: S.proposal_votes.Insertable[]) {
-    return await db
-      .upsert('proposal_votes', proposalVotes, ['account_id', 'space_id', 'proposal_id'], {
-        updateColumns: db.doNothing,
-      })
-      .run(pool);
+    return await db.upsert('proposal_votes', proposalVotes, ['account_id', 'space_id', 'proposal_id']).run(pool);
   }
 }

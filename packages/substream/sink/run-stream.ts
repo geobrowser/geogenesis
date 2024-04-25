@@ -32,6 +32,8 @@ import { handleSubspacesAdded } from './events/subspaces-added/handler';
 import { ZodSubspacesAddedStreamResponse } from './events/subspaces-added/parser';
 import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
 import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
+import { handleVotesCast } from './events/votes-cast/handler';
+import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { mapMembers } from './members/map-members';
 import { ZodMembersApprovedStreamResponse } from './parsers/members-approved';
 import { ZodProposalExecutedStreamResponse } from './parsers/proposal-executed';
@@ -43,7 +45,6 @@ import {
   ZodProposalProcessedStreamResponse,
   ZodProposalStreamResponse,
 } from './parsers/proposals';
-import { ZodVotesCastStreamResponse } from './parsers/votes';
 import {
   groupProposalsByType,
   mapContentProposalsToSchema,
@@ -714,23 +715,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           if (votesCast.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
 
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${votesCast.data.votesCast.length} votes to DB in block`,
-            });
-
-            const schemaVotes = yield* _(mapVotes(votesCast.data.votesCast, blockNumber, timestamp));
-
             yield* _(
-              Effect.tryPromise({
-                try: () => db.insert('proposal_votes', schemaVotes).run(pool),
-                catch: error => {
-                  slog({
-                    requestId: message.cursor,
-                    message: `Failed to write votes to DB ${error}`,
-                    level: 'error',
-                  });
-                },
+              handleVotesCast(votesCast.data.votesCast, {
+                blockNumber,
+                cursor,
+                timestamp,
               })
             );
           }
