@@ -1,8 +1,8 @@
-import { createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
+import { createGeoId } from '../utils/create-geo-id';
 import { upsertChunked } from '../utils/db';
 import { pool } from '../utils/pool';
 import type { Action } from '../zod';
