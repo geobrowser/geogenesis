@@ -3,9 +3,9 @@ import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
 import { SpaceWithPluginAddressNotFoundError } from '../errors';
+import type { SubspaceAdded } from '../parsers/subspaces';
 import { getChecksumAddress } from '../utils/get-checksum-address';
 import { pool } from '../utils/pool';
-import type { SubspaceAdded } from '../zod';
 
 export function mapSubspaces({
   subspacesAdded,

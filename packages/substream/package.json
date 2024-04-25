@@ -34,7 +34,6 @@
     "dotenv": "latest",
     "effect": "^2.3.5",
     "fast-check": "^3.13.2",
-    "fetch-retry": "^5.0.6",
     "node-fetch": "^3.3.2",
     "pg": "^8.7.3",
     "pg-cursor": "^2.10.3",

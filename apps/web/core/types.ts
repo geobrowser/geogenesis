@@ -69,9 +69,6 @@ export type Space = {
   memberAccessPluginAddress: string | null;
   spacePluginAddress: string | null;
   editors: string[];
-  editorControllers: string[];
-  admins: string[];
-  editorsV2: string[];
   members: string[];
   spaceConfig: SpaceConfigEntity | null;
   createdAtBlock: string;

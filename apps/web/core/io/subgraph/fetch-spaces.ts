@@ -19,26 +19,12 @@ const getFetchSpacesQuery = () => `query {
       memberAccessPluginAddress
       spacePluginAddress
 
-      spaceAdmins {
-        nodes {
-          accountId
-        }
-      }
       spaceEditors {
         nodes {
           accountId
         }
       }
-      spaceEditorControllers {
-        nodes {
-          accountId
-        }
-      }
-      spaceEditorsV2s {
-        nodes {
-          accountId
-        }
-      }
+
       spaceMembers {
         nodes {
           accountId
@@ -160,10 +146,7 @@ export async function fetchSpaces() {
     return {
       id: space.id,
       isRootSpace: space.isRootSpace,
-      admins: space.spaceAdmins.nodes.map(account => account.accountId),
-      editorControllers: space.spaceEditorControllers.nodes.map(account => account.accountId),
       editors: space.spaceEditors.nodes.map(account => account.accountId),
-      editorsV2: space.spaceEditorsV2s.nodes.map(account => account.accountId),
       members: space.spaceMembers.nodes.map(account => account.accountId),
       spaceConfig: spaceConfigWithImage,
       createdAtBlock: space.createdAtBlock,

@@ -2,9 +2,9 @@ import { Effect, Schedule } from 'effect';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
+import type { OnchainProfileRegistered } from '../parsers/onchain-profile-registered';
 import { getChecksumAddress } from '../utils/get-checksum-address';
 import { pool } from '../utils/pool';
-import type { OnchainProfileRegistered } from '../zod';
 
 function retry(effect: Effect.Effect<void, Error>) {
   return Effect.retry(effect, Schedule.exponential(100).pipe(Schedule.jittered));

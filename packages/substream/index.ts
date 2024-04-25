@@ -2,18 +2,16 @@ import { Command } from 'commander';
 import dotenv from 'dotenv';
 import { Duration, Effect, Either, Schedule, pipe } from 'effect';
 
-import { bootstrapRoot } from './sink/bootstrap-root.js';
-import { getStreamConfiguration } from './sink/get-stream-configuration.js';
-import { populateFromCache } from './sink/populate-from-cache.js';
-import { runStream } from './sink/run-stream.js';
-import { resetPublicTablesToGenesis } from './sink/utils/reset-public-tables-to-genesis.js';
+import { bootstrapRoot } from './sink/bootstrap-root';
+import { getStreamConfiguration } from './sink/get-stream-configuration';
+import { runStream } from './sink/run-stream';
+import { resetPublicTablesToGenesis } from './sink/utils/reset-public-tables-to-genesis';
 
 dotenv.config();
 
 async function main() {
   const program = new Command();
   program
-    .option('--from-cache', 'Start from cached block')
     .option('--start-block <number>', 'NOT IMPLEMENTED – Start from block number')
     .option('--reset-db', 'Reset public tables to genesis');
   program.parse(process.argv);
@@ -54,27 +52,9 @@ async function main() {
 
   let blockNumberFromCache: number | undefined;
 
-  if (options.fromCache) {
-    console.info('Populating Geo data from cache');
-    // @TODO: Effectify populateFromCache
-    blockNumberFromCache = await populateFromCache();
-    console.info(`Cache processing complete at block ${blockNumberFromCache}`);
-  }
-
   /**
    * The stream has several "execution states" depending on whether we are running the stream
    * from genesis, using the cache, or if we're recovering from error states.
-   *
-   * Start --from-cache and --start-block
-   *   Use startBlockNumber from cache. Cache assumes you want to start from the entries in
-   *   cache and ignores the start bock number
-   * Start --from-cache
-   *   Use startBlockNumber from cache.
-   * Start from --start-block
-   *   Use startBlockNumber passed in from CLI
-   *
-   * Neither --from-cache or --start-block
-   *   Use cursor. Fall back to genesis start block if not available.
    *
    * If we're recovering from an error state we always use the cursor. We need to make sure we
    * don't accidentally start indexing from genesis again when restarting the stream, especially

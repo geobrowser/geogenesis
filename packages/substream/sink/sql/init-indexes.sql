@@ -15,8 +15,7 @@ CREATE INDEX idx_triple_space ON public.triples(space_id);
 CREATE INDEX idx_accounts_space_id ON public.space_admins(account_id, space_id);
 
 CREATE INDEX idx_space_editors ON public.space_editors(account_id, space_id);
-
-CREATE INDEX idx_space_editor_controllers ON public.space_editor_controllers(account_id, space_id);
+CREATE INDEX idx_space_members ON public.space_members(account_id, space_id);
 
 CREATE INDEX triple_entity_id
     on triples (entity_id);

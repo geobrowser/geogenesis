@@ -3,10 +3,10 @@ import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
 import { DESCRIPTION, NAME, TYPES } from '../constants/system-ids';
-import { TripleAction } from '../types';
+import { TripleAction, type TripleWithActionTuple } from '../types';
+import { generateTripleId } from '../utils/id';
 import { pool } from '../utils/pool';
 import type { Action } from '../zod';
-import { mapTriplesWithActionType } from './map-entries';
 
 interface PopulateTriplesArgs {
   entries: { space: string; actions: Action[] }[];
@@ -362,4 +362,57 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
       }
     }
   });
+}
+
+export function mapTriplesWithActionType(
+  entries: { space: string; actions: Action[] }[],
+  timestamp: number,
+  blockNumber: number
+): TripleWithActionTuple[] {
+  const triples: TripleWithActionTuple[] = entries.flatMap(e => {
+    return e.actions.map(action => {
+      const action_type = action.type;
+
+      const entity_id = action.entityId;
+      const attribute_id = action.attributeId;
+      const value_type = action.value.type;
+      const value_id = action.value.id;
+      const space_id = e.space;
+      const is_protected = false;
+      const id = generateTripleId({
+        space_id,
+        entity_id,
+        attribute_id,
+        value_id,
+      });
+
+      const entity_value_id = value_type === 'entity' ? value_id : null;
+      const string_value =
+        value_type === 'string' || value_type === 'image' || value_type === 'date' || value_type === 'url'
+          ? action.value.value
+          : null;
+
+      const tupleType = action_type === 'deleteTriple' ? TripleAction.Delete : TripleAction.Create;
+
+      return [
+        tupleType,
+        {
+          id,
+          entity_id,
+          attribute_id,
+          value_id,
+          value_type,
+          entity_value_id,
+          string_value,
+          space_id,
+          is_protected,
+          created_at: timestamp,
+          created_at_block: blockNumber,
+          is_stale: false,
+        },
+      ] as TripleWithActionTuple;
+    });
+  });
+
+  return triples;
 }

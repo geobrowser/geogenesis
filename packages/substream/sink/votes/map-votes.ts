@@ -6,11 +6,11 @@ import {
   ProposalWithOnchainProposalIdAndSpaceIdNotFoundError,
   type SpaceWithPluginAddressNotFoundError,
 } from '../errors';
+import type { Vote } from '../parsers/votes';
 import { slog } from '../utils';
 import { getChecksumAddress } from '../utils/get-checksum-address';
 import { getSpaceForVotingPlugin } from '../utils/get-space-for-voting-plugin';
 import { pool } from '../utils/pool';
-import type { Vote } from '../zod';
 
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can

@@ -101,14 +101,6 @@ CREATE TABLE public.proposed_versions (
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
-CREATE TABLE public.space_admins (
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    account_id text NOT NULL REFERENCES public.accounts(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    CONSTRAINT space_admins_unique_account_space_pair UNIQUE (account_id, space_id)
-);
-
 CREATE TABLE public.space_editors (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
@@ -117,28 +109,12 @@ CREATE TABLE public.space_editors (
     CONSTRAINT space_editors_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
-CREATE TABLE public.space_editors_v2 (
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    account_id text NOT NULL REFERENCES public.accounts(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    CONSTRAINT space_editors_v2_unique_account_space_pair UNIQUE (account_id, space_id)
-);
-
 CREATE TABLE public.space_members (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     CONSTRAINT space_members_unique_account_space_pair UNIQUE (account_id, space_id)
-);
-
-CREATE TABLE public.space_editor_controllers (
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    account_id text NOT NULL REFERENCES public.accounts(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    CONSTRAINT space_editor_controllers_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
 CREATE TABLE public.space_subspaces (
@@ -302,16 +278,7 @@ ALTER TABLE
     public.versions DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.space_admins DISABLE TRIGGER ALL;
-
-ALTER TABLE
     public.space_editors DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.space_editors_v2 DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.space_editor_controllers DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.triple_versions DISABLE TRIGGER ALL;

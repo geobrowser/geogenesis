@@ -19,13 +19,26 @@ import {
   SpaceMembers,
 } from './db';
 import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
-import { populateWithFullEntries } from './entries/populate-entries';
 import { mapMembers } from './members/map-members';
-import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
+import { ZodEditorsAddedStreamResponse } from './parsers/editors-added';
 import { ZodMembersApprovedStreamResponse } from './parsers/members-approved';
+import { ZodOnchainProfilesRegisteredStreamResponse } from './parsers/onchain-profile-registered';
 import { ZodProposalExecutedStreamResponse } from './parsers/proposal-executed';
-import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
-import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
+import {
+  type ContentProposal,
+  type EditorshipProposal,
+  type MembershipProposal,
+  type SubspaceProposal,
+  ZodProposalProcessedStreamResponse,
+  ZodProposalStreamResponse,
+} from './parsers/proposals';
+import {
+  ZodGovernancePluginsCreatedStreamResponse,
+  ZodSpacePluginCreatedStreamResponse,
+} from './parsers/spaces-created';
+import { ZodSubspacesAddedStreamResponse, ZodSubspacesRemovedStreamResponse } from './parsers/subspaces';
+import { ZodVotesCastStreamResponse } from './parsers/votes';
+import { getEditorsGrantedV2Effect } from './populate-roles';
 import { populateOnchainProfiles } from './profiles/populate-onchain-profiles';
 import {
   groupProposalsByType,
@@ -37,31 +50,11 @@ import {
 import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
 import { mapSubspaces } from './spaces/map-subspaces';
 import { slog } from './utils';
-import { getChecksumAddress } from './utils/get-checksum-address';
 import { getSpaceForVotingPlugin } from './utils/get-space-for-voting-plugin';
 import { invariant } from './utils/invariant';
-import { getEntryWithIpfsContent, getProposalFromMetadata, getProposalFromProcessedProposal } from './utils/ipfs';
+import { getProposalFromMetadata, getProposalFromProcessedProposal } from './utils/ipfs';
 import { pool } from './utils/pool';
 import { mapVotes } from './votes/map-votes';
-import {
-  type Action,
-  type ContentProposal,
-  type EditorshipProposal,
-  type FullEntry,
-  type MembershipProposal,
-  type SubspaceProposal,
-  ZodEditorsAddedStreamResponse,
-  ZodEntryStreamResponse,
-  ZodGovernancePluginsCreatedStreamResponse,
-  ZodOnchainProfilesRegisteredStreamResponse,
-  ZodProposalProcessedStreamResponse,
-  ZodProposalStreamResponse,
-  ZodRoleChangeStreamResponse,
-  ZodSpacePluginCreatedStreamResponse,
-  ZodSubspacesAddedStreamResponse,
-  ZodSubspacesRemovedStreamResponse,
-  ZodVotesCastStreamResponse,
-} from './zod';
 
 export class InvalidPackageError extends Error {
   _tag: 'InvalidPackageError' = 'InvalidPackageError';
@@ -221,8 +214,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           const jsonOutput = unpackedOutput.toJson({ typeRegistry: registry });
 
-          const entryResponse = ZodEntryStreamResponse.safeParse(jsonOutput);
-          const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
           const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
           const subspacesAdded = ZodSubspacesAddedStreamResponse.safeParse(jsonOutput);
@@ -234,10 +225,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
           const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
           const membersApproved = ZodMembersApprovedStreamResponse.safeParse(jsonOutput);
-
-          if (blockNumber === 55447697) {
-            console.info('output', jsonOutput);
-          }
 
           if (profilesRegistered.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
@@ -847,218 +834,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 },
               })
             );
-          }
-
-          if (entryResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-
-            slog({
-              requestId: message.cursor,
-              message: `Processing ${entryResponse.data.entries.length} entries`,
-            });
-
-            const entries = entryResponse.data.entries;
-
-            slog({
-              requestId: message.cursor,
-              message: `Gathering IPFS content for ${entries.length} entries`,
-            });
-
-            const maybeEntriesWithIpfsContent: (FullEntry | null)[] = yield* _(
-              Effect.all(
-                entries.map(entry => getEntryWithIpfsContent(entry)),
-                {
-                  concurrency: 20,
-                }
-              )
-            );
-
-            const nonValidatedFullEntries = maybeEntriesWithIpfsContent.filter(
-              (maybeFullEntry): maybeFullEntry is FullEntry => maybeFullEntry !== null
-            );
-
-            const validFullEntries = parseValidActionsForFullEntries(nonValidatedFullEntries);
-
-            slog({
-              requestId: message.cursor,
-              message: `Caching ${entries.length} entries`,
-            });
-            yield* _(
-              Effect.tryPromise({
-                try: () =>
-                  upsertCachedEntries({
-                    fullEntries: validFullEntries,
-                    blockNumber,
-                    cursor,
-                    timestamp,
-                  }),
-                catch: error =>
-                  new CouldNotWriteCachedEntryError(
-                    `Could not upsert cached entries in block ${blockNumber} ${String(error)}}`
-                  ),
-              })
-            );
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${entries.length} entries to DB`,
-            });
-
-            /**
-             * @HACK: Ticks in the stream might process out-of-order if any of the ticks take
-             * longer than subsequent ticks to execute. This is problematic as Geo relies on
-             * data being processed linearly to correctly build the knowledge graph state over
-             * time.
-             *
-             * We create a "Queue" using promise chaining to ensure that ticks are processed
-             * in the order that they come in. This is a giant hack and can destroy performance
-             * in JS.
-             *
-             * Soon (as of January 23, 2024) we'll migrate to a Queue implementation using Effect's
-             * Queue. This will allow us to queue up the DB writes necessary for a given tick and
-             * execute them in a more reasonable manner.
-             */
-            entriesQueue = entriesQueue.then(() => {
-              /**
-               * @TODO: This should write all of the actions we need to take to an Effect.Queue
-               * The Effect.Queue will process each action in a separate process. This also lets
-               * us do all the DB writes for _all_ events at once instead of separating them out
-               * based on the event type.
-               */
-              return populateWithFullEntries({
-                fullEntries: validFullEntries,
-                blockNumber,
-                cursor,
-                timestamp,
-              });
-            });
-          }
-
-          if (roleChangeResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-
-            for (const roleChange of roleChangeResponse.data.roleChanges) {
-              const { granted, revoked } = roleChange;
-
-              if (granted) {
-                const roleChangeWithChecksum: (typeof roleChange)['granted'] = {
-                  ...granted,
-                  account: getChecksumAddress(granted.account),
-                  sender: getChecksumAddress(granted.sender),
-                  space: getChecksumAddress(granted.space),
-                };
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Caching granted role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
-                    roleChangeWithChecksum.account
-                  } in space ${roleChangeWithChecksum.space}`,
-                });
-
-                yield* _(
-                  Effect.tryPromise({
-                    try: () =>
-                      upsertCachedRoles({
-                        roleChange: roleChangeWithChecksum,
-                        blockNumber,
-                        cursor,
-                        type: 'GRANTED',
-                        timestamp,
-                      }),
-                    catch: error =>
-                      new CouldNotWriteCachedRoleError(
-                        `Could not upsert cached granted role in block ${blockNumber} ${String(error)}}`
-                      ),
-                  })
-                );
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Writing granted role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
-                    roleChangeWithChecksum.account
-                  } in space ${roleChangeWithChecksum.space} to DB`,
-                });
-
-                yield* _(
-                  Effect.tryPromise({
-                    try: () =>
-                      handleRoleGranted({
-                        roleGranted: roleChangeWithChecksum,
-                        blockNumber,
-                        timestamp,
-                      }),
-                    catch: error =>
-                      new CouldNotGrantRoleError(
-                        `Could not handle granted role in block ${blockNumber} ${String(error)}}`
-                      ),
-                  })
-                );
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Granted role written successfully`,
-                });
-              }
-
-              if (revoked) {
-                const roleChangeWithChecksum: (typeof roleChange)['revoked'] = {
-                  ...revoked,
-                  account: getChecksumAddress(revoked.account),
-                  sender: getChecksumAddress(revoked.sender),
-                  space: getChecksumAddress(revoked.space),
-                };
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Caching revoked role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
-                    roleChangeWithChecksum.account
-                  } in space ${roleChangeWithChecksum.space}`,
-                });
-
-                yield* _(
-                  Effect.tryPromise({
-                    try: () =>
-                      upsertCachedRoles({
-                        roleChange: roleChangeWithChecksum,
-                        blockNumber,
-                        cursor,
-                        type: 'REVOKED',
-                        timestamp,
-                      }),
-                    catch: error =>
-                      new CouldNotWriteCachedRoleError(
-                        `Could not upsert cached revoked role in block ${blockNumber} ${String(error)}}`
-                      ),
-                  })
-                );
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Writing revoked role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
-                    roleChangeWithChecksum.account
-                  } in space ${roleChangeWithChecksum.space} to DB`,
-                });
-
-                yield* _(
-                  Effect.tryPromise({
-                    try: () =>
-                      handleRoleRevoked({
-                        roleRevoked: roleChangeWithChecksum,
-                        blockNumber,
-                      }),
-                    catch: error =>
-                      new CouldNotRevokeRoleError(
-                        `Could not handle revoked role in block ${blockNumber} ${String(error)}}`
-                      ),
-                  })
-                );
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Revoked role written successfully`,
-                });
-              }
-            }
           }
         });
       },

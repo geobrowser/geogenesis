@@ -1,29 +1,26 @@
 import { Duration, Effect, Either, Schedule } from 'effect';
 import type { TimeoutException } from 'effect/Cause';
 
-import { IPFS_GATEWAY } from '../constants/constants.js';
-import { SpaceWithPluginAddressNotFoundError } from '../errors.js';
-import { slog } from '../utils.js';
+import { IPFS_GATEWAY } from '../constants/constants';
+import { SpaceWithPluginAddressNotFoundError } from '../errors';
 import {
-  type Action,
   type ContentProposal,
   type EditorshipProposal,
-  type Entry,
-  type FullEntry,
   type MembershipProposal,
   type SubspaceProposal,
   type SubstreamProposal,
-  type UriData,
   ZodContentProposal,
   ZodMembershipProposal,
   ZodProposalMetadata,
   ZodSubspaceProposal,
-} from '../zod.js';
-import { isValidAction } from './actions.js';
-import { getChecksumAddress } from './get-checksum-address.js';
-import { getSpaceForMembershipPlugin } from './get-space-for-membership-plugin.js';
-import { getSpaceForSpacePlugin } from './get-space-for-space-plugin.js';
-import { getSpaceForVotingPlugin } from './get-space-for-voting-plugin.js';
+} from '../parsers/proposals';
+import { slog } from '../utils';
+import { type UriData } from '../zod';
+import { isValidAction } from './actions';
+import { getChecksumAddress } from './get-checksum-address';
+import { getSpaceForMembershipPlugin } from './get-space-for-membership-plugin';
+import { getSpaceForSpacePlugin } from './get-space-for-space-plugin';
+import { getSpaceForVotingPlugin } from './get-space-for-voting-plugin';
 
 class UnableToParseBase64Error extends Error {
   _tag: 'UnableToParseBase64Error' = 'UnableToParseBase64Error';
@@ -103,47 +100,6 @@ function getFetchIpfsContentEffect(
 
     // We only support IPFS URIs or base64 encoded content with the above format
     return null;
-  });
-}
-
-export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry | null> {
-  return Effect.gen(function* (unwrap) {
-    const fetchIpfsContentEffect = getFetchIpfsContentEffect(entry.uri);
-    const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
-
-    if (Either.isLeft(maybeIpfsContent)) {
-      const error = maybeIpfsContent.left;
-
-      switch (error._tag) {
-        case 'UnableToParseBase64Error':
-          console.error(`Unable to parse base64 string ${entry.uri}`, error);
-          break;
-        case 'FailedFetchingIpfsContentError':
-          console.error(`Failed fetching IPFS content from uri ${entry.uri}`, error);
-          break;
-        case 'UnableToParseJsonError':
-          console.error(`Unable to parse JSON when reading content from uri ${entry.uri}`, error);
-          break;
-        default:
-          console.error(`Unknown error when fetching IPFS content for uri ${entry.uri}`, error);
-          break;
-      }
-
-      return null;
-    }
-
-    const ipfsContent = maybeIpfsContent.right;
-
-    if (!ipfsContent) {
-      return null;
-    }
-
-    return {
-      ...entry,
-      uriData: ipfsContent,
-      // json: JSON.stringify(ipfsContent),
-      // uri: entry.uri,
-    };
   });
 }
 
