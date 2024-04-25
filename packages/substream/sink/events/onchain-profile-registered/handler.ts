@@ -6,9 +6,9 @@ import { Accounts, Spaces } from '~/sink/db';
 import { OnchainProfiles } from '~/sink/db/onchain-profiles';
 import { CouldNotWriteAccountsError, CouldNotWriteSpacesError } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
-import { slog } from '~/sink/utils';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { retryEffect } from '~/sink/utils/retry-effect';
+import { slog } from '~/sink/utils/slog';
 
 export class CouldNotWriteOnchainProfilesError extends Error {
   _tag: 'CouldNotWriteOnchainProfilesError' = 'CouldNotWriteOnchainProfilesError';

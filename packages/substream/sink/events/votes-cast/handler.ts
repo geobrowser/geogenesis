@@ -4,8 +4,8 @@ import { mapVotes } from './map-votes';
 import type { VoteCast } from './parser';
 import { ProposalVotes } from '~/sink/db/proposal-votes';
 import type { BlockEvent } from '~/sink/types';
-import { slog } from '~/sink/utils';
 import { retryEffect } from '~/sink/utils/retry-effect';
+import { slog } from '~/sink/utils/slog';
 
 class CouldNotWriteVotesError extends Error {
   _tag: 'CouldNotWriteVotesError' = 'CouldNotWriteVotesError';

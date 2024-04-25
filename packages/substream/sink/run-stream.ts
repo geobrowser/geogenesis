@@ -52,11 +52,11 @@ import {
   mapMembershipProposalsToSchema,
   mapSubspaceProposalsToSchema,
 } from './proposals/map-proposals';
-import { slog } from './utils';
 import { getSpaceForVotingPlugin } from './utils/get-space-for-voting-plugin';
 import { invariant } from './utils/invariant';
 import { getProposalFromMetadata, getProposalFromProcessedProposal } from './utils/ipfs';
 import { pool } from './utils/pool';
+import { slog } from './utils/slog';
 
 export class InvalidPackageError extends Error {
   _tag: 'InvalidPackageError' = 'InvalidPackageError';

@@ -3,10 +3,10 @@ import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
 import type { MembersApproved } from '../parsers/members-approved';
-import { slog } from '../utils';
 import { getChecksumAddress } from '../utils/get-checksum-address';
 import { getSpaceForMembershipPlugin } from '../utils/get-space-for-membership-plugin';
 import { pool } from '../utils/pool';
+import { slog } from '../utils/slog';
 
 interface MapMembersArgs {
   membersApproved: MembersApproved[];

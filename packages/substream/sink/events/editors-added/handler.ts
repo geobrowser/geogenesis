@@ -6,10 +6,10 @@ import type { EditorsAdded } from './parser';
 import { Accounts, SpaceEditors, SpaceMembers } from '~/sink/db';
 import { CouldNotWriteAccountsError, SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
-import { slog } from '~/sink/utils';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { pool } from '~/sink/utils/pool';
 import { retryEffect } from '~/sink/utils/retry-effect';
+import { slog } from '~/sink/utils/slog';
 
 class CouldNotWriteEditorsError extends Error {
   _tag: 'CouldNotWriteEditorsError' = 'CouldNotWriteEditorsError';

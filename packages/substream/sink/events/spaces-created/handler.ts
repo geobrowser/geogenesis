@@ -5,8 +5,8 @@ import type { GovernancePluginsCreated, SpacePluginCreated } from './parser';
 import { Spaces } from '~/sink/db';
 import { CouldNotWriteSpacesError } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
-import { slog } from '~/sink/utils';
 import { retryEffect } from '~/sink/utils/retry-effect';
+import { slog } from '~/sink/utils/slog';
 
 export class CouldNotWriteGovernancePlugins extends Error {
   _tag: 'CouldNotWriteGovernancePlugins' = 'CouldNotWriteGovernancePlugins';

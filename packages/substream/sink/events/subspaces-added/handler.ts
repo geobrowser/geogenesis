@@ -4,8 +4,8 @@ import { mapSubspaces } from './map-subspaces';
 import type { SubspaceAdded } from './parser';
 import { Subspaces } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';
-import { slog } from '~/sink/utils';
 import { retryEffect } from '~/sink/utils/retry-effect';
+import { slog } from '~/sink/utils/slog';
 
 export class CouldNotWriteSubspacesError extends Error {
   _tag: 'CouldNotWriteSubspacesError' = 'CouldNotWriteSubspacesError';

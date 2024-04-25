@@ -14,13 +14,13 @@ import {
   ZodProposalMetadata,
   ZodSubspaceProposal,
 } from '../parsers/proposals';
-import { slog } from '../utils';
 import { type UriData } from '../zod';
 import { isValidAction } from './actions';
 import { getChecksumAddress } from './get-checksum-address';
 import { getSpaceForMembershipPlugin } from './get-space-for-membership-plugin';
 import { getSpaceForSpacePlugin } from './get-space-for-space-plugin';
 import { getSpaceForVotingPlugin } from './get-space-for-voting-plugin';
+import { slog } from './slog';
 
 class UnableToParseBase64Error extends Error {
   _tag: 'UnableToParseBase64Error' = 'UnableToParseBase64Error';

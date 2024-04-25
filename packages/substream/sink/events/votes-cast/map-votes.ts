@@ -8,10 +8,10 @@ import {
   type SpaceWithPluginAddressNotFoundError,
 } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
-import { slog } from '~/sink/utils';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { getSpaceForVotingPlugin } from '~/sink/utils/get-space-for-voting-plugin';
 import { pool } from '~/sink/utils/pool';
+import { slog } from '~/sink/utils/slog';
 
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
