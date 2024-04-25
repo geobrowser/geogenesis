@@ -1,54 +1,30 @@
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
-import { SpaceEditors, SpaceMembers } from './db';
-import { SpaceWithPluginAddressNotFoundError } from './errors';
-import type { EditorsAdded } from './parsers/editors-added';
-import { slog } from './utils';
-import { getChecksumAddress } from './utils/get-checksum-address';
-import { pool } from './utils/pool';
-
-class CouldNotWriteAccountsError extends Error {
-  _tag: 'CouldNotWriteAccountsError' = 'CouldNotWriteAccountsError';
-}
+import type { EditorsAdded } from './parser';
+import { Accounts, SpaceEditors, SpaceMembers } from '~/sink/db';
+import { CouldNotWriteAccountsError, SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
+import type { BlockEvent } from '~/sink/types';
+import { slog } from '~/sink/utils';
+import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
+import { pool } from '~/sink/utils/pool';
+import { retryEffect } from '~/sink/utils/retry-effect';
 
 class CouldNotWriteEditorsError extends Error {
   _tag: 'CouldNotWriteEditorsError' = 'CouldNotWriteEditorsError';
 }
 
-/**
- * The data model for DAO-based spaces works slightly differently than in legacy spaces.
- * This means there will be a period where we need to support both data models depending
- * on which space/contract we are working with. Eventually these data models will be merged
- * and usage of the legacy space contracts will be migrated to the DAO-based contracts, but
- * for now we are appending "V2" to permissions data models to denote it's used for the
- * DAO-based spaces.
- *
- * An editor has editing and voting permissions in a DAO-based space. Editors join a space
- * one of two ways:
- * 1. They submit a request to join the space as an editor which goes to a vote. The editors
- *    in the space vote on whether to accept the new editor.
- * 2. They are added as a set of initial editors when first creating the space. This allows
- *    space deployers to bootstrap a set of editors on space creation.
- */
-export function getEditorsGrantedV2Effect({
-  editorsAdded,
-  timestamp,
-  blockNumber,
-}: {
-  editorsAdded: EditorsAdded[];
-  timestamp: number;
-  blockNumber: number;
-}) {
+export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    const accounts = editorsAdded.flatMap(e => e.addresses.map(a => ({ id: getChecksumAddress(a) })));
+    slog({
+      requestId: block.cursor,
+      message: `Writing initial editor and member role for accounts ${editorsAdded
+        .map(e => e.addresses)
+        .join(', ')} to space with plugin ${editorsAdded.map(e => e.pluginAddress)} to DB`,
+    });
 
-    // This should be handled by our zod parsing validation so this shouldn't trigger
-    if (editorsAdded.length === 0) {
-      console.error('No editors added in editors granted event');
-      return;
-    }
+    const accounts = editorsAdded.flatMap(e => e.addresses.map(a => ({ id: getChecksumAddress(a) })));
 
     // Note that the plugin address for each entry in editorsAdded _should_ be the same
     // for a given editorsAdded event. TypeScript type narrowing doesn't really work when
@@ -100,20 +76,34 @@ export function getEditorsGrantedV2Effect({
       );
 
     /**
-     * Here we ensure that we create any relations for the role change before we create the
+     * Ensure that we create any relations for the role change before we create the
      * role change itself.
      */
-    yield* _(
+    const writtenAccounts = yield* _(
       Effect.tryPromise({
-        try: () =>
-          db
-            .upsert('accounts', accounts, ['id'], {
-              updateColumns: db.doNothing,
-            })
-            .run(pool),
+        try: async () => {
+          await Accounts.upsert(accounts);
+        },
         catch: error => new CouldNotWriteAccountsError(String(error)),
-      })
+      }),
+      retryEffect,
+      Effect.either
     );
+
+    if (Either.isLeft(writtenAccounts)) {
+      const error = writtenAccounts.left;
+
+      slog({
+        level: 'error',
+        requestId: block.cursor,
+        message: `Could not write accounts when writing added editors
+          Cause: ${error.cause}
+          Message: ${error.message}
+        `,
+      });
+
+      return;
+    }
 
     const newEditors = editorsAdded.flatMap(({ addresses, pluginAddress }) =>
       addresses
@@ -126,8 +116,8 @@ export function getEditorsGrantedV2Effect({
             // space was created.
             space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress))!,
             account_id: getChecksumAddress(a),
-            created_at: timestamp,
-            created_at_block: blockNumber,
+            created_at: block.timestamp,
+            created_at_block: block.blockNumber,
           };
 
           return editor;
@@ -159,8 +149,8 @@ export function getEditorsGrantedV2Effect({
             // space was created.
             space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress))!,
             account_id: getChecksumAddress(a),
-            created_at: timestamp,
-            created_at_block: blockNumber,
+            created_at: block.timestamp,
+            created_at_block: block.blockNumber,
           };
 
           return member;
@@ -181,7 +171,8 @@ export function getEditorsGrantedV2Effect({
         .filter(e => e.space_id !== undefined)
     );
 
-    yield* _(
+    // @TODO: Transaction
+    const writtenEditors = yield* _(
       Effect.tryPromise({
         try: async () => {
           await Promise.all([SpaceEditors.upsert(newEditors), SpaceMembers.upsert(newMembers)]);
@@ -189,7 +180,29 @@ export function getEditorsGrantedV2Effect({
         catch: error => {
           return new CouldNotWriteEditorsError(String(error));
         },
-      })
+      }),
+      retryEffect,
+      Effect.either
     );
+
+    if (Either.isLeft(writtenEditors)) {
+      const error = writtenEditors.left;
+
+      slog({
+        level: 'error',
+        requestId: block.cursor,
+        message: `Could not write editors and members when writing added editors
+          Cause: ${error.cause}
+          Message: ${error.message}
+        `,
+      });
+
+      return;
+    }
+
+    slog({
+      requestId: block.cursor,
+      message: `Initial editor and member roles written successfully!`,
+    });
   });
 }

@@ -19,6 +19,8 @@ import {
   SpaceMembers,
 } from './db';
 import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
+import { handleEditorsAdded } from './events/editors-added/handler';
+import { ZodEditorsAddedStreamResponse } from './events/editors-added/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profile-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profile-registered/parser';
 import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
@@ -31,7 +33,6 @@ import { ZodSubspacesAddedStreamResponse } from './events/subspaces-added/parser
 import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
 import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
 import { mapMembers } from './members/map-members';
-import { ZodEditorsAddedStreamResponse } from './parsers/editors-added';
 import { ZodMembersApprovedStreamResponse } from './parsers/members-approved';
 import { ZodProposalExecutedStreamResponse } from './parsers/proposal-executed';
 import {
@@ -267,27 +268,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           if (editorsAddedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
 
-            slog({
-              requestId: message.cursor,
-              message: `Writing initial editor and member role for accounts ${editorsAddedResponse.data.editorsAdded
-                .map(e => e.addresses)
-                .join(', ')} to space with plugin ${editorsAddedResponse.data.editorsAdded.map(
-                e => e.pluginAddress
-              )} to DB`,
-            });
-
             yield* _(
-              getEditorsGrantedV2Effect({
-                editorsAdded: editorsAddedResponse.data.editorsAdded,
+              handleEditorsAdded(editorsAddedResponse.data.editorsAdded, {
                 blockNumber,
+                cursor,
                 timestamp,
               })
             );
-
-            slog({
-              requestId: message.cursor,
-              message: `Initial editor and member roles written successfully`,
-            });
           }
 
           /**
