@@ -63,6 +63,7 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
       const error = writtenSpaces.left;
 
       slog({
+        level: 'error',
         requestId: block.cursor,
         message: `Could not write spaces when writing onchain profiles
           Cause: ${error.cause}
@@ -90,6 +91,7 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
       const error = writtenAccounts.left;
 
       slog({
+        level: 'error',
         requestId: block.cursor,
         message: `Could not write accounts when writing onchain profiles
           Cause: ${error.cause}
@@ -117,6 +119,7 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
       const error = writtenProfiles.left;
 
       slog({
+        level: 'error',
         requestId: block.cursor,
         message: `Could not write onchain profiles when writing onchain profiles
           Cause: ${error.cause}
@@ -126,5 +129,10 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
 
       return;
     }
+
+    slog({
+      requestId: block.cursor,
+      message: `Onchain profiles written successfully!`,
+    });
   });
 }

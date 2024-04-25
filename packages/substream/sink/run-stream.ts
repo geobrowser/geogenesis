@@ -26,6 +26,10 @@ import {
   ZodGovernancePluginsCreatedStreamResponse,
   ZodSpacePluginCreatedStreamResponse,
 } from './events/spaces-created/parser';
+import { handleSubspacesAdded } from './events/subspaces-added/handler';
+import { ZodSubspacesAddedStreamResponse } from './events/subspaces-added/parser';
+import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
+import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
 import { mapMembers } from './members/map-members';
 import { ZodEditorsAddedStreamResponse } from './parsers/editors-added';
 import { ZodMembersApprovedStreamResponse } from './parsers/members-approved';
@@ -38,7 +42,6 @@ import {
   ZodProposalProcessedStreamResponse,
   ZodProposalStreamResponse,
 } from './parsers/proposals';
-import { ZodSubspacesAddedStreamResponse, ZodSubspacesRemovedStreamResponse } from './parsers/subspaces';
 import { ZodVotesCastStreamResponse } from './parsers/votes';
 import { getEditorsGrantedV2Effect } from './populate-roles';
 import {
@@ -48,8 +51,6 @@ import {
   mapMembershipProposalsToSchema,
   mapSubspaceProposalsToSchema,
 } from './proposals/map-proposals';
-import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
-import { mapSubspaces } from './spaces/map-subspaces';
 import { slog } from './utils';
 import { getSpaceForVotingPlugin } from './utils/get-space-for-voting-plugin';
 import { invariant } from './utils/invariant';
@@ -71,10 +72,6 @@ export class InvalidStreamConfigurationError extends Error {
 
 export class CouldNotReadCursorError extends Error {
   _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
-}
-
-export class CouldNotWriteSubspacesError extends Error {
-  _tag: 'CouldNotWriteSubspacesError' = 'CouldNotWriteSubspacesError';
 }
 
 export class CouldNotWriteProposalsError extends Error {
@@ -219,23 +216,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
-          /**
-           * @TODO: De-duplicate any spaces being added with both the space plugin governance
-           * plugins. This can likely happen when we refactor to a real queue implementation
-           * which has better aggregation->write separation and performance.
-           *
-           * Right now we have a lot of blocking writes to the DB, as we separate writing to the
-           * DB based on the type of event that we're reacting to. `populateEntries` also has
-           * quite a few serially blocking calls.
-           *
-           * We want to move to a Queue implementation instead of the hacky Promise queue that
-           * we currently have. This switch will give us a better opportunity to aggregate _all_
-           * the changes happening as part of a single block and then write them more efficiently.
-           *
-           * With the new governance contracts (as of January 23, 2024) we will be indexing _many_
-           * more events, so we'll need a more scalable way to handle async writes to the DB so
-           * indexing time doesn't balloon.
-           */
           if (spacePluginCreatedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
 
@@ -263,42 +243,27 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           if (subspacesAdded.success) {
             console.log('----------------- @BLOCK', blockNumber, '-----------------');
 
-            const subspaces = yield* _(
-              mapSubspaces({
-                subspacesAdded: subspacesAdded.data.subspacesAdded,
-                timestamp,
-                blockNumber,
-              })
-            );
-
             yield* _(
-              Effect.tryPromise({
-                try: () => db.insert('space_subspaces', subspaces).run(pool),
-                catch: error => {
-                  slog({
-                    level: 'error',
-                    requestId: message.cursor,
-                    message: `Failed to write subspaces to DB ${error}`,
-                  });
-                  return new CouldNotWriteSubspacesError(String(error));
-                },
+              handleSubspacesAdded(subspacesAdded.data.subspacesAdded, {
+                blockNumber,
+                cursor,
+                timestamp,
               })
             );
           }
 
           if (subspacesRemoved.success) {
             console.log('----------------- @BLOCK', blockNumber, '-----------------');
-            console.log('SUBSPACE REMOVED', JSON.stringify(subspacesRemoved.data.subspacesRemoved, null, 2));
+
+            yield* _(
+              handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved, {
+                blockNumber,
+                cursor,
+                timestamp,
+              })
+            );
           }
 
-          /**
-           * The data model for DAO-based spaces works slightly differently than in legacy spaces.
-           * This means there will be a period where we need to support both data models depending
-           * on which space/contract we are working with. Eventually these data models will be merged
-           * and usage of the legacy space contracts will be migrated to the DAO-based contracts, but
-           * for now we are appending "V2" to permissions data models to denote it's used for the
-           * DAO-based spaces.
-           */
           if (editorsAddedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
 

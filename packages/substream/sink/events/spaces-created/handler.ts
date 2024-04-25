@@ -1,9 +1,9 @@
 import { Effect, Either } from 'effect';
 
+import { mapGovernanceToSpaces, mapSpaces } from './map-spaces';
 import type { GovernancePluginsCreated, SpacePluginCreated } from './parser';
 import { Spaces } from '~/sink/db';
 import { CouldNotWriteSpacesError } from '~/sink/errors';
-import { mapGovernanceToSpaces, mapSpaces } from '~/sink/spaces/map-spaces';
 import type { BlockEvent } from '~/sink/types';
 import { slog } from '~/sink/utils';
 import { retryEffect } from '~/sink/utils/retry-effect';
@@ -38,6 +38,7 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreated[], block: 
       const error = writtenSpaces.left;
 
       slog({
+        level: 'error',
         requestId: block.cursor,
         message: `Could not write spaces
           Cause: ${error.cause}
@@ -50,7 +51,7 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreated[], block: 
 
     slog({
       requestId: block.cursor,
-      message: `Spaces written successfully`,
+      message: `Spaces written successfully!`,
     });
   });
 }
@@ -81,6 +82,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
       const error = writtenGovernancePlugins.left;
 
       slog({
+        level: 'error',
         requestId: block.cursor,
         message: `Could not governance plugins to spaces
           Cause: ${error.cause}
@@ -93,7 +95,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
 
     slog({
       requestId: block.cursor,
-      message: `Spaces with governance written successfully`,
+      message: `Governance plugins written successfully!`,
     });
   });
 }

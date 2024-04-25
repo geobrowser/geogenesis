@@ -1,7 +1,7 @@
 import type * as S from 'zapatos/schema';
 
-import type { GovernancePluginsCreated, SpacePluginCreated } from '../events/spaces-created/parser';
-import { getChecksumAddress } from '../utils/get-checksum-address';
+import type { GovernancePluginsCreated, SpacePluginCreated } from './parser';
+import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 
 export function mapSpaces(spaces: SpacePluginCreated[], createdAtBlock: number): S.spaces.Insertable[] {
   return spaces.map(s => ({
