@@ -1,8 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Effect from 'effect/Effect';
-import { createPublicClient, createWalletClient, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { polygon } from 'viem/chains';
 
 import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
@@ -13,6 +10,7 @@ import { slog } from '~/core/utils/utils';
 
 import { CreateSpaceEntitiesFailedError } from '../../errors';
 import { makeProposalServer } from '../../make-proposal-server';
+import { geoAccount, publicClient, walletClient } from '../../client';
 
 interface UserConfig {
   type: SpaceType;
@@ -25,21 +23,6 @@ export function makeCreateEntitiesEffect(
   requestId: string,
   { type, spaceName, spaceAvatarUri, spaceAddress }: UserConfig
 ) {
-  const account = privateKeyToAccount(process.env.GEO_PK as `0x${string}`);
-
-  const client = createWalletClient({
-    account,
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
-  const publicClient = createPublicClient({
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
   // Create the profile entity representing the new user and space configuration for this space
   // in the Geo knowledge graph.
   //
@@ -185,9 +168,9 @@ export function makeCreateEntitiesEffect(
         name: `Creating entities for new space ${spaceAddress}`,
         space: spaceAddress,
         storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
-        account,
-        wallet: client,
-        publicClient,
+        account: geoAccount,
+        wallet: walletClient,
+        publicClient: publicClient,
       });
 
       await Effect.runPromise(proposalEffect);

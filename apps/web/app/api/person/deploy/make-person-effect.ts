@@ -2,9 +2,6 @@ import { SpaceArtifact } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Effect from 'effect/Effect';
 import * as Schedule from 'effect/Schedule';
-import { createPublicClient, createWalletClient, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { polygon } from 'viem/chains';
 
 import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
@@ -14,6 +11,7 @@ import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
 import { slog } from '~/core/utils/utils';
 
 import { makeProposalServer } from '../../make-proposal-server';
+import { geoAccount, publicClient, walletClient } from '../../client';
 
 type Role = {
   role: string;
@@ -71,21 +69,6 @@ export async function makePersonEffect(
   requestId: string,
   { account: userAccount, username, avatarUri, spaceAddress, profileId }: UserConfig
 ) {
-  const account = privateKeyToAccount(process.env.GEO_PK as `0x${string}`);
-
-  const client = createWalletClient({
-    account,
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
-  const publicClient = createPublicClient({
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
   // Create the profile entity representing the new user and space configuration for this space
   // in the Geo knowledge graph.
   //
@@ -187,9 +170,9 @@ export async function makePersonEffect(
         name: `Creating profile for ${userAccount}`,
         space: spaceAddress,
         storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
-        account,
-        wallet: client,
-        publicClient,
+        account: geoAccount,
+        wallet: walletClient,
+        publicClient: publicClient,
       });
 
       await Effect.runPromise(proposalEffect);
@@ -219,11 +202,11 @@ export async function makePersonEffect(
           abi: SpaceArtifact.abi,
           address: spaceAddress as `0x${string}`,
           functionName: 'grantRole',
-          account,
+          account: geoAccount,
           args: [role.binary, userAccount],
         });
 
-        const grantRoleSimulateHash = await client.writeContract(simulateGrantRoleResult.request);
+        const grantRoleSimulateHash = await walletClient.writeContract(simulateGrantRoleResult.request);
         slog({
           requestId,
           message: `Grant ${role.role} role hash: ${grantRoleSimulateHash}`,
@@ -261,11 +244,11 @@ export async function makePersonEffect(
           abi: SpaceArtifact.abi,
           address: spaceAddress as `0x${string}`,
           functionName: 'renounceRole',
-          account,
-          args: [role.binary, account.address],
+          account: geoAccount,
+          args: [role.binary, geoAccount.address],
         });
 
-        const grantRoleSimulateHash = await client.writeContract(simulateRenounceRoleResult.request);
+        const grantRoleSimulateHash = await walletClient.writeContract(simulateRenounceRoleResult.request);
         slog({
           requestId,
           message: `Renounce ${role.role} role hash: ${grantRoleSimulateHash}`,

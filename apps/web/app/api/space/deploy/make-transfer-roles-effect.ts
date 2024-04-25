@@ -1,13 +1,11 @@
 import { SpaceArtifact } from '@geogenesis/contracts';
 import { Effect, Schedule } from 'effect';
-import { createPublicClient, createWalletClient, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { polygon } from 'viem/chains';
 
 import { slog } from '~/core/utils/utils';
 
 import { GrantRoleError, RenounceRoleError } from '../../errors';
 import { ROLES, Role } from '../../roles';
+import { geoAccount, publicClient, walletClient } from '../../client';
 
 interface TransferRoleConfig {
   spaceAddress: string;
@@ -15,21 +13,6 @@ interface TransferRoleConfig {
 }
 
 export function makeTransferRolesEffect(requestId: string, { spaceAddress, userAccount }: TransferRoleConfig) {
-  const account = privateKeyToAccount(process.env.GEO_PK as `0x${string}`);
-
-  const client = createWalletClient({
-    account,
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
-  const publicClient = createPublicClient({
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
   // Grant each role to the new user
   const createGrantRoleEffect = (role: Role) => {
     return Effect.tryPromise({
@@ -38,11 +21,11 @@ export function makeTransferRolesEffect(requestId: string, { spaceAddress, userA
           abi: SpaceArtifact.abi,
           address: spaceAddress as `0x${string}`,
           functionName: 'grantRole',
-          account,
+          account: geoAccount,
           args: [role.binary, userAccount],
         });
 
-        const grantRoleSimulateHash = await client.writeContract(simulateGrantRoleResult.request);
+        const grantRoleSimulateHash = await walletClient.writeContract(simulateGrantRoleResult.request);
         slog({
           requestId,
           message: `Grant ${role.role} role hash: ${grantRoleSimulateHash}`,
@@ -80,11 +63,11 @@ export function makeTransferRolesEffect(requestId: string, { spaceAddress, userA
           abi: SpaceArtifact.abi,
           address: spaceAddress as `0x${string}`,
           functionName: 'renounceRole',
-          account,
-          args: [role.binary, account.address],
+          account: geoAccount,
+          args: [role.binary, geoAccount.address],
         });
 
-        const grantRoleSimulateHash = await client.writeContract(simulateRenounceRoleResult.request);
+        const grantRoleSimulateHash = await walletClient.writeContract(simulateRenounceRoleResult.request);
         slog({
           requestId,
           message: `Renounce ${role.role} role hash: ${grantRoleSimulateHash}`,

@@ -12,7 +12,6 @@ import { InjectedConnector } from 'wagmi/connectors/injected';
 import { MetaMaskConnector } from 'wagmi/connectors/metaMask';
 import { MockConnector } from 'wagmi/connectors/mock';
 import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
-import { alchemyProvider } from 'wagmi/providers/alchemy';
 import { jsonRpcProvider } from 'wagmi/providers/jsonRpc';
 import { publicProvider } from 'wagmi/providers/public';
 
@@ -32,6 +31,7 @@ import {
 
 import { Cookie } from '../cookie';
 import { Environment } from '../environment';
+import { CONDUIT_TESTNET } from './conduit-chain';
 
 // const LOCAL_CHAIN: Chain = {
 //   id: Number(Environment.options.development.chainId),
@@ -52,36 +52,16 @@ import { Environment } from '../environment';
 //   },
 // };
 
-const CONDUIT_TESTNET: Chain = {
-  id: Number(Environment.options.production.chainId),
-  name: 'Geo Genesis Conduit Dev',
-  network: 'Arbitrum Orbit L3',
-  nativeCurrency: {
-    name: 'Ethereum',
-    symbol: 'ETH',
-    decimals: 18,
-  },
-  rpcUrls: {
-    default: {
-      http: [Environment.options.production.rpc],
-    },
-    public: {
-      http: [Environment.options.production.rpc],
-    },
-  },
-}
-
 const { chains, publicClient, webSocketPublicClient } = configureChains(
   [CONDUIT_TESTNET],
   [
     jsonRpcProvider({
-      rpc: (chain: Chain): { http: string; webSocket?: string } => {
+      rpc: (_: Chain): { http: string; webSocket?: string } => {
         return {
           http: CONDUIT_TESTNET.rpcUrls.default.http[0],
         };
       },
     }),
-    alchemyProvider({ apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY! }),
     // We need to use another provider if using a local chain
     ...(process.env.NEXT_PUBLIC_APP_ENV === 'development' ? [publicProvider()] : []),
   ]

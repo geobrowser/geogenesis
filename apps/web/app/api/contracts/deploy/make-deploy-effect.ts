@@ -1,12 +1,8 @@
 import { SpaceArtifact } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import BeaconProxy from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol/BeaconProxy.json';
-// import UpgradeableBeacon from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol/UpgradeableBeacon.json';
 import * as Effect from 'effect/Effect';
 import * as Schedule from 'effect/Schedule';
-import { createPublicClient, createWalletClient, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { polygon } from 'viem/chains';
 
 import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
@@ -15,6 +11,7 @@ import { OmitStrict, Triple } from '~/core/types';
 import { slog } from '~/core/utils/utils';
 
 import { makeProposalServer } from '../../make-proposal-server';
+import { geoAccount, publicClient, walletClient } from '../../client';
 
 class ProxyBeaconInitializeFailedError extends Error {
   readonly _tag = 'ProxyBeaconInitializeFailedError';
@@ -58,25 +55,10 @@ interface UserConfig {
  * to register their profile and set up their space.
  */
 export function makeDeployEffect(requestId: string, { account: userAccount }: UserConfig) {
-  const account = privateKeyToAccount(process.env.GEO_PK as `0x${string}`);
-
-  const client = createWalletClient({
-    account,
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
-  const publicClient = createPublicClient({
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
   // Deploy the proxy contract representing the user's space.
   const deployEffect = Effect.tryPromise({
     try: async () => {
-      const proxyTxHash = await client.deployContract({
+      const proxyTxHash = await walletClient.deployContract({
         abi: BeaconProxy.abi,
         bytecode: BeaconProxy.bytecode as `0x${string}`,
         // We are deploying a permissioned space to a permissionless registry.
@@ -84,7 +66,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
         // implementation of the personal space and not the implementation
         // of the registry.
         args: [SYSTEM_IDS.PERMISSIONED_SPACE_BEACON_ADDRESS, ''],
-        account,
+        account: geoAccount,
       });
       slog({ requestId, message: `Space proxy hash: ${proxyTxHash}`, account: userAccount });
 
@@ -116,10 +98,10 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
           abi: SpaceArtifact.abi,
           address: contractAddress as `0x${string}`,
           functionName: 'initialize',
-          account,
+          account: geoAccount,
         });
 
-        const simulateInitializeHash = await client.writeContract(simulateInitializeResult.request);
+        const simulateInitializeHash = await walletClient.writeContract(simulateInitializeResult.request);
         slog({ requestId, message: `Initialize hash: ${simulateInitializeHash}`, account: userAccount });
 
         const initializeTxResult = await publicClient.waitForTransactionReceipt({ hash: simulateInitializeHash });
@@ -200,8 +182,8 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
           name: `Adding space ${contractAddress} for ${userAccount} to space registry`,
           space: SYSTEM_IDS.PERMISSIONLESS_SPACE_REGISTRY_ADDRESS,
           storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
-          account,
-          wallet: client,
+          account: geoAccount,
+          wallet: walletClient,
           publicClient,
         });
 
@@ -238,10 +220,10 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
           abi: SpaceArtifact.abi,
           address: contractAddress as `0x${string}`,
           functionName: 'configureRoles',
-          account,
+          account: geoAccount,
         });
 
-        const configureRolesSimulateHash = await client.writeContract(simulateConfigureRolesResult.request);
+        const configureRolesSimulateHash = await walletClient.writeContract(simulateConfigureRolesResult.request);
         slog({ requestId, message: `Configure roles hash: ${configureRolesSimulateHash}`, account: userAccount });
 
         const configureRolesTxResult = await publicClient.waitForTransactionReceipt({
