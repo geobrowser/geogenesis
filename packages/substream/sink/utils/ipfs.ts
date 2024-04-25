@@ -182,8 +182,6 @@ export function getProposalFromMetadata(
       return null;
     }
 
-    console.log('validIpfsMetadata', validIpfsMetadata.data);
-
     switch (validIpfsMetadata.data.type) {
       case 'CONTENT': {
         const parsedContent = ZodContentProposal.safeParse(ipfsContent);
