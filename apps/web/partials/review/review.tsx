@@ -828,7 +828,7 @@ const ChangedAttribute = ({
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 first:rounded-t-lg last:rounded-b-lg p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}

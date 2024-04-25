@@ -1,4 +1,4 @@
-import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_PATH } from '~/core/constants';
+import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
 import { Entity as IEntity, Proposal, Vote } from '~/core/types';
 
 import { Entity } from './entity';
@@ -202,7 +202,7 @@ export const getImageHash = (value: string) => {
 export const getImagePath = (value: string) => {
   // Add the IPFS gateway path for images with the ipfs:// protocol
   if (value.startsWith('ipfs://')) {
-    return `${IPFS_GATEWAY_PATH}${getImageHash(value)}`;
+    return `${IPFS_GATEWAY_READ_PATH}${getImageHash(value)}`;
     // The image likely resolves to an image resource at some URL
   } else if (value.startsWith('http')) {
     return value;

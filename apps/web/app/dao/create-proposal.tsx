@@ -51,35 +51,35 @@ export function CreateProposal() {
   }
 
   const onClick = async () => {
-    // const entityId = createGeoId();
+    const entityId = createGeoId();
 
-    // const proposal = createContentProposal('Add space page to test DAO', [
-    //   {
-    //     entityId: '97a5909c-58e7-4da2-933a-2ce941f0701e',
-    //     attributeId: SYSTEM_IDS.NAME,
-    //     type: 'createTriple',
-    //     value: {
-    //       type: 'string',
-    //       id: createGeoId(),
-    //       value: 'Governance Space A',
-    //     },
-    //   },
-    //   // {
-    //   //   entityId: '',
-    //   //   attributeId: SYSTEM_IDS.TYPES,
-    //   //   type: 'createTriple',
-    //   //   value: {
-    //   //     type: 'entity',
-    //   //     id: SYSTEM_IDS.SPACE_CONFIGURATION,
-    //   //   },
-    //   // },
-    // ]);
+    const proposal = createContentProposal('Add space page to test DAO', [
+      {
+        entityId: '97a5909c-58e7-4da2-933a-2ce941f0701e',
+        attributeId: SYSTEM_IDS.NAME,
+        type: 'createTriple',
+        value: {
+          type: 'string',
+          id: createGeoId(),
+          value: 'Governance Space A',
+        },
+      },
+      // {
+      //   entityId: '',
+      //   attributeId: SYSTEM_IDS.TYPES,
+      //   type: 'createTriple',
+      //   value: {
+      //     type: 'entity',
+      //     id: SYSTEM_IDS.SPACE_CONFIGURATION,
+      //   },
+      // },
+    ]);
 
-    const proposal = createSubspaceProposal({
-      name: 'Add subspace to test DAO',
-      type: 'ADD_SUBSPACE',
-      spaceAddress: '0x9c19615715a1B465EDf0146D36d803C3a8FC351A', // Some governance space
-    });
+    // const proposal = createSubspaceProposal({
+    //   name: 'Add subspace to test DAO',
+    //   type: 'ADD_SUBSPACE',
+    //   spaceAddress: '0x9c19615715a1B465EDf0146D36d803C3a8FC351A', // Some governance space
+    // });
 
     const hash = await storageClient.uploadObject(proposal);
     const uri = `ipfs://${hash}` as const;

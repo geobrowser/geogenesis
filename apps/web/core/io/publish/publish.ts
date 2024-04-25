@@ -1,15 +1,15 @@
-import { Root } from '@geogenesis/action-schema';
 import { GeoProfileRegistryAbi, SpaceAbi } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { createContentProposal, createGeoId, getProcessGeoProposalArguments } from '@geogenesis/sdk';
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import * as Effect from 'effect/Effect';
 
 import { WalletClient } from 'wagmi';
 import { prepareWriteContract, readContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
-import { UPLOAD_CHUNK_SIZE } from '~/core/constants';
-
 import { Action, ReviewState } from '../../types';
 import { Storage } from '../storage';
+import { fetchSpace } from '../subgraph';
 
 function getActionFromChangeStatus(action: Action) {
   switch (action.type) {
@@ -57,30 +57,31 @@ export async function makeProposal({
   onChangePublishState('publishing-ipfs');
   const cids: string[] = [];
 
-  for (let i = 0; i < actions.length; i += UPLOAD_CHUNK_SIZE) {
-    console.log(`Publishing ${i / UPLOAD_CHUNK_SIZE}/${Math.ceil(actions.length / UPLOAD_CHUNK_SIZE)}`);
+  const maybeSpace = await fetchSpace({ id: space });
 
-    const chunk = actions.slice(i, i + UPLOAD_CHUNK_SIZE);
-
-    const root: Root = {
-      type: 'root',
-      version: '0.0.1',
-      actions: chunk.flatMap(getActionFromChangeStatus),
-      name,
-    };
-
-    const cidString = await storageClient.uploadObject(root);
-    cids.push(`ipfs://${cidString}`);
+  if (!maybeSpace || !maybeSpace.mainVotingPluginAddress) {
+    return;
   }
+
+  const proposal = createContentProposal(name, actions.flatMap(getActionFromChangeStatus));
+  const cidString = await storageClient.uploadObject(proposal);
 
   const prepareTxEffect = Effect.tryPromise({
     try: () =>
       prepareWriteContract({
-        abi: SpaceAbi,
-        address: space as unknown as `0x${string}`,
-        functionName: 'addEntries',
         walletClient: wallet,
-        args: [cids],
+        address: maybeSpace.mainVotingPluginAddress as `0x${string}`,
+        abi: MainVotingAbi,
+        functionName: 'createProposal',
+        // @TODO: We should abstract the proposal metadata creation and the proposal
+        // action callback args together somehow since right now you have to sync
+        // them both and ensure you're using the correct functions for each content
+        // proposal type.
+        //
+        // What can happen is that you create a "CONTENT" proposal but pass a callback
+        // action that does some other action like "ADD_SUBSPACE" and it will fail since
+        // the substream won't index a mismatched proposal type and action callback args.
+        args: getProcessGeoProposalArguments(space as `0x${string}`, `ipfs://${cidString}`),
       }),
     catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
   });
