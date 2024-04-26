@@ -6,7 +6,7 @@ export function retryEffect<T>(effect: Effect.Effect<T, Error>) {
     Schedule.exponential(100).pipe(
       Schedule.jittered,
       Schedule.compose(Schedule.elapsed),
-      // Retry for 30 seconds.
+      // Retry for 3 seconds.
       Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(3)))
     )
   );
