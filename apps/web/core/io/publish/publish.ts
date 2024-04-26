@@ -1,6 +1,6 @@
 import { GeoProfileRegistryAbi, SpaceAbi } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { createContentProposal, createGeoId, getProcessGeoProposalArguments } from '@geogenesis/sdk';
+import { createContentProposal, getProcessGeoProposalArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import * as Effect from 'effect/Effect';
 
