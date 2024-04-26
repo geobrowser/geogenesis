@@ -1,11 +1,16 @@
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import * as db from 'zapatos/db';
 
 import type { ProposalExecuted } from './parser';
 import { Spaces } from '~/sink/db';
+import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
+
+class CouldNotWriteExecutedProposalError extends Error {
+  _tag: 'CouldNotWriteExecutedProposalError' = 'CouldNotWriteExecutedProposalError';
+}
 
 export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], block: BlockEvent) {
   return Effect.gen(function* (_) {
@@ -16,7 +21,8 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
       message: `Updating ${proposals.length} proposals after execution`,
     });
 
-    yield* _(
+    // @TODO: Batch update proposals in one insert instead of iteratively
+    const writtenExecutedProposals = yield* _(
       Effect.all(
         proposalsExecuted.map(proposal => {
           return Effect.tryPromise({
@@ -42,18 +48,34 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
               }
             },
             catch: error => {
-              slog({
-                requestId: block.cursor,
-                message: `Failed to update executed proposal ${proposal.proposalId} from voting plugin ${
-                  proposal.pluginAddress
-                } ${String(error)}`,
-                level: 'error',
-              });
+              return new CouldNotWriteExecutedProposalError(String(error));
             },
           });
-        })
+        }),
+        {
+          mode: 'either',
+        }
       )
     );
+
+    // @TODO: Batch update proposals in one insert instead of iteratively
+    for (const writtenExecutedProposal of writtenExecutedProposals) {
+      if (Either.isLeft(writtenExecutedProposal)) {
+        const error = writtenExecutedProposal.left;
+        Telemetry.captureException(error);
+
+        slog({
+          level: 'error',
+          requestId: block.cursor,
+          message: `Could not write executed proposal
+            Cause: ${error.cause}
+            Message: ${error.message}
+          `,
+        });
+
+        continue;
+      }
+    }
 
     slog({
       requestId: block.cursor,
