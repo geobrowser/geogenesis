@@ -5,6 +5,7 @@ import type { OnchainProfileRegistered } from './parser';
 import { Accounts, Spaces } from '~/sink/db';
 import { OnchainProfiles } from '~/sink/db/onchain-profiles';
 import { CouldNotWriteAccountsError, CouldNotWriteSpacesError } from '~/sink/errors';
+import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { retryEffect } from '~/sink/utils/retry-effect';
@@ -61,6 +62,7 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
 
     if (Either.isLeft(writtenSpaces)) {
       const error = writtenSpaces.left;
+      Telemetry.captureException(error);
 
       slog({
         level: 'error',
@@ -89,6 +91,7 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
 
     if (Either.isLeft(writtenAccounts)) {
       const error = writtenAccounts.left;
+      Telemetry.captureException(error);
 
       slog({
         level: 'error',
@@ -117,6 +120,7 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
 
     if (Either.isLeft(writtenProfiles)) {
       const error = writtenProfiles.left;
+      Telemetry.captureException(error);
 
       slog({
         level: 'error',

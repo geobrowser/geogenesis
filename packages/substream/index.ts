@@ -5,6 +5,7 @@ import { Duration, Effect, Either, Schedule, pipe } from 'effect';
 import { bootstrapRoot } from './sink/bootstrap-root';
 import { getStreamConfiguration } from './sink/get-stream-configuration';
 import { runStream } from './sink/run-stream';
+import { Telemetry } from './sink/telemetry';
 import { resetPublicTablesToGenesis } from './sink/utils/reset-public-tables-to-genesis';
 
 dotenv.config();
@@ -18,6 +19,10 @@ async function main() {
 
   // @TODO: How do we make the options typesafe?
   const options = program.opts();
+
+  // @TODO: Only start logs in prod environment
+  // Right now we're always in a prod environment when transpiling with esbuild
+  Telemetry.startLogs();
 
   /**
    * @TODO: It probably makes more sense to tie resetting the DB to a separate flag.

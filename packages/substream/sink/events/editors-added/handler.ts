@@ -5,6 +5,7 @@ import type * as S from 'zapatos/schema';
 import type { EditorsAdded } from './parser';
 import { Accounts, SpaceEditors, SpaceMembers } from '~/sink/db';
 import { CouldNotWriteAccountsError, SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
+import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { pool } from '~/sink/utils/pool';
@@ -92,6 +93,7 @@ export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEve
 
     if (Either.isLeft(writtenAccounts)) {
       const error = writtenAccounts.left;
+      Telemetry.captureException(error);
 
       slog({
         level: 'error',
@@ -187,6 +189,7 @@ export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEve
 
     if (Either.isLeft(writtenEditors)) {
       const error = writtenEditors.left;
+      Telemetry.captureException(error);
 
       slog({
         level: 'error',

@@ -4,6 +4,7 @@ import { mapGovernanceToSpaces, mapSpaces } from './map-spaces';
 import type { GovernancePluginsCreated, SpacePluginCreated } from './parser';
 import { Spaces } from '~/sink/db';
 import { CouldNotWriteSpacesError } from '~/sink/errors';
+import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
@@ -36,6 +37,7 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreated[], block: 
 
     if (Either.isLeft(writtenSpaces)) {
       const error = writtenSpaces.left;
+      Telemetry.captureException(error);
 
       slog({
         level: 'error',
@@ -80,6 +82,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
 
     if (Either.isLeft(writtenGovernancePlugins)) {
       const error = writtenGovernancePlugins.left;
+      Telemetry.captureException(error);
 
       slog({
         level: 'error',

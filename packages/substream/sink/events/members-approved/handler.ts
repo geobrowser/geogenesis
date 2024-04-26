@@ -3,6 +3,7 @@ import { Effect, Either } from 'effect';
 import { mapMembers } from './map-members';
 import type { MembersApproved } from './parser';
 import { SpaceMembers } from '~/sink/db';
+import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
@@ -33,6 +34,7 @@ export function handleMembersApproved(membersApproved: MembersApproved[], block:
 
     if (Either.isLeft(writtenApprovedMembers)) {
       const error = writtenApprovedMembers.left;
+      Telemetry.captureException(error);
 
       slog({
         level: 'error',

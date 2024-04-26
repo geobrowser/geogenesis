@@ -22,8 +22,8 @@ import { handleEditorsAdded } from './events/editors-added/handler';
 import { ZodEditorsAddedStreamResponse } from './events/editors-added/parser';
 import { handleMembersApproved } from './events/members-approved/handler';
 import { ZodMembersApprovedStreamResponse } from './events/members-approved/parser';
-import { handleOnchainProfilesRegistered } from './events/onchain-profile-registered/handler';
-import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profile-registered/parser';
+import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
+import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
 import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
 import {
   ZodGovernancePluginsCreatedStreamResponse,

@@ -3,6 +3,7 @@ import { Effect, Either } from 'effect';
 import { mapSubspaces } from './map-subspaces';
 import type { SubspaceAdded } from './parser';
 import { Subspaces } from '~/sink/db';
+import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
@@ -36,6 +37,7 @@ export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: Blo
 
     if (Either.isLeft(writtenSubspaces)) {
       const error = writtenSubspaces.left;
+      Telemetry.captureException(error);
 
       slog({
         level: 'error',

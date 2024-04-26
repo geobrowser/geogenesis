@@ -3,6 +3,7 @@ import { Effect, Either } from 'effect';
 import { mapVotes } from './map-votes';
 import type { VoteCast } from './parser';
 import { ProposalVotes } from '~/sink/db/proposal-votes';
+import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
@@ -35,6 +36,7 @@ export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
 
     if (Either.isLeft(writtenVotes)) {
       const error = writtenVotes.left;
+      Telemetry.captureException(error);
 
       slog({
         level: 'error',
