@@ -24,7 +24,7 @@ export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
     const writtenVotes = yield* _(
       Effect.tryPromise({
         try: async () => {
-          await ProposalVotes.upsert(schemaVotes);
+          await ProposalVotes.insert(schemaVotes);
         },
         catch: error => {
           return new CouldNotWriteVotesError(String(error));

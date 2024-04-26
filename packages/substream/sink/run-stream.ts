@@ -24,6 +24,8 @@ import { handleMembersApproved } from './events/members-approved/handler';
 import { ZodMembersApprovedStreamResponse } from './events/members-approved/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
+import { handleProposalsExecuted } from './events/proposals-executed/handler';
+import { ZodProposalExecutedStreamResponse } from './events/proposals-executed/parser';
 import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
 import {
   ZodGovernancePluginsCreatedStreamResponse,
@@ -35,7 +37,6 @@ import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
 import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
-import { ZodProposalExecutedStreamResponse } from './parsers/proposal-executed';
 import {
   type ContentProposal,
   type EditorshipProposal,
@@ -51,7 +52,6 @@ import {
   mapMembershipProposalsToSchema,
   mapSubspaceProposalsToSchema,
 } from './proposals/map-proposals';
-import { getSpaceForVotingPlugin } from './utils/get-space-for-voting-plugin';
 import { invariant } from './utils/invariant';
 import { getProposalFromMetadata, getProposalFromProcessedProposal } from './utils/ipfs';
 import { pool } from './utils/pool';
@@ -636,57 +636,14 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (executedProposals.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-            const proposals = executedProposals.data.executedProposals;
-
-            slog({
-              requestId: message.cursor,
-              message: `Updating ${proposals.length} proposals after execution`,
-            });
 
             yield* _(
-              Effect.all(
-                proposals.map(proposal => {
-                  return Effect.tryPromise({
-                    try: async () => {
-                      // @TODO: There might be executed proposals coming from both the member access plugin
-                      // and the voting plugin, so we need to handle both cases.
-                      //
-                      // Alternatively we use the `Approved` event to update events coming from the member
-                      // access plugin. I'm not sure if overloading the ProposalExecuted event for multiple
-                      // proposal types is better than using unique events for each proposal type.
-                      const spaceEffect = getSpaceForVotingPlugin(proposal.pluginAddress as `0x${string}`);
-                      const space = await Effect.runPromise(spaceEffect);
-
-                      if (space) {
-                        return await db
-                          .update(
-                            'proposals',
-                            { status: 'accepted' },
-                            // @TODO: There might be multiple proposals with the same onchain_proposal_id
-                            // if there are proposals from both the voting plugin and the member access plugin.
-                            { onchain_proposal_id: proposal.proposalId, space_id: space, type: 'CONTENT' }
-                          )
-                          .run(pool);
-                      }
-                    },
-                    catch: error => {
-                      slog({
-                        requestId: message.cursor,
-                        message: `Failed to update executed proposal ${proposal.proposalId} from voting plugin ${
-                          proposal.pluginAddress
-                        } ${String(error)}`,
-                        level: 'error',
-                      });
-                    },
-                  });
-                })
-              )
+              handleProposalsExecuted(executedProposals.data.executedProposals, {
+                blockNumber,
+                cursor,
+                timestamp,
+              })
             );
-
-            slog({
-              requestId: message.cursor,
-              message: `${proposals.length} proposals updated successfully!`,
-            });
           }
 
           if (votesCast.success) {

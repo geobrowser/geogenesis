@@ -2,6 +2,7 @@ import { Duration, Effect, Either, Schedule } from 'effect';
 import type { TimeoutException } from 'effect/Cause';
 
 import { IPFS_GATEWAY } from '../constants/constants';
+import { Spaces } from '../db';
 import { SpaceWithPluginAddressNotFoundError } from '../errors';
 import {
   type ContentProposal,
@@ -17,9 +18,6 @@ import {
 import { type UriData } from '../zod';
 import { isValidAction } from './actions';
 import { getChecksumAddress } from './get-checksum-address';
-import { getSpaceForMembershipPlugin } from './get-space-for-membership-plugin';
-import { getSpaceForSpacePlugin } from './get-space-for-space-plugin';
-import { getSpaceForVotingPlugin } from './get-space-for-voting-plugin';
 import { slog } from './slog';
 
 class UnableToParseBase64Error extends Error {
@@ -120,11 +118,13 @@ export function getProposalFromMetadata(
   SpaceWithPluginAddressNotFoundError
 > {
   return Effect.gen(function* (unwrap) {
+    // The proposal can come from either the voting plugin or the membership plugin
+    // depending on which type of proposal is being processed
     const maybeSpaceIdForVotingPlugin = yield* unwrap(
-      getSpaceForVotingPlugin(getChecksumAddress(proposal.pluginAddress))
+      Effect.promise(() => Spaces.findForVotingPlugin(proposal.pluginAddress))
     );
     const maybeSpaceIdForMembershipPlugin = yield* unwrap(
-      getSpaceForMembershipPlugin(getChecksumAddress(proposal.pluginAddress))
+      Effect.promise(() => Spaces.findForMembershipPlugin(proposal.pluginAddress))
     );
 
     if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForMembershipPlugin) {
@@ -307,7 +307,7 @@ export function getProposalFromProcessedProposal(
 > {
   return Effect.gen(function* (unwrap) {
     const maybeSpaceIdForVotingPlugin = yield* unwrap(
-      getSpaceForSpacePlugin(getChecksumAddress(processedProposal.pluginAddress))
+      Effect.promise(() => Spaces.findForSpacePlugin(processedProposal.pluginAddress))
     );
 
     if (!maybeSpaceIdForVotingPlugin) {

@@ -3,13 +3,13 @@ import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
 import type { VoteCast } from './parser';
+import { Spaces } from '~/sink/db';
 import {
   ProposalWithOnchainProposalIdAndSpaceIdNotFoundError,
   type SpaceWithPluginAddressNotFoundError,
 } from '~/sink/errors';
 import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
-import { getSpaceForVotingPlugin } from '~/sink/utils/get-space-for-voting-plugin';
 import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
 
@@ -46,7 +46,7 @@ export function mapVotes(
         continue;
       }
 
-      const maybeSpaceIdForPlugin = yield* unwrap(getSpaceForVotingPlugin(getChecksumAddress(vote.pluginAddress)));
+      const maybeSpaceIdForPlugin = yield* unwrap(Effect.promise(() => Spaces.findForVotingPlugin(vote.pluginAddress)));
 
       if (!maybeSpaceIdForPlugin) {
         slog({

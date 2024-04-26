@@ -3,17 +3,11 @@ import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
 import { getChecksumAddress } from '../../utils/get-checksum-address';
-import { getSpaceForMembershipPlugin } from '../../utils/get-space-for-membership-plugin';
 import { pool } from '../../utils/pool';
 import { slog } from '../../utils/slog';
 import type { MembersApproved } from './parser';
+import { Spaces } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';
-
-interface MapMembersArgs {
-  membersApproved: MembersApproved[];
-  blockNumber: number;
-  timestamp: number;
-}
 
 export function mapMembers(membersApproved: MembersApproved[], block: BlockEvent) {
   return Effect.gen(function* (unwrap) {
@@ -21,7 +15,7 @@ export function mapMembers(membersApproved: MembersApproved[], block: BlockEvent
 
     for (const member of membersApproved) {
       const maybeSpaceIdForPlugin = yield* unwrap(
-        getSpaceForMembershipPlugin(getChecksumAddress(member.membershipPluginAddress))
+        Effect.promise(() => Spaces.findForMembershipPlugin(member.membershipPluginAddress))
       );
 
       if (!maybeSpaceIdForPlugin) {
