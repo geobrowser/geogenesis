@@ -17,7 +17,7 @@ binaries:
 modules:
   - name: map_entries_added
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -32,7 +32,7 @@ modules:
 
   - name: map_roles
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -40,7 +40,7 @@ modules:
 
   - name: map_profiles_registered
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -48,7 +48,7 @@ modules:
 
   - name: map_successor_spaces_created
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -56,7 +56,7 @@ modules:
 
   - name: map_subspaces_added
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -64,7 +64,7 @@ modules:
 
   - name: map_subspaces_removed
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -72,7 +72,7 @@ modules:
 
   - name: map_spaces_created
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -80,7 +80,7 @@ modules:
 
   - name: map_governance_plugins_created
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -88,7 +88,7 @@ modules:
 
   - name: map_editors_added
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -96,7 +96,7 @@ modules:
 
   - name: map_proposals_created
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -104,7 +104,7 @@ modules:
 
   - name: map_proposals_processed
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -112,7 +112,7 @@ modules:
 
   - name: map_votes_cast
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -120,7 +120,7 @@ modules:
 
   - name: map_proposals_executed
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -128,7 +128,7 @@ modules:
 
   - name: map_members_approved
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
@@ -136,7 +136,7 @@ modules:
 
   - name: geo_out
     kind: map
-    initialBlock: 670
+    initialBlock: 620
     inputs:
       - map: map_entries_added
       - map: map_roles
