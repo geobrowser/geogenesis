@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { type Action, ZodAction } from '../zod';
+import { type Action, ZodAction } from '../../zod';
 
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
@@ -22,7 +22,7 @@ import { type Action, ZodAction } from '../zod';
  * }
  * ```
  */
-export const ZodSubstreamProposal = z.object({
+export const ZodSubstreamProposalCreated = z.object({
   proposalId: z.string(),
   pluginAddress: z.string(),
   creator: z.string(),
@@ -62,7 +62,7 @@ export const ZodProposalMetadata = z.object({
 
 export type ProposalMetadata = z.infer<typeof ZodProposalMetadata>;
 
-export type SubstreamProposal = z.infer<typeof ZodSubstreamProposal>;
+export type ProposalCreated = z.infer<typeof ZodSubstreamProposalCreated>;
 export type Proposal = z.infer<typeof ZodProposal>;
 
 export const ZodContentProposal = z.object({
@@ -125,8 +125,8 @@ export type SubspaceProposal = Proposal & {
   // json: string;
 };
 
-export const ZodProposalStreamResponse = z.object({
-  proposalsCreated: z.array(ZodSubstreamProposal).min(1),
+export const ZodProposalCreatedStreamResponse = z.object({
+  proposalsCreated: z.array(ZodSubstreamProposalCreated).min(1),
 });
 
 export const ZodProposalProcessed = z.object({

@@ -1,7 +1,8 @@
 import type * as S from 'zapatos/schema';
 
-import type { ContentProposal, EditorshipProposal, MembershipProposal, SubspaceProposal } from '../parsers/proposals';
-import { generateActionId, generateVersionId } from '../utils/id';
+import { generateActionId, generateVersionId } from '../../utils/id';
+import type { ContentProposal, EditorshipProposal, MembershipProposal, SubspaceProposal } from './parser';
+import type { BlockEvent } from '~/sink/types';
 
 export function groupProposalsByType(
   proposals: (ContentProposal | MembershipProposal | SubspaceProposal | EditorshipProposal)[]
@@ -28,8 +29,7 @@ export function groupProposalsByType(
 
 export function mapContentProposalsToSchema(
   proposals: ContentProposal[],
-  blockNumber: number,
-  cursor: string
+  block: BlockEvent
 ): {
   proposals: S.proposals.Insertable[];
   proposedVersions: S.proposed_versions.Insertable[];
@@ -48,7 +48,7 @@ export function mapContentProposalsToSchema(
       name: p.name,
       type: 'CONTENT',
       created_at: Number(p.startTime),
-      created_at_block: blockNumber,
+      created_at_block: block.blockNumber,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -71,7 +71,7 @@ export function mapContentProposalsToSchema(
       const proposed_version_id = generateVersionId({
         entryIndex: index,
         entityId: action.entityId,
-        cursor,
+        cursor: block.cursor,
       });
 
       const action_id = generateActionId({
@@ -79,7 +79,7 @@ export function mapContentProposalsToSchema(
         entity_id: action.entityId,
         attribute_id: action.attributeId,
         value_id: action.value.id,
-        cursor,
+        cursor: block.cursor,
       });
 
       const mappedAction: S.actions.Insertable = {
@@ -93,7 +93,7 @@ export function mapContentProposalsToSchema(
         entity_value_id: entity_value,
         proposed_version_id,
         created_at: Number(p.startTime),
-        created_at_block: blockNumber,
+        created_at_block: block.blockNumber,
       };
 
       return actionsToWrite.push(mappedAction);
@@ -103,9 +103,9 @@ export function mapContentProposalsToSchema(
 
     [...uniqueEntityIds.values()].forEach((entityId, entryIndex) => {
       const mappedProposedVersion: S.proposed_versions.Insertable = {
-        id: generateVersionId({ entryIndex, entityId, cursor }),
+        id: generateVersionId({ entryIndex, entityId, cursor: block.cursor }),
         entity_id: entityId,
-        created_at_block: blockNumber,
+        created_at_block: block.blockNumber,
         created_at: Number(p.startTime),
         name: p.name,
         created_by_id: p.creator,
@@ -126,7 +126,7 @@ export function mapContentProposalsToSchema(
 
 export function mapSubspaceProposalsToSchema(
   proposals: SubspaceProposal[],
-  blockNumber: number
+  block: BlockEvent
 ): {
   proposals: S.proposals.Insertable[];
   proposedSubspaces: S.proposed_subspaces.Insertable[];
@@ -143,7 +143,7 @@ export function mapSubspaceProposalsToSchema(
       name: p.name,
       type: p.type,
       created_at: Number(p.startTime),
-      created_at_block: blockNumber,
+      created_at_block: block.blockNumber,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -159,7 +159,7 @@ export function mapSubspaceProposalsToSchema(
       parent_space: p.space,
       subspace: p.subspace,
       created_at: Number(p.startTime),
-      created_at_block: blockNumber,
+      created_at_block: block.blockNumber,
       proposal_id: p.proposalId,
     };
 
@@ -174,7 +174,7 @@ export function mapSubspaceProposalsToSchema(
 
 export function mapEditorshipProposalsToSchema(
   proposals: EditorshipProposal[],
-  blockNumber: number
+  block: BlockEvent
 ): {
   proposals: S.proposals.Insertable[];
   proposedEditors: S.proposed_editors.Insertable[];
@@ -193,7 +193,7 @@ export function mapEditorshipProposalsToSchema(
       name: p.name,
       type: p.type,
       created_at: Number(p.startTime),
-      created_at_block: blockNumber,
+      created_at_block: block.blockNumber,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -209,7 +209,7 @@ export function mapEditorshipProposalsToSchema(
       account_id: p.userAddress,
       space_id: spaceId,
       created_at: Number(p.startTime),
-      created_at_block: blockNumber,
+      created_at_block: block.blockNumber,
       proposal_id: p.proposalId,
     };
 
@@ -231,7 +231,7 @@ export function mapEditorshipProposalsToSchema(
 
 export function mapMembershipProposalsToSchema(
   proposals: MembershipProposal[],
-  blockNumber: number
+  block: BlockEvent
 ): {
   proposals: S.proposals.Insertable[];
   proposedMembers: S.proposed_members.Insertable[];
@@ -250,7 +250,7 @@ export function mapMembershipProposalsToSchema(
       name: p.name,
       type: p.type,
       created_at: Number(p.startTime),
-      created_at_block: blockNumber,
+      created_at_block: block.blockNumber,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -266,7 +266,7 @@ export function mapMembershipProposalsToSchema(
       account_id: p.userAddress,
       space_id: spaceId,
       created_at: Number(p.startTime),
-      created_at_block: blockNumber,
+      created_at_block: block.blockNumber,
       proposal_id: p.proposalId,
     };
 

@@ -24,6 +24,22 @@ import { handleMembersApproved } from './events/members-approved/handler';
 import { ZodMembersApprovedStreamResponse } from './events/members-approved/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
+import { handleProposalsCreated } from './events/proposals-created/handler';
+import {
+  groupProposalsByType,
+  mapContentProposalsToSchema,
+  mapEditorshipProposalsToSchema,
+  mapMembershipProposalsToSchema,
+  mapSubspaceProposalsToSchema,
+} from './events/proposals-created/map-proposals';
+import {
+  type ContentProposal,
+  type EditorshipProposal,
+  type MembershipProposal,
+  type SubspaceProposal,
+  ZodProposalCreatedStreamResponse,
+  ZodProposalProcessedStreamResponse,
+} from './events/proposals-created/parser';
 import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { ZodProposalExecutedStreamResponse } from './events/proposals-executed/parser';
 import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
@@ -37,21 +53,6 @@ import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
 import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
-import {
-  type ContentProposal,
-  type EditorshipProposal,
-  type MembershipProposal,
-  type SubspaceProposal,
-  ZodProposalProcessedStreamResponse,
-  ZodProposalStreamResponse,
-} from './parsers/proposals';
-import {
-  groupProposalsByType,
-  mapContentProposalsToSchema,
-  mapEditorshipProposalsToSchema,
-  mapMembershipProposalsToSchema,
-  mapSubspaceProposalsToSchema,
-} from './proposals/map-proposals';
 import { invariant } from './utils/invariant';
 import { getProposalFromMetadata, getProposalFromProcessedProposal } from './utils/ipfs';
 import { pool } from './utils/pool';
@@ -196,7 +197,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const subspacesAdded = ZodSubspacesAddedStreamResponse.safeParse(jsonOutput);
           const subspacesRemoved = ZodSubspacesRemovedStreamResponse.safeParse(jsonOutput);
           const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
-          const proposalResponse = ZodProposalStreamResponse.safeParse(jsonOutput);
+          const proposalCreatedResponse = ZodProposalCreatedStreamResponse.safeParse(jsonOutput);
           const proposalProcessedResponse = ZodProposalProcessedStreamResponse.safeParse(jsonOutput);
           const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
           const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
@@ -284,113 +285,14 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
            * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
            * _and_ members can create them.
            */
-          if (proposalResponse.success) {
+          if (proposalCreatedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
 
-            slog({
-              requestId: message.cursor,
-              message: `Processing ${proposalResponse.data.proposalsCreated.length} proposals`,
-            });
-
-            slog({
-              requestId: message.cursor,
-              message: `Gathering IPFS content for ${proposalResponse.data.proposalsCreated.length} proposals`,
-            });
-
-            const maybeProposals = yield* _(
-              Effect.all(
-                proposalResponse.data.proposalsCreated.map(proposal => getProposalFromMetadata(proposal)),
-                {
-                  concurrency: 20,
-                }
-              )
-            );
-
-            const proposals = maybeProposals.filter(
-              (
-                maybeProposal
-              ): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal | EditorshipProposal =>
-                maybeProposal !== null
-            );
-
-            const { contentProposals, subspaceProposals, memberProposals, editorProposals } =
-              groupProposalsByType(proposals);
-            const schemaContentProposals = mapContentProposalsToSchema(contentProposals, blockNumber, cursor);
-            const schemaSubspaceProposals = mapSubspaceProposalsToSchema(subspaceProposals, blockNumber);
-            const schemaMembershipProposals = mapMembershipProposalsToSchema(memberProposals, blockNumber);
-            const schemaEditorshipProposals = mapEditorshipProposalsToSchema(editorProposals, blockNumber);
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${contentProposals.length} content proposals to DB`,
-            });
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${subspaceProposals.length} subspace proposals to DB`,
-            });
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${memberProposals.length} membership proposals to DB`,
-            });
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${editorProposals.length} editorship proposals to DB`,
-            });
-
-            // This might be the very first onchain interaction for a wallet address,
-            // so we need to make sure that any accounts are already created when we
-            // process the proposals below, particularly for editor and member requests.
             yield* _(
-              Effect.tryPromise({
-                try: async () => Accounts.upsert(schemaEditorshipProposals.accounts),
-                catch: error => {
-                  slog({
-                    requestId: message.cursor,
-                    message: `Failed to write accounts to DB when processing new proposals ${error}`,
-                    level: 'error',
-                  });
-
-                  return error;
-                },
-              })
-            );
-
-            // @TODO: Put this in a transaction since all these writes are related
-            yield* _(
-              Effect.tryPromise({
-                try: async () => {
-                  // @TODO: Batch since there might be postgres byte limits. See upsertChunked
-                  await Promise.all([
-                    // Content proposals
-                    Proposals.upsert(schemaContentProposals.proposals),
-                    ProposedVersions.upsert(schemaContentProposals.proposedVersions),
-                    Actions.upsert(schemaContentProposals.actions),
-
-                    // Subspace proposals
-                    Proposals.upsert(schemaSubspaceProposals.proposals),
-                    ProposedSubspaces.upsert(schemaSubspaceProposals.proposedSubspaces),
-
-                    // Editorship proposals
-                    Proposals.upsert(schemaEditorshipProposals.proposals),
-                    ProposedEditors.upsert(schemaEditorshipProposals.proposedEditors),
-
-                    // Membership proposals
-                    Proposals.upsert(schemaMembershipProposals.proposals),
-                    ProposedMembers.upsert(schemaMembershipProposals.proposedMembers),
-                  ]);
-                },
-                catch: error => {
-                  slog({
-                    requestId: message.cursor,
-                    message: `Failed to write proposals to DB ${error}`,
-                    level: 'error',
-                  });
-
-                  return error;
-                },
+              handleProposalsCreated(proposalCreatedResponse.data.proposalsCreated, {
+                blockNumber,
+                cursor,
+                timestamp,
               })
             );
           }
@@ -441,7 +343,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
 
             const { contentProposals } = groupProposalsByType(proposalsFromIpfs);
-            const schemaContentProposals = mapContentProposalsToSchema(contentProposals, blockNumber, cursor);
+            const schemaContentProposals = mapContentProposalsToSchema(contentProposals, {
+              blockNumber,
+              cursor,
+              timestamp,
+            });
 
             slog({
               requestId: message.cursor,

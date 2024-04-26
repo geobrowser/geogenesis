@@ -8,13 +8,13 @@ import {
   type ContentProposal,
   type EditorshipProposal,
   type MembershipProposal,
+  type ProposalCreated,
   type SubspaceProposal,
-  type SubstreamProposal,
   ZodContentProposal,
   ZodMembershipProposal,
   ZodProposalMetadata,
   ZodSubspaceProposal,
-} from '../parsers/proposals';
+} from '../events/proposals-created/parser';
 import { type UriData } from '../zod';
 import { isValidAction } from './actions';
 import { getChecksumAddress } from './get-checksum-address';
@@ -112,7 +112,7 @@ function getFetchIpfsContentEffect(
  * Later on we map this to the database schema and write the proposal to the database.
  */
 export function getProposalFromMetadata(
-  proposal: SubstreamProposal
+  proposal: ProposalCreated
 ): Effect.Effect<
   ContentProposal | SubspaceProposal | MembershipProposal | EditorshipProposal | null,
   SpaceWithPluginAddressNotFoundError
