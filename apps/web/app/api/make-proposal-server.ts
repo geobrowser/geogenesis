@@ -55,7 +55,7 @@ export async function makeProposalServer({
   const maybeSpace = await fetchSpace({ id: space });
 
   if (!maybeSpace || !maybeSpace.mainVotingPluginAddress) {
-    return;
+    return Effect.succeed(undefined);
   }
 
   const proposal = createContentProposal(name, actions.flatMap(getActionFromChangeStatus));

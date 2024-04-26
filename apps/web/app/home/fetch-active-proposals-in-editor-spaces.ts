@@ -64,7 +64,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
         status: { equalTo: PROPOSED }
         endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
         space: {
-          spaceEditorsV2s: {
+          spaceEditors: {
             some: {
               accountId: { equalTo: "${address}" }
             }

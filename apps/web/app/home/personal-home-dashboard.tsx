@@ -6,7 +6,7 @@ import { atomWithStorage } from 'jotai/utils';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-import { useCallback, useState } from 'react';
+import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpaces } from '~/core/hooks/use-spaces';
@@ -39,7 +39,7 @@ type PersonalHomeDashboardProps = {
 };
 
 export function PersonalHomeDashboard({ acceptedProposalsCount, proposalsList }: PersonalHomeDashboardProps) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const params = useSearchParams();
   const proposalType = params?.get('proposalType');
 
@@ -166,7 +166,7 @@ const Notice = ({ id, color, title, description, element, media }: NoticeProps) 
     },
   });
 
-  const handleDismissNotice = useCallback(() => {
+  const handleDismissNotice = React.useCallback(() => {
     const newDismissedNotices = [...dismissedNotices, id];
     setDismissedNotices(newDismissedNotices);
   }, [id, dismissedNotices, setDismissedNotices]);

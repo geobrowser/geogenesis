@@ -21,7 +21,7 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
   }
 
   const maybeEditorsProfiles = await Promise.all(
-    space.editorsV2.map(editor => Subgraph.fetchProfile({ address: editor }))
+    space.editors.map(editor => Subgraph.fetchProfile({ address: editor }))
   );
 
   const allEditors = maybeEditorsProfiles.map(profile => {

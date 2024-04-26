@@ -20,7 +20,7 @@ export const getFirstThreeEditorsForSpace = cache(async (spaceId: string): Promi
   // For now we use editors for both editors and members until we have the new membership
   // model in place.
   const maybeEditorsProfiles = await Promise.all(
-    space.editorsV2.slice(0, 3).map(editor => Subgraph.fetchProfile({ address: editor }))
+    space.editors.slice(0, 3).map(editor => Subgraph.fetchProfile({ address: editor }))
   );
 
   const firstThreeEditors = maybeEditorsProfiles.map((profile, i) => {
@@ -46,6 +46,6 @@ export const getFirstThreeEditorsForSpace = cache(async (spaceId: string): Promi
   return {
     firstThreeEditors,
     // @TODO: Use total count from graphql
-    totalEditors: space.editorsV2.length,
+    totalEditors: space.editors.length,
   };
 });
