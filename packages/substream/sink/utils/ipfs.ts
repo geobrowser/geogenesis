@@ -137,7 +137,13 @@ export function getProposalFromMetadata(
     }
 
     slog({
-      message: `Fetching IPFS content for proposal, ${JSON.stringify(proposal, null, 2)}`,
+      message: `Fetching IPFS content for proposal
+        proposalId:    ${proposal.proposalId}
+        pluginAddress: ${proposal.pluginAddress}
+        creator:       ${proposal.creator}
+        metadataUri:   ${proposal.metadataUri}
+        startTime:     ${proposal.startTime}
+        endTime:       ${proposal.endTime}`,
       requestId: '-1',
     });
 
@@ -320,7 +326,9 @@ export function getProposalFromProcessedProposal(
     }
 
     slog({
-      message: `Fetching IPFS content for processed proposal, ${JSON.stringify(processedProposal, null, 2)}`,
+      message: `Fetching IPFS content for processed proposal
+        ipfsUri:       ${processedProposal.ipfsUri}
+        pluginAddress: ${processedProposal.ipfsUri}`,
       requestId: '-1',
     });
 
