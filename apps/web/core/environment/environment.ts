@@ -23,8 +23,8 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '19411',
     rpc: process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!,
     ipfs: IPFS_GATEWAY_PATH,
-    // api: 'https://geo-conduit.up.railway.app/graphql',
-    api: 'http://localhost:5001/graphql',
+    api: 'https://geo-conduit.up.railway.app/graphql',
+    // api: 'http://localhost:5001/graphql',
   },
   testnet: {
     chainId: '19411',
