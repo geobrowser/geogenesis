@@ -34,8 +34,7 @@
     "commander": "latest",
     "dotenv": "latest",
     "effect": "^2.4.19",
-    "fast-check": "^3.13.2",
-    "node-fetch": "^3.3.2",
+    "fast-check": "3.13.2",
     "pg": "^8.7.3",
     "pg-cursor": "^2.10.3",
     "prom-client": "latest",
@@ -62,8 +61,8 @@
     "eslint-plugin-prettier": "^4.0.0",
     "prettier": "^3.0.3",
     "typescript": "latest",
-    "vite": "^3.0.9",
-    "vitest": "^0.22.1"
+    "vite": "^5.2.10",
+    "vitest": "^1.5.2"
   },
   "packageManager": "pnpm@7.30.5"
 }
