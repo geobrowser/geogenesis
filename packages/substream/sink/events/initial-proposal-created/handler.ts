@@ -1,49 +1,21 @@
 import { Effect } from 'effect';
 
 import { groupProposalsByType, mapContentProposalsToSchema } from '../proposals-created/map-proposals';
-import type { ContentProposal, ProposalProcessed } from '../proposals-created/parser';
+import type { ContentProposal } from '../proposals-created/parser';
 import { Actions, Proposals, ProposedVersions } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';
-import { getProposalFromProcessedProposal } from '~/sink/utils/ipfs';
 import { slog } from '~/sink/utils/slog';
 
-export function handleInitialProposalCreated(proposalsProcessed: ProposalProcessed[], block: BlockEvent) {
+export function handleInitialProposalsCreated(proposalsFromIpfs: ContentProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    /**
-     * Write the proposal data for a "proposed" proposal
-     */
     slog({
       requestId: block.cursor,
-      message: `Processing ${proposalsProcessed.length} initial space proposals`,
+      message: `Processing ${proposalsFromIpfs.length} initial space proposals`,
     });
-
-    slog({
-      requestId: block.cursor,
-      message: `Gathering IPFS content for ${proposalsProcessed.length} initial space proposals`,
-    });
-
-    const maybeProposalsFromIpfs = yield* _(
-      Effect.all(
-        proposalsProcessed.map(proposal =>
-          getProposalFromProcessedProposal(
-            {
-              ipfsUri: proposal.contentUri,
-              pluginAddress: proposal.pluginAddress,
-            },
-            block.timestamp
-          )
-        ),
-        {
-          concurrency: 20,
-        }
-      )
-    );
-
-    const proposalsFromIpfs = maybeProposalsFromIpfs.filter(
-      (maybeProposal): maybeProposal is ContentProposal => maybeProposal !== null
-    );
 
     const { contentProposals } = groupProposalsByType(proposalsFromIpfs);
+
+    // @TODO: We need a special function to map a proposal endtime to be now
     const schemaContentProposals = mapContentProposalsToSchema(contentProposals, {
       blockNumber: block.blockNumber,
       cursor: block.cursor,
@@ -82,7 +54,5 @@ export function handleInitialProposalCreated(proposalsProcessed: ProposalProcess
         })
       )
     );
-
-    return contentProposals;
   });
 }

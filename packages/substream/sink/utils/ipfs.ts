@@ -32,7 +32,7 @@ class UnableToParseJsonError extends Error {
   _tag: 'UnableToParseJsonError' = 'UnableToParseJsonError';
 }
 
-function getFetchIpfsContentEffect(
+export function getFetchIpfsContentEffect(
   uri: string
 ): Effect.Effect<
   UriData | null,
@@ -294,113 +294,5 @@ export function getProposalFromMetadata(
         return mappedProposal;
       }
     }
-  });
-}
-
-class InvalidProcessedProposalContentTypeError extends Error {
-  _tag: 'InvalidProcessedProposalContentTypeError' = 'InvalidProcessedProposalContentTypeError';
-}
-
-export function getProposalFromProcessedProposal(
-  processedProposal: {
-    ipfsUri: string;
-    pluginAddress: string;
-  },
-  timestamp: number
-): Effect.Effect<
-  ContentProposal | null,
-  SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError
-> {
-  return Effect.gen(function* (unwrap) {
-    const maybeSpaceIdForVotingPlugin = yield* unwrap(
-      Effect.promise(() => Spaces.findForSpacePlugin(processedProposal.pluginAddress))
-    );
-
-    if (!maybeSpaceIdForVotingPlugin) {
-      slog({
-        message: `Matching space in Proposal not found for plugin address ${processedProposal.pluginAddress}`,
-        requestId: '-1',
-      });
-
-      return null;
-    }
-
-    slog({
-      message: `Fetching IPFS content for processed proposal
-        ipfsUri:       ${processedProposal.ipfsUri}
-        pluginAddress: ${processedProposal.ipfsUri}`,
-      requestId: '-1',
-    });
-
-    const fetchIpfsContentEffect = getFetchIpfsContentEffect(processedProposal.ipfsUri);
-    const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
-
-    if (Either.isLeft(maybeIpfsContent)) {
-      const error = maybeIpfsContent.left;
-
-      switch (error._tag) {
-        case 'UnableToParseBase64Error':
-          console.error(`Unable to parse base64 string ${processedProposal.ipfsUri}`, error);
-          break;
-        case 'FailedFetchingIpfsContentError':
-          console.error(`Failed fetching IPFS content from uri ${processedProposal.ipfsUri}`, error);
-          break;
-        case 'UnableToParseJsonError':
-          console.error(`Unable to parse JSON when reading content from uri ${processedProposal.ipfsUri}`, error);
-          break;
-        case 'TimeoutException':
-          console.error(`Timed out when fetching IPFS content for uri ${processedProposal.ipfsUri}`, error);
-          break;
-        default:
-          console.error(`Unknown error when fetching IPFS content for uri ${processedProposal.ipfsUri}`, error);
-          break;
-      }
-
-      return null;
-    }
-
-    const ipfsContent = maybeIpfsContent.right;
-
-    if (!ipfsContent) {
-      return null;
-    }
-
-    const validIpfsMetadata = ZodProposalMetadata.safeParse(ipfsContent);
-
-    if (!validIpfsMetadata.success) {
-      // @TODO: Effectify error handling
-      console.error('Failed to parse IPFS metadata', validIpfsMetadata.error);
-      return null;
-    }
-
-    switch (validIpfsMetadata.data.type) {
-      case 'CONTENT':
-        const parsedContent = ZodContentProposal.safeParse(ipfsContent);
-
-        if (!parsedContent.success) {
-          return null;
-        }
-
-        const contentProposal: ContentProposal = {
-          type: validIpfsMetadata.data.type,
-          name: validIpfsMetadata.data.name ?? null,
-          proposalId: parsedContent.data.proposalId,
-          onchainProposalId: '-1',
-          actions: parsedContent.data.actions.filter(isValidAction),
-          creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // Geobot
-          space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
-          endTime: timestamp.toString(),
-          startTime: timestamp.toString(),
-          metadataUri: processedProposal.ipfsUri,
-        };
-
-        return contentProposal;
-    }
-
-    yield* unwrap(
-      Effect.fail(new InvalidProcessedProposalContentTypeError('Invalid processed proposal content type.'))
-    );
-
-    return null;
   });
 }

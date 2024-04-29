@@ -6,15 +6,15 @@ import { Effect, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
-} from './db';
-import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
 import { handleEditorsAdded } from './events/editors-added/handler';
 import { ZodEditorsAddedStreamResponse } from './events/editors-added/parser';
-import { handleInitialProposalCreated } from './events/initial-proposal-created/handler';
+import { getInitialProposalsForSpaces } from './events/initial-proposal-created/get-initial-proposals';
+import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
 import { handleMembersApproved } from './events/members-approved/handler';
 import { ZodMembersApprovedStreamResponse } from './events/members-approved/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
+import { getContentProposalFromProcessedProposalIpfsUri } from './events/proposal-processed/get-content-proposal-from-processed-proposal';
 import { handleProposalsProcessed } from './events/proposal-processed/handler';
 import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
@@ -266,18 +266,15 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
-          // A proposal might be processed as part of the initial space creation. If this happens we
-          // need to write any DB dependencies that normally exist when processing a proposal, like
-          // proposed versions, the proposal, actions, etc.
-          //
-          // @TODO: This actually doesn't handle the case where there are processed proposals
-          // _and_ spaces created in the same block that aren't related. We need to be able to check
-          // that a proposal being processed is for a given space here or not
-          if (spacePluginCreatedResponse.success && proposalProcessedResponse.success) {
+          if (proposalProcessedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
 
-            const initialSpaceProposals = yield* _(
-              handleInitialProposalCreated(proposalProcessedResponse.data.proposalsProcessed, {
+            // Since there are potentially two handlers that we need to run, we abstract out the common
+            // data fetching needed for both here, and pass the result to the two handlers. This breaks
+            // from the normalized pattern where we have a single handler for every event. For this event
+            // there might be two handlers.
+            const proposals = yield* _(
+              getContentProposalFromProcessedProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
                 blockNumber,
                 cursor,
                 timestamp,
@@ -285,20 +282,30 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
 
             /**
-             * Write the proposal data for an "accepted" proposal
+             * If we have a set of "SpacePluginCreated" events in the same block as a set of "ProposalProcessed" events
+             * we need to check if any of the processed proposals are because an initial content IPFS URI was passed
+             * during space creation.
+             *
+             * If there are processed proposals as a result of an initial content uri, we need to create the appropriate
+             * proposals, proposed versions, actions, etc. before we actually set the proposal as "ACCEPTED"
              */
-            yield* _(
-              handleProposalsProcessed(proposalProcessedResponse.data.proposalsProcessed, {
-                blockNumber,
-                cursor,
-                timestamp,
-              })
-            );
-          } else if (proposalProcessedResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            if (spacePluginCreatedResponse.success) {
+              const initialProposalsToWrite = getInitialProposalsForSpaces(
+                spacePluginCreatedResponse.data.spacesCreated,
+                proposals
+              );
+
+              yield* _(
+                handleInitialProposalsCreated(initialProposalsToWrite, {
+                  blockNumber,
+                  cursor,
+                  timestamp,
+                })
+              );
+            }
 
             yield* _(
-              handleProposalsProcessed(proposalProcessedResponse.data.proposalsProcessed, {
+              handleProposalsProcessed(proposals, {
                 blockNumber,
                 cursor,
                 timestamp,

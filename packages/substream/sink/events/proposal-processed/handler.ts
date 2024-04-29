@@ -2,14 +2,13 @@ import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
-import type { ContentProposal, ProposalProcessed } from '../proposals-created/parser';
+import type { ContentProposal } from '../proposals-created/parser';
 import { populateApprovedContentProposal } from '~/sink/entries/populate-approved-content-proposal';
 import type { BlockEvent } from '~/sink/types';
-import { getProposalFromProcessedProposal } from '~/sink/utils/ipfs';
 import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
 
-export function handleProposalsProcessed(proposalsProcessed: ProposalProcessed[], block: BlockEvent) {
+export function handleProposalsProcessed(proposalsFromIpfs: ContentProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     /**
      * 1. Fetch IPFS content
@@ -17,27 +16,6 @@ export function handleProposalsProcessed(proposalsProcessed: ProposalProcessed[]
      * 3. Update the proposal status to ACCEPTED
      * 4. Write the proposal content as Versions, Triples, Entities, etc.
      */
-    const maybeProposalsFromIpfs = yield* _(
-      Effect.all(
-        proposalsProcessed.map(proposal =>
-          getProposalFromProcessedProposal(
-            {
-              ipfsUri: proposal.contentUri,
-              pluginAddress: proposal.pluginAddress,
-            },
-            block.timestamp
-          )
-        ),
-        {
-          concurrency: 20,
-        }
-      )
-    );
-
-    const proposalsFromIpfs = maybeProposalsFromIpfs.filter(
-      (maybeProposal): maybeProposal is ContentProposal => maybeProposal !== null
-    );
-
     const maybeProposals = yield* _(
       Effect.all(
         proposalsFromIpfs.map(p => {
@@ -87,7 +65,7 @@ export function handleProposalsProcessed(proposalsProcessed: ProposalProcessed[]
 
     slog({
       requestId: block.cursor,
-      message: `Processing ${proposalsProcessed.length} processed proposals`,
+      message: `Processing ${proposalsFromIpfs.length} processed proposals`,
     });
 
     slog({
