@@ -3,40 +3,21 @@ import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/co
 import { readPackageFromFile } from '@substreams/manifest';
 import { createSink, createStream } from '@substreams/sink';
 import { Effect, Stream } from 'effect';
-import * as db from 'zapatos/db';
-import type * as S from 'zapatos/schema';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
-import {
-  Accounts,
-  Actions,
-  Proposals,
-  ProposedEditors,
-  ProposedMembers,
-  ProposedSubspaces,
-  ProposedVersions,
 } from './db';
 import { populateApprovedContentProposal } from './entries/populate-approved-content-proposal';
 import { handleEditorsAdded } from './events/editors-added/handler';
 import { ZodEditorsAddedStreamResponse } from './events/editors-added/parser';
+import { handleInitialProposalCreated } from './events/initial-proposal-created/handler';
 import { handleMembersApproved } from './events/members-approved/handler';
 import { ZodMembersApprovedStreamResponse } from './events/members-approved/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
+import { handleProposalsProcessed } from './events/proposal-processed/handler';
 import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
-  groupProposalsByType,
-  mapContentProposalsToSchema,
-  mapEditorshipProposalsToSchema,
-  mapMembershipProposalsToSchema,
-  mapSubspaceProposalsToSchema,
-} from './events/proposals-created/map-proposals';
-import {
-  type ContentProposal,
-  type EditorshipProposal,
-  type MembershipProposal,
-  type SubspaceProposal,
   ZodProposalCreatedStreamResponse,
   ZodProposalProcessedStreamResponse,
 } from './events/proposals-created/parser';
@@ -54,9 +35,6 @@ import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/pa
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { invariant } from './utils/invariant';
-import { getProposalFromMetadata, getProposalFromProcessedProposal } from './utils/ipfs';
-import { pool } from './utils/pool';
-import { slog } from './utils/slog';
 
 export class InvalidPackageError extends Error {
   _tag: 'InvalidPackageError' = 'InvalidPackageError';
@@ -131,7 +109,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       connectTransport: transport,
       substreamPackage,
       outputModule: 'geo_out',
-      productionMode: true,
+      productionMode: false,
       // The caller determines which block or cursor to start from based on
       // error handling, CLI flags, cache state, etc. We default to cursor
       // if it exists or start from the passed in block if not.
@@ -276,15 +254,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
-          /**
-           * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
-           * represent changes to content, membership (editor or member), governance changes, subspace
-           * membership, or anything else that can be executed by a DAO.
-           *
-           * Currently we use a simple majority voting model, where a proposal requires 51% of the
-           * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
-           * _and_ members can create them.
-           */
           if (proposalCreatedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
 
@@ -306,226 +275,35 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           // that a proposal being processed is for a given space here or not
           if (spacePluginCreatedResponse.success && proposalProcessedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-            const onchainProposals = proposalProcessedResponse.data.proposalsProcessed;
 
-            /**
-             * Write the proposal data for a "proposed" proposal
-             */
-            slog({
-              requestId: message.cursor,
-              message: `Processing ${onchainProposals.length} initial space proposals`,
-            });
-
-            slog({
-              requestId: message.cursor,
-              message: `Gathering IPFS content for ${onchainProposals.length} initial space proposals`,
-            });
-
-            const maybeProposalsFromIpfs = yield* _(
-              Effect.all(
-                proposalProcessedResponse.data.proposalsProcessed.map(proposal =>
-                  getProposalFromProcessedProposal(
-                    {
-                      ipfsUri: proposal.contentUri,
-                      pluginAddress: proposal.pluginAddress,
-                    },
-                    timestamp
-                  )
-                ),
-                {
-                  concurrency: 20,
-                }
-              )
-            );
-
-            const proposalsFromIpfs = maybeProposalsFromIpfs.filter(
-              (maybeProposal): maybeProposal is ContentProposal => maybeProposal !== null
-            );
-
-            const { contentProposals } = groupProposalsByType(proposalsFromIpfs);
-            const schemaContentProposals = mapContentProposalsToSchema(contentProposals, {
-              blockNumber,
-              cursor,
-              timestamp,
-            });
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${contentProposals.length} initial content proposals to DB`,
-            });
-
-            // @TODO: Put this in a transaction since all these writes are related
-            yield* _(
-              Effect.either(
-                Effect.tryPromise({
-                  try: async () => {
-                    // @TODO: Batch since there might be postgres byte limits. See upsertChunked
-                    await Promise.all([
-                      // @TODO: Should we only attempt to write to the db for the correct content type?
-                      // What if we get multiple proposals in the same block with different content types?
-                      // Content proposals
-                      Proposals.upsert(schemaContentProposals.proposals),
-                      ProposedVersions.upsert(schemaContentProposals.proposedVersions),
-                      Actions.upsert(schemaContentProposals.actions),
-                    ]);
-                  },
-                  catch: error => {
-                    slog({
-                      requestId: message.cursor,
-                      message: `Failed to write proposals to DB ${error}`,
-                      level: 'error',
-                    });
-
-                    return error;
-                  },
-                })
-              )
+            const initialSpaceProposals = yield* _(
+              handleInitialProposalCreated(proposalProcessedResponse.data.proposalsProcessed, {
+                blockNumber,
+                cursor,
+                timestamp,
+              })
             );
 
             /**
              * Write the proposal data for an "accepted" proposal
              */
-            const maybeProposals = yield* _(
-              Effect.all(
-                proposalsFromIpfs.map(p => {
-                  return Effect.tryPromise({
-                    try: () => db.selectExactlyOne('proposals', { id: p.proposalId }).run(pool),
-                    catch: error => {
-                      slog({
-                        requestId: message.cursor,
-                        message: `Failed to read proposal from DB ${error}`,
-                        level: 'error',
-                      });
-                    },
-                  });
-                })
-              )
-            );
-
-            const proposals = maybeProposals.filter(
-              (maybeProposal): maybeProposal is S.proposals.Selectable => maybeProposal !== null
-            );
-
             yield* _(
-              Effect.all(
-                proposals.map(proposal => {
-                  return Effect.tryPromise({
-                    try: () => db.update('proposals', { status: 'accepted' }, { id: proposal.id }).run(pool),
-                    catch: () => {
-                      slog({
-                        requestId: message.cursor,
-                        message: `Failed to update proposal in DB ${proposal.id}`,
-                        level: 'error',
-                      });
-                    },
-                  });
-                })
-              )
-            );
-
-            slog({
-              requestId: message.cursor,
-              message: `Processing ${proposalProcessedResponse.data.proposalsProcessed.length} processed proposals for initial space proposals`,
-            });
-
-            yield* _(
-              populateApprovedContentProposal(
-                proposals,
-                proposalsFromIpfs.flatMap(p => p.actions),
+              handleProposalsProcessed(proposalProcessedResponse.data.proposalsProcessed, {
+                blockNumber,
+                cursor,
                 timestamp,
-                blockNumber
-              )
+              })
             );
-
-            slog({
-              requestId: message.cursor,
-              message: `Wrote ${proposals.length} processed proposals to DB for initial space proposals`,
-            });
           } else if (proposalProcessedResponse.success) {
             console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-            /**
-             * 1. Fetch IPFS content
-             * 2. Find the proposal based on the proposalId
-             * 3. Update the proposal status to ACCEPTED
-             * 4. Write the proposal content as Versions, Triples, Entities, etc.
-             */
-            const maybeProposalsFromIpfs = yield* _(
-              Effect.all(
-                proposalProcessedResponse.data.proposalsProcessed.map(proposal =>
-                  getProposalFromProcessedProposal(
-                    {
-                      ipfsUri: proposal.contentUri,
-                      pluginAddress: proposal.pluginAddress,
-                    },
-                    timestamp
-                  )
-                ),
-                {
-                  concurrency: 20,
-                }
-              )
-            );
-
-            const proposalsFromIpfs = maybeProposalsFromIpfs.filter(
-              (maybeProposal): maybeProposal is ContentProposal => maybeProposal !== null
-            );
-
-            const maybeProposals = yield* _(
-              Effect.all(
-                proposalsFromIpfs.map(p => {
-                  return Effect.tryPromise({
-                    try: () => db.selectExactlyOne('proposals', { id: p.proposalId }).run(pool),
-                    catch: error => {
-                      slog({
-                        requestId: message.cursor,
-                        message: `Failed to read proposal from DB ${error}`,
-                        level: 'error',
-                      });
-                    },
-                  });
-                })
-              )
-            );
-
-            const proposals = maybeProposals.filter(
-              (maybeProposal): maybeProposal is S.proposals.Selectable => maybeProposal !== null
-            );
 
             yield* _(
-              Effect.all(
-                proposals.map(proposal => {
-                  return Effect.tryPromise({
-                    try: () => db.update('proposals', { status: 'accepted' }, { id: proposal.id }).run(pool),
-                    catch: () => {
-                      slog({
-                        requestId: message.cursor,
-                        message: `Failed to update proposal in DB ${proposal.id}`,
-                        level: 'error',
-                      });
-                    },
-                  });
-                })
-              )
-            );
-
-            yield* _(
-              populateApprovedContentProposal(
-                proposals,
-                proposalsFromIpfs.flatMap(p => p.actions),
+              handleProposalsProcessed(proposalProcessedResponse.data.proposalsProcessed, {
+                blockNumber,
+                cursor,
                 timestamp,
-                blockNumber
-              )
+              })
             );
-
-            slog({
-              requestId: message.cursor,
-              message: `Processing ${proposalProcessedResponse.data.proposalsProcessed.length} processed proposals`,
-            });
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${proposals.length} processed proposals to DB`,
-            });
           }
 
           if (membersApproved.success) {
