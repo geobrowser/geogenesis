@@ -1,21 +1,21 @@
 
--- 
+--
 -- Custom Postgraphile Query Results for Attribute Functions
--- 
+--
 CREATE TYPE public.attribute_with_scalar_value_type AS (
     type text,
     value text
 );
 
 CREATE TYPE public.attribute_with_relation_value_type AS (
-    type text, 
-    entity_value_id text 
+    type text,
+    entity_value_id text
 );
 
 CREATE TYPE public.attribute_with_unknown_value_type AS (
    type text,
    value text,
-   entity_value_id text 
+   entity_value_id text
 );
 
 COMMENT ON TYPE public.attribute_with_relation_value_type IS
@@ -30,10 +30,10 @@ COMMENT ON TYPE public.attribute_with_unknown_value_type IS
 -- Note that attribute_id is hardcoded to '01412f83-8189-4ab1-8365-65c7fd358cc1' and type_id is 'type'
 --
 
--- 
+--
 -- Query "types" on entities to get the types of an entity or "typeCount" to get the number of types
--- "typeCount" can be used for filtering 
--- 
+-- "typeCount" can be used for filtering
+--
 CREATE FUNCTION public.geo_entities_types(e_row geo_entities)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN
@@ -43,11 +43,11 @@ BEGIN
     WHERE e.id IN (
         SELECT t.value_id
         FROM triples t
-        WHERE t.entity_id = e_row.id 
-        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1' 
+        WHERE t.entity_id = e_row.id
+        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1'
     );
 END;
-$$ LANGUAGE plpgsql STRICT STABLE;  
+$$ LANGUAGE plpgsql STRICT STABLE;
 
 CREATE FUNCTION public.geo_entities_types_count(e_row geo_entities)
 RETURNS integer AS $$
@@ -59,9 +59,9 @@ BEGIN
     FROM geo_entities_types(e_row);
     RETURN type_count;
 END;
-$$ LANGUAGE plpgsql STRICT STABLE;    
+$$ LANGUAGE plpgsql STRICT STABLE;
 
--- 
+--
 -- Query "typeSchema" on a type entity (e.g. Place) to get it's attributes
 -- "typeSchemaCount" can be used for filtering
 --
@@ -92,72 +92,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STRICT STABLE;
 
--- CREATE FUNCTION public.space_space_configurations(e_row geo_entities)
--- RETURNS SETOF public.geo_entities AS $$
--- BEGIN
---     -- Using CTE to first fetch all types of the given entity
---     RETURN QUERY 
---     WITH space_configuration_types AS (
---         SELECT t.value_id AS type_id
---         FROM triples t
---         WHERE t.entity_id = e_row.id 
---         AND t.attribute_id = 'type'
---         AND t.value_id = '1d5d0c2a-db23-466c-a0b0-9abe879df457'
---     ),
-
---     -- Get all space configuration types
---     -- Return entities where the triple for the space config space id is the same as
---     -- a space id
---     space_type_triples AS (
---         -- For each type, fetch the associated attributes
---         SELECT DISTINCT t.value_id AS attribute_id
---         FROM space_configuration_types sct
---         JOIN spaces s ON t.space_id = sct.space_id
---     )
---     SELECT e.*
---     FROM geo_entities e
---     JOIN space_type_triples ta ON e.id = ta.attribute_id;
--- END;
--- $$ LANGUAGE plpgsql STRICT STABLE;
-
-CREATE FUNCTION public.spaces_metadata(e_row spaces)
-RETURNS SETOF public.geo_entities AS $$
-BEGIN
-    -- Using CTE to first fetch all types of the given entity
-    RETURN QUERY 
-    -- Get the entity id 
-    WITH space_configuration_entity_ids AS (
-        SELECT t.*
-        FROM triples t
-        WHERE t.space_id = e_row.id
-        AND t.attribute_id = 'type'
-        AND t.value_id = '1d5d0c2a-db23-466c-a0b0-9abe879df457' -- space configuration
-    )
-    SELECT e.*
-    FROM geo_entities e
-    JOIN space_configuration_entity_ids eids ON e.id = eids.entity_id;
-END;
-$$ LANGUAGE plpgsql STRICT STABLE;
-
--- Map the account id to a geo profile based on the entity id of
--- the account's onchain profile if it exists
-CREATE FUNCTION public.accounts_geo_profiles(e_row accounts)
-RETURNS SETOF public.geo_entities AS $$
-BEGIN
-    RETURN QUERY 
-    -- Get the onchain profile that matches the account id
-    WITH onchain_profiles_ids AS (
-        SELECT op.*
-        FROM onchain_profiles op
-        WHERE op.account_id = e_row.id
-    )
-    SELECT e.*
-    FROM geo_entities e
-    -- Return the entity id that matches the onchain profile id
-    INNER JOIN onchain_profiles_ids opids ON e.id = opids.id;
-END;
-$$ LANGUAGE plpgsql STRICT STABLE;
-
 -- 
 -- Query "schema" on an instance of a type entity (e.g. San Francisco) to get it's inferred type attributes
 -- "schemaCount" can be used for filtering
@@ -166,20 +100,19 @@ CREATE FUNCTION public.geo_entities_schema(e_row geo_entities)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN
     -- Using CTE to first fetch all types of the given entity
-    RETURN QUERY 
+    RETURN QUERY
     WITH entity_types AS (
         SELECT t.value_id AS type_id
         FROM triples t
-        WHERE t.entity_id = e_row.id 
+        WHERE t.entity_id = e_row.id
         AND t.attribute_id = 'type'
     ),
     type_attributes AS (
         -- For each type, fetch the associated attributes
         SELECT DISTINCT t.value_id AS attribute_id
         FROM entity_types et
-        JOIN triples t ON t.entity_id = et.type_id 
-        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1' 
-
+        JOIN triples t ON t.entity_id = et.type_id
+        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1'
     )
     SELECT e.*
     FROM geo_entities e

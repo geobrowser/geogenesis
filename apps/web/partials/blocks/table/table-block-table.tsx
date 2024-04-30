@@ -12,6 +12,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { cx } from 'class-variance-authority';
+import { useAtomValue } from 'jotai';
 
 import { useState } from 'react';
 
@@ -25,6 +26,7 @@ import { Triple } from '~/core/utils/triple';
 import { NavUtils } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
+import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
 import { EmptyTableText } from '~/design-system/table/styles';
 import { Text } from '~/design-system/text';
@@ -34,6 +36,7 @@ import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 
 import { columnName, columnValueType } from './utils';
+import { editingColumnsAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
 
@@ -143,9 +146,12 @@ interface Props {
   space: string;
   columns: Column[];
   rows: Row[];
+  shownIndexes: Array<number>;
 }
 
-export const TableBlockTable = ({ rows, space, columns }: Props) => {
+export const TableBlockTable = ({ rows, space, columns, shownIndexes }: Props) => {
+  const isEditingColumns = useAtomValue(editingColumnsAtom);
+
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(space);
@@ -178,11 +184,24 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
-              {headerGroup.headers.map(header => (
-                <th key={header.id} className="min-w-[250px] border border-b-0 border-grey-02 p-[10px] text-left">
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                </th>
-              ))}
+              {headerGroup.headers.map((header, index: number) => {
+                const isShown = shownIndexes.includes(index);
+
+                return (
+                  <th
+                    key={header.id}
+                    className={cx(
+                      !isShown ? (!isEditingColumns || !isEditMode ? 'hidden' : '!bg-grey-01 !text-grey-03') : null,
+                      'group relative min-w-[250px] border border-b-0 border-grey-02 p-[10px] text-left'
+                    )}
+                  >
+                    <div className="flex h-full w-full items-center gap-[10px]">
+                      {isEditMode && !isShown ? <EyeHide /> : null}
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           ))}
         </thead>
@@ -200,10 +219,11 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
 
             return (
               <tr key={entityId ?? index} className="hover:bg-bg">
-                {cells.map(cell => {
+                {cells.map((cell, index: number) => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
                   const isExpandable = firstTriple && firstTriple.value.type === 'string';
+                  const isShown = shownIndexes.includes(index);
 
                   return (
                     <TableCell
@@ -219,6 +239,8 @@ export const TableBlockTable = ({ rows, space, columns }: Props) => {
                           [cellId]: !prev[cellId],
                         }))
                       }
+                      isShown={isShown}
+                      isEditMode={isEditMode}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>

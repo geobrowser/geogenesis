@@ -4,7 +4,7 @@ import Link from 'next/link';
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { fetchProfilePermissionless } from '~/core/io/subgraph/fetch-profile-permissionless';
+import { fetchProfile } from '~/core/io/subgraph';
 import {
   NavUtils,
   getImagePath,
@@ -108,7 +108,7 @@ type PendingProposalsProps = {
 async function PendingProposals({ proposalType, connectedAddress }: PendingProposalsProps) {
   const [activeProposals, profile] = await Promise.all([
     getActiveProposalsForSpacesWhereEditor(connectedAddress, proposalType),
-    connectedAddress ? fetchProfilePermissionless({ address: connectedAddress }) : null,
+    connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
   ]);
 
   if (activeProposals.proposals.length === 0) {
@@ -151,7 +151,7 @@ type PendingMembershipProposalProps = {
 async function PendingMembershipProposal({ proposal }: PendingMembershipProposalProps) {
   const [proposedMember, space] = await Promise.all([
     fetchProposedMemberForProposal(proposal.id),
-    cachedFetchSpace(proposal.spaceId),
+    cachedFetchSpace(proposal.space.id),
   ]);
 
   if (!proposedMember || !space) {
@@ -185,7 +185,7 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
         {ProfileHeader}
 
         <Link
-          href={NavUtils.toSpace(proposal.spaceId)}
+          href={NavUtils.toSpace(proposal.space.id)}
           className="flex items-center gap-1.5 text-breadcrumb text-grey-04"
         >
           <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
@@ -214,7 +214,7 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
 }
 
 async function PendingContentProposal({ proposal, user }: PendingMembershipProposalProps) {
-  const space = await cachedFetchSpace(proposal.spaceId);
+  const space = await cachedFetchSpace(proposal.space.id);
 
   if (!space) {
     // @TODO: Should never happen but we should error handle
@@ -231,7 +231,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
-      <Link href={NavUtils.toProposal(proposal.spaceId, proposal.id)}>
+      <Link href={NavUtils.toProposal(proposal.space.id, proposal.id)}>
         <div className="text-smallTitle">{proposal.name}</div>
       </Link>
       <div className="flex w-full items-center gap-1.5 text-breadcrumb text-grey-04">

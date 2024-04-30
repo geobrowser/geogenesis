@@ -339,6 +339,26 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
         });
 
         yield* awaited(Effect.retry(insertTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+
+        if (triple.value_id === COLLECTION_TYPE) {
+          const insertCollectionEffect = Effect.tryPromise({
+            try: () =>
+              db
+                .upsert(
+                  'collections',
+                  {
+                    id: triple.value_id,
+                    entity_id: triple.value_id,
+                  },
+                  ['id', 'entity_id'],
+                  { updateColumns: db.doNothing }
+                )
+                .run(pool),
+            catch: () => new Error('Failed to create type'),
+          });
+
+          yield* awaited(Effect.retry(insertCollectionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        }
       }
 
       /**
@@ -359,6 +379,20 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
           catch: () => new Error('Failed to delete type'),
         });
         yield* awaited(Effect.retry(deleteTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+
+        if (triple.value_id === COLLECTION_TYPE) {
+          const deleteCollectionEffect = Effect.tryPromise({
+            try: () =>
+              db
+                .deletes('collections', {
+                  id: triple.value_id,
+                })
+                .run(pool),
+            catch: () => new Error('Failed to create type'),
+          });
+
+          yield* awaited(Effect.retry(deleteCollectionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        }
       }
     }
   });

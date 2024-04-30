@@ -48,7 +48,7 @@ export const FlowBar = () => {
 
   return (
     <AnimatePresence>
-      <div className="z-[1000]">
+      <div className="relative z-[1000]">
         {!hideFlowbar && (
           <div className="pointer-events-none fixed bottom-0 left-0 right-0 flex w-full justify-center p-4">
             <motion.div

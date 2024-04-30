@@ -160,7 +160,7 @@ export function makeCreateEntitiesEffect(
 
       slog({
         requestId,
-        message: `Adding profile to space ${spaceAddress}`,
+        message: `Adding entities for ${type} space type to space ${spaceAddress}`,
       });
 
       const proposalEffect = await makeProposalServer({

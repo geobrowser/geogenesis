@@ -161,7 +161,7 @@ export async function makeCompanyEffect(
 
       slog({
         requestId,
-        message: `Adding profile to space ${spaceAddress}`,
+        message: `Adding company entity to space ${spaceAddress}`,
         account: userAccount,
       });
 

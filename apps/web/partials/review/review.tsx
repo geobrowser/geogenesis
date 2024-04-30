@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useWalletClient } from 'wagmi';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
@@ -64,10 +65,6 @@ type Proposal = {
 
 type EntityId = string;
 
-type GatewaySpaceWithEntityConfig = {
-  spaceConfigEntityId: string;
-} & Space;
-
 const ReviewChanges = () => {
   const { subgraph } = Services.useServices();
   const { state } = useStatusBar();
@@ -87,8 +84,7 @@ const ReviewChanges = () => {
       for (const space of spaces) {
         const id = space.id;
         const config = space.spaceConfig;
-        const maybeImageHash = Entity.cover(config.triples) ?? Entity.avatar(config.triples);
-        const image = maybeImageHash ? getImagePath(maybeImageHash) : null;
+        const image = config ? getImagePath(config.image) : PLACEHOLDER_SPACE_IMAGE;
 
         spacesMap.set(id, {
           id,

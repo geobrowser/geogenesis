@@ -1,11 +1,13 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
+import { COMPANY_TYPE, NONPROFIT_TYPE, PERSON_TYPE } from '@geogenesis/ids/system-ids';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { Subgraph } from '~/core/io';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
+import { Triple } from '~/core/types';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -19,6 +21,8 @@ import {
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { Subspaces } from '~/partials/space-page/subspaces';
 
+import { cachedFetchSpace } from './cached-fetch-space';
+
 interface Props {
   params: { id: string };
 }
@@ -26,7 +30,7 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
 
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
   const entity = space?.spaceConfig;
 
   if (!entity) {
@@ -66,18 +70,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function SpacePage({ params }: Props) {
-  const props = await getData(params.id);
+  const spaceId = params.id;
+  const props = await getData(spaceId);
+  const spaceType = getSpaceType(props.triples);
 
   return (
     <>
       <React.Suspense fallback={<SubspacesSkeleton />}>
         <SubspacesContainer spaceId={params.id} />
       </React.Suspense>
-      <Editor shouldHandleOwnSpacing />
+      {spaceType && <SpaceNotices spaceType={spaceType} spaceId={spaceId} />}
+      <Editor shouldHandleOwnSpacing spacePage />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
       <React.Suspense fallback={<EntityReferencedByLoading />}>
-        <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
+        <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={spaceId} />
       </React.Suspense>
     </>
   );
@@ -108,7 +115,7 @@ const SubspacesContainer = async ({ spaceId }: SubspacesContainerProps) => {
 };
 
 const getData = async (spaceId: string) => {
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
   const entity = space?.spaceConfig;
 
   if (!entity) {
@@ -123,4 +130,20 @@ const getData = async (spaceId: string) => {
     spaceId,
     subspaces: [],
   };
+};
+
+export type SpacePageType = 'person' | 'company' | 'nonprofit';
+
+const getSpaceType = (triples: Array<Triple>): SpacePageType | null => {
+  const typeTriples = triples.filter(triple => triple.attributeId === 'type');
+
+  if (typeTriples.some(triple => triple.value.id === PERSON_TYPE)) {
+    return 'person';
+  } else if (typeTriples.some(triple => triple.value.id === COMPANY_TYPE)) {
+    return 'company';
+  } else if (typeTriples.some(triple => triple.value.id === NONPROFIT_TYPE)) {
+    return 'nonprofit';
+  } else {
+    return null;
+  }
 };

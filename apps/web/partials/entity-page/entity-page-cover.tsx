@@ -24,7 +24,7 @@ export const EntityPageCover = ({ avatarUrl: serverAvatarUrl, coverUrl: serverCo
 
   if (coverUrl) {
     return (
-      <div className={cx('relative mx-auto h-[320px] w-full max-w-[1192px]', avatarUrl ? 'mb-20' : 'mb-8')}>
+      <div className={cx('relative mx-auto -mt-6 h-[320px] w-full max-w-[1192px]', avatarUrl ? 'mb-20' : 'mb-8')}>
         <div className="relative h-full w-full overflow-hidden rounded-lg bg-grey-01">
           <Image
             src={getImagePath(coverUrl)}

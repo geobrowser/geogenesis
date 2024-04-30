@@ -30,11 +30,11 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
     }
 
     return {
-      id: profile[1].id,
-      avatarUrl: profile[1].avatarUrl,
-      name: profile[1].name,
-      address: profile[1].address,
-      profileLink: profile[1].profileLink,
+      id: profile.id,
+      avatarUrl: profile.avatarUrl,
+      name: profile.name,
+      address: profile.address,
+      profileLink: profile.profileLink,
     };
   });
 

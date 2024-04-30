@@ -3,17 +3,16 @@ import useMeasure from 'react-use-measure';
 
 import * as React from 'react';
 
-interface Props {
-  children: React.ReactNode;
+type ResizableContainerProps = {
   duration?: number;
-}
+} & React.ComponentPropsWithoutRef<'div'>;
 
-export function ResizableContainer({ children, duration = 0.1 }: Props) {
+export function ResizableContainer({ duration = 0.1, ...rest }: ResizableContainerProps) {
   const [ref, { height }] = useMeasure();
 
   return (
     <motion.div layout animate={{ height }} transition={{ duration }} className="overflow-hidden">
-      <div ref={ref}>{children}</div>
+      <div ref={ref} {...rest} />
     </motion.div>
   );
 }

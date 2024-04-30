@@ -2,12 +2,14 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Version } from '~/core/types';
+import { Profile, SpaceWithMetadata, Version } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { NavUtils } from '~/core/utils/utils';
 
-import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { SubstreamVersion, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, SubstreamVersion, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
 
 const getVersionsQuery = (versionId: string) => `query {
   version(id: ${JSON.stringify(versionId)}) {
@@ -15,8 +17,83 @@ const getVersionsQuery = (versionId: string) => `query {
     name
     createdAt
     createdAtBlock
-    createdById
-    spaceId
+
+    createdBy {
+      id
+      onchainProfiles {
+        nodes {
+          homeSpaceId
+          id
+        }
+      }
+      geoProfiles {
+        nodes {
+          id
+          name
+          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+            nodes {
+              id
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+              entityValue {
+                id
+                name
+              }
+              numberValue
+              stringValue
+              valueType
+              valueId
+              isProtected
+              space {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+
+    space {
+      id
+      metadata {
+        nodes {
+          id
+          name
+          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+            nodes {
+              id
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+              entityValue {
+                id
+                name
+              }
+              numberValue
+              stringValue
+              valueType
+              valueId
+              isProtected
+              space {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+
     entity {
       id
       name
@@ -117,22 +194,43 @@ export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersion
 
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfile = await fetchProfile({ address: version.createdById });
+  const maybeProfile = version.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
+  const onchainProfile = version.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
+  const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+
+  const profile: Profile = maybeProfile
+    ? {
+        id: version.createdBy.id,
+        address: version.createdBy.id as `0x${string}`,
+        avatarUrl: Entity.avatar(profileTriples),
+        coverUrl: Entity.cover(profileTriples),
+        name: maybeProfile.name,
+        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
+      }
+    : {
+        id: version.createdBy.id,
+        name: null,
+        avatarUrl: null,
+        coverUrl: null,
+        address: version.createdBy.id as `0x${string}`,
+        profileLink: null,
+      };
+
   const networkTriples = version.tripleVersions.nodes.flatMap(tv => tv.triple);
+
+  const spaceConfig = version.space.metadata.nodes[0] as SubstreamEntity | undefined;
+  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+
+  const spaceWithMetadata: SpaceWithMetadata = {
+    id: version.space.id,
+    name: spaceConfig?.name ?? null,
+    image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+  };
 
   return {
     ...version,
-    // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-    createdBy: maybeProfile
-      ? maybeProfile[1]
-      : {
-          id: version.createdById,
-          name: null,
-          avatarUrl: null,
-          coverUrl: null,
-          address: version.createdById as `0x${string}`,
-          profileLink: null,
-        },
+    createdBy: profile,
+    space: spaceWithMetadata,
     triples: fromNetworkTriples(networkTriples),
   };
 }

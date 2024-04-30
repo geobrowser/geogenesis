@@ -11,9 +11,8 @@ import * as React from 'react';
 import { useAccount } from 'wagmi';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useGeoProfile } from '~/core/hooks/use-geo-profile';
+import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
-import { usePerson } from '~/core/hooks/use-person';
 import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -32,14 +31,13 @@ export function NavbarActions() {
   const { showCreateProfile } = useCreateProfile();
 
   const { address } = useAccount();
-  const { profile, isLoading: isProfileLoading } = useGeoProfile(address);
-  const { person, isLoading: isPersonLoading } = usePerson(address);
+  const { isLoading, account } = useGeoAccount(address);
 
   if (!address) {
     return <GeoConnectButton />;
   }
 
-  if (isProfileLoading || isPersonLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center gap-4">
         <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
@@ -51,18 +49,17 @@ export function NavbarActions() {
   return (
     <div className="flex items-center gap-4">
       <ModeToggle />
-
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={person?.avatarUrl} size={28} />
+            <Avatar value={address} avatarUrl={account?.profile?.avatarUrl} size={28} />
           </div>
         }
         open={open}
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {!person && profile ? (
+        {!account?.profile && account?.onchainProfile ? (
           <AvatarMenuItem>
             <div className="flex items-center gap-2">
               <div className="relative h-4 w-4 overflow-hidden rounded-full">
@@ -73,14 +70,18 @@ export function NavbarActions() {
           </AvatarMenuItem>
         ) : (
           <>
-            {profile?.homeSpaceId && (
+            {account?.onchainProfile?.homeSpaceId && (
               <>
                 <AvatarMenuItem>
                   <div className="flex items-center gap-2">
                     <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                      <Avatar value={address} avatarUrl={person?.avatarUrl} size={16} />
+                      <Avatar value={address} avatarUrl={account.profile?.avatarUrl} size={16} />
                     </div>
-                    <Link prefetch={false} href={NavUtils.toSpace(profile.homeSpaceId)} className="text-button">
+                    <Link
+                      prefetch={false}
+                      href={NavUtils.toSpace(account.onchainProfile.homeSpaceId)}
+                      className="text-button"
+                    >
                       Personal space
                     </Link>
                   </div>
@@ -149,30 +150,52 @@ const variants = {
 
 const MotionPopoverContent = motion(Popover.Content);
 
-function ModeToggle() {
+const useSpaceId = () => {
   const params = useParams();
   const spaceId = params?.['id'] as string | undefined;
+  return spaceId;
+};
 
+const useCanUserEdit = (spaceId: string | null | undefined) => {
   const { isEditor, isMember } = useAccessControl(spaceId);
-  const { setEditable, editable } = useEditable();
+  return isEditor || isMember;
+};
 
+function ModeToggle() {
   const controls = useAnimation();
-  const canUserEdit = isEditor || isMember;
-  const isUserEditing = isEditor && editable;
+  const { editable, setEditable } = useEditable();
+
+  const spaceId = useSpaceId();
+  const canUserEdit = useCanUserEdit(spaceId);
+
+  React.useEffect(() => {
+    // If a user doesn't have edit access on the page, make sure we set the toggle
+    // state to false. This can happen if a user is in edit mode in a space they
+    // have edit access in, then they navigate to a space they don't have edit
+    // access in.
+    if (!canUserEdit) {
+      setEditable(false);
+    }
+  }, [canUserEdit, setEditable]);
 
   const [attemptCount, setAttemptCount] = React.useState(0);
   const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
 
-  // If a user doesn't have edit access on the page, make sure we set the toggle
-  // state to false. This can happen if a user is in edit mode in a space they
-  // have edit access in, then they navigate to a space they don't have edit
-  // access in.
-  if (!isEditor && !isMember) setEditable(false);
-
   const onToggle = React.useCallback(() => {
+    if (!spaceId) {
+      setEditable(false);
+      return;
+    }
+
     // If they are signed in and not an editor, shake the toggle to indicate that they can't edit,
     // otherwise toggle the edit mode. Only handle shaking and attempt logic in the context of a space.
-    if (!canUserEdit && spaceId) {
+    if (!canUserEdit) {
+      if (editable) {
+        // Make sure they can always escape edit mode
+        setEditable(false);
+        return;
+      }
+
       controls.start('shake');
 
       // Allow the user two attempts to toggle edit mode before showing the tooltip.
@@ -203,28 +226,27 @@ function ModeToggle() {
       className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
     >
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {!isUserEditing && <AnimatedTogglePill controls={controls} />}
+        {!editable && <AnimatedTogglePill controls={controls} />}
         <motion.div
           animate={controls}
           variants={variants}
-          className={`z-10 transition-colors duration-300 ${!isUserEditing ? 'text-text' : 'text-grey-03'}`}
+          className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}
         >
           <EyeSmall />
         </motion.div>
       </div>
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {isUserEditing && <AnimatedTogglePill controls={controls} />}
+        {editable && <AnimatedTogglePill controls={controls} />}
         <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
           <Popover.Anchor asChild>
             <div
               className={`z-10 transition-colors duration-300 ${
-                showEditAccessTooltip ? 'text-red-01' : isUserEditing ? 'text-text' : 'text-grey-03'
+                showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
               }`}
             >
               <BulkEdit />
             </div>
           </Popover.Anchor>
-
           <Popover.Portal>
             <AnimatePresence mode="popLayout">
               {showEditAccessTooltip && (

@@ -37,13 +37,7 @@ export default async function PersonalHomePage(props: Props) {
 
   return (
     <Component
-      header={
-        <PersonalHomeHeader
-          person={person ? person[1] : null}
-          address={connectedAddress ?? null}
-          onchainProfile={profile}
-        />
-      }
+      header={<PersonalHomeHeader person={person} address={connectedAddress ?? null} onchainProfile={profile} />}
       proposalType={props.searchParams.proposalType}
       acceptedProposalsCount={acceptedProposalsCount}
       connectedAddress={connectedAddress}

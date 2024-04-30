@@ -5,6 +5,56 @@ export const SPACE = 'space'
 export const INDEXED_SPACE = '30659852-2df5-42f6-9ad7-2921c33ad84b'
 export const ATTRIBUTE = 'attribute'
 
+/**
+ * Collections are a data model that enable us to create references between some
+ * arbitrary id and a set of entity ids.
+ *
+ * They act similarly to Join Tables in a relational database, but are designed
+ * around the graph-based nature of the Geo data model.
+ *
+ * A collection is primarily just an id. These can exist as a value in a triple or
+ * as an Entire entity. Collection items create a reference between a collection and
+ * an entity.
+ *
+ * ┌─────────────────────┐       ┌────────────────────┐      ┌──────────────────────┐
+ * │                     │       │                    │      │                      │
+ * │      Collection     │◄──────┤   Collection Item  │─────►│        Entity        │
+ * │                     │       │                    │      │                      │
+ * └─────────────────────┘       └────────────────────┘      └──────────────────────┘
+ */
+
+/**
+ * Collection entity type. This is used when the Collection itself is an entity
+ * vs. being a value in a Triple
+ */
+export const COLLECTION_TYPE = 'debbf9ff-62c6-40aa-9b2c-672e3bb15d0e'
+
+/**
+ * Collection item type. This is the entity representing the Join between the
+ * the Collection and the Entity
+ */
+export const COLLECTION_ITEM_TYPE = '0e8d692b-94d7-4c64-bcb3-0eb4d55503ef'
+
+/**
+ * Collection item's collection reference. This is the attribute that references
+ * the Collection id
+ */
+export const COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE =
+  '487e084b-4132-4b05-b15a-b6e147d58244'
+
+/**
+ * Collection item's entity reference. This is the attribute that references
+ * the Entity id for a given Collection item entry
+ */
+export const COLLECTION_ITEM_ENTITY_REFERENCE =
+  '53d1e5f2-6f23-4bf2-9e88-42b02f437970'
+
+/**
+ * Collection item's ordering within the collection. Collections are unordered by
+ * default, but we set all collection items to a default index value of 0.
+ */
+export const COLLECTION_ITEM_INDEX = 'ede47e69-30b0-4499-8ea4-aafbda449609'
+
 /*
   Example Usage: Rhonda Patrick -> TYPES -> Person
   Note that we should probably convert "type" to "types" or a UUID in the future.
@@ -46,15 +96,21 @@ export const RELATION_VALUE_RELATIONSHIP_TYPE =
 export const DEFAULT_TYPE = 'aeebbd5e-4d79-4d24-ae99-239e9142d9ed'
 
 export const PERSON_TYPE = 'af7ae93b-97d6-4aed-ad69-0c1d3da149a1'
+export const COMPANY_TYPE = '9cc8a65d-df92-4c0c-8d90-24980e822dc0'
 export const NONPROFIT_TYPE = 'b3b03c90-9b6d-487c-b2e2-a7d685f120eb'
 export const PROJECT_TYPE = 'cb9d261d-456b-4eaf-87e5-1e9faa441867'
 export const REGION_TYPE = '911a8e0a-52f2-4655-a0c6-d89cd161bb12'
 export const NONPROFIT_SERVICE_TYPE = '2edf4225-7937-41ba-b205-6ac91ab4aab4'
+export const FINANCE_OVERVIEW_TYPE = '2cc9d244-59ea-427f-9257-f1362a5fa952'
+export const FINANCE_SUMMMARY_TYPE = 'ce59ccc1-2ac5-4ace-8f82-09322434733d'
 export const TAG_TYPE = '3d31f766-b651-48af-a357-271343a773de'
 export const TOPIC_TYPE = '1d7f027e-415c-4f69-800e-460fde65feb9'
 export const GOAL_TYPE = 'f7191246-3dca-4e77-8a79-d9cdc9804127'
 export const CLAIM_TYPE = 'fa8e8e54-f742-4c00-b73c-05adee2b4545'
-export const COMPANY_TYPE = '9cc8a65d-df92-4c0c-8d90-24980e822dc0'
+
+export const PAGE_TYPE = '1a9fc4a0-0fec-4eea-a075-eec7ebd0d043'
+export const TAB_TYPE = '2c72ace7-5404-4455-9d22-65272a94e874'
+export const POST_TYPE = '682fbeff-41e2-42cd-a7f9-c4909136a8c5'
 
 export const VALUES_ATTRIBUTE = 'c8e8fd5f-011d-4c8e-8aaf-1a2ffc5b48fd'
 export const VISION_ATTRIBUTE = 'c6702478-93c7-4af4-8f2a-285a46cc19ca'

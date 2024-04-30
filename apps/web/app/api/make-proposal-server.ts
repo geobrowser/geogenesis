@@ -1,5 +1,6 @@
 import { createContentProposal, getProcessGeoProposalArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
 import { PrivateKeyAccount, PublicClient, WalletClient } from 'viem';
 
@@ -31,6 +32,10 @@ export class TransactionPrepareFailedError extends Error {
 
 export class TransactionWriteFailedError extends Error {
   _tag = 'TransactionWriteFailedError';
+}
+
+export class IpfsUploadFailedError extends Error {
+  _tag = 'IpfsUploadFailedError';
 }
 
 export type MakeProposalServerOptions = {
@@ -82,18 +87,25 @@ export async function makeProposalServer({
   });
 
   const writeTxEffect = Effect.gen(function* (awaited) {
-    const contractConfig = yield* awaited(prepareTxEffect);
+    const contractConfig = yield* awaited(
+      Effect.retry(prepareTxEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered))
+    );
 
     return yield* awaited(
-      Effect.tryPromise({
-        try: () => wallet.writeContract(contractConfig.request),
-        catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
-      })
+      Effect.retry(
+        Effect.tryPromise({
+          try: () => wallet.writeContract(contractConfig.request),
+          catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
+        }),
+        Schedule.exponential('100 millis').pipe(Schedule.jittered)
+      )
     );
   });
 
   const publishProgram = Effect.gen(function* (awaited) {
-    const writeTxHash = yield* awaited(writeTxEffect);
+    const writeTxHash = yield* awaited(
+      Effect.retry(writeTxEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered))
+    );
 
     const waitForTransactionEffect = yield* awaited(
       Effect.tryPromise({
