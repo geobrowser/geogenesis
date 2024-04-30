@@ -36,6 +36,7 @@ import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { Telemetry } from './telemetry/telemetry';
 import { invariant } from './utils/invariant';
+import { slog } from './utils/slog';
 
 export class InvalidPackageError extends Error {
   _tag: 'InvalidPackageError' = 'InvalidPackageError';
@@ -140,6 +141,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
     const sink = createSink({
       handleBlockScopedData: message => {
         return Effect.gen(function* (_) {
+          const telemetry = yield* _(Telemetry);
           const cursor = message.cursor;
           const blockNumber = Number(message.clock?.number.toString());
           const timestamp = Number(message.clock?.timestamp?.seconds.toString());
@@ -152,7 +154,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           );
 
           if (blockNumber % 1000 === 0) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
           }
 
           const mapOutput = message.output?.mapOutput;
@@ -163,9 +165,15 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           const unpackedOutput = mapOutput.unpack(registry);
 
-          // @TODO: Error handling with effect
           if (!unpackedOutput) {
-            console.error('Failed to unpack substream message', mapOutput);
+            slog({
+              requestId: cursor,
+              level: 'error',
+              message: `Failed to unpack substream message: ${mapOutput}`,
+            });
+
+            telemetry.captureMessage(`Failed to unpack substream message: ${mapOutput}`);
+
             return;
           }
 
@@ -184,7 +192,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const membersApproved = ZodMembersApprovedStreamResponse.safeParse(jsonOutput);
 
           if (profilesRegistered.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
             yield* _(
               handleOnchainProfilesRegistered(profilesRegistered.data.profilesRegistered, {
@@ -196,7 +204,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (spacePluginCreatedResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
             yield* _(
               handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
@@ -208,7 +216,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (governancePluginsCreatedResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
             yield* _(
               handleGovernancePluginCreated(governancePluginsCreatedResponse.data.governancePluginsCreated, {
@@ -220,7 +228,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (subspacesAdded.success) {
-            console.log('----------------- @BLOCK', blockNumber, '-----------------');
+            console.log('==================== @BLOCK', blockNumber, '====================');
 
             yield* _(
               handleSubspacesAdded(subspacesAdded.data.subspacesAdded, {
@@ -232,7 +240,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (subspacesRemoved.success) {
-            console.log('----------------- @BLOCK', blockNumber, '-----------------');
+            console.log('==================== @BLOCK', blockNumber, '====================');
 
             yield* _(
               handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved, {
@@ -244,7 +252,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (editorsAddedResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
             yield* _(
               handleEditorsAdded(editorsAddedResponse.data.editorsAdded, {
@@ -256,7 +264,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (proposalCreatedResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
             yield* _(
               handleProposalsCreated(proposalCreatedResponse.data.proposalsCreated, {
@@ -268,7 +276,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (proposalProcessedResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
             // Since there are potentially two handlers that we need to run, we abstract out the common
             // data fetching needed for both here, and pass the result to the two handlers. This breaks
@@ -315,7 +323,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (membersApproved.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
             yield* _(
               handleMembersApproved(membersApproved.data.membersApproved, {
@@ -327,7 +335,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (executedProposals.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
             yield* _(
               handleProposalsExecuted(executedProposals.data.executedProposals, {
@@ -339,7 +347,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (votesCast.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
             yield* _(
               handleVotesCast(votesCast.data.votesCast, {
