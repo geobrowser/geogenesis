@@ -17,8 +17,6 @@ export const getFirstThreeMembersForSpace = cache(async (spaceId: string): Promi
     throw new Error("Space doesn't exist");
   }
 
-  // For now we use editors for both editors and members until we have the new membership
-  // model in place.
   const maybeEditorsProfiles = await Promise.all(
     space.members.slice(0, 3).map(editor => Subgraph.fetchProfile({ address: editor }))
   );
@@ -35,11 +33,11 @@ export const getFirstThreeMembersForSpace = cache(async (spaceId: string): Promi
     }
 
     return {
-      id: profile[1].id,
-      avatarUrl: profile[1].avatarUrl,
-      name: profile[1].name,
-      address: profile[1].address,
-      profileLink: profile[1].profileLink,
+      id: profile.id,
+      avatarUrl: profile.avatarUrl,
+      name: profile.name,
+      address: profile.address,
+      profileLink: profile.profileLink,
     };
   });
 

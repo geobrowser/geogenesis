@@ -3,6 +3,7 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { OmitStrict, Space, SpaceConfigEntity } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
@@ -121,13 +122,14 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
     };
   });
 
+  // @TODO: Should use space metadata from space object
   const spaces = result.spaceSubspaces.nodes.map((space): Subspace => {
     const config = spaceConfigs.find(config => config.spaceId === space.subspace.id)?.config;
 
     const spaceConfigWithImage: SpaceConfigEntity | null = config
       ? {
           ...config,
-          image: EntityModule.avatar(config.triples) ?? EntityModule.cover(config.triples) ?? null,
+          image: EntityModule.avatar(config.triples) ?? EntityModule.cover(config.triples) ?? PLACEHOLDER_SPACE_IMAGE,
         }
       : null;
 

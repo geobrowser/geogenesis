@@ -99,9 +99,9 @@ export async function fetchAccount(
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchAccount. queryId: ${queryId} endpoint: ${
-              config.profileSubgraph
-            } address: ${options.address}
+            `Encountered runtime graphql error in fetchAccount. queryId: ${queryId} endpoint: ${config.api} address: ${
+              options.address
+            }
             
             queryString: ${getAccountQuery(options.address)}
             `,
@@ -111,7 +111,7 @@ export async function fetchAccount(
           return null;
         default:
           console.error(
-            `${error._tag}: Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${config.profileSubgraph} address: ${options.address}`
+            `${error._tag}: Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${config.api} address: ${options.address}`
           );
 
           return null;

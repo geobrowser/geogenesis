@@ -32,6 +32,12 @@ export type SubstreamTriple = NetworkValue & {
   space: Space;
 };
 
+type CreatedBy = {
+  id: string;
+  geoProfiles: { nodes: SubstreamEntity[] };
+  onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
+};
+
 export type SubstreamAction = OmitStrict<SubstreamTriple, 'space' | 'isProtected'> &
   NetworkValue & {
     actionType: 'createTriple' | 'deleteTriple';
@@ -43,29 +49,23 @@ export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
   triplesByEntityId: { nodes: SubstreamTriple[] };
 };
 
+export type SubstreamSpace = { id: string; metadata: { nodes: SubstreamEntity[] } };
+
 export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy' | 'space'> & {
   actions: { nodes: SubstreamAction[] };
 
-  createdBy: {
-    id: string;
-    geoProfiles: { nodes: SubstreamEntity[] };
-    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
-  };
-  space: { id: string; metadata: { nodes: SubstreamEntity[] } };
+  createdBy: CreatedBy;
+  space: SubstreamSpace;
 };
 
 export type SubstreamVersion = {
   id: string;
   name: string | null;
   description: string | null;
-  createdBy: {
-    id: string;
-    geoProfiles: { nodes: SubstreamEntity[] };
-    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
-  };
+  createdBy: CreatedBy;
   createdAt: number;
   createdAtBlock: string;
-  space: { id: string; metadata: { nodes: SubstreamEntity[] } };
+  space: SubstreamSpace;
   tripleVersions: { nodes: { triple: SubstreamTriple }[] };
   entity: {
     id: string;
@@ -77,16 +77,12 @@ export type SubstreamProposal = {
   id: string;
   type: ProposalType;
   onchainProposalId: string;
-  createdBy: {
-    id: string;
-    geoProfiles: { nodes: SubstreamEntity[] };
-    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
-  };
+  createdBy: CreatedBy;
   createdAt: number;
   createdAtBlock: string;
   name: string | null;
   description: string | null;
-  space: { id: string; metadata: { nodes: SubstreamEntity[] } };
+  space: SubstreamSpace;
   startTime: number;
   endTime: number;
   status: ProposalStatus;

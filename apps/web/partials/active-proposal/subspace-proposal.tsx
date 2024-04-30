@@ -19,8 +19,8 @@ interface Props {
 
 export async function SubspaceProposal({ proposal }: Props) {
   const [subspace, space] = await Promise.all([
-    fetchProposedSubspace(proposal.id, proposal.space),
-    fetchSpace({ id: proposal.space }),
+    fetchProposedSubspace(proposal.id, proposal.space.id),
+    fetchSpace({ id: proposal.space.id }),
   ]);
 
   if (!subspace) {
@@ -212,7 +212,7 @@ async function fetchProposedSubspace(proposalId: string, spaceId: string) {
   const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
     ? {
         ...spaceConfig,
-        image: Entity.avatar(spaceConfig.triples) ?? Entity.cover(spaceConfig.triples) ?? null,
+        image: Entity.avatar(spaceConfig.triples) ?? Entity.cover(spaceConfig.triples) ?? PLACEHOLDER_SPACE_IMAGE,
       }
     : null;
 

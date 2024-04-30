@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { COMPANY_TYPE, NONPROFIT_TYPE, PERSON_TYPE } from '@geogenesis/ids/system-ids';
 import { redirect } from 'next/navigation';
 
@@ -19,6 +18,7 @@ import {
   EntityReferencedByServerContainer,
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { SpaceNotices } from '~/partials/space-page/space-notices';
 import { Subspaces } from '~/partials/space-page/subspaces';
 
 import { cachedFetchSpace } from './cached-fetch-space';

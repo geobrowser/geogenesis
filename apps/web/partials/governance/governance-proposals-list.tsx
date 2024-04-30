@@ -7,10 +7,11 @@ import React from 'react';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { fetchProfile } from '~/core/io/subgraph';
-import { fetchProfilePermissionless } from '~/core/io/subgraph/fetch-profile-permissionless';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamProposal } from '~/core/io/subgraph/network-local-mapping';
-import { OmitStrict, Vote } from '~/core/types';
+import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
+import { OmitStrict, Profile, Proposal, Vote } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -26,7 +27,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
   const [proposals, profile] = await Promise.all([
     fetchActiveProposals({ spaceId, first: 5, page, connectedAddress }),
-    connectedAddress ? fetchProfilePermissionless({ address: connectedAddress }) : null,
+    connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
   ]);
 
   const userVotesByProposalId = proposals.reduce((acc, p) => {
@@ -89,7 +90,9 @@ export interface FetchProposalsOptions {
 }
 
 interface NetworkResult {
-  proposals: { nodes: OmitStrict<SubstreamProposal & { userVotes: { nodes: Vote[] } }, 'proposedVersions'>[] };
+  proposals: {
+    nodes: OmitStrict<SubstreamProposal & { userVotes: { nodes: Vote[] } }, 'proposedVersions' | 'space'>[];
+  };
 }
 
 const getFetchSpaceProposalsQuery = (
@@ -115,9 +118,50 @@ const getFetchSpaceProposalsQuery = (
       id
       onchainProposalId
       name
-      spaceId
+
       createdAtBlock
-      createdById
+
+      createdBy {
+        id
+        onchainProfiles {
+          nodes {
+            homeSpaceId
+            id
+          }
+        }
+        geoProfiles {
+          nodes {
+            id
+            name
+            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+              nodes {
+                id
+                attribute {
+                  id
+                  name
+                }
+                entity {
+                  id
+                  name
+                }
+                entityValue {
+                  id
+                  name
+                }
+                numberValue
+                stringValue
+                valueType
+                valueId
+                isProtected
+                space {
+                  id
+                }
+              }
+            }
+          }
+        }
+      }
+
       createdAt
       startTime
       endTime
@@ -204,27 +248,32 @@ async function fetchActiveProposals({
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const proposals = result.proposals.nodes;
 
-  // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
-  // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfiles = await Promise.all(proposals.map(v => fetchProfile({ address: v.createdById })));
-
-  // Create a map of wallet address -> profile so we can look it up when creating the application
-  // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile
-  // of the user who created the ProposedVersion.
-  const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
-
   return proposals.map(p => {
+    const maybeProfile = p.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
+    const onchainProfile = p.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
+    const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+
+    const profile: Profile = maybeProfile
+      ? {
+          id: p.createdBy.id,
+          address: p.createdBy.id as `0x${string}`,
+          avatarUrl: Entity.avatar(profileTriples),
+          coverUrl: Entity.cover(profileTriples),
+          name: maybeProfile.name,
+          profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
+        }
+      : {
+          id: p.createdBy.id,
+          name: null,
+          avatarUrl: null,
+          coverUrl: null,
+          address: p.createdBy.id as `0x${string}`,
+          profileLink: null,
+        };
+
     return {
       ...p,
-      // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profiles[p.createdById] ?? {
-        id: p.createdById,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: p.createdById as `0x${string}`,
-        profileLink: null,
-      },
+      createdBy: profile,
     };
   });
 }

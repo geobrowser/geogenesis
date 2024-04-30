@@ -7,7 +7,6 @@ import * as Schedule from 'effect/Schedule';
 import { slog } from '~/core/utils/utils';
 
 import { geoAccount, publicClient, walletClient } from '../../client';
-import { makeProposalServer } from '../../make-proposal-server';
 
 class ProxyBeaconInitializeFailedError extends Error {
   readonly _tag = 'ProxyBeaconInitializeFailedError';

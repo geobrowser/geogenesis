@@ -26,7 +26,10 @@ import { getActiveProposalDiff } from './get-active-proposal-diff';
 import { getEndedProposalDiff } from './get-ended-proposal-diff';
 
 export async function ContentProposal({ proposal }: { proposal: Proposal }) {
-  const previousProposalId = await fetchPreviousProposalId({ spaceId: proposal.space, createdAt: proposal.createdAt });
+  const previousProposalId = await fetchPreviousProposalId({
+    spaceId: proposal.space.id,
+    createdAt: proposal.createdAt,
+  });
 
   // Depending on whether the proposal is active or ended we need to compare against
   // either the live versions of entities in the proposal or against the state of

@@ -1,10 +1,11 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
-import { fetchProfile } from '~/core/io/subgraph';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamProposal } from '~/core/io/subgraph/network-local-mapping';
-import { OmitStrict, Vote } from '~/core/types';
+import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
+import { OmitStrict, Profile, Vote } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
+import { NavUtils } from '~/core/utils/utils';
 
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
 
@@ -137,29 +138,34 @@ export async function getActiveProposalsForSpacesWhereEditor(
   const result = await Effect.runPromise(proposalsInSpacesWhereEditor);
   const proposals = result.proposals.nodes;
 
-  // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
-  // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfiles = await Promise.all(proposals.map(v => fetchProfile({ address: v.createdById })));
-
-  // Create a map of wallet address -> profile so we can look it up when creating the application
-  // ProposedVersions data structure. ProposedVersions have a `createdBy` field that should map to the Profile
-  // of the user who created the ProposedVersion.
-  const profiles = Object.fromEntries(maybeProfiles.flatMap(profile => (profile ? [profile] : [])));
-
   return {
     totalCount: result.proposals.totalCount,
     proposals: proposals.map(p => {
+      const maybeProfile = p.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
+      const onchainProfile = p.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
+      const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+
+      const profile: Profile = maybeProfile
+        ? {
+            id: p.createdBy.id,
+            address: p.createdBy.id as `0x${string}`,
+            avatarUrl: Entity.avatar(profileTriples),
+            coverUrl: Entity.cover(profileTriples),
+            name: maybeProfile.name,
+            profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
+          }
+        : {
+            id: p.createdBy.id,
+            name: null,
+            avatarUrl: null,
+            coverUrl: null,
+            address: p.createdBy.id as `0x${string}`,
+            profileLink: null,
+          };
+
       return {
         ...p,
-        // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-        createdBy: profiles[p.createdById] ?? {
-          id: p.createdById,
-          name: null,
-          avatarUrl: null,
-          coverUrl: null,
-          address: p.createdById as `0x${string}`,
-          profileLink: null,
-        },
+        createdBy: profile,
       };
     }),
   };
