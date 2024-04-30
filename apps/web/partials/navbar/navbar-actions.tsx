@@ -153,11 +153,11 @@ function ModeToggle() {
   const params = useParams();
   const spaceId = params?.['id'] as string | undefined;
 
-  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
+  const { isEditor, isMember } = useAccessControl(spaceId);
   const { setEditable, editable } = useEditable();
 
   const controls = useAnimation();
-  const canUserEdit = isEditor || isAdmin || isEditorController;
+  const canUserEdit = isEditor || isMember;
   const isUserEditing = isEditor && editable;
 
   const [attemptCount, setAttemptCount] = React.useState(0);
@@ -167,7 +167,7 @@ function ModeToggle() {
   // state to false. This can happen if a user is in edit mode in a space they
   // have edit access in, then they navigate to a space they don't have edit
   // access in.
-  if (!isEditor && !isAdmin && !isEditorController) setEditable(false);
+  if (!isEditor && !isMember) setEditable(false);
 
   const onToggle = React.useCallback(() => {
     // If they are signed in and not an editor, shake the toggle to indicate that they can't edit,

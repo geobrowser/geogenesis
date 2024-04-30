@@ -136,7 +136,7 @@ export const PEOPLE_SPACE = '0xb4476A42A66eC1356A58D300555169E17db6756c'
 export const BROADER_SPACES = '03aa11ed-d69a-4d5e-a0ae-a0f197614cfd'
 
 /**
- * Addresses for important contracts on Polygon mainnet.
+ * Addresses for important contracts on our L3.
  *
  * Note: If you want to test deployments on a different network (e.g. local or Mumbai),
  * you can update these addresses to point to the correct contracts on that network.
@@ -144,7 +144,11 @@ export const BROADER_SPACES = '03aa11ed-d69a-4d5e-a0ae-a0f197614cfd'
 
 export const PROFILE_REGISTRY_ADDRESS =
   '0xc066E89bF7669b905f869Cb936818b0fd0bc456d'
-// '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458' // mumbai
+export const MEMBERSHIP_CONTRACT_ADDRESS =
+  '0x34a94160f4B0f86d932927DFfb326354dB279181'
+
+// This is the address for the Root Space.
+export const ROOT_SPACE_ADDRESS = '0xEcC4016C71fF38B32f01538207B6F0FdcbCF99f5'
 
 // This represents the beacon for the first set of deployed permissioned spaces.
 // We should use this beacon for all new permissioned spaces. We need to track the beacon
@@ -169,10 +173,6 @@ export const PERMISSIONLESS_SPACE_BEACON_ADDRESS =
 export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS =
   '0x68930a23A91A8FA97C6053cD5057431BaD3eEB52'
 // '0x42096035524630382E73cfFAE1CA319CFa72F4dC' // mumbai
-
-export const MEMBERSHIP_CONTRACT_ADDRESS =
-  '0x34a94160f4B0f86d932927DFfb326354dB279181'
-// '0x22e4484e71ec9ea3b115aa21fd3d9f98edbe5d4e' // mumbai
 
 /**
   There are currently multiple beacon proxies representing multiple space deployments on Polygon mainnet.

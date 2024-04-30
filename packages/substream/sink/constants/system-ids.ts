@@ -6,8 +6,8 @@ export const INDEXED_SPACE = '30659852-2df5-42f6-9ad7-2921c33ad84b';
 export const ATTRIBUTE = 'attribute';
 
 /* We could wire this up to the substream, but since we're hardcoding quite a bit already in bootstrapRoot.ts, this is probably fine */
-export const ROOT_SPACE_CREATED_AT = 1670280473;
-export const ROOT_SPACE_CREATED_AT_BLOCK = 36472429;
+export const ROOT_SPACE_CREATED_AT = 0;
+export const ROOT_SPACE_CREATED_AT_BLOCK = 678;
 export const ROOT_SPACE_CREATED_BY_ID = '0x66703c058795B9Cb215fbcc7c6b07aee7D216F24';
 
 /*
@@ -105,30 +105,10 @@ export const PEOPLE_SPACE = '0xb4476A42A66eC1356A58D300555169E17db6756c';
  */
 
 export const PROFILE_REGISTRY_ADDRESS = '0xc066E89bF7669b905f869Cb936818b0fd0bc456d';
-// '0x62b5b813B74C4166DA4f3f88Af6E8E4e657a9458' // mumbai
 
-// This represents the beacon for the first set of deployed permissioned spaces.
-// We should use this beacon for all new permissioned spaces. We need to track the beacon
-// address in case we decide to upgrade the implementation of the permissionless space.
-export const PERMISSIONED_SPACE_BEACON_ADDRESS = '0xe44Be15e413169Ad49fB24CBF8db192BE5A9A8bF';
-// '0xf7239cb6d1ac800f2025a2571ce32bde190059cb' // mumbai
-
-// This represents the Space contract acting as the registry for all permissioned spaces.
 // This is the address for the Root Space.
-export const PERMISSIONED_SPACE_REGISTRY_ADDRESS = '0x170b749413328ac9a94762031a7A05b00c1D2e34';
-
-// This represents the beacon for all permissionless spaces. We need to track the beacon
-// address in case we decide to upgrade the implementation of the permissionless space.
-export const PERMISSIONLESS_SPACE_BEACON_ADDRESS = '0xf14C33B732851ECccA5e2c84a9b0DB6Eb24a5a4A';
-// '0xc90513962Db42C1fb44fBb97a8eb0c2E102701Da' // mumbai
-
-// This represents the PermissionlessSpace contract acting as the registry for all
-// permissionless spaces.
-export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = '0x68930a23A91A8FA97C6053cD5057431BaD3eEB52';
-// '0x42096035524630382E73cfFAE1CA319CFa72F4dC' // mumbai
-
+export const ROOT_SPACE_ADDRESS = '0xEcC4016C71fF38B32f01538207B6F0FdcbCF99f5';
 export const MEMBERSHIP_CONTRACT_ADDRESS = '0x34a94160f4B0f86d932927DFfb326354dB279181';
-// '0x22e4484e71ec9ea3b115aa21fd3d9f98edbe5d4e' // mumbai
 
 /**
   There are currently multiple beacon proxies representing multiple space deployments on Polygon mainnet.

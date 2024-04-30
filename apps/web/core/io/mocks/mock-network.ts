@@ -140,10 +140,12 @@ export const makeStubSpace = (spaceId: string): Space => {
     id: spaceId,
     isRootSpace: false,
     editors: [],
-    editorControllers: [],
-    admins: [],
+    members: [],
     spaceConfig: null,
     createdAtBlock: '36472399',
+    mainVotingPluginAddress: null,
+    memberAccessPluginAddress: null,
+    spacePluginAddress: null,
   };
 };
 

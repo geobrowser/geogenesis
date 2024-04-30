@@ -43,10 +43,7 @@ interface NetworkResult {
       mainVotingPluginAddress: string | null;
       memberAccessPluginAddress: string | null;
       spacePluginAddress: string | null;
-      spaceAdmins: { nodes: { accountId: string }[] };
       spaceEditors: { nodes: { accountId: string }[] };
-      spaceEditorControllers: { nodes: { accountId: string }[] };
-      spaceEditorsV2s: { nodes: { accountId: string }[] };
       spaceMembers: { nodes: { accountId: string }[] };
       createdAtBlock: string;
     }[];

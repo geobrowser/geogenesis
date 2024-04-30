@@ -20,7 +20,16 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
   }
 }`;
 
-export type Subspace = OmitStrict<Space, 'admins' | 'createdAtBlock' | 'editorControllers' | 'editors' | 'isRootSpace'>;
+export type Subspace = OmitStrict<
+  Space,
+  | 'members'
+  | 'createdAtBlock'
+  | 'editors'
+  | 'isRootSpace'
+  | 'mainVotingPluginAddress'
+  | 'memberAccessPluginAddress'
+  | 'spacePluginAddress'
+>;
 
 interface NetworkResult {
   spaceSubspaces: {

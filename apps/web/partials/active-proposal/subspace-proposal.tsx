@@ -113,7 +113,7 @@ const getSubspaceInProposalQuery = (proposalId: string) => `query {
       spaceBySubspace {
         id
 
-        spaceEditorsV2s {
+        spaceEditors {
           totalCount
         }
       }
@@ -127,7 +127,7 @@ interface NetworkResult {
       spaceBySubspace: {
         id: string;
 
-        spaceEditorsV2s: {
+        spaceEditors: {
           totalCount: number;
         };
       };
@@ -218,8 +218,8 @@ async function fetchProposedSubspace(proposalId: string, spaceId: string) {
 
   return {
     id: proposedSpace.id,
-    membersCount: proposedSpace.spaceEditorsV2s.totalCount,
-    editorsCount: proposedSpace.spaceEditorsV2s.totalCount,
+    membersCount: proposedSpace.spaceEditors.totalCount,
+    editorsCount: proposedSpace.spaceEditors.totalCount,
     spaceConfig: spaceConfigWithImage,
   };
 }

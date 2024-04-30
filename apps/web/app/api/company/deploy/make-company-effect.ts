@@ -2,8 +2,6 @@ import { SpaceArtifact } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Effect from 'effect/Effect';
 import * as Schedule from 'effect/Schedule';
-import { createPublicClient, createWalletClient, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
 
 import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
@@ -12,9 +10,8 @@ import { StorageClient } from '~/core/io/storage/storage';
 import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
 import { slog } from '~/core/utils/utils';
 
-import { makeProposalServer } from '../../make-proposal-server';
-import { CONDUIT_TESTNET } from '~/core/wallet/conduit-chain';
 import { geoAccount, publicClient, walletClient } from '../../client';
+import { makeProposalServer } from '../../make-proposal-server';
 
 type Role = {
   role: string;

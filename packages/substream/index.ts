@@ -5,6 +5,7 @@ import { Duration, Effect, Either, Schedule, pipe } from 'effect';
 import { bootstrapRoot } from './sink/bootstrap-root';
 import { getStreamConfiguration } from './sink/get-stream-configuration';
 import { runStream } from './sink/run-stream';
+import { Telemetry, TelemetryLive, startLogs } from './sink/telemetry';
 import { resetPublicTablesToGenesis } from './sink/utils/reset-public-tables-to-genesis';
 
 dotenv.config();
@@ -19,6 +20,8 @@ async function main() {
   // @TODO: How do we make the options typesafe?
   const options = program.opts();
 
+  startLogs();
+
   /**
    * @TODO: It probably makes more sense to tie resetting the DB to a separate flag.
    *        There are probably scenarios where we want to index from the genesis block
@@ -32,6 +35,8 @@ async function main() {
     const reset = await pipe(resetPublicTablesToGenesis(), Effect.either, Effect.runPromise);
 
     if (Either.isLeft(reset)) {
+      TelemetryLive.captureMessage('Could not reset public tables');
+
       console.error('Could not reset public tables');
       console.error('Message: ', reset.left.message);
       console.error('Cause: ', reset.left.cause);
@@ -42,6 +47,8 @@ async function main() {
     const bootstrap = await pipe(bootstrapRoot(), Effect.either, Effect.runPromise);
 
     if (Either.isLeft(bootstrap)) {
+      TelemetryLive.captureMessage('Could not bootstrap system entities');
+
       console.error('Could not bootstrap system entities');
       console.error('Message: ', bootstrap.left.message);
       console.error('Cause: ', bootstrap.left.cause);
@@ -87,7 +94,8 @@ async function main() {
             // If we've started the stream at least once, we want to start from the cursor, otherwise
             // default to the derived configuration value.
             shouldUseCursor: shouldUseCursor ? shouldUseCursor : config.shouldUseCursor,
-          })
+          }),
+          Effect.provideService(Telemetry, TelemetryLive)
         );
       }),
       // Retry jittered exponential with base of 100ms for up to 10 minutes.
@@ -115,6 +123,7 @@ async function main() {
 
   if (Either.isLeft(stream)) {
     const error = stream.left;
+    TelemetryLive.captureException(error);
 
     switch (error._tag) {
       case 'SinkError':

@@ -48,9 +48,7 @@ export async function fetchOnchainProfileByEntityId(entityId: string): Promise<O
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProfile. endpoint: ${
-              config.profileSubgraph
-            } entityId: ${entityId}
+            `Encountered runtime graphql error in fetchProfile. endpoint: ${config.api} entityId: ${entityId}
 
               queryString: ${getFetchProfileQuery(entityId)}
               `,
@@ -62,7 +60,7 @@ export async function fetchOnchainProfileByEntityId(entityId: string): Promise<O
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch wallets to derive profile, endpoint: ${config.profileSubgraph} entityId: ${entityId}`
+            `${error._tag}: Unable to fetch wallets to derive profile, endpoint: ${config.api} entityId: ${entityId}`
           );
 
           return {
