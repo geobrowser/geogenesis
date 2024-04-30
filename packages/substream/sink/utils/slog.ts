@@ -17,6 +17,6 @@ export function slog({
     level = 'info';
   }
 
-  const structuredMessage = `${level.toUpperCase()} – ${new Date().toISOString()} – ${message} – requestId: ${requestId}`;
+  const structuredMessage = `${level.toUpperCase()} – requestId: ${requestId} – ${new Date().toISOString()} – ${message}`;
   console[level](structuredMessage);
 }
