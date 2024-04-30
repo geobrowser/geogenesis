@@ -100,12 +100,14 @@ export function populateApprovedContentProposal(
 
     yield* awaited(
       populateTriples({
+        // @TODO: Don't use entries-based mapping
         entries: proposedVersions.map(e => ({
           space: e.space_id,
           actions: actions.filter(a => a.entityId === e.entity_id),
         })),
         blockNumber,
         timestamp,
+        // @TODO: This is wrong. Should be the person who actually created the proposal
         createdById: proposals[0]?.created_by_id!,
         versions,
       })
