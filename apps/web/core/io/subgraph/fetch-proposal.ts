@@ -95,6 +95,7 @@ export const getFetchProposalQuery = (id: string) => `query {
                 }
               }
             }
+          }
         }
       }
     }
