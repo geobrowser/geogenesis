@@ -23,7 +23,7 @@ function fetchContentProposalFromIpfs(
     ipfsUri: string;
     pluginAddress: string;
   },
-  timestamp: number
+  block: BlockEvent
 ): Effect.Effect<
   ContentProposal | null,
   SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError
@@ -36,7 +36,7 @@ function fetchContentProposalFromIpfs(
     if (!maybeSpaceIdForVotingPlugin) {
       slog({
         message: `Matching space in Proposal not found for plugin address ${processedProposal.pluginAddress}`,
-        requestId: '-1',
+        requestId: block.requestId,
       });
 
       return null;
@@ -46,7 +46,7 @@ function fetchContentProposalFromIpfs(
       message: `Fetching IPFS content for processed proposal
         ipfsUri:       ${processedProposal.ipfsUri}
         pluginAddress: ${processedProposal.ipfsUri}`,
-      requestId: '-1',
+      requestId: block.requestId,
     });
 
     const fetchIpfsContentEffect = getFetchIpfsContentEffect(processedProposal.ipfsUri);
@@ -106,8 +106,8 @@ function fetchContentProposalFromIpfs(
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // Geobot
           space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
-          endTime: timestamp.toString(),
-          startTime: timestamp.toString(),
+          endTime: block.timestamp.toString(),
+          startTime: block.timestamp.toString(),
           metadataUri: processedProposal.ipfsUri,
         };
 
@@ -144,7 +144,7 @@ export function getContentProposalFromProcessedProposalIpfsUri(
               ipfsUri: proposal.contentUri,
               pluginAddress: proposal.pluginAddress,
             },
-            block.timestamp
+            block
           )
         ),
         {

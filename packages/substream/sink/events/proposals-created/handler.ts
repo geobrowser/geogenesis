@@ -1,5 +1,6 @@
 import { Effect, Either } from 'effect';
 
+import { getProposalFromCreatedProposalIpfsUri } from './get-proposal-from-created-proposal';
 import {
   Accounts,
   Actions,
@@ -26,7 +27,6 @@ import type {
 } from '~/sink/events/proposals-created/parser';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
-import { getProposalFromMetadata } from '~/sink/utils/ipfs';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
 
@@ -46,7 +46,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
 
     const maybeProposals = yield* _(
       Effect.all(
-        proposalsCreated.map(proposal => getProposalFromMetadata(proposal)),
+        proposalsCreated.map(proposal => getProposalFromCreatedProposalIpfsUri(proposal, block)),
         {
           concurrency: 20,
         }

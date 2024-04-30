@@ -40,7 +40,7 @@ export function mapVotes(
         slog({
           level: 'error',
           message: `Vote type is invalid ${vote.voteOption} for vote ${vote.onchainProposalId} in space ${vote.pluginAddress}, skipping indexing the vote.`,
-          requestId: '-1',
+          requestId: block.requestId,
         });
 
         continue;
@@ -51,7 +51,7 @@ export function mapVotes(
       if (!maybeSpaceIdForPlugin) {
         slog({
           message: `Matching space in Proposal not found for plugin address ${vote.pluginAddress}`,
-          requestId: '-1',
+          requestId: block.requestId,
         });
 
         continue;
@@ -75,7 +75,7 @@ export function mapVotes(
         slog({
           level: 'error',
           message: `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForPlugin}`,
-          requestId: '-1',
+          requestId: block.requestId,
         });
 
         continue;

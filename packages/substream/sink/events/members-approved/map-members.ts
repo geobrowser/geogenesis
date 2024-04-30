@@ -22,7 +22,7 @@ export function mapMembers(membersApproved: MembersApproved[], block: BlockEvent
         slog({
           level: 'error',
           message: `Matching space for approved member not found for plugin address ${member.membershipPluginAddress}`,
-          requestId: '-1',
+          requestId: block.requestId,
         });
 
         continue;

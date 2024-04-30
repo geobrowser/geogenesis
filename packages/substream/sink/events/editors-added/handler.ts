@@ -133,7 +133,7 @@ export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEve
             slog({
               level: 'error',
               message: `Could not find space for plugin address, ${pluginAddress}`,
-              requestId: '0',
+              requestId: block.requestId,
             });
           }
 
@@ -166,7 +166,7 @@ export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEve
             slog({
               level: 'error',
               message: `Could not find space for plugin address, ${pluginAddress}`,
-              requestId: '0',
+              requestId: block.requestId,
             });
           }
 
