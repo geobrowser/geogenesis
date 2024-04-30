@@ -1,4 +1,4 @@
-import { Effect, Either } from 'effect';
+import { Data, Effect, Either } from 'effect';
 
 import { getProposalFromCreatedProposalIpfsUri } from './get-proposal-from-created-proposal';
 import {
@@ -29,6 +29,10 @@ import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
+
+class CouldNotWriteCreatedProposalsError extends Error {
+  _tag: 'CouldNotWriteCreatedProposalsError' = 'CouldNotWriteCreatedProposalsError';
+}
 
 export function handleProposalsCreated(proposalsCreated: ProposalCreated[], block: BlockEvent) {
   return Effect.gen(function* (_) {
@@ -96,7 +100,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       slog({
         level: 'error',
         requestId: block.requestId,
-        message: `Could not write accounts when processing new proposals
+        message: `Could not write accounts when creating new proposals
           Cause: ${error.cause}
           Message: ${error.message}
         `,
@@ -106,7 +110,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
     }
 
     // @TODO: Put this in a transaction since all these writes are related
-    yield* _(
+    const writtenProposals = yield* _(
       Effect.tryPromise({
         try: async () => {
           // @TODO: Batch since there might be postgres byte limits. See upsertChunked
@@ -130,16 +134,29 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
           ]);
         },
         catch: error => {
-          // @TODO: Once we have transactions do real error handling for the entire transaction
-          slog({
-            requestId: block.requestId,
-            message: `Failed to write proposals to DB ${error}`,
-            level: 'error',
-          });
-
-          return error;
+          return new CouldNotWriteCreatedProposalsError(String(error));
         },
-      })
+      }),
+      retryEffect,
+      Effect.either
     );
+
+    if (Either.isLeft(writtenProposals)) {
+      const error = writtenProposals.left;
+      telemetry.captureException(error);
+
+      slog({
+        requestId: block.requestId,
+        message: 'Could not write created proposals',
+        level: 'error',
+      });
+
+      return;
+    }
+
+    slog({
+      requestId: block.requestId,
+      message: 'Created proposals written successfully!',
+    });
   });
 }
