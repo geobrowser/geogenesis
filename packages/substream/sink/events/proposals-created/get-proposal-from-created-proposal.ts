@@ -1,4 +1,4 @@
-import {  Effect, Either } from 'effect';
+import { Effect, Either } from 'effect';
 
 import {
   type ContentProposal,
@@ -151,8 +151,7 @@ export function getProposalFromCreatedProposalIpfsUri(
           subspace: getChecksumAddress(parsedSubspace.data.subspace),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
-          // json: JSON.stringify(ipfsContent),
-          // uri: proposal.metadataUri,
+          uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -179,8 +178,7 @@ export function getProposalFromCreatedProposalIpfsUri(
           userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(spaceAddress),
-          // json: JSON.stringify(ipfsContent),
-          // uri: proposal.metadataUri,
+          uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -206,8 +204,7 @@ export function getProposalFromCreatedProposalIpfsUri(
           userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(spaceAddress),
-          // json: JSON.stringify(ipfsContent),
-          // uri: proposal.metadataUri,
+          uri: proposal.metadataUri,
         };
 
         return mappedProposal;

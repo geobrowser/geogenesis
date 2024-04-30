@@ -4,6 +4,8 @@ import {
 } from '@geogenesis/action-schema';
 import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
 
+import { SubstreamEntity } from './io/subgraph/network-local-mapping';
+
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
@@ -171,7 +173,11 @@ export type Row = Record<string, Cell>;
 
 export type Vote = {
   vote: 'ACCEPT' | 'REJECT';
-  accountId: string;
+  account: {
+    id: string;
+    geoProfiles: { nodes: SubstreamEntity[] };
+    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
+  };
   voter: Profile;
 };
 
