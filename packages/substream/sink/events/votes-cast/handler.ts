@@ -14,6 +14,8 @@ class CouldNotWriteVotesError extends Error {
 
 export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
   return Effect.gen(function* (_) {
+    const telemetry = yield* _(Telemetry);
+
     slog({
       requestId: block.cursor,
       message: `Writing ${votesCast.length} votes`,
@@ -36,7 +38,7 @@ export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
 
     if (Either.isLeft(writtenVotes)) {
       const error = writtenVotes.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',

@@ -14,6 +14,7 @@ class CouldNotWriteExecutedProposalError extends Error {
 
 export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], block: BlockEvent) {
   return Effect.gen(function* (_) {
+    const telemetry = yield* _(Telemetry);
     const proposals = proposalsExecuted;
 
     slog({
@@ -62,7 +63,7 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
     for (const writtenExecutedProposal of writtenExecutedProposals) {
       if (Either.isLeft(writtenExecutedProposal)) {
         const error = writtenExecutedProposal.left;
-        Telemetry.captureException(error);
+        telemetry.captureException(error);
 
         slog({
           level: 'error',

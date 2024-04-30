@@ -14,6 +14,8 @@ export class CouldNotWriteSubspacesError extends Error {
 
 export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
+    const telemetry = yield* _(Telemetry);
+
     const subspaces = yield* _(
       mapSubspaces({
         subspacesAdded: subspacesAdded,
@@ -37,7 +39,7 @@ export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: Blo
 
     if (Either.isLeft(writtenSubspaces)) {
       const error = writtenSubspaces.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',

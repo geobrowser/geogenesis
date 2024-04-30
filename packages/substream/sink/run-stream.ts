@@ -34,6 +34,7 @@ import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
 import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
+import { Telemetry } from './telemetry/telemetry';
 import { invariant } from './utils/invariant';
 
 export class InvalidPackageError extends Error {

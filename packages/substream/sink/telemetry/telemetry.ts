@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/node';
+import { Context, Effect } from 'effect';
 
 export function startLogs() {
   if (!process.env.SENTRY_DSN) {
@@ -31,3 +32,17 @@ export function captureMessage(message: string) {
 
   Sentry.captureMessage(message);
 }
+
+interface ITelemetry {
+  captureException: (error: unknown) => void;
+  captureMessage: (message: string) => void;
+}
+
+export class Telemetry extends Context.Tag('Telemetry')<Telemetry, ITelemetry>() {}
+
+export const TelemetryLive: ITelemetry = {
+  // Alternatively we can check for the presence of our Sentry env var and swap implementations here
+  // instead of having to read it in each capture method
+  captureException,
+  captureMessage,
+};

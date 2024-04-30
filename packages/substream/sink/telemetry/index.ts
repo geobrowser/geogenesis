@@ -1,1 +1,1 @@
-export * as Telemetry from './telemetry';
+export { Telemetry, TelemetryLive, startLogs } from './telemetry';

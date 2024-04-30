@@ -18,6 +18,8 @@ class CouldNotWriteEditorsError extends Error {
 
 export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
+    const telemetry = yield* _(Telemetry);
+
     slog({
       requestId: block.cursor,
       message: `Writing initial editor and member role for accounts ${editorsAdded
@@ -93,7 +95,7 @@ export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEve
 
     if (Either.isLeft(writtenAccounts)) {
       const error = writtenAccounts.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',
@@ -189,7 +191,7 @@ export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEve
 
     if (Either.isLeft(writtenEditors)) {
       const error = writtenEditors.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',

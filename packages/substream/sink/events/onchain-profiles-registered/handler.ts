@@ -17,6 +17,8 @@ export class CouldNotWriteOnchainProfilesError extends Error {
 
 export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegistered[], block: BlockEvent) {
   return Effect.gen(function* (unwrap) {
+    const telemetry = yield* unwrap(Telemetry);
+
     const accounts = profiles.map(p => {
       const newAccount: S.accounts.Insertable = {
         id: getChecksumAddress(p.requestor),
@@ -62,7 +64,7 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
 
     if (Either.isLeft(writtenSpaces)) {
       const error = writtenSpaces.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',
@@ -91,7 +93,7 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
 
     if (Either.isLeft(writtenAccounts)) {
       const error = writtenAccounts.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',
@@ -120,7 +122,7 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
 
     if (Either.isLeft(writtenProfiles)) {
       const error = writtenProfiles.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',

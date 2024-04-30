@@ -15,6 +15,7 @@ export class CouldNotWriteGovernancePlugins extends Error {
 
 export function handleSpacesCreated(spacesCreated: SpacePluginCreated[], block: BlockEvent) {
   return Effect.gen(function* (_) {
+    const telemetry = yield* _(Telemetry);
     const spaces = mapSpaces(spacesCreated, block.blockNumber);
 
     slog({
@@ -37,7 +38,7 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreated[], block: 
 
     if (Either.isLeft(writtenSpaces)) {
       const error = writtenSpaces.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',
@@ -60,6 +61,8 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreated[], block: 
 
 export function handleGovernancePluginCreated(governancePluginsCreated: GovernancePluginsCreated[], block: BlockEvent) {
   return Effect.gen(function* (_) {
+    const telemetry = yield* _(Telemetry);
+
     const spaces = mapGovernanceToSpaces(governancePluginsCreated, block.blockNumber);
 
     slog({
@@ -82,7 +85,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
 
     if (Either.isLeft(writtenGovernancePlugins)) {
       const error = writtenGovernancePlugins.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',

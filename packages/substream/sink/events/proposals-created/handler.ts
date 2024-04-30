@@ -32,6 +32,8 @@ import { slog } from '~/sink/utils/slog';
 
 export function handleProposalsCreated(proposalsCreated: ProposalCreated[], block: BlockEvent) {
   return Effect.gen(function* (_) {
+    const telemetry = yield* _(Telemetry);
+
     slog({
       requestId: block.cursor,
       message: `Processing ${proposalsCreated.length} proposals`,
@@ -89,7 +91,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
 
     if (Either.isLeft(writtenAccounts)) {
       const error = writtenAccounts.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',

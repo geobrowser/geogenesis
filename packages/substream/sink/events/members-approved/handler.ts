@@ -14,6 +14,7 @@ export class CouldNotWriteApprovedMembersError extends Error {
 
 export function handleMembersApproved(membersApproved: MembersApproved[], block: BlockEvent) {
   return Effect.gen(function* (_) {
+    const telemetry = yield* _(Telemetry);
     const schemaMembers = yield* _(mapMembers(membersApproved, block));
 
     slog({
@@ -34,7 +35,7 @@ export function handleMembersApproved(membersApproved: MembersApproved[], block:
 
     if (Either.isLeft(writtenApprovedMembers)) {
       const error = writtenApprovedMembers.left;
-      Telemetry.captureException(error);
+      telemetry.captureException(error);
 
       slog({
         level: 'error',
