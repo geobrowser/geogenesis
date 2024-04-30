@@ -21,7 +21,7 @@ export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEve
     const telemetry = yield* _(Telemetry);
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Writing initial editor and member role for accounts ${editorsAdded
         .map(e => e.addresses)
         .join(', ')} to space with plugin ${editorsAdded.map(e => e.pluginAddress)} to DB`,
@@ -99,7 +99,7 @@ export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEve
 
       slog({
         level: 'error',
-        requestId: block.cursor,
+        requestId: block.requestId,
         message: `Could not write accounts when writing added editors
           Cause: ${error.cause}
           Message: ${error.message}
@@ -195,7 +195,7 @@ export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEve
 
       slog({
         level: 'error',
-        requestId: block.cursor,
+        requestId: block.requestId,
         message: `Could not write editors and members when writing added editors
           Cause: ${error.cause}
           Message: ${error.message}
@@ -206,7 +206,7 @@ export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEve
     }
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Initial editor and member roles written successfully!`,
     });
   });

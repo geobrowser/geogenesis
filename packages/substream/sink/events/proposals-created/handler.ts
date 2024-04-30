@@ -35,12 +35,12 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
     const telemetry = yield* _(Telemetry);
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Processing ${proposalsCreated.length} proposals`,
     });
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Gathering IPFS content for ${proposalsCreated.length} proposals`,
     });
 
@@ -65,7 +65,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
     const schemaEditorshipProposals = mapEditorshipProposalsToSchema(editorProposals, block);
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Writing proposals
         Content proposals: ${contentProposals.length}
         Subspace proposals: ${subspaceProposals.length}
@@ -95,7 +95,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
 
       slog({
         level: 'error',
-        requestId: block.cursor,
+        requestId: block.requestId,
         message: `Could not write accounts when processing new proposals
           Cause: ${error.cause}
           Message: ${error.message}
@@ -132,7 +132,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
         catch: error => {
           // @TODO: Once we have transactions do real error handling for the entire transaction
           slog({
-            requestId: block.cursor,
+            requestId: block.requestId,
             message: `Failed to write proposals to DB ${error}`,
             level: 'error',
           });

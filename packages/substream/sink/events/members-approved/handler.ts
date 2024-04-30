@@ -18,7 +18,7 @@ export function handleMembersApproved(membersApproved: MembersApproved[], block:
     const schemaMembers = yield* _(mapMembers(membersApproved, block));
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Writing ${schemaMembers.length} approved members to DB`,
     });
 
@@ -39,7 +39,7 @@ export function handleMembersApproved(membersApproved: MembersApproved[], block:
 
       slog({
         level: 'error',
-        requestId: block.cursor,
+        requestId: block.requestId,
         message: `Could not write approved members
           Cause: ${error.cause}
           Message: ${error.message}
@@ -50,7 +50,7 @@ export function handleMembersApproved(membersApproved: MembersApproved[], block:
     }
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Approved members written successfully!`,
     });
   });

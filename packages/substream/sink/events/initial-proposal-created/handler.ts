@@ -9,7 +9,7 @@ import { slog } from '~/sink/utils/slog';
 export function handleInitialProposalsCreated(proposalsFromIpfs: ContentProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Processing ${proposalsFromIpfs.length} initial space proposals`,
     });
 
@@ -20,10 +20,11 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: ContentProposal
       blockNumber: block.blockNumber,
       cursor: block.cursor,
       timestamp: block.timestamp,
+      requestId: block.requestId,
     });
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Writing ${contentProposals.length} initial content proposals to DB`,
     });
 
@@ -44,7 +45,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: ContentProposal
           },
           catch: error => {
             slog({
-              requestId: block.cursor,
+              requestId: block.requestId,
               message: `Failed to write proposals to DB ${error}`,
               level: 'error',
             });

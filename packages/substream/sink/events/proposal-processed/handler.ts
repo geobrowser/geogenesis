@@ -23,7 +23,7 @@ export function handleProposalsProcessed(proposalsFromIpfs: ContentProposal[], b
             try: () => db.selectExactlyOne('proposals', { id: p.proposalId }).run(pool),
             catch: error => {
               slog({
-                requestId: block.cursor,
+                requestId: block.requestId,
                 message: `Failed to read proposal from DB ${error}`,
                 level: 'error',
               });
@@ -44,7 +44,7 @@ export function handleProposalsProcessed(proposalsFromIpfs: ContentProposal[], b
             try: () => db.update('proposals', { status: 'accepted' }, { id: proposal.id }).run(pool),
             catch: () => {
               slog({
-                requestId: block.cursor,
+                requestId: block.requestId,
                 message: `Failed to update proposal in DB ${proposal.id}`,
                 level: 'error',
               });
@@ -64,12 +64,12 @@ export function handleProposalsProcessed(proposalsFromIpfs: ContentProposal[], b
     );
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Processing ${proposalsFromIpfs.length} processed proposals`,
     });
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Writing ${proposals.length} processed proposals to DB`,
     });
   });

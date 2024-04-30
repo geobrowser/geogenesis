@@ -43,7 +43,7 @@ export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: Blo
 
       slog({
         level: 'error',
-        requestId: block.cursor,
+        requestId: block.requestId,
         message: `Could not write subspaces
           Cause: ${error.cause}
           Message: ${error.message}
@@ -54,7 +54,7 @@ export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: Blo
     }
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Subspaces written successfully!`,
     });
   });

@@ -19,7 +19,7 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreated[], block: 
     const spaces = mapSpaces(spacesCreated, block.blockNumber);
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Writing ${spaces.length} spaces to DB`,
     });
 
@@ -42,7 +42,7 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreated[], block: 
 
       slog({
         level: 'error',
-        requestId: block.cursor,
+        requestId: block.requestId,
         message: `Could not write spaces
           Cause: ${error.cause}
           Message: ${error.message}
@@ -53,7 +53,7 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreated[], block: 
     }
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Spaces written successfully!`,
     });
   });
@@ -66,7 +66,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
     const spaces = mapGovernanceToSpaces(governancePluginsCreated, block.blockNumber);
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Writing ${spaces.length} spaces with governance to DB`,
     });
 
@@ -89,7 +89,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
 
       slog({
         level: 'error',
-        requestId: block.cursor,
+        requestId: block.requestId,
         message: `Could not write governance plugins for spaces
           Cause: ${error.cause}
           Message: ${error.message}
@@ -100,7 +100,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
     }
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Governance plugins written successfully!`,
     });
   });

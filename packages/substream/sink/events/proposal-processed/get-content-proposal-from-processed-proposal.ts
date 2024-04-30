@@ -132,7 +132,7 @@ export function getContentProposalFromProcessedProposalIpfsUri(
 ) {
   return Effect.gen(function* (_) {
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Gathering IPFS content for ${proposalsProcessed.length} initial space proposals`,
     });
 

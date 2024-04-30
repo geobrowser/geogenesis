@@ -35,6 +35,7 @@ import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/pa
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { Telemetry } from './telemetry/telemetry';
+import { createGeoId } from './utils/create-geo-id';
 import { invariant } from './utils/invariant';
 import { slog } from './utils/slog';
 
@@ -141,6 +142,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
     const sink = createSink({
       handleBlockScopedData: message => {
         return Effect.gen(function* (_) {
+          const requestId = createGeoId();
           const telemetry = yield* _(Telemetry);
           const cursor = message.cursor;
           const blockNumber = Number(message.clock?.number.toString());
@@ -167,7 +169,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (!unpackedOutput) {
             slog({
-              requestId: cursor,
+              requestId,
               level: 'error',
               message: `Failed to unpack substream message: ${mapOutput}`,
             });
@@ -199,6 +201,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }
@@ -211,6 +214,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }
@@ -223,6 +227,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }
@@ -235,6 +240,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }
@@ -247,6 +253,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }
@@ -259,6 +266,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }
@@ -271,6 +279,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }
@@ -287,6 +296,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
 
@@ -309,6 +319,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   blockNumber,
                   cursor,
                   timestamp,
+                  requestId,
                 })
               );
             }
@@ -318,6 +329,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }
@@ -330,6 +342,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }
@@ -342,6 +355,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }
@@ -354,6 +368,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 blockNumber,
                 cursor,
                 timestamp,
+                requestId,
               })
             );
           }

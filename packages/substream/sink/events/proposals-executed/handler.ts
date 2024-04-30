@@ -18,7 +18,7 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
     const proposals = proposalsExecuted;
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Updating ${proposals.length} proposals after execution`,
     });
 
@@ -67,7 +67,7 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
 
         slog({
           level: 'error',
-          requestId: block.cursor,
+          requestId: block.requestId,
           message: `Could not write executed proposal
             Cause: ${error.cause}
             Message: ${error.message}
@@ -79,7 +79,7 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
     }
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `${proposals.length} proposals updated successfully!`,
     });
   });

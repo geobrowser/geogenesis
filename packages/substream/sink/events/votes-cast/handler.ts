@@ -17,7 +17,7 @@ export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
     const telemetry = yield* _(Telemetry);
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Writing ${votesCast.length} votes`,
     });
 
@@ -42,7 +42,7 @@ export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
 
       slog({
         level: 'error',
-        requestId: block.cursor,
+        requestId: block.requestId,
         message: `Could not write votes
           Cause: ${error.cause}
           Message: ${error.message}
@@ -53,7 +53,7 @@ export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
     }
 
     slog({
-      requestId: block.cursor,
+      requestId: block.requestId,
       message: `Votes written successfully!`,
     });
   });

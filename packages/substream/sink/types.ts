@@ -11,4 +11,5 @@ export interface BlockEvent {
   cursor: string;
   blockNumber: number;
   timestamp: number;
+  requestId: string; // uuid
 }
