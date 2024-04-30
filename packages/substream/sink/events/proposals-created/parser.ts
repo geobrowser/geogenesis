@@ -76,7 +76,6 @@ export type ContentProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   actions: Action[];
-  uri: string;
 };
 
 export const ZodMembershipProposal = z.object({
@@ -90,7 +89,6 @@ export type MembershipProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   userAddress: `0x${string}`;
-  uri: string;
 };
 
 export const ZodEditorshipProposal = z.object({
@@ -104,7 +102,6 @@ export type EditorshipProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   userAddress: `0x${string}`;
-  uri: string;
 };
 
 export const ZodSubspaceProposal = z.object({
@@ -118,7 +115,6 @@ export type SubspaceProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   subspace: `0x${string}`;
-  uri: string;
 };
 
 export const ZodProposalCreatedStreamResponse = z.object({

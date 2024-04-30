@@ -125,8 +125,6 @@ export function getProposalFromCreatedProposalIpfsUri(
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
-          // json: JSON.stringify(ipfsContent),
-          // uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -151,7 +149,6 @@ export function getProposalFromCreatedProposalIpfsUri(
           subspace: getChecksumAddress(parsedSubspace.data.subspace),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
-          uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -178,7 +175,6 @@ export function getProposalFromCreatedProposalIpfsUri(
           userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(spaceAddress),
-          uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -204,7 +200,6 @@ export function getProposalFromCreatedProposalIpfsUri(
           userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(spaceAddress),
-          uri: proposal.metadataUri,
         };
 
         return mappedProposal;
