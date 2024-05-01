@@ -95,7 +95,7 @@ export enum VotingMode {
 
 export type ProposalStatus = 'PROPOSED' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'EXECUTED';
 
-export { createGeoId } from './src/id';
+export { createGeoId, createTripleId } from './src/id';
 export { getProcessGeoProposalArguments, getAcceptSubspaceArguments, getAcceptEditorArguments } from './src/encodings';
 export { createCollection, createCollectionItem, reorderCollectionItem } from './src/collections';
 export { createContentProposal, createSubspaceProposal, createMembershipProposal } from './src/proposals';

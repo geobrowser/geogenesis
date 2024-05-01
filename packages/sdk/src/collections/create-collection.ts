@@ -1,10 +1,5 @@
-import { CreateTripleAction } from '@geogenesis/action-schema';
+import { createGeoId } from '../../';
 
-interface CreateCollectionArgs {
-  spaceId: string; // 0x...
-  attributeId: string; // uuid
-}
-
-export function createCollection(args: CreateCollectionArgs): CreateTripleAction[] {
-  return [];
+export function createCollection(): string {
+  return createGeoId();
 }

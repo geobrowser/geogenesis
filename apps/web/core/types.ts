@@ -9,7 +9,7 @@ import { SubstreamEntity } from './io/subgraph/network-local-mapping';
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date' | 'url';
+export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date' | 'url' | 'collection';
 
 export type NumberValue = {
   type: 'number';
@@ -47,7 +47,10 @@ export type UrlValue = {
   value: string;
 };
 
-export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue | UrlValue;
+export type CollectionValue = {
+  type: 'collection';
+  id: string;
+};
 
 export type Triple = {
   id: string;
@@ -59,6 +62,23 @@ export type Triple = {
   space: string;
   placeholder?: boolean;
 };
+
+  // (spaceId, entityId, attributeId)
+  spaceId: string;
+  entityId: string;
+  attributeId: string;
+  // @TODO: Entity values don't need to publish the name, but we
+};
+
+// @TODO: Do we need these properties to render a triple effectively?
+// The main problem with this approach is that we might not know the
+// entity name/attribute name at render time if we haven't changed
+// the name locally. We'll still need to make a request to get it.
+export type TripleWithRelations = Identifiable &
+  LocalTripleV2 & {
+    attributeName: string | null;
+    entityName: string | null;
+  };
 
 export type SpaceConfigEntity = Entity & {
   image: string;

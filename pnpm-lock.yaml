@@ -548,6 +548,7 @@ importers:
       '@trivago/prettier-plugin-sort-imports': ^4.2.0
       '@types/uuid': ^9.0.8
       ethers: ^5.7.2
+      fractional-indexing: ^3.2.0
       prettier: ^3.2.5
       typescript: ^5.1.6
       uuid: ^9.0.0
@@ -559,6 +560,7 @@ importers:
       '@geogenesis/ids': link:../ids
       '@types/uuid': 9.0.8
       ethers: 5.7.2
+      fractional-indexing: 3.2.0
       uuid: 9.0.0
       viem: 1.16.0_typescript@5.3.3
     devDependencies:
@@ -12267,7 +12269,7 @@ packages:
       debug: 4.3.4
       enhanced-resolve: 5.12.0
       eslint: 8.21.0
-      eslint-plugin-import: 2.26.0_m2m4u4ujm3f6v75yfbf66l5qly
+      eslint-plugin-import: 2.26.0_vfkjhpyu3ul4ompvtbiazva2r4
       get-tsconfig: 4.7.2
       globby: 13.1.2
       is-core-module: 2.13.0
@@ -13959,6 +13961,11 @@ packages:
   /fraction.js/4.2.0:
     resolution: {integrity: sha512-MhLuK+2gUcnZe8ZHlaaINnQLl0xRIGRfcGk2yl8xoQAfHrSsL3rYu6FCmBdkdbhc9EPlwyGHewaRsvwRMJtAlA==}
     dev: true
+
+  /fractional-indexing/3.2.0:
+    resolution: {integrity: sha512-PcOxmqwYCW7O2ovKRU8OoQQj2yqTfEB/yeTYk4gPid6dN5ODRfU1hXd9tTVZzax/0NkO7AxpHykvZnT1aYp/BQ==}
+    engines: {node: ^14.13.1 || >=16.0.0}
+    dev: false
 
   /fragment-cache/0.2.1:
     resolution: {integrity: sha512-GMBAbW9antB8iZRHLoGw0b3HANt57diZYFO/HL1JGIC1MjKrdmhxvrJbupnVvpys0zsz7yBApXdQyfepKly2kA==}
