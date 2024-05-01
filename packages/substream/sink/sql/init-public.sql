@@ -126,21 +126,13 @@ CREATE TABLE public.space_subspaces (
     CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
+CREATE TYPE public.triple_value_type as ENUM ('number', 'string', 'entity', 'collection', 'image', 'date', 'url');
+
 CREATE TABLE public.triples (
     id text PRIMARY KEY,
     entity_id text NOT NULL REFERENCES public.geo_entities(id),
     attribute_id text NOT NULL REFERENCES public.geo_entities(id),
-    value_type text NOT NULL CHECK(
-        value_type IN (
-            'number',
-            'string',
-            'entity',
-            'collection',
-            'image',
-            'date',
-            'url'
-        )
-    ),
+    value_type triple_value_type NOT NULL,
     value_id text NOT NULL,
     number_value text,
     string_value text,

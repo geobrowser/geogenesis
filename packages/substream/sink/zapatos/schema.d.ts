@@ -39,6 +39,10 @@ declare module 'zapatos/schema' {
   export namespace every {
     export type subspace_proposal_type = ['ADD_SUBSPACE', 'REMOVE_SUBSPACE'];
   }
+  export type triple_value_type = 'collection' | 'date' | 'entity' | 'image' | 'number' | 'string' | 'url';
+  export namespace every {
+    export type triple_value_type = ['collection', 'date', 'entity', 'image', 'number', 'string', 'url'];
+  }
   export type vote_type = 'accept' | 'reject';
   export namespace every {
     export type vote_type = ['accept', 'reject'];
@@ -3990,10 +3994,10 @@ declare module 'zapatos/schema' {
       attribute_id: string;
       /**
       * **triples.value_type**
-      * - `text` in database
+      * - `triple_value_type` in database
       * - `NOT NULL`, no default
       */
-      value_type: string;
+      value_type: triple_value_type;
       /**
       * **triples.value_id**
       * - `text` in database
@@ -4082,10 +4086,10 @@ declare module 'zapatos/schema' {
       attribute_id: string;
       /**
       * **triples.value_type**
-      * - `text` in database
+      * - `triple_value_type` in database
       * - `NOT NULL`, no default
       */
-      value_type: string;
+      value_type: triple_value_type;
       /**
       * **triples.value_id**
       * - `text` in database
@@ -4174,10 +4178,10 @@ declare module 'zapatos/schema' {
       attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **triples.value_type**
-      * - `text` in database
+      * - `triple_value_type` in database
       * - `NOT NULL`, no default
       */
-      value_type?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      value_type?: triple_value_type | db.Parameter<triple_value_type> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, triple_value_type | db.Parameter<triple_value_type> | db.SQLFragment | db.ParentColumn>;
       /**
       * **triples.value_id**
       * - `text` in database
@@ -4266,10 +4270,10 @@ declare module 'zapatos/schema' {
       attribute_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **triples.value_type**
-      * - `text` in database
+      * - `triple_value_type` in database
       * - `NOT NULL`, no default
       */
-      value_type: string | db.Parameter<string> | db.SQLFragment;
+      value_type: triple_value_type | db.Parameter<triple_value_type> | db.SQLFragment;
       /**
       * **triples.value_id**
       * - `text` in database
@@ -4358,10 +4362,10 @@ declare module 'zapatos/schema' {
       attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **triples.value_type**
-      * - `text` in database
+      * - `triple_value_type` in database
       * - `NOT NULL`, no default
       */
-      value_type?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      value_type?: triple_value_type | db.Parameter<triple_value_type> | db.SQLFragment | db.SQLFragment<any, triple_value_type | db.Parameter<triple_value_type> | db.SQLFragment>;
       /**
       * **triples.value_id**
       * - `text` in database
