@@ -52,6 +52,8 @@ export type CollectionValue = {
   id: string;
 };
 
+export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue | UrlValue | CollectionValue;
+
 export type Triple = {
   id: string;
   entityId: string;
