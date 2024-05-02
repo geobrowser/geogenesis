@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Services } from '~/core/services';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -28,14 +29,19 @@ export function NavbarSpaceMetadata() {
 
       if (!spaceConfig) {
         return {
-          name: space.spaceConfig?.name ?? space.id,
-          img: space.spaceConfig?.image ?? null,
+          name: space.id,
+          img: PLACEHOLDER_SPACE_IMAGE,
           href: NavUtils.toSpace(space.id),
         };
       }
 
       return {
         name: spaceConfig.name ?? space.id,
+        // We don't directly use spaceConfig.image here since we don't want to render
+        // a placeholder fallback in case the image doesn't exist. So we check for
+        // the images explicitly from the triples, and render null if it doesn't exist.
+        //
+        // spaceConfig.image will have a placeholder if the images don't exist.
         img: Entity.avatar(spaceConfig.triples) ?? Entity.cover(spaceConfig.triples),
         href: NavUtils.toSpace(space.id),
       };

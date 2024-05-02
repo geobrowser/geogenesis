@@ -18,7 +18,7 @@ export interface ISubgraph {
   fetchSpaces: () => Promise<Space[]>;
   fetchSpace: (options: FetchSpaceOptions) => Promise<Space | null>;
   fetchEntity: (options: FetchEntityOptions) => Promise<Entity | null>;
-  fetchProfile: (options: FetchProfileOptions) => Promise<[string, Profile] | null>;
+  fetchProfile: (options: FetchProfileOptions) => Promise<Profile | null>;
   fetchOnchainProfile: (options: FetchOnchainProfileOptions) => Promise<OnchainProfile | null>;
   fetchProposals: (options: FetchProposalsOptions) => Promise<Proposal[]>;
   fetchProposal: (options: FetchProposalOptions) => Promise<Proposal | null>;

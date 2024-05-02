@@ -69,7 +69,7 @@ export default async function Spaces() {
     return {
       id: space.id,
       name: EntityModule.name(entity.triples) ?? null,
-      image: EntityModule.cover(entity.triples) ?? null,
+      image: space?.spaceConfig.image,
     };
   });
 

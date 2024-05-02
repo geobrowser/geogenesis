@@ -1,14 +1,14 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Entity, Space, SpaceConfigEntity, Triple } from '~/core/types';
-import { Entity as EntityModule } from '~/core/utils/entity';
+import { Space, SpaceConfigEntity } from '~/core/types';
+import { Entity } from '~/core/utils/entity';
 
-import { fetchEntities } from './fetch-entities';
 import { graphql } from './graphql';
+import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 const getFetchSpacesQuery = () => `query {
   spaces {
@@ -31,6 +31,38 @@ const getFetchSpacesQuery = () => `query {
         }
       }
       createdAtBlock
+      
+      metadata {
+        nodes {
+          id
+          name
+          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+            nodes {
+              id
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+              entityValue {
+                id
+                name
+              }
+              numberValue
+              stringValue
+              valueType
+              valueId
+              isProtected
+              space {
+                id
+              }
+            }
+          }
+        }
+      }
     }
   }
 }`;
@@ -44,6 +76,7 @@ interface NetworkResult {
       spaceEditors: { nodes: { accountId: string }[] };
       spaceEditorControllers: { nodes: { accountId: string }[] };
       createdAtBlock: string;
+      metadata: { nodes: SubstreamEntity[] };
     }[];
   };
 }
@@ -100,41 +133,19 @@ export async function fetchSpaces() {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  // @TODO: This should be tied to the space config entity in the substream
-  // eventually.
-  const configs = await fetchEntities({
-    query: '',
-    typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
-    first: 1000,
-    filter: [],
-  });
-
-  const spaceConfigs = result.spaces.nodes.map(s => {
-    // Ensure that we're using the space config that has been defined in the current space.
-    // Eventually this association will be handled by the substream API.
-    const spaceConfig = configs.find(config =>
-      config.triples.some(
-        t =>
-          t.space === s.id &&
-          t.attributeId === SYSTEM_IDS.TYPES &&
-          t.value.type === 'entity' &&
-          t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
-      )
-    );
-
-    return {
-      spaceId: s.id,
-      config: spaceConfig,
-    };
-  });
-
   const spaces = result.spaces.nodes.map((space): Space => {
-    const config = spaceConfigs.find(config => config.spaceId === space.id)?.config;
+    const spaceConfig = space.metadata.nodes[0] as SubstreamEntity | undefined;
+    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
 
-    const spaceConfigWithImage: SpaceConfigEntity | null = config
+    const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
       ? {
-          ...config,
-          image: EntityModule.avatar(config.triples) ?? EntityModule.cover(config.triples) ?? null,
+          id: spaceConfig.id,
+          name: spaceConfig.name,
+          description: null,
+          image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+          triples: spaceConfigTriples,
+          types: Entity.types(spaceConfigTriples),
+          nameTripleSpaces: Entity.nameTriples(spaceConfigTriples).map(t => t.space),
         }
       : null;
 

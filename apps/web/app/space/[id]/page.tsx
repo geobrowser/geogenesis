@@ -6,7 +6,6 @@ import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { Subgraph } from '~/core/io';
 import { fetchEntities } from '~/core/io/subgraph';
 import { Triple } from '~/core/types';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
@@ -23,6 +22,8 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { SpaceNotices } from '~/partials/space-page/space-notices';
 import { Subspaces } from '~/partials/space-page/subspaces';
 
+import { cachedFetchSpace } from './cached-fetch-space';
+
 interface Props {
   params: { id: string };
 }
@@ -30,7 +31,7 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
 
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
   const entity = space?.spaceConfig;
 
   if (!entity) {
@@ -127,7 +128,7 @@ const SubspacesContainer = async ({ entityId }: SubspacesContainerProps) => {
 };
 
 const getData = async (spaceId: string) => {
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
   const entity = space?.spaceConfig;
 
   if (!entity) {
