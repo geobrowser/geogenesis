@@ -17,7 +17,7 @@ import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 // following the pre-existing pattern.
 function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
   return `query {
-    geoEntities(filter: ${filter} first: ${first} offset: ${skip}) {
+    geoEntities(filter: ${filter} first: ${first} offset: ${skip} orderBy: UPDATED_AT_DESC) {
       nodes {
         id
         name
@@ -89,7 +89,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
             `Encountered runtime graphql error in fetchTableRowEntities. queryId: ${queryId} skip: ${
               options.skip
             } first: ${options.first} filter: ${options.filter}
-            
+
             queryString: ${getFetchTableRowsQuery(options.filter, options.first, options.skip)}
             `,
             error.message
