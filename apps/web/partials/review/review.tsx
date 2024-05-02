@@ -15,7 +15,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useWalletClient } from 'wagmi';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
-import { Environment } from '~/core/environment';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
@@ -64,10 +63,6 @@ type Proposal = {
 };
 
 type EntityId = string;
-
-type GatewaySpaceWithEntityConfig = {
-  spaceConfigEntityId: string;
-} & Space;
 
 const ReviewChanges = () => {
   const { subgraph } = Services.useServices();
@@ -945,7 +940,7 @@ const labelClassNames = `text-footnote text-grey-04`;
 
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
-const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
+export const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
   const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: ['changes', spaceId, actions],

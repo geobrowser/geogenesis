@@ -3,17 +3,16 @@
 import { parse } from 'csv/sync';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-// import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
-// import { useEditable } from '~/core/state/editable-store';
 import {
   DateValue,
   Entity as EntityType,
@@ -22,6 +21,7 @@ import {
   Triple as TripleType,
   UrlValue,
 } from '~/core/types';
+import type { Space } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
 
@@ -39,10 +39,13 @@ import { Upload } from '~/design-system/icons/upload';
 import { Url } from '~/design-system/icons/url';
 import { Select } from '~/design-system/select';
 
+import { actionsAtom, examplesAtom, headersAtom, loadingAtom, publishAtom, recordsAtom, stepAtom } from './atoms';
+
 dayjs.extend(utc);
 
-type Props = {
+type GenerateProps = {
   spaceId: string;
+  space: Space;
 };
 
 export type SupportedValueType = 'string' | 'date' | 'url' | 'entity';
@@ -51,17 +54,17 @@ export type UnsupportedValueType = 'number' | 'image';
 
 type EntityAttributesType = Record<string, { index: number; type: SupportedValueType; name: string }>;
 
-export const Component = ({ spaceId }: Props) => {
-  // const { isEditor } = useAccessControl(spaceId);
-  // const { editable } = useEditable();
-  // const isEditMode = isEditor && editable;
+export const Generate = ({ spaceId }: GenerateProps) => {
+  const { isEditor } = useAccessControl(spaceId);
+
+  const [actions, setActions] = useAtom(actionsAtom);
+  const [isLoading, setIsLoading] = useAtom(loadingAtom);
+  const [step, setStep] = useAtom(stepAtom);
+  const setIsPublishOpen = useSetAtom(publishAtom);
 
   const pathname = usePathname();
   const spacePath = pathname?.split('/import')[0] ?? '/spaces';
-  const { create } = useActionsStore(spaceId);
 
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [step, setStep] = useState<string>('step1');
   const [entityType, setEntityType] = useState<EntityType | undefined>(undefined);
   const { supportedAttributes, unsupportedAttributes } = useMemo(() => getAttributes(entityType), [entityType]);
 
@@ -69,20 +72,21 @@ export const Component = ({ spaceId }: Props) => {
   const [entityIdIndex, setEntityIdIndex] = useState<number | undefined>(undefined);
   const [entityAttributes, setEntityAttributes] = useState<EntityAttributesType>({});
 
+  const [records, setRecords] = useAtom(recordsAtom);
+  const headers = useAtomValue(headersAtom);
+  const examples = useAtomValue(examplesAtom);
+
+  const [file, setFile] = useState<string | undefined>(undefined);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileInputClick = useCallback(() => {
+  const handleFileInputClick = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
-  }, []);
+  };
 
-  const [file, setFile] = useState<string | undefined>(undefined);
-  const [records, setRecords] = useState<Array<Array<string>>>([]);
-  const headers = useMemo(() => records?.[0] ?? [], [records]);
-  const examples = useMemo(() => records?.[1] ?? [], [records]);
-
-  const handleProcessFile = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProcessFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     setFile(event.currentTarget?.files?.[0]?.name);
 
     const reader = new FileReader();
@@ -108,7 +112,7 @@ export const Component = ({ spaceId }: Props) => {
     }
 
     setStep('step3');
-  }, []);
+  };
 
   const handleReset = useCallback(() => {
     setStep('step1');
@@ -117,7 +121,8 @@ export const Component = ({ spaceId }: Props) => {
     setEntityAttributes({});
     setFile(undefined);
     setRecords([]);
-  }, []);
+    setActions([]);
+  }, [setActions, setRecords, setStep]);
 
   const handleGenerateActions = useCallback(async () => {
     setIsLoading(true);
@@ -160,14 +165,16 @@ export const Component = ({ spaceId }: Props) => {
         });
       }
 
+      const newActions: Array<any> = [];
+
       entities.forEach(entity => {
         const newEntityId = typeof entityIdIndex === 'number' ? entity[entityIdIndex] : ID.createEntityId();
 
-        if (!entityNameIndex || !entityType) return;
+        if (typeof entityNameIndex !== 'number' || !entityType) return;
 
         // Create new entity + set entity name
-        create(
-          Triple.withId({
+        newActions.push({
+          ...Triple.withId({
             space: spaceId,
             entityId: newEntityId,
             entityName: entity[entityNameIndex],
@@ -178,12 +185,13 @@ export const Component = ({ spaceId }: Props) => {
               id: ID.createValueId(),
               value: entity[entityNameIndex],
             },
-          })
-        );
+          }),
+          type: 'createTriple',
+        });
 
         // Create entity type
-        create(
-          Triple.withId({
+        newActions.push({
+          ...Triple.withId({
             space: spaceId,
             entityId: newEntityId,
             entityName: entity[entityNameIndex],
@@ -194,8 +202,9 @@ export const Component = ({ spaceId }: Props) => {
               id: entityType.id,
               name: entityType.name,
             },
-          })
-        );
+          }),
+          type: 'createTriple',
+        });
 
         // Create entity attribute values
         attributes.forEach(attributeId => {
@@ -214,8 +223,8 @@ export const Component = ({ spaceId }: Props) => {
               minute: '0',
             });
 
-            create(
-              Triple.withId({
+            newActions.push({
+              ...Triple.withId({
                 space: spaceId,
                 entityId: newEntityId,
                 entityName: entity[entityNameIndex],
@@ -226,14 +235,15 @@ export const Component = ({ spaceId }: Props) => {
                   id: ID.createValueId(),
                   value: dateValue,
                 } as DateValue,
-              })
-            );
+              }),
+              type: 'createTriple',
+            });
           } else if (entityAttributes[attributeId]?.type === 'entity') {
             const values = entity[entityAttributes[attributeId].index].split(',');
 
             values.forEach(value => {
-              create(
-                Triple.withId({
+              newActions.push({
+                ...Triple.withId({
                   space: spaceId,
                   entityId: newEntityId,
                   entityName: entity[entityNameIndex],
@@ -244,12 +254,13 @@ export const Component = ({ spaceId }: Props) => {
                     id: value,
                     name: relatedEntitiesMap.get(value),
                   } as EntityValue,
-                })
-              );
+                }),
+                type: 'createTriple',
+              });
             });
           } else {
-            create(
-              Triple.withId({
+            newActions.push({
+              ...Triple.withId({
                 space: spaceId,
                 entityId: newEntityId,
                 entityName: entity[entityNameIndex],
@@ -260,38 +271,64 @@ export const Component = ({ spaceId }: Props) => {
                   id: ID.createValueId(),
                   value: entity[entityAttributes[attributeId].index],
                 } as StringValue | UrlValue,
-              })
-            );
+              }),
+              type: 'createTriple',
+            });
           }
         });
       });
+
+      setActions(newActions);
     };
 
-    await generateActions();
+    try {
+      await generateActions();
+    } catch (error) {
+      console.error(error);
+    }
 
     setIsLoading(false);
     setStep('step4');
-  }, [create, spaceId, records, entityNameIndex, entityIdIndex, entityType, entityAttributes]);
+  }, [
+    entityAttributes,
+    entityIdIndex,
+    entityNameIndex,
+    entityType,
+    records,
+    setActions,
+    setIsLoading,
+    setStep,
+    spaceId,
+  ]);
+
+  const handlePublishActions = () => {
+    setIsPublishOpen(true);
+  };
 
   const isGenerationReady =
     !!entityType?.id && records.length > 0 && typeof entityNameIndex === 'number' && step !== 'step4';
 
+  useEffect(() => {
+    if (step === 'done') {
+      handleReset();
+    }
+  }, [step, handleReset]);
+
+  if (!isEditor) {
+    return null;
+  }
+
   return (
-    <div className="mx-auto max-w-3xl space-y-16 overflow-visible">
+    <div className="overflow-visible">
       <div className="space-y-4">
         <Link href={spacePath}>
           <SquareButton icon={<ArrowLeft />} />
         </Link>
         <div className="flex w-full items-center justify-between">
           <div className="text-mediumTitle">Import CSV data</div>
-          <div className="inline-flex items-center gap-3">
-            <Button onClick={handleReset} variant="ghost" icon={<RetrySmall />}>
-              Reset form
-            </Button>
-            <Button onClick={handleGenerateActions} variant="primary" disabled={!isGenerationReady}>
-              {!isLoading ? 'Generate' : 'Generating...'}
-            </Button>
-          </div>
+          <SmallButton onClick={handleReset} variant="secondary" icon={<RetrySmall />}>
+            Reset form
+          </SmallButton>
         </div>
       </div>
       <Accordion type="single" value={step} onValueChange={setStep}>
@@ -546,14 +583,27 @@ export const Component = ({ spaceId }: Props) => {
                 </div>
               </div>
             )}
+            <div className="mt-8">
+              <Button
+                onClick={handleGenerateActions}
+                variant="primary"
+                disabled={!isGenerationReady || actions.length > 0 || isLoading}
+              >
+                {!isLoading ? 'Generate' : 'Generating...'}
+              </Button>
+            </div>
           </Accordion.Content>
         </Accordion.Item>
-        <Accordion.Item value="step4" disabled={step !== 'step4'}>
+        <Accordion.Item value="step4" disabled={step !== 'step4' && actions.length === 0}>
           <Accordion.Trigger>
             <div className="text-smallTitle">Step 4</div>
             <div className="mt-1 text-metadata">Publish generated actions</div>
           </Accordion.Trigger>
-          <Accordion.Content>Click &ldquo;Review edits&rdquo; and publish your CSV import</Accordion.Content>
+          <Accordion.Content>
+            <Button onClick={handlePublishActions} variant="primary" disabled={actions.length === 0}>
+              Review and publish
+            </Button>
+          </Accordion.Content>
         </Accordion.Item>
       </Accordion>
     </div>
