@@ -145,15 +145,9 @@ export default function CollectionsPage() {
       return 0;
     });
 
-  const handleCollectionItemOrder = (collectionItemId: string, direction: 'up' | 'down') => {
-    const items = orderedCollectionItems.map(c => c.collectionItemId);
-    const position = items.indexOf(collectionItemId);
-
+  const handleCollectionItemOrder = (collectionItemId: string, position: number, direction: 'up' | 'down') => {
     let beforeItemIndex: number | undefined;
     let afterItemIndex: number | undefined;
-
-    // We need to calculate what the new position is. Right now we're just
-    // randomly re-ordering
 
     if (direction === 'up') {
       if (position === 0) {
@@ -165,7 +159,7 @@ export default function CollectionsPage() {
     }
 
     if (direction === 'down') {
-      if (position === items.length - 1) {
+      if (position === orderedCollectionItems.length - 1) {
         return;
       }
 
@@ -196,6 +190,7 @@ export default function CollectionsPage() {
       .get(collectionItemId)
       ?.find(t => t.attributeId === SYSTEM_IDS.COLLECTION_ITEM_INDEX);
 
+    // @TODO: Upsert
     update(
       {
         ...newTripleOrdering,
@@ -220,7 +215,7 @@ export default function CollectionsPage() {
       </div>
 
       <div className="flex flex-col">
-        {orderedCollectionItems.map(c => {
+        {orderedCollectionItems.map((c, i) => {
           const collectionItemId = c.collectionItemId;
           const indexTripleValue = c.order;
           const entityReferenceTripleValue = c.entityId;
@@ -233,12 +228,12 @@ export default function CollectionsPage() {
             <div key={collectionItemId} className="flex items-center gap-2">
               {indexTripleValue} – {entityReferenceTripleValue}
               <button
-                onClick={() => (collectionItemId ? handleCollectionItemOrder(collectionItemId, 'up') : undefined)}
+                onClick={() => (collectionItemId ? handleCollectionItemOrder(collectionItemId, i, 'up') : undefined)}
               >
                 Up
               </button>
               <button
-                onClick={() => (collectionItemId ? handleCollectionItemOrder(collectionItemId, 'down') : undefined)}
+                onClick={() => (collectionItemId ? handleCollectionItemOrder(collectionItemId, i, 'down') : undefined)}
               >
                 Down
               </button>
