@@ -136,10 +136,10 @@ declare module 'zapatos/schema' {
       attribute_id: string;
       /**
       * **actions.value_type**
-      * - `text` in database
-      * - Nullable, no default
+      * - `triple_value_type` in database
+      * - `NOT NULL`, no default
       */
-      value_type: string | null;
+      value_type: triple_value_type;
       /**
       * **actions.value_id**
       * - `text` in database
@@ -216,10 +216,10 @@ declare module 'zapatos/schema' {
       attribute_id: string;
       /**
       * **actions.value_type**
-      * - `text` in database
-      * - Nullable, no default
+      * - `triple_value_type` in database
+      * - `NOT NULL`, no default
       */
-      value_type: string | null;
+      value_type: triple_value_type;
       /**
       * **actions.value_id**
       * - `text` in database
@@ -296,10 +296,10 @@ declare module 'zapatos/schema' {
       attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **actions.value_type**
-      * - `text` in database
-      * - Nullable, no default
+      * - `triple_value_type` in database
+      * - `NOT NULL`, no default
       */
-      value_type?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      value_type?: triple_value_type | db.Parameter<triple_value_type> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, triple_value_type | db.Parameter<triple_value_type> | db.SQLFragment | db.ParentColumn>;
       /**
       * **actions.value_id**
       * - `text` in database
@@ -376,10 +376,10 @@ declare module 'zapatos/schema' {
       attribute_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **actions.value_type**
-      * - `text` in database
-      * - Nullable, no default
+      * - `triple_value_type` in database
+      * - `NOT NULL`, no default
       */
-      value_type?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      value_type: triple_value_type | db.Parameter<triple_value_type> | db.SQLFragment;
       /**
       * **actions.value_id**
       * - `text` in database
@@ -456,10 +456,10 @@ declare module 'zapatos/schema' {
       attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **actions.value_type**
-      * - `text` in database
-      * - Nullable, no default
+      * - `triple_value_type` in database
+      * - `NOT NULL`, no default
       */
-      value_type?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      value_type?: triple_value_type | db.Parameter<triple_value_type> | db.SQLFragment | db.SQLFragment<any, triple_value_type | db.Parameter<triple_value_type> | db.SQLFragment>;
       /**
       * **actions.value_id**
       * - `text` in database
