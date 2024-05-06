@@ -2,14 +2,14 @@ import * as Sentry from '@sentry/node';
 import { Context, Effect } from 'effect';
 
 export function startLogs() {
-  if (!process.env.SENTRY_DSN) {
+  if (!process.env.TELEMETRY_URL) {
     console.log('Telemetry environment not found. Skipping telemetry.');
 
     return;
   }
 
   Sentry.init({
-    dsn: process.env.SENTRY_DSN,
+    dsn: process.env.TELEMETRY_URL,
 
     // We recommend adjusting this value in production, or using tracesSampler
     // for finer control
@@ -18,7 +18,7 @@ export function startLogs() {
 }
 
 export function captureException(error: unknown) {
-  if (!process.env.SENTRY_DSN) {
+  if (!process.env.TELEMETRY_URL) {
     return;
   }
 
@@ -26,7 +26,7 @@ export function captureException(error: unknown) {
 }
 
 export function captureMessage(message: string) {
-  if (!process.env.SENTRY_DSN) {
+  if (!process.env.TELEMETRY_URL) {
     return;
   }
 

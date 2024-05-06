@@ -1,8 +1,9 @@
 import { Command } from 'commander';
 import dotenv from 'dotenv';
-import { Duration, Effect, Either, Schedule, pipe } from 'effect';
+import { Duration, Effect, Either, Layer, Schedule, pipe } from 'effect';
 
 import { bootstrapRoot } from './sink/bootstrap-root';
+import { Environment, EnvironmentLive } from './sink/environment';
 import { getStreamConfiguration } from './sink/get-stream-configuration';
 import { runStream } from './sink/run-stream';
 import { Telemetry, TelemetryLive, startLogs } from './sink/telemetry';
@@ -95,7 +96,8 @@ async function main() {
             // default to the derived configuration value.
             shouldUseCursor: shouldUseCursor ? shouldUseCursor : config.shouldUseCursor,
           }),
-          Effect.provideService(Telemetry, TelemetryLive)
+          Effect.provideService(Telemetry, TelemetryLive),
+          Effect.provideService(Environment, EnvironmentLive)
         );
       }),
       // Retry jittered exponential with base of 100ms for up to 10 minutes.

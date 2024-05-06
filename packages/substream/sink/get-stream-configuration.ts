@@ -1,5 +1,3 @@
-import { START_BLOCK } from './constants/constants';
-
 type GetStreamConfigurationFn = (
   options: Record<string, any>,
   blockNumberFromCache: number | undefined
@@ -17,7 +15,7 @@ export const getStreamConfiguration: GetStreamConfigurationFn = (options, blockN
 
   return {
     // Default to using the value in .env. If there's no value in .env default to the Geo genesis block.
-    startBlockNumber: START_BLOCK,
+    startBlockNumber: 620,
 
     // We should always use cursor unless we specify a block number or have used the cache.
     shouldUseCursor: true,

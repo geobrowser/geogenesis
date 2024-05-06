@@ -2,10 +2,11 @@ import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { createSink, createStream } from '@substreams/sink';
-import { Effect, Stream } from 'effect';
+import { Effect, Secret, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
+import { Environment } from './environment';
 import { handleEditorsAdded } from './events/editors-added/handler';
 import { ZodEditorsAddedStreamResponse } from './events/editors-added/parser';
 import { getInitialProposalsForSpaces } from './events/initial-proposal-created/get-initial-proposals';
@@ -36,7 +37,6 @@ import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { Telemetry } from './telemetry/telemetry';
 import { createGeoId } from './utils/create-geo-id';
-import { invariant } from './utils/invariant';
 import { slog } from './utils/slog';
 
 export class InvalidPackageError extends Error {
@@ -72,6 +72,8 @@ interface StreamConfig {
 
 export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
   return Effect.gen(function* (_) {
+    const environment = yield* _(Environment);
+
     const startCursor = yield* _(
       Effect.tryPromise({
         try: () => readCursor(),
@@ -83,19 +85,12 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       yield* _(Effect.fail(new InvalidStreamConfigurationError('Either startBlockNumber or startCursor is required')));
     }
 
-    const substreamsEndpoint = process.env.SUBSTREAMS_ENDPOINT;
-    invariant(substreamsEndpoint, 'SUBSTREAMS_ENDPOINT is required');
-    const substreamsApiKey = process.env.SUBSTREAMS_API_KEY;
-    invariant(substreamsApiKey, 'SUBSTREAMS_API_KEY is required');
-    const authIssueUrl = process.env.AUTH_ISSUE_URL;
-    invariant(authIssueUrl, 'AUTH_ISSUE_URL is required');
-
     const substreamPackage = readPackageFromFile(MANIFEST);
     console.info(`Using substream package ${MANIFEST}`);
 
     const { token } = yield* _(
       Effect.tryPromise({
-        try: () => authIssue(substreamsApiKey, authIssueUrl),
+        try: () => authIssue(Secret.value(environment.apiKey), environment.authIssueUrl),
         catch: error => new InvalidPackageError(`Could not read package at path ${MANIFEST} ${String(error)}`),
       })
     );
@@ -103,7 +98,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
     const registry = createRegistry(substreamPackage);
 
     const transport = createGrpcTransport({
-      baseUrl: substreamsEndpoint,
+      baseUrl: environment.endpoint,
       httpVersion: '2',
       interceptors: [createAuthInterceptor(token)],
     });
