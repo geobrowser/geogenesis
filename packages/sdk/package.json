@@ -11,9 +11,6 @@
   "files": [
     "dist"
   ],
-  "scripts": {
-    "build": "tsc"
-  },
   "dependencies": {
     "@ethersproject/abi": "^5.6.4",
     "@ethersproject/providers": "^5.6.8",
