@@ -30,6 +30,10 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
   return (
     <div className="flex flex-wrap gap-2">
       {triples.map(({ value }) => {
+        if (value.type === 'collection') {
+          return null;
+        }
+
         if (value.type === 'entity') {
           return (
             <LinkableChip key={value.id} href={NavUtils.toEntity(space, value.id)}>

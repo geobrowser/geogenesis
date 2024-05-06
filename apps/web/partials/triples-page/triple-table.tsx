@@ -73,6 +73,10 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
       case 'value': {
         const value = cellData as Value;
 
+        if (value.type === 'collection') {
+          return null;
+        }
+
         if (value.type === 'entity') {
           return <LinkableChip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</LinkableChip>;
         }

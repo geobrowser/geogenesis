@@ -22,6 +22,7 @@ const MotionContent = motion(DropdownPrimitive.Content);
 const icons: Record<TripleValueType, React.FunctionComponent<{ color?: ColorName }>> = {
   date: Date,
   entity: Relation,
+  collection: Relation,
   string: Text,
   number: Text,
   image: Image,
