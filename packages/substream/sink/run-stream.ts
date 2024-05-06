@@ -123,22 +123,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       maxRetrySeconds: 600, // 10 minutes.
     });
 
-    /**
-     * @HACK: Ticks in the stream might process out-of-order if any of the ticks take
-     * longer than subsequent ticks to execute. This is problematic as Geo relies on
-     * data being processed linearly to correctly build the knowledge graph state over
-     * time.
-     *
-     * We create a "Queue" using promise chaining to ensure that ticks are processed
-     * in the order that they come in. This is a giant hack and can destroy performance
-     * in JS.
-     *
-     * Soon (as of January 23, 2024) we'll migrate to a Queue implementation using Effect's
-     * Queue. This will allow us to queue up the DB writes necessary for a given tick and
-     * execute them in a more reasonable manner.
-     */
-    let entriesQueue = Promise.resolve();
-
     const sink = createSink({
       handleBlockScopedData: message => {
         return Effect.gen(function* (_) {
