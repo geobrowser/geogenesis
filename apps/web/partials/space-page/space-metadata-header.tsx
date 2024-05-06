@@ -164,7 +164,7 @@ export function SpacePageMetadataHeader({
               View data
             </Text>
           </Link>
-          <Link
+          {/* <Link
             href={`${pathname}/import`}
             onClick={() => onOpenChange(false)}
             className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
@@ -172,7 +172,7 @@ export function SpacePageMetadataHeader({
             <Text variant="button" className="hover:!text-text">
               CSV import
             </Text>
-          </Link>
+          </Link> */}
         </Menu>
       </div>
     </div>
