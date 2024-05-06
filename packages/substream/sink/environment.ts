@@ -1,4 +1,4 @@
-import { Config, Context, Effect, Layer, Option, Secret } from 'effect';
+import { Config, Context, Effect, Option, Secret } from 'effect';
 
 export type IEnvironment = Readonly<{
   authIssueUrl: string;
