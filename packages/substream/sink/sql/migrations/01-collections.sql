@@ -78,7 +78,7 @@ BEGIN
     FROM triples t1
     JOIN triples t2 ON t1.entity_id = t2.entity_id
     JOIN triples t3 ON t1.entity_id = t3.entity_id
-    JOIN triples t4 ON t1.entity_id = t3.entity_id 
+    JOIN triples t4 ON t1.entity_id = t4.entity_id 
     WHERE t1.entity_id = e_row.entity_id
       AND t1.attribute_id = 'types'
       AND t1.entity_value_id = '0e8d692b-94d7-4c64-bcb3-0eb4d55503ef' -- Collection Item type
