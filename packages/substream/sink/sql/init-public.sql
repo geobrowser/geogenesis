@@ -177,7 +177,7 @@ CREATE TABLE public.actions (
     action_type text NOT NULL,
     entity_id text REFERENCES public.geo_entities(id) NOT NULL,
     attribute_id text REFERENCES public.geo_entities(id) NOT NULL,
-    value_type text,
+    value_type triple_value_type NOT NULL,
     value_id text,
     number_value text,
     string_value text,
