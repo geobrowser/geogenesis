@@ -17,44 +17,48 @@ export default function CollectionsPage() {
   const { createMany, update } = useActionsStore();
   const { triples } = useLocalStore();
 
-  const handleCreateCollectionTriple = () => {
+  const handleCreateCollectionEntity = () => {
     const collectionId = createCollection();
 
     // @TODO: This should be more ergonomic with some new local DB mechanism that
     // only receives the baseline Geo triple properties.
     createMany([
       {
-        id: 'test-collection-triple-id',
-        entityId: 'test-entity-id',
-        entityName: 'Test Collection',
-        attributeId: 'test-attribute-id',
-        attributeName: 'Test attribute',
-        space: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
+        id: createTripleId({
+          attributeId: SYSTEM_IDS.TYPES,
+          entityId: '6c9a06d9-de52-42ce-9fa2-d2f070ae7719',
+          spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+        }),
+        entityId: '6c9a06d9-de52-42ce-9fa2-d2f070ae7719',
+        entityName: '6c9a06d9-de52-42ce-9fa2-d2f070ae7719',
+        attributeId: SYSTEM_IDS.TYPES,
+        attributeName: 'Types',
+        space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
         value: {
-          type: 'collection',
-          id: collectionId,
-        },
+          type: 'entity',
+          id: SYSTEM_IDS.COLLECTION_TYPE,
+        } as EntityValue,
       },
     ]);
   };
 
   const handleCreateCollectionItem = () => {
     const [typeTriple, collectionIdTriple, entityIdTriple, orderTriple] = createCollectionItem({
-      collectionId: 'test-collection-triple-id',
+      collectionId: '6c9a06d9-de52-42ce-9fa2-d2f070ae7719',
       entityId: createGeoId(),
-      spaceId: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
+      spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
     });
 
     createMany([
       {
         ...typeTriple,
         id: createTripleId({
-          spaceId: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
+          spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
           entityId: typeTriple.entityId,
           attributeId: typeTriple.attributeId,
         }),
-        space: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
-        attributeName: 'Some Attribute',
+        space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+        attributeName: 'Types',
         entityName: 'Collection Entity A',
         value: {
           ...typeTriple.value,
@@ -64,12 +68,12 @@ export default function CollectionsPage() {
       {
         ...collectionIdTriple,
         id: createTripleId({
-          spaceId: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
+          spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
           entityId: collectionIdTriple.entityId,
           attributeId: collectionIdTriple.attributeId,
         }),
-        space: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
-        attributeName: 'Some Attribute',
+        space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+        attributeName: 'Collection ID',
         entityName: 'Collection Entity A',
         value: {
           ...collectionIdTriple.value,
@@ -79,12 +83,12 @@ export default function CollectionsPage() {
       {
         ...entityIdTriple,
         id: createTripleId({
-          spaceId: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
+          spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
           entityId: entityIdTriple.entityId,
           attributeId: entityIdTriple.attributeId,
         }),
-        space: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
-        attributeName: 'Some Attribute',
+        space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+        attributeName: 'Entity ID',
         entityName: 'Collection Entity A',
         value: {
           ...entityIdTriple.value,
@@ -94,12 +98,12 @@ export default function CollectionsPage() {
       {
         ...orderTriple,
         id: createTripleId({
-          spaceId: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
+          spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
           entityId: orderTriple.entityId,
           attributeId: orderTriple.attributeId,
         }),
-        space: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
-        attributeName: 'Some Attribute',
+        space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+        attributeName: 'Index',
         entityName: 'Collection Entity A',
         value: {
           ...orderTriple.value,
@@ -176,16 +180,6 @@ export default function CollectionsPage() {
       beforeIndex: beforeItemOrderValue,
     });
 
-    // console.log('new index', {
-    //   index: idk.value.value,
-    //   position,
-    //   beforeItemIndex,
-    //   afterItemIndex,
-    //   items,
-    //   collectionItems,
-    //   collectionItemId,
-    // });
-
     const orderTripleForCollectionItem = collectionItems
       .get(collectionItemId)
       ?.find(t => t.attributeId === SYSTEM_IDS.COLLECTION_ITEM_INDEX);
@@ -194,13 +188,9 @@ export default function CollectionsPage() {
     update(
       {
         ...newTripleOrdering,
-        id: createTripleId({
-          spaceId: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
-          entityId: collectionItemId,
-          attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-        }),
-        space: '0xBED46b561c96602D142ceaE85285D051e2cC3Ac2',
-        attributeName: 'Some Attribute',
+        id: orderTripleForCollectionItem!.id, // need to keep old id when updating
+        space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+        attributeName: 'Index',
         entityName: 'Collection Entity A',
       },
       orderTripleForCollectionItem! // We know this exists or it wouldn't be rendered
@@ -210,7 +200,7 @@ export default function CollectionsPage() {
   return (
     <div>
       <div className="flex items-center gap-8">
-        <button onClick={handleCreateCollectionTriple}>Create collection</button>
+        <button onClick={handleCreateCollectionEntity}>Create collection</button>
         <button onClick={handleCreateCollectionItem}>Create collection item</button>
       </div>
 
