@@ -1,3 +1,5 @@
+import { validate as uuidValidate, version as uuidVersion } from 'uuid';
+
 import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
 import { Entity as IEntity, Proposal, Vote } from '~/core/types';
 
@@ -300,3 +302,8 @@ export function getProposalTimeRemaining(endTime: number) {
 
   return { days, hours, minutes, seconds };
 }
+export const uuidValidateV4 = (uuid: string) => {
+  if (!uuid) return false;
+
+  return uuidValidate(uuid) && uuidVersion(uuid) === 4;
+};

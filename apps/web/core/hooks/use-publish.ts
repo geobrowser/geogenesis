@@ -95,3 +95,33 @@ export function usePublish() {
     // @TODO: This should also include APIs for granting and revoking roles
   };
 }
+
+export function useBulkPublish() {
+  const { storageClient, publish } = Services.useServices();
+  const { data: wallet } = useWalletClient();
+
+  /**
+   * Take the bulk actions for a specific space the user wants to write to Geo and publish them
+   * to IPFS + transact the IPFS hash onto Polygon.
+   */
+  const makeBulkProposal = React.useCallback(
+    async ({ actions, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
+      if (!wallet) return;
+      if (actions.length < 1) return;
+
+      await publish.makeProposal({
+        storageClient,
+        actions,
+        name,
+        onChangePublishState,
+        space: spaceId,
+        wallet,
+      });
+    },
+    [storageClient, wallet, publish]
+  );
+
+  return {
+    makeBulkProposal,
+  };
+}

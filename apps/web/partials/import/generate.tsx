@@ -3,17 +3,27 @@
 import { parse } from 'csv/sync';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
-import { Entity as EntityType, Triple as TripleType } from '~/core/types';
+import { Subgraph } from '~/core/io';
+import {
+  DateValue,
+  Entity as EntityType,
+  EntityValue,
+  StringValue,
+  Triple as TripleType,
+  UrlValue,
+} from '~/core/types';
+import type { Space } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
-import { GeoDate } from '~/core/utils/utils';
+import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
 
 import { Accordion } from '~/design-system/accordion';
 import { EntitySearchAutocomplete } from '~/design-system/autocomplete/entity-search-autocomplete';
@@ -29,42 +39,54 @@ import { Upload } from '~/design-system/icons/upload';
 import { Url } from '~/design-system/icons/url';
 import { Select } from '~/design-system/select';
 
+import { actionsAtom, examplesAtom, headersAtom, loadingAtom, publishAtom, recordsAtom, stepAtom } from './atoms';
+
 dayjs.extend(utc);
 
-type Props = {
+type GenerateProps = {
   spaceId: string;
+  space: Space;
 };
 
-type SupportedValueType = 'string' | 'date' | 'url';
+export type SupportedValueType = 'string' | 'date' | 'url' | 'entity';
+
+export type UnsupportedValueType = 'number' | 'image';
 
 type EntityAttributesType = Record<string, { index: number; type: SupportedValueType; name: string }>;
 
-export const Component = ({ spaceId }: Props) => {
+export const Generate = ({ spaceId }: GenerateProps) => {
+  const { isEditor } = useAccessControl(spaceId);
+
+  const [actions, setActions] = useAtom(actionsAtom);
+  const [isLoading, setIsLoading] = useAtom(loadingAtom);
+  const [step, setStep] = useAtom(stepAtom);
+  const setIsPublishOpen = useSetAtom(publishAtom);
+
   const pathname = usePathname();
   const spacePath = pathname?.split('/import')[0] ?? '/spaces';
-  const { create } = useActionsStore(spaceId);
 
-  const [step, setStep] = useState<string>('step1');
   const [entityType, setEntityType] = useState<EntityType | undefined>(undefined);
   const { supportedAttributes, unsupportedAttributes } = useMemo(() => getAttributes(entityType), [entityType]);
 
   const [entityNameIndex, setEntityNameIndex] = useState<number | undefined>(undefined);
+  const [entityIdIndex, setEntityIdIndex] = useState<number | undefined>(undefined);
   const [entityAttributes, setEntityAttributes] = useState<EntityAttributesType>({});
+
+  const [records, setRecords] = useAtom(recordsAtom);
+  const headers = useAtomValue(headersAtom);
+  const examples = useAtomValue(examplesAtom);
+
+  const [file, setFile] = useState<string | undefined>(undefined);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileInputClick = useCallback(() => {
+  const handleFileInputClick = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
-  }, []);
+  };
 
-  const [file, setFile] = useState<string | undefined>(undefined);
-  const [records, setRecords] = useState<Array<Array<string>>>([]);
-  const headers = useMemo(() => records?.[0] ?? [], [records]);
-  const examples = useMemo(() => records?.[1] ?? [], [records]);
-
-  const handleProcessFile = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProcessFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     setFile(event.currentTarget?.files?.[0]?.name);
 
     const reader = new FileReader();
@@ -90,28 +112,69 @@ export const Component = ({ spaceId }: Props) => {
     }
 
     setStep('step3');
-  }, []);
+  };
 
   const handleReset = useCallback(() => {
+    setStep('step1');
     setEntityType(undefined);
     setEntityNameIndex(undefined);
     setEntityAttributes({});
     setFile(undefined);
     setRecords([]);
-  }, []);
+    setActions([]);
+  }, [setActions, setRecords, setStep]);
 
-  const handleGenerateActions = useCallback(() => {
+  const handleGenerateActions = useCallback(async () => {
+    setIsLoading(true);
+
     const [, ...entities] = records;
 
-    const generateActions = () => {
-      entities.forEach(entity => {
-        const newEntityId = ID.createEntityId();
+    const generateActions = async () => {
+      const attributes = Object.keys(entityAttributes);
 
-        if (!entityNameIndex || !entityType) return;
+      const relationAttributes = Object.values(entityAttributes).filter(({ type }) => type === 'entity');
+      const relatedEntityIdsSet: Set<string> = new Set();
+
+      entities.forEach(entity => {
+        relationAttributes.forEach(relation => {
+          const values = entity[relation.index].split(',');
+          values.forEach(value => {
+            if (!relatedEntityIdsSet.has(value)) {
+              relatedEntityIdsSet.add(value);
+            }
+          });
+        });
+      });
+
+      const relatedEntityIds: Array<string> = [...relatedEntityIdsSet.values()];
+      const relatedEntities = await Promise.all(
+        relatedEntityIds.map((entityId: string) => {
+          return Subgraph.fetchEntity({ id: entityId });
+        })
+      );
+
+      const filteredRelatedEntities: Array<EntityType> = relatedEntities.filter(
+        entity => entity !== null
+      ) as Array<EntityType>;
+
+      const relatedEntitiesMap = new Map(filteredRelatedEntities.map(entity => [entity.id, entity.name ?? '']));
+
+      if (typeof entityNameIndex === 'number' && typeof entityIdIndex === 'number') {
+        entities.forEach(entity => {
+          relatedEntitiesMap.set(entity[entityIdIndex], entity[entityNameIndex]);
+        });
+      }
+
+      const newActions: Array<any> = [];
+
+      entities.forEach(entity => {
+        const newEntityId = typeof entityIdIndex === 'number' ? entity[entityIdIndex] : ID.createEntityId();
+
+        if (typeof entityNameIndex !== 'number' || !entityType) return;
 
         // Create new entity + set entity name
-        create(
-          Triple.withId({
+        newActions.push({
+          ...Triple.withId({
             space: spaceId,
             entityId: newEntityId,
             entityName: entity[entityNameIndex],
@@ -122,12 +185,13 @@ export const Component = ({ spaceId }: Props) => {
               id: ID.createValueId(),
               value: entity[entityNameIndex],
             },
-          })
-        );
+          }),
+          type: 'createTriple',
+        });
 
         // Create entity type
-        create(
-          Triple.withId({
+        newActions.push({
+          ...Triple.withId({
             space: spaceId,
             entityId: newEntityId,
             entityName: entity[entityNameIndex],
@@ -138,11 +202,12 @@ export const Component = ({ spaceId }: Props) => {
               id: entityType.id,
               name: entityType.name,
             },
-          })
-        );
+          }),
+          type: 'createTriple',
+        });
 
         // Create entity attribute values
-        Object.keys(entityAttributes).forEach(attributeId => {
+        attributes.forEach(attributeId => {
           if (entityAttributes[attributeId]?.type === 'date') {
             const date = dayjs.utc(entity[entityAttributes[attributeId].index], 'MM/DD/YYYY');
 
@@ -158,68 +223,118 @@ export const Component = ({ spaceId }: Props) => {
               minute: '0',
             });
 
-            create(
-              Triple.withId({
+            newActions.push({
+              ...Triple.withId({
                 space: spaceId,
                 entityId: newEntityId,
                 entityName: entity[entityNameIndex],
                 attributeId,
                 attributeName: entityAttributes[attributeId]?.name ?? '',
                 value: {
-                  type: 'date' as SupportedValueType,
+                  type: 'date',
                   id: ID.createValueId(),
                   value: dateValue,
-                },
-              })
-            );
+                } as DateValue,
+              }),
+              type: 'createTriple',
+            });
+          } else if (entityAttributes[attributeId]?.type === 'entity') {
+            const values = entity[entityAttributes[attributeId].index].split(',');
+
+            values.forEach(value => {
+              newActions.push({
+                ...Triple.withId({
+                  space: spaceId,
+                  entityId: newEntityId,
+                  entityName: entity[entityNameIndex],
+                  attributeId,
+                  attributeName: entityAttributes[attributeId]?.name ?? '',
+                  value: {
+                    type: 'entity',
+                    id: value,
+                    name: relatedEntitiesMap.get(value),
+                  } as EntityValue,
+                }),
+                type: 'createTriple',
+              });
+            });
           } else {
-            create(
-              Triple.withId({
+            newActions.push({
+              ...Triple.withId({
                 space: spaceId,
                 entityId: newEntityId,
                 entityName: entity[entityNameIndex],
                 attributeId,
                 attributeName: entityAttributes[attributeId]?.name ?? '',
                 value: {
-                  type: (entityAttributes[attributeId]?.type ?? 'string') as SupportedValueType,
+                  type: entityAttributes[attributeId]?.type ?? 'string',
                   id: ID.createValueId(),
                   value: entity[entityAttributes[attributeId].index],
-                },
-              })
-            );
+                } as StringValue | UrlValue,
+              }),
+              type: 'createTriple',
+            });
           }
         });
       });
+
+      setActions(newActions);
     };
 
-    generateActions();
-  }, [create, spaceId, records, entityNameIndex, entityType, entityAttributes]);
+    try {
+      await generateActions();
+    } catch (error) {
+      console.error(error);
+    }
 
-  const isGenerationReady = !!entityType?.id && records.length > 0 && typeof entityNameIndex === 'number';
+    setIsLoading(false);
+    setStep('step4');
+  }, [
+    entityAttributes,
+    entityIdIndex,
+    entityNameIndex,
+    entityType,
+    records,
+    setActions,
+    setIsLoading,
+    setStep,
+    spaceId,
+  ]);
+
+  const handlePublishActions = () => {
+    setIsPublishOpen(true);
+  };
+
+  const isGenerationReady =
+    !!entityType?.id && records.length > 0 && typeof entityNameIndex === 'number' && step !== 'step4';
+
+  useEffect(() => {
+    if (step === 'done') {
+      handleReset();
+    }
+  }, [step, handleReset]);
+
+  if (!isEditor) {
+    return null;
+  }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-16 overflow-visible">
+    <div className="overflow-visible">
       <div className="space-y-4">
         <Link href={spacePath}>
           <SquareButton icon={<ArrowLeft />} />
         </Link>
         <div className="flex w-full items-center justify-between">
           <div className="text-mediumTitle">Import CSV data</div>
-          <div className="inline-flex items-center gap-3">
-            <Button onClick={handleReset} variant="ghost" icon={<RetrySmall />}>
-              Reset form
-            </Button>
-            <Button onClick={handleGenerateActions} variant="primary" disabled={!isGenerationReady}>
-              Generate
-            </Button>
-          </div>
+          <SmallButton onClick={handleReset} variant="secondary" icon={<RetrySmall />}>
+            Reset form
+          </SmallButton>
         </div>
       </div>
       <Accordion type="single" value={step} onValueChange={setStep}>
         <Accordion.Item value="step1">
           <Accordion.Trigger>
             <div className="text-smallTitle">Step 1</div>
-
             <div className="mt-1 text-metadata">
               {!entityType ? `Choose a type to add data to` : `Type: ${entityType.name}`}
             </div>
@@ -282,7 +397,7 @@ export const Component = ({ spaceId }: Props) => {
           <Accordion.Trigger>
             <div className="text-smallTitle">Step 3</div>
             <div className="mt-1 text-metadata">
-              Match the type attributes with the corresponding columns in your csv and specify their data types
+              Match the attributes with the corresponding columns in your csv and specify their value types
             </div>
           </Accordion.Trigger>
           <Accordion.Content>
@@ -308,30 +423,61 @@ export const Component = ({ spaceId }: Props) => {
                   />
                 </div>
               </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="text-metadataMedium">Entity ID</div>
+                  <div className="text-footnoteMedium">Optional (advanced)</div>
+                </div>
+                <div className="mt-2 flex items-center gap-1">
+                  <Select
+                    value={entityIdIndex?.toString() ?? ''}
+                    onChange={(value: string) => {
+                      if (value) {
+                        setEntityIdIndex(parseInt(value, 10));
+                      } else {
+                        setEntityIdIndex(undefined);
+                      }
+                    }}
+                    placeholder="Select column..."
+                    options={[
+                      { value: '', label: 'Select column...' },
+                      ...headers.map((header: string, index: number) => {
+                        return {
+                          value: index.toString(),
+                          label: `${header} (e.g., ${examples[index].substring(0, 16)})`,
+                          disabled: !uuidValidateV4(examples[index]),
+                        };
+                      }),
+                    ]}
+                    className="max-w-full overflow-clip"
+                    position="popper"
+                  />
+                </div>
+              </div>
               {supportedAttributes.map((attribute: TripleType) => (
-                <div key={attribute.id}>
+                <div key={attribute.value.id}>
                   <div className="flex items-center justify-between">
                     <div className="text-metadataMedium">
-                      {attribute.value.type === 'entity' && attribute.value.name}
+                      {attribute.value.type === 'entity' ? attribute.value.name : null}
                     </div>
                     <div className="text-footnoteMedium">Optional</div>
                   </div>
                   <div className="mt-2 flex items-center gap-1">
                     <Select
-                      value={entityAttributes?.[attribute.id]?.type ?? 'string'}
+                      value={entityAttributes?.[attribute.value.id]?.type ?? 'string'}
                       onChange={(value: string) => {
                         const newEntityAttributes = {
                           ...entityAttributes,
                         };
 
                         if (value) {
-                          newEntityAttributes[attribute.id] = {
-                            ...newEntityAttributes[attribute.id],
+                          newEntityAttributes[attribute.value.id] = {
+                            ...newEntityAttributes[attribute.value.id],
                             type: value as SupportedValueType,
                           };
                         } else {
-                          newEntityAttributes[attribute.id] = {
-                            ...newEntityAttributes[attribute.id],
+                          newEntityAttributes[attribute.value.id] = {
+                            ...newEntityAttributes[attribute.value.id],
                             type: 'string' as SupportedValueType,
                           };
                         }
@@ -339,30 +485,36 @@ export const Component = ({ spaceId }: Props) => {
                         setEntityAttributes(newEntityAttributes);
                       }}
                       options={[
-                        { value: 'string', label: 'Text', render: <Text /> },
-                        { value: 'date', label: 'Date', render: <Date /> },
-                        { value: 'url', label: 'Web URL', render: <Url /> },
-                        { value: 'image', label: 'Image', render: <Image />, disabled: true },
-                        { value: 'relation', label: 'Relation', render: <Relation />, disabled: true },
+                        { value: 'string', label: 'Text', render: <Text />, className: `items-center` },
+                        { value: 'date', label: 'Date', render: <Date />, className: `items-center` },
+                        { value: 'url', label: 'Web URL', render: <Url />, className: `items-center` },
+                        {
+                          value: 'image',
+                          label: 'Image',
+                          render: <Image />,
+                          disabled: true,
+                          className: `items-center`,
+                        },
+                        { value: 'entity', label: 'Relation', render: <Relation />, className: `items-center` },
                       ]}
                       className="!flex-[0]"
                       position="popper"
                     />
                     <Select
-                      value={entityAttributes?.[attribute.id]?.index?.toString() ?? ''}
+                      value={entityAttributes?.[attribute.value.id]?.index?.toString() ?? ''}
                       onChange={(value: string) => {
                         const newEntityAttributes = {
                           ...entityAttributes,
                         };
 
                         if (value) {
-                          newEntityAttributes[attribute.id] = {
-                            ...newEntityAttributes[attribute.id],
+                          newEntityAttributes[attribute.value.id] = {
+                            ...newEntityAttributes[attribute.value.id],
                             index: parseInt(value, 10),
                             name: attribute.value.type === 'entity' ? attribute.value.name ?? '' : '',
                           };
                         } else {
-                          delete newEntityAttributes[attribute.id];
+                          delete newEntityAttributes[attribute.value.id];
                         }
 
                         setEntityAttributes(newEntityAttributes);
@@ -390,7 +542,7 @@ export const Component = ({ spaceId }: Props) => {
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-8">
                   {unsupportedAttributes.map((attribute: TripleType) => (
-                    <div key={attribute.id}>
+                    <div key={attribute.value.id}>
                       <div className="flex items-center justify-between">
                         <div className="text-metadataMedium">
                           {attribute.value.type === 'entity' && attribute.value.name}
@@ -399,14 +551,20 @@ export const Component = ({ spaceId }: Props) => {
                       </div>
                       <div className="mt-2 flex items-center gap-1">
                         <Select
-                          value={entityAttributes?.[attribute.id]?.type ?? 'string'}
+                          value={entityAttributes?.[attribute.value.id]?.type ?? 'string'}
                           onChange={() => null}
                           options={[
-                            { value: 'string', label: 'Text', render: <Text /> },
-                            { value: 'date', label: 'Date', render: <Date /> },
-                            { value: 'url', label: 'Web URL', render: <Url /> },
-                            { value: 'image', label: 'Image', render: <Image />, disabled: true },
-                            { value: 'relation', label: 'Relation', render: <Relation />, disabled: true },
+                            { value: 'string', label: 'Text', render: <Text />, className: `items-center` },
+                            { value: 'date', label: 'Date', render: <Date />, className: `items-center` },
+                            { value: 'url', label: 'Web URL', render: <Url />, className: `items-center` },
+                            {
+                              value: 'image',
+                              label: 'Image',
+                              render: <Image />,
+                              disabled: true,
+                              className: `items-center`,
+                            },
+                            { value: 'relation', label: 'Relation', render: <Relation />, className: `items-center` },
                           ]}
                           className="!flex-[0]"
                           disabled
@@ -425,6 +583,26 @@ export const Component = ({ spaceId }: Props) => {
                 </div>
               </div>
             )}
+            <div className="mt-8">
+              <Button
+                onClick={handleGenerateActions}
+                variant="primary"
+                disabled={!isGenerationReady || actions.length > 0 || isLoading}
+              >
+                {!isLoading ? 'Generate' : 'Generating...'}
+              </Button>
+            </div>
+          </Accordion.Content>
+        </Accordion.Item>
+        <Accordion.Item value="step4" disabled={step !== 'step4' && actions.length === 0}>
+          <Accordion.Trigger>
+            <div className="text-smallTitle">Step 4</div>
+            <div className="mt-1 text-metadata">Publish generated actions</div>
+          </Accordion.Trigger>
+          <Accordion.Content>
+            <Button onClick={handlePublishActions} variant="primary" disabled={actions.length === 0}>
+              Review and publish
+            </Button>
           </Accordion.Content>
         </Accordion.Item>
       </Accordion>
