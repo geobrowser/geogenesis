@@ -1,10 +1,11 @@
-import { Effect, Schedule } from 'effect';
+import { Effect, Either, Schedule } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
 import { TripleAction, type TripleWithActionTuple } from '../types';
 import { generateTripleId } from '../utils/id';
 import { pool } from '../utils/pool';
+import { retryEffect } from '../utils/retry-effect';
 import type { Action } from '../zod';
 import { SYSTEM_IDS } from '~/sink/constants/system-ids';
 
@@ -89,8 +90,8 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
         });
 
         // @TODO: Parallelize with Effect.all
-        yield* awaited(Effect.retry(insertTripleEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
-        yield* awaited(Effect.retry(insertTripleVersionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(insertTripleEffect, retryEffect);
+        yield* awaited(insertTripleVersionEffect, retryEffect);
       }
 
       /**
@@ -124,8 +125,8 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
         });
 
         // @TODO: Parallelize with Effect.all
-        yield* awaited(Effect.retry(deleteEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
-        yield* awaited(Effect.retry(setStaleEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(deleteEffect, retryEffect);
+        yield* awaited(setStaleEffect, retryEffect);
       }
 
       /**
@@ -164,7 +165,7 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
             ),
         });
 
-        yield* awaited(Effect.retry(insertNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(insertNameEffect, retryEffect);
       }
 
       /**
@@ -232,7 +233,7 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
             ),
         });
 
-        yield* awaited(Effect.retry(deleteNameEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(deleteNameEffect, retryEffect);
       }
 
       /**
@@ -271,7 +272,7 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
             ),
         });
 
-        yield* awaited(Effect.retry(insertDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(insertDescriptionEffect, retryEffect);
       }
 
       /**
@@ -310,7 +311,7 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
             ),
         });
 
-        yield* awaited(Effect.retry(deleteDescriptionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(deleteDescriptionEffect, retryEffect);
       }
 
       /**
@@ -338,7 +339,7 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
           catch: () => new Error('Failed to create type'),
         });
 
-        yield* awaited(Effect.retry(insertTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(insertTypeEffect, retryEffect);
 
         if (triple.value_id === SYSTEM_IDS.COLLECTION_TYPE) {
           const insertCollectionEffect = Effect.tryPromise({
@@ -350,14 +351,14 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
                     id: triple.value_id,
                     entity_id: triple.value_id,
                   },
-                  ['id', 'entity_id'],
+                  ['id'],
                   { updateColumns: db.doNothing }
                 )
                 .run(pool),
-            catch: () => new Error('Failed to create type'),
+            catch: error => new Error(`Failed to create collection item ${String(error)}`),
           });
 
-          yield* awaited(Effect.retry(insertCollectionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+          yield* awaited(insertCollectionEffect, retryEffect);
         }
       }
 
@@ -378,7 +379,7 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
               .run(pool),
           catch: () => new Error('Failed to delete type'),
         });
-        yield* awaited(Effect.retry(deleteTypeEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+        yield* awaited(deleteTypeEffect, retryEffect);
 
         if (triple.value_id === SYSTEM_IDS.COLLECTION_TYPE) {
           const deleteCollectionEffect = Effect.tryPromise({
@@ -391,7 +392,7 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
             catch: () => new Error('Failed to create type'),
           });
 
-          yield* awaited(Effect.retry(deleteCollectionEffect, Schedule.exponential(100).pipe(Schedule.jittered)));
+          yield* awaited(deleteCollectionEffect, retryEffect);
         }
       }
     }

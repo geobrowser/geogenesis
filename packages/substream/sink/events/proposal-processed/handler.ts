@@ -10,6 +10,11 @@ import { slog } from '~/sink/utils/slog';
 
 export function handleProposalsProcessed(proposalsFromIpfs: ContentProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
+    slog({
+      requestId: block.requestId,
+      message: `Processing ${proposalsFromIpfs.length} processed proposals`,
+    });
+
     /**
      * 1. Fetch IPFS content
      * 2. Find the proposal based on the proposalId
