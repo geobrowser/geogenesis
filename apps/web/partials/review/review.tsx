@@ -940,7 +940,7 @@ const labelClassNames = `text-footnote text-grey-04`;
 
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
-const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
+export const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
   const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: ['changes', spaceId, actions],
