@@ -9,7 +9,7 @@ interface CreateCollectionItemArgs {
 }
 
 type CreateCollectionItemTypeAction = {
-  attributeId: typeof SYSTEM_IDS.SCHEMA_TYPE;
+  attributeId: typeof SYSTEM_IDS.TYPES;
   entityId: string;
   type: 'createTriple';
   value: {
@@ -64,7 +64,7 @@ export function createCollectionItem(
   return [
     // Type of Collection Item
     {
-      attributeId: SYSTEM_IDS.SCHEMA_TYPE,
+      attributeId: SYSTEM_IDS.TYPES,
       entityId: newEntityId,
       type: 'createTriple',
       value: {
