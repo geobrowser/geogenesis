@@ -46,6 +46,10 @@ export function emptyValue(type: TripleValueType): Value {
       type: 'entity',
       name: '',
     } as EntityValue,
+    collection: {
+      id: '',
+      type: 'collection',
+    },
     number: {
       id: ID.createValueId(),
       type: 'number',
@@ -218,5 +222,7 @@ export const getValue = (triple: Triple): string | null => {
       return triple.value.value;
     case 'url':
       return triple.value.value;
+    case 'collection':
+      return triple.value.id;
   }
 };

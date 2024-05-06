@@ -157,7 +157,7 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(([id, nam
 }));
 
 const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
-  .map(([id, entity_value_id]) => [
+  .map(([id, entity_value_id]): s.triples.Insertable[] => [
     /* Giving these entities a type of attribute */
     {
       id: generateTripleId({
@@ -200,7 +200,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
   .flat();
 
 const typeTriples: s.triples.Insertable[] = Object.entries(types)
-  .map(([id, attributes]) => [
+  .map(([id, attributes]): s.triples.Insertable[] => [
     /* Giving these entities a type of type */
     {
       id: generateTripleId({
@@ -221,24 +221,26 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       is_stale: false,
     },
     /* Giving these entities an attribute of attribute */
-    ...attributes.map(attribute => ({
-      id: generateTripleId({
-        space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+    ...attributes.map(
+      (attribute): s.triples.Insertable => ({
+        id: generateTripleId({
+          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+          entity_id: id,
+          attribute_id: SYSTEM_IDS.ATTRIBUTES,
+          value_id: attribute,
+        }),
         entity_id: id,
         attribute_id: SYSTEM_IDS.ATTRIBUTES,
+        value_type: 'entity',
         value_id: attribute,
-      }),
-      entity_id: id,
-      attribute_id: SYSTEM_IDS.ATTRIBUTES,
-      value_type: 'entity',
-      value_id: attribute,
-      entity_value_id: attribute,
-      is_protected: true,
-      space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-      created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-      created_at: ROOT_SPACE_CREATED_AT,
-      is_stale: false,
-    })),
+        entity_value_id: attribute,
+        is_protected: true,
+        space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+        created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+        created_at: ROOT_SPACE_CREATED_AT,
+        is_stale: false,
+      })
+    ),
   ])
   .flat();
 

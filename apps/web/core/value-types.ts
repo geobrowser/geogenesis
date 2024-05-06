@@ -16,6 +16,7 @@ export const valueTypeIds: Record<TripleValueType, ValueTypeId> = {
   date: SYSTEM_IDS.DATE,
   url: SYSTEM_IDS.WEB_URL,
   number: SYSTEM_IDS.TEXT,
+  collection: SYSTEM_IDS.RELATION, // @TODO: Collection value type
 };
 
 export const valueTypes: Record<ValueTypeId, TripleValueType> = {

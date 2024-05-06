@@ -72,6 +72,16 @@ const create = (triple: ITriple) => {
   store.set(actionsAtom, [...allActions, action]);
 };
 
+const createMany = (triples: ITriple[]) => {
+  const actions: CreateTripleAction[] = triples.map(t => ({
+    ...t,
+    type: 'createTriple',
+  }));
+
+  const allActions = store.get(actionsAtom);
+  store.set(actionsAtom, [...allActions, ...actions]);
+};
+
 const remove = (triple: ITriple) => {
   const action: DeleteTripleAction = {
     ...triple,
@@ -197,6 +207,7 @@ export function useActions(spaceId?: string) {
 
       addActions: setActions,
       create,
+      createMany,
       update,
       remove,
       clear,
@@ -216,6 +227,7 @@ export function useActions(spaceId?: string) {
 
     addActions: setActions,
     create,
+    createMany,
     update,
     remove,
     clear,

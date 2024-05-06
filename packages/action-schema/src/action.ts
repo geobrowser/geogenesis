@@ -61,6 +61,11 @@ interface UrlValue {
   value: string
 }
 
+interface CollectionValue {
+  type: 'collection'
+  id: string
+}
+
 type Value =
   | NumberValue
   | StringValue
@@ -68,3 +73,4 @@ type Value =
   | ImageValue
   | DateValue
   | UrlValue
+  | CollectionValue

@@ -9,7 +9,7 @@ import { SubstreamEntity } from './io/subgraph/network-local-mapping';
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date' | 'url';
+export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date' | 'url' | 'collection';
 
 export type NumberValue = {
   type: 'number';
@@ -47,7 +47,12 @@ export type UrlValue = {
   value: string;
 };
 
-export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue | UrlValue;
+export type CollectionValue = {
+  type: 'collection';
+  id: string;
+};
+
+export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue | UrlValue | CollectionValue;
 
 export type Triple = {
   id: string;

@@ -35,7 +35,6 @@ export function populateApprovedContentProposal(
     const entities = proposedVersions.map(pv => {
       const newEntity: Schema.Insertable = {
         id: pv.entity_id,
-        name: pv.name,
         description: pv.description,
         created_at: timestamp,
         created_at_block: blockNumber,

@@ -45,7 +45,7 @@ function fetchContentProposalFromIpfs(
     slog({
       message: `Fetching IPFS content for processed proposal
         ipfsUri:       ${processedProposal.ipfsUri}
-        pluginAddress: ${processedProposal.ipfsUri}`,
+        pluginAddress: ${processedProposal.pluginAddress}`,
       requestId: block.requestId,
     });
 

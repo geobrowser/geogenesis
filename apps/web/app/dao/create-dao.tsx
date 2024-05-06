@@ -27,7 +27,21 @@ export function CreateDao() {
     if (!wallet) return;
 
     const entityId = createGeoId();
+    const collectionId = createGeoId();
+    const collectionItemId = createGeoId();
+    const entityA = createGeoId();
+
     const initialContent = createContentProposal('Initial proposal for space', [
+      {
+        entityId: entityA,
+        attributeId: SYSTEM_IDS.NAME,
+        type: 'createTriple',
+        value: {
+          type: 'string',
+          id: createGeoId(),
+          value: 'Entity A is in a Collection',
+        },
+      },
       {
         entityId,
         attributeId: SYSTEM_IDS.NAME,
@@ -35,7 +49,7 @@ export function CreateDao() {
         value: {
           type: 'string',
           id: createGeoId(),
-          value: 'Central California Yellow Fruit Co.',
+          value: 'Collections test space',
         },
       },
       {
@@ -45,6 +59,52 @@ export function CreateDao() {
         value: {
           type: 'entity',
           id: SYSTEM_IDS.SPACE_CONFIGURATION,
+        },
+      },
+      {
+        entityId: collectionId,
+        type: 'createTriple',
+        attributeId: SYSTEM_IDS.TYPES,
+        value: {
+          type: 'entity',
+          id: SYSTEM_IDS.COLLECTION_TYPE,
+        },
+      },
+      {
+        entityId: collectionItemId,
+        attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
+        type: 'createTriple',
+        value: {
+          type: 'entity',
+          id: collectionId,
+        },
+      },
+      {
+        attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
+        entityId: collectionItemId,
+        type: 'createTriple',
+        value: {
+          type: 'entity',
+          id: entityA,
+        },
+      },
+      {
+        attributeId: 'types',
+        entityId: collectionItemId,
+        type: 'createTriple',
+        value: {
+          type: 'entity',
+          id: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
+        },
+      },
+      {
+        attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
+        entityId: collectionItemId,
+        type: 'createTriple',
+        value: {
+          type: 'string',
+          id: createGeoId(),
+          value: 'a0',
         },
       },
     ]);
@@ -66,9 +126,8 @@ export function CreateDao() {
     const governancePluginConfig: Parameters<typeof getGovernancePluginInstallItem>[0] = {
       votingSettings: {
         votingMode: VotingMode.Standard,
-        supportThreshold: 1, // example value
-        minParticipation: 1, // example value
-        // duration: BigInt(60 * 60 * 24), // 1 day in seconds
+        supportThreshold: 50_000,
+        minParticipation: 50_000,
         duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
       },
       memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
