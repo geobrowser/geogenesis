@@ -150,8 +150,8 @@ export function SpacePageMetadataHeader({
           trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
           className="max-w-[9rem] whitespace-nowrap"
         >
-          {isEditing && addSubspaceComponent}
-          {isEditing && removeSubspaceComponent}
+          <div>{isEditing && addSubspaceComponent}</div>
+          <div>{isEditing && removeSubspaceComponent}</div>
 
           <button
             className="flex w-full items-center bg-white px-3 py-2 text-grey-04 hover:bg-bg hover:text-text"
