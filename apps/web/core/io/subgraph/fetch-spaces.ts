@@ -8,7 +8,7 @@ import { Space, SpaceConfigEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 const getFetchSpacesQuery = () => `query {
   spaces {
@@ -136,20 +136,7 @@ export async function fetchSpaces() {
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaces.nodes.map((space): Space => {
-    const spaceConfig = space.metadata.nodes[0] as SubstreamEntity | undefined;
-    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
-
-    const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
-      ? {
-          id: spaceConfig.id,
-          name: spaceConfig.name,
-          description: null,
-          image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-          triples: spaceConfigTriples,
-          types: Entity.types(spaceConfigTriples),
-          nameTripleSpaces: Entity.nameTriples(spaceConfigTriples).map(t => t.space),
-        }
-      : null;
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.metadata.nodes[0]);
 
     return {
       id: space.id,

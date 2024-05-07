@@ -1,13 +1,12 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Effect, Either } from 'effect';
 import Image from 'next/legacy/image';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { fetchEntities, fetchSpace } from '~/core/io/subgraph';
+import { fetchSpace } from '~/core/io/subgraph';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { Proposal, SpaceConfigEntity } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
+import { Proposal } from '~/core/types';
 
 import { AddTo } from '~/design-system/icons/add-to';
 import { EditSmall } from '~/design-system/icons/edit-small';
@@ -116,6 +115,38 @@ const getSubspaceInProposalQuery = (proposalId: string) => `query {
         spaceEditors {
           totalCount
         }
+
+        metadata {
+          nodes {
+            id
+            name
+            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+              nodes {
+                id
+                attribute {
+                  id
+                  name
+                }
+                entity {
+                  id
+                  name
+                }
+                entityValue {
+                  id
+                  name
+                }
+                numberValue
+                stringValue
+                valueType
+                valueId
+                isProtected
+                space {
+                  id
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -130,6 +161,8 @@ interface NetworkResult {
         spaceEditors: {
           totalCount: number;
         };
+
+        metadata: { nodes: SubstreamEntity[] };
       };
     }[];
   };
@@ -195,26 +228,7 @@ async function fetchProposedSubspace(proposalId: string, spaceId: string) {
 
   // There should only be one proposed space in a single proposal
   const proposedSpace = proposedSubspaces[0].spaceBySubspace;
-
-  const spaceConfigs = await fetchEntities({
-    query: '',
-    spaceId: proposedSpace.id,
-    typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
-    filter: [],
-  });
-
-  // Ensure that we're using the space config that has been defined in the current space.
-  // Eventually this association will be handled by the substream API.
-  const spaceConfig = spaceConfigs.find(s =>
-    Boolean(s.triples.find(t => t.attributeId === SYSTEM_IDS.TYPES && t.space === proposedSpace.id))
-  );
-
-  const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
-    ? {
-        ...spaceConfig,
-        image: Entity.avatar(spaceConfig.triples) ?? Entity.cover(spaceConfig.triples) ?? PLACEHOLDER_SPACE_IMAGE,
-      }
-    : null;
+  const spaceConfigWithImage = getSpaceConfigFromMetadata(proposedSpace.metadata.nodes[0]);
 
   return {
     id: proposedSpace.id,

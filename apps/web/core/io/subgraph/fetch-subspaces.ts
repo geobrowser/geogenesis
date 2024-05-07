@@ -1,21 +1,50 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { OmitStrict, Space, SpaceConfigEntity } from '~/core/types';
-import { Entity as EntityModule } from '~/core/utils/entity';
+import { OmitStrict, Space } from '~/core/types';
 
-import { fetchEntities } from './fetch-entities';
 import { graphql } from './graphql';
+import { SubstreamEntity, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 const getFetchSpacesQuery = (spaceId: string) => `query {
   spaceSubspaces(filter: { parentSpaceId: { equalTo: "${spaceId}" } }) {
     nodes {
       subspace {
         id
+
+        metadata {
+          nodes {
+            id
+            name
+            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+              nodes {
+                id
+                attribute {
+                  id
+                  name
+                }
+                entity {
+                  id
+                  name
+                }
+                entityValue {
+                  id
+                  name
+                }
+                numberValue
+                stringValue
+                valueType
+                valueId
+                isProtected
+                space {
+                  id
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -37,6 +66,7 @@ interface NetworkResult {
     nodes: {
       subspace: {
         id: string;
+        metadata: { nodes: SubstreamEntity[] };
       };
     }[];
   };
@@ -94,44 +124,9 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  // @TODO: This should be tied to the space config entity in the substream
-  // eventually.
-  const configs = await fetchEntities({
-    query: '',
-    typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
-    first: 1000,
-    filter: [],
-  });
-
-  const spaceConfigs = result.spaceSubspaces.nodes.map(s => {
-    // Ensure that we're using the space config that has been defined in the current space.
-    // Eventually this association will be handled by the substream API.
-    const spaceConfig = configs.find(config =>
-      config.triples.some(
-        t =>
-          t.space === s.subspace.id &&
-          t.attributeId === SYSTEM_IDS.TYPES &&
-          t.value.type === 'entity' &&
-          t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
-      )
-    );
-
-    return {
-      spaceId: s.subspace.id,
-      config: spaceConfig,
-    };
-  });
-
   // @TODO: Should use space metadata from space object
   const spaces = result.spaceSubspaces.nodes.map((space): Subspace => {
-    const config = spaceConfigs.find(config => config.spaceId === space.subspace.id)?.config;
-
-    const spaceConfigWithImage: SpaceConfigEntity | null = config
-      ? {
-          ...config,
-          image: EntityModule.avatar(config.triples) ?? EntityModule.cover(config.triples) ?? PLACEHOLDER_SPACE_IMAGE,
-        }
-      : null;
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.subspace.metadata.nodes[0]);
 
     return {
       id: space.subspace.id,

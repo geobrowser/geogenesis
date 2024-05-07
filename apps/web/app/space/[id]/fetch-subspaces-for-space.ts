@@ -4,7 +4,11 @@ import { v4 as uuid } from 'uuid';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamEntity, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
+import {
+  SubstreamEntity,
+  fromNetworkTriples,
+  getSpaceConfigFromMetadata,
+} from '~/core/io/subgraph/network-local-mapping';
 import { SpaceConfigEntity, SpaceWithMetadata } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
@@ -122,20 +126,7 @@ export async function getSubspacesForSpace(spaceId: string) {
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaceSubspaces.nodes.map((space): Subspace => {
-    const spaceConfig = space.metadata.nodes[0] as SubstreamEntity | undefined;
-    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
-
-    const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
-      ? {
-          id: spaceConfig.id,
-          name: spaceConfig.name,
-          description: null,
-          image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-          triples: spaceConfigTriples,
-          types: Entity.types(spaceConfigTriples),
-          nameTripleSpaces: Entity.nameTriples(spaceConfigTriples).map(t => t.space),
-        }
-      : null;
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.metadata.nodes[0]);
 
     return {
       id: space.id,

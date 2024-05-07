@@ -8,7 +8,7 @@ import { Space, SpaceConfigEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 const getFetchSpaceQuery = (id: string) => `query {
   space(id: "${id}") {
@@ -74,8 +74,8 @@ type NetworkResult = {
     id: string;
     isRootSpace: boolean;
     mainVotingPluginAddress: string | null;
-    memberAccessPluginAddress: string | null;
-    spacePluginAddress: string | null;
+    memberAccessPluginAddress: string;
+    spacePluginAddress: string;
     spaceEditors: { nodes: { accountId: string }[] };
     spaceMembers: { nodes: { accountId: string }[] };
     createdAtBlock: string;
@@ -140,21 +140,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   }
 
   const networkSpace = result.space;
-
-  const spaceConfig = networkSpace.metadata.nodes[0] as SubstreamEntity | undefined;
-  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
-
-  const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
-    ? {
-        id: spaceConfig.id,
-        name: spaceConfig.name,
-        description: null,
-        image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-        triples: spaceConfigTriples,
-        types: Entity.types(spaceConfigTriples),
-        nameTripleSpaces: Entity.nameTriples(spaceConfigTriples).map(t => t.space),
-      }
-    : null;
+  const spaceConfigWithImage = getSpaceConfigFromMetadata(networkSpace.metadata.nodes[0]);
 
   return {
     id: networkSpace.id,
