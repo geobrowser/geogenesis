@@ -1,16 +1,10 @@
 import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { graphql } from '~/core/io/subgraph/graphql';
-import {
-  SubstreamEntity,
-  fromNetworkTriples,
-  getSpaceConfigFromMetadata,
-} from '~/core/io/subgraph/network-local-mapping';
-import { SpaceConfigEntity, SpaceWithMetadata } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
+import { SpaceWithMetadata } from '~/core/types';
 
 const getFetchSpacesQuery = (spaceId: string) => `query {
   spaceSubspaces(filter: { parentSpaceId: { equalTo: "${spaceId}" } }) {

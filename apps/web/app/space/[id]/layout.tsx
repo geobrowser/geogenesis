@@ -6,19 +6,13 @@ import { v4 as uuid } from 'uuid';
 
 import * as React from 'react';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { graphql } from '~/core/io/subgraph/graphql';
-import {
-  SubstreamEntity,
-  fromNetworkTriples,
-  getSpaceConfigFromMetadata,
-} from '~/core/io/subgraph/network-local-mapping';
+import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
-import { SpaceConfigEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
