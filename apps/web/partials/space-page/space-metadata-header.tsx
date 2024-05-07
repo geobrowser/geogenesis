@@ -21,16 +21,16 @@ import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
 // import { CsvImport } from '~/design-system/icons/csv-import';
 import { Menu } from '~/design-system/menu';
-import { Text } from '~/design-system/text';
 
 import { HistoryEmpty } from '../history/history-empty';
 import { HistoryItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
-import { AddSubspaceButton } from './space-metadata-header-add-subspace-button';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement;
+  addSubspaceComponent: React.ReactElement;
+  removeSubspaceComponent: React.ReactElement;
   typeNames: string[];
   entityId: string;
 }
@@ -40,6 +40,8 @@ export function SpacePageMetadataHeader({
   membersComponent,
   typeNames,
   entityId,
+  addSubspaceComponent,
+  removeSubspaceComponent,
 }: SpacePageMetadataHeaderProps) {
   const isEditing = useUserIsEditing(spaceId);
   const [open, onOpenChange] = React.useState(false);
@@ -148,7 +150,12 @@ export function SpacePageMetadataHeader({
           trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
           className="max-w-[9rem] whitespace-nowrap"
         >
-          {isEditing && <AddSubspaceButton />}
+          {isEditing && (
+            <>
+              {addSubspaceComponent}
+              {removeSubspaceComponent}
+            </>
+          )}
 
           <button
             className="flex w-full items-center bg-white px-3 py-2 text-grey-04 hover:bg-bg hover:text-text"
