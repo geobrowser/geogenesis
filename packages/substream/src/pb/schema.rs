@@ -273,19 +273,17 @@ pub struct VotesCast {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MemberApproved {
+pub struct MemberAdded {
     #[prost(string, tag="1")]
-    pub onchain_proposal_id: ::prost::alloc::string::String,
+    pub member_address: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
-    pub approver: ::prost::alloc::string::String,
-    #[prost(string, tag="3")]
     pub membership_plugin_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MembersApproved {
+pub struct MembersAdded {
     #[prost(message, repeated, tag="1")]
-    pub members: ::prost::alloc::vec::Vec<MemberApproved>,
+    pub members: ::prost::alloc::vec::Vec<MemberAdded>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -313,6 +311,6 @@ pub struct GeoOutput {
     #[prost(message, repeated, tag="11")]
     pub executed_proposals: ::prost::alloc::vec::Vec<ProposalExecuted>,
     #[prost(message, repeated, tag="12")]
-    pub members_approved: ::prost::alloc::vec::Vec<MemberApproved>,
+    pub members_added: ::prost::alloc::vec::Vec<MemberAdded>,
 }
 // @@protoc_insertion_point(module)

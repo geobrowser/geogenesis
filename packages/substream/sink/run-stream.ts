@@ -11,8 +11,8 @@ import { handleEditorsAdded } from './events/editors-added/handler';
 import { ZodEditorsAddedStreamResponse } from './events/editors-added/parser';
 import { getInitialProposalsForSpaces } from './events/initial-proposal-created/get-initial-proposals';
 import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
-import { handleMembersApproved } from './events/members-approved/handler';
-import { ZodMembersApprovedStreamResponse } from './events/members-approved/parser';
+import { handleMembersAdded } from './events/members-added/handler';
+import { ZodMembersAddedStreamResponse } from './events/members-added/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
 import { getContentProposalFromProcessedProposalIpfsUri } from './events/proposal-processed/get-content-proposal-from-processed-proposal';
@@ -107,7 +107,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       connectTransport: transport,
       substreamPackage,
       outputModule: 'geo_out',
-      productionMode: true,
+      productionMode: false,
       // The caller determines which block or cursor to start from based on
       // error handling, CLI flags, cache state, etc. We default to cursor
       // if it exists or start from the passed in block if not.
@@ -170,11 +170,29 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
           const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
           const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
-          const membersApproved = ZodMembersApprovedStreamResponse.safeParse(jsonOutput);
+          const membersAdded = ZodMembersAddedStreamResponse.safeParse(jsonOutput);
+          // members removed
+          // editors added
+          // editors removed
+
+          const hasValidEvent =
+            spacePluginCreatedResponse.success ||
+            governancePluginsCreatedResponse.success ||
+            subspacesAdded.success ||
+            subspacesRemoved.success ||
+            editorsAddedResponse.success ||
+            proposalCreatedResponse.success ||
+            proposalProcessedResponse.success ||
+            votesCast.success ||
+            profilesRegistered.success ||
+            executedProposals.success ||
+            membersAdded.success;
+
+          if (hasValidEvent) {
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
+          }
 
           if (profilesRegistered.success) {
-            console.info(`==================== @BLOCK ${blockNumber} ====================`);
-
             yield* _(
               handleOnchainProfilesRegistered(profilesRegistered.data.profilesRegistered, {
                 blockNumber,
@@ -186,8 +204,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (spacePluginCreatedResponse.success) {
-            console.info(`==================== @BLOCK ${blockNumber} ====================`);
-
             yield* _(
               handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
                 blockNumber,
@@ -199,8 +215,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (governancePluginsCreatedResponse.success) {
-            console.info(`==================== @BLOCK ${blockNumber} ====================`);
-
             yield* _(
               handleGovernancePluginCreated(governancePluginsCreatedResponse.data.governancePluginsCreated, {
                 blockNumber,
@@ -212,8 +226,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (subspacesAdded.success) {
-            console.log('==================== @BLOCK', blockNumber, '====================');
-
             yield* _(
               handleSubspacesAdded(subspacesAdded.data.subspacesAdded, {
                 blockNumber,
@@ -225,8 +237,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (subspacesRemoved.success) {
-            console.log('==================== @BLOCK', blockNumber, '====================');
-
             yield* _(
               handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved, {
                 blockNumber,
@@ -238,8 +248,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (editorsAddedResponse.success) {
-            console.info(`==================== @BLOCK ${blockNumber} ====================`);
-
             yield* _(
               handleEditorsAdded(editorsAddedResponse.data.editorsAdded, {
                 blockNumber,
@@ -251,8 +259,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (proposalCreatedResponse.success) {
-            console.info(`==================== @BLOCK ${blockNumber} ====================`);
-
             yield* _(
               handleProposalsCreated(proposalCreatedResponse.data.proposalsCreated, {
                 blockNumber,
@@ -264,8 +270,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (proposalProcessedResponse.success) {
-            console.info(`==================== @BLOCK ${blockNumber} ====================`);
-
             // Since there are potentially two handlers that we need to run, we abstract out the common
             // data fetching needed for both here, and pass the result to the two handlers. This breaks
             // from the normalized pattern where we have a single handler for every event. For this event
@@ -313,11 +317,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
-          if (membersApproved.success) {
-            console.info(`==================== @BLOCK ${blockNumber} ====================`);
-
+          if (membersAdded.success) {
             yield* _(
-              handleMembersApproved(membersApproved.data.membersApproved, {
+              handleMembersAdded(membersAdded.data.membersAdded, {
                 blockNumber,
                 cursor,
                 timestamp,
@@ -327,8 +329,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (executedProposals.success) {
-            console.info(`==================== @BLOCK ${blockNumber} ====================`);
-
             yield* _(
               handleProposalsExecuted(executedProposals.data.executedProposals, {
                 blockNumber,
@@ -340,8 +340,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (votesCast.success) {
-            console.info(`==================== @BLOCK ${blockNumber} ====================`);
-
             yield* _(
               handleVotesCast(votesCast.data.votesCast, {
                 blockNumber,

@@ -103,7 +103,7 @@ modules:
     output:
       type: proto:schema.ProposalsExecuted
 
-  - name: map_members_approved
+  - name: map_members_added
     kind: map
     initialBlock: 620
     inputs:
@@ -126,7 +126,7 @@ modules:
       - map: map_subspaces_added
       - map: map_subspaces_removed
       - map: map_proposals_executed
-      - map: map_members_approved
+      - map: map_members_added
       # - map: map_members_removed
       # - map: map_editors_approved
       # - map: map_editors_removed

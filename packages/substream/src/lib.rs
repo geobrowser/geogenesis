@@ -3,8 +3,8 @@ mod pb;
 
 use pb::schema::{
     EditorAdded, EditorsAdded, GeoGovernancePluginCreated, GeoGovernancePluginsCreated, GeoOutput,
-    GeoProfileRegistered, GeoProfilesRegistered, GeoSpaceCreated, GeoSpacesCreated, MemberApproved,
-    MembersApproved, ProposalCreated, ProposalExecuted, ProposalProcessed, ProposalsCreated,
+    GeoProfileRegistered, GeoProfilesRegistered, GeoSpaceCreated, GeoSpacesCreated, MemberAdded,
+    MembersAdded, ProposalCreated, ProposalExecuted, ProposalProcessed, ProposalsCreated,
     ProposalsExecuted, ProposalsProcessed, SubspaceAdded, SubspaceRemoved, SubspacesAdded,
     SubspacesRemoved, SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
 };
@@ -23,10 +23,10 @@ use_contract!(member_access_plugin, "abis/member-access-plugin.json");
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
 use main_voting_plugin::events::{
-    EditorsAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
-    ProposalExecuted as ProposalExecutedEvent, VoteCast as VoteCastEvent,
+    EditorsAdded as EditorsAddedEvent, MemberAdded as MemberAddedEvent,
+    ProposalCreated as ProposalCreatedEvent, ProposalExecuted as ProposalExecutedEvent,
+    VoteCast as VoteCastEvent,
 };
-use member_access_plugin::events::Approved as MemberApprovedEvent;
 use space::events::{
     GeoProposalProcessed, SubspaceAccepted, SubspaceRemoved as GeoSubspaceRemoved,
     SuccessorSpaceCreated as SuccessSpaceCreatedEvent,
@@ -243,17 +243,14 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
 }
 
 #[substreams::handlers::map]
-fn map_members_approved(
-    block: eth::v2::Block,
-) -> Result<MembersApproved, substreams::errors::Error> {
-    let members: Vec<MemberApproved> = block
+fn map_members_added(block: eth::v2::Block) -> Result<MembersAdded, substreams::errors::Error> {
+    let members: Vec<MemberAdded> = block
         .logs()
         .filter_map(|log| {
-            if let Some(members_approved) = MemberApprovedEvent::match_and_decode(log) {
-                return Some(MemberApproved {
+            if let Some(members_approved) = MemberAddedEvent::match_and_decode(log) {
+                return Some(MemberAdded {
                     membership_plugin_address: format_hex(&log.address()),
-                    approver: format_hex(&members_approved.editor),
-                    onchain_proposal_id: members_approved.proposal_id.to_string(),
+                    member_address: format_hex(&members_approved.member),
                 });
             }
 
@@ -261,7 +258,7 @@ fn map_members_approved(
         })
         .collect();
 
-    Ok(MembersApproved { members })
+    Ok(MembersAdded { members })
 }
 
 /**
@@ -405,7 +402,7 @@ fn geo_out(
     subspaces_added: SubspacesAdded,
     subspaces_removed: SubspacesRemoved,
     proposals_executed: ProposalsExecuted,
-    members_approved: MembersApproved,
+    members_added: MembersAdded,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let profiles_registered = profiles_registered.profiles;
     let spaces_created = spaces_created.spaces;
@@ -418,7 +415,7 @@ fn geo_out(
     let added_subspaces = subspaces_added.subspaces;
     let removed_subspaces = subspaces_removed.subspaces;
     let executed_proposals = proposals_executed.executed_proposals;
-    let members_approved = members_approved.members;
+    let members_added = members_added.members;
 
     Ok(GeoOutput {
         profiles_registered,
@@ -432,6 +429,6 @@ fn geo_out(
         subspaces_added: added_subspaces,
         subspaces_removed: removed_subspaces,
         executed_proposals,
-        members_approved,
+        members_added,
     })
 }
