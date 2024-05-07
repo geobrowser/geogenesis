@@ -12,13 +12,13 @@ export function SubspaceRow({ subspace }: { subspace: SpaceToAdd }) {
       href={NavUtils.toSpace(subspace.id)}
       className="flex flex-1 items-center gap-2 p-2 transition-colors duration-150 hover:bg-divider"
     >
-      <div className="relative h-8 w-8 overflow-hidden rounded-full">
+      <div className="relative h-8 w-8 overflow-hidden rounded">
         <Avatar size={32} avatarUrl={subspace.spaceConfig?.image} value={subspace.id} />
       </div>
 
       <div className="space-y-0.5">
         <p className="text-metadataMedium">{subspace.spaceConfig?.name ?? subspace.id}</p>
-        <p className="grey-03 text-footnoteMedium">{subspace.totalMembers}</p>
+        <p className="text-footnoteMedium text-grey-03">{subspace.totalMembers}</p>
       </div>
     </Link>
   );

@@ -30,7 +30,7 @@ interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement;
   addSubspaceComponent: React.ReactElement;
-  removeSubspaceComponent: React.ReactElement;
+  removeSubspaceComponent: React.ReactElement | null;
   typeNames: string[];
   entityId: string;
 }
@@ -150,12 +150,8 @@ export function SpacePageMetadataHeader({
           trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
           className="max-w-[9rem] whitespace-nowrap"
         >
-          {isEditing && (
-            <>
-              {addSubspaceComponent}
-              {removeSubspaceComponent}
-            </>
-          )}
+          {isEditing && addSubspaceComponent}
+          {isEditing && removeSubspaceComponent}
 
           <button
             className="flex w-full items-center bg-white px-3 py-2 text-grey-04 hover:bg-bg hover:text-text"

@@ -27,12 +27,14 @@ import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { AddSubspaceDialog } from '~/partials/space-page/add-subspace-dialog';
+import { RemoveSubspaceDialog } from '~/partials/space-page/remove-subspace-dialog';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceToAdd } from '~/partials/space-page/types';
 
 import { cachedFetchSpace } from './cached-fetch-space';
+import { getSubspacesForSpace } from './fetch-subspaces-for-space';
 
 interface Props {
   params: { id: string };
@@ -181,19 +183,11 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
 const getFetchSpacesQuery = () => `query {
   spaces {
     totalCount
-
     nodes {
       id
-      mainVotingPluginAddress
-      memberAccessPluginAddress
-      spacePluginAddress
-
       spaceMembers {
-        nodes {
-          accountId
-        }
+        totalCount
       }
-      
       metadata {
         nodes {
           id
@@ -324,7 +318,11 @@ async function getSpacesForSubspaceManagement(): Promise<{ totalCount: number; s
 }
 
 export default async function Layout({ children, params }: Props) {
-  const [props, spaces] = await Promise.all([getData(params.id), getSpacesForSubspaceManagement()]);
+  const [props, spaces, subspaces] = await Promise.all([
+    getData(params.id),
+    getSpacesForSubspaceManagement(),
+    getSubspacesForSpace(params.id),
+  ]);
   const coverUrl = Entity.cover(props.triples);
 
   const typeNames = props.space?.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
@@ -347,7 +345,12 @@ export default async function Layout({ children, params }: Props) {
               spaceId={props.spaceId}
               entityId={props.id}
               addSubspaceComponent={<AddSubspaceDialog spaces={spaces.spaces} totalCount={spaces.totalCount} />}
-              removeSubspaceComponent={<AddSubspaceDialog spaces={spaces.spaces} totalCount={spaces.totalCount} />}
+              // If a space does not have any subspaces then
+              removeSubspaceComponent={
+                // subspaces ? (
+                <RemoveSubspaceDialog spaces={subspaces?.subspaces} totalCount={subspaces.totalCount} />
+                // ) : null
+              }
               membersComponent={
                 <React.Suspense fallback={<MembersSkeleton />}>
                   <SpaceEditors spaceId={params.id} />
