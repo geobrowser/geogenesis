@@ -48,8 +48,8 @@ interface ContentProps {
 
 function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: ContentProps) {
   const { storageClient } = Services.useServices();
-  const [query, setQuery] = React.useState('');
   const { data: wallet } = useWalletClient();
+  const [query, setQuery] = React.useState('');
 
   const filteredSpaces = React.useMemo(() => {
     return spaces.filter(e => e.spaceConfig?.name?.toLowerCase().includes(query.toLowerCase()));

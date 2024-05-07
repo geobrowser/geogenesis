@@ -355,7 +355,12 @@ export default async function Layout({ children, params }: Props) {
               // If a space does not have any subspaces then
               removeSubspaceComponent={
                 subspaces ? (
-                  <RemoveSubspaceDialog spaces={subspaces?.subspaces} totalCount={subspaces.totalCount} />
+                  <RemoveSubspaceDialog
+                    mainVotingPluginAddress={props.space.mainVotingPluginAddress}
+                    spacePluginAddress={props.space.spacePluginAddress}
+                    spaces={subspaces?.subspaces}
+                    totalCount={subspaces.totalCount}
+                  />
                 ) : null
               }
               membersComponent={

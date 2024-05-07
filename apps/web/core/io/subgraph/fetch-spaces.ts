@@ -73,8 +73,8 @@ interface NetworkResult {
       id: string;
       isRootSpace: boolean;
       mainVotingPluginAddress: string | null;
-      memberAccessPluginAddress: string | null;
-      spacePluginAddress: string | null;
+      memberAccessPluginAddress: string;
+      spacePluginAddress: string;
       spaceEditors: { nodes: { accountId: string }[] };
       spaceMembers: { nodes: { accountId: string }[] };
       createdAtBlock: string;

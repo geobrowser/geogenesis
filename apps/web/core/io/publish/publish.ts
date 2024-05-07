@@ -5,6 +5,7 @@ import {
   createSubspaceProposal,
   getAcceptSubspaceArguments,
   getProcessGeoProposalArguments,
+  getRemoveSubspaceArguments,
 } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import * as Effect from 'effect/Effect';
@@ -250,15 +251,13 @@ export async function proposeAddSubspace({
   mainVotingPluginAddress,
   subspaceAddress,
 }: ProposeAddSubspaceArgs) {
-  console.log('proposing', { wallet, spacePluginAddress, mainVotingPluginAddress });
-
   // @TODO: Handle adding subspace for spaces with different governance types
   if (!wallet || !mainVotingPluginAddress) {
     return;
   }
 
   const proposal = createSubspaceProposal({
-    name: 'Add subspace to test DAO',
+    name: 'Add subspace',
     type: 'ADD_SUBSPACE',
     spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
   });
@@ -283,6 +282,55 @@ export async function proposeAddSubspace({
     // action that does some other action like "ADD_SUBSPACE" and it will fail since
     // the substream won't index a mismatched proposal type and action callback args.
     args: getAcceptSubspaceArguments({
+      spacePluginAddress: spacePluginAddress as `0x${string}`,
+      ipfsUri: uri,
+      subspaceToAccept: subspaceAddress as `0x${string}`, // Root
+    }),
+  });
+
+  const writeResult = await writeContract(config);
+  console.log('writeResult', writeResult);
+}
+
+// @TODO: Effectify with error handling and UI states
+export async function proposeRemoveSubspace({
+  wallet,
+  storageClient,
+  spacePluginAddress,
+  mainVotingPluginAddress,
+  subspaceAddress,
+}: ProposeAddSubspaceArgs) {
+  // @TODO: Handle adding subspace for spaces with different governance types
+  if (!wallet || !mainVotingPluginAddress) {
+    return;
+  }
+
+  const proposal = createSubspaceProposal({
+    name: 'Remove subspace',
+    type: 'REMOVE_SUBSPACE',
+    spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
+  });
+
+  const hash = await storageClient.uploadObject(proposal);
+  const uri = `ipfs://${hash}` as const;
+
+  // @TODO: This will call different functions depending on the type of space we're
+  // in. Additionally, we'll have wrappers for encoding the args that we can call
+  // directly onchain.
+  const config = await prepareWriteContract({
+    walletClient: wallet,
+    address: mainVotingPluginAddress as `0x${string}`,
+    abi: MainVotingAbi,
+    functionName: 'createProposal',
+    // @TODO: We should abstract the proposal metadata creation and the proposal
+    // action callback args together somehow since right now you have to sync
+    // them both and ensure you're using the correct functions for each content
+    // proposal type.
+    //
+    // What can happen is that you create a "CONTENT" proposal but pass a callback
+    // action that does some other action like "ADD_SUBSPACE" and it will fail since
+    // the substream won't index a mismatched proposal type and action callback args.
+    args: getRemoveSubspaceArguments({
       spacePluginAddress: spacePluginAddress as `0x${string}`,
       ipfsUri: uri,
       subspaceToAccept: subspaceAddress as `0x${string}`, // Root
