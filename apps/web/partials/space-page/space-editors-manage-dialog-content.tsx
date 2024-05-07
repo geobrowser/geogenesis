@@ -8,15 +8,15 @@ import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 
 import { MemberRow } from './space-member-row';
-import { useProposeToRemoveMember } from './use-propose-to-remove-member';
+import { useProposeToRemoveEditor } from './use-propose-to-remove-editor';
 
 interface Props {
   members: OmitStrict<Profile, 'coverUrl'>[];
-  memberAccessPluginAddress: string;
+  votingPluginAddress: string | null;
 }
 
-export function SpaceMembersManageDialogContent({ members, memberAccessPluginAddress }: Props) {
-  const { proposeToRemoveMember } = useProposeToRemoveMember(memberAccessPluginAddress);
+export function SpaceEditorsManageDialogContent({ members, votingPluginAddress }: Props) {
+  const { proposeToRemoveEditor } = useProposeToRemoveEditor(votingPluginAddress);
 
   const [query, setQuery] = React.useState('');
 
@@ -32,7 +32,7 @@ export function SpaceMembersManageDialogContent({ members, memberAccessPluginAdd
         {filteredMembers.map(m => (
           <div key={m.id} className="flex items-center justify-between">
             <MemberRow editor={m} />
-            <SmallButton onClick={() => proposeToRemoveMember(m.address)}>Propose to remove</SmallButton>
+            <SmallButton onClick={() => proposeToRemoveEditor(m.address)}>Propose to remove</SmallButton>
           </div>
         ))}
       </div>

@@ -96,6 +96,6 @@ export enum VotingMode {
 export type ProposalStatus = 'PROPOSED' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'EXECUTED';
 
 export { createGeoId, createTripleId } from './src/id';
-export { getProcessGeoProposalArguments, getAcceptSubspaceArguments, getAcceptEditorArguments, getRemoveSubspaceArguments } from './src/encodings';
+export { getProcessGeoProposalArguments, getAcceptSubspaceArguments, getAcceptEditorArguments, getRemoveEditorArguments, getRemoveSubspaceArguments } from './src/encodings';
 export { createCollection, createCollectionItem, reorderCollectionItem } from './src/collections';
 export { createContentProposal, createSubspaceProposal, createMembershipProposal } from './src/proposals';

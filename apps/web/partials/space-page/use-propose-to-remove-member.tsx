@@ -4,24 +4,18 @@ import { createMembershipProposal } from '@geogenesis/sdk';
 import { MemberAccessAbi } from '@geogenesis/sdk/abis';
 import { getAddress, stringToHex } from 'viem';
 
-import { useAccount } from 'wagmi';
 import { prepareWriteContract, writeContract } from 'wagmi/actions';
 
 import { Services } from '~/core/services';
 
-export function useRequestToBeMember(memberAccessPluginAddress: string | null) {
+export function useProposeToRemoveMember(memberAccessPluginAddress: string) {
   const { storageClient } = Services.useServices();
-  const { address: requestorAddress } = useAccount();
 
-  const write = async () => {
-    if (!memberAccessPluginAddress || !requestorAddress) {
-      return null;
-    }
-
+  const write = async (memberToRemove: string) => {
     const membershipProposalMetadata = createMembershipProposal({
-      name: 'Member request',
-      type: 'ADD_MEMBER',
-      userAddress: getAddress(requestorAddress),
+      name: 'Remove member request',
+      type: 'REMOVE_MEMBER',
+      userAddress: getAddress(memberToRemove) as `0x${string}`,
     });
 
     const hash = await storageClient.uploadObject(membershipProposalMetadata);
@@ -30,8 +24,8 @@ export function useRequestToBeMember(memberAccessPluginAddress: string | null) {
     const config = await prepareWriteContract({
       address: memberAccessPluginAddress as `0x${string}`,
       abi: MemberAccessAbi,
-      functionName: 'proposeNewMember',
-      args: [stringToHex(uri), getAddress(requestorAddress) as `0x${string}`],
+      functionName: 'proposeRemoveMember',
+      args: [stringToHex(uri), getAddress(memberToRemove) as `0x${string}`],
     });
 
     const writer = await writeContract(config);
@@ -39,6 +33,6 @@ export function useRequestToBeMember(memberAccessPluginAddress: string | null) {
   };
 
   return {
-    requestToBeMember: write,
+    proposeToRemoveMember: write,
   };
 }
