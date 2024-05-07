@@ -35,7 +35,7 @@ import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
 import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
-import { Telemetry } from './telemetry/telemetry';
+import { Telemetry } from './telemetry';
 import { createGeoId } from './utils/create-geo-id';
 import { slog } from './utils/slog';
 
