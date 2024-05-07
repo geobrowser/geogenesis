@@ -1,10 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { Space, Triple, TripleWithDateValue, TripleWithStringValue, TripleWithUrlValue, Value } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
-
-import { Subgraph } from '..';
-import { ISubgraph } from '../subgraph';
 
 export const makeStubTriple = (name: string, entityId?: string): Triple => {
   return {
@@ -144,77 +140,7 @@ export const makeStubSpace = (spaceId: string): Space => {
     spaceConfig: null,
     createdAtBlock: '36472399',
     mainVotingPluginAddress: null,
-    memberAccessPluginAddress: null,
-    spacePluginAddress: null,
+    memberAccessPluginAddress: '',
+    spacePluginAddress: '',
   };
 };
-
-export class MockNetwork implements ISubgraph {
-  triples: Triple[] = [];
-
-  constructor({ triples = [] }: { triples: Triple[] } = { triples: [] }) {
-    this.triples = triples;
-  }
-
-  fetchSpaces = async () => {
-    return [];
-  };
-
-  fetchSpace = async () => {
-    return null;
-  };
-
-  fetchTableRowEntities = async () => {
-    return [];
-  };
-
-  fetchTriples = async ({ skip, first }: Subgraph.FetchTriplesOptions) => {
-    return this.triples.slice(skip, skip + first);
-  };
-
-  fetchEntityTableData = async () => {
-    return { rows: [], columns: [], hasNextPage: false };
-  };
-
-  fetchEntities = async () => {
-    return Entity.entitiesFromTriples(this.triples);
-  };
-
-  fetchEntity = async ({ id }: Subgraph.FetchEntityOptions) => {
-    const entity = Entity.entitiesFromTriples(this.triples).find(e => e.id === id);
-    if (!entity) return null;
-    return entity;
-  };
-
-  columns = async () => {
-    return { columns: [], columnsSchema: [] };
-  };
-
-  rows = async () => {
-    return { rows: [], hasNextPage: false };
-  };
-
-  fetchProfile = async () => {
-    return null;
-  };
-
-  fetchOnchainProfile = async () => {
-    return null;
-  };
-
-  fetchProposedVersion = async () => {
-    return null;
-  };
-
-  fetchProposal = async () => {
-    return null;
-  };
-
-  fetchProposedVersions = async () => {
-    return [];
-  };
-
-  fetchProposals = async () => {
-    return [];
-  };
-}

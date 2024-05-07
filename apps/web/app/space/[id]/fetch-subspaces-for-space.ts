@@ -1,18 +1,21 @@
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
+import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { OmitStrict, Space } from '~/core/types';
-
-import { graphql } from './graphql';
-import { SubstreamEntity, getSpaceConfigFromMetadata } from './network-local-mapping';
+import { graphql } from '~/core/io/subgraph/graphql';
+import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
+import { SpaceWithMetadata } from '~/core/types';
 
 const getFetchSpacesQuery = (spaceId: string) => `query {
   spaceSubspaces(filter: { parentSpaceId: { equalTo: "${spaceId}" } }) {
+    totalCount
     nodes {
       subspace {
         id
+
+        spaceMembers {
+          totalCount
+        }
 
         metadata {
           nodes {
@@ -50,29 +53,26 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
   }
 }`;
 
-export type Subspace = OmitStrict<
-  Space,
-  | 'members'
-  | 'createdAtBlock'
-  | 'editors'
-  | 'isRootSpace'
-  | 'mainVotingPluginAddress'
-  | 'memberAccessPluginAddress'
-  | 'spacePluginAddress'
->;
+interface NetworkSubspace {
+  id: string;
+  spaceMembers: { totalCount: number };
+  metadata: { nodes: SubstreamEntity[] };
+}
 
 interface NetworkResult {
   spaceSubspaces: {
-    nodes: {
-      subspace: {
-        id: string;
-        metadata: { nodes: SubstreamEntity[] };
-      };
-    }[];
+    totalCount: number;
+    nodes: NetworkSubspace[];
   };
 }
 
-export async function fetchSubspacesBySpaceId(spaceId: string) {
+interface Subspace {
+  id: string;
+  totalMembers: number;
+  spaceConfig: SpaceWithMetadata | null;
+}
+
+export async function getSubspacesForSpace(spaceId: string) {
   const queryId = uuid();
   const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
 
@@ -103,18 +103,13 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
           );
 
           return {
-            spaceSubspaces: {
-              nodes: [],
-            },
+            spaceSubspaces: { totalCount: 0, nodes: [] },
           };
-
         default:
           console.error(`${error._tag}: Unable to fetch spaces, queryId: ${queryId} endpoint: ${endpoint}`);
 
           return {
-            spaceSubspaces: {
-              nodes: [],
-            },
+            spaceSubspaces: { totalCount: 0, nodes: [] },
           };
       }
     }
@@ -124,17 +119,18 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  // @TODO: Should use space metadata from space object
   const spaces = result.spaceSubspaces.nodes.map((space): Subspace => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.subspace.metadata.nodes[0]);
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.metadata.nodes[0]);
 
     return {
-      id: space.subspace.id,
+      id: space.id,
       spaceConfig: spaceConfigWithImage,
+      totalMembers: space.spaceMembers.totalCount,
     };
   });
 
-  // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
-  // the query level when we index the space config entity as part of a Space.
-  return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
+  return {
+    totalCount: result.spaceSubspaces.totalCount,
+    subspaces: spaces,
+  };
 }

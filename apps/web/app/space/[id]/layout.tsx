@@ -1,10 +1,15 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { Effect, Either } from 'effect';
 import { redirect } from 'next/navigation';
+import { v4 as uuid } from 'uuid';
 
 import * as React from 'react';
 
+import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
+import { graphql } from '~/core/io/subgraph/graphql';
+import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -19,11 +24,15 @@ import { TabGroup } from '~/design-system/tab-group';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { AddSubspaceDialog } from '~/partials/space-page/add-subspace-dialog';
+import { RemoveSubspaceDialog } from '~/partials/space-page/remove-subspace-dialog';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
+import { SpaceToAdd } from '~/partials/space-page/types';
 
 import { cachedFetchSpace } from './cached-fetch-space';
+import { getSubspacesForSpace } from './fetch-subspaces-for-space';
 
 interface Props {
   params: { id: string };
@@ -169,8 +178,136 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   return [...seen.values()].sort((a, b) => a.priority - b.priority);
 }
 
+const getFetchSpacesQuery = () => `query {
+  spaces {
+    totalCount
+    nodes {
+      id
+      spaceMembers {
+        totalCount
+      }
+      metadata {
+        nodes {
+          id
+          name
+          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+            nodes {
+              id
+              attribute {
+                id
+                name
+              }
+              entity {
+                id
+                name
+              }
+              entityValue {
+                id
+                name
+              }
+              numberValue
+              stringValue
+              valueType
+              valueId
+              isProtected
+              space {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+interface NetworkResult {
+  spaces: {
+    totalCount: number;
+    nodes: {
+      id: string;
+      spaceMembers: { totalCount: number };
+      metadata: { nodes: SubstreamEntity[] };
+    }[];
+  };
+}
+
+async function getSpacesForSubspaceManagement(): Promise<{ totalCount: number; spaces: SpaceToAdd[] }> {
+  const queryId = uuid();
+  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+
+  const graphqlFetchEffect = graphql<NetworkResult>({
+    endpoint,
+    query: getFetchSpacesQuery(),
+  });
+
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
+
+      switch (error._tag) {
+        case 'AbortError':
+          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+          // the caller to consume the error channel as an effect. We throw here the typical JS
+          // way so we don't infect more of the codebase with the effect runtime.
+          throw error;
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${endpoint}
+
+            queryString: ${getFetchSpacesQuery()}
+            `,
+            error.message
+          );
+
+          return {
+            spaces: {
+              totalCount: 0,
+              nodes: [],
+            },
+          };
+
+        default:
+          console.error(`${error._tag}: Unable to fetch spaces, queryId: ${queryId} endpoint: ${endpoint}`);
+
+          return {
+            spaces: {
+              totalCount: 0,
+              nodes: [],
+            },
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+
+  const spaces = result.spaces.nodes.map((space): SpaceToAdd => {
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.metadata.nodes[0]);
+
+    return {
+      id: space.id,
+      spaceConfig: spaceConfigWithImage,
+      totalMembers: space.spaceMembers.totalCount,
+    };
+  });
+
+  return {
+    totalCount: result.spaces.totalCount,
+    spaces,
+  };
+}
+
 export default async function Layout({ children, params }: Props) {
-  const props = await getData(params.id);
+  const [props, spaces, subspaces] = await Promise.all([
+    getData(params.id),
+    getSpacesForSubspaceManagement(),
+    getSubspacesForSpace(params.id),
+  ]);
   const coverUrl = Entity.cover(props.triples);
 
   const typeNames = props.space?.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
@@ -192,6 +329,25 @@ export default async function Layout({ children, params }: Props) {
               typeNames={typeNames}
               spaceId={props.spaceId}
               entityId={props.id}
+              addSubspaceComponent={
+                <AddSubspaceDialog
+                  mainVotingPluginAddress={props.space.mainVotingPluginAddress}
+                  spacePluginAddress={props.space.spacePluginAddress}
+                  spaces={spaces.spaces}
+                  totalCount={spaces.totalCount}
+                />
+              }
+              // If a space does not have any subspaces then
+              removeSubspaceComponent={
+                subspaces ? (
+                  <RemoveSubspaceDialog
+                    mainVotingPluginAddress={props.space.mainVotingPluginAddress}
+                    spacePluginAddress={props.space.spacePluginAddress}
+                    spaces={subspaces?.subspaces}
+                    totalCount={subspaces.totalCount}
+                  />
+                ) : null
+              }
               membersComponent={
                 <React.Suspense fallback={<MembersSkeleton />}>
                   <SpaceEditors spaceId={params.id} />
