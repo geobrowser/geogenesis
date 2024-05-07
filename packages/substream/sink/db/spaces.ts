@@ -31,9 +31,18 @@ export class Spaces {
 
   static async findForSpacePlugin(spacePluginAddress: string) {
     const result = await db
-      .selectOne('spaces', { space_plugin_address: getChecksumAddress(spacePluginAddress) }, { columns: ['id'] })
+      .selectOne(
+        'spaces',
+        { space_plugin_address: getChecksumAddress(spacePluginAddress) },
+        { columns: ['id', 'space_plugin_address'] }
+      )
       .run(pool);
 
-    return result ? getChecksumAddress(result.id) : null;
+    return result
+      ? {
+          id: getChecksumAddress(result.id),
+          space_plugin_address: result.space_plugin_address,
+        }
+      : null;
   }
 }
