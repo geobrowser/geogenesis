@@ -43,7 +43,10 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
                     { status: 'accepted' },
                     // @TODO: There might be multiple proposals with the same onchain_proposal_id
                     // if there are proposals from both the voting plugin and the member access plugin.
-                    { onchain_proposal_id: proposal.proposalId, space_id: space, type: 'CONTENT' }
+                    //
+                    // We need to be able to check proposals of different content types based on the
+                    // onchain id, the content type, and which plugin it came from
+                    { onchain_proposal_id: proposal.proposalId, space_id: space }
                   )
                   .run(pool);
               }
@@ -77,10 +80,5 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
         continue;
       }
     }
-
-    slog({
-      requestId: block.requestId,
-      message: `${proposals.length} proposals updated successfully!`,
-    });
   });
 }
