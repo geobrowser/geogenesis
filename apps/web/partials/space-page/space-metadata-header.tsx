@@ -26,6 +26,7 @@ import { Text } from '~/design-system/text';
 import { HistoryEmpty } from '../history/history-empty';
 import { HistoryItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
+import { AddSubspaceButton } from './space-metadata-header-add-subspace-button';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
@@ -145,33 +146,29 @@ export function SpacePageMetadataHeader({
           onOpenChange={onOpenChange}
           align="end"
           trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
-          className="max-w-[7rem] whitespace-nowrap"
+          className="max-w-[9rem] whitespace-nowrap"
         >
+          {isEditing && <AddSubspaceButton />}
+
           <button
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
+            className="flex w-full items-center bg-white px-3 py-2 text-grey-04 hover:bg-bg hover:text-text"
             onClick={onCopyId}
           >
-            <Text variant="button" className="hover:!text-text">
-              Copy ID
-            </Text>
+            <p className="text-button">Copy ID</p>
           </button>
           <Link
             href={`${pathname}/entities`}
             onClick={() => onOpenChange(false)}
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
+            className="flex w-full items-center bg-white px-3 py-2 text-grey-04 hover:bg-bg hover:text-text"
           >
-            <Text variant="button" className="hover:!text-text">
-              View data
-            </Text>
+            <p className="text-button">View data</p>
           </Link>
           {/* <Link
             href={`${pathname}/import`}
             onClick={() => onOpenChange(false)}
-            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2 hover:bg-bg"
           >
-            <Text variant="button" className="hover:!text-text">
-              CSV import
-            </Text>
+              <p className="text-button">CSV import</p>
           </Link> */}
         </Menu>
       </div>
