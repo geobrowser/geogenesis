@@ -2,20 +2,17 @@ pub mod helpers;
 mod pb;
 
 use pb::schema::{
-    EditorAdded, EditorsAdded, EntriesAdded, EntryAdded, GeoGovernancePluginCreated,
-    GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
-    GeoSpaceCreated, GeoSpacesCreated, MemberApproved, MembersApproved, ProposalCreated,
-    ProposalExecuted, ProposalProcessed, ProposalsCreated, ProposalsExecuted, ProposalsProcessed,
-    RoleChange, RoleChanges, SubspaceAdded, SubspaceRemoved, SubspacesAdded, SubspacesRemoved,
-    SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
+    EditorAdded, EditorsAdded, GeoGovernancePluginCreated, GeoGovernancePluginsCreated, GeoOutput,
+    GeoProfileRegistered, GeoProfilesRegistered, GeoSpaceCreated, GeoSpacesCreated, MemberApproved,
+    MembersApproved, ProposalCreated, ProposalExecuted, ProposalProcessed, ProposalsCreated,
+    ProposalsExecuted, ProposalsProcessed, SubspaceAdded, SubspaceRemoved, SubspacesAdded,
+    SubspacesRemoved, SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
 };
 
-use substreams::store::*;
 use substreams_ethereum::{pb::eth, use_contract, Event};
 
 use helpers::*;
 
-use_contract!(legacy_space, "abis/legacy-space.json");
 use_contract!(space, "abis/space.json");
 use_contract!(geo_profile_registry, "abis/geo-profile-registry.json");
 use_contract!(space_setup, "abis/space-setup.json");
@@ -25,7 +22,6 @@ use_contract!(member_access_plugin, "abis/member-access-plugin.json");
 
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
-use legacy_space::events::{EntryAdded as EntryAddedEvent, RoleGranted, RoleRevoked};
 use main_voting_plugin::events::{
     EditorsAdded as EditorsAddedEvent, ProposalCreated as ProposalCreatedEvent,
     ProposalExecuted as ProposalExecutedEvent, VoteCast as VoteCastEvent,
@@ -36,118 +32,6 @@ use space::events::{
     SuccessorSpaceCreated as SuccessSpaceCreatedEvent,
 };
 use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
-
-/**
- * We currently index two sets of contracts representing spaces:
- * 1. The original Space contract with simple permissions rules and no proposals.
- * 2. The new (as of January 23rd, 2024) DAO-based contracts with Plugins representing
- *    the Space and any governance and permissions rules.
- *
- * Having multiple sets of contracts means that we support multiple methods for
- * indexing data from these contracts, including the data representing the contracts
- * themselves like the address of the contract and any plugins (if they exist).
- *
- * We will eventually deprecate the existing contracts and migrate data and permissions
- * in them to the new contract implementation. To do this we will likely only index the
- * old contracts up to a specific block number and then index the new contracts from that
- * block.
- *
- * Alternatively we might look to "snapshot" the state of Geo at a specific timepoint
- * and migrate fully to the new contracts. This would likely coincide with a migration
- * to a separate blockchain.
- *
- * The new, DAO-based contracts are based on Aragon's OSX architecture in which a DAO's
- * onchain functionality is defined by a set of plugin contracts. These plugins can be
- * used for things like governance, membership, or representing an append-only log of
- * IPFS content.
- */
-
-/**
- * Entries represent the content being added to a legacy space (See top level for more
- * info on the different space contracts). This content is stored on IPFS and represented
- * by a content URI.
- *
- * Additionally we map the author of the content and the space the content was added to.
- *
- * The new, DAO-based contracts have a different method and event for adding content to
- * a space which will get mapped in a separate handler.
- */
-#[substreams::handlers::map]
-fn map_entries_added(block: eth::v2::Block) -> Result<EntriesAdded, substreams::errors::Error> {
-    let entries = block
-        .logs()
-        .filter_map(|log| {
-            if let Some(entry) = EntryAddedEvent::match_and_decode(log) {
-                let tx_hash = format_hex(&log.receipt.transaction.hash);
-                let log_index = log.index();
-                let block_number = block.number;
-                let id = format!("{block_number}-{tx_hash}-{log_index}");
-                let address = format_hex(&log.address());
-                Some((entry, id, address))
-            } else {
-                None
-            }
-        })
-        .map(|(entry, id, address)| EntryAdded {
-            id,
-            index: entry.index.to_string(),
-            uri: entry.uri,
-            author: format_hex(&entry.author),
-            space: address,
-        })
-        .collect::<Vec<EntryAdded>>();
-
-    Ok(EntriesAdded { entries })
-}
-
-#[substreams::handlers::store]
-fn store_addresses(entries: EntriesAdded, output: StoreSetIfNotExistsString) {
-    let addresses = entries
-        .entries
-        .iter()
-        .map(|entry| &entry.space)
-        .collect::<Vec<&String>>();
-
-    for address in addresses.iter() {
-        output.set_if_not_exists(0, &address, address);
-    }
-}
-
-/**
- * Roles represent the permissions for a legacy space (See top level comment for more info
- * on the different space contracts). Roles fall into "admin", "editor controller" (moderator),
- * and "editor" (member) roles, each granting different permissions within the space.
- *
- * The new, DAO-based contracts have a different, but similar permissions model which will
- * get mapped in a separate handler.
- */
-#[substreams::handlers::map]
-fn map_roles(block: eth::v2::Block) -> Result<RoleChanges, substreams::errors::Error> {
-    let changes: Vec<RoleChange> = block
-        .logs()
-        .filter_map(|log| {
-            let tx_hash = format_hex(&log.receipt.transaction.hash);
-            let log_index = log.index();
-            let block_number = block.number;
-            let id = format!("{block_number}-{tx_hash}-{log_index}");
-            let address = format_hex(&log.address());
-
-            if let Some(role_granted) = RoleGranted::match_and_decode(log) {
-                let change = ChangeKind::Granted(role_granted);
-                return Some((change, id, address));
-            }
-            if let Some(role_revoked) = RoleRevoked::match_and_decode(log) {
-                let change = ChangeKind::Revoked(role_revoked);
-                return Some((change, id, address));
-            }
-
-            return None;
-        })
-        .map(|(role_change, id, address)| role_change.as_change(id, address))
-        .collect();
-
-    Ok(RoleChanges { changes })
-}
 
 /**
  * Profiles represent the users of Geo. Profiles are registered in the GeoProfileRegistry
@@ -510,8 +394,6 @@ fn map_votes_cast(block: eth::v2::Block) -> Result<VotesCast, substreams::errors
 
 #[substreams::handlers::map]
 fn geo_out(
-    entries: EntriesAdded,
-    role_changes: RoleChanges,
     profiles_registered: GeoProfilesRegistered,
     spaces_created: GeoSpacesCreated,
     governance_plugins_created: GeoGovernancePluginsCreated,
@@ -525,8 +407,6 @@ fn geo_out(
     proposals_executed: ProposalsExecuted,
     members_approved: MembersApproved,
 ) -> Result<GeoOutput, substreams::errors::Error> {
-    let entries = entries.entries;
-    let role_changes = role_changes.changes;
     let profiles_registered = profiles_registered.profiles;
     let spaces_created = spaces_created.spaces;
     let governance_plugins_created = governance_plugins_created.plugins;
@@ -541,8 +421,6 @@ fn geo_out(
     let members_approved = members_approved.members;
 
     Ok(GeoOutput {
-        entries,
-        role_changes,
         profiles_registered,
         spaces_created,
         governance_plugins_created,

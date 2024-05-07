@@ -15,29 +15,6 @@ binaries:
     file: ./target/wasm32-unknown-unknown/release/geo_substream.wasm
 
 modules:
-  - name: map_entries_added
-    kind: map
-    initialBlock: 620
-    inputs:
-      - source: sf.ethereum.type.v2.Block
-    output:
-      type: proto:schema.EntriesAdded
-
-  - name: store_addresses
-    kind: store
-    updatePolicy: set_if_not_exists
-    valueType: string
-    inputs:
-      - map: map_entries_added
-
-  - name: map_roles
-    kind: map
-    initialBlock: 620
-    inputs:
-      - source: sf.ethereum.type.v2.Block
-    output:
-      type: proto:schema.RoleChanges
-
   - name: map_profiles_registered
     kind: map
     initialBlock: 620
@@ -138,8 +115,6 @@ modules:
     kind: map
     initialBlock: 620
     inputs:
-      - map: map_entries_added
-      - map: map_roles
       - map: map_profiles_registered
       - map: map_spaces_created
       - map: map_governance_plugins_created
@@ -152,6 +127,9 @@ modules:
       - map: map_subspaces_removed
       - map: map_proposals_executed
       - map: map_members_approved
+      # - map: map_members_removed
+      # - map: map_editors_approved
+      # - map: map_editors_removed
     output:
       type: proto:schema.GeoOutput
 
