@@ -65,6 +65,8 @@ export const getFetchProposalQuery = (id: string) => `query {
       nodes {
         vote
         account {
+          id
+          
           geoProfiles {
             nodes {
               id
@@ -283,19 +285,19 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
         const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
         const voter = maybeProfile
           ? {
-              id: proposal.createdBy.id,
-              address: proposal.createdBy.id as `0x${string}`,
+              id: v.account.id,
+              address: v.account.id as `0x${string}`,
               avatarUrl: Entity.avatar(profileTriples),
               coverUrl: Entity.cover(profileTriples),
               name: maybeProfile.name,
               profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
             }
           : {
-              id: proposal.createdBy.id,
+              id: v.account.id,
+              address: v.account.id as `0x${string}`,
               name: null,
               avatarUrl: null,
               coverUrl: null,
-              address: proposal.createdBy.id as `0x${string}`,
               profileLink: null,
             };
 

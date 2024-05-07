@@ -1,10 +1,10 @@
 'use client';
 
-import * as React from 'react';
+import { getAcceptSubspaceArguments } from '@geogenesis/sdk';
+
+import { Services } from '~/core/services';
 
 export function AddSubspaceButton() {
-  const [isAdding, setIsAdding] = React.useState(false);
-
   return (
     <>
       <button

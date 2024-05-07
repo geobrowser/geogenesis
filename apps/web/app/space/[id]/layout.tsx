@@ -344,12 +344,19 @@ export default async function Layout({ children, params }: Props) {
               typeNames={typeNames}
               spaceId={props.spaceId}
               entityId={props.id}
-              addSubspaceComponent={<AddSubspaceDialog spaces={spaces.spaces} totalCount={spaces.totalCount} />}
+              addSubspaceComponent={
+                <AddSubspaceDialog
+                  mainVotingPluginAddress={props.space.mainVotingPluginAddress}
+                  spacePluginAddress={props.space.spacePluginAddress}
+                  spaces={spaces.spaces}
+                  totalCount={spaces.totalCount}
+                />
+              }
               // If a space does not have any subspaces then
               removeSubspaceComponent={
-                // subspaces ? (
-                <RemoveSubspaceDialog spaces={subspaces?.subspaces} totalCount={subspaces.totalCount} />
-                // ) : null
+                subspaces ? (
+                  <RemoveSubspaceDialog spaces={subspaces?.subspaces} totalCount={subspaces.totalCount} />
+                ) : null
               }
               membersComponent={
                 <React.Suspense fallback={<MembersSkeleton />}>

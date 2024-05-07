@@ -73,8 +73,8 @@ export type Space = {
   id: string;
   isRootSpace: boolean;
   mainVotingPluginAddress: string | null;
-  memberAccessPluginAddress: string | null;
-  spacePluginAddress: string | null;
+  memberAccessPluginAddress: string;
+  spacePluginAddress: string;
   editors: string[];
   members: string[];
   spaceConfig: SpaceConfigEntity | null;

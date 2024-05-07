@@ -45,18 +45,18 @@ export async function SubspaceProposal({ proposal }: Props) {
               />
             </div>
             <div className="space-y-5">
-              <h2 className="break-all text-mainPage">{subspace?.spaceConfig?.name ?? subspace?.id}</h2>
+              <h2 className="break-all text-mainPage">{space?.spaceConfig?.name ?? space?.id}</h2>
               <div className="flex items-center justify-center gap-2">
                 <span className="flex h-6 items-center rounded-sm bg-text px-1.5 text-breadcrumb text-white">
                   Space
                 </span>
                 <div className="flex h-6 items-center gap-1 rounded-sm bg-divider px-1.5 text-breadcrumb text-text">
                   <EditSmall color="grey-04" />
-                  {subspace.editorsCount}
+                  {space?.editors.length}
                 </div>
                 <div className="flex h-6 items-center gap-1 rounded-sm bg-divider px-1.5 text-breadcrumb text-text">
                   <Member color="grey-04" />
-                  {subspace.membersCount}
+                  {space?.members.length}
                 </div>
               </div>
             </div>
