@@ -26,10 +26,11 @@ import { TabGroup } from '~/design-system/tab-group';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { AddSubspaceDialog, SpaceToAdd } from '~/partials/space-page/add-subspace-dialog';
+import { AddSubspaceDialog } from '~/partials/space-page/add-subspace-dialog';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
+import { SpaceToAdd } from '~/partials/space-page/types';
 
 import { cachedFetchSpace } from './cached-fetch-space';
 

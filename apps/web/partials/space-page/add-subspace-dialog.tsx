@@ -1,24 +1,14 @@
 'use client';
 
-import Link from 'next/link';
-
 import * as React from 'react';
 
-import { SpaceWithMetadata } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
-
-import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
 import { Input } from '~/design-system/input';
 
 import { AddSubspaceButton } from './space-metadata-header-add-subspace-button';
-
-export type SpaceToAdd = {
-  id: string;
-  spaceConfig: SpaceWithMetadata | null;
-  totalMembers: number;
-};
+import { SubspaceRow } from './subspace-row';
+import { SpaceToAdd } from './types';
 
 export function AddSubspaceDialog({ spaces, totalCount }: { totalCount: number; spaces: SpaceToAdd[] }) {
   return (
@@ -50,19 +40,5 @@ function Content({ spaces }: { spaces: SpaceToAdd[] }) {
         ))}
       </div>
     </div>
-  );
-}
-
-function SubspaceRow({ subspace }: { subspace: SpaceToAdd }) {
-  return (
-    <Link
-      href={NavUtils.toSpace(subspace.id)}
-      className="flex flex-1 items-center gap-2 p-2 transition-colors duration-150 hover:bg-divider"
-    >
-      <div className="relative h-8 w-8 overflow-hidden rounded-full">
-        <Avatar size={32} avatarUrl={subspace.spaceConfig?.image} value={subspace.id} />
-      </div>
-      <p className="text-metadataMedium">{subspace.spaceConfig?.name ?? subspace.id}</p>
-    </Link>
   );
 }
