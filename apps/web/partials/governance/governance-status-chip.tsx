@@ -1,9 +1,6 @@
 import { ProposalStatus } from '@geogenesis/sdk';
 
-import { Vote } from '~/core/types';
-import { GeoDate, getProposalTimeRemaining } from '~/core/utils/utils';
-
-import { Avatar } from '~/design-system/avatar';
+import { getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { CheckSuccess } from './check-success';
 
