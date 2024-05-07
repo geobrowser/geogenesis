@@ -17,7 +17,7 @@ describe('get-stream-configuration', () => {
 
     expect(config).toEqual({
       shouldUseCursor: true,
-      startBlockNumber: 36472424, // the default value from env
+      startBlockNumber: 620, // the default value from env
     });
   });
 });
