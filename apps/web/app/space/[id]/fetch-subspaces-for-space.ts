@@ -54,9 +54,11 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
 }`;
 
 interface NetworkSubspace {
-  id: string;
-  spaceMembers: { totalCount: number };
-  metadata: { nodes: SubstreamEntity[] };
+  subspace: {
+    id: string;
+    spaceMembers: { totalCount: number };
+    metadata: { nodes: SubstreamEntity[] };
+  };
 }
 
 interface NetworkResult {
@@ -120,12 +122,12 @@ export async function getSubspacesForSpace(spaceId: string) {
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaceSubspaces.nodes.map((space): Subspace => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.metadata.nodes[0]);
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.subspace.metadata.nodes[0]);
 
     return {
-      id: space.id,
+      id: space.subspace.id,
       spaceConfig: spaceConfigWithImage,
-      totalMembers: space.spaceMembers.totalCount,
+      totalMembers: space.subspace.spaceMembers.totalCount,
     };
   });
 
