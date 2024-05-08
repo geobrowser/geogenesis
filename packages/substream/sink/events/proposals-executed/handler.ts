@@ -36,7 +36,7 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
               //
               // A proposal stores the plugin address that created the proposal so we can disambiguate
               // when we update the proposals here.
-              const [isContentProposal, isAddSubspaceProposal] = await Promise.all([
+              const [isContentProposal, isAddSubspaceProposal, isAddEditorProposal] = await Promise.all([
                 Proposals.getOne({
                   onchainProposalId: proposal.proposalId,
                   pluginAddress: getChecksumAddress(proposal.pluginAddress),
@@ -46,6 +46,11 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
                   onchainProposalId: proposal.proposalId,
                   pluginAddress: getChecksumAddress(proposal.pluginAddress),
                   type: 'ADD_SUBSPACE',
+                }),
+                Proposals.getOne({
+                  onchainProposalId: proposal.proposalId,
+                  pluginAddress: getChecksumAddress(proposal.pluginAddress),
+                  type: 'ADD_EDITOR',
                 }),
               ]);
 
@@ -62,6 +67,14 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
                   onchainProposalId: proposal.proposalId,
                   pluginAddress: getChecksumAddress(proposal.pluginAddress),
                   type: 'ADD_SUBSPACE',
+                });
+              }
+
+              if (isAddEditorProposal) {
+                return await Proposals.setAccepted({
+                  onchainProposalId: proposal.proposalId,
+                  pluginAddress: getChecksumAddress(proposal.pluginAddress),
+                  type: 'ADD_EDITOR',
                 });
               }
 

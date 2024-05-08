@@ -7,8 +7,10 @@ import { Effect, Secret, Stream } from 'effect';
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
 import { Environment } from './environment';
-import { handleEditorsAdded } from './events/initial-editors-added/handler';
-import { ZodEditorsAddedStreamResponse } from './events/initial-editors-added/parser';
+import { handleEditorsAdded } from './events/editor-added/handler';
+import { ZodEditorAddedStreamResponse } from './events/editor-added/parser';
+import { handleInitialEditorsAdded } from './events/initial-editors-added/handler';
+import { ZodInitialEditorsAddedStreamResponse } from './events/initial-editors-added/parser';
 import { getInitialProposalsForSpaces } from './events/initial-proposal-created/get-initial-proposals';
 import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
 import { handleMemberAdded } from './events/member-added/handler';
@@ -164,7 +166,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
           const subspacesAdded = ZodSubspacesAddedStreamResponse.safeParse(jsonOutput);
           const subspacesRemoved = ZodSubspacesRemovedStreamResponse.safeParse(jsonOutput);
-          const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
+          const initialEditorsAddedResponse = ZodInitialEditorsAddedStreamResponse.safeParse(jsonOutput);
           const proposalCreatedResponse = ZodProposalCreatedStreamResponse.safeParse(jsonOutput);
           const proposalProcessedResponse = ZodProposalProcessedStreamResponse.safeParse(jsonOutput);
           const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
@@ -172,7 +174,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
           const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
           // members removed
-          // editors added
+          const editorsAdded = ZodEditorAddedStreamResponse.safeParse(jsonOutput);
           // editors removed
 
           const hasValidEvent =
@@ -180,13 +182,14 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             governancePluginsCreatedResponse.success ||
             subspacesAdded.success ||
             subspacesRemoved.success ||
-            editorsAddedResponse.success ||
+            initialEditorsAddedResponse.success ||
             proposalCreatedResponse.success ||
             proposalProcessedResponse.success ||
             votesCast.success ||
             profilesRegistered.success ||
             executedProposals.success ||
-            membersAdded.success;
+            membersAdded.success ||
+            editorsAdded.success;
 
           if (hasValidEvent) {
             console.info(`==================== @BLOCK ${blockNumber} ====================`);
@@ -247,9 +250,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
-          if (editorsAddedResponse.success) {
+          if (initialEditorsAddedResponse.success) {
             yield* _(
-              handleEditorsAdded(editorsAddedResponse.data.initialEditorsAdded, {
+              handleInitialEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, {
                 blockNumber,
                 cursor,
                 timestamp,
@@ -320,6 +323,17 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           if (membersAdded.success) {
             yield* _(
               handleMemberAdded(membersAdded.data.membersAdded, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          if (editorsAdded.success) {
+            yield* _(
+              handleEditorsAdded(editorsAdded.data.editorsAdded, {
                 blockNumber,
                 cursor,
                 timestamp,

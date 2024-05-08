@@ -2,11 +2,12 @@ pub mod helpers;
 mod pb;
 
 use pb::schema::{
-    EditorAdded, EditorsAdded, GeoGovernancePluginCreated, GeoGovernancePluginsCreated, GeoOutput,
-    GeoProfileRegistered, GeoProfilesRegistered, GeoSpaceCreated, GeoSpacesCreated,
-    InitialEditorAdded, InitialEditorsAdded, MemberAdded, MembersAdded, ProposalCreated,
-    ProposalExecuted, ProposalProcessed, ProposalsCreated, ProposalsExecuted, ProposalsProcessed,
-    SubspaceAdded, SubspaceRemoved, SubspacesAdded, SubspacesRemoved, SuccessorSpaceCreated,
+    EditorAdded, EditorRemoved, EditorsAdded, EditorsRemoved, GeoGovernancePluginCreated,
+    GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
+    GeoSpaceCreated, GeoSpacesCreated, InitialEditorAdded, InitialEditorsAdded, MemberAdded,
+    MemberRemoved, MembersAdded, MembersRemoved, ProposalCreated, ProposalExecuted,
+    ProposalProcessed, ProposalsCreated, ProposalsExecuted, ProposalsProcessed, SubspaceAdded,
+    SubspaceRemoved, SubspacesAdded, SubspacesRemoved, SuccessorSpaceCreated,
     SuccessorSpacesCreated, VoteCast, VotesCast,
 };
 
@@ -24,8 +25,9 @@ use_contract!(member_access_plugin, "abis/member-access-plugin.json");
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
 use main_voting_plugin::events::{
-    EditorAdded as EditorAddedEvent, EditorsAdded as EditorsAddedEvent,
-    MemberAdded as MemberAddedEvent, ProposalCreated as ProposalCreatedEvent,
+    EditorAdded as EditorAddedEvent, EditorRemoved as EditorRemovedEvent,
+    EditorsAdded as EditorsAddedEvent, MemberAdded as MemberAddedEvent,
+    MemberRemoved as MemberRemovedEvent, ProposalCreated as ProposalCreatedEvent,
     ProposalExecuted as ProposalExecutedEvent, VoteCast as VoteCastEvent,
 };
 use space::events::{
@@ -266,6 +268,26 @@ fn map_members_added(block: eth::v2::Block) -> Result<MembersAdded, substreams::
 }
 
 #[substreams::handlers::map]
+fn map_members_removed(block: eth::v2::Block) -> Result<MembersRemoved, substreams::errors::Error> {
+    let members: Vec<MemberRemoved> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(members_approved) = MemberRemovedEvent::match_and_decode(log) {
+                return Some(MemberRemoved {
+                    change_type: "removed".to_string(),
+                    main_voting_plugin_address: format_hex(&log.address()),
+                    member_address: format_hex(&members_approved.member),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(MembersRemoved { members })
+}
+
+#[substreams::handlers::map]
 fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::errors::Error> {
     let editors: Vec<EditorAdded> = block
         .logs()
@@ -283,6 +305,26 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
         .collect();
 
     Ok(EditorsAdded { editors })
+}
+
+#[substreams::handlers::map]
+fn map_editors_removed(block: eth::v2::Block) -> Result<EditorsRemoved, substreams::errors::Error> {
+    let editors: Vec<EditorRemoved> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(members_approved) = EditorRemovedEvent::match_and_decode(log) {
+                return Some(EditorRemoved {
+                    change_type: "removed".to_string(),
+                    main_voting_plugin_address: format_hex(&log.address()),
+                    editor_address: format_hex(&members_approved.editor),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(EditorsRemoved { editors })
 }
 
 /**

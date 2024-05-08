@@ -11,13 +11,13 @@ import { z } from 'zod';
  * 2. They are added as a set of initial editors when first creating the space. This allows
  *    space deployers to bootstrap a set of editors on space creation.
  */
-export const ZodEditorsAdded = z.object({
+export const ZodInitialEditorsAdded = z.object({
   addresses: z.array(z.string()),
   pluginAddress: z.string(),
 });
 
-export type EditorsAdded = z.infer<typeof ZodEditorsAdded>;
+export type InitialEditorsAdded = z.infer<typeof ZodInitialEditorsAdded>;
 
-export const ZodEditorsAddedStreamResponse = z.object({
-  initialEditorsAdded: z.array(ZodEditorsAdded).min(1),
+export const ZodInitialEditorsAddedStreamResponse = z.object({
+  initialEditorsAdded: z.array(ZodInitialEditorsAdded).min(1),
 });

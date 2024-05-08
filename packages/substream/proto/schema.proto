@@ -224,6 +224,16 @@ message MembersAdded {
   repeated MemberAdded members = 1;
 }
 
+message MemberRemoved {
+  string member_address = 1;
+  string main_voting_plugin_address = 2;
+  string change_type = 3;
+}
+
+message MembersRemoved {
+  repeated MemberRemoved members = 1;
+}
+
 message EditorAdded {
   string editor_address = 1;
   string main_voting_plugin_address = 2;
@@ -232,6 +242,16 @@ message EditorAdded {
 
 message EditorsAdded {
   repeated EditorAdded editors = 1;
+}
+
+message EditorRemoved {
+  string editor_address = 1;
+  string main_voting_plugin_address = 2;
+  string change_type = 3;
+}
+
+message EditorsRemoved {
+  repeated EditorRemoved editors = 1;
 }
 
 message GeoOutput {

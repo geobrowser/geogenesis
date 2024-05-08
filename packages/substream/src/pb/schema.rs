@@ -289,6 +289,22 @@ pub struct MembersAdded {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MemberRemoved {
+    #[prost(string, tag="1")]
+    pub member_address: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub main_voting_plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MembersRemoved {
+    #[prost(message, repeated, tag="1")]
+    pub members: ::prost::alloc::vec::Vec<MemberRemoved>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EditorAdded {
     #[prost(string, tag="1")]
     pub editor_address: ::prost::alloc::string::String,
@@ -302,6 +318,22 @@ pub struct EditorAdded {
 pub struct EditorsAdded {
     #[prost(message, repeated, tag="1")]
     pub editors: ::prost::alloc::vec::Vec<EditorAdded>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditorRemoved {
+    #[prost(string, tag="1")]
+    pub editor_address: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub main_voting_plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub change_type: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditorsRemoved {
+    #[prost(message, repeated, tag="1")]
+    pub editors: ::prost::alloc::vec::Vec<EditorRemoved>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
