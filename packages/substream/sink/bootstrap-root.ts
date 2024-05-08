@@ -259,6 +259,7 @@ const proposal: s.proposals.Insertable = {
   onchain_proposal_id: '-1',
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
   created_at: ROOT_SPACE_CREATED_AT,
+  plugin_address: '',
   space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,

@@ -216,7 +216,7 @@ message VotesCast {
 
 message MemberAdded {
   string member_address = 1;
-  string membership_plugin_address = 2;
+  string main_voting_plugin_address = 2;
 }
 
 message MembersAdded {

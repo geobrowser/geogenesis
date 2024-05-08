@@ -140,7 +140,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   }
 
   const networkSpace = result.space;
-  const spaceConfigWithImage = getSpaceConfigFromMetadata(networkSpace.metadata.nodes[0]);
+  const spaceConfigWithImage = getSpaceConfigFromMetadata(networkSpace.id, networkSpace.metadata.nodes[0]);
 
   return {
     id: networkSpace.id,

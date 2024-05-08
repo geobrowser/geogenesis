@@ -1837,6 +1837,12 @@ declare module 'zapatos/schema' {
       */
       onchain_proposal_id: string;
       /**
+      * **proposals.plugin_address**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      plugin_address: string;
+      /**
       * **proposals.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -1916,6 +1922,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       onchain_proposal_id: string;
+      /**
+      * **proposals.plugin_address**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      plugin_address: string;
       /**
       * **proposals.space_id**
       * - `text` in database
@@ -1997,6 +2009,12 @@ declare module 'zapatos/schema' {
       */
       onchain_proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposals.plugin_address**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      plugin_address?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposals.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2077,6 +2095,12 @@ declare module 'zapatos/schema' {
       */
       onchain_proposal_id: string | db.Parameter<string> | db.SQLFragment;
       /**
+      * **proposals.plugin_address**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      plugin_address: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **proposals.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2156,6 +2180,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       onchain_proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposals.plugin_address**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      plugin_address?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposals.space_id**
       * - `text` in database

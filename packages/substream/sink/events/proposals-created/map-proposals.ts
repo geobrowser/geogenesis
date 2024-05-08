@@ -45,6 +45,7 @@ export function mapContentProposalsToSchema(
     const proposalToWrite: S.proposals.Insertable = {
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
+      plugin_address: p.pluginAddress,
       name: p.name,
       type: 'CONTENT',
       created_at: Number(p.startTime),
@@ -141,6 +142,7 @@ export function mapSubspaceProposalsToSchema(
     const proposalToWrite: S.proposals.Insertable = {
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
+      plugin_address: p.pluginAddress,
       name: p.name,
       type: p.type,
       created_at: Number(p.startTime),
@@ -191,6 +193,7 @@ export function mapEditorshipProposalsToSchema(
     const proposalToWrite: S.proposals.Insertable = {
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
+      plugin_address: p.pluginAddress,
       name: p.name,
       type: p.type,
       created_at: Number(p.startTime),
@@ -248,6 +251,7 @@ export function mapMembershipProposalsToSchema(
     const proposalToWrite: S.proposals.Insertable = {
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
+      plugin_address: p.pluginAddress,
       name: p.name,
       type: p.type,
       created_at: Number(p.startTime),

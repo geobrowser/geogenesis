@@ -328,9 +328,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
-          if (executedProposals.success) {
+          if (votesCast.success) {
             yield* _(
-              handleProposalsExecuted(executedProposals.data.executedProposals, {
+              handleVotesCast(votesCast.data.votesCast, {
                 blockNumber,
                 cursor,
                 timestamp,
@@ -339,9 +339,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
-          if (votesCast.success) {
+          if (executedProposals.success) {
             yield* _(
-              handleVotesCast(votesCast.data.votesCast, {
+              handleProposalsExecuted(executedProposals.data.executedProposals, {
                 blockNumber,
                 cursor,
                 timestamp,

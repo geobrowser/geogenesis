@@ -2,9 +2,10 @@ import { Effect, Either } from 'effect';
 import * as db from 'zapatos/db';
 
 import type { ProposalExecuted } from './parser';
-import { Spaces } from '~/sink/db';
+import { Proposals } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
+import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
 
@@ -28,27 +29,54 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
         proposalsExecuted.map(proposal => {
           return Effect.tryPromise({
             try: async () => {
-              // @TODO: There might be executed proposals coming from both the member access plugin
-              // and the voting plugin, so we need to handle both cases.
+              // There might be executed proposals coming from both the member access plugin
+              // and the voting plugin, so we need to handle both cases. Each plugin contract keeps
+              // of its own onchain ids, so there might be clashes between onchain ids for proposals
+              // created in different plugins.
               //
-              // Alternatively we use the `Approved` event to update events coming from the member
-              // access plugin. I'm not sure if overloading the ProposalExecuted event for multiple
-              // proposal types is better than using unique events for each proposal type.
-              const space = await Spaces.findForVotingPlugin(proposal.pluginAddress);
+              // A proposal stores the plugin address that created the proposal so we can disambiguate
+              // when we update the proposals here.
+              const [isContentProposal, isAddSubspaceProposal] = await Promise.all([
+                Proposals.getOne({
+                  onchainProposalId: proposal.proposalId,
+                  pluginAddress: getChecksumAddress(proposal.pluginAddress),
+                  type: 'CONTENT',
+                }),
+                Proposals.getOne({
+                  onchainProposalId: proposal.proposalId,
+                  pluginAddress: getChecksumAddress(proposal.pluginAddress),
+                  type: 'ADD_SUBSPACE',
+                }),
+              ]);
 
-              if (space) {
-                return await db
-                  .update(
-                    'proposals',
-                    { status: 'accepted' },
-                    // @TODO: There might be multiple proposals with the same onchain_proposal_id
-                    // if there are proposals from both the voting plugin and the member access plugin.
-                    //
-                    // We need to be able to check proposals of different content types based on the
-                    // onchain id, the content type, and which plugin it came from
-                    { onchain_proposal_id: proposal.proposalId, space_id: space }
-                  )
-                  .run(pool);
+              if (isContentProposal) {
+                return await Proposals.setAccepted({
+                  onchainProposalId: proposal.proposalId,
+                  pluginAddress: getChecksumAddress(proposal.pluginAddress),
+                  type: 'CONTENT',
+                });
+              }
+
+              if (isAddSubspaceProposal) {
+                return await Proposals.setAccepted({
+                  onchainProposalId: proposal.proposalId,
+                  pluginAddress: getChecksumAddress(proposal.pluginAddress),
+                  type: 'ADD_SUBSPACE',
+                });
+              }
+
+              const isAddMemberProposal = await Proposals.getOne({
+                onchainProposalId: proposal.proposalId,
+                pluginAddress: getChecksumAddress(proposal.pluginAddress),
+                type: 'ADD_MEMBER',
+              });
+
+              if (isAddMemberProposal) {
+                return await Proposals.setAccepted({
+                  onchainProposalId: proposal.proposalId,
+                  pluginAddress: getChecksumAddress(proposal.pluginAddress),
+                  type: 'ADD_MEMBER',
+                });
               }
             },
             catch: error => {

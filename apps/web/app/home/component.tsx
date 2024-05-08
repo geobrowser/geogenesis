@@ -151,7 +151,7 @@ type PendingMembershipProposalProps = {
 async function PendingMembershipProposal({ proposal }: PendingMembershipProposalProps) {
   const [proposedMember, space] = await Promise.all([
     fetchProposedMemberForProposal(proposal.id),
-    cachedFetchSpace(proposal.space.id),
+    cachedFetchSpace(proposal.space!.id), // we know the space exists here. @TODO: Encode in type system
   ]);
 
   if (!proposedMember || !space) {

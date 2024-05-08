@@ -75,6 +75,7 @@ export type ContentProposal = Proposal & {
   name: string | null;
   proposalId: string;
   onchainProposalId: string;
+  pluginAddress: string;
   actions: Action[];
 };
 
@@ -88,6 +89,7 @@ export type MembershipProposal = Proposal & {
   name: string | null;
   proposalId: string;
   onchainProposalId: string;
+  pluginAddress: string;
   userAddress: `0x${string}`;
 };
 
@@ -101,6 +103,7 @@ export type EditorshipProposal = Proposal & {
   name: string | null;
   proposalId: string;
   onchainProposalId: string;
+  pluginAddress: string;
   userAddress: `0x${string}`;
 };
 
@@ -114,6 +117,7 @@ export type SubspaceProposal = Proposal & {
   name: string | null;
   proposalId: string;
   onchainProposalId: string;
+  pluginAddress: string;
   subspace: `0x${string}`;
 };
 

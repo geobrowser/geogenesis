@@ -103,6 +103,7 @@ function fetchContentProposalFromIpfs(
           name: validIpfsMetadata.data.name ?? null,
           proposalId: parsedContent.data.proposalId,
           onchainProposalId: '-1',
+          pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // Geobot
           space: getChecksumAddress(maybeSpaceIdForVotingPlugin.id),

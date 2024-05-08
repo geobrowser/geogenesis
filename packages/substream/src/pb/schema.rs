@@ -277,7 +277,7 @@ pub struct MemberAdded {
     #[prost(string, tag="1")]
     pub member_address: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
-    pub membership_plugin_address: ::prost::alloc::string::String,
+    pub main_voting_plugin_address: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

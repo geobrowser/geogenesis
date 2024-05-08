@@ -77,6 +77,7 @@ CREATE TYPE public.vote_type as ENUM ('accept', 'reject');
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,
     onchain_proposal_id text NOT NULL,
+    plugin_address text NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
     name text,
     description text,

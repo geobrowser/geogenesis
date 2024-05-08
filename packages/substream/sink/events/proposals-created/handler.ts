@@ -83,7 +83,8 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
     const writtenAccounts = yield* _(
       Effect.tryPromise({
         try: async () => {
-          return await Accounts.upsert(schemaEditorshipProposals.accounts);
+          const accounts = [...schemaMembershipProposals.accounts, ...schemaEditorshipProposals.accounts];
+          return await Accounts.upsert(accounts);
         },
         catch: error => {
           return new CouldNotWriteAccountsError(String(error));
@@ -147,7 +148,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
 
       slog({
         requestId: block.requestId,
-        message: 'Could not write created proposals',
+        message: `Could not write created proposals: ${error.message}`,
         level: 'error',
       });
 
