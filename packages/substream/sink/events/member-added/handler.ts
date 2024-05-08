@@ -1,7 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { mapMembers } from './map-members';
-import type { MembersAdded } from './parser';
+import type { MemberAdded } from './parser';
 import { SpaceMembers } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
@@ -12,7 +12,7 @@ export class CouldNotWriteAddedMembersError extends Error {
   _tag: 'CouldNotWriteAddedMembersError' = 'CouldNotWriteAddedMembersError';
 }
 
-export function handleMembersAdded(membersAdded: MembersAdded[], block: BlockEvent) {
+export function handleMemberAdded(membersAdded: MemberAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
     const schemaMembers = yield* _(mapMembers(membersAdded, block));

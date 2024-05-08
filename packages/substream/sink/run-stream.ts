@@ -7,12 +7,12 @@ import { Effect, Secret, Stream } from 'effect';
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
 import { Environment } from './environment';
-import { handleEditorsAdded } from './events/editors-added/handler';
-import { ZodEditorsAddedStreamResponse } from './events/editors-added/parser';
+import { handleEditorsAdded } from './events/initial-editors-added/handler';
+import { ZodEditorsAddedStreamResponse } from './events/initial-editors-added/parser';
 import { getInitialProposalsForSpaces } from './events/initial-proposal-created/get-initial-proposals';
 import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
-import { handleMembersAdded } from './events/members-added/handler';
-import { ZodMembersAddedStreamResponse } from './events/members-added/parser';
+import { handleMemberAdded } from './events/member-added/handler';
+import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
 import { getContentProposalFromProcessedProposalIpfsUri } from './events/proposal-processed/get-content-proposal-from-processed-proposal';
@@ -170,7 +170,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
           const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
           const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
-          const membersAdded = ZodMembersAddedStreamResponse.safeParse(jsonOutput);
+          const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
           // members removed
           // editors added
           // editors removed
@@ -249,7 +249,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (editorsAddedResponse.success) {
             yield* _(
-              handleEditorsAdded(editorsAddedResponse.data.editorsAdded, {
+              handleEditorsAdded(editorsAddedResponse.data.initialEditorsAdded, {
                 blockNumber,
                 cursor,
                 timestamp,
@@ -319,7 +319,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (membersAdded.success) {
             yield* _(
-              handleMembersAdded(membersAdded.data.membersAdded, {
+              handleMemberAdded(membersAdded.data.membersAdded, {
                 blockNumber,
                 cursor,
                 timestamp,

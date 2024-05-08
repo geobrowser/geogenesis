@@ -19,5 +19,5 @@ export const ZodEditorsAdded = z.object({
 export type EditorsAdded = z.infer<typeof ZodEditorsAdded>;
 
 export const ZodEditorsAddedStreamResponse = z.object({
-  editorsAdded: z.array(ZodEditorsAdded).min(1),
+  initialEditorsAdded: z.array(ZodEditorsAdded).min(1),
 });

@@ -3,10 +3,11 @@ mod pb;
 
 use pb::schema::{
     EditorAdded, EditorsAdded, GeoGovernancePluginCreated, GeoGovernancePluginsCreated, GeoOutput,
-    GeoProfileRegistered, GeoProfilesRegistered, GeoSpaceCreated, GeoSpacesCreated, MemberAdded,
-    MembersAdded, ProposalCreated, ProposalExecuted, ProposalProcessed, ProposalsCreated,
-    ProposalsExecuted, ProposalsProcessed, SubspaceAdded, SubspaceRemoved, SubspacesAdded,
-    SubspacesRemoved, SuccessorSpaceCreated, SuccessorSpacesCreated, VoteCast, VotesCast,
+    GeoProfileRegistered, GeoProfilesRegistered, GeoSpaceCreated, GeoSpacesCreated,
+    InitialEditorAdded, InitialEditorsAdded, MemberAdded, MembersAdded, ProposalCreated,
+    ProposalExecuted, ProposalProcessed, ProposalsCreated, ProposalsExecuted, ProposalsProcessed,
+    SubspaceAdded, SubspaceRemoved, SubspacesAdded, SubspacesRemoved, SuccessorSpaceCreated,
+    SuccessorSpacesCreated, VoteCast, VotesCast,
 };
 
 use substreams_ethereum::{pb::eth, use_contract, Event};
@@ -23,9 +24,9 @@ use_contract!(member_access_plugin, "abis/member-access-plugin.json");
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
 use main_voting_plugin::events::{
-    EditorsAdded as EditorsAddedEvent, MemberAdded as MemberAddedEvent,
-    ProposalCreated as ProposalCreatedEvent, ProposalExecuted as ProposalExecutedEvent,
-    VoteCast as VoteCastEvent,
+    EditorAdded as EditorAddedEvent, EditorsAdded as EditorsAddedEvent,
+    MemberAdded as MemberAddedEvent, ProposalCreated as ProposalCreatedEvent,
+    ProposalExecuted as ProposalExecutedEvent, VoteCast as VoteCastEvent,
 };
 use space::events::{
     GeoProposalProcessed, SubspaceAccepted, SubspaceRemoved as GeoSubspaceRemoved,
@@ -220,12 +221,14 @@ fn map_governance_plugins_created(
  * It would be nicer to just output a single array instead of a nested array.
  */
 #[substreams::handlers::map]
-fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::errors::Error> {
-    let editors: Vec<EditorAdded> = block
+fn map_initial_editors_added(
+    block: eth::v2::Block,
+) -> Result<InitialEditorsAdded, substreams::errors::Error> {
+    let editors: Vec<InitialEditorAdded> = block
         .logs()
         .filter_map(|log| {
             if let Some(editors_added) = EditorsAddedEvent::match_and_decode(log) {
-                return Some(EditorAdded {
+                return Some(InitialEditorAdded {
                     addresses: editors_added
                         .editors // contract event calls them members, but conceptually they are editors
                         .iter()
@@ -239,7 +242,7 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
         })
         .collect();
 
-    Ok(EditorsAdded { editors })
+    Ok(InitialEditorsAdded { editors })
 }
 
 #[substreams::handlers::map]
@@ -259,6 +262,25 @@ fn map_members_added(block: eth::v2::Block) -> Result<MembersAdded, substreams::
         .collect();
 
     Ok(MembersAdded { members })
+}
+
+#[substreams::handlers::map]
+fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::errors::Error> {
+    let editors: Vec<EditorAdded> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(members_approved) = EditorAddedEvent::match_and_decode(log) {
+                return Some(EditorAdded {
+                    main_voting_plugin_address: format_hex(&log.address()),
+                    editor_address: format_hex(&members_approved.editor),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(EditorsAdded { editors })
 }
 
 /**
@@ -394,7 +416,7 @@ fn geo_out(
     profiles_registered: GeoProfilesRegistered,
     spaces_created: GeoSpacesCreated,
     governance_plugins_created: GeoGovernancePluginsCreated,
-    editors_added: EditorsAdded,
+    initial_editors_added: InitialEditorsAdded,
     proposals_created: ProposalsCreated,
     votes_cast: VotesCast,
     geo_proposals_processed: ProposalsProcessed,
@@ -403,11 +425,12 @@ fn geo_out(
     subspaces_removed: SubspacesRemoved,
     proposals_executed: ProposalsExecuted,
     members_added: MembersAdded,
+    editors_added: EditorsAdded,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let profiles_registered = profiles_registered.profiles;
     let spaces_created = spaces_created.spaces;
     let governance_plugins_created = governance_plugins_created.plugins;
-    let editors_added = editors_added.editors;
+    let initial_editors_added = initial_editors_added.editors;
     let proposals_created = proposals_created.proposals;
     let votes_cast = votes_cast.votes;
     let proposals_processed = geo_proposals_processed.proposals;
@@ -416,12 +439,13 @@ fn geo_out(
     let removed_subspaces = subspaces_removed.subspaces;
     let executed_proposals = proposals_executed.executed_proposals;
     let members_added = members_added.members;
+    let editors_added = editors_added.editors;
 
     Ok(GeoOutput {
         profiles_registered,
         spaces_created,
         governance_plugins_created,
-        editors_added,
+        initial_editors_added,
         proposals_created,
         votes_cast,
         proposals_processed,
@@ -430,5 +454,6 @@ fn geo_out(
         subspaces_removed: removed_subspaces,
         executed_proposals,
         members_added,
+        editors_added,
     })
 }

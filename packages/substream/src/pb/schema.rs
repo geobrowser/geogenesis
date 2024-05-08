@@ -105,7 +105,7 @@ pub struct GeoGovernancePluginsCreated {
 ///     space deployers to bootstrap a set of editors on space creation.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EditorAdded {
+pub struct InitialEditorAdded {
     /// The event emits an array of addresses. We only emit multiple addresses
     /// when first creating the governance plugin. After that we only emit one
     /// address at a time via proposals.
@@ -116,9 +116,9 @@ pub struct EditorAdded {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EditorsAdded {
+pub struct InitialEditorsAdded {
     #[prost(message, repeated, tag="1")]
-    pub editors: ::prost::alloc::vec::Vec<EditorAdded>,
+    pub editors: ::prost::alloc::vec::Vec<InitialEditorAdded>,
 }
 /// *
 /// Proposals represent a proposal to change the state of a DAO-based space. Proposals can
@@ -287,6 +287,20 @@ pub struct MembersAdded {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditorAdded {
+    #[prost(string, tag="1")]
+    pub editor_address: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub main_voting_plugin_address: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditorsAdded {
+    #[prost(message, repeated, tag="1")]
+    pub editors: ::prost::alloc::vec::Vec<EditorAdded>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeoOutput {
     #[prost(message, repeated, tag="1")]
     pub profiles_registered: ::prost::alloc::vec::Vec<GeoProfileRegistered>,
@@ -295,7 +309,7 @@ pub struct GeoOutput {
     #[prost(message, repeated, tag="3")]
     pub governance_plugins_created: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
     #[prost(message, repeated, tag="4")]
-    pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
+    pub initial_editors_added: ::prost::alloc::vec::Vec<InitialEditorAdded>,
     #[prost(message, repeated, tag="5")]
     pub proposals_created: ::prost::alloc::vec::Vec<ProposalCreated>,
     #[prost(message, repeated, tag="6")]
@@ -312,5 +326,7 @@ pub struct GeoOutput {
     pub executed_proposals: ::prost::alloc::vec::Vec<ProposalExecuted>,
     #[prost(message, repeated, tag="12")]
     pub members_added: ::prost::alloc::vec::Vec<MemberAdded>,
+    #[prost(message, repeated, tag="13")]
+    pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
 }
 // @@protoc_insertion_point(module)

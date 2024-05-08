@@ -25,7 +25,7 @@ export function getAcceptEditorArguments({
       },
     ],
     BigInt(0),
-    VoteOption.Yes,
+    VoteOption.None,
     true,
   ] as const
 }

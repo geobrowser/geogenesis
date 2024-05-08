@@ -89,7 +89,7 @@ message GeoGovernancePluginsCreated {
  * 2. They are added as a set of initial editors when first creating the space. This allows
  *    space deployers to bootstrap a set of editors on space creation.
  */
-message EditorAdded {
+message InitialEditorAdded {
   // The event emits an array of addresses. We only emit multiple addresses
   // when first creating the governance plugin. After that we only emit one
   // address at a time via proposals.
@@ -97,8 +97,8 @@ message EditorAdded {
   string pluginAddress = 2;
 }
 
-message EditorsAdded {
-  repeated EditorAdded editors = 1;
+message InitialEditorsAdded {
+  repeated InitialEditorAdded editors = 1;
 }
 
 /**
@@ -223,11 +223,20 @@ message MembersAdded {
   repeated MemberAdded members = 1;
 }
 
+message EditorAdded {
+  string editor_address = 1;
+  string main_voting_plugin_address = 2;
+}
+
+message EditorsAdded {
+  repeated EditorAdded editors = 1;
+}
+
 message GeoOutput {
   repeated GeoProfileRegistered profiles_registered = 1;
   repeated GeoSpaceCreated spaces_created = 2;
   repeated GeoGovernancePluginCreated governance_plugins_created = 3;
-  repeated EditorAdded editors_added = 4;
+  repeated InitialEditorAdded initial_editors_added = 4;
   repeated ProposalCreated proposals_created = 5;
   repeated VoteCast votes_cast = 6;
   repeated ProposalProcessed proposals_processed = 7;
@@ -236,4 +245,5 @@ message GeoOutput {
   repeated SubspaceRemoved subspaces_removed = 10;
   repeated ProposalExecuted executed_proposals = 11;
   repeated MemberAdded members_added = 12;
+  repeated EditorAdded editors_added = 13;
 }
