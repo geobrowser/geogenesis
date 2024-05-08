@@ -20,8 +20,6 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
     getIsEditorForSpace(spaceId, connectedAddress),
   ]);
 
-  console.log('isEditor', { isEditor, connectedAddress });
-
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
       <div className="max-h-[265px] overflow-hidden overflow-y-auto">

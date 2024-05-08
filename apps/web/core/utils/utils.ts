@@ -271,10 +271,8 @@ export function toTitleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
-export function isProposalEnded(proposal: Proposal) {
-  return (
-    proposal.status === 'REJECTED' || proposal.status === 'ACCEPTED' || proposal.endTime < GeoDate.toGeoTime(Date.now())
-  );
+export function isProposalEnded(status: Proposal['status'], endTime: number) {
+  return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
 }
 
 export function getYesVotePercentage(votes: Vote[], votesCount: number) {

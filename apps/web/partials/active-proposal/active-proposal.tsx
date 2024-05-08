@@ -60,7 +60,7 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
   const yesVotesPercentage = getYesVotePercentage(votes, votesCount);
   const noVotesPercentage = getNoVotePercentage(votes, votesCount);
 
-  const isProposalDone = isProposalEnded(proposal);
+  const isProposalDone = isProposalEnded(proposal.status, proposal.endTime);
   const userVote = connectedAddress ? votes.find(v => v.account.id === getAddress(connectedAddress)) : undefined;
 
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);

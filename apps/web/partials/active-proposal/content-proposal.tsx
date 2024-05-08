@@ -34,7 +34,7 @@ export async function ContentProposal({ proposal }: { proposal: Proposal }) {
   // Depending on whether the proposal is active or ended we need to compare against
   // either the live versions of entities in the proposal or against the state of
   // entities in the proposal as they existed at the time the proposal ended.
-  const { changes, proposals } = isProposalEnded(proposal)
+  const { changes, proposals } = isProposalEnded(proposal.status, proposal.endTime)
     ? await getEndedProposalDiff(proposal, previousProposalId, Subgraph)
     : await getActiveProposalDiff(proposal, previousProposalId, Subgraph);
 
