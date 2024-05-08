@@ -217,6 +217,7 @@ message VotesCast {
 message MemberAdded {
   string member_address = 1;
   string main_voting_plugin_address = 2;
+  string change_type = 3;
 }
 
 message MembersAdded {
@@ -226,6 +227,7 @@ message MembersAdded {
 message EditorAdded {
   string editor_address = 1;
   string main_voting_plugin_address = 2;
+  string change_type = 3;
 }
 
 message EditorsAdded {

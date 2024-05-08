@@ -252,6 +252,7 @@ fn map_members_added(block: eth::v2::Block) -> Result<MembersAdded, substreams::
         .filter_map(|log| {
             if let Some(members_approved) = MemberAddedEvent::match_and_decode(log) {
                 return Some(MemberAdded {
+                    change_type: "added".to_string(),
                     main_voting_plugin_address: format_hex(&log.address()),
                     member_address: format_hex(&members_approved.member),
                 });
@@ -271,6 +272,7 @@ fn map_editors_added(block: eth::v2::Block) -> Result<EditorsAdded, substreams::
         .filter_map(|log| {
             if let Some(members_approved) = EditorAddedEvent::match_and_decode(log) {
                 return Some(EditorAdded {
+                    change_type: "added".to_string(),
                     main_voting_plugin_address: format_hex(&log.address()),
                     editor_address: format_hex(&members_approved.editor),
                 });

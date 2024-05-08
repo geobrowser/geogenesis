@@ -278,6 +278,8 @@ pub struct MemberAdded {
     pub member_address: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
     pub main_voting_plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub change_type: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -292,6 +294,8 @@ pub struct EditorAdded {
     pub editor_address: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
     pub main_voting_plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub change_type: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
