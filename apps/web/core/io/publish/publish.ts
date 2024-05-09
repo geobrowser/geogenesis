@@ -153,69 +153,6 @@ export async function makeProposal({
   await Effect.runPromise(publishProgram);
 }
 
-export async function uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string> {
-  const fileUri = await storageClient.uploadFile(file);
-  return fileUri;
-}
-
-export async function getRole(spaceId: string, role: 'EDITOR_ROLE' | 'ADMIN_ROLE' | 'EDITOR_CONTROLLER_ROLE') {
-  const data = (await readContract({
-    abi: SpaceAbi,
-    address: spaceId as unknown as `0x${string}`,
-    functionName: role,
-  })) as string;
-
-  return data;
-}
-
-export async function grantRole({
-  spaceId,
-  wallet,
-  role,
-  userAddress,
-}: {
-  spaceId: string;
-  wallet: WalletClient;
-  role: string;
-  userAddress: string;
-}) {
-  const contractConfig = await prepareWriteContract({
-    abi: SpaceAbi,
-    address: spaceId as unknown as `0x${string}`,
-    functionName: 'grantRole',
-    walletClient: wallet,
-    args: [role, userAddress],
-  });
-
-  const tx = await writeContract(contractConfig);
-  console.log(`Role granted to ${userAddress}. Transaction hash: ${tx.hash}`);
-  return tx.hash;
-}
-
-export async function revokeRole({
-  spaceId,
-  wallet,
-  role,
-  userAddress,
-}: {
-  spaceId: string;
-  wallet: WalletClient;
-  role: string;
-  userAddress: string;
-}) {
-  const contractConfig = await prepareWriteContract({
-    abi: SpaceAbi,
-    address: spaceId as unknown as `0x${string}`,
-    functionName: 'revokeRole',
-    walletClient: wallet,
-    args: [role, userAddress],
-  });
-
-  const tx = await writeContract(contractConfig);
-  console.log(`Role revoked from ${userAddress}. Transaction hash: ${tx.hash}`);
-  return tx.hash;
-}
-
 export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${string}`): Promise<string> {
   const contractConfig = await prepareWriteContract({
     abi: GeoProfileRegistryAbi,
