@@ -1,4 +1,4 @@
-import type { CreateTripleAction, DeleteTripleAction } from '@geogenesis/action-schema';
+import type { CreateTripleAction, DeleteTripleAction } from './legacy';
 
 export type StringValue = {
   id: string;
@@ -35,7 +35,7 @@ export type UpsertTripleOperation = {
  * @see: Operations data spec is still WIP
  */
 export type DeleteTripleOperation = {
-  op: 'upsertTriple';
+  op: 'deleteTriple';
   spaceId: string;
   entityId: string;
   attributeId: string;

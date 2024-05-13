@@ -1,11 +1,11 @@
-import { SpaceArtifact } from '@geogenesis/contracts';
+import { LegacySpaceAbi } from '@geogenesis/sdk/legacy';
 import { Effect, Schedule } from 'effect';
 
 import { slog } from '~/core/utils/utils';
 
+import { geoAccount, publicClient, walletClient } from '../../client';
 import { GrantRoleError, RenounceRoleError } from '../../errors';
 import { ROLES, Role } from '../../roles';
-import { geoAccount, publicClient, walletClient } from '../../client';
 
 interface TransferRoleConfig {
   spaceAddress: string;
@@ -18,11 +18,11 @@ export function makeTransferRolesEffect(requestId: string, { spaceAddress, userA
     return Effect.tryPromise({
       try: async () => {
         const simulateGrantRoleResult = await publicClient.simulateContract({
-          abi: SpaceArtifact.abi,
+          abi: LegacySpaceAbi,
           address: spaceAddress as `0x${string}`,
           functionName: 'grantRole',
           account: geoAccount,
-          args: [role.binary, userAccount],
+          args: [role.binary as `0x${string}`, userAccount],
         });
 
         const grantRoleSimulateHash = await walletClient.writeContract(simulateGrantRoleResult.request);
@@ -60,11 +60,11 @@ export function makeTransferRolesEffect(requestId: string, { spaceAddress, userA
     return Effect.tryPromise({
       try: async () => {
         const simulateRenounceRoleResult = await publicClient.simulateContract({
-          abi: SpaceArtifact.abi,
+          abi: LegacySpaceAbi,
           address: spaceAddress as `0x${string}`,
           functionName: 'renounceRole',
           account: geoAccount,
-          args: [role.binary, geoAccount.address],
+          args: [role.binary as `0x${string}`, geoAccount.address],
         });
 
         const grantRoleSimulateHash = await walletClient.writeContract(simulateRenounceRoleResult.request);

@@ -1,5 +1,5 @@
-import { SpaceArtifact } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { LegacySpaceAbi } from '@geogenesis/sdk/legacy';
 import * as Effect from 'effect/Effect';
 import * as Schedule from 'effect/Schedule';
 
@@ -199,11 +199,11 @@ export async function makeCompanyEffect(
     return Effect.tryPromise({
       try: async () => {
         const simulateGrantRoleResult = await publicClient.simulateContract({
-          abi: SpaceArtifact.abi,
+          abi: LegacySpaceAbi,
           address: spaceAddress as `0x${string}`,
           functionName: 'grantRole',
           account: geoAccount,
-          args: [role.binary, userAccount],
+          args: [role.binary as `0x${string}`, userAccount],
         });
 
         const grantRoleSimulateHash = await walletClient.writeContract(simulateGrantRoleResult.request);
@@ -241,11 +241,11 @@ export async function makeCompanyEffect(
     return Effect.tryPromise({
       try: async () => {
         const simulateRenounceRoleResult = await publicClient.simulateContract({
-          abi: SpaceArtifact.abi,
+          abi: LegacySpaceAbi,
           address: spaceAddress as `0x${string}`,
           functionName: 'renounceRole',
           account: geoAccount,
-          args: [role.binary, geoAccount.address],
+          args: [role.binary as `0x${string}`, geoAccount.address],
         });
 
         const grantRoleSimulateHash = await walletClient.writeContract(simulateRenounceRoleResult.request);

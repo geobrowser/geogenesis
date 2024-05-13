@@ -1,5 +1,5 @@
-import { SpaceArtifact } from '@geogenesis/contracts';
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { LegacySpaceAbi } from '@geogenesis/sdk/legacy';
 import BeaconProxy from '@openzeppelin/upgrades-core/artifacts/@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol/BeaconProxy.json';
 import * as Effect from 'effect/Effect';
 import * as Schedule from 'effect/Schedule';
@@ -86,7 +86,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
     Effect.tryPromise({
       try: async () => {
         const simulateInitializeResult = await publicClient.simulateContract({
-          abi: SpaceArtifact.abi,
+          abi: LegacySpaceAbi,
           address: contractAddress as `0x${string}`,
           functionName: 'initialize',
           account: geoAccount,
@@ -126,7 +126,7 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
     Effect.tryPromise({
       try: async () => {
         const simulateConfigureRolesResult = await publicClient.simulateContract({
-          abi: SpaceArtifact.abi,
+          abi: LegacySpaceAbi,
           address: contractAddress as `0x${string}`,
           functionName: 'configureRoles',
           account: geoAccount,
