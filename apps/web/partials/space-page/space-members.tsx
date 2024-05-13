@@ -21,15 +21,17 @@ interface Props {
 
 export async function SpaceMembers({ spaceId }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
-  const [isEditor, space] = await Promise.all([
+  const [isMember, space] = await Promise.all([
     getIsMemberForSpace(spaceId, connectedAddress),
     cachedFetchSpace(spaceId),
     // @TODO: Check if the user has already requested to be a member
   ]);
 
-  const memberAccessPlugin = space?.memberAccessPluginAddress ?? null;
+  if (!space) {
+    return null;
+  }
 
-  if (isEditor) {
+  if (isMember) {
     return (
       <div className="flex h-6 items-center gap-1.5 rounded-sm border border-grey-02 px-2 text-breadcrumb shadow-button transition-colors duration-150 focus-within:border-text">
         <SpaceMembersPopover
@@ -44,7 +46,10 @@ export async function SpaceMembers({ spaceId }: Props) {
         <SpaceMembersMenu
           manageMembersComponent={
             <React.Suspense>
-              <SpaceMembersDialogServerContainer spaceId={spaceId} />
+              <SpaceMembersDialogServerContainer
+                spaceId={spaceId}
+                memberAccessPluginAddress={space.memberAccessPluginAddress}
+              />
             </React.Suspense>
           }
           trigger={<ChevronDownSmall color="grey-04" />}
@@ -65,7 +70,7 @@ export async function SpaceMembers({ spaceId }: Props) {
       />
       <div className="h-4 w-px bg-divider" />
 
-      <SpaceMembersJoinButton spaceId={spaceId} memberAccessPluginAddress={memberAccessPlugin} />
+      <SpaceMembersJoinButton spaceId={spaceId} memberAccessPluginAddress={space.memberAccessPluginAddress} />
     </div>
   );
 }

@@ -2,7 +2,12 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
+import {
+  SubstreamEntity,
+  SubstreamProposal,
+  fromNetworkTriples,
+  getSpaceConfigFromMetadata,
+} from '~/core/io/subgraph/network-local-mapping';
 import { OmitStrict, Profile, Vote } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -79,9 +84,82 @@ export async function getActiveProposalsForSpacesWhereEditor(
         type
         onchainProposalId
         name
-        spaceId
+        space {
+          id
+          metadata {
+            nodes {
+              id
+              name
+              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+                nodes {
+                  id
+                  attribute {
+                    id
+                    name
+                  }
+                  entity {
+                    id
+                    name
+                  }
+                  entityValue {
+                    id
+                    name
+                  }
+                  numberValue
+                  stringValue
+                  valueType
+                  valueId
+                  isProtected
+                  space {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+        
         createdAtBlock
-        createdById
+        createdBy {
+          id
+          onchainProfiles {
+            nodes {
+              homeSpaceId
+              id
+            }
+          }
+          geoProfiles {
+            nodes {
+              id
+              name
+              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+                nodes {
+                  id
+                  attribute {
+                    id
+                    name
+                  }
+                  entity {
+                    id
+                    name
+                  }
+                  entityValue {
+                    id
+                    name
+                  }
+                  numberValue
+                  stringValue
+                  valueType
+                  valueId
+                  isProtected
+                  space {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
         createdAt
         startTime
         endTime
@@ -141,6 +219,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
   return {
     totalCount: result.proposals.totalCount,
     proposals: proposals.map(p => {
+      const spaceConfigWithImage = getSpaceConfigFromMetadata(p.space.id, p.space.metadata.nodes[0]);
       const maybeProfile = p.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
       const onchainProfile = p.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
       const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
@@ -166,6 +245,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
       return {
         ...p,
         createdBy: profile,
+        space: spaceConfigWithImage,
       };
     }),
   };

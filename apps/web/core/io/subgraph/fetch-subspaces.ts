@@ -126,7 +126,7 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
 
   // @TODO: Should use space metadata from space object
   const spaces = result.spaceSubspaces.nodes.map((space): Subspace => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.subspace.metadata.nodes[0]);
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.subspace.id, space.subspace.metadata.nodes[0]);
 
     return {
       id: space.subspace.id,

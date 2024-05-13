@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -278,12 +279,12 @@ export function fromNetworkActions(networkActions: SubstreamAction[], spaceId: s
   }
 }
 
-export function getSpaceConfigFromMetadata(metadata: SubstreamEntity | undefined) {
+export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamEntity | undefined) {
   const spaceConfigTriples = fromNetworkTriples(metadata?.triplesByEntityId.nodes ?? []);
 
-  const spaceConfigWithImage: SpaceConfigEntity | null = metadata
+  const spaceConfigWithImage: SpaceConfigEntity = metadata
     ? {
-        id: metadata.id,
+        id: spaceId,
         name: metadata.name,
         description: null,
         image:
@@ -292,7 +293,15 @@ export function getSpaceConfigFromMetadata(metadata: SubstreamEntity | undefined
         types: EntityModule.types(spaceConfigTriples),
         nameTripleSpaces: EntityModule.nameTriples(spaceConfigTriples).map(t => t.space),
       }
-    : null;
+    : {
+        id: spaceId,
+        name: null,
+        description: null,
+        image: PLACEHOLDER_SPACE_IMAGE,
+        triples: [],
+        types: [],
+        nameTripleSpaces: [],
+      };
 
   return spaceConfigWithImage;
 }

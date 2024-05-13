@@ -228,7 +228,7 @@ async function fetchProposedSubspace(proposalId: string, spaceId: string) {
 
   // There should only be one proposed space in a single proposal
   const proposedSpace = proposedSubspaces[0].spaceBySubspace;
-  const spaceConfigWithImage = getSpaceConfigFromMetadata(proposedSpace.metadata.nodes[0]);
+  const spaceConfigWithImage = getSpaceConfigFromMetadata(proposedSpace.id, proposedSpace.metadata.nodes[0]);
 
   return {
     id: proposedSpace.id,

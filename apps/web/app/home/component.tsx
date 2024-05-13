@@ -11,6 +11,7 @@ import {
   getNoVotePercentage,
   getProposalTimeRemaining,
   getYesVotePercentage,
+  isProposalEnded,
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -18,6 +19,8 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { Skeleton } from '~/design-system/skeleton';
 import { TabGroup } from '~/design-system/tab-group';
+
+import { Execute } from '~/partials/active-proposal/execute';
 
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
 import { AcceptOrRejectEditor } from './accept-or-reject-editor';
@@ -130,8 +133,6 @@ async function PendingProposals({ proposalType, connectedAddress }: PendingPropo
           case 'ADD_MEMBER':
           case 'REMOVE_MEMBER':
             return <PendingMembershipProposal key={proposal.id} proposal={proposal} user={user} />;
-          case 'ADD_EDITOR':
-          case 'REMOVE_EDITOR':
           default:
             return <PendingContentProposal key={proposal.id} proposal={proposal} user={user} />;
         }
@@ -151,7 +152,7 @@ type PendingMembershipProposalProps = {
 async function PendingMembershipProposal({ proposal }: PendingMembershipProposalProps) {
   const [proposedMember, space] = await Promise.all([
     fetchProposedMemberForProposal(proposal.id),
-    cachedFetchSpace(proposal.space.id),
+    cachedFetchSpace(proposal.space!.id), // we know the space exists here. @TODO: Encode in type system
   ]);
 
   if (!proposedMember || !space) {
@@ -228,6 +229,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
   const noVotesPercentage = getNoVotePercentage(votes.nodes, votes.totalCount);
 
   const userVote = proposal.userVotes.nodes.length !== 0 ? proposal.userVotes.nodes[0].vote : null;
+  const isProposalDone = isProposalEnded(proposal.status, proposal.endTime);
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
@@ -278,6 +280,15 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
       </div>
       <div className="flex w-full items-center justify-between">
         <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+
+        {process.env.NODE_ENV === 'development' && isProposalDone && (
+          <Execute
+            contractAddress={space?.mainVotingPluginAddress as `0x${string}`}
+            onchainProposalId={proposal.onchainProposalId}
+          >
+            Execute
+          </Execute>
+        )}
 
         {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && !userVote && (
           <AcceptOrRejectEditor

@@ -2,7 +2,7 @@ import { encodeFunctionData, stringToHex } from 'viem'
 import { MainVotingAbi } from '../abis'
 import { VoteOption } from '../..'
 
-export function getAcceptEditorArguments({
+export function getRemoveEditorArguments({
   votingPluginAddress,
   ipfsUri,
   editorAddress,
@@ -19,13 +19,13 @@ export function getAcceptEditorArguments({
         value: BigInt(0),
         data: encodeFunctionData({
           abi: MainVotingAbi,
-          functionName: 'addEditor',
+          functionName: 'removeMember',
           args: [editorAddress],
         }),
       },
     ],
     BigInt(0),
-    VoteOption.None,
+    VoteOption.Yes,
     true,
   ] as const
 }

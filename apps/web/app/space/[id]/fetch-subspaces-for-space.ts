@@ -122,7 +122,7 @@ export async function getSubspacesForSpace(spaceId: string) {
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaceSubspaces.nodes.map((space): Subspace => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.subspace.metadata.nodes[0]);
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.subspace.id, space.subspace.metadata.nodes[0]);
 
     return {
       id: space.subspace.id,

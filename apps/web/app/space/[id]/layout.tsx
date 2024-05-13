@@ -287,7 +287,7 @@ async function getSpacesForSubspaceManagement(): Promise<{ totalCount: number; s
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaces.nodes.map((space): SpaceToAdd => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.metadata.nodes[0]);
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.metadata.nodes[0]);
 
     return {
       id: space.id,

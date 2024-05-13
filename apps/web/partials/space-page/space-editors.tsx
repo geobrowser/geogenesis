@@ -12,6 +12,7 @@ import { SpaceEditorsDialogServerContainer } from './space-editors-dialog-server
 import { SpaceEditorsContent } from './space-editors-popover-content';
 import { SpaceMembersMenu } from './space-members-menu';
 import { SpaceMembersPopover } from './space-members-popover';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   spaceId: string;
@@ -19,7 +20,15 @@ interface Props {
 
 export async function SpaceEditors({ spaceId }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
-  const isEditor = await getIsEditorForSpace(spaceId, connectedAddress);
+  const [isEditor, space] = await Promise.all([
+    getIsEditorForSpace(spaceId, connectedAddress),
+    cachedFetchSpace(spaceId),
+    // @TODO: Check if the user has already requested to be an editor
+  ]);
+
+  if (!space) {
+    return null;
+  }
 
   if (isEditor) {
     return (
@@ -38,7 +47,10 @@ export async function SpaceEditors({ spaceId }: Props) {
           trigger={<ChevronDownSmall color="grey-04" />}
           manageMembersComponent={
             <React.Suspense>
-              <SpaceEditorsDialogServerContainer spaceId={spaceId} />
+              <SpaceEditorsDialogServerContainer
+                spaceId={spaceId}
+                votingPluginAddress={space.mainVotingPluginAddress}
+              />
             </React.Suspense>
           }
         />

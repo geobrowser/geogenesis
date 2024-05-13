@@ -2,7 +2,7 @@ import { Effect, Either } from 'effect';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
-import type { EditorsAdded } from './parser';
+import type { InitialEditorsAdded } from './parser';
 import { Accounts, SpaceEditors, SpaceMembers } from '~/sink/db';
 import { CouldNotWriteAccountsError, SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
@@ -16,7 +16,7 @@ class CouldNotWriteEditorsError extends Error {
   _tag: 'CouldNotWriteEditorsError' = 'CouldNotWriteEditorsError';
 }
 
-export function handleEditorsAdded(editorsAdded: EditorsAdded[], block: BlockEvent) {
+export function handleInitialEditorsAdded(editorsAdded: InitialEditorsAdded[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 

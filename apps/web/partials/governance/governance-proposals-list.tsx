@@ -36,11 +36,6 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
     return acc.set(p.id, p.userVotes.nodes[0].vote);
   }, new Map<string, Vote['vote']>());
 
-  console.log(
-    'proposals',
-    proposals.map(p => p.status)
-  );
-
   return (
     <div className="flex flex-col divide-y divide-grey-01">
       {proposals.map(p => {
