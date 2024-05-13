@@ -1,1258 +1,1341 @@
 export const abi = [
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: 'dao',
-        type: 'address',
+        "internalType": "address",
+        "name": "dao",
+        "type": "address"
       },
       {
-        internalType: 'address',
-        name: 'where',
-        type: 'address',
+        "internalType": "address",
+        "name": "where",
+        "type": "address"
       },
       {
-        internalType: 'address',
-        name: 'who',
-        type: 'address',
+        "internalType": "address",
+        "name": "who",
+        "type": "address"
       },
       {
-        internalType: 'bytes32',
-        name: 'permissionId',
-        type: 'bytes32',
-      },
+        "internalType": "bytes32",
+        "name": "permissionId",
+        "type": "bytes32"
+      }
     ],
-    name: 'DaoUnauthorized',
-    type: 'error',
+    "name": "DaoUnauthorized",
+    "type": "error"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint64',
-        name: 'limit',
-        type: 'uint64',
+        "internalType": "uint64",
+        "name": "limit",
+        "type": "uint64"
       },
       {
-        internalType: 'uint64',
-        name: 'actual',
-        type: 'uint64',
-      },
+        "internalType": "uint64",
+        "name": "actual",
+        "type": "uint64"
+      }
     ],
-    name: 'DateOutOfBounds',
-    type: 'error',
+    "name": "DateOutOfBounds",
+    "type": "error"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint64',
-        name: 'limit',
-        type: 'uint64',
+        "internalType": "uint64",
+        "name": "limit",
+        "type": "uint64"
       },
       {
-        internalType: 'uint64',
-        name: 'actual',
-        type: 'uint64',
-      },
+        "internalType": "uint64",
+        "name": "actual",
+        "type": "uint64"
+      }
     ],
-    name: 'DurationOutOfBounds',
-    type: 'error',
+    "name": "DurationOutOfBounds",
+    "type": "error"
   },
   {
-    inputs: [
+    "inputs": [],
+    "name": "EmptyContent",
+    "type": "error"
+  },
+  {
+    "inputs": [
       {
-        internalType: 'address',
-        name: 'member',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
     ],
-    name: 'InvalidAddresslistUpdate',
-    type: 'error',
+    "name": "InvalidAddresslistUpdate",
+    "type": "error"
   },
   {
-    inputs: [],
-    name: 'NoEditorsLeft',
-    type: 'error',
+    "inputs": [],
+    "name": "NoEditorsLeft",
+    "type": "error"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: 'caller',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "caller",
+        "type": "address"
+      }
     ],
-    name: 'NotAMember',
-    type: 'error',
+    "name": "NotAMember",
+    "type": "error"
   },
   {
-    inputs: [],
-    name: 'OnlyCreatorCanCancel',
-    type: 'error',
+    "inputs": [],
+    "name": "OnlyCreatorCanCancel",
+    "type": "error"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: 'length',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "length",
+        "type": "uint256"
+      }
     ],
-    name: 'OnlyOneEditorPerCall',
-    type: 'error',
+    "name": "OnlyOneEditorPerCall",
+    "type": "error"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: 'sender',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      }
     ],
-    name: 'ProposalCreationForbidden',
-    type: 'error',
+    "name": "ProposalCreationForbidden",
+    "type": "error"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: 'proposalId',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
     ],
-    name: 'ProposalExecutionForbidden',
-    type: 'error',
+    "name": "ProposalExecutionForbidden",
+    "type": "error"
   },
   {
-    inputs: [],
-    name: 'ProposalIsNotOpen',
-    type: 'error',
+    "inputs": [],
+    "name": "ProposalIsNotOpen",
+    "type": "error"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: 'limit',
-        type: 'uint256',
+        "internalType": "uint256",
+        "name": "limit",
+        "type": "uint256"
       },
       {
-        internalType: 'uint256',
-        name: 'actual',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "actual",
+        "type": "uint256"
+      }
     ],
-    name: 'RatioOutOfBounds',
-    type: 'error',
+    "name": "RatioOutOfBounds",
+    "type": "error"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: 'proposalId',
-        type: 'uint256',
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
       },
       {
-        internalType: 'address',
-        name: 'account',
-        type: 'address',
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
       },
       {
-        internalType: 'enum IMajorityVoting.VoteOption',
-        name: 'voteOption',
-        type: 'uint8',
-      },
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "voteOption",
+        "type": "uint8"
+      }
     ],
-    name: 'VoteCastForbidden',
-    type: 'error',
+    "name": "VoteCastForbidden",
+    "type": "error"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: false,
-        internalType: 'address',
-        name: 'previousAdmin',
-        type: 'address',
+        "indexed": false,
+        "internalType": "address",
+        "name": "previousAdmin",
+        "type": "address"
       },
       {
-        indexed: false,
-        internalType: 'address',
-        name: 'newAdmin',
-        type: 'address',
-      },
+        "indexed": false,
+        "internalType": "address",
+        "name": "newAdmin",
+        "type": "address"
+      }
     ],
-    name: 'AdminChanged',
-    type: 'event',
+    "name": "AdminChanged",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: true,
-        internalType: 'address',
-        name: 'beacon',
-        type: 'address',
-      },
+        "indexed": true,
+        "internalType": "address",
+        "name": "beacon",
+        "type": "address"
+      }
     ],
-    name: 'BeaconUpgraded',
-    type: 'event',
+    "name": "BeaconUpgraded",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: false,
-        internalType: 'address',
-        name: 'editor',
-        type: 'address',
+        "indexed": false,
+        "internalType": "address",
+        "name": "dao",
+        "type": "address"
       },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "editor",
+        "type": "address"
+      }
     ],
-    name: 'EditorAdded',
-    type: 'event',
+    "name": "EditorAdded",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: false,
-        internalType: 'address',
-        name: 'editor',
-        type: 'address',
+        "indexed": false,
+        "internalType": "address",
+        "name": "dao",
+        "type": "address"
       },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "editor",
+        "type": "address"
+      }
     ],
-    name: 'EditorRemoved',
-    type: 'event',
+    "name": "EditorRemoved",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: false,
-        internalType: 'address[]',
-        name: 'editors',
-        type: 'address[]',
-      },
+        "indexed": false,
+        "internalType": "address[]",
+        "name": "editors",
+        "type": "address[]"
+      }
     ],
-    name: 'EditorsAdded',
-    type: 'event',
+    "name": "EditorsAdded",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: false,
-        internalType: 'uint8',
-        name: 'version',
-        type: 'uint8',
-      },
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "version",
+        "type": "uint8"
+      }
     ],
-    name: 'Initialized',
-    type: 'event',
+    "name": "Initialized",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: false,
-        internalType: 'address',
-        name: 'member',
-        type: 'address',
+        "indexed": false,
+        "internalType": "address",
+        "name": "dao",
+        "type": "address"
       },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
     ],
-    name: 'MemberAdded',
-    type: 'event',
+    "name": "MemberAdded",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: false,
-        internalType: 'address',
-        name: 'member',
-        type: 'address',
+        "indexed": false,
+        "internalType": "address",
+        "name": "dao",
+        "type": "address"
       },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
     ],
-    name: 'MemberRemoved',
-    type: 'event',
+    "name": "MemberRemoved",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: false,
-        internalType: 'uint256',
-        name: 'proposalId',
-        type: 'uint256',
-      },
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
     ],
-    name: 'ProposalCanceled',
-    type: 'event',
+    "name": "ProposalCanceled",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: true,
-        internalType: 'uint256',
-        name: 'proposalId',
-        type: 'uint256',
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
       },
       {
-        indexed: true,
-        internalType: 'address',
-        name: 'creator',
-        type: 'address',
+        "indexed": true,
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
       },
       {
-        indexed: false,
-        internalType: 'uint64',
-        name: 'startDate',
-        type: 'uint64',
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "startDate",
+        "type": "uint64"
       },
       {
-        indexed: false,
-        internalType: 'uint64',
-        name: 'endDate',
-        type: 'uint64',
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "endDate",
+        "type": "uint64"
       },
       {
-        indexed: false,
-        internalType: 'bytes',
-        name: 'metadata',
-        type: 'bytes',
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "metadata",
+        "type": "bytes"
       },
       {
-        components: [
+        "components": [
           {
-            internalType: 'address',
-            name: 'to',
-            type: 'address',
+            "internalType": "address",
+            "name": "to",
+            "type": "address"
           },
           {
-            internalType: 'uint256',
-            name: 'value',
-            type: 'uint256',
+            "internalType": "uint256",
+            "name": "value",
+            "type": "uint256"
           },
           {
-            internalType: 'bytes',
-            name: 'data',
-            type: 'bytes',
-          },
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          }
         ],
-        indexed: false,
-        internalType: 'struct IDAO.Action[]',
-        name: 'actions',
-        type: 'tuple[]',
+        "indexed": false,
+        "internalType": "struct IDAO.Action[]",
+        "name": "actions",
+        "type": "tuple[]"
       },
       {
-        indexed: false,
-        internalType: 'uint256',
-        name: 'allowFailureMap',
-        type: 'uint256',
-      },
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "allowFailureMap",
+        "type": "uint256"
+      }
     ],
-    name: 'ProposalCreated',
-    type: 'event',
+    "name": "ProposalCreated",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: true,
-        internalType: 'uint256',
-        name: 'proposalId',
-        type: 'uint256',
-      },
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
     ],
-    name: 'ProposalExecuted',
-    type: 'event',
+    "name": "ProposalExecuted",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: true,
-        internalType: 'address',
-        name: 'implementation',
-        type: 'address',
-      },
+        "indexed": true,
+        "internalType": "address",
+        "name": "implementation",
+        "type": "address"
+      }
     ],
-    name: 'Upgraded',
-    type: 'event',
+    "name": "Upgraded",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: true,
-        internalType: 'uint256',
-        name: 'proposalId',
-        type: 'uint256',
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
       },
       {
-        indexed: true,
-        internalType: 'address',
-        name: 'voter',
-        type: 'address',
+        "indexed": true,
+        "internalType": "address",
+        "name": "voter",
+        "type": "address"
       },
       {
-        indexed: false,
-        internalType: 'enum IMajorityVoting.VoteOption',
-        name: 'voteOption',
-        type: 'uint8',
+        "indexed": false,
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "voteOption",
+        "type": "uint8"
       },
       {
-        indexed: false,
-        internalType: 'uint256',
-        name: 'votingPower',
-        type: 'uint256',
-      },
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "votingPower",
+        "type": "uint256"
+      }
     ],
-    name: 'VoteCast',
-    type: 'event',
+    "name": "VoteCast",
+    "type": "event"
   },
   {
-    anonymous: false,
-    inputs: [
+    "anonymous": false,
+    "inputs": [
       {
-        indexed: false,
-        internalType: 'enum MajorityVotingBase.VotingMode',
-        name: 'votingMode',
-        type: 'uint8',
+        "indexed": false,
+        "internalType": "enum MajorityVotingBase.VotingMode",
+        "name": "votingMode",
+        "type": "uint8"
       },
       {
-        indexed: false,
-        internalType: 'uint32',
-        name: 'supportThreshold',
-        type: 'uint32',
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "supportThreshold",
+        "type": "uint32"
       },
       {
-        indexed: false,
-        internalType: 'uint32',
-        name: 'minParticipation',
-        type: 'uint32',
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "minParticipation",
+        "type": "uint32"
       },
       {
-        indexed: false,
-        internalType: 'uint64',
-        name: 'duration',
-        type: 'uint64',
-      },
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "duration",
+        "type": "uint64"
+      }
     ],
-    name: 'VotingSettingsUpdated',
-    type: 'event',
+    "name": "VotingSettingsUpdated",
+    "type": "event"
   },
   {
-    inputs: [],
-    name: 'UPDATE_ADDRESSES_PERMISSION_ID',
-    outputs: [
+    "inputs": [],
+    "name": "UPDATE_ADDRESSES_PERMISSION_ID",
+    "outputs": [
       {
-        internalType: 'bytes32',
-        name: '',
-        type: 'bytes32',
-      },
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'UPDATE_VOTING_SETTINGS_PERMISSION_ID',
-    outputs: [
+    "inputs": [],
+    "name": "UPDATE_VOTING_SETTINGS_PERMISSION_ID",
+    "outputs": [
       {
-        internalType: 'bytes32',
-        name: '',
-        type: 'bytes32',
-      },
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'UPGRADE_PLUGIN_PERMISSION_ID',
-    outputs: [
+    "inputs": [],
+    "name": "UPGRADE_PLUGIN_PERMISSION_ID",
+    "outputs": [
       {
-        internalType: 'bytes32',
-        name: '',
-        type: 'bytes32',
-      },
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: '_account',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
+      }
     ],
-    name: 'addEditor',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "name": "addEditor",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: '_account',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
+      }
     ],
-    name: 'addMember',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "name": "addMember",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'addresslistLength',
-    outputs: [
+    "inputs": [],
+    "name": "addresslistLength",
+    "outputs": [
       {
-        internalType: 'uint256',
-        name: '',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_blockNumber',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "_blockNumber",
+        "type": "uint256"
+      }
     ],
-    name: 'addresslistLengthAtBlock',
-    outputs: [
+    "name": "addresslistLengthAtBlock",
+    "outputs": [
       {
-        internalType: 'uint256',
-        name: '',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_proposalId',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      }
     ],
-    name: 'canExecute',
-    outputs: [
+    "name": "canExecute",
+    "outputs": [
       {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_proposalId',
-        type: 'uint256',
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
       },
       {
-        internalType: 'address',
-        name: '_voter',
-        type: 'address',
+        "internalType": "address",
+        "name": "_voter",
+        "type": "address"
       },
       {
-        internalType: 'enum IMajorityVoting.VoteOption',
-        name: '_voteOption',
-        type: 'uint8',
-      },
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "_voteOption",
+        "type": "uint8"
+      }
     ],
-    name: 'canVote',
-    outputs: [
+    "name": "canVote",
+    "outputs": [
       {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_proposalId',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      }
     ],
-    name: 'cancelProposal',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "name": "cancelProposal",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'bytes',
-        name: '_metadata',
-        type: 'bytes',
+        "internalType": "bytes",
+        "name": "_metadata",
+        "type": "bytes"
       },
       {
-        components: [
+        "components": [
           {
-            internalType: 'address',
-            name: 'to',
-            type: 'address',
+            "internalType": "address",
+            "name": "to",
+            "type": "address"
           },
           {
-            internalType: 'uint256',
-            name: 'value',
-            type: 'uint256',
+            "internalType": "uint256",
+            "name": "value",
+            "type": "uint256"
           },
           {
-            internalType: 'bytes',
-            name: 'data',
-            type: 'bytes',
-          },
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          }
         ],
-        internalType: 'struct IDAO.Action[]',
-        name: '_actions',
-        type: 'tuple[]',
+        "internalType": "struct IDAO.Action[]",
+        "name": "_actions",
+        "type": "tuple[]"
       },
       {
-        internalType: 'uint256',
-        name: '_allowFailureMap',
-        type: 'uint256',
+        "internalType": "uint256",
+        "name": "_allowFailureMap",
+        "type": "uint256"
       },
       {
-        internalType: 'enum IMajorityVoting.VoteOption',
-        name: '_voteOption',
-        type: 'uint8',
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "_voteOption",
+        "type": "uint8"
       },
       {
-        internalType: 'bool',
-        name: '_tryEarlyExecution',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "_tryEarlyExecution",
+        "type": "bool"
+      }
     ],
-    name: 'createProposal',
-    outputs: [
+    "name": "createProposal",
+    "outputs": [
       {
-        internalType: 'uint256',
-        name: 'proposalId',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
     ],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'dao',
-    outputs: [
+    "inputs": [],
+    "name": "dao",
+    "outputs": [
       {
-        internalType: 'contract IDAO',
-        name: '',
-        type: 'address',
-      },
+        "internalType": "contract IDAO",
+        "name": "",
+        "type": "address"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'duration',
-    outputs: [
+    "inputs": [],
+    "name": "duration",
+    "outputs": [
       {
-        internalType: 'uint64',
-        name: '',
-        type: 'uint64',
-      },
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_proposalId',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      }
     ],
-    name: 'execute',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "name": "execute",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_proposalId',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      }
     ],
-    name: 'getProposal',
-    outputs: [
+    "name": "getProposal",
+    "outputs": [
       {
-        internalType: 'bool',
-        name: 'open',
-        type: 'bool',
+        "internalType": "bool",
+        "name": "open",
+        "type": "bool"
       },
       {
-        internalType: 'bool',
-        name: 'executed',
-        type: 'bool',
+        "internalType": "bool",
+        "name": "executed",
+        "type": "bool"
       },
       {
-        components: [
+        "components": [
           {
-            internalType: 'enum MajorityVotingBase.VotingMode',
-            name: 'votingMode',
-            type: 'uint8',
+            "internalType": "enum MajorityVotingBase.VotingMode",
+            "name": "votingMode",
+            "type": "uint8"
           },
           {
-            internalType: 'uint32',
-            name: 'supportThreshold',
-            type: 'uint32',
+            "internalType": "uint32",
+            "name": "supportThreshold",
+            "type": "uint32"
           },
           {
-            internalType: 'uint64',
-            name: 'startDate',
-            type: 'uint64',
+            "internalType": "uint64",
+            "name": "startDate",
+            "type": "uint64"
           },
           {
-            internalType: 'uint64',
-            name: 'endDate',
-            type: 'uint64',
+            "internalType": "uint64",
+            "name": "endDate",
+            "type": "uint64"
           },
           {
-            internalType: 'uint64',
-            name: 'snapshotBlock',
-            type: 'uint64',
+            "internalType": "uint64",
+            "name": "snapshotBlock",
+            "type": "uint64"
           },
           {
-            internalType: 'uint256',
-            name: 'minVotingPower',
-            type: 'uint256',
-          },
+            "internalType": "uint256",
+            "name": "minVotingPower",
+            "type": "uint256"
+          }
         ],
-        internalType: 'struct MajorityVotingBase.ProposalParameters',
-        name: 'parameters',
-        type: 'tuple',
+        "internalType": "struct MajorityVotingBase.ProposalParameters",
+        "name": "parameters",
+        "type": "tuple"
       },
       {
-        components: [
+        "components": [
           {
-            internalType: 'uint256',
-            name: 'abstain',
-            type: 'uint256',
+            "internalType": "uint256",
+            "name": "abstain",
+            "type": "uint256"
           },
           {
-            internalType: 'uint256',
-            name: 'yes',
-            type: 'uint256',
+            "internalType": "uint256",
+            "name": "yes",
+            "type": "uint256"
           },
           {
-            internalType: 'uint256',
-            name: 'no',
-            type: 'uint256',
-          },
+            "internalType": "uint256",
+            "name": "no",
+            "type": "uint256"
+          }
         ],
-        internalType: 'struct MajorityVotingBase.Tally',
-        name: 'tally',
-        type: 'tuple',
+        "internalType": "struct MajorityVotingBase.Tally",
+        "name": "tally",
+        "type": "tuple"
       },
       {
-        components: [
+        "components": [
           {
-            internalType: 'address',
-            name: 'to',
-            type: 'address',
+            "internalType": "address",
+            "name": "to",
+            "type": "address"
           },
           {
-            internalType: 'uint256',
-            name: 'value',
-            type: 'uint256',
+            "internalType": "uint256",
+            "name": "value",
+            "type": "uint256"
           },
           {
-            internalType: 'bytes',
-            name: 'data',
-            type: 'bytes',
-          },
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          }
         ],
-        internalType: 'struct IDAO.Action[]',
-        name: 'actions',
-        type: 'tuple[]',
+        "internalType": "struct IDAO.Action[]",
+        "name": "actions",
+        "type": "tuple[]"
       },
       {
-        internalType: 'uint256',
-        name: 'allowFailureMap',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "allowFailureMap",
+        "type": "uint256"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_proposalId',
-        type: 'uint256',
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
       },
       {
-        internalType: 'address',
-        name: '_voter',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "_voter",
+        "type": "address"
+      }
     ],
-    name: 'getVoteOption',
-    outputs: [
+    "name": "getVoteOption",
+    "outputs": [
       {
-        internalType: 'enum IMajorityVoting.VoteOption',
-        name: '',
-        type: 'uint8',
-      },
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "",
+        "type": "uint8"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'implementation',
-    outputs: [
+    "inputs": [],
+    "name": "implementation",
+    "outputs": [
       {
-        internalType: 'address',
-        name: '',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'contract IDAO',
-        name: '_dao',
-        type: 'address',
+        "internalType": "contract IDAO",
+        "name": "_dao",
+        "type": "address"
       },
       {
-        components: [
+        "components": [
           {
-            internalType: 'enum MajorityVotingBase.VotingMode',
-            name: 'votingMode',
-            type: 'uint8',
+            "internalType": "enum MajorityVotingBase.VotingMode",
+            "name": "votingMode",
+            "type": "uint8"
           },
           {
-            internalType: 'uint32',
-            name: 'supportThreshold',
-            type: 'uint32',
+            "internalType": "uint32",
+            "name": "supportThreshold",
+            "type": "uint32"
           },
           {
-            internalType: 'uint32',
-            name: 'minParticipation',
-            type: 'uint32',
+            "internalType": "uint32",
+            "name": "minParticipation",
+            "type": "uint32"
           },
           {
-            internalType: 'uint64',
-            name: 'duration',
-            type: 'uint64',
-          },
+            "internalType": "uint64",
+            "name": "duration",
+            "type": "uint64"
+          }
         ],
-        internalType: 'struct MajorityVotingBase.VotingSettings',
-        name: '_votingSettings',
-        type: 'tuple',
+        "internalType": "struct MajorityVotingBase.VotingSettings",
+        "name": "_votingSettings",
+        "type": "tuple"
       },
       {
-        internalType: 'address[]',
-        name: '_initialEditors',
-        type: 'address[]',
-      },
+        "internalType": "address[]",
+        "name": "_initialEditors",
+        "type": "address[]"
+      }
     ],
-    name: 'initialize',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "name": "initialize",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: '_account',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
+      }
     ],
-    name: 'isEditor',
-    outputs: [
+    "name": "isEditor",
+    "outputs": [
       {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: '_account',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
+      }
     ],
-    name: 'isListed',
-    outputs: [
+    "name": "isListed",
+    "outputs": [
       {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: '_account',
-        type: 'address',
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
       },
       {
-        internalType: 'uint256',
-        name: '_blockNumber',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "_blockNumber",
+        "type": "uint256"
+      }
     ],
-    name: 'isListedAtBlock',
-    outputs: [
+    "name": "isListedAtBlock",
+    "outputs": [
       {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: '_account',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
+      }
     ],
-    name: 'isMember',
-    outputs: [
+    "name": "isMember",
+    "outputs": [
       {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_proposalId',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      }
     ],
-    name: 'isMinParticipationReached',
-    outputs: [
+    "name": "isMinParticipationReached",
+    "outputs": [
       {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_proposalId',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      }
     ],
-    name: 'isSupportThresholdReached',
-    outputs: [
+    "name": "isSupportThresholdReached",
+    "outputs": [
       {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_proposalId',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      }
     ],
-    name: 'isSupportThresholdReachedEarly',
-    outputs: [
+    "name": "isSupportThresholdReachedEarly",
+    "outputs": [
       {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'minParticipation',
-    outputs: [
+    "inputs": [],
+    "name": "minParticipation",
+    "outputs": [
       {
-        internalType: 'uint32',
-        name: '',
-        type: 'uint32',
-      },
+        "internalType": "uint32",
+        "name": "",
+        "type": "uint32"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'pluginType',
-    outputs: [
+    "inputs": [],
+    "name": "pluginType",
+    "outputs": [
       {
-        internalType: 'enum IPlugin.PluginType',
-        name: '',
-        type: 'uint8',
-      },
+        "internalType": "enum IPlugin.PluginType",
+        "name": "",
+        "type": "uint8"
+      }
     ],
-    stateMutability: 'pure',
-    type: 'function',
+    "stateMutability": "pure",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'proposalCount',
-    outputs: [
+    "inputs": [],
+    "name": "proposalCount",
+    "outputs": [
       {
-        internalType: 'uint256',
-        name: '',
-        type: 'uint256',
-      },
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'proxiableUUID',
-    outputs: [
+    "inputs": [
       {
-        internalType: 'bytes32',
-        name: '',
-        type: 'bytes32',
+        "internalType": "contract IDAO",
+        "name": "_subspaceDao",
+        "type": "address"
       },
+      {
+        "internalType": "address",
+        "name": "_spacePlugin",
+        "type": "address"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "name": "proposeAcceptSubspace",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: '_account',
-        type: 'address',
+        "internalType": "string",
+        "name": "_contentUri",
+        "type": "string"
       },
+      {
+        "internalType": "address",
+        "name": "_spacePlugin",
+        "type": "address"
+      }
     ],
-    name: 'removeEditor',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "name": "proposeEdits",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: '_account',
-        type: 'address',
+        "internalType": "contract IDAO",
+        "name": "_subspaceDao",
+        "type": "address"
       },
+      {
+        "internalType": "address",
+        "name": "_spacePlugin",
+        "type": "address"
+      }
     ],
-    name: 'removeMember',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "name": "proposeRemoveSubspace",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'supportThreshold',
-    outputs: [
+    "inputs": [],
+    "name": "proxiableUUID",
+    "outputs": [
       {
-        internalType: 'uint32',
-        name: '',
-        type: 'uint32',
-      },
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'bytes4',
-        name: '_interfaceId',
-        type: 'bytes4',
-      },
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
+      }
     ],
-    name: 'supportsInterface',
-    outputs: [
-      {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
-    ],
-    stateMutability: 'view',
-    type: 'function',
+    "name": "removeEditor",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_blockNumber',
-        type: 'uint256',
-      },
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
+      }
     ],
-    name: 'totalVotingPower',
-    outputs: [
-      {
-        internalType: 'uint256',
-        name: '',
-        type: 'uint256',
-      },
-    ],
-    stateMutability: 'view',
-    type: 'function',
+    "name": "removeMember",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [],
+    "name": "supportThreshold",
+    "outputs": [
       {
-        components: [
+        "internalType": "uint32",
+        "name": "",
+        "type": "uint32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes4",
+        "name": "_interfaceId",
+        "type": "bytes4"
+      }
+    ],
+    "name": "supportsInterface",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_blockNumber",
+        "type": "uint256"
+      }
+    ],
+    "name": "totalVotingPower",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
           {
-            internalType: 'enum MajorityVotingBase.VotingMode',
-            name: 'votingMode',
-            type: 'uint8',
+            "internalType": "enum MajorityVotingBase.VotingMode",
+            "name": "votingMode",
+            "type": "uint8"
           },
           {
-            internalType: 'uint32',
-            name: 'supportThreshold',
-            type: 'uint32',
+            "internalType": "uint32",
+            "name": "supportThreshold",
+            "type": "uint32"
           },
           {
-            internalType: 'uint32',
-            name: 'minParticipation',
-            type: 'uint32',
+            "internalType": "uint32",
+            "name": "minParticipation",
+            "type": "uint32"
           },
           {
-            internalType: 'uint64',
-            name: 'duration',
-            type: 'uint64',
-          },
+            "internalType": "uint64",
+            "name": "duration",
+            "type": "uint64"
+          }
         ],
-        internalType: 'struct MajorityVotingBase.VotingSettings',
-        name: '_votingSettings',
-        type: 'tuple',
-      },
+        "internalType": "struct MajorityVotingBase.VotingSettings",
+        "name": "_votingSettings",
+        "type": "tuple"
+      }
     ],
-    name: 'updateVotingSettings',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "name": "updateVotingSettings",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: 'newImplementation',
-        type: 'address',
-      },
+        "internalType": "address",
+        "name": "newImplementation",
+        "type": "address"
+      }
     ],
-    name: 'upgradeTo',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "name": "upgradeTo",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'address',
-        name: 'newImplementation',
-        type: 'address',
+        "internalType": "address",
+        "name": "newImplementation",
+        "type": "address"
       },
       {
-        internalType: 'bytes',
-        name: 'data',
-        type: 'bytes',
-      },
+        "internalType": "bytes",
+        "name": "data",
+        "type": "bytes"
+      }
     ],
-    name: 'upgradeToAndCall',
-    outputs: [],
-    stateMutability: 'payable',
-    type: 'function',
+    "name": "upgradeToAndCall",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
   },
   {
-    inputs: [
+    "inputs": [
       {
-        internalType: 'uint256',
-        name: '_proposalId',
-        type: 'uint256',
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
       },
       {
-        internalType: 'enum IMajorityVoting.VoteOption',
-        name: '_voteOption',
-        type: 'uint8',
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "_voteOption",
+        "type": "uint8"
       },
       {
-        internalType: 'bool',
-        name: '_tryEarlyExecution',
-        type: 'bool',
-      },
+        "internalType": "bool",
+        "name": "_tryEarlyExecution",
+        "type": "bool"
+      }
     ],
-    name: 'vote',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
+    "name": "vote",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: 'votingMode',
-    outputs: [
+    "inputs": [],
+    "name": "votingMode",
+    "outputs": [
       {
-        internalType: 'enum MajorityVotingBase.VotingMode',
-        name: '',
-        type: 'uint8',
-      },
+        "internalType": "enum MajorityVotingBase.VotingMode",
+        "name": "",
+        "type": "uint8"
+      }
     ],
-    stateMutability: 'view',
-    type: 'function',
-  },
+    "stateMutability": "view",
+    "type": "function"
+  }
 ] as const
