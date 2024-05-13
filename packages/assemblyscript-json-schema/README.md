@@ -1,1 +1,0 @@
-assemblyscript-json-schema is used to build wasm types for use in the subgraph. Previously we would codegen the types, but now we manually write them. Manually writing is easier for now as some different generated types are starting to diverge from the original usage – e.g. arrays.
