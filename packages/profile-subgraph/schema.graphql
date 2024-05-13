@@ -1,6 +1,0 @@
-type GeoProfile @entity {
-  id: ID!
-  account: String!
-  homeSpace: String!
-  createdAt: BigInt!
-}

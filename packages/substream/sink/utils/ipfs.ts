@@ -1,4 +1,4 @@
-import { Duration, Effect, Schedule } from 'effect';
+import { Duration, Effect, Either, Schedule } from 'effect';
 import type { TimeoutException } from 'effect/Cause';
 
 import { IPFS_GATEWAY } from '../constants/constants';
