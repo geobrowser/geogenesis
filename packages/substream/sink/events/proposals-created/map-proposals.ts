@@ -4,7 +4,7 @@ import { generateActionId, generateVersionId } from '../../utils/id';
 import type { ContentProposal, EditorshipProposal, MembershipProposal, SubspaceProposal } from './parser';
 import type { BlockEvent } from '~/sink/types';
 
-export function groupProposalsByType(
+function groupProposalsByType(
   proposals: (ContentProposal | MembershipProposal | SubspaceProposal | EditorshipProposal)[]
 ): {
   contentProposals: ContentProposal[];
@@ -27,7 +27,7 @@ export function groupProposalsByType(
   };
 }
 
-export function mapContentProposalsToSchema(
+function mapContentProposalsToSchema(
   proposals: ContentProposal[],
   block: BlockEvent
 ): {
@@ -126,7 +126,7 @@ export function mapContentProposalsToSchema(
   };
 }
 
-export function mapSubspaceProposalsToSchema(
+function mapSubspaceProposalsToSchema(
   proposals: SubspaceProposal[],
   block: BlockEvent
 ): {
@@ -175,7 +175,7 @@ export function mapSubspaceProposalsToSchema(
   };
 }
 
-export function mapEditorshipProposalsToSchema(
+function mapEditorshipProposalsToSchema(
   proposals: EditorshipProposal[],
   block: BlockEvent
 ): {
@@ -233,7 +233,7 @@ export function mapEditorshipProposalsToSchema(
   };
 }
 
-export function mapMembershipProposalsToSchema(
+function mapMembershipProposalsToSchema(
   proposals: MembershipProposal[],
   block: BlockEvent
 ): {
@@ -288,5 +288,23 @@ export function mapMembershipProposalsToSchema(
     proposals: proposalsToWrite,
     proposedMembers: proposedMembersToWrite,
     accounts: accountsToWrite,
+  };
+}
+
+export function mapIpfsProposalToSchemaProposalByType(
+  proposals: (ContentProposal | MembershipProposal | SubspaceProposal | EditorshipProposal)[],
+  block: BlockEvent
+) {
+  const { contentProposals, subspaceProposals, memberProposals, editorProposals } = groupProposalsByType(proposals);
+  const schemaContentProposals = mapContentProposalsToSchema(contentProposals, block);
+  const schemaSubspaceProposals = mapSubspaceProposalsToSchema(subspaceProposals, block);
+  const schemaMembershipProposals = mapMembershipProposalsToSchema(memberProposals, block);
+  const schemaEditorshipProposals = mapEditorshipProposalsToSchema(editorProposals, block);
+
+  return {
+    schemaContentProposals,
+    schemaSubspaceProposals,
+    schemaMembershipProposals,
+    schemaEditorshipProposals,
   };
 }

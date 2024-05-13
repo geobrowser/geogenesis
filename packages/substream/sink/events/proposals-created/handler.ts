@@ -1,4 +1,4 @@
-import { Data, Effect, Either } from 'effect';
+import { Effect, Either } from 'effect';
 
 import { getProposalFromCreatedProposalIpfsUri } from './get-proposal-from-created-proposal';
 import {
@@ -11,13 +11,7 @@ import {
   ProposedVersions,
 } from '~/sink/db';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
-import {
-  groupProposalsByType,
-  mapContentProposalsToSchema,
-  mapEditorshipProposalsToSchema,
-  mapMembershipProposalsToSchema,
-  mapSubspaceProposalsToSchema,
-} from '~/sink/events/proposals-created/map-proposals';
+import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
 import type {
   ContentProposal,
   EditorshipProposal,
@@ -62,18 +56,16 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
         maybeProposal !== null
     );
 
-    const { contentProposals, subspaceProposals, memberProposals, editorProposals } = groupProposalsByType(proposals);
-    const schemaContentProposals = mapContentProposalsToSchema(contentProposals, block);
-    const schemaSubspaceProposals = mapSubspaceProposalsToSchema(subspaceProposals, block);
-    const schemaMembershipProposals = mapMembershipProposalsToSchema(memberProposals, block);
-    const schemaEditorshipProposals = mapEditorshipProposalsToSchema(editorProposals, block);
+    const { schemaContentProposals, schemaSubspaceProposals, schemaMembershipProposals, schemaEditorshipProposals } =
+      mapIpfsProposalToSchemaProposalByType(proposals, block);
 
     slog({
       requestId: block.requestId,
       message: `Writing proposals
-        Content proposals: ${contentProposals.length}
-        Subspace proposals: ${subspaceProposals.length}
-        Editor proposals: ${editorProposals.length}
+        Content proposals: ${schemaContentProposals.proposals.length}
+        Subspace proposals: ${schemaSubspaceProposals.proposals.length}
+        Editor proposals: ${schemaEditorshipProposals.proposals.length}
+        Member proposals: ${schemaMembershipProposals.proposals.length}
       `,
     });
 
