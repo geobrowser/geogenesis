@@ -8,6 +8,7 @@ export function mapSpaces(spaces: SpacePluginCreated[], createdAtBlock: number):
     id: getChecksumAddress(s.daoAddress),
     space_plugin_address: getChecksumAddress(s.spaceAddress),
     is_root_space: false, // @TODO: it _might_ be the root space
+    type: 'public',
     created_at_block: createdAtBlock,
   }));
 }
@@ -20,6 +21,7 @@ export function mapGovernanceToSpaces(
     id: getChecksumAddress(s.daoAddress),
     is_root_space: false, // @TODO: it _might_ be the root space
     created_at_block: createdAtBlock,
+    type: 'public',
     main_voting_plugin_address: getChecksumAddress(s.mainVotingAddress),
     member_access_plugin_address: getChecksumAddress(s.memberAccessAddress),
   }));

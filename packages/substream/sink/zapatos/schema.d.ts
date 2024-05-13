@@ -35,6 +35,10 @@ declare module 'zapatos/schema' {
   export namespace every {
     export type proposal_type = ['ADD_EDITOR', 'ADD_MEMBER', 'ADD_SUBSPACE', 'CONTENT', 'REMOVE_EDITOR', 'REMOVE_MEMBER', 'REMOVE_SUBSPACE'];
   }
+  export type space_type = 'personal' | 'public';
+  export namespace every {
+    export type space_type = ['personal', 'public'];
+  }
   export type subspace_proposal_type = 'ADD_SUBSPACE' | 'REMOVE_SUBSPACE';
   export namespace every {
     export type subspace_proposal_type = ['ADD_SUBSPACE', 'REMOVE_SUBSPACE'];
@@ -3707,6 +3711,12 @@ declare module 'zapatos/schema' {
       */
       is_root_space: boolean;
       /**
+      * **spaces.type**
+      * - `space_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: space_type;
+      /**
       * **spaces.space_plugin_address**
       * - `text` in database
       * - Nullable, no default
@@ -3750,6 +3760,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_root_space: boolean;
+      /**
+      * **spaces.type**
+      * - `space_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: space_type;
       /**
       * **spaces.space_plugin_address**
       * - `text` in database
@@ -3795,6 +3811,12 @@ declare module 'zapatos/schema' {
       */
       is_root_space?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **spaces.type**
+      * - `space_type` in database
+      * - `NOT NULL`, no default
+      */
+      type?: space_type | db.Parameter<space_type> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, space_type | db.Parameter<space_type> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **spaces.space_plugin_address**
       * - `text` in database
       * - Nullable, no default
@@ -3839,6 +3861,12 @@ declare module 'zapatos/schema' {
       */
       is_root_space: boolean | db.Parameter<boolean> | db.SQLFragment;
       /**
+      * **spaces.type**
+      * - `space_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: space_type | db.Parameter<space_type> | db.SQLFragment;
+      /**
       * **spaces.space_plugin_address**
       * - `text` in database
       * - Nullable, no default
@@ -3882,6 +3910,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_root_space?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
+      /**
+      * **spaces.type**
+      * - `space_type` in database
+      * - `NOT NULL`, no default
+      */
+      type?: space_type | db.Parameter<space_type> | db.SQLFragment | db.SQLFragment<any, space_type | db.Parameter<space_type> | db.SQLFragment>;
       /**
       * **spaces.space_plugin_address**
       * - `text` in database
