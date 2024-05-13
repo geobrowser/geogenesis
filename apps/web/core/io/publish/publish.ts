@@ -171,6 +171,11 @@ export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${str
   return contractConfig.result as string;
 }
 
+export async function uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string> {
+  const fileUri = await storageClient.uploadFile(file);
+  return fileUri;
+}
+
 interface ProposeAddSubspaceArgs {
   wallet: GetWalletClientResult | undefined;
   storageClient: IStorageClient;
