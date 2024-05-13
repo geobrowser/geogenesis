@@ -88,11 +88,11 @@ export async function SubspaceProposal({ proposal }: Props) {
               <div className="flex items-center gap-2">
                 <div className="flex h-6 items-center gap-1 rounded-sm bg-divider px-1.5 text-breadcrumb text-text">
                   <EditSmall color="grey-04" />
-                  {space?.editors.length ?? 0}
+                  {subspace?.editorsCount}
                 </div>
                 <div className="flex h-6 items-center gap-1 rounded-sm bg-divider px-1.5 text-breadcrumb text-text">
                   <Member color="grey-04" />
-                  {space?.editors.length ?? 0}
+                  {subspace?.membersCount}
                 </div>
               </div>
             </div>
