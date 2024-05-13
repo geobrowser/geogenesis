@@ -72,6 +72,15 @@ message GeoGovernancePluginsCreated {
   repeated GeoGovernancePluginCreated plugins = 1;
 }
 
+message GeoPersonalSpaceAdminPluginCreated {
+  string daoAddress = 1;
+  string personalAdminAddress = 2;
+}
+
+message GeoPersonalSpaceAdminPluginsCreated {
+  repeated GeoPersonalSpaceAdminPluginCreated plugins = 1;
+}
+
 /**
  * This event represents adding editors to a DAO-based space
  *
@@ -268,4 +277,5 @@ message GeoOutput {
   repeated ProposalExecuted executed_proposals = 11;
   repeated MemberAdded members_added = 12;
   repeated EditorAdded editors_added = 13;
+  repeated GeoPersonalSpaceAdminPluginCreated personal_plugins_created = 14;
 }
