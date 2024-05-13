@@ -1,8 +1,8 @@
+import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
 import {
   CreateTripleAction as CreateTripleActionSchema,
   DeleteTripleAction as DeleteTripleActionSchema,
-} from '@geogenesis/action-schema';
-import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
+} from '@geogenesis/sdk/legacy';
 
 import { SubstreamEntity } from './io/subgraph/network-local-mapping';
 

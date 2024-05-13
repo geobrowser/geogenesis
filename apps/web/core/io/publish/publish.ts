@@ -1,4 +1,4 @@
-import { GeoProfileRegistryAbi, SpaceAbi } from '@geogenesis/contracts';
+import { ProfileRegistryAbi } from '@geogenesis/sdk/abis';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import {
   createContentProposal,
@@ -14,7 +14,6 @@ import { WalletClient } from 'wagmi';
 import {
   GetWalletClientResult,
   prepareWriteContract,
-  readContract,
   waitForTransaction,
   writeContract,
 } from 'wagmi/actions';
@@ -68,8 +67,6 @@ export async function makeProposal({
   name,
 }: MakeProposalOptions): Promise<void> {
   onChangePublishState('publishing-ipfs');
-  const cids: string[] = [];
-
   const maybeSpace = await fetchSpace({ id: space });
 
   if (!maybeSpace || !maybeSpace.mainVotingPluginAddress) {
@@ -155,7 +152,7 @@ export async function makeProposal({
 
 export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${string}`): Promise<string> {
   const contractConfig = await prepareWriteContract({
-    abi: GeoProfileRegistryAbi,
+    abi: ProfileRegistryAbi,
     address: SYSTEM_IDS.PROFILE_REGISTRY_ADDRESS,
     functionName: 'registerGeoProfile',
     walletClient: wallet,
@@ -168,7 +165,8 @@ export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${str
   });
 
   console.log(`Geo profile created. Transaction hash: ${waited.transactionHash}`);
-  return contractConfig.result as string;
+  // @TODO: Test that this is correct
+  return contractConfig.result.toString();
 }
 
 export async function uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string> {
