@@ -16,14 +16,11 @@ CREATE TABLE public.geo_entities (
     id text PRIMARY KEY,
     name character varying,
     description character varying,
-    -- latest_version_id text REFERENCES public.versions(id),
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     updated_at integer,
     updated_at_block integer
-    -- is_attribute boolean DEFAULT false,
-    -- attribute_value_type_id text
 );
 
 CREATE TABLE public.spaces (
@@ -127,7 +124,8 @@ CREATE TABLE public.space_subspaces (
     CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
-CREATE TYPE public.triple_value_type as ENUM ('number', 'string', 'entity', 'collection', 'image', 'date', 'url');
+CREATE TYPE public.triple_value_type as ENUM ('number', 'text', 'entity', 'collection', 'image', 'date', 'url');
+CREATE TYPE public.triple_value_typeV2 as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URL', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
 
 CREATE TABLE public.triples (
     id text PRIMARY KEY,
@@ -139,6 +137,22 @@ CREATE TABLE public.triples (
     string_value text,
     array_value text,
     entity_value_id text REFERENCES public.geo_entities(id),
+    collection_value_id text REFERENCES public.geo_entities(id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    is_stale boolean NOT NULL
+);
+
+CREATE TABLE public.triplesV2 (
+    PRIMARY KEY (space_id, entity_id, attribute_id),
+    entity_id text NOT NULL REFERENCES public.geo_entities(id),
+    attribute_id text NOT NULL REFERENCES public.geo_entities(id),
+    value_type triple_value_typeV2 NOT NULL,
+    number_value text,
+    text_value text,
+    entity_value_id text REFERENCES public.geo_entities(id),
+    collection_value_id text REFERENCES public.geo_entities(id),
     space_id text NOT NULL REFERENCES public.spaces(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
@@ -156,10 +170,6 @@ CREATE TABLE public.versions (
     entity_id text NOT NULL REFERENCES public.geo_entities(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
-
--- @TODO: Proposed Member
--- @TODO: Proposed Editor
--- @TODO: Proposed Subspace
 
 CREATE TABLE public.proposal_votes (
     PRIMARY KEY (onchain_proposal_id, space_id, account_id),
@@ -182,9 +192,25 @@ CREATE TABLE public.actions (
     number_value text,
     string_value text,
     entity_value_id text REFERENCES public.geo_entities(id),
-    array_value text [],
     proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
-    -- version_id text REFERENCES public.versions(id) NOT NULL,
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL
+);
+
+CREATE TYPE public.op_type as ENUM ('SET_TRIPLE', 'DELETE_TRIPLE');
+
+CREATE TABLE public.ops (
+    id text PRIMARY KEY NOT NULL,
+    type op_type NOT NULL,
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    entity_id text NOT NULL REFERENCES public.geo_entities(id),
+    attribute_id text NOT NULL REFERENCES public.geo_entities(id),
+    value_type triple_value_typeV2 NOT NULL,
+    number_value text,
+    text_value text,
+    entity_value_id text REFERENCES public.geo_entities(id),
+    collection_value_id text REFERENCES public.geo_entities(id),
+    proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL
 );

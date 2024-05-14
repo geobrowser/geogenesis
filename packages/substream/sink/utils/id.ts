@@ -12,18 +12,6 @@ export function generateTripleId({
   return `${space_id}:${entity_id}:${attribute_id}:${value_id}`;
 }
 
-export function generateTripleIdV2({
-  space_id,
-  entity_id,
-  attribute_id,
-}: {
-  space_id: string;
-  entity_id: string;
-  attribute_id: string;
-}): string {
-  return `${space_id}:${entity_id}:${attribute_id}`;
-}
-
 export function generateActionId({
   space_id,
   entity_id,

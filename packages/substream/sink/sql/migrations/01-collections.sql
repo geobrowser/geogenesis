@@ -3,19 +3,6 @@ CREATE TABLE public.collections (
     entity_id text REFERENCES public.geo_entities(id) NOT NULL
 );
 
-ALTER TABLE public.triples ADD CHECK (value_type in (
-        'number',
-        'string',
-        'entity',
-        'collection',
-        'image',
-        'date',
-        'url'
-    )
-);
-
-ALTER TABLE public.triples ADD COLUMN collection_value_id text REFERENCES public.collections(id);
-
 CREATE OR REPLACE FUNCTION public.spaces_metadata(e_row spaces)
 RETURNS SETOF public.geo_entities AS $$
 BEGIN

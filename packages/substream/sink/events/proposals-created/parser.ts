@@ -135,3 +135,70 @@ export type ProposalProcessed = z.infer<typeof ZodProposalProcessed>;
 export const ZodProposalProcessedStreamResponse = z.object({
   proposalsProcessed: z.array(ZodProposalProcessed).min(1),
 });
+
+const ZodEditValueType = z.union([
+  z.literal('TEXT'),
+  z.literal('NUMBER'),
+  z.literal('ENTITY'),
+  z.literal('COLLECTION'),
+  z.literal('CHECKBOX'),
+  z.literal('URL'),
+  z.literal('TIME'),
+  z.literal('GEO_LOCATION'),
+]);
+
+const ZodEditValue = z.object({
+  type: ZodEditValueType,
+  value: z.string(),
+});
+
+const ZodEditSetTriplePayload = z.object({
+  entityId: z.string(),
+  attributeId: z.string(),
+  // @TODO: idk why this is broken
+  // value: ZodEditValue,
+  value: z.any(),
+});
+
+const ZodEditDeleteTriplePayload = z.object({
+  entityId: z.string(),
+  attributeId: z.string(),
+  // @TODO: idk why this is broken
+  // value: z.object({})
+  value: z.any(),
+});
+
+const ZodSetTripleOp = z.object({
+  opType: z.literal('SET_TRIPLE'),
+  payload: ZodEditSetTriplePayload,
+});
+
+const ZodDeleteTripleOp = z.object({
+  opType: z.literal('DELETE_TRIPLE'),
+  payload: ZodEditDeleteTriplePayload,
+});
+
+export const ZodOp = z.discriminatedUnion('opType', [ZodSetTripleOp, ZodDeleteTripleOp]);
+
+export type Op = z.infer<typeof ZodOp>;
+
+export const ZodEdit = z.object({
+  name: z.string(),
+  version: z.string(),
+  ops: z.array(ZodOp),
+  authors: z.array(z.string()),
+});
+
+export type Edit = z.infer<typeof ZodEdit> & {
+  type: 'EDIT';
+  spaceId: string;
+  createdById: string;
+
+  // @TODO: This should come from the protobuf blob
+  proposalId: string;
+  onchainProposalId: string;
+  pluginAddress: string;
+  metadataUri: string;
+  startTime: string;
+  endTime: string;
+};

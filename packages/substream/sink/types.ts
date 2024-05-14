@@ -7,6 +7,8 @@ export enum TripleAction {
   Upsert = 'upsertTriple',
 }
 
+export type TripleOp = 'SET_TRIPLE' | 'DELETE_TRIPLE';
+
 export type TripleWithActionTuple = [TripleAction, s.triples.Insertable];
 
 export interface BlockEvent {

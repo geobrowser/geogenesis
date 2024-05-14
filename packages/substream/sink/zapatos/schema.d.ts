@@ -27,6 +27,10 @@ declare module 'zapatos/schema' {
   export namespace every {
     export type member_proposal_type = ['ADD_MEMBER', 'REMOVE_MEMBER'];
   }
+  export type op_type = 'DELETE_TRIPLE' | 'SET_TRIPLE';
+  export namespace every {
+    export type op_type = ['DELETE_TRIPLE', 'SET_TRIPLE'];
+  }
   export type proposal_status = 'accepted' | 'canceled' | 'executed' | 'proposed' | 'rejected';
   export namespace every {
     export type proposal_status = ['accepted', 'canceled', 'executed', 'proposed', 'rejected'];
@@ -39,9 +43,13 @@ declare module 'zapatos/schema' {
   export namespace every {
     export type subspace_proposal_type = ['ADD_SUBSPACE', 'REMOVE_SUBSPACE'];
   }
-  export type triple_value_type = 'collection' | 'date' | 'entity' | 'image' | 'number' | 'string' | 'url';
+  export type triple_value_type = 'collection' | 'date' | 'entity' | 'image' | 'number' | 'text' | 'url';
   export namespace every {
-    export type triple_value_type = ['collection', 'date', 'entity', 'image', 'number', 'string', 'url'];
+    export type triple_value_type = ['collection', 'date', 'entity', 'image', 'number', 'text', 'url'];
+  }
+  export type triple_value_typev2 = 'CHECKBOX' | 'COLLECTION' | 'ENTITY' | 'GEO_LOCATION' | 'NUMBER' | 'TEXT' | 'TIME' | 'URL';
+  export namespace every {
+    export type triple_value_typev2 = ['CHECKBOX', 'COLLECTION', 'ENTITY', 'GEO_LOCATION', 'NUMBER', 'TEXT', 'TIME', 'URL'];
   }
   export type vote_type = 'accept' | 'reject';
   export namespace every {
@@ -165,12 +173,6 @@ declare module 'zapatos/schema' {
       */
       entity_value_id: string | null;
       /**
-      * **actions.array_value**
-      * - `_text` in database
-      * - Nullable, no default
-      */
-      array_value: string[] | null;
-      /**
       * **actions.proposed_version_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -244,12 +246,6 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       entity_value_id: string | null;
-      /**
-      * **actions.array_value**
-      * - `_text` in database
-      * - Nullable, no default
-      */
-      array_value: string[] | null;
       /**
       * **actions.proposed_version_id**
       * - `text` in database
@@ -325,12 +321,6 @@ declare module 'zapatos/schema' {
       */
       entity_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **actions.array_value**
-      * - `_text` in database
-      * - Nullable, no default
-      */
-      array_value?: string[] | db.Parameter<string[]> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string[] | db.Parameter<string[]> | db.SQLFragment | db.ParentColumn>;
-      /**
       * **actions.proposed_version_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -405,12 +395,6 @@ declare module 'zapatos/schema' {
       */
       entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **actions.array_value**
-      * - `_text` in database
-      * - Nullable, no default
-      */
-      array_value?: string[] | db.Parameter<string[]> | null | db.DefaultType | db.SQLFragment;
-      /**
       * **actions.proposed_version_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -484,12 +468,6 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
-      /**
-      * **actions.array_value**
-      * - `_text` in database
-      * - Nullable, no default
-      */
-      array_value?: string[] | db.Parameter<string[]> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string[] | db.Parameter<string[]> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **actions.proposed_version_id**
       * - `text` in database
@@ -1578,6 +1556,419 @@ declare module 'zapatos/schema' {
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'onchain_profiles_pkey';
+    export type Column = keyof Selectable;
+    export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
+    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQL = SQLExpression | SQLExpression[];
+  }
+
+  /**
+   * **ops**
+   * - Table in database
+   */
+  export namespace ops {
+    export type Table = 'ops';
+    export interface Selectable {
+      /**
+      * **ops.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id: string;
+      /**
+      * **ops.type**
+      * - `op_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: op_type;
+      /**
+      * **ops.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string;
+      /**
+      * **ops.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id: string;
+      /**
+      * **ops.attribute_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_id: string;
+      /**
+      * **ops.value_type**
+      * - `triple_value_typev2` in database
+      * - `NOT NULL`, no default
+      */
+      value_type: triple_value_typev2;
+      /**
+      * **ops.number_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      number_value: string | null;
+      /**
+      * **ops.text_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      text_value: string | null;
+      /**
+      * **ops.entity_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      entity_value_id: string | null;
+      /**
+      * **ops.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id: string | null;
+      /**
+      * **ops.proposed_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      proposed_version_id: string;
+      /**
+      * **ops.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **ops.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+    }
+    export interface JSONSelectable {
+      /**
+      * **ops.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id: string;
+      /**
+      * **ops.type**
+      * - `op_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: op_type;
+      /**
+      * **ops.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string;
+      /**
+      * **ops.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id: string;
+      /**
+      * **ops.attribute_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_id: string;
+      /**
+      * **ops.value_type**
+      * - `triple_value_typev2` in database
+      * - `NOT NULL`, no default
+      */
+      value_type: triple_value_typev2;
+      /**
+      * **ops.number_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      number_value: string | null;
+      /**
+      * **ops.text_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      text_value: string | null;
+      /**
+      * **ops.entity_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      entity_value_id: string | null;
+      /**
+      * **ops.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id: string | null;
+      /**
+      * **ops.proposed_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      proposed_version_id: string;
+      /**
+      * **ops.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **ops.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+    }
+    export interface Whereable {
+      /**
+      * **ops.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.type**
+      * - `op_type` in database
+      * - `NOT NULL`, no default
+      */
+      type?: op_type | db.Parameter<op_type> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, op_type | db.Parameter<op_type> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.attribute_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.value_type**
+      * - `triple_value_typev2` in database
+      * - `NOT NULL`, no default
+      */
+      value_type?: triple_value_typev2 | db.Parameter<triple_value_typev2> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, triple_value_typev2 | db.Parameter<triple_value_typev2> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.number_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      number_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.text_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      text_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.entity_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      entity_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.proposed_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **ops.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+    }
+    export interface Insertable {
+      /**
+      * **ops.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **ops.type**
+      * - `op_type` in database
+      * - `NOT NULL`, no default
+      */
+      type: op_type | db.Parameter<op_type> | db.SQLFragment;
+      /**
+      * **ops.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **ops.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **ops.attribute_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **ops.value_type**
+      * - `triple_value_typev2` in database
+      * - `NOT NULL`, no default
+      */
+      value_type: triple_value_typev2 | db.Parameter<triple_value_typev2> | db.SQLFragment;
+      /**
+      * **ops.number_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      number_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **ops.text_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      text_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **ops.entity_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **ops.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **ops.proposed_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      proposed_version_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **ops.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **ops.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+    }
+    export interface Updatable {
+      /**
+      * **ops.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **ops.type**
+      * - `op_type` in database
+      * - `NOT NULL`, no default
+      */
+      type?: op_type | db.Parameter<op_type> | db.SQLFragment | db.SQLFragment<any, op_type | db.Parameter<op_type> | db.SQLFragment>;
+      /**
+      * **ops.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **ops.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **ops.attribute_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **ops.value_type**
+      * - `triple_value_typev2` in database
+      * - `NOT NULL`, no default
+      */
+      value_type?: triple_value_typev2 | db.Parameter<triple_value_typev2> | db.SQLFragment | db.SQLFragment<any, triple_value_typev2 | db.Parameter<triple_value_typev2> | db.SQLFragment>;
+      /**
+      * **ops.number_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      number_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **ops.text_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      text_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **ops.entity_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **ops.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **ops.proposed_version_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **ops.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **ops.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+    }
+    export type UniqueIndex = 'ops_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
     export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
@@ -4059,6 +4450,12 @@ declare module 'zapatos/schema' {
       */
       entity_value_id: string | null;
       /**
+      * **triples.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id: string | null;
+      /**
       * **triples.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -4082,12 +4479,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_stale: boolean;
-      /**
-      * **triples.collection_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      collection_value_id: string | null;
     }
     export interface JSONSelectable {
       /**
@@ -4145,6 +4536,12 @@ declare module 'zapatos/schema' {
       */
       entity_value_id: string | null;
       /**
+      * **triples.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id: string | null;
+      /**
       * **triples.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -4168,12 +4565,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_stale: boolean;
-      /**
-      * **triples.collection_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      collection_value_id: string | null;
     }
     export interface Whereable {
       /**
@@ -4231,6 +4622,12 @@ declare module 'zapatos/schema' {
       */
       entity_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **triples.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **triples.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -4254,12 +4651,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_stale?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **triples.collection_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      collection_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -4317,6 +4708,12 @@ declare module 'zapatos/schema' {
       */
       entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
+      * **triples.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
       * **triples.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -4340,12 +4737,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_stale: boolean | db.Parameter<boolean> | db.SQLFragment;
-      /**
-      * **triples.collection_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -4403,6 +4794,12 @@ declare module 'zapatos/schema' {
       */
       entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
+      * **triples.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
       * **triples.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -4426,14 +4823,361 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       is_stale?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
+    }
+    export type UniqueIndex = 'triples_pkey';
+    export type Column = keyof Selectable;
+    export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
+    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQL = SQLExpression | SQLExpression[];
+  }
+
+  /**
+   * **triplesv2**
+   * - Table in database
+   */
+  export namespace triplesv2 {
+    export type Table = 'triplesv2';
+    export interface Selectable {
       /**
-      * **triples.collection_value_id**
+      * **triplesv2.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id: string;
+      /**
+      * **triplesv2.attribute_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_id: string;
+      /**
+      * **triplesv2.value_type**
+      * - `triple_value_typev2` in database
+      * - `NOT NULL`, no default
+      */
+      value_type: triple_value_typev2;
+      /**
+      * **triplesv2.number_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      number_value: string | null;
+      /**
+      * **triplesv2.text_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      text_value: string | null;
+      /**
+      * **triplesv2.entity_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      entity_value_id: string | null;
+      /**
+      * **triplesv2.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id: string | null;
+      /**
+      * **triplesv2.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string;
+      /**
+      * **triplesv2.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **triplesv2.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+      /**
+      * **triplesv2.is_stale**
+      * - `bool` in database
+      * - `NOT NULL`, no default
+      */
+      is_stale: boolean;
+    }
+    export interface JSONSelectable {
+      /**
+      * **triplesv2.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id: string;
+      /**
+      * **triplesv2.attribute_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_id: string;
+      /**
+      * **triplesv2.value_type**
+      * - `triple_value_typev2` in database
+      * - `NOT NULL`, no default
+      */
+      value_type: triple_value_typev2;
+      /**
+      * **triplesv2.number_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      number_value: string | null;
+      /**
+      * **triplesv2.text_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      text_value: string | null;
+      /**
+      * **triplesv2.entity_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      entity_value_id: string | null;
+      /**
+      * **triplesv2.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id: string | null;
+      /**
+      * **triplesv2.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string;
+      /**
+      * **triplesv2.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number;
+      /**
+      * **triplesv2.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+      /**
+      * **triplesv2.is_stale**
+      * - `bool` in database
+      * - `NOT NULL`, no default
+      */
+      is_stale: boolean;
+    }
+    export interface Whereable {
+      /**
+      * **triplesv2.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triplesv2.attribute_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triplesv2.value_type**
+      * - `triple_value_typev2` in database
+      * - `NOT NULL`, no default
+      */
+      value_type?: triple_value_typev2 | db.Parameter<triple_value_typev2> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, triple_value_typev2 | db.Parameter<triple_value_typev2> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triplesv2.number_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      number_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triplesv2.text_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      text_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triplesv2.entity_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      entity_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triplesv2.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triplesv2.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triplesv2.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triplesv2.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triplesv2.is_stale**
+      * - `bool` in database
+      * - `NOT NULL`, no default
+      */
+      is_stale?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
+    }
+    export interface Insertable {
+      /**
+      * **triplesv2.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **triplesv2.attribute_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **triplesv2.value_type**
+      * - `triple_value_typev2` in database
+      * - `NOT NULL`, no default
+      */
+      value_type: triple_value_typev2 | db.Parameter<triple_value_typev2> | db.SQLFragment;
+      /**
+      * **triplesv2.number_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      number_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **triplesv2.text_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      text_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **triplesv2.entity_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **triplesv2.collection_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **triplesv2.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **triplesv2.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **triplesv2.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **triplesv2.is_stale**
+      * - `bool` in database
+      * - `NOT NULL`, no default
+      */
+      is_stale: boolean | db.Parameter<boolean> | db.SQLFragment;
+    }
+    export interface Updatable {
+      /**
+      * **triplesv2.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **triplesv2.attribute_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **triplesv2.value_type**
+      * - `triple_value_typev2` in database
+      * - `NOT NULL`, no default
+      */
+      value_type?: triple_value_typev2 | db.Parameter<triple_value_typev2> | db.SQLFragment | db.SQLFragment<any, triple_value_typev2 | db.Parameter<triple_value_typev2> | db.SQLFragment>;
+      /**
+      * **triplesv2.number_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      number_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **triplesv2.text_value**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      text_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **triplesv2.entity_value_id**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **triplesv2.collection_value_id**
       * - `text` in database
       * - Nullable, no default
       */
       collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **triplesv2.space_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **triplesv2.created_at**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **triplesv2.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **triplesv2.is_stale**
+      * - `bool` in database
+      * - `NOT NULL`, no default
+      */
+      is_stale?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
     }
-    export type UniqueIndex = 'triples_pkey';
+    export type UniqueIndex = 'triplesv2_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
     export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
@@ -4736,20 +5480,20 @@ declare module 'zapatos/schema' {
   /* --- aggregate types --- */
 
   export namespace public {  
-    export type Table = accounts.Table | actions.Table | collections.Table | cursors.Table | geo_entities.Table | geo_entity_types.Table | log_entries.Table | onchain_profiles.Table | proposal_votes.Table | proposals.Table | proposed_editors.Table | proposed_members.Table | proposed_subspaces.Table | proposed_versions.Table | space_editors.Table | space_members.Table | space_subspaces.Table | spaces.Table | triple_versions.Table | triples.Table | versions.Table;
-    export type Selectable = accounts.Selectable | actions.Selectable | collections.Selectable | cursors.Selectable | geo_entities.Selectable | geo_entity_types.Selectable | log_entries.Selectable | onchain_profiles.Selectable | proposal_votes.Selectable | proposals.Selectable | proposed_editors.Selectable | proposed_members.Selectable | proposed_subspaces.Selectable | proposed_versions.Selectable | space_editors.Selectable | space_members.Selectable | space_subspaces.Selectable | spaces.Selectable | triple_versions.Selectable | triples.Selectable | versions.Selectable;
-    export type JSONSelectable = accounts.JSONSelectable | actions.JSONSelectable | collections.JSONSelectable | cursors.JSONSelectable | geo_entities.JSONSelectable | geo_entity_types.JSONSelectable | log_entries.JSONSelectable | onchain_profiles.JSONSelectable | proposal_votes.JSONSelectable | proposals.JSONSelectable | proposed_editors.JSONSelectable | proposed_members.JSONSelectable | proposed_subspaces.JSONSelectable | proposed_versions.JSONSelectable | space_editors.JSONSelectable | space_members.JSONSelectable | space_subspaces.JSONSelectable | spaces.JSONSelectable | triple_versions.JSONSelectable | triples.JSONSelectable | versions.JSONSelectable;
-    export type Whereable = accounts.Whereable | actions.Whereable | collections.Whereable | cursors.Whereable | geo_entities.Whereable | geo_entity_types.Whereable | log_entries.Whereable | onchain_profiles.Whereable | proposal_votes.Whereable | proposals.Whereable | proposed_editors.Whereable | proposed_members.Whereable | proposed_subspaces.Whereable | proposed_versions.Whereable | space_editors.Whereable | space_members.Whereable | space_subspaces.Whereable | spaces.Whereable | triple_versions.Whereable | triples.Whereable | versions.Whereable;
-    export type Insertable = accounts.Insertable | actions.Insertable | collections.Insertable | cursors.Insertable | geo_entities.Insertable | geo_entity_types.Insertable | log_entries.Insertable | onchain_profiles.Insertable | proposal_votes.Insertable | proposals.Insertable | proposed_editors.Insertable | proposed_members.Insertable | proposed_subspaces.Insertable | proposed_versions.Insertable | space_editors.Insertable | space_members.Insertable | space_subspaces.Insertable | spaces.Insertable | triple_versions.Insertable | triples.Insertable | versions.Insertable;
-    export type Updatable = accounts.Updatable | actions.Updatable | collections.Updatable | cursors.Updatable | geo_entities.Updatable | geo_entity_types.Updatable | log_entries.Updatable | onchain_profiles.Updatable | proposal_votes.Updatable | proposals.Updatable | proposed_editors.Updatable | proposed_members.Updatable | proposed_subspaces.Updatable | proposed_versions.Updatable | space_editors.Updatable | space_members.Updatable | space_subspaces.Updatable | spaces.Updatable | triple_versions.Updatable | triples.Updatable | versions.Updatable;
-    export type UniqueIndex = accounts.UniqueIndex | actions.UniqueIndex | collections.UniqueIndex | cursors.UniqueIndex | geo_entities.UniqueIndex | geo_entity_types.UniqueIndex | log_entries.UniqueIndex | onchain_profiles.UniqueIndex | proposal_votes.UniqueIndex | proposals.UniqueIndex | proposed_editors.UniqueIndex | proposed_members.UniqueIndex | proposed_subspaces.UniqueIndex | proposed_versions.UniqueIndex | space_editors.UniqueIndex | space_members.UniqueIndex | space_subspaces.UniqueIndex | spaces.UniqueIndex | triple_versions.UniqueIndex | triples.UniqueIndex | versions.UniqueIndex;
-    export type Column = accounts.Column | actions.Column | collections.Column | cursors.Column | geo_entities.Column | geo_entity_types.Column | log_entries.Column | onchain_profiles.Column | proposal_votes.Column | proposals.Column | proposed_editors.Column | proposed_members.Column | proposed_subspaces.Column | proposed_versions.Column | space_editors.Column | space_members.Column | space_subspaces.Column | spaces.Column | triple_versions.Column | triples.Column | versions.Column;
+    export type Table = accounts.Table | actions.Table | collections.Table | cursors.Table | geo_entities.Table | geo_entity_types.Table | log_entries.Table | onchain_profiles.Table | ops.Table | proposal_votes.Table | proposals.Table | proposed_editors.Table | proposed_members.Table | proposed_subspaces.Table | proposed_versions.Table | space_editors.Table | space_members.Table | space_subspaces.Table | spaces.Table | triple_versions.Table | triples.Table | triplesv2.Table | versions.Table;
+    export type Selectable = accounts.Selectable | actions.Selectable | collections.Selectable | cursors.Selectable | geo_entities.Selectable | geo_entity_types.Selectable | log_entries.Selectable | onchain_profiles.Selectable | ops.Selectable | proposal_votes.Selectable | proposals.Selectable | proposed_editors.Selectable | proposed_members.Selectable | proposed_subspaces.Selectable | proposed_versions.Selectable | space_editors.Selectable | space_members.Selectable | space_subspaces.Selectable | spaces.Selectable | triple_versions.Selectable | triples.Selectable | triplesv2.Selectable | versions.Selectable;
+    export type JSONSelectable = accounts.JSONSelectable | actions.JSONSelectable | collections.JSONSelectable | cursors.JSONSelectable | geo_entities.JSONSelectable | geo_entity_types.JSONSelectable | log_entries.JSONSelectable | onchain_profiles.JSONSelectable | ops.JSONSelectable | proposal_votes.JSONSelectable | proposals.JSONSelectable | proposed_editors.JSONSelectable | proposed_members.JSONSelectable | proposed_subspaces.JSONSelectable | proposed_versions.JSONSelectable | space_editors.JSONSelectable | space_members.JSONSelectable | space_subspaces.JSONSelectable | spaces.JSONSelectable | triple_versions.JSONSelectable | triples.JSONSelectable | triplesv2.JSONSelectable | versions.JSONSelectable;
+    export type Whereable = accounts.Whereable | actions.Whereable | collections.Whereable | cursors.Whereable | geo_entities.Whereable | geo_entity_types.Whereable | log_entries.Whereable | onchain_profiles.Whereable | ops.Whereable | proposal_votes.Whereable | proposals.Whereable | proposed_editors.Whereable | proposed_members.Whereable | proposed_subspaces.Whereable | proposed_versions.Whereable | space_editors.Whereable | space_members.Whereable | space_subspaces.Whereable | spaces.Whereable | triple_versions.Whereable | triples.Whereable | triplesv2.Whereable | versions.Whereable;
+    export type Insertable = accounts.Insertable | actions.Insertable | collections.Insertable | cursors.Insertable | geo_entities.Insertable | geo_entity_types.Insertable | log_entries.Insertable | onchain_profiles.Insertable | ops.Insertable | proposal_votes.Insertable | proposals.Insertable | proposed_editors.Insertable | proposed_members.Insertable | proposed_subspaces.Insertable | proposed_versions.Insertable | space_editors.Insertable | space_members.Insertable | space_subspaces.Insertable | spaces.Insertable | triple_versions.Insertable | triples.Insertable | triplesv2.Insertable | versions.Insertable;
+    export type Updatable = accounts.Updatable | actions.Updatable | collections.Updatable | cursors.Updatable | geo_entities.Updatable | geo_entity_types.Updatable | log_entries.Updatable | onchain_profiles.Updatable | ops.Updatable | proposal_votes.Updatable | proposals.Updatable | proposed_editors.Updatable | proposed_members.Updatable | proposed_subspaces.Updatable | proposed_versions.Updatable | space_editors.Updatable | space_members.Updatable | space_subspaces.Updatable | spaces.Updatable | triple_versions.Updatable | triples.Updatable | triplesv2.Updatable | versions.Updatable;
+    export type UniqueIndex = accounts.UniqueIndex | actions.UniqueIndex | collections.UniqueIndex | cursors.UniqueIndex | geo_entities.UniqueIndex | geo_entity_types.UniqueIndex | log_entries.UniqueIndex | onchain_profiles.UniqueIndex | ops.UniqueIndex | proposal_votes.UniqueIndex | proposals.UniqueIndex | proposed_editors.UniqueIndex | proposed_members.UniqueIndex | proposed_subspaces.UniqueIndex | proposed_versions.UniqueIndex | space_editors.UniqueIndex | space_members.UniqueIndex | space_subspaces.UniqueIndex | spaces.UniqueIndex | triple_versions.UniqueIndex | triples.UniqueIndex | triplesv2.UniqueIndex | versions.UniqueIndex;
+    export type Column = accounts.Column | actions.Column | collections.Column | cursors.Column | geo_entities.Column | geo_entity_types.Column | log_entries.Column | onchain_profiles.Column | ops.Column | proposal_votes.Column | proposals.Column | proposed_editors.Column | proposed_members.Column | proposed_subspaces.Column | proposed_versions.Column | space_editors.Column | space_members.Column | space_subspaces.Column | spaces.Column | triple_versions.Column | triples.Column | triplesv2.Column | versions.Column;
   
-    export type AllBaseTables = [accounts.Table, actions.Table, collections.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, proposed_versions.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, triple_versions.Table, triples.Table, versions.Table];
+    export type AllBaseTables = [accounts.Table, actions.Table, collections.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, ops.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, proposed_versions.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, triple_versions.Table, triples.Table, triplesv2.Table, versions.Table];
     export type AllForeignTables = [];
     export type AllViews = [];
     export type AllMaterializedViews = [];
-    export type AllTablesAndViews = [accounts.Table, actions.Table, collections.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, proposed_versions.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, triple_versions.Table, triples.Table, versions.Table];
+    export type AllTablesAndViews = [accounts.Table, actions.Table, collections.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, ops.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, proposed_versions.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, triple_versions.Table, triples.Table, triplesv2.Table, versions.Table];
   }
 
 
@@ -5279,6 +6023,7 @@ declare module 'zapatos/schema' {
     "geo_entity_types": geo_entity_types.Selectable;
     "log_entries": log_entries.Selectable;
     "onchain_profiles": onchain_profiles.Selectable;
+    "ops": ops.Selectable;
     "proposal_votes": proposal_votes.Selectable;
     "proposals": proposals.Selectable;
     "proposed_editors": proposed_editors.Selectable;
@@ -5291,6 +6036,7 @@ declare module 'zapatos/schema' {
     "spaces": spaces.Selectable;
     "triple_versions": triple_versions.Selectable;
     "triples": triples.Selectable;
+    "triplesv2": triplesv2.Selectable;
     "versions": versions.Selectable;
     "cache.entries": cache.entries.Selectable;
     "cache.roles": cache.roles.Selectable;
@@ -5305,6 +6051,7 @@ declare module 'zapatos/schema' {
     "geo_entity_types": geo_entity_types.JSONSelectable;
     "log_entries": log_entries.JSONSelectable;
     "onchain_profiles": onchain_profiles.JSONSelectable;
+    "ops": ops.JSONSelectable;
     "proposal_votes": proposal_votes.JSONSelectable;
     "proposals": proposals.JSONSelectable;
     "proposed_editors": proposed_editors.JSONSelectable;
@@ -5317,6 +6064,7 @@ declare module 'zapatos/schema' {
     "spaces": spaces.JSONSelectable;
     "triple_versions": triple_versions.JSONSelectable;
     "triples": triples.JSONSelectable;
+    "triplesv2": triplesv2.JSONSelectable;
     "versions": versions.JSONSelectable;
     "cache.entries": cache.entries.JSONSelectable;
     "cache.roles": cache.roles.JSONSelectable;
@@ -5331,6 +6079,7 @@ declare module 'zapatos/schema' {
     "geo_entity_types": geo_entity_types.Whereable;
     "log_entries": log_entries.Whereable;
     "onchain_profiles": onchain_profiles.Whereable;
+    "ops": ops.Whereable;
     "proposal_votes": proposal_votes.Whereable;
     "proposals": proposals.Whereable;
     "proposed_editors": proposed_editors.Whereable;
@@ -5343,6 +6092,7 @@ declare module 'zapatos/schema' {
     "spaces": spaces.Whereable;
     "triple_versions": triple_versions.Whereable;
     "triples": triples.Whereable;
+    "triplesv2": triplesv2.Whereable;
     "versions": versions.Whereable;
     "cache.entries": cache.entries.Whereable;
     "cache.roles": cache.roles.Whereable;
@@ -5357,6 +6107,7 @@ declare module 'zapatos/schema' {
     "geo_entity_types": geo_entity_types.Insertable;
     "log_entries": log_entries.Insertable;
     "onchain_profiles": onchain_profiles.Insertable;
+    "ops": ops.Insertable;
     "proposal_votes": proposal_votes.Insertable;
     "proposals": proposals.Insertable;
     "proposed_editors": proposed_editors.Insertable;
@@ -5369,6 +6120,7 @@ declare module 'zapatos/schema' {
     "spaces": spaces.Insertable;
     "triple_versions": triple_versions.Insertable;
     "triples": triples.Insertable;
+    "triplesv2": triplesv2.Insertable;
     "versions": versions.Insertable;
     "cache.entries": cache.entries.Insertable;
     "cache.roles": cache.roles.Insertable;
@@ -5383,6 +6135,7 @@ declare module 'zapatos/schema' {
     "geo_entity_types": geo_entity_types.Updatable;
     "log_entries": log_entries.Updatable;
     "onchain_profiles": onchain_profiles.Updatable;
+    "ops": ops.Updatable;
     "proposal_votes": proposal_votes.Updatable;
     "proposals": proposals.Updatable;
     "proposed_editors": proposed_editors.Updatable;
@@ -5395,6 +6148,7 @@ declare module 'zapatos/schema' {
     "spaces": spaces.Updatable;
     "triple_versions": triple_versions.Updatable;
     "triples": triples.Updatable;
+    "triplesv2": triplesv2.Updatable;
     "versions": versions.Updatable;
     "cache.entries": cache.entries.Updatable;
     "cache.roles": cache.roles.Updatable;
@@ -5409,6 +6163,7 @@ declare module 'zapatos/schema' {
     "geo_entity_types": geo_entity_types.UniqueIndex;
     "log_entries": log_entries.UniqueIndex;
     "onchain_profiles": onchain_profiles.UniqueIndex;
+    "ops": ops.UniqueIndex;
     "proposal_votes": proposal_votes.UniqueIndex;
     "proposals": proposals.UniqueIndex;
     "proposed_editors": proposed_editors.UniqueIndex;
@@ -5421,6 +6176,7 @@ declare module 'zapatos/schema' {
     "spaces": spaces.UniqueIndex;
     "triple_versions": triple_versions.UniqueIndex;
     "triples": triples.UniqueIndex;
+    "triplesv2": triplesv2.UniqueIndex;
     "versions": versions.UniqueIndex;
     "cache.entries": cache.entries.UniqueIndex;
     "cache.roles": cache.roles.UniqueIndex;
@@ -5435,6 +6191,7 @@ declare module 'zapatos/schema' {
     "geo_entity_types": geo_entity_types.Column;
     "log_entries": log_entries.Column;
     "onchain_profiles": onchain_profiles.Column;
+    "ops": ops.Column;
     "proposal_votes": proposal_votes.Column;
     "proposals": proposals.Column;
     "proposed_editors": proposed_editors.Column;
@@ -5447,6 +6204,7 @@ declare module 'zapatos/schema' {
     "spaces": spaces.Column;
     "triple_versions": triple_versions.Column;
     "triples": triples.Column;
+    "triplesv2": triplesv2.Column;
     "versions": versions.Column;
     "cache.entries": cache.entries.Column;
     "cache.roles": cache.roles.Column;
@@ -5461,6 +6219,7 @@ declare module 'zapatos/schema' {
     "geo_entity_types": geo_entity_types.SQL;
     "log_entries": log_entries.SQL;
     "onchain_profiles": onchain_profiles.SQL;
+    "ops": ops.SQL;
     "proposal_votes": proposal_votes.SQL;
     "proposals": proposals.SQL;
     "proposed_editors": proposed_editors.SQL;
@@ -5473,6 +6232,7 @@ declare module 'zapatos/schema' {
     "spaces": spaces.SQL;
     "triple_versions": triple_versions.SQL;
     "triples": triples.SQL;
+    "triplesv2": triplesv2.SQL;
     "versions": versions.SQL;
     "cache.entries": cache.entries.SQL;
     "cache.roles": cache.roles.SQL;
