@@ -139,7 +139,6 @@ CREATE TABLE public.triples (
     string_value text,
     array_value text,
     entity_value_id text REFERENCES public.geo_entities(id),
-    is_protected boolean NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,

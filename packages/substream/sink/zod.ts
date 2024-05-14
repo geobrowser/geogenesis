@@ -12,7 +12,7 @@ export const ZodAction = z.object({
   // @TODO: Value should be a union of objects
   value: z
     .object({
-      type: z.enum(['number', 'string', 'entity', 'image', 'date', 'url']),
+      type: z.enum(['number', 'string', 'entity', 'image', 'date', 'url', 'collection']),
       id: z.string(),
       value: z.string().nullish(),
     })

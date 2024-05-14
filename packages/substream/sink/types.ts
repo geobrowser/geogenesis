@@ -1,8 +1,10 @@
 import type * as s from 'zapatos/schema';
 
 export enum TripleAction {
+  // @deprecated
   Create = 'createTriple',
   Delete = 'deleteTriple',
+  Upsert = 'upsertTriple',
 }
 
 export type TripleWithActionTuple = [TripleAction, s.triples.Insertable];

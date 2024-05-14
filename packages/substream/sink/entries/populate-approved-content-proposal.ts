@@ -2,12 +2,12 @@ import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
+import { populateTriples } from '../events/proposal-processed/populate-triples';
 import { createGeoId } from '../utils/create-geo-id';
 import { upsertChunked } from '../utils/db';
 import { pool } from '../utils/pool';
 import type { Action } from '../zod';
 import { mapTripleVersions } from './map-triple-versions';
-import { populateTriples } from './populate-triples';
 
 export function populateApprovedContentProposal(
   proposals: Schema.proposals.Selectable[],

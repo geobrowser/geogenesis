@@ -4059,12 +4059,6 @@ declare module 'zapatos/schema' {
       */
       entity_value_id: string | null;
       /**
-      * **triples.is_protected**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_protected: boolean;
-      /**
       * **triples.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -4150,12 +4144,6 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       entity_value_id: string | null;
-      /**
-      * **triples.is_protected**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_protected: boolean;
       /**
       * **triples.space_id**
       * - `text` in database
@@ -4243,12 +4231,6 @@ declare module 'zapatos/schema' {
       */
       entity_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.is_protected**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_protected?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
-      /**
       * **triples.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -4335,12 +4317,6 @@ declare module 'zapatos/schema' {
       */
       entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **triples.is_protected**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_protected: boolean | db.Parameter<boolean> | db.SQLFragment;
-      /**
       * **triples.space_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -4426,12 +4402,6 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       entity_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
-      /**
-      * **triples.is_protected**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_protected?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
       /**
       * **triples.space_id**
       * - `text` in database
