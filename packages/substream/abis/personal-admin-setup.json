@@ -13,6 +13,12 @@
         "internalType": "address",
         "name": "personalAdminPlugin",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "initialEditor",
+        "type": "address"
       }
     ],
     "name": "GeoPersonalAdminPluginCreated",

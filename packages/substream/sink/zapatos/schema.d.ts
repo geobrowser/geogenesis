@@ -3735,6 +3735,12 @@ declare module 'zapatos/schema' {
       */
       member_access_plugin_address: string | null;
       /**
+      * **spaces.personal_space_admin_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      personal_space_admin_plugin_address: string | null;
+      /**
       * **spaces.configuration_id**
       * - `text` in database
       * - Nullable, no default
@@ -3784,6 +3790,12 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       member_access_plugin_address: string | null;
+      /**
+      * **spaces.personal_space_admin_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      personal_space_admin_plugin_address: string | null;
       /**
       * **spaces.configuration_id**
       * - `text` in database
@@ -3835,6 +3847,12 @@ declare module 'zapatos/schema' {
       */
       member_access_plugin_address?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **spaces.personal_space_admin_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      personal_space_admin_plugin_address?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **spaces.configuration_id**
       * - `text` in database
       * - Nullable, no default
@@ -3885,6 +3903,12 @@ declare module 'zapatos/schema' {
       */
       member_access_plugin_address?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
+      * **spaces.personal_space_admin_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      personal_space_admin_plugin_address?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
       * **spaces.configuration_id**
       * - `text` in database
       * - Nullable, no default
@@ -3934,6 +3958,12 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       member_access_plugin_address?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **spaces.personal_space_admin_plugin_address**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      personal_space_admin_plugin_address?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **spaces.configuration_id**
       * - `text` in database

@@ -87,6 +87,22 @@ pub struct GeoGovernancePluginsCreated {
     #[prost(message, repeated, tag="1")]
     pub plugins: ::prost::alloc::vec::Vec<GeoGovernancePluginCreated>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeoPersonalSpaceAdminPluginCreated {
+    #[prost(string, tag="1")]
+    pub dao_address: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub personal_admin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub initial_editor: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeoPersonalSpaceAdminPluginsCreated {
+    #[prost(message, repeated, tag="1")]
+    pub plugins: ::prost::alloc::vec::Vec<GeoPersonalSpaceAdminPluginCreated>,
+}
 /// *
 /// This event represents adding editors to a DAO-based space
 ///
@@ -364,5 +380,7 @@ pub struct GeoOutput {
     pub members_added: ::prost::alloc::vec::Vec<MemberAdded>,
     #[prost(message, repeated, tag="13")]
     pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
+    #[prost(message, repeated, tag="14")]
+    pub personal_plugins_created: ::prost::alloc::vec::Vec<GeoPersonalSpaceAdminPluginCreated>,
 }
 // @@protoc_insertion_point(module)
