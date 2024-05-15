@@ -32,8 +32,6 @@ export function populateApprovedContentProposal(
 
     const proposedVersions = nestedProposedVersions.flatMap(pv => pv);
 
-    console.log('proposed versions', proposedVersions);
-
     const entities = proposedVersions.map(pv => {
       const newEntity: Schema.Insertable = {
         id: pv.entity_id,

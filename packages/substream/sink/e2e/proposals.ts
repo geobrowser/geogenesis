@@ -57,8 +57,6 @@ function e2e() {
 
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType([editProposal], mockBlock);
 
-    console.log('pvs', schemaEditProposals.proposedVersions);
-
     const writtenProposals = yield* _(
       Effect.tryPromise({
         try: async () => {

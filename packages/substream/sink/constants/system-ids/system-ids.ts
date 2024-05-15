@@ -1,6 +1,6 @@
 export const IMAGE_ATTRIBUTE = '457a27af-7b0b-485c-ac07-aa37756adafa';
 export const DESCRIPTION = 'Description';
-export const NAME = 'name';
+export const NAME = 'a126ca530c8e48d5b88882c734c38935';
 export const SPACE = 'space';
 export const INDEXED_SPACE = '30659852-2df5-42f6-9ad7-2921c33ad84b';
 export const ATTRIBUTE = 'attribute';
@@ -200,38 +200,3 @@ export const PROFILE_REGISTRY_ADDRESS = '0xc066E89bF7669b905f869Cb936818b0fd0bc4
 // This is the address for the Root Space.
 export const ROOT_SPACE_ADDRESS = '0xEcC4016C71fF38B32f01538207B6F0FdcbCF99f5';
 export const MEMBERSHIP_CONTRACT_ADDRESS = '0x34a94160f4B0f86d932927DFfb326354dB279181';
-
-/**
-  There are currently multiple beacon proxies representing multiple space deployments on Polygon mainnet.
-  Going forward we need to make sure all new permissionless and permissioned spaces are deployed using
-  a single Beacon for each type rather than creating a new beacon every time we deploy new spaces.
-
-  See packages/contracts/.openzepplin/polygon.json for metadata on the deployed beacons.
-
-  Note: This is commented out for now to make the subgraph happy since it depends on this file.
-
-  export const BEACONS = [
-    {
-      // This is the original beacon proxy deployed for the first spaces.
-      address: '0x8991A5056A0ebC8740A9F74Fd9122dAdE2F29ED0',
-      txHash:
-        '0x3b7e16025ef0ceb218dc244a2145ea6dc153185cea175dc7a01ef09d0e214aea',
-      kind: 'beacon',
-    },
-    {
-      address: '0x9C65Ff69c55B2Af83d1E396188Ec05f2101F4b7E',
-      txHash:
-        '0x91e258c315a7d4e8cebbe51ca1dcd7c973a8700698e7bf7f16ecb44c15dc47bc',
-      kind: 'beacon',
-    },
-    {
-      address: '0x9952B5C325981fa48Df48BfCCdb019161E9e56D3',
-      txHash:
-        '0xfafedd87721f08c559dd0c7fc80c73b4a61756650a3dee504c89160a11045e69',
-      kind: 'beacon',
-    },
-  ]
-*/
-
-// Legacy attributes
-export const HIDDEN_COLUMNS = '1ed5b976-f8a4-451b-a2cc-531f85b59cab';
