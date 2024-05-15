@@ -71,25 +71,24 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           catch: () => new Error('Failed to insert triple'),
         });
 
-        // @TODO:
-        // const insertTripleVersionEffect = Effect.tryPromise({
-        //   try: () =>
-        //     db
-        //       .upsert(
-        //         'triple_versions',
-        //         { version_id: version.id, triple_id: triple.id },
-        //         ['triple_id', 'version_id'],
-        //         {
-        //           updateColumns: ['triple_id', 'version_id'],
-        //         }
-        //       )
-        //       .run(pool),
-        //   catch: error => new Error(`Failed to insert ${triple.id}. ${(error as Error).message}`),
-        // });
+        const insertTripleVersionEffect = Effect.tryPromise({
+          try: () =>
+            db
+              .upsert(
+                'triple_versions',
+                { version_id: version.id, triple_id: triple.id },
+                ['triple_id', 'version_id'],
+                {
+                  updateColumns: ['triple_id', 'version_id'],
+                }
+              )
+              .run(pool),
+          catch: error => new Error(`Failed to insert ${triple.id}. ${(error as Error).message}`),
+        });
 
         // @TODO: Parallelize with Effect.all
         yield* awaited(insertTripleEffect, retryEffect);
-        // yield* awaited(insertTripleVersionEffect, retryEffect);
+        yield* awaited(insertTripleVersionEffect, retryEffect);
       }
 
       /**
@@ -100,29 +99,29 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
        * Here we remove the triple from the current if it was deleted.
        */
       if (isDeleteTriple && version) {
-        // const deleteEffect = Effect.tryPromise({
-        //   try: () =>
-        //     db
-        //       .deletes(
-        //         'triple_versions',
-        //         { version_id: version.id, triple_id: triple.id },
-        //         { returning: ['triple_id', 'version_id'] }
-        //       )
-        //       .run(pool),
-        //   catch: error =>
-        //     new Error(`Failed to delete triple ${triple.id} from version ${version.id}}. ${(error as Error).message}`),
-        // });
-        // /**
-        //  * With our versioning model we store all triples that have ever been written to the system. If a
-        //  * triple is not part of the latest version for an entity we mark it as stale.
-        //  */
-        // const setStaleEffect = Effect.tryPromise({
-        //   try: () => db.update('triples', { is_stale: true }, { id: triple.id }).run(pool),
-        //   catch: error => new Error(`Failed to set triple ${triple.id} as stale. ${(error as Error).message}`),
-        // });
-        // // @TODO: Parallelize with Effect.all
-        // yield* awaited(deleteEffect, retryEffect);
-        // yield* awaited(setStaleEffect, retryEffect);
+        const deleteEffect = Effect.tryPromise({
+          try: () =>
+            db
+              .deletes(
+                'triple_versions',
+                { version_id: version.id, triple_id: triple.id },
+                { returning: ['triple_id', 'version_id'] }
+              )
+              .run(pool),
+          catch: error =>
+            new Error(`Failed to delete triple ${triple.id} from version ${version.id}}. ${(error as Error).message}`),
+        });
+        /**
+         * With our versioning model we store all triples that have ever been written to the system. If a
+         * triple is not part of the latest version for an entity we mark it as stale.
+         */
+        const setStaleEffect = Effect.tryPromise({
+          try: () => db.update('triples', { is_stale: true }, { id: triple.id }).run(pool),
+          catch: error => new Error(`Failed to set triple ${triple.id} as stale. ${(error as Error).message}`),
+        });
+        // @TODO: Parallelize with Effect.all
+        yield* awaited(deleteEffect, retryEffect);
+        yield* awaited(setStaleEffect, retryEffect);
       }
 
       /**
