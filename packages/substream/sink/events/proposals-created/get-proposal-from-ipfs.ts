@@ -153,7 +153,7 @@ export function getProposalFromIpfs(
       }
 
       case IpfsContentType.ADD_EDITOR:
-      case IpfsContentType.REMOVE_EDITOR:
+      case IpfsContentType.REMOVE_EDITOR: {
         const parsedEditorship = yield* _(decode(() => Membership.fromBinary(ipfsContent)));
 
         if (!parsedEditorship) {
@@ -177,6 +177,7 @@ export function getProposalFromIpfs(
         };
 
         return mappedProposal;
+      }
 
       case IpfsContentType.ADD_MEMBER:
       case IpfsContentType.REMOVE_MEMBER: {

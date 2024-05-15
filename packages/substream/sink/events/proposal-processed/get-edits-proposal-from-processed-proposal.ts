@@ -83,7 +83,7 @@ function fetchEditProposalFromIpfs(
     }
 
     switch (validIpfsMetadata.type) {
-      case IpfsContentType.EDIT:
+      case IpfsContentType.EDIT: {
         const parsedContent = yield* _(decode(() => Edit.fromBinary(ipfsContent)));
 
         if (!parsedContent) {
@@ -107,6 +107,7 @@ function fetchEditProposalFromIpfs(
         };
 
         return contentProposal;
+      }
     }
 
     yield* _(
