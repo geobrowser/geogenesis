@@ -9,13 +9,13 @@ import { type OpWithCreatedBy, mapSchemaTriples } from './map-triples';
 import { SYSTEM_IDS } from '~/sink/constants/system-ids';
 import { Triples } from '~/sink/db';
 
-interface PopulateTriplesArgsV2 {
+interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
   block: BlockEvent;
   versions: Schema.versions.Insertable[];
 }
 
-export function populateTriples({ schemaTriples, block, versions }: PopulateTriplesArgsV2) {
+export function populateTriples({ schemaTriples, block, versions }: PopulateTriplesArgs) {
   return Effect.gen(function* (awaited) {
     /**
      * Changes to data in Geo are modeled as "actions." You can create a triple or delete a triple.
@@ -184,7 +184,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
         const maybeNameTripleForEntityEffect = Effect.tryPromise({
           try: () =>
             db
-              .selectOne('triplesv2', {
+              .selectOne('triples', {
                 entity_id: triple.entity_id,
                 attribute_id: SYSTEM_IDS.NAME,
                 value_type: 'TEXT',

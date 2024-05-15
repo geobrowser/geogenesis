@@ -124,31 +124,14 @@ CREATE TABLE public.space_subspaces (
     CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
-CREATE TYPE public.triple_value_type as ENUM ('number', 'text', 'entity', 'collection', 'image', 'date', 'url');
-CREATE TYPE public.triple_value_typeV2 as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URL', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
+CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URL', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
+
 
 CREATE TABLE public.triples (
     id text PRIMARY KEY,
     entity_id text NOT NULL REFERENCES public.geo_entities(id),
     attribute_id text NOT NULL REFERENCES public.geo_entities(id),
     value_type triple_value_type NOT NULL,
-    value_id text NOT NULL,
-    number_value text,
-    string_value text,
-    array_value text,
-    entity_value_id text REFERENCES public.geo_entities(id),
-    collection_value_id text REFERENCES public.geo_entities(id),
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    is_stale boolean NOT NULL
-);
-
-CREATE TABLE public.triplesV2 (
-    PRIMARY KEY (space_id, entity_id, attribute_id),
-    entity_id text NOT NULL REFERENCES public.geo_entities(id),
-    attribute_id text NOT NULL REFERENCES public.geo_entities(id),
-    value_type triple_value_typeV2 NOT NULL,
     number_value text,
     text_value text,
     entity_value_id text REFERENCES public.geo_entities(id),
@@ -190,7 +173,7 @@ CREATE TABLE public.ops (
     space_id text NOT NULL REFERENCES public.spaces(id),
     entity_id text NOT NULL REFERENCES public.geo_entities(id),
     attribute_id text NOT NULL REFERENCES public.geo_entities(id),
-    value_type triple_value_typeV2 NOT NULL,
+    value_type triple_value_type NOT NULL,
     number_value text,
     text_value text,
     entity_value_id text REFERENCES public.geo_entities(id),

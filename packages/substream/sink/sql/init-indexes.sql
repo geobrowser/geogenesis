@@ -6,7 +6,7 @@
 
 CREATE INDEX idx_entity_attribute ON public.triples(entity_id, attribute_id);
 
-CREATE INDEX idx_entity_attribute_value_id ON public.triples(entity_id, attribute_id, value_id);
+CREATE INDEX idx_entity_attribute_value_id ON public.triples(entity_id, attribute_id, entity_value_id);
 
 CREATE INDEX idx_entity_value_id ON public.triples(entity_value_id);
 

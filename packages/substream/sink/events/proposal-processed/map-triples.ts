@@ -2,11 +2,12 @@ import type * as S from 'zapatos/schema';
 
 import type { Op } from '../proposals-created/parser';
 import { type BlockEvent, type TripleOp } from '~/sink/types';
+import { generateTripleId } from '~/sink/utils/id';
 
 export interface OpWithCreatedBy {
   createdById: string;
   op: TripleOp;
-  triple: S.triplesv2.Insertable;
+  triple: S.triples.Insertable;
 }
 
 export type SchemaTripleEdit = Parameters<typeof mapSchemaTriples>[0];
@@ -34,6 +35,11 @@ export function mapSchemaTriples(
         createdById: edit.createdById,
         op: op.opType,
         triple: {
+          id: generateTripleId({
+            space_id,
+            entity_id,
+            attribute_id,
+          }),
           space_id,
           entity_id,
           attribute_id,
@@ -56,6 +62,11 @@ export function mapSchemaTriples(
       createdById: edit.createdById,
       op: op.opType,
       triple: {
+        id: generateTripleId({
+          space_id,
+          entity_id,
+          attribute_id,
+        }),
         space_id,
         entity_id,
         attribute_id,
