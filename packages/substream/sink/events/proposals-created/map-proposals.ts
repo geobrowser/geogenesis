@@ -12,13 +12,12 @@ function groupProposalsByType(
   subspaceProposals: SubspaceProposal[];
   editProposals: EditProposal[];
 } {
+  const editProposals = proposals.flatMap(p => (p.type === 'EDIT' ? p : []));
   const memberProposals = proposals.flatMap(p => (p.type === 'ADD_MEMBER' || p.type === 'REMOVE_MEMBER' ? p : []));
   const editorProposals = proposals.flatMap(p => (p.type === 'ADD_EDITOR' || p.type === 'REMOVE_EDITOR' ? p : []));
   const subspaceProposals = proposals.flatMap(p =>
     p.type === 'ADD_SUBSPACE' || p.type === 'REMOVE_SUBSPACE' ? p : []
   );
-
-  const editProposals = proposals.flatMap(p => (p.type === 'EDIT' ? p : []));
 
   return {
     memberProposals,
