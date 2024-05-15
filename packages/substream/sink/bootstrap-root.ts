@@ -4,7 +4,6 @@ import type * as s from 'zapatos/schema';
 
 import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
 import { SYSTEM_IDS } from './constants/system-ids';
-import { generateTripleId } from './utils/id';
 import { pool } from './utils/pool';
 
 const entities: string[] = [
@@ -137,21 +136,18 @@ const geoEntities: s.geo_entities.Insertable[] = entities.map(entity => ({
   updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
 }));
 
-const namesTriples: s.triples.Insertable[] = Object.entries(names).map(([id, name]) => ({
-  id: generateTripleId({
-    space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
+  ([id, name]): s.triples.Insertable => ({
     entity_id: id,
     attribute_id: SYSTEM_IDS.NAME,
-  }),
-  entity_id: id,
-  attribute_id: SYSTEM_IDS.NAME,
-  value_type: 'TEXT',
-  string_value: name,
-  space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-  created_at: ROOT_SPACE_CREATED_AT,
-  is_stale: false,
-}));
+    value_type: 'TEXT',
+    text_value: name,
+    space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    created_at: ROOT_SPACE_CREATED_AT,
+    is_stale: false,
+  })
+);
 
 const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
   .map(([id, entity_value_id]): s.triples.Insertable[] => [

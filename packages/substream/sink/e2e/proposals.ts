@@ -3,6 +3,7 @@ import fs from 'fs';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
+import { bootstrapRoot } from '../bootstrap-root';
 import { Ops, Proposals, ProposedVersions } from '../db';
 import { populateApprovedContentProposal } from '../entries/populate-approved-content-proposal';
 import { mapIpfsProposalToSchemaProposalByType } from '../events/proposals-created/map-proposals';
@@ -116,4 +117,5 @@ function e2e() {
   });
 }
 
+Effect.runPromise(bootstrapRoot());
 Effect.runPromise(e2e());

@@ -2,7 +2,6 @@ import type * as S from 'zapatos/schema';
 
 import type { Op } from '../proposals-created/parser';
 import { type BlockEvent, type TripleOp } from '~/sink/types';
-import { generateTripleId } from '~/sink/utils/id';
 
 export interface OpWithCreatedBy {
   createdById: string;
