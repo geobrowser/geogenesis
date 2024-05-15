@@ -18,11 +18,10 @@ import {
 } from './parser';
 import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
+import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { handleDecodeIpfsContentType } from '~/sink/ipfs/decoder';
 import type { BlockEvent } from '~/sink/types';
-import { isValidAction } from '~/sink/utils/actions';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
-import { getFetchIpfsContentEffect } from '~/sink/utils/ipfs';
 import { slog } from '~/sink/utils/slog';
 
 /**

@@ -2,9 +2,9 @@ import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
 import type { SpaceWithPluginAddressNotFoundError } from '../../errors';
+import { getFetchIpfsContentEffect } from '../../ipfs';
 import type { BlockEvent } from '../../types';
 import { getChecksumAddress } from '../../utils/get-checksum-address';
-import { getFetchIpfsContentEffect } from '../../utils/ipfs';
 import { slog } from '../../utils/slog';
 import { handleDecodeEditProposal } from '../proposals-created/decoder';
 import { type EditProposal, type ProposalProcessed, ZodProposalMetadata } from '../proposals-created/parser';

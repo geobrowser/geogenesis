@@ -17,7 +17,7 @@ import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
-import { getContentProposalFromProcessedProposalIpfsUri } from './events/proposal-processed/get-content-proposal-from-processed-proposal';
+import { getContentProposalFromProcessedProposalIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
 import { handleProposalsProcessed } from './events/proposal-processed/handler';
 import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
