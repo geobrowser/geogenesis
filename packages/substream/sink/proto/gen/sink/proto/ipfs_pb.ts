@@ -420,19 +420,19 @@ export class Value extends Message<Value> {
  */
 export class Membership extends Message<Membership> {
   /**
-   * @generated from field: string name = 1;
+   * @generated from field: IpfsContentType type = 1;
+   */
+  type = IpfsContentType.UNKNOWN;
+
+  /**
+   * @generated from field: string name = 2;
    */
   name = "";
 
   /**
-   * @generated from field: string version = 2;
+   * @generated from field: string version = 3;
    */
   version = "";
-
-  /**
-   * @generated from field: string userAddress = 3;
-   */
-  userAddress = "";
 
   /**
    * @generated from field: string proposalId = 4;
@@ -440,9 +440,9 @@ export class Membership extends Message<Membership> {
   proposalId = "";
 
   /**
-   * @generated from field: IpfsContentType type = 5;
+   * @generated from field: string userAddress = 5;
    */
-  type = IpfsContentType.UNKNOWN;
+  userAddress = "";
 
   constructor(data?: PartialMessage<Membership>) {
     super();
@@ -452,11 +452,11 @@ export class Membership extends Message<Membership> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "Membership";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "userAddress", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(IpfsContentType) },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "proposalId", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "type", kind: "enum", T: proto3.getEnumType(IpfsContentType) },
+    { no: 5, name: "userAddress", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Membership {
@@ -481,19 +481,19 @@ export class Membership extends Message<Membership> {
  */
 export class Subspace extends Message<Subspace> {
   /**
-   * @generated from field: string name = 1;
+   * @generated from field: IpfsContentType type = 1;
+   */
+  type = IpfsContentType.UNKNOWN;
+
+  /**
+   * @generated from field: string name = 2;
    */
   name = "";
 
   /**
-   * @generated from field: string version = 2;
+   * @generated from field: string version = 3;
    */
   version = "";
-
-  /**
-   * @generated from field: string subspace = 3;
-   */
-  subspace = "";
 
   /**
    * @generated from field: string proposalId = 4;
@@ -501,9 +501,9 @@ export class Subspace extends Message<Subspace> {
   proposalId = "";
 
   /**
-   * @generated from field: IpfsContentType type = 5;
+   * @generated from field: string subspace = 5;
    */
-  type = IpfsContentType.UNKNOWN;
+  subspace = "";
 
   constructor(data?: PartialMessage<Subspace>) {
     super();
@@ -513,11 +513,11 @@ export class Subspace extends Message<Subspace> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "Subspace";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "subspace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(IpfsContentType) },
+    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "proposalId", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "type", kind: "enum", T: proto3.getEnumType(IpfsContentType) },
+    { no: 5, name: "subspace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Subspace {

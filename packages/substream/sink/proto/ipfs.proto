@@ -72,7 +72,6 @@ message Membership {
   string version = 3;
   string proposalId = 4;
   string userAddress = 5;
-  string proposalId = 6;
 }
 
 message Subspace {
