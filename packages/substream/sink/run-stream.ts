@@ -1,7 +1,6 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { createSink, createStream } from '@substreams/sink';
 import { Effect, Secret, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
@@ -9,8 +8,11 @@ import { readCursor, writeCursor } from './cursor';
 import { Environment } from './environment';
 import { handleEditorsAdded } from './events/editor-added/handler';
 import { ZodEditorAddedStreamResponse } from './events/editor-added/parser';
-import { handleInitialEditorsAdded } from './events/initial-editors-added/handler';
-import { ZodInitialEditorsAddedStreamResponse } from './events/initial-editors-added/parser';
+import {
+  handleInitialGovernanceSpaceEditorsAdded,
+  handleInitialPersonalSpaceEditorsAdded,
+} from './events/initial-editors-added/handler';
+import { type InitialEditorsAdded, ZodInitialEditorsAddedStreamResponse } from './events/initial-editors-added/parser';
 import { getInitialProposalsForSpaces } from './events/initial-proposal-created/get-initial-proposals';
 import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
 import { handleMemberAdded } from './events/member-added/handler';
@@ -26,9 +28,14 @@ import {
 } from './events/proposals-created/parser';
 import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { ZodProposalExecutedStreamResponse } from './events/proposals-executed/parser';
-import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
+import {
+  handleGovernancePluginCreated,
+  handlePersonalSpacesCreated,
+  handleSpacesCreated,
+} from './events/spaces-created/handler';
 import {
   ZodGovernancePluginsCreatedStreamResponse,
+  ZodPersonalPluginsCreatedStreamResponse,
   ZodSpacePluginCreatedStreamResponse,
 } from './events/spaces-created/parser';
 import { handleSubspacesAdded } from './events/subspaces-added/handler';
@@ -40,6 +47,7 @@ import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { Telemetry } from './telemetry';
 import { createGeoId } from './utils/create-geo-id';
 import { slog } from './utils/slog';
+import { createSink, createStream } from './vendor/sink/src';
 
 export class InvalidPackageError extends Error {
   _tag: 'InvalidPackageError' = 'InvalidPackageError';
@@ -164,6 +172,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
+          const personalPluginsCreated = ZodPersonalPluginsCreatedStreamResponse.safeParse(jsonOutput);
           const subspacesAdded = ZodSubspacesAddedStreamResponse.safeParse(jsonOutput);
           const subspacesRemoved = ZodSubspacesRemovedStreamResponse.safeParse(jsonOutput);
           const initialEditorsAddedResponse = ZodInitialEditorsAddedStreamResponse.safeParse(jsonOutput);
@@ -180,6 +189,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const hasValidEvent =
             spacePluginCreatedResponse.success ||
             governancePluginsCreatedResponse.success ||
+            personalPluginsCreated ||
             subspacesAdded.success ||
             subspacesRemoved.success ||
             initialEditorsAddedResponse.success ||
@@ -209,6 +219,44 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           if (spacePluginCreatedResponse.success) {
             yield* _(
               handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          if (personalPluginsCreated.success) {
+            yield* _(
+              handlePersonalSpacesCreated(personalPluginsCreated.data.personalPluginsCreated, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+
+            // We want to map the initial editors across spaces fairly similarly. Unfortunately
+            // the contracts are distinct enough where they don't match 1:1 with how they
+            // emit the initial editor information. We do our best here to map them to use
+            // mostly the same event handler for both.
+            //
+            // The main difference is that we handle writing the editors for personal spaces
+            // at the same time as we write the space itself rather than doing it in its
+            // own unique event like we do for governance spaces.
+            //
+            // Order matters here so we need to make sure we cwrite the plugin before we write
+            // the editors.
+            const initialEditors: InitialEditorsAdded[] = personalPluginsCreated.data.personalPluginsCreated.map(p => {
+              return {
+                pluginAddress: p.personalAdminAddress,
+                addresses: [p.initialEditor],
+              };
+            });
+
+            yield* _(
+              handleInitialPersonalSpaceEditorsAdded(initialEditors, {
                 blockNumber,
                 cursor,
                 timestamp,
@@ -252,7 +300,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (initialEditorsAddedResponse.success) {
             yield* _(
-              handleInitialEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, {
+              handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, {
                 blockNumber,
                 cursor,
                 timestamp,

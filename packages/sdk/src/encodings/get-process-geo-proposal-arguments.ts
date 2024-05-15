@@ -14,8 +14,8 @@ export function getProcessGeoProposalArguments(
         value: BigInt(0),
         data: encodeFunctionData({
           abi: SpaceAbi,
-          functionName: 'processGeoProposal',
-          args: [0, 0, ipfsUri],
+          functionName: 'publishEdits',
+          args: [ipfsUri],
         }),
       },
     ],

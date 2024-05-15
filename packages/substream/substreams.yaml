@@ -63,6 +63,14 @@ modules:
     output:
       type: proto:schema.GeoGovernancePluginsCreated
 
+  - name: map_personal_admin_plugins_created
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.GeoPersonalSpaceAdminPluginsCreated
+
   - name: map_initial_editors_added
     kind: map
     initialBlock: 620
@@ -138,6 +146,7 @@ modules:
       # - map: map_members_removed
       - map: map_editors_added
       # - map: map_editors_removed
+      - map: map_personal_admin_plugins_created
     output:
       type: proto:schema.GeoOutput
 

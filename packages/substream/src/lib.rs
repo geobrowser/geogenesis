@@ -3,7 +3,8 @@ mod pb;
 
 use pb::schema::{
     EditorAdded, EditorRemoved, EditorsAdded, EditorsRemoved, GeoGovernancePluginCreated,
-    GeoGovernancePluginsCreated, GeoOutput, GeoProfileRegistered, GeoProfilesRegistered,
+    GeoGovernancePluginsCreated, GeoOutput, GeoPersonalSpaceAdminPluginCreated,
+    GeoPersonalSpaceAdminPluginsCreated, GeoProfileRegistered, GeoProfilesRegistered,
     GeoSpaceCreated, GeoSpacesCreated, InitialEditorAdded, InitialEditorsAdded, MemberAdded,
     MemberRemoved, MembersAdded, MembersRemoved, ProposalCreated, ProposalExecuted,
     ProposalProcessed, ProposalsCreated, ProposalsExecuted, ProposalsProcessed, SubspaceAdded,
@@ -19,22 +20,25 @@ use_contract!(space, "abis/space.json");
 use_contract!(geo_profile_registry, "abis/geo-profile-registry.json");
 use_contract!(space_setup, "abis/space-setup.json");
 use_contract!(governance_setup, "abis/governance-setup.json");
+use_contract!(personal_admin_setup, "abis/personal-admin-setup.json");
+use_contract!(personal_admin_plugin, "abis/personal-admin-plugin.json");
 use_contract!(main_voting_plugin, "abis/main-voting-plugin.json");
 use_contract!(member_access_plugin, "abis/member-access-plugin.json");
 
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
-use governance_setup::events::GeoGovernancePluginsCreated as GeoGovernancePluginCreatedEvent;
+use governance_setup::events::GeoGovernancePluginsCreated as GovernancePluginCreatedEvent;
 use main_voting_plugin::events::{
     EditorAdded as EditorAddedEvent, EditorRemoved as EditorRemovedEvent,
     EditorsAdded as EditorsAddedEvent, MemberAdded as MemberAddedEvent,
     MemberRemoved as MemberRemovedEvent, ProposalCreated as ProposalCreatedEvent,
     ProposalExecuted as ProposalExecutedEvent, VoteCast as VoteCastEvent,
 };
+use personal_admin_setup::events::GeoPersonalAdminPluginCreated as GeoPersonalAdminPluginCreatedEvent;
 use space::events::{
-    GeoProposalProcessed, SubspaceAccepted, SubspaceRemoved as GeoSubspaceRemoved,
-    SuccessorSpaceCreated as SuccessSpaceCreatedEvent,
+    EditsPublished as EditsPublishedEvent, SubspaceAccepted as SubspaceAcceptedEvent,
+    SubspaceRemoved as SubspaceRemovedEvent, SuccessorSpaceCreated as SuccessSpaceCreatedEvent,
 };
-use space_setup::events::GeoSpacePluginCreated as GeoSpacePluginCreatedEvent;
+use space_setup::events::GeoSpacePluginCreated as SpacePluginCreatedEvent;
 
 /**
  * Profiles represent the users of Geo. Profiles are registered in the GeoProfileRegistry
@@ -111,7 +115,7 @@ fn map_spaces_created(
     let spaces: Vec<GeoSpaceCreated> = block
         .logs()
         .filter_map(|log| {
-            if let Some(space_created) = GeoSpacePluginCreatedEvent::match_and_decode(log) {
+            if let Some(space_created) = SpacePluginCreatedEvent::match_and_decode(log) {
                 return Some(GeoSpaceCreated {
                     dao_address: format_hex(&space_created.dao),
                     space_address: format_hex(&space_created.plugin),
@@ -130,7 +134,7 @@ fn map_subspaces_added(block: eth::v2::Block) -> Result<SubspacesAdded, substrea
     let subspaces: Vec<SubspaceAdded> = block
         .logs()
         .filter_map(|log| {
-            if let Some(space_created) = SubspaceAccepted::match_and_decode(log) {
+            if let Some(space_created) = SubspaceAcceptedEvent::match_and_decode(log) {
                 return Some(SubspaceAdded {
                     change_type: "added".to_string(),
                     subspace: format_hex(&space_created.subspace_dao),
@@ -152,7 +156,7 @@ fn map_subspaces_removed(
     let subspaces: Vec<SubspaceRemoved> = block
         .logs()
         .filter_map(|log| {
-            if let Some(space_created) = GeoSubspaceRemoved::match_and_decode(log) {
+            if let Some(space_created) = SubspaceRemovedEvent::match_and_decode(log) {
                 return Some(SubspaceRemoved {
                     change_type: "removed".to_string(),
                     subspace: format_hex(&space_created.subspace_dao),
@@ -187,7 +191,7 @@ fn map_governance_plugins_created(
         .logs()
         .filter_map(|log| {
             if let Some(space_governance_created) =
-                GeoGovernancePluginCreatedEvent::match_and_decode(log)
+                GovernancePluginCreatedEvent::match_and_decode(log)
             {
                 return Some(GeoGovernancePluginCreated {
                     dao_address: format_hex(&space_governance_created.dao),
@@ -203,6 +207,32 @@ fn map_governance_plugins_created(
         .collect();
 
     Ok(GeoGovernancePluginsCreated { plugins })
+}
+
+#[substreams::handlers::map]
+fn map_personal_admin_plugins_created(
+    block: eth::v2::Block,
+) -> Result<GeoPersonalSpaceAdminPluginsCreated, substreams::errors::Error> {
+    let plugins: Vec<GeoPersonalSpaceAdminPluginCreated> = block
+        .logs()
+        .filter_map(|log| {
+            if let Some(personal_space_created) =
+                GeoPersonalAdminPluginCreatedEvent::match_and_decode(log)
+            {
+                return Some(GeoPersonalSpaceAdminPluginCreated {
+                    initial_editor: format_hex(&personal_space_created.initial_editor),
+                    dao_address: format_hex(&personal_space_created.dao),
+                    personal_admin_address: (format_hex(
+                        &personal_space_created.personal_admin_plugin,
+                    )),
+                });
+            }
+
+            return None;
+        })
+        .collect();
+
+    Ok(GeoPersonalSpaceAdminPluginsCreated { plugins })
 }
 
 /**
@@ -409,7 +439,7 @@ fn map_proposals_processed(
     let proposals: Vec<ProposalProcessed> = block
         .logs()
         .filter_map(|log| {
-            if let Some(proposal_created) = GeoProposalProcessed::match_and_decode(log) {
+            if let Some(proposal_created) = EditsPublishedEvent::match_and_decode(log) {
                 return Some(ProposalProcessed {
                     content_uri: proposal_created.content_uri,
                     plugin_address: format_hex(&log.address()),
@@ -470,6 +500,7 @@ fn geo_out(
     proposals_executed: ProposalsExecuted,
     members_added: MembersAdded,
     editors_added: EditorsAdded,
+    personal_admin_plugins_created: GeoPersonalSpaceAdminPluginsCreated,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let profiles_registered = profiles_registered.profiles;
     let spaces_created = spaces_created.spaces;
@@ -484,6 +515,7 @@ fn geo_out(
     let executed_proposals = proposals_executed.executed_proposals;
     let members_added = members_added.members;
     let editors_added = editors_added.editors;
+    let personal_admin_plugins_created = personal_admin_plugins_created.plugins;
 
     Ok(GeoOutput {
         profiles_registered,
@@ -499,5 +531,6 @@ fn geo_out(
         executed_proposals,
         members_added,
         editors_added,
+        personal_plugins_created: personal_admin_plugins_created,
     })
 }

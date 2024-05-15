@@ -2,6 +2,7 @@ import { PluginInstallItem } from '@aragon/sdk-client-common';
 import { VotingMode } from '@geogenesis/sdk';
 import {
   GOVERNANCE_PLUGIN_REPO_ADDRESS,
+  PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
   SPACE_PLUGIN_REPO_ADDRESS,
 } from '@geogenesis/sdk/contracts';
 import { encodeAbiParameters, hexToBytes } from 'viem';
@@ -51,6 +52,30 @@ export function getSpacePluginInstallItem({
   };
 }
 
+export function getPersonalSpaceGovernancePluginInstallItem({
+  initialEditor,
+}: {
+  initialEditor: string;
+}): PluginInstallItem {
+  // Define the ABI for the prepareInstallation function's inputs. This comes from the
+  // `personal-space-admin-build-metadata.json` in our contracts repo, not from the setup plugin's ABIs.
+  const prepareInstallationInputs = [
+    {
+      name: '_initialEditorAddress',
+      type: 'address',
+      internalType: 'address',
+      description: 'The address of the first address to be granted the editor permission.',
+    },
+  ];
+
+  const encodedParams = encodeAbiParameters(prepareInstallationInputs, [initialEditor]);
+
+  return {
+    id: PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
+    data: hexToBytes(encodedParams),
+  };
+}
+
 export function getGovernancePluginInstallItem(params: {
   votingSettings: {
     votingMode: VotingMode;
@@ -62,17 +87,6 @@ export function getGovernancePluginInstallItem(params: {
   pluginUpgrader: `0x${string}`;
   memberAccessProposalDuration: bigint;
 }): PluginInstallItem {
-  // MajorityVotingBase.VotingSettings memory _votingSettings,
-  // address[] memory _initialEditors,
-  // uint64 _memberAccessProposalDuration,
-  // address _pluginUpgrader
-  //  struct VotingSettings {
-  //     VotingMode votingMode;
-  //     uint32 supportThreshold;
-  //     uint32 minParticipation;
-  //     uint64 duration;
-  // }
-  // votingSettings: comes from the MainVotingPlugin
   const prepareInstallationInputs = [
     {
       components: [
