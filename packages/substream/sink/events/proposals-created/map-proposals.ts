@@ -267,7 +267,7 @@ function mapEditProposalToSchema(
 
     [...uniqueEntityIds.values()].forEach((entityId, entryIndex) => {
       const mappedProposedVersion: S.proposed_versions.Insertable = {
-        id: generateVersionId({ entryIndex, entityId, cursor: block.cursor }),
+        id: `${p.proposalId}:${entityId}`,
         entity_id: entityId,
         created_at_block: block.blockNumber,
         created_at: Number(p.startTime),
