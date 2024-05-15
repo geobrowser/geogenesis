@@ -14,7 +14,7 @@ BEGIN
         FROM triples t
         WHERE t.space_id = e_row.id
         AND t.attribute_id = 'type'
-        AND t.value_id = '1d5d0c2a-db23-466c-a0b0-9abe879df457' -- space configuration
+        AND t.entity_value_id = '1d5d0c2a-db23-466c-a0b0-9abe879df457' -- space configuration
         AND t.is_stale = FALSE
     )
     SELECT e.*
