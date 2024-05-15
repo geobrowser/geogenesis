@@ -27,5 +27,5 @@ const read = () => {
   console.log('read data', JSON.stringify(data.name, null, 2));
 };
 
-// write(IpfsContentType.EDIT, `${new Date().toString()}: Edit test with new schema`);
-read();
+write(IpfsContentType.EDIT, `${new Date().toString()}: Edit test with new schema`);
+// read();
