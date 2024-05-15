@@ -19,7 +19,7 @@ import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
-import { getEditProposalFromProcessedProposalIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
+import { getEditProposalFromInitialSpaceProposalIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
 import { handleProposalsProcessed } from './events/proposal-processed/handler';
 import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
@@ -336,7 +336,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
              * there might be two handlers.
              */
             const proposals = yield* _(
-              getEditProposalFromProcessedProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
+              getEditProposalFromInitialSpaceProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
                 blockNumber,
                 cursor,
                 timestamp,

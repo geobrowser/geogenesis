@@ -329,8 +329,9 @@ importers:
 
   packages/substream:
     specifiers:
-      '@bufbuild/buf': ^1.29.0
-      '@bufbuild/protobuf': ^1.7.2
+      '@bufbuild/buf': ^1.31.0
+      '@bufbuild/protobuf': ^1.9.0
+      '@bufbuild/protoc-gen-es': ^1.9.0
       '@connectrpc/connect': ^1.3.0
       '@connectrpc/connect-node': ^1.3.0
       '@effect/schema': ^0.63.0
@@ -360,7 +361,6 @@ importers:
       pg-cursor: ^2.10.3
       prettier: ^3.0.3
       prom-client: latest
-      protobufjs: ^7.3.0
       tsx: ^4.6.0
       typescript: latest
       uuid: ^9.0.0
@@ -371,16 +371,17 @@ importers:
       zapatos: ^6.2.0
       zod: ^3.22.4
     dependencies:
-      '@bufbuild/buf': 1.29.0
-      '@bufbuild/protobuf': 1.7.2
-      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.2
-      '@connectrpc/connect-node': 1.3.0_bxtizuvznsbuo3vepj6cj6snqi
+      '@bufbuild/buf': 1.31.0
+      '@bufbuild/protobuf': 1.9.0
+      '@bufbuild/protoc-gen-es': 1.9.0_@bufbuild+protobuf@1.9.0
+      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.9.0
+      '@connectrpc/connect-node': 1.3.0_5knvtlcp2yqhejnrh6rqwxenmy
       '@effect/schema': 0.63.0_6j5y6pn3jndfg4lkhzxm7nwed4
       '@sentry/node': 7.112.2
-      '@substreams/core': 0.16.0_bxtizuvznsbuo3vepj6cj6snqi
-      '@substreams/manifest': 0.15.0_qetmvh5473knzdofhzhbbiw7nq
+      '@substreams/core': 0.16.0_5knvtlcp2yqhejnrh6rqwxenmy
+      '@substreams/manifest': 0.15.0_4g2x7l5fbeu63j3mbcaklvsfdi
       '@substreams/node': 0.6.2
-      '@substreams/sink': 0.14.0_7llnctuv5p42fyxhpcp5ed2sqm
+      '@substreams/sink': 0.14.0_ntywwjmrrxg7bcfxswgz45ixxa
       commander: 12.0.0
       dotenv: 16.4.5
       effect: 2.4.19
@@ -388,7 +389,6 @@ importers:
       pg: 8.11.3
       pg-cursor: 2.10.3_pg@8.11.3
       prom-client: 15.1.2
-      protobufjs: 7.3.0
       tsx: 4.6.0
       uuid: 9.0.0
       viem: 1.16.0_emlehvdemuvnto44dgo26yuudm
@@ -986,8 +986,8 @@ packages:
       '@babel/helper-validator-identifier': 7.22.20
       to-fast-properties: 2.0.0
 
-  /@bufbuild/buf-darwin-arm64/1.29.0:
-    resolution: {integrity: sha512-5hKxsARoY2WpWq1n5ONFqqGuauHb4yILKXCy37KRYCKiRLWmIP5yI3gWvWHKoH7sUJWTQmBqdJoCvYQr6ahQnw==}
+  /@bufbuild/buf-darwin-arm64/1.31.0:
+    resolution: {integrity: sha512-C0jArGS/SW0jfpBBmG6xEhUBWQTsGInnPr7y44WYWNS/U5OnnWPJtYQ7xbH0mzYDMx7sZVRV0FKvPO0FPKS+hA==}
     engines: {node: '>=12'}
     cpu: [arm64]
     os: [darwin]
@@ -995,8 +995,8 @@ packages:
     dev: false
     optional: true
 
-  /@bufbuild/buf-darwin-x64/1.29.0:
-    resolution: {integrity: sha512-wOAPxbPLBns4AHiComWtdO1sx1J1p6mDYTbqmloHuI+B5U2rDbMsoHoe4nBcoMF8+RHxoqjypha29wVo6yzbZg==}
+  /@bufbuild/buf-darwin-x64/1.31.0:
+    resolution: {integrity: sha512-oBTe1T4l2WSukAG+9YS7VHID4N1CuSvAxGBfuzpFQrjjiQZaaTfYuLqqVP6408MyCN7X/LOjfCekR1QToVweNw==}
     engines: {node: '>=12'}
     cpu: [x64]
     os: [darwin]
@@ -1004,8 +1004,8 @@ packages:
     dev: false
     optional: true
 
-  /@bufbuild/buf-linux-aarch64/1.29.0:
-    resolution: {integrity: sha512-jLk2J/wyyM7KNJ/DkLfhy3eS2/Bdb70e/56adMkapSoLJmghnpgxW+oFznMxxQUX5I9BU5hTn1UhDFxgLwhP7g==}
+  /@bufbuild/buf-linux-aarch64/1.31.0:
+    resolution: {integrity: sha512-UN9KsTuO9YS5Vefj/CaqX1wO+hvc3AyGElxzOHMc7S3MWEuqSAFOhxu5I7CyOr2/yoZO2qZPPR29HuzmQsb2+w==}
     engines: {node: '>=12'}
     cpu: [arm64]
     os: [linux]
@@ -1013,8 +1013,8 @@ packages:
     dev: false
     optional: true
 
-  /@bufbuild/buf-linux-x64/1.29.0:
-    resolution: {integrity: sha512-heLOywj3Oaoh69RnTx7tHsuz6rEnvz77bghLEOghsrjBR6Jcpcwc137EZR4kRTIWJNrE8Kmo3RVeXlv144qQIQ==}
+  /@bufbuild/buf-linux-x64/1.31.0:
+    resolution: {integrity: sha512-4uKq5Iu5tNEFE3Mz9a52KFCaywg5xLqwhN6Kf4kAk34kxWJgQ8D3WFe9ZpXHzH7Lj00u3Q+V/3vKCVATHR3tkw==}
     engines: {node: '>=12'}
     cpu: [x64]
     os: [linux]
@@ -1022,8 +1022,8 @@ packages:
     dev: false
     optional: true
 
-  /@bufbuild/buf-win32-arm64/1.29.0:
-    resolution: {integrity: sha512-Eglyvr3PLqVucuHBcQ61conyBgH9BRaoLpKWcce1gYBVlxMQM1NxjVjGOWihxQ1dXXw5qZXmYfVODf3gSwPMuQ==}
+  /@bufbuild/buf-win32-arm64/1.31.0:
+    resolution: {integrity: sha512-jz7GenlNsqwbC3qaHcBHBO35MycZ1gV8OUSRp/wTXGgZsEZzAyw335JA2NWL+5LaI8cF+CsYd6/uuWzKkdCKTQ==}
     engines: {node: '>=12'}
     cpu: [arm64]
     os: [win32]
@@ -1031,8 +1031,8 @@ packages:
     dev: false
     optional: true
 
-  /@bufbuild/buf-win32-x64/1.29.0:
-    resolution: {integrity: sha512-wRk6co+nqHqEq4iLolXgej0jUVlWlTtGHjKaq54lTbKZrwxrBgql6qS06abgNPRASX0++XT9m3QRZ97qEIC/HQ==}
+  /@bufbuild/buf-win32-x64/1.31.0:
+    resolution: {integrity: sha512-gw7p3PYam0g7hNwIhNphua5P8GBZczginoWNK3jk5sGVv0TzWOdHrjkVVhkc3DJbRZEg10ExGI3qRfCqiX1IHw==}
     engines: {node: '>=12'}
     cpu: [x64]
     os: [win32]
@@ -1040,26 +1040,48 @@ packages:
     dev: false
     optional: true
 
-  /@bufbuild/buf/1.29.0:
-    resolution: {integrity: sha512-euksXeFtvlvAV5j94LqXb69qQcJvFfo8vN1d3cx+IzhOKoipykuQQTq7mOWVo2R0kdk6yIMBLBofOYOsh0Df8g==}
+  /@bufbuild/buf/1.31.0:
+    resolution: {integrity: sha512-kM/eueGkp0NDo8p8B6GXr1MdCzf4w8zEV1gbEiDlaLYDoyeHGLtlf5jF/hrb6MsvCccy3x7cc+cj4Wn/DmoR2g==}
     engines: {node: '>=12'}
     hasBin: true
     requiresBuild: true
     optionalDependencies:
-      '@bufbuild/buf-darwin-arm64': 1.29.0
-      '@bufbuild/buf-darwin-x64': 1.29.0
-      '@bufbuild/buf-linux-aarch64': 1.29.0
-      '@bufbuild/buf-linux-x64': 1.29.0
-      '@bufbuild/buf-win32-arm64': 1.29.0
-      '@bufbuild/buf-win32-x64': 1.29.0
-    dev: false
-
-  /@bufbuild/protobuf/1.7.2:
-    resolution: {integrity: sha512-i5GE2Dk5ekdlK1TR7SugY4LWRrKSfb5T1Qn4unpIMbfxoeGKERKQ59HG3iYewacGD10SR7UzevfPnh6my4tNmQ==}
+      '@bufbuild/buf-darwin-arm64': 1.31.0
+      '@bufbuild/buf-darwin-x64': 1.31.0
+      '@bufbuild/buf-linux-aarch64': 1.31.0
+      '@bufbuild/buf-linux-x64': 1.31.0
+      '@bufbuild/buf-win32-arm64': 1.31.0
+      '@bufbuild/buf-win32-x64': 1.31.0
     dev: false
 
   /@bufbuild/protobuf/1.9.0:
     resolution: {integrity: sha512-W7gp8Q/v1NlCZLsv8pQ3Y0uCu/SHgXOVFK+eUluUKWXmsb6VHkpNx0apdOWWcDbB9sJoKeP8uPrjmehJz6xETQ==}
+    dev: false
+
+  /@bufbuild/protoc-gen-es/1.9.0_@bufbuild+protobuf@1.9.0:
+    resolution: {integrity: sha512-LJy1nC3Jsfdhs9v48P7qF6YXIqh+usFhXSVzJDTmw0yKjxQ3CKBNISRtaMql/g9hb1MLRU6unHCcFfdz4HSO/Q==}
+    engines: {node: '>=14'}
+    hasBin: true
+    peerDependencies:
+      '@bufbuild/protobuf': 1.9.0
+    peerDependenciesMeta:
+      '@bufbuild/protobuf':
+        optional: true
+    dependencies:
+      '@bufbuild/protobuf': 1.9.0
+      '@bufbuild/protoplugin': 1.9.0
+    transitivePeerDependencies:
+      - supports-color
+    dev: false
+
+  /@bufbuild/protoplugin/1.9.0:
+    resolution: {integrity: sha512-/mxMiGs5h78RUHT7v4+mv0Wt0gyRf/SOS5PLzKEg2sclEAlFPbXfZ8HjlvxJpXZP/YpP3HvsW/mil3E69G0mXg==}
+    dependencies:
+      '@bufbuild/protobuf': 1.9.0
+      '@typescript/vfs': 1.5.0
+      typescript: 4.5.2
+    transitivePeerDependencies:
+      - supports-color
     dev: false
 
   /@coinbase/wallet-sdk/3.7.1:
@@ -1090,15 +1112,15 @@ packages:
       - utf-8-validate
     dev: false
 
-  /@connectrpc/connect-node/1.3.0_bxtizuvznsbuo3vepj6cj6snqi:
+  /@connectrpc/connect-node/1.3.0_5knvtlcp2yqhejnrh6rqwxenmy:
     resolution: {integrity: sha512-2fV/z/8MUFOkTn2Gbm7T/qvRfkpt/D/w7ykYqACZRH6VNG/faY4lH2wUZiNkwv9tzTrECKOJFyPsaGs3nRYK3w==}
     engines: {node: '>=16.0.0'}
     peerDependencies:
       '@bufbuild/protobuf': ^1.4.2
       '@connectrpc/connect': 1.3.0
     dependencies:
-      '@bufbuild/protobuf': 1.7.2
-      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.2
+      '@bufbuild/protobuf': 1.9.0
+      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.9.0
       undici: 5.28.3
     dev: false
 
@@ -1124,12 +1146,12 @@ packages:
       '@connectrpc/connect': 1.4.0_@bufbuild+protobuf@1.9.0
     dev: false
 
-  /@connectrpc/connect/1.3.0_@bufbuild+protobuf@1.7.2:
+  /@connectrpc/connect/1.3.0_@bufbuild+protobuf@1.9.0:
     resolution: {integrity: sha512-kTeWxJnLLtxKc2ZSDN0rIBgwfP8RwcLknthX4AKlIAmN9ZC4gGnCbwp+3BKcP/WH5c8zGBAWqSY3zeqCM+ah7w==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.4.2
     dependencies:
-      '@bufbuild/protobuf': 1.7.2
+      '@bufbuild/protobuf': 1.9.0
     dev: false
 
   /@connectrpc/connect/1.4.0_@bufbuild+protobuf@1.9.0:
@@ -2629,49 +2651,6 @@ packages:
     resolution: {integrity: sha512-50/17A98tWUfQ176raKiOGXuYpLyyVMkxxG6oylzL3BPOlA6ADGdK7EYunSa4I064xerltq9TGXs8HmOk5E+vw==}
     dev: false
 
-  /@protobufjs/aspromise/1.1.2:
-    resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
-    dev: false
-
-  /@protobufjs/base64/1.1.2:
-    resolution: {integrity: sha512-AZkcAA5vnN/v4PDqKyMR5lx7hZttPDgClv83E//FMNhR2TMcLUhfRUBHCmSl0oi9zMgDDqRUJkSxO3wm85+XLg==}
-    dev: false
-
-  /@protobufjs/codegen/2.0.4:
-    resolution: {integrity: sha512-YyFaikqM5sH0ziFZCN3xDC7zeGaB/d0IUb9CATugHWbd1FRFwWwt4ld4OYMPWu5a3Xe01mGAULCdqhMlPl29Jg==}
-    dev: false
-
-  /@protobufjs/eventemitter/1.1.0:
-    resolution: {integrity: sha512-j9ednRT81vYJ9OfVuXG6ERSTdEL1xVsNgqpkxMsbIabzSo3goCjDIveeGv5d03om39ML71RdmrGNjG5SReBP/Q==}
-    dev: false
-
-  /@protobufjs/fetch/1.1.0:
-    resolution: {integrity: sha512-lljVXpqXebpsijW71PZaCYeIcE5on1w5DlQy5WH6GLbFryLUrBD4932W/E2BSpfRJWseIL4v/KPgBFxDOIdKpQ==}
-    dependencies:
-      '@protobufjs/aspromise': 1.1.2
-      '@protobufjs/inquire': 1.1.0
-    dev: false
-
-  /@protobufjs/float/1.0.2:
-    resolution: {integrity: sha512-Ddb+kVXlXst9d+R9PfTIxh1EdNkgoRe5tOX6t01f1lYWOvJnSPDBlG241QLzcyPdoNTsblLUdujGSE4RzrTZGQ==}
-    dev: false
-
-  /@protobufjs/inquire/1.1.0:
-    resolution: {integrity: sha512-kdSefcPdruJiFMVSbn801t4vFK7KB/5gd2fYvrxhuJYg8ILrmn9SKSX2tZdV6V+ksulWqS7aXjBcRXl3wHoD9Q==}
-    dev: false
-
-  /@protobufjs/path/1.1.2:
-    resolution: {integrity: sha512-6JOcJ5Tm08dOHAbdR3GrvP+yUUfkjG5ePsHYczMFLq3ZmMkAD98cDgcT2iA1lJ9NVwFd4tH/iSSoe44YWkltEA==}
-    dev: false
-
-  /@protobufjs/pool/1.1.0:
-    resolution: {integrity: sha512-0kELaGSIDBKvcgS4zkjz1PeddatrjYcmMWOlAuAPwAeccUrPHdUqo/J6LiymHHEiJT5NrF1UVwxY14f+fy4WQw==}
-    dev: false
-
-  /@protobufjs/utf8/1.1.0:
-    resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
-    dev: false
-
   /@radix-ui/number/1.0.1:
     resolution: {integrity: sha512-T5gIdVO2mmPW3NNhjNgEP3cqMXjXL9UbO0BzWcXfvdBs+BohbQxvd/K5hSVKmn9/lbTdsQVKbUcP5WLCwvUbBg==}
     dependencies:
@@ -4022,14 +4001,14 @@ packages:
       '@stablelib/wipe': 1.0.1
     dev: false
 
-  /@substreams/core/0.16.0_bxtizuvznsbuo3vepj6cj6snqi:
+  /@substreams/core/0.16.0_5knvtlcp2yqhejnrh6rqwxenmy:
     resolution: {integrity: sha512-1HDFEZvH5EkHFykBfekqBtm3YKFWIMMHQaSa1T+Z8u4wcn8DIaiVOywvBtVmBT6R2pBaqbz4j14ndXN6r+IV6Q==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.7.2
       '@connectrpc/connect': ^1.3.0
     dependencies:
-      '@bufbuild/protobuf': 1.7.2
-      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.2
+      '@bufbuild/protobuf': 1.9.0
+      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.9.0
     dev: false
 
   /@substreams/core/0.16.0_wut4uockfj6xglxbg7ougowgb4:
@@ -4042,7 +4021,7 @@ packages:
       '@connectrpc/connect': 1.4.0_@bufbuild+protobuf@1.9.0
     dev: false
 
-  /@substreams/manifest/0.15.0_qetmvh5473knzdofhzhbbiw7nq:
+  /@substreams/manifest/0.15.0_4g2x7l5fbeu63j3mbcaklvsfdi:
     resolution: {integrity: sha512-/U8QeOT4NyXcylHQWNnIX/e1Zh9ZBY+KqB8QXuGw5ftlawC0lDrG/2MljR0X7QWw8lhpFIGHw8Th4OolFwkaNA==}
     peerDependencies:
       '@bufbuild/buf': ^1.29.0
@@ -4051,10 +4030,10 @@ packages:
       effect: ^2.4.0
       yaml: ^2.4.0
     dependencies:
-      '@bufbuild/buf': 1.29.0
-      '@bufbuild/protobuf': 1.7.2
+      '@bufbuild/buf': 1.31.0
+      '@bufbuild/protobuf': 1.9.0
       '@effect/schema': 0.63.0_6j5y6pn3jndfg4lkhzxm7nwed4
-      '@substreams/core': 0.16.0_bxtizuvznsbuo3vepj6cj6snqi
+      '@substreams/core': 0.16.0_5knvtlcp2yqhejnrh6rqwxenmy
       effect: 2.4.19
       yaml: 2.4.0
     transitivePeerDependencies:
@@ -4073,16 +4052,16 @@ packages:
       eventemitter3: 5.0.1
     dev: false
 
-  /@substreams/sink/0.14.0_7llnctuv5p42fyxhpcp5ed2sqm:
+  /@substreams/sink/0.14.0_ntywwjmrrxg7bcfxswgz45ixxa:
     resolution: {integrity: sha512-Kv4tZ4x/u13tiiPG7/9gQhT8WCicadYeyaS1iklEG1xVURMYU3Nruq3y9+BqwNmC2e4F6+vAUFfNvI4gS4AaeQ==}
     peerDependencies:
       '@bufbuild/protobuf': ^1.7.2
       '@connectrpc/connect': ^1.3.0
       effect: ^2.4.0
     dependencies:
-      '@bufbuild/protobuf': 1.7.2
-      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.7.2
-      '@substreams/core': 0.16.0_bxtizuvznsbuo3vepj6cj6snqi
+      '@bufbuild/protobuf': 1.9.0
+      '@connectrpc/connect': 1.3.0_@bufbuild+protobuf@1.9.0
+      '@substreams/core': 0.16.0_5knvtlcp2yqhejnrh6rqwxenmy
       effect: 2.4.19
     dev: false
 
@@ -5285,6 +5264,14 @@ packages:
       '@typescript-eslint/types': 6.13.1
       eslint-visitor-keys: 3.4.3
     dev: true
+
+  /@typescript/vfs/1.5.0:
+    resolution: {integrity: sha512-AJS307bPgbsZZ9ggCT3wwpg3VbTKMFNHfaY/uF0ahSkYYrPF2dSSKDNIDIQAHm9qJqbLvCsSJH7yN4Vs/CsMMg==}
+    dependencies:
+      debug: 4.3.4
+    transitivePeerDependencies:
+      - supports-color
+    dev: false
 
   /@vercel/analytics/0.1.6_react@18.2.0:
     resolution: {integrity: sha512-zNd5pj3iDvq8IMBQHa1YRcIteiw6ZiPB8AsONHd8ieFXlNpLqhXfIYnf4WvTfZ7S1NSJ++mIM14aJnNac/VMXQ==}
@@ -10358,10 +10345,6 @@ packages:
     resolution: {integrity: sha512-Q5ALD6JiS6xAUWCwX3taQmgwxyveCtIIuL08+ml0nHwT3k0S/GIFJN+Hd38b1qYIMaE5X++iqsqWVksz7SYW+Q==}
     dev: false
 
-  /long/5.2.3:
-    resolution: {integrity: sha512-lcHwpNoggQTObv5apGNCTdJrO69eHOZMi4BNC+rTLER8iHAqGrUVeLh/irVIM7zTw2bOXA8T6uNPeujwOLg/2Q==}
-    dev: false
-
   /loose-envify/1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
     dependencies:
@@ -11722,25 +11705,6 @@ packages:
       prosemirror-model: 1.19.3
       prosemirror-state: 1.4.3
       prosemirror-transform: 1.7.5
-    dev: false
-
-  /protobufjs/7.3.0:
-    resolution: {integrity: sha512-YWD03n3shzV9ImZRX3ccbjqLxj7NokGN0V/ESiBV5xWqrommYHYiihuIyavq03pWSGqlyvYUFmfoMKd+1rPA/g==}
-    engines: {node: '>=12.0.0'}
-    requiresBuild: true
-    dependencies:
-      '@protobufjs/aspromise': 1.1.2
-      '@protobufjs/base64': 1.1.2
-      '@protobufjs/codegen': 2.0.4
-      '@protobufjs/eventemitter': 1.1.0
-      '@protobufjs/fetch': 1.1.0
-      '@protobufjs/float': 1.0.2
-      '@protobufjs/inquire': 1.1.0
-      '@protobufjs/path': 1.1.2
-      '@protobufjs/pool': 1.1.0
-      '@protobufjs/utf8': 1.1.0
-      '@types/node': 20.12.12
-      long: 5.2.3
     dev: false
 
   /proxy-addr/2.0.7:
@@ -13292,6 +13256,12 @@ packages:
     resolution: {integrity: sha512-zdu8XMNEDepKKR+XYOXAVPtWui0ly0NtohUscw+UmaHiAWT8hrV1rr//H6V+0DvJ3OQ19S979M0laLfX8rm82Q==}
     dependencies:
       is-typedarray: 1.0.0
+    dev: false
+
+  /typescript/4.5.2:
+    resolution: {integrity: sha512-5BlMof9H1yGt0P8/WF+wPNw6GfctgGjXp5hkblpyT+8rkASSmkUKMXrxR0Xg8ThVCi/JnHQiKXeBaEwCeQwMFw==}
+    engines: {node: '>=4.2.0'}
+    hasBin: true
     dev: false
 
   /typescript/5.1.6:

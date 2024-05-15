@@ -1,0 +1,32 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`decode Edit > decodes parsed Edit protobuf correctly 1`] = `
+{
+  "authors": [],
+  "name": "Edit",
+  "ops": [],
+  "proposalId": "-1",
+  "type": "EDIT",
+  "version": "0.0.1",
+}
+`;
+
+exports[`decode Edit > decodes valid type 1`] = `
+{
+  "authors": [],
+  "name": "Edit",
+  "ops": [],
+  "proposalId": "-1",
+  "type": "EDIT",
+  "version": "0.0.1",
+}
+`;
+
+exports[`decode IpfsContent > decodes parsed IpfsMetadata protobuf correctly 1`] = `
+{
+  "name": "Edit",
+  "proposalId": "-1",
+  "type": "EDIT",
+  "version": "0.0.1",
+}
+`;

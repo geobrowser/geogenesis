@@ -1,12 +1,6 @@
 import { Effect, Either } from 'effect';
 
 import {
-  handleDecodeEditProposal,
-  handleDecodeEditorshipProposal,
-  handleDecodeMembershipProposal,
-  handleDecodeSubspaceProposal,
-} from './decoder';
-import {
   type EditProposal,
   type EditorshipProposal,
   type MembershipProposal,
@@ -16,7 +10,7 @@ import {
 import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
-import { handleDecodeIpfsContentType } from '~/sink/ipfs/decoder';
+import { Edit, IpfsContentType, IpfsMetadata, Membership, Subspace, decode } from '~/sink/proto';
 import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { slog } from '~/sink/utils/slog';
@@ -38,13 +32,13 @@ export function getProposalFromIpfs(
   EditProposal | SubspaceProposal | MembershipProposal | EditorshipProposal | null,
   SpaceWithPluginAddressNotFoundError
 > {
-  return Effect.gen(function* (unwrap) {
+  return Effect.gen(function* (_) {
     // The proposal can come from either the voting plugin or the membership plugin
     // depending on which type of proposal is being processed
-    const maybeSpaceIdForVotingPlugin = yield* unwrap(
+    const maybeSpaceIdForVotingPlugin = yield* _(
       Effect.promise(() => Spaces.findForVotingPlugin(proposal.pluginAddress))
     );
-    const maybeSpaceIdForMembershipPlugin = yield* unwrap(
+    const maybeSpaceIdForMembershipPlugin = yield* _(
       Effect.promise(() => Spaces.findForMembershipPlugin(proposal.pluginAddress))
     );
 
@@ -69,7 +63,7 @@ export function getProposalFromIpfs(
     });
 
     const fetchIpfsContentEffect = getFetchIpfsContentEffect(proposal.metadataUri);
-    const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
+    const maybeIpfsContent = yield* _(Effect.either(fetchIpfsContentEffect));
 
     if (Either.isLeft(maybeIpfsContent)) {
       const error = maybeIpfsContent.left;
@@ -101,7 +95,7 @@ export function getProposalFromIpfs(
       return null;
     }
 
-    const validIpfsMetadata = yield* unwrap(handleDecodeIpfsContentType(ipfsContent));
+    const validIpfsMetadata = yield* _(decode(() => IpfsMetadata.fromBinary(ipfsContent)));
 
     if (!validIpfsMetadata) {
       // @TODO: Effectify error handling
@@ -110,8 +104,8 @@ export function getProposalFromIpfs(
     }
 
     switch (validIpfsMetadata.type) {
-      case 'EDIT': {
-        const parsedContent = yield* unwrap(handleDecodeEditProposal(ipfsContent));
+      case IpfsContentType.EDIT: {
+        const parsedContent = yield* _(decode(() => Edit.fromBinary(ipfsContent)));
 
         // Subspace proposals are only emitted by the voting plugin
         if (!parsedContent || !maybeSpaceIdForVotingPlugin) {
@@ -120,12 +114,13 @@ export function getProposalFromIpfs(
 
         const mappedProposal: EditProposal = {
           ...proposal,
-          type: validIpfsMetadata.type,
+          type: 'EDIT',
           name: validIpfsMetadata.name ?? null,
-          proposalId: parsedContent.id,
+          proposalId: parsedContent.proposalId,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          ops: parsedContent.ops,
+          // @TODO: Figure out these types
+          ops: [],
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
         };
@@ -133,10 +128,9 @@ export function getProposalFromIpfs(
         return mappedProposal;
       }
 
-      case 'ADD_SUBSPACE':
-      case 'REMOVE_SUBSPACE': {
-        // @TODO: ipfs content type is not correct for non-content-type proposals
-        const parsedSubspace = yield* unwrap(handleDecodeSubspaceProposal(ipfsContent));
+      case IpfsContentType.ADD_SUBSPACE:
+      case IpfsContentType.REMOVE_SUBSPACE: {
+        const parsedSubspace = yield* _(decode(() => Subspace.fromBinary(ipfsContent)));
 
         // Subspace proposals are only emitted by the voting plugin
         if (!parsedSubspace || !maybeSpaceIdForVotingPlugin) {
@@ -145,7 +139,7 @@ export function getProposalFromIpfs(
 
         const mappedProposal: SubspaceProposal = {
           ...proposal,
-          type: validIpfsMetadata.type,
+          type: validIpfsMetadata.type === IpfsContentType.ADD_SUBSPACE ? 'ADD_SUBSPACE' : 'REMOVE_SUBSPACE',
           name: validIpfsMetadata.name ?? null,
           proposalId: parsedSubspace.proposalId,
           onchainProposalId: proposal.proposalId,
@@ -158,9 +152,9 @@ export function getProposalFromIpfs(
         return mappedProposal;
       }
 
-      case 'ADD_EDITOR':
-      case 'REMOVE_EDITOR':
-        const parsedEditorship = yield* unwrap(handleDecodeEditorshipProposal(ipfsContent));
+      case IpfsContentType.ADD_EDITOR:
+      case IpfsContentType.REMOVE_EDITOR:
+        const parsedEditorship = yield* _(decode(() => Membership.fromBinary(ipfsContent)));
 
         if (!parsedEditorship) {
           return null;
@@ -172,21 +166,21 @@ export function getProposalFromIpfs(
 
         const mappedProposal: EditorshipProposal = {
           ...proposal,
-          type: validIpfsMetadata.type,
+          type: validIpfsMetadata.type === IpfsContentType.ADD_EDITOR ? 'ADD_EDITOR' : 'REMOVE_EDITOR',
           name: validIpfsMetadata.name ?? null,
           proposalId: parsedEditorship.proposalId,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          userAddress: getChecksumAddress(parsedEditorship.editorAddress),
+          userAddress: getChecksumAddress(parsedEditorship.userAddress),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(spaceAddress),
         };
 
         return mappedProposal;
 
-      case 'ADD_MEMBER':
-      case 'REMOVE_MEMBER': {
-        const parsedMembership = yield* unwrap(handleDecodeMembershipProposal(ipfsContent));
+      case IpfsContentType.ADD_MEMBER:
+      case IpfsContentType.REMOVE_MEMBER: {
+        const parsedMembership = yield* _(decode(() => Membership.fromBinary(ipfsContent)));
 
         if (!parsedMembership) {
           return null;
@@ -198,7 +192,7 @@ export function getProposalFromIpfs(
 
         const mappedProposal: MembershipProposal = {
           ...proposal,
-          type: validIpfsMetadata.type,
+          type: validIpfsMetadata.type === IpfsContentType.ADD_MEMBER ? 'ADD_MEMBER' : 'REMOVE_MEMBER',
           name: validIpfsMetadata.name ?? null,
           proposalId: parsedMembership.proposalId,
           onchainProposalId: proposal.proposalId,
@@ -210,6 +204,9 @@ export function getProposalFromIpfs(
 
         return mappedProposal;
       }
+      default:
+        // @TODO: Use more explicitly typed error
+        throw new Error('Unsupported content type');
     }
   });
 }

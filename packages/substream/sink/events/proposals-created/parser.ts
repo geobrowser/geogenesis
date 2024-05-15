@@ -171,7 +171,7 @@ export const ZodEdit = z.object({
   version: z.string(),
   ops: z.array(ZodOp),
   authors: z.array(z.string()),
-  id: z.string(),
+  // id: z.string(),
 });
 
 export type Edit = z.infer<typeof ZodEdit>;
