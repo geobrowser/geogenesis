@@ -2,11 +2,13 @@ import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
+import { type SchemaTripleEdit, mapSchemaTriples } from '../events/proposal-processed/map-triples';
 import { populateTriples } from '../events/proposal-processed/populate-triples';
+import type { Op } from '../events/proposals-created/parser';
+import type { BlockEvent } from '../types';
 import { createGeoId } from '../utils/create-geo-id';
 import { upsertChunked } from '../utils/db';
 import { pool } from '../utils/pool';
-import type { Action } from '../zod';
 import { mapTripleVersions } from './map-triple-versions';
 
 export function populateApprovedContentProposal(
@@ -14,9 +16,8 @@ export function populateApprovedContentProposal(
   // Since we read from IPFS to get the onchain id we also just pass in the actions
   // so we don't have to query the DB. Also so we know we get the correct order
   // of the actions from IPFS.
-  actions: Action[],
-  timestamp: number,
-  blockNumber: number
+  ops: Op[],
+  block: BlockEvent
 ) {
   return Effect.gen(function* (awaited) {
     const nestedProposedVersions = yield* awaited(
@@ -36,10 +37,10 @@ export function populateApprovedContentProposal(
       const newEntity: Schema.Insertable = {
         id: pv.entity_id,
         description: pv.description,
-        created_at: timestamp,
-        created_at_block: blockNumber,
-        updated_at: timestamp,
-        updated_at_block: blockNumber,
+        created_at: block.timestamp,
+        created_at_block: block.blockNumber,
+        updated_at: block.timestamp,
+        updated_at_block: block.blockNumber,
         created_by_id: pv.created_by_id,
       };
 
@@ -50,8 +51,8 @@ export function populateApprovedContentProposal(
       const newVersion: Schema.versions.Insertable = {
         id: createGeoId(),
         entity_id: pv.entity_id,
-        created_at_block: blockNumber,
-        created_at: timestamp,
+        created_at_block: block.blockNumber,
+        created_at: block.timestamp,
         name: pv.name,
         created_by_id: pv.created_by_id,
         proposed_version_id: pv.id,
@@ -97,17 +98,20 @@ export function populateApprovedContentProposal(
       ])
     );
 
+    const opsWithCreatedById = proposedVersions.map(
+      (pv): SchemaTripleEdit => ({
+        createdById: pv.created_by_id,
+        spaceId: pv.space_id,
+        ops: ops.filter(o => o.payload.entityId === pv.entity_id),
+      })
+    );
+
+    const schemaTriples = opsWithCreatedById.map(o => mapSchemaTriples(o, block)).flat();
+
     yield* awaited(
       populateTriples({
-        // @TODO: Don't use entries-based mapping
-        entries: proposedVersions.map(e => ({
-          space: e.space_id,
-          actions: actions.filter(a => a.entityId === e.entity_id),
-        })),
-        blockNumber,
-        timestamp,
-        // @TODO: This is wrong. Should be the person who actually created the proposal
-        createdById: proposals[0]?.created_by_id!,
+        schemaTriples,
+        block,
         versions,
       })
     );

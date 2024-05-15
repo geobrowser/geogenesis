@@ -1,15 +1,6 @@
-import type * as s from 'zapatos/schema';
-
-export enum TripleAction {
-  // @deprecated
-  Create = 'createTriple',
-  Delete = 'deleteTriple',
-  Upsert = 'upsertTriple',
-}
+export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export type TripleOp = 'SET_TRIPLE' | 'DELETE_TRIPLE';
-
-export type TripleWithActionTuple = [TripleAction, s.triples.Insertable];
 
 export interface BlockEvent {
   cursor: string;

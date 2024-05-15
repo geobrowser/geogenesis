@@ -2,7 +2,6 @@ import { Duration, Effect, Either, Schedule } from 'effect';
 import type { TimeoutException } from 'effect/Cause';
 
 import { IPFS_GATEWAY } from '../constants/constants';
-import { type UriData } from '../zod';
 
 class UnableToParseBase64Error extends Error {
   _tag: 'UnableToParseBase64Error' = 'UnableToParseBase64Error';
@@ -19,7 +18,7 @@ class UnableToParseJsonError extends Error {
 export function getFetchIpfsContentEffect(
   uri: string
 ): Effect.Effect<
-  UriData | null,
+  Buffer | null,
   UnableToParseBase64Error | FailedFetchingIpfsContentError | UnableToParseJsonError | TimeoutException,
   never
 > {
@@ -33,7 +32,7 @@ export function getFetchIpfsContentEffect(
 
       const decoded = Effect.try({
         try: () => {
-          return JSON.parse(Buffer.from(base64, 'base64').toString('utf8')) as UriData;
+          return JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
         },
         catch: error => {
           return new UnableToParseBase64Error(`Unable to parse base64 string ${uri}. ${String(error)}`);
@@ -103,7 +102,8 @@ export function getFetchIpfsContentEffect(
         return yield* unwrap(
           Effect.tryPromise({
             try: async () => {
-              return (await secondaryGatewayResponse.json()) as UriData;
+              const buffer = await secondaryGatewayResponse.arrayBuffer();
+              return Buffer.from(buffer);
             },
             catch: error =>
               new UnableToParseJsonError(`Unable to parse JSON when reading content from uri ${uri}. ${String(error)}`),
@@ -116,7 +116,8 @@ export function getFetchIpfsContentEffect(
       return yield* unwrap(
         Effect.tryPromise({
           try: async () => {
-            return (await response.json()) as UriData;
+            const buffer = await response.arrayBuffer();
+            return Buffer.from(buffer);
           },
           catch: error =>
             new UnableToParseJsonError(`Unable to parse JSON when reading content from uri ${uri}. ${String(error)}`),

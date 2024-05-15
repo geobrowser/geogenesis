@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import { type Action, ZodAction } from '../../zod';
-
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
  * represent changes to content, membership (editor or member), governance changes, subspace
@@ -45,7 +43,7 @@ export const ZodProposal = z.object({
 // proposal and write to the sink correctly.
 export const ZodProposalMetadata = z.object({
   type: z.enum([
-    'CONTENT',
+    'EDIT',
     'ADD_SUBSPACE',
     'REMOVE_SUBSPACE',
     'ADD_EDITOR',
@@ -53,7 +51,7 @@ export const ZodProposalMetadata = z.object({
     'ADD_MEMBER',
     'REMOVE_MEMBER',
   ]),
-  name: z.string().optional(),
+  name: z.string(),
   // We version the data structured used to represent proposal metadata. Each
   // proposal type has their own metadata and versioning that we can change
   // independently of other proposal types.
@@ -65,20 +63,6 @@ export type ProposalMetadata = z.infer<typeof ZodProposalMetadata>;
 export type ProposalCreated = z.infer<typeof ZodSubstreamProposalCreated>;
 export type Proposal = z.infer<typeof ZodProposal>;
 
-export const ZodContentProposal = z.object({
-  proposalId: z.string(),
-  actions: z.array(ZodAction),
-});
-
-export type ContentProposal = Proposal & {
-  type: 'CONTENT';
-  name: string | null;
-  proposalId: string;
-  onchainProposalId: string;
-  pluginAddress: string;
-  actions: Action[];
-};
-
 export const ZodMembershipProposal = z.object({
   proposalId: z.string(),
   userAddress: z.string(),
@@ -86,7 +70,7 @@ export const ZodMembershipProposal = z.object({
 
 export type MembershipProposal = Proposal & {
   type: 'ADD_MEMBER' | 'REMOVE_MEMBER';
-  name: string | null;
+  name: string;
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
@@ -100,7 +84,7 @@ export const ZodEditorshipProposal = z.object({
 
 export type EditorshipProposal = Proposal & {
   type: 'ADD_EDITOR' | 'REMOVE_EDITOR';
-  name: string | null;
+  name: string;
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
@@ -114,7 +98,7 @@ export const ZodSubspaceProposal = z.object({
 
 export type SubspaceProposal = Proposal & {
   type: 'ADD_SUBSPACE' | 'REMOVE_SUBSPACE';
-  name: string | null;
+  name: string;
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
@@ -187,18 +171,16 @@ export const ZodEdit = z.object({
   version: z.string(),
   ops: z.array(ZodOp),
   authors: z.array(z.string()),
+  id: z.string(),
 });
 
-export type Edit = z.infer<typeof ZodEdit> & {
-  type: 'EDIT';
-  spaceId: string;
-  createdById: string;
+export type Edit = z.infer<typeof ZodEdit>;
 
-  // @TODO: This should come from the protobuf blob
+export type EditProposal = Proposal & {
+  type: 'EDIT';
+  name: string;
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
-  metadataUri: string;
-  startTime: string;
-  endTime: string;
+  ops: Op[];
 };

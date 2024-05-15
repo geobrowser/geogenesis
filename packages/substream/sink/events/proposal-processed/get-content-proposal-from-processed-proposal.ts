@@ -3,31 +3,24 @@ import { Effect, Either } from 'effect';
 import { Spaces } from '../../db';
 import type { SpaceWithPluginAddressNotFoundError } from '../../errors';
 import type { BlockEvent } from '../../types';
-import { isValidAction } from '../../utils/actions';
 import { getChecksumAddress } from '../../utils/get-checksum-address';
 import { getFetchIpfsContentEffect } from '../../utils/ipfs';
 import { slog } from '../../utils/slog';
-import {
-  type ContentProposal,
-  type ProposalProcessed,
-  ZodContentProposal,
-  ZodProposalMetadata,
-} from '../proposals-created/parser';
+import { handleDecodeEditProposal } from '../proposals-created/decoder';
+import { type EditProposal, type ProposalProcessed, ZodProposalMetadata } from '../proposals-created/parser';
+import { handleDecodeIpfsContentType } from '~/sink/ipfs/decoder';
 
 class InvalidProcessedProposalContentTypeError extends Error {
   _tag: 'InvalidProcessedProposalContentTypeError' = 'InvalidProcessedProposalContentTypeError';
 }
 
-function fetchContentProposalFromIpfs(
+function fetchEditProposalFromIpfs(
   processedProposal: {
     ipfsUri: string;
     pluginAddress: string;
   },
   block: BlockEvent
-): Effect.Effect<
-  ContentProposal | null,
-  SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError
-> {
+): Effect.Effect<EditProposal | null, SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError> {
   return Effect.gen(function* (unwrap) {
     const maybeSpaceIdForVotingPlugin = yield* unwrap(
       Effect.promise(() => Spaces.findForSpacePlugin(processedProposal.pluginAddress))
@@ -82,29 +75,29 @@ function fetchContentProposalFromIpfs(
       return null;
     }
 
-    const validIpfsMetadata = ZodProposalMetadata.safeParse(ipfsContent);
+    const validIpfsMetadata = yield* unwrap(handleDecodeIpfsContentType(ipfsContent));
 
-    if (!validIpfsMetadata.success) {
+    if (!validIpfsMetadata) {
       // @TODO: Effectify error handling
-      console.error('Failed to parse IPFS metadata', validIpfsMetadata.error);
+      console.error('Failed to parse IPFS metadata', validIpfsMetadata);
       return null;
     }
 
-    switch (validIpfsMetadata.data.type) {
-      case 'CONTENT':
-        const parsedContent = ZodContentProposal.safeParse(ipfsContent);
+    switch (validIpfsMetadata.type) {
+      case 'EDIT':
+        const parsedContent = yield* unwrap(handleDecodeEditProposal(ipfsContent));
 
-        if (!parsedContent.success) {
+        if (!parsedContent) {
           return null;
         }
 
-        const contentProposal: ContentProposal = {
-          type: validIpfsMetadata.data.type,
-          name: validIpfsMetadata.data.name ?? null,
-          proposalId: parsedContent.data.proposalId,
+        const contentProposal: EditProposal = {
+          type: validIpfsMetadata.type,
+          name: validIpfsMetadata.name ?? null,
+          proposalId: parsedContent.id,
           onchainProposalId: '-1',
           pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
-          actions: parsedContent.data.actions.filter(isValidAction),
+          ops: parsedContent.ops,
           creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // Geobot
           space: getChecksumAddress(maybeSpaceIdForVotingPlugin.id),
           endTime: block.timestamp.toString(),
@@ -118,7 +111,7 @@ function fetchContentProposalFromIpfs(
     yield* unwrap(
       Effect.fail(
         new InvalidProcessedProposalContentTypeError(
-          `Invalid processed proposal content type ${validIpfsMetadata.data.type}`
+          `Invalid processed proposal content type ${validIpfsMetadata.type}`
         )
       )
     );
@@ -140,7 +133,7 @@ export function getContentProposalFromProcessedProposalIpfsUri(
     const maybeProposalsFromIpfs = yield* _(
       Effect.all(
         proposalsProcessed.map(proposal =>
-          fetchContentProposalFromIpfs(
+          fetchEditProposalFromIpfs(
             {
               ipfsUri: proposal.contentUri,
               pluginAddress: proposal.pluginAddress,
@@ -155,7 +148,7 @@ export function getContentProposalFromProcessedProposalIpfsUri(
     );
 
     const proposalsFromIpfs = maybeProposalsFromIpfs.filter(
-      (maybeProposal): maybeProposal is ContentProposal => maybeProposal !== null
+      (maybeProposal): maybeProposal is EditProposal => maybeProposal !== null
     );
 
     return proposalsFromIpfs;

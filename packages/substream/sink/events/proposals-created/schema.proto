@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+message Edit {
+  string name = 1;
+  string version = 2;
+  repeated Op ops = 3;
+  repeated bytes authors = 4;
+
+  // string proposalId = 5;
+  // string type = 6;
+}
+
+message Op {
+  OpType opType = 1;
+  Payload payload = 2;
+}
+
+message Payload {
+  bytes entityId = 1;
+  bytes attributeId = 2;
+  Value value = 3;
+}
+
+message Value {
+  ValueType type = 1;
+  string value = 2;
+}
+
+enum OpType {
+  UNKNOWN = 0;
+  SET_TRIPLE = 1;
+  DELETE_TRIPLE = 2;
+}
+
+enum ValueType {
+  UNKNOWN = 0;
+  TEXT = 1;
+  NUMBER = 2;
+  ENTITY = 3;
+  COLLECTION = 4;
+  CHECKBOX = 5;
+  URL = 6;
+  TIME = 7;
+  GEO_LOCATION = 8;
+}
+
+message Membership {
+  string name = 1;
+  string version = 2;
+  string userAddress = 3;
+  string version = 4;
+  string proposalId = 5;
+  string type = 6;
+}
+
+message Subspace {
+  string name = 1;
+  string version = 2;
+  string userAddress = 3;
+  string version = 4;
+  string proposalId = 5;
+  string type = 6;
+}

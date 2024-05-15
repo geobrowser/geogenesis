@@ -3,10 +3,9 @@ import fs from 'fs';
 import { Type, loadSync } from 'protobufjs';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../../proposals-created/map-proposals';
-import { type Edit, ZodEdit } from '../../proposals-created/parser';
+import { type Edit, type EditProposal, ZodEdit } from '../../proposals-created/parser';
 import {
   Accounts,
-  Actions,
   Ops,
   Proposals,
   ProposedEditors,
@@ -35,11 +34,11 @@ const decode = Effect.gen(function* (_) {
   console.log('success', data.success);
 
   if (data.success) {
-    const result: Edit = {
+    const result: EditProposal = {
       ...data.data,
-      createdById: data.data.authors[0] as string,
+      creator: data.data.authors[0] as string,
       type: 'EDIT',
-      spaceId: '',
+      space: '',
       proposalId: '1',
       onchainProposalId: '0',
       metadataUri: '',
@@ -65,7 +64,7 @@ function deserialize(data: Buffer, messageType: Type) {
   });
 }
 
-function handleProposalCreated(edit: Edit | null) {
+function handleProposalCreated(edit: EditProposal | null) {
   return Effect.gen(function* (_) {
     if (!edit) {
       return;

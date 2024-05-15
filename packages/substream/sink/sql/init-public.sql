@@ -76,7 +76,7 @@ CREATE TABLE public.proposals (
     onchain_proposal_id text NOT NULL,
     plugin_address text NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
-    name text,
+    name text NOT NULL,
     description text,
     uri text,
     type proposal_type NOT NULL,
@@ -90,7 +90,7 @@ CREATE TABLE public.proposals (
 
 CREATE TABLE public.proposed_versions (
     id text PRIMARY KEY,
-    name text,
+    name text NOT NULL,
     description text,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
@@ -161,7 +161,7 @@ CREATE TABLE public.triplesV2 (
 
 CREATE TABLE public.versions (
     id text PRIMARY KEY,
-    name text,
+    name text NOT NULL,
     description text,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
@@ -178,21 +178,6 @@ CREATE TABLE public.proposal_votes (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
     vote vote_type NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
-);
-
-CREATE TABLE public.actions (
-    id text PRIMARY KEY NOT NULL,
-    action_type text NOT NULL,
-    entity_id text REFERENCES public.geo_entities(id) NOT NULL,
-    attribute_id text REFERENCES public.geo_entities(id) NOT NULL,
-    value_type triple_value_type NOT NULL,
-    value_id text,
-    number_value text,
-    string_value text,
-    entity_value_id text REFERENCES public.geo_entities(id),
-    proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL
 );
@@ -266,9 +251,6 @@ CREATE TABLE public.triple_versions (
 --
 ALTER TABLE
     public.accounts DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.actions DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.geo_entities DISABLE TRIGGER ALL;

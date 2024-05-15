@@ -1,4 +1,4 @@
-import type { ContentProposal } from '../proposals-created/parser';
+import type { EditProposal } from '../proposals-created/parser';
 import type { SpacePluginCreated } from '../spaces-created/parser';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 
@@ -10,7 +10,7 @@ import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
  * If there are processed proposals as a result of an initial content uri, we need to create the appropriate
  * proposals, proposed versions, actions, etc. before we actually set the proposal as "ACCEPTED"
  */
-export function getInitialProposalsForSpaces(spacesCreated: SpacePluginCreated[], proposals: ContentProposal[]) {
+export function getInitialProposalsForSpaces(spacesCreated: SpacePluginCreated[], proposals: EditProposal[]) {
   const spaceAddresses = new Set(spacesCreated.map(s => getChecksumAddress(s.daoAddress)));
   return proposals.filter(p => spaceAddresses.has(getChecksumAddress(p.space)));
 }

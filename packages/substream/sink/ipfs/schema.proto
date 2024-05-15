@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+message IpfsContent {
+  IpfsContentType type = 1;
+  string name = 2;
+  // We version the data structured used to represent proposal metadata. Each
+  // proposal type has their own metadata and versioning that we can change
+  // independently of other proposal types.
+  string version = 3;
+}
+
+enum IpfsContentType {
+  UNKNOWN = 0;
+  EDIT = 1;
+  ADD_SUBSPACE = 2;
+  REMOVE_SUBSPACE = 2;
+  ADD_EDITOR = 2;
+  REMOVE_EDITOR = 2;
+  ADD_MEMBER = 2;
+  REMOVE_MEMBER = 2;
+}

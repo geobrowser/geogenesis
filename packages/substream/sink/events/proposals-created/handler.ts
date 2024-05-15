@@ -3,7 +3,7 @@ import { Effect, Either } from 'effect';
 import { getProposalFromCreatedProposalIpfsUri } from './get-proposal-from-created-proposal';
 import {
   Accounts,
-  Actions,
+  Ops,
   Proposals,
   ProposedEditors,
   ProposedMembers,
@@ -13,7 +13,7 @@ import {
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
 import type {
-  ContentProposal,
+  EditProposal,
   EditorshipProposal,
   MembershipProposal,
   ProposalCreated,
@@ -52,17 +52,17 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
     );
 
     const proposals = maybeProposals.filter(
-      (maybeProposal): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal | EditorshipProposal =>
+      (maybeProposal): maybeProposal is EditProposal | SubspaceProposal | MembershipProposal | EditorshipProposal =>
         maybeProposal !== null
     );
 
-    const { schemaContentProposals, schemaSubspaceProposals, schemaMembershipProposals, schemaEditorshipProposals } =
+    const { schemaEditProposals, schemaSubspaceProposals, schemaMembershipProposals, schemaEditorshipProposals } =
       mapIpfsProposalToSchemaProposalByType(proposals, block);
 
     slog({
       requestId: block.requestId,
       message: `Writing proposals
-        Content proposals: ${schemaContentProposals.proposals.length}
+        Edit proposals: ${schemaEditProposals.proposals.length}
         Subspace proposals: ${schemaSubspaceProposals.proposals.length}
         Editor proposals: ${schemaEditorshipProposals.proposals.length}
         Member proposals: ${schemaMembershipProposals.proposals.length}
@@ -109,9 +109,9 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
           // @TODO: Batch since there might be postgres byte limits. See upsertChunked
           await Promise.all([
             // Content proposals
-            Proposals.upsert(schemaContentProposals.proposals),
-            ProposedVersions.upsert(schemaContentProposals.proposedVersions),
-            Actions.upsert(schemaContentProposals.actions),
+            Proposals.upsert(schemaEditProposals.proposals),
+            ProposedVersions.upsert(schemaEditProposals.proposedVersions),
+            Ops.upsert(schemaEditProposals.ops),
 
             // Subspace proposals
             Proposals.upsert(schemaSubspaceProposals.proposals),
