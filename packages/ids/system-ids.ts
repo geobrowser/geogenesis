@@ -23,16 +23,11 @@ export const ATTRIBUTE = 'attribute'
  * └─────────────────────┘       └────────────────────┘      └──────────────────────┘
  */
 
-// const blocksAttributeId = 'beaba5cba67741a8b35377030613fc70'
-const collectionAttributeId = '487e084b41324b05b15ab6e147d58244'
-const collectionItemAttributeId = 'c43b537bcff742718822717fdf2c9c01'
-const indexAttributeId = 'ede47e6930b044998ea4aafbda449609'
-
 /**
  * Collection entity type. This is used when the Collection itself is an entity
  * vs. being a value in a Triple
  */
-export const COLLECTION_TYPE = 'debbf9ff62c640aa9b2c672e3bb15d0e'
+export const COLLECTION_TYPE = 'c373a33052df47b3a6d2df552bda4b44'
 
 /**
  * Collection item type. This is the entity representing the Join between the

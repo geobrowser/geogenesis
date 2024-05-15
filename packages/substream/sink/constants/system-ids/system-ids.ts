@@ -32,7 +32,7 @@ export const ROOT_SPACE_CREATED_BY_ID = '0x66703c058795B9Cb215fbcc7c6b07aee7D216
  * Collection entity type. This is used when the Collection itself is an entity
  * vs. being a value in a Triple
  */
-export const COLLECTION_TYPE = 'debbf9ff62c640aa9b2c672e3bb15d0e';
+export const COLLECTION_TYPE = 'c373a33052df47b3a6d2df552bda4b44';
 
 /**
  * Collection item type. This is the entity representing the Join between the
