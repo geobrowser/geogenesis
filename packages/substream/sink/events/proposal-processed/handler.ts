@@ -2,13 +2,13 @@ import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
-import type { ContentProposal } from '../proposals-created/parser';
+import type { EditProposal } from '../proposals-created/parser';
 import { populateApprovedContentProposal } from '~/sink/entries/populate-approved-content-proposal';
 import type { BlockEvent } from '~/sink/types';
 import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
 
-export function handleProposalsProcessed(proposalsFromIpfs: ContentProposal[], block: BlockEvent) {
+export function handleProposalsProcessed(proposalsFromIpfs: EditProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
@@ -62,9 +62,8 @@ export function handleProposalsProcessed(proposalsFromIpfs: ContentProposal[], b
     yield* _(
       populateApprovedContentProposal(
         proposals,
-        proposalsFromIpfs.flatMap(p => p.actions),
-        block.timestamp,
-        block.blockNumber
+        proposalsFromIpfs.flatMap(p => p.ops),
+        block
       )
     );
 

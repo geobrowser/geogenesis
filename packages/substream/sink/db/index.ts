@@ -1,5 +1,4 @@
 export * from './accounts';
-export * from './actions';
 export * from './proposals';
 export * from './proposed-editors';
 export * from './proposed-members';
@@ -9,3 +8,5 @@ export * from './space-members';
 export * from './space-editors';
 export * from './spaces';
 export * from './subspaces';
+export * from './triples';
+export * from './ops';

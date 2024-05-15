@@ -2,34 +2,26 @@ import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
 import type { SpaceWithPluginAddressNotFoundError } from '../../errors';
+import { getFetchIpfsContentEffect } from '../../ipfs';
 import type { BlockEvent } from '../../types';
-import { isValidAction } from '../../utils/actions';
 import { getChecksumAddress } from '../../utils/get-checksum-address';
-import { getFetchIpfsContentEffect } from '../../utils/ipfs';
 import { slog } from '../../utils/slog';
-import {
-  type ContentProposal,
-  type ProposalProcessed,
-  ZodContentProposal,
-  ZodProposalMetadata,
-} from '../proposals-created/parser';
+import { type EditProposal, type ProposalProcessed } from '../proposals-created/parser';
+import { Decoder, Edit, IpfsContentType, IpfsMetadata, decode } from '~/sink/proto';
 
 class InvalidProcessedProposalContentTypeError extends Error {
   _tag: 'InvalidProcessedProposalContentTypeError' = 'InvalidProcessedProposalContentTypeError';
 }
 
-function fetchContentProposalFromIpfs(
+function fetchEditProposalFromIpfs(
   processedProposal: {
     ipfsUri: string;
     pluginAddress: string;
   },
   block: BlockEvent
-): Effect.Effect<
-  ContentProposal | null,
-  SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError
-> {
-  return Effect.gen(function* (unwrap) {
-    const maybeSpaceIdForVotingPlugin = yield* unwrap(
+): Effect.Effect<EditProposal | null, SpaceWithPluginAddressNotFoundError | InvalidProcessedProposalContentTypeError> {
+  return Effect.gen(function* (_) {
+    const maybeSpaceIdForVotingPlugin = yield* _(
       Effect.promise(() => Spaces.findForSpacePlugin(processedProposal.pluginAddress))
     );
 
@@ -50,7 +42,7 @@ function fetchContentProposalFromIpfs(
     });
 
     const fetchIpfsContentEffect = getFetchIpfsContentEffect(processedProposal.ipfsUri);
-    const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
+    const maybeIpfsContent = yield* _(Effect.either(fetchIpfsContentEffect));
 
     if (Either.isLeft(maybeIpfsContent)) {
       const error = maybeIpfsContent.left;
@@ -82,30 +74,32 @@ function fetchContentProposalFromIpfs(
       return null;
     }
 
-    const validIpfsMetadata = ZodProposalMetadata.safeParse(ipfsContent);
+    const validIpfsMetadata = yield* _(decode(() => IpfsMetadata.fromBinary(ipfsContent)));
 
-    if (!validIpfsMetadata.success) {
+    if (!validIpfsMetadata) {
       // @TODO: Effectify error handling
-      console.error('Failed to parse IPFS metadata', validIpfsMetadata.error);
+      console.error('Failed to parse IPFS metadata', validIpfsMetadata);
       return null;
     }
 
-    switch (validIpfsMetadata.data.type) {
-      case 'CONTENT':
-        const parsedContent = ZodContentProposal.safeParse(ipfsContent);
+    switch (validIpfsMetadata.type) {
+      case IpfsContentType.EDIT: {
+        const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
 
-        if (!parsedContent.success) {
+        if (!parsedContent) {
           return null;
         }
 
-        const contentProposal: ContentProposal = {
-          type: validIpfsMetadata.data.type,
-          name: validIpfsMetadata.data.name ?? null,
-          proposalId: parsedContent.data.proposalId,
+        const contentProposal: EditProposal = {
+          type: 'EDIT',
+          name: validIpfsMetadata.name ?? null,
+          proposalId: parsedContent.proposalId,
           onchainProposalId: '-1',
           pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
-          actions: parsedContent.data.actions.filter(isValidAction),
-          creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'), // Geobot
+          // @TODO: Figure out these types
+          ops: [],
+          // We use Geobot as the initial creator for any initial space proposals.
+          creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'),
           space: getChecksumAddress(maybeSpaceIdForVotingPlugin.id),
           endTime: block.timestamp.toString(),
           startTime: block.timestamp.toString(),
@@ -113,12 +107,13 @@ function fetchContentProposalFromIpfs(
         };
 
         return contentProposal;
+      }
     }
 
-    yield* unwrap(
+    yield* _(
       Effect.fail(
         new InvalidProcessedProposalContentTypeError(
-          `Invalid processed proposal content type ${validIpfsMetadata.data.type}`
+          `Invalid processed proposal content type ${validIpfsMetadata.type}`
         )
       )
     );
@@ -127,7 +122,7 @@ function fetchContentProposalFromIpfs(
   });
 }
 
-export function getContentProposalFromProcessedProposalIpfsUri(
+export function getEditProposalFromInitialSpaceProposalIpfsUri(
   proposalsProcessed: ProposalProcessed[],
   block: BlockEvent
 ) {
@@ -140,7 +135,7 @@ export function getContentProposalFromProcessedProposalIpfsUri(
     const maybeProposalsFromIpfs = yield* _(
       Effect.all(
         proposalsProcessed.map(proposal =>
-          fetchContentProposalFromIpfs(
+          fetchEditProposalFromIpfs(
             {
               ipfsUri: proposal.contentUri,
               pluginAddress: proposal.pluginAddress,
@@ -155,7 +150,7 @@ export function getContentProposalFromProcessedProposalIpfsUri(
     );
 
     const proposalsFromIpfs = maybeProposalsFromIpfs.filter(
-      (maybeProposal): maybeProposal is ContentProposal => maybeProposal !== null
+      (maybeProposal): maybeProposal is EditProposal => maybeProposal !== null
     );
 
     return proposalsFromIpfs;

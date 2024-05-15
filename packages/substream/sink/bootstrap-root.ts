@@ -4,7 +4,6 @@ import type * as s from 'zapatos/schema';
 
 import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
 import { SYSTEM_IDS } from './constants/system-ids';
-import { generateTripleId } from './utils/id';
 import { pool } from './utils/pool';
 
 const entities: string[] = [
@@ -137,41 +136,27 @@ const geoEntities: s.geo_entities.Insertable[] = entities.map(entity => ({
   updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
 }));
 
-const namesTriples: s.triples.Insertable[] = Object.entries(names).map(([id, name]) => ({
-  id: generateTripleId({
-    space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
+  ([id, name]): s.triples.Insertable => ({
     entity_id: id,
     attribute_id: SYSTEM_IDS.NAME,
-    value_id: name,
-  }),
-  entity_id: id,
-  attribute_id: SYSTEM_IDS.NAME,
-  value_type: 'string',
-  value_id: id,
-  string_value: name,
-  is_protected: true,
-  space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-  created_at: ROOT_SPACE_CREATED_AT,
-  is_stale: false,
-}));
+    value_type: 'TEXT',
+    text_value: name,
+    space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    created_at: ROOT_SPACE_CREATED_AT,
+    is_stale: false,
+  })
+);
 
 const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
   .map(([id, entity_value_id]): s.triples.Insertable[] => [
     /* Giving these entities a type of attribute */
     {
-      id: generateTripleId({
-        space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-        entity_id: id,
-        attribute_id: SYSTEM_IDS.TYPES,
-        value_id: SYSTEM_IDS.ATTRIBUTE,
-      }),
       entity_id: id,
       attribute_id: SYSTEM_IDS.TYPES,
-      value_type: 'entity',
-      value_id: SYSTEM_IDS.ATTRIBUTE,
+      value_type: 'TEXT',
       entity_value_id: SYSTEM_IDS.ATTRIBUTE,
-      is_protected: true,
       space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
@@ -179,18 +164,10 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
     },
     /* Giving these attributes a value type of the type they are */
     {
-      id: generateTripleId({
-        space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-        entity_id: id,
-        attribute_id: SYSTEM_IDS.VALUE_TYPE,
-        value_id: SYSTEM_IDS.ATTRIBUTE,
-      }),
       entity_id: id,
       attribute_id: SYSTEM_IDS.VALUE_TYPE,
-      value_type: 'entity',
-      value_id: SYSTEM_IDS.ATTRIBUTE,
+      value_type: 'ENTITY',
       entity_value_id,
-      is_protected: true,
       space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
@@ -203,18 +180,10 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
   .map(([id, attributes]): s.triples.Insertable[] => [
     /* Giving these entities a type of type */
     {
-      id: generateTripleId({
-        space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-        entity_id: id,
-        attribute_id: SYSTEM_IDS.TYPES,
-        value_id: SYSTEM_IDS.SCHEMA_TYPE,
-      }),
       entity_id: id,
       attribute_id: SYSTEM_IDS.TYPES,
-      value_type: 'entity',
-      value_id: SYSTEM_IDS.SCHEMA_TYPE,
+      value_type: 'ENTITY',
       entity_value_id: SYSTEM_IDS.SCHEMA_TYPE,
-      is_protected: true,
       space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
@@ -223,18 +192,10 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
     /* Giving these entities an attribute of attribute */
     ...attributes.map(
       (attribute): s.triples.Insertable => ({
-        id: generateTripleId({
-          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-          entity_id: id,
-          attribute_id: SYSTEM_IDS.ATTRIBUTES,
-          value_id: attribute,
-        }),
         entity_id: id,
         attribute_id: SYSTEM_IDS.ATTRIBUTES,
-        value_type: 'entity',
-        value_id: attribute,
+        value_type: 'TEXT',
         entity_value_id: attribute,
-        is_protected: true,
         space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
         created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
         created_at: ROOT_SPACE_CREATED_AT,

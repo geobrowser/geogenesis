@@ -1,11 +1,6 @@
-import type * as s from 'zapatos/schema';
+export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export enum TripleAction {
-  Create = 'createTriple',
-  Delete = 'deleteTriple',
-}
-
-export type TripleWithActionTuple = [TripleAction, s.triples.Insertable];
+export type TripleOp = 'SET_TRIPLE' | 'DELETE_TRIPLE';
 
 export interface BlockEvent {
   cursor: string;
@@ -13,3 +8,5 @@ export interface BlockEvent {
   timestamp: number;
   requestId: string; // uuid
 }
+
+export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';

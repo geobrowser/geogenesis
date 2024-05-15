@@ -3,10 +3,10 @@ import type * as S from 'zapatos/schema';
 
 import { pool } from '../utils/pool';
 
-export class Actions {
-  static async upsert(actions: S.actions.Insertable[]) {
+export class Ops {
+  static async upsert(ops: S.ops.Insertable[]) {
     return await db
-      .upsert('actions', actions, ['id'], {
+      .upsert('ops', ops, ['id'], {
         updateColumns: db.doNothing,
       })
       .run(pool);

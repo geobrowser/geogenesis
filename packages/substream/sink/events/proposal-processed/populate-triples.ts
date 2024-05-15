@@ -1,26 +1,22 @@
-import { Effect, Either, Schedule } from 'effect';
+import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
-import { TripleAction, type TripleWithActionTuple } from '../types';
-import { generateTripleId } from '../utils/id';
-import { pool } from '../utils/pool';
-import { retryEffect } from '../utils/retry-effect';
-import type { Action } from '../zod';
+import { type BlockEvent } from '../../types';
+import { pool } from '../../utils/pool';
+import { retryEffect } from '../../utils/retry-effect';
+import { type OpWithCreatedBy, mapSchemaTriples } from './map-triples';
 import { SYSTEM_IDS } from '~/sink/constants/system-ids';
+import { Triples } from '~/sink/db';
 
 interface PopulateTriplesArgs {
-  entries: { space: string; actions: Action[] }[];
-  timestamp: number;
-  blockNumber: number;
-  createdById: string;
+  schemaTriples: OpWithCreatedBy[];
+  block: BlockEvent;
   versions: Schema.versions.Insertable[];
 }
 
-export function populateTriples({ entries, timestamp, blockNumber, createdById, versions }: PopulateTriplesArgs) {
+export function populateTriples({ schemaTriples, block, versions }: PopulateTriplesArgs) {
   return Effect.gen(function* (awaited) {
-    const triplesDatabaseTuples = mapTriplesWithActionType(entries, timestamp, blockNumber);
-
     /**
      * Changes to data in Geo are modeled as "actions." You can create a triple or delete a triple.
      * A client might publish _many_ actions, some of which are operations on the same triple. e.g.,
@@ -37,18 +33,18 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
      * Right now (January 23, 2024) the Geo Genesis client _does_ squash actions before publishing, but
      * this wasn't always the case and other clients might not implement the squashing mechanism.
      */
-    for (const [actionType, triple] of triplesDatabaseTuples) {
-      const isCreateTriple = actionType === TripleAction.Create;
-      const isDeleteTriple = actionType === TripleAction.Delete;
-      const isAddType = triple.attribute_id === SYSTEM_IDS.TYPES && isCreateTriple;
+    for (const { op, triple, createdById } of schemaTriples) {
+      const isUpsertTriple = op === 'SET_TRIPLE';
+      const isDeleteTriple = op === 'DELETE_TRIPLE';
+      const isAddType = triple.attribute_id === SYSTEM_IDS.TYPES && isUpsertTriple && triple.entity_value_id;
       const isDeleteType = triple.attribute_id === SYSTEM_IDS.TYPES && isDeleteTriple;
       const isNameAttribute = triple.attribute_id === SYSTEM_IDS.NAME;
       const isDescriptionAttribute = triple.attribute_id === SYSTEM_IDS.DESCRIPTION;
-      const isStringValueType = triple.value_type === 'string';
+      const isStringValueType = triple.value_type === 'TEXT';
 
-      const isNameCreateAction = isCreateTriple && isNameAttribute && isStringValueType;
+      const isNameCreateAction = isUpsertTriple && isNameAttribute && isStringValueType;
       const isNameDeleteAction = isDeleteTriple && isNameAttribute && isStringValueType;
-      const isDescriptionCreateAction = isCreateTriple && isDescriptionAttribute && isStringValueType;
+      const isDescriptionCreateAction = isUpsertTriple && isDescriptionAttribute && isStringValueType;
       const isDescriptionDeleteAction = isDeleteTriple && isDescriptionAttribute && isStringValueType;
 
       /**
@@ -68,30 +64,31 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
        * deleted later on in the same actions processing loop. If we squash ahead of time this
        * shouldn't be an issue.
        */
-      if (isCreateTriple && version) {
+      if (isUpsertTriple && version) {
         const insertTripleEffect = Effect.tryPromise({
-          try: () => db.upsert('triples', triple, 'id').run(pool),
-          catch: () => new Error('Failed to insert triple'),
+          try: () => Triples.upsert([triple]),
+          // @TODO: More specifically typed error
+          catch: error => new Error(`Failed to insert triple: ${String(error)}`),
         });
 
-        const insertTripleVersionEffect = Effect.tryPromise({
-          try: () =>
-            db
-              .upsert(
-                'triple_versions',
-                { version_id: version.id, triple_id: triple.id },
-                ['triple_id', 'version_id'],
-                {
-                  updateColumns: ['triple_id', 'version_id'],
-                }
-              )
-              .run(pool),
-          catch: error => new Error(`Failed to insert ${triple.id}. ${(error as Error).message}`),
-        });
+        // const insertTripleVersionEffect = Effect.tryPromise({
+        //   try: () =>
+        //     db
+        //       .upsert(
+        //         'triple_versions',
+        //         { version_id: version.id, triple_id: triple.id },
+        //         ['triple_id', 'version_id'],
+        //         {
+        //           updateColumns: ['triple_id', 'version_id'],
+        //         }
+        //       )
+        //       .run(pool),
+        //   catch: error => new Error(`Failed to insert ${triple.id}. ${(error as Error).message}`),
+        // });
 
         // @TODO: Parallelize with Effect.all
         yield* awaited(insertTripleEffect, retryEffect);
-        yield* awaited(insertTripleVersionEffect, retryEffect);
+        // yield* awaited(insertTripleVersionEffect, retryEffect);
       }
 
       /**
@@ -102,31 +99,29 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
        * Here we remove the triple from the current if it was deleted.
        */
       if (isDeleteTriple && version) {
-        const deleteEffect = Effect.tryPromise({
-          try: () =>
-            db
-              .deletes(
-                'triple_versions',
-                { version_id: version.id, triple_id: triple.id },
-                { returning: ['triple_id', 'version_id'] }
-              )
-              .run(pool),
-          catch: error =>
-            new Error(`Failed to delete triple ${triple.id} from version ${version.id}}. ${(error as Error).message}`),
-        });
-
-        /**
-         * With our versioning model we store all triples that have ever been written to the system. If a
-         * triple is not part of the latest version for an entity we mark it as stale.
-         */
-        const setStaleEffect = Effect.tryPromise({
-          try: () => db.update('triples', { is_stale: true }, { id: triple.id }).run(pool),
-          catch: error => new Error(`Failed to set triple ${triple.id} as stale. ${(error as Error).message}`),
-        });
-
-        // @TODO: Parallelize with Effect.all
-        yield* awaited(deleteEffect, retryEffect);
-        yield* awaited(setStaleEffect, retryEffect);
+        // const deleteEffect = Effect.tryPromise({
+        //   try: () =>
+        //     db
+        //       .deletes(
+        //         'triple_versions',
+        //         { version_id: version.id, triple_id: triple.id },
+        //         { returning: ['triple_id', 'version_id'] }
+        //       )
+        //       .run(pool),
+        //   catch: error =>
+        //     new Error(`Failed to delete triple ${triple.id} from version ${version.id}}. ${(error as Error).message}`),
+        // });
+        // /**
+        //  * With our versioning model we store all triples that have ever been written to the system. If a
+        //  * triple is not part of the latest version for an entity we mark it as stale.
+        //  */
+        // const setStaleEffect = Effect.tryPromise({
+        //   try: () => db.update('triples', { is_stale: true }, { id: triple.id }).run(pool),
+        //   catch: error => new Error(`Failed to set triple ${triple.id} as stale. ${(error as Error).message}`),
+        // });
+        // // @TODO: Parallelize with Effect.all
+        // yield* awaited(deleteEffect, retryEffect);
+        // yield* awaited(setStaleEffect, retryEffect);
       }
 
       /**
@@ -143,12 +138,12 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
                 'geo_entities',
                 {
                   id: triple.entity_id,
-                  name: triple.string_value,
+                  name: triple.text_value,
                   created_by_id: createdById,
-                  created_at: timestamp,
-                  created_at_block: blockNumber,
-                  updated_at: timestamp,
-                  updated_at_block: blockNumber,
+                  created_at: block.timestamp,
+                  created_at_block: block.blockNumber,
+                  updated_at: block.timestamp,
+                  updated_at_block: block.blockNumber,
                 },
                 'id',
                 {
@@ -159,9 +154,9 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
               .run(pool),
           catch: error =>
             new Error(
-              `Failed to create name ${String(triple.string_value)} for triple ${triple.id}. ${
-                (error as Error).message
-              }`
+              `Failed to create name ${String(triple.text_value)} for triple ${triple.space_id}:${triple.entity_id}:${
+                triple.attribute_id
+              }. ${(error as Error).message}`
             ),
         });
 
@@ -191,8 +186,7 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
               .selectOne('triples', {
                 entity_id: triple.entity_id,
                 attribute_id: SYSTEM_IDS.NAME,
-                // @TODO: should be a typed enum instead of `text`
-                value_type: 'string',
+                value_type: 'TEXT',
                 is_stale: false,
               })
               .run(pool),
@@ -211,12 +205,12 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
                 'geo_entities',
                 {
                   id: triple.entity_id,
-                  name: maybeNameTripleForEntity ? maybeNameTripleForEntity.string_value : null,
+                  name: maybeNameTripleForEntity ? maybeNameTripleForEntity.text_value : null,
                   created_by_id: createdById,
-                  created_at: timestamp,
-                  created_at_block: blockNumber,
-                  updated_at: timestamp,
-                  updated_at_block: blockNumber,
+                  created_at: block.timestamp,
+                  created_at_block: block.blockNumber,
+                  updated_at: block.timestamp,
+                  updated_at_block: block.blockNumber,
                 },
                 'id',
                 {
@@ -227,9 +221,9 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
               .run(pool),
           catch: error =>
             new Error(
-              `Failed to delete name ${String(triple.string_value)} for triple ${triple.id}. ${
-                (error as Error).message
-              }`
+              `Failed to delete name ${String(triple.text_value)} for triple triple ${triple.space_id}:${
+                triple.entity_id
+              }:${triple.attribute_id}. ${(error as Error).message}`
             ),
         });
 
@@ -250,12 +244,12 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
                 'geo_entities',
                 {
                   id: triple.entity_id,
-                  description: triple.string_value,
+                  description: triple.text_value,
                   created_by_id: createdById,
-                  created_at: timestamp,
-                  created_at_block: blockNumber,
-                  updated_at: timestamp,
-                  updated_at_block: blockNumber,
+                  created_at: block.timestamp,
+                  created_at_block: block.blockNumber,
+                  updated_at: block.timestamp,
+                  updated_at_block: block.blockNumber,
                 },
                 'id',
                 {
@@ -266,9 +260,9 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
               .run(pool),
           catch: error =>
             new Error(
-              `Failed to create description ${String(triple.string_value)} for triple ${triple.id}. ${
-                (error as Error).message
-              }`
+              `Failed to create description ${String(triple.text_value)} for triple triple ${triple.space_id}:${
+                triple.entity_id
+              }:${triple.attribute_id}. ${(error as Error).message}`
             ),
         });
 
@@ -291,10 +285,10 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
                   id: triple.entity_id,
                   description: null,
                   created_by_id: createdById,
-                  created_at: timestamp,
-                  created_at_block: blockNumber,
-                  updated_at: timestamp,
-                  updated_at_block: blockNumber,
+                  created_at: block.timestamp,
+                  created_at_block: block.blockNumber,
+                  updated_at: block.timestamp,
+                  updated_at_block: block.blockNumber,
                 },
                 'id',
                 {
@@ -305,9 +299,9 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
               .run(pool),
           catch: error =>
             new Error(
-              `Failed to delete description ${String(triple.string_value)} for triple ${triple.id}. ${
-                (error as Error).message
-              }`
+              `Failed to delete description ${String(triple.text_value)} for triple triple ${triple.space_id}:${
+                triple.entity_id
+              }:${triple.attribute_id}. ${(error as Error).message}`
             ),
         });
 
@@ -328,9 +322,9 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
                 'geo_entity_types',
                 {
                   entity_id: triple.entity_id,
-                  type_id: triple.value_id,
-                  created_at: timestamp,
-                  created_at_block: blockNumber,
+                  type_id: triple.entity_value_id?.toString()!,
+                  created_at: block.timestamp,
+                  created_at_block: block.blockNumber,
                 },
                 ['entity_id', 'type_id'],
                 { updateColumns: db.doNothing }
@@ -341,15 +335,15 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
 
         yield* awaited(insertTypeEffect, retryEffect);
 
-        if (triple.value_id === SYSTEM_IDS.COLLECTION_TYPE) {
+        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
           const insertCollectionEffect = Effect.tryPromise({
             try: () =>
               db
                 .upsert(
                   'collections',
                   {
-                    id: triple.value_id,
-                    entity_id: triple.value_id,
+                    id: triple.entity_value_id?.toString()!, // we know it exists because of the above check
+                    entity_id: triple.entity_value_id?.toString()!,
                   },
                   ['id'],
                   { updateColumns: db.doNothing }
@@ -374,19 +368,19 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
             db
               .deletes('geo_entity_types', {
                 entity_id: triple.entity_id,
-                type_id: triple.value_id,
+                type_id: triple.entity_value_id?.toString(),
               })
               .run(pool),
           catch: () => new Error('Failed to delete type'),
         });
         yield* awaited(deleteTypeEffect, retryEffect);
 
-        if (triple.value_id === SYSTEM_IDS.COLLECTION_TYPE) {
+        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
           const deleteCollectionEffect = Effect.tryPromise({
             try: () =>
               db
                 .deletes('collections', {
-                  id: triple.value_id,
+                  id: triple.entity_value_id?.toString()!,
                 })
                 .run(pool),
             catch: () => new Error('Failed to create type'),
@@ -397,57 +391,4 @@ export function populateTriples({ entries, timestamp, blockNumber, createdById, 
       }
     }
   });
-}
-
-export function mapTriplesWithActionType(
-  entries: { space: string; actions: Action[] }[],
-  timestamp: number,
-  blockNumber: number
-): TripleWithActionTuple[] {
-  const triples: TripleWithActionTuple[] = entries.flatMap(e => {
-    return e.actions.map(action => {
-      const action_type = action.type;
-
-      const entity_id = action.entityId;
-      const attribute_id = action.attributeId;
-      const value_type = action.value.type;
-      const value_id = action.value.id;
-      const space_id = e.space;
-      const is_protected = false;
-      const id = generateTripleId({
-        space_id,
-        entity_id,
-        attribute_id,
-        value_id,
-      });
-
-      const entity_value_id = value_type === 'entity' ? value_id : null;
-      const string_value =
-        value_type === 'string' || value_type === 'image' || value_type === 'date' || value_type === 'url'
-          ? action.value.value
-          : null;
-
-      const tupleType = action_type === 'deleteTriple' ? TripleAction.Delete : TripleAction.Create;
-
-      return [
-        tupleType,
-        {
-          id,
-          entity_id,
-          attribute_id,
-          value_id,
-          value_type,
-          entity_value_id,
-          string_value,
-          space_id,
-          is_protected,
-          created_at: timestamp,
-          created_at_block: blockNumber,
-          is_stale: false,
-        },
-      ] as TripleWithActionTuple;
-    });
-  });
-
-  return triples;
 }

@@ -16,14 +16,11 @@ CREATE TABLE public.geo_entities (
     id text PRIMARY KEY,
     name character varying,
     description character varying,
-    -- latest_version_id text REFERENCES public.versions(id),
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     updated_at integer,
     updated_at_block integer
-    -- is_attribute boolean DEFAULT false,
-    -- attribute_value_type_id text
 );
 
 CREATE TYPE public.space_type as ENUM ('personal', 'public');
@@ -83,7 +80,7 @@ CREATE TABLE public.proposals (
     onchain_proposal_id text NOT NULL,
     plugin_address text NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
-    name text,
+    name text NOT NULL,
     description text,
     uri text,
     type proposal_type NOT NULL,
@@ -97,8 +94,6 @@ CREATE TABLE public.proposals (
 
 CREATE TABLE public.proposed_versions (
     id text PRIMARY KEY,
-    name text,
-    description text,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
@@ -131,20 +126,18 @@ CREATE TABLE public.space_subspaces (
     CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
-CREATE TYPE public.triple_value_type as ENUM ('number', 'string', 'entity', 'collection', 'image', 'date', 'url');
+CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URL', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
 
 CREATE TABLE public.triples (
-    id text PRIMARY KEY,
+    PRIMARY KEY (space_id, entity_id, attribute_id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
     entity_id text NOT NULL REFERENCES public.geo_entities(id),
     attribute_id text NOT NULL REFERENCES public.geo_entities(id),
     value_type triple_value_type NOT NULL,
-    value_id text NOT NULL,
     number_value text,
-    string_value text,
-    array_value text,
+    text_value text,
     entity_value_id text REFERENCES public.geo_entities(id),
-    is_protected boolean NOT NULL,
-    space_id text NOT NULL REFERENCES public.spaces(id),
+    collection_value_id text REFERENCES public.geo_entities(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     is_stale boolean NOT NULL
@@ -152,8 +145,6 @@ CREATE TABLE public.triples (
 
 CREATE TABLE public.versions (
     id text PRIMARY KEY,
-    name text,
-    description text,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
@@ -161,10 +152,6 @@ CREATE TABLE public.versions (
     entity_id text NOT NULL REFERENCES public.geo_entities(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
-
--- @TODO: Proposed Member
--- @TODO: Proposed Editor
--- @TODO: Proposed Subspace
 
 CREATE TABLE public.proposal_votes (
     PRIMARY KEY (onchain_proposal_id, space_id, account_id),
@@ -177,19 +164,20 @@ CREATE TABLE public.proposal_votes (
     created_at_block integer NOT NULL
 );
 
-CREATE TABLE public.actions (
+CREATE TYPE public.op_type as ENUM ('SET_TRIPLE', 'DELETE_TRIPLE');
+
+CREATE TABLE public.ops (
     id text PRIMARY KEY NOT NULL,
-    action_type text NOT NULL,
-    entity_id text REFERENCES public.geo_entities(id) NOT NULL,
-    attribute_id text REFERENCES public.geo_entities(id) NOT NULL,
+    type op_type NOT NULL,
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    entity_id text NOT NULL REFERENCES public.geo_entities(id),
+    attribute_id text NOT NULL REFERENCES public.geo_entities(id),
     value_type triple_value_type NOT NULL,
-    value_id text,
     number_value text,
-    string_value text,
+    text_value text,
     entity_value_id text REFERENCES public.geo_entities(id),
-    array_value text [],
+    collection_value_id text REFERENCES public.geo_entities(id),
     proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
-    -- version_id text REFERENCES public.versions(id) NOT NULL,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL
 );
@@ -245,9 +233,6 @@ CREATE TABLE public.triple_versions (
 --
 ALTER TABLE
     public.accounts DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.actions DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.geo_entities DISABLE TRIGGER ALL;
