@@ -12,9 +12,6 @@ import {
   type MembershipProposal,
   type ProposalCreated,
   type SubspaceProposal,
-  ZodMembershipProposal,
-  ZodProposalMetadata,
-  ZodSubspaceProposal,
 } from './parser';
 import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
@@ -34,7 +31,7 @@ import { slog } from '~/sink/utils/slog';
  *
  * Later on we map this to the database schema and write the proposal to the database.
  */
-export function getProposalFromCreatedProposalIpfsUri(
+export function getProposalFromIpfs(
   proposal: ProposalCreated,
   block: BlockEvent
 ): Effect.Effect<

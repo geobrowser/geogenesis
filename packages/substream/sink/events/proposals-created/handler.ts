@@ -1,6 +1,6 @@
 import { Effect, Either } from 'effect';
 
-import { getProposalFromCreatedProposalIpfsUri } from './get-proposal-from-created-proposal';
+import { getProposalFromIpfs } from './get-proposal-from-ipfs';
 import {
   Accounts,
   Ops,
@@ -44,7 +44,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
 
     const maybeProposals = yield* _(
       Effect.all(
-        proposalsCreated.map(proposal => getProposalFromCreatedProposalIpfsUri(proposal, block)),
+        proposalsCreated.map(proposal => getProposalFromIpfs(proposal, block)),
         {
           concurrency: 20,
         }
