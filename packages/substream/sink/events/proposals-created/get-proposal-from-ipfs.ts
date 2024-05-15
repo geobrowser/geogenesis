@@ -116,7 +116,7 @@ export function getProposalFromIpfs(
           ...proposal,
           type: 'EDIT',
           name: validIpfsMetadata.name ?? null,
-          proposalId: parsedContent.id,
+          proposalId: parsedContent.proposalId,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
           // @TODO: Figure out these types

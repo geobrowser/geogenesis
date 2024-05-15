@@ -47,14 +47,12 @@ message Value {
 }
 
 enum OpType {
-  // option allow_alias = true;
   NONE = 0;
   SET_TRIPLE = 1;
   DELETE_TRIPLE = 2;
 }
 
 enum ValueType {
-  // option allow_alias = true;
   NULL = 0;
   TEXT = 1;
   NUMBER = 2;

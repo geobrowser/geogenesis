@@ -7,7 +7,7 @@ const writeMetadata = (type: IpfsContentType, name: string) => {
     name: name,
     type: type,
     version: '0.0.1',
-    id: '-1',
+    proposalId: '-1',
     userAddress: '0x1234',
   });
 
