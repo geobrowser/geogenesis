@@ -157,11 +157,6 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
   .map(([id, entity_value_id]): s.triples.Insertable[] => [
     /* Giving these entities a type of attribute */
     {
-      id: generateTripleId({
-        space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-        entity_id: id,
-        attribute_id: SYSTEM_IDS.TYPES,
-      }),
       entity_id: id,
       attribute_id: SYSTEM_IDS.TYPES,
       value_type: 'TEXT',
@@ -173,11 +168,6 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
     },
     /* Giving these attributes a value type of the type they are */
     {
-      id: generateTripleId({
-        space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-        entity_id: id,
-        attribute_id: SYSTEM_IDS.VALUE_TYPE,
-      }),
       entity_id: id,
       attribute_id: SYSTEM_IDS.VALUE_TYPE,
       value_type: 'ENTITY',
@@ -194,11 +184,6 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
   .map(([id, attributes]): s.triples.Insertable[] => [
     /* Giving these entities a type of type */
     {
-      id: generateTripleId({
-        space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-        entity_id: id,
-        attribute_id: SYSTEM_IDS.TYPES,
-      }),
       entity_id: id,
       attribute_id: SYSTEM_IDS.TYPES,
       value_type: 'ENTITY',
@@ -211,11 +196,6 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
     /* Giving these entities an attribute of attribute */
     ...attributes.map(
       (attribute): s.triples.Insertable => ({
-        id: generateTripleId({
-          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-          entity_id: id,
-          attribute_id: SYSTEM_IDS.ATTRIBUTES,
-        }),
         entity_id: id,
         attribute_id: SYSTEM_IDS.ATTRIBUTES,
         value_type: 'TEXT',

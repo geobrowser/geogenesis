@@ -6,10 +6,8 @@ import { type SchemaTripleEdit, mapSchemaTriples } from '../events/proposal-proc
 import { populateTriples } from '../events/proposal-processed/populate-triples';
 import type { Op } from '../events/proposals-created/parser';
 import type { BlockEvent } from '../types';
-import { createGeoId } from '../utils/create-geo-id';
 import { upsertChunked } from '../utils/db';
 import { pool } from '../utils/pool';
-import { mapTripleVersions } from './map-triple-versions';
 
 export function populateApprovedContentProposal(
   proposals: Schema.proposals.Selectable[],
@@ -33,15 +31,16 @@ export function populateApprovedContentProposal(
 
     const proposedVersions = nestedProposedVersions.flatMap(pv => pv);
 
+    console.log('proposed versions', proposedVersions);
+
     const entities = proposedVersions.map(pv => {
       const newEntity: Schema.Insertable = {
         id: pv.entity_id,
-        description: pv.description,
+        created_by_id: pv.created_by_id,
         created_at: block.timestamp,
         created_at_block: block.blockNumber,
         updated_at: block.timestamp,
         updated_at_block: block.blockNumber,
-        created_by_id: pv.created_by_id,
       };
 
       return newEntity;
@@ -49,21 +48,20 @@ export function populateApprovedContentProposal(
 
     const versions = proposedVersions.map(pv => {
       const newVersion: Schema.versions.Insertable = {
-        id: createGeoId(),
+        id: `${pv.proposal_id}:${pv.entity_id}`,
         entity_id: pv.entity_id,
         created_at_block: block.blockNumber,
         created_at: block.timestamp,
-        name: pv.name,
         created_by_id: pv.created_by_id,
         proposed_version_id: pv.id,
         space_id: pv.space_id,
-        description: pv.description,
       };
 
       return newVersion;
     });
 
-    const tripleVersions = yield* awaited(mapTripleVersions(versions));
+    // const tripleVersions = yield* awaited(mapTripleVersions(versions));
+    const tripleVersions = [];
 
     yield* awaited(
       Effect.all([
@@ -91,10 +89,10 @@ export function populateApprovedContentProposal(
             }),
           catch: error => new Error(`Failed to insert bulk versions. ${(error as Error).message}`),
         }),
-        Effect.tryPromise({
-          try: () => upsertChunked('triple_versions', tripleVersions, ['triple_id', 'version_id']),
-          catch: error => new Error(`Failed to insert bulk triple versions. ${(error as Error).message}`),
-        }),
+        // Effect.tryPromise({
+        //   try: () => upsertChunked('triple_versions', tripleVersions, ['triple_id', 'version_id']),
+        //   catch: error => new Error(`Failed to insert bulk triple versions. ${(error as Error).message}`),
+        // }),
       ])
     );
 

@@ -29,17 +29,12 @@ export function mapSchemaTriples(
 
       const entity_value_id = value_type === 'ENTITY' ? value.value : null;
       const collection_value_id = value_type === 'COLLECTION' ? value.value : null;
-      const text_value = value_type === 'TEXT' || value_type === 'URL' ? value : null;
+      const text_value = value_type === 'TEXT' || value_type === 'URL' ? value.value : null;
 
       return {
         createdById: edit.createdById,
         op: op.opType,
         triple: {
-          id: generateTripleId({
-            space_id,
-            entity_id,
-            attribute_id,
-          }),
           space_id,
           entity_id,
           attribute_id,
@@ -62,11 +57,6 @@ export function mapSchemaTriples(
       createdById: edit.createdById,
       op: op.opType,
       triple: {
-        id: generateTripleId({
-          space_id,
-          entity_id,
-          attribute_id,
-        }),
         space_id,
         entity_id,
         attribute_id,

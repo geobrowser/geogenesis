@@ -265,13 +265,12 @@ function mapEditProposalToSchema(
 
     const uniqueEntityIds = new Set(p.ops.map(action => action.payload.entityId));
 
-    [...uniqueEntityIds.values()].forEach((entityId, entryIndex) => {
+    [...uniqueEntityIds.values()].forEach(entityId => {
       const mappedProposedVersion: S.proposed_versions.Insertable = {
         id: `${p.proposalId}:${entityId}`,
         entity_id: entityId,
         created_at_block: block.blockNumber,
         created_at: Number(p.startTime),
-        name: p.name,
         created_by_id: p.creator,
         proposal_id: p.proposalId,
         space_id: spaceId,
