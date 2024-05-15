@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { ValueType } from '~/sink/types';
+
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
  * represent changes to content, membership (editor or member), governance changes, subspace
@@ -13,12 +15,6 @@ import { z } from 'zod';
  * succeeds. For example, if a proposal is to add a new editor to the space, the callback would
  * be the encoded function call to add the editor to the space.
  *
- * ```ts
- * {
- *   to: `0x123...`, // The address of the membership contract
- *   data: `0x123...`, // The encoded function call parameters
- * }
- * ```
  */
 export const ZodSubstreamProposalCreated = z.object({
   proposalId: z.string(),
@@ -120,61 +116,24 @@ export const ZodProposalProcessedStreamResponse = z.object({
   proposalsProcessed: z.array(ZodProposalProcessed).min(1),
 });
 
-const ZodEditValueType = z.union([
-  z.literal('TEXT'),
-  z.literal('NUMBER'),
-  z.literal('ENTITY'),
-  z.literal('COLLECTION'),
-  z.literal('CHECKBOX'),
-  z.literal('URL'),
-  z.literal('TIME'),
-  z.literal('GEO_LOCATION'),
-]);
+export type Op = {
+  opType: 'SET_TRIPLE';
+  payload: {
+    entityId: string;
+    attributeId: string;
+    value: {
+      type: ValueType;
+      value: string;
+    };
+  };
+};
 
-const ZodEditValue = z.object({
-  type: ZodEditValueType,
-  value: z.string(),
-});
-
-const ZodEditSetTriplePayload = z.object({
-  entityId: z.string(),
-  attributeId: z.string(),
-  // @TODO: idk why this is broken
-  // value: ZodEditValue,
-  value: z.any(),
-});
-
-const ZodEditDeleteTriplePayload = z.object({
-  entityId: z.string(),
-  attributeId: z.string(),
-  // @TODO: idk why this is broken
-  // value: z.object({})
-  value: z.any(),
-});
-
-const ZodSetTripleOp = z.object({
-  opType: z.literal('SET_TRIPLE'),
-  payload: ZodEditSetTriplePayload,
-});
-
-const ZodDeleteTripleOp = z.object({
-  opType: z.literal('DELETE_TRIPLE'),
-  payload: ZodEditDeleteTriplePayload,
-});
-
-export const ZodOp = z.discriminatedUnion('opType', [ZodSetTripleOp, ZodDeleteTripleOp]);
-
-export type Op = z.infer<typeof ZodOp>;
-
-export const ZodEdit = z.object({
-  name: z.string(),
-  version: z.string(),
-  ops: z.array(ZodOp),
-  authors: z.array(z.string()),
-  // id: z.string(),
-});
-
-export type Edit = z.infer<typeof ZodEdit>;
+export type Edit = {
+  name: string;
+  version: string;
+  ops: Op[];
+  authors: string[];
+};
 
 export type EditProposal = Proposal & {
   type: 'EDIT';

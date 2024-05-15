@@ -8,3 +8,5 @@ export interface BlockEvent {
   timestamp: number;
   requestId: string; // uuid
 }
+
+export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';

@@ -6,7 +6,7 @@ import { getFetchIpfsContentEffect } from '../../ipfs';
 import type { BlockEvent } from '../../types';
 import { getChecksumAddress } from '../../utils/get-checksum-address';
 import { slog } from '../../utils/slog';
-import { type EditProposal, type ProposalProcessed, ZodProposalMetadata } from '../proposals-created/parser';
+import { type EditProposal, type ProposalProcessed } from '../proposals-created/parser';
 import { Edit, IpfsContentType, IpfsMetadata, decode } from '~/sink/proto';
 
 class InvalidProcessedProposalContentTypeError extends Error {

@@ -4,6 +4,7 @@ import {
   type EditProposal,
   type EditorshipProposal,
   type MembershipProposal,
+  type Op,
   type ProposalCreated,
   type SubspaceProposal,
 } from './parser';
@@ -120,7 +121,7 @@ export function getProposalFromIpfs(
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
           // @TODO: Figure out these types
-          ops: [],
+          ops: parsedContent.ops as unknown as Op[],
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
         };
