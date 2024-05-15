@@ -1,5 +1,7 @@
 import { Effect, Either } from 'effect';
 
+import { ZodEdit } from '../events/proposals-created/parser';
+import { Edit } from '../proto';
 // import { Telemetry } from '~/sink/telemetry';
 import { slog } from '~/sink/utils/slog';
 
@@ -43,3 +45,24 @@ export function decode<T>(fn: () => T) {
     });
   });
 }
+
+function decodeEdit(data: Buffer) {
+  return Effect.gen(function* (_) {
+    const decodeEffect = decode(() => {
+      const edit = Edit.fromBinary(data);
+      const parseResult = ZodEdit.safeParse(edit.toJson());
+
+      if (parseResult.success) {
+        return parseResult.data;
+      }
+
+      return null;
+    });
+
+    return yield* _(decodeEffect);
+  });
+}
+
+export const Decoder = {
+  decodeEdit,
+};

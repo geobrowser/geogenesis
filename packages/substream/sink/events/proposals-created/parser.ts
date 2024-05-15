@@ -116,23 +116,79 @@ export const ZodProposalProcessedStreamResponse = z.object({
   proposalsProcessed: z.array(ZodProposalProcessed).min(1),
 });
 
-export type Op = {
-  opType: 'SET_TRIPLE';
-  payload: {
-    entityId: string;
-    attributeId: string;
-    value: {
-      type: ValueType;
-      value: string;
+const ZodEditSetTriplePayload = z.object({
+  entityId: z.string(),
+  attributeId: z.string(),
+  // zod has issues with discriminated unions. We set the value
+  // to any here and trust that it is constructed into the correct
+  // format once it's decoded.
+  value: z.any(),
+});
+
+const ZodEditDeleteTriplePayload = z.object({
+  entityId: z.string(),
+  attributeId: z.string(),
+  // zod has issues with discriminated unions. We set the value
+  // to any here and trust that it is constructed into the correct
+  // format once it's decoded.
+  value: z.any(),
+});
+
+const ZodSetTripleOp = z.object({
+  opType: z.literal('SET_TRIPLE'),
+  payload: ZodEditSetTriplePayload,
+});
+
+const ZodDeleteTripleOp = z.object({
+  opType: z.literal('DELETE_TRIPLE'),
+  payload: ZodEditDeleteTriplePayload,
+});
+
+export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
+
+export const ZodEdit = z.object({
+  type: z.literal('EDIT'),
+  name: z.string(),
+  version: z.string(),
+  ops: z.array(ZodOp),
+  authors: z.array(z.string()),
+  proposalId: z.string(),
+});
+
+// We hardcode our Op type instead of deriving it from the Zod types.
+// This is due to zod having issues generating disciminate types from
+// discriminate unions. See `ZodEditDeleteTriplePayload` and `ZodEditDeleteTriplePayload`
+// above.
+//
+// For now we cast the value depending on the op type during decoding and
+// trust that it is constructed into the correct ormat once it's decoded.
+export type Op =
+  | {
+      opType: 'SET_TRIPLE';
+      payload: {
+        entityId: string;
+        attributeId: string;
+        value: {
+          type: ValueType;
+          value: string;
+        };
+      };
+    }
+  | {
+      opType: 'DELETE_TRIPLE';
+      payload: {
+        entityId: string;
+        attributeId: string;
+        value: {};
+      };
     };
-  };
-};
 
 export type Edit = {
   name: string;
   version: string;
   ops: Op[];
   authors: string[];
+  proposalId: string;
 };
 
 export type EditProposal = Proposal & {

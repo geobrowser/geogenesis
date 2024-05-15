@@ -67,8 +67,6 @@ proto3.util.setEnumType(IpfsContentType, "IpfsContentType", [
  */
 export enum OpType {
   /**
-   * option allow_alias = true;
-   *
    * @generated from enum value: NONE = 0;
    */
   NONE = 0,
@@ -95,8 +93,6 @@ proto3.util.setEnumType(OpType, "OpType", [
  */
 export enum ValueType {
   /**
-   * option allow_alias = true;
-   *
    * @generated from enum value: NULL = 0;
    */
   NULL = 0,
@@ -210,6 +206,61 @@ export class IpfsMetadata extends Message<IpfsMetadata> {
 
   static equals(a: IpfsMetadata | PlainMessage<IpfsMetadata> | undefined, b: IpfsMetadata | PlainMessage<IpfsMetadata> | undefined): boolean {
     return proto3.util.equals(IpfsMetadata, a, b);
+  }
+}
+
+/**
+ * @generated from message EditLegacy
+ */
+export class EditLegacy extends Message<EditLegacy> {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name = "";
+
+  /**
+   * @generated from field: string version = 2;
+   */
+  version = "";
+
+  /**
+   * @generated from field: repeated Op ops = 3;
+   */
+  ops: Op[] = [];
+
+  /**
+   * @generated from field: repeated bytes authors = 4;
+   */
+  authors: Uint8Array[] = [];
+
+  constructor(data?: PartialMessage<EditLegacy>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "EditLegacy";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "ops", kind: "message", T: Op, repeated: true },
+    { no: 4, name: "authors", kind: "scalar", T: 12 /* ScalarType.BYTES */, repeated: true },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EditLegacy {
+    return new EditLegacy().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): EditLegacy {
+    return new EditLegacy().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): EditLegacy {
+    return new EditLegacy().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: EditLegacy | PlainMessage<EditLegacy> | undefined, b: EditLegacy | PlainMessage<EditLegacy> | undefined): boolean {
+    return proto3.util.equals(EditLegacy, a, b);
   }
 }
 
