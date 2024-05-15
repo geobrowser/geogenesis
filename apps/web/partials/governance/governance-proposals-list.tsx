@@ -73,7 +73,12 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
                 />
               </div>
 
-              <GovernanceStatusChip endTime={p.endTime} status={p.status} />
+              <GovernanceStatusChip
+                endTime={p.endTime}
+                status={p.status}
+                yesVotesCount={p.proposalVotes.totalCount}
+                noVotesCount={p.proposalVotes.totalCount}
+              />
             </div>
           </Link>
         );

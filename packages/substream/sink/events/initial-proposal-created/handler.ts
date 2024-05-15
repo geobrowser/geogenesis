@@ -1,6 +1,6 @@
 import { Effect, Either } from 'effect';
 
-import { groupProposalsByType, mapContentProposalsToSchema } from '../proposals-created/map-proposals';
+import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { ContentProposal } from '../proposals-created/parser';
 import { Actions, Proposals, ProposedVersions } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
@@ -21,19 +21,12 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: ContentProposal
       message: `Processing ${proposalsFromIpfs.length} initial space proposals`,
     });
 
-    const { contentProposals } = groupProposalsByType(proposalsFromIpfs);
-
     // @TODO: We need a special function to map a proposal endtime to be now
-    const schemaContentProposals = mapContentProposalsToSchema(contentProposals, {
-      blockNumber: block.blockNumber,
-      cursor: block.cursor,
-      timestamp: block.timestamp,
-      requestId: block.requestId,
-    });
+    const { schemaContentProposals } = mapIpfsProposalToSchemaProposalByType(proposalsFromIpfs, block);
 
     slog({
       requestId: block.requestId,
-      message: `Writing ${contentProposals.length} initial content proposals to DB`,
+      message: `Writing ${schemaContentProposals.proposals.length} initial content proposals to DB`,
     });
 
     // @TODO: Put this in a transaction since all these writes are related

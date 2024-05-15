@@ -594,6 +594,19 @@ export const abi = [
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "_metadata",
+        "type": "bytes"
+      }
+    ],
+    "name": "leaveSpace",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "multisigSettings",
     "outputs": [

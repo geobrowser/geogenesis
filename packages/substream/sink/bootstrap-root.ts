@@ -247,6 +247,7 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
 const space: s.spaces.Insertable = {
   id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
   is_root_space: true,
+  type: 'public',
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
 };
 

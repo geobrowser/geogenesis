@@ -17,6 +17,23 @@ export class Spaces {
     return result ? getChecksumAddress(result.id) : null;
   }
 
+  static async findForPersonalPlugin(personalPluginAddress: string) {
+    const result = await db
+      .selectOne(
+        'spaces',
+        { personal_space_admin_plugin_address: getChecksumAddress(personalPluginAddress) },
+        { columns: ['id', 'personal_space_admin_plugin_address'] }
+      )
+      .run(pool);
+
+    return result
+      ? {
+          id: getChecksumAddress(result.id),
+          personal_space_admin_plugin_address: result.personal_space_admin_plugin_address,
+        }
+      : null;
+  }
+
   static async findForMembershipPlugin(membershipPluginAddress: string) {
     const result = await db
       .selectOne(

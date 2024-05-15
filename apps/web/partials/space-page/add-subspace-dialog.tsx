@@ -55,13 +55,13 @@ function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: Conten
     return spaces.filter(e => e.spaceConfig?.name?.toLowerCase().includes(query.toLowerCase()));
   }, [spaces, query]);
 
-  const onAddSubspace = async () => {
+  const onAddSubspace = async (subspaceAddress: string) => {
     proposeAddSubspace({
       wallet,
       storageClient,
       spacePluginAddress,
       mainVotingPluginAddress,
-      subspaceAddress: '0x7eC3D9a27F89f52FAEa2C9cCC8dFBBA1A0c6a239',
+      subspaceAddress,
     });
   };
 
@@ -73,7 +73,7 @@ function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: Conten
         {filteredSpaces.map(s => (
           <div key={s.id} className="flex items-center justify-between">
             <SubspaceRow subspace={s} />
-            <SmallButton onClick={onAddSubspace}>Propose to add</SmallButton>
+            <SmallButton onClick={() => onAddSubspace(s.id)}>Propose to add</SmallButton>
           </div>
         ))}
       </div>
