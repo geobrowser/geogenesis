@@ -1,6 +1,6 @@
 import type * as S from 'zapatos/schema';
 
-import { generateVersionId } from '../../utils/id';
+import { createVersionId } from '../../utils/id';
 import type { EditProposal, EditorshipProposal, MembershipProposal, SubspaceProposal } from './parser';
 import type { BlockEvent } from '~/sink/types';
 
@@ -267,7 +267,10 @@ function mapEditProposalToSchema(
 
     [...uniqueEntityIds.values()].forEach(entityId => {
       const mappedProposedVersion: S.proposed_versions.Insertable = {
-        id: `${p.proposalId}:${entityId}`,
+        id: createVersionId({
+          entityId,
+          proposalId: p.proposalId,
+        }),
         entity_id: entityId,
         created_at_block: block.blockNumber,
         created_at: Number(p.startTime),

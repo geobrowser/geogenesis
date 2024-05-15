@@ -7,6 +7,7 @@ import { populateTriples } from '../events/proposal-processed/populate-triples';
 import type { Op } from '../events/proposals-created/parser';
 import type { BlockEvent } from '../types';
 import { upsertChunked } from '../utils/db';
+import { createVersionId } from '../utils/id';
 import { pool } from '../utils/pool';
 
 export function populateApprovedContentProposal(
@@ -48,7 +49,10 @@ export function populateApprovedContentProposal(
 
     const versions = proposedVersions.map(pv => {
       const newVersion: Schema.versions.Insertable = {
-        id: `${pv.proposal_id}:${pv.entity_id}`,
+        id: createVersionId({
+          entityId: pv.entity_id,
+          proposalId: pv.proposal_id,
+        }),
         entity_id: pv.entity_id,
         created_at_block: block.blockNumber,
         created_at: block.timestamp,
