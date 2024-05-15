@@ -120,7 +120,7 @@ function fetchEditProposalFromIpfs(
   });
 }
 
-export function getContentProposalFromProcessedProposalIpfsUri(
+export function getEditProposalFromProcessedProposalIpfsUri(
   proposalsProcessed: ProposalProcessed[],
   block: BlockEvent
 ) {

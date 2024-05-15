@@ -17,7 +17,7 @@ import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
-import { getContentProposalFromProcessedProposalIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
+import { getEditProposalFromProcessedProposalIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
 import { handleProposalsProcessed } from './events/proposal-processed/handler';
 import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
@@ -272,13 +272,23 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
+          /**
+           * If we have a set of "SpacePluginCreated" events in the same block as a set of "ProposalProcessed" events
+           * we need to check if any of the processed proposals are because an initial content IPFS URI was passed
+           * during space creation.
+           *
+           * If there are processed proposals as a result of an initial content uri, we need to create the appropriate
+           * proposals, proposed versions, actions, etc. before we actually set the proposal as "ACCEPTED"
+           */
           if (proposalProcessedResponse.success) {
-            // Since there are potentially two handlers that we need to run, we abstract out the common
-            // data fetching needed for both here, and pass the result to the two handlers. This breaks
-            // from the normalized pattern where we have a single handler for every event. For this event
-            // there might be two handlers.
+            /**
+             * Since there are potentially two handlers that we need to run, we abstract out the common
+             * data fetching needed for both here, and pass the result to the two handlers. This breaks
+             * from the normalized pattern where we have a single handler for every event. For this event
+             * there might be two handlers.
+             */
             const proposals = yield* _(
-              getContentProposalFromProcessedProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
+              getEditProposalFromProcessedProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
                 blockNumber,
                 cursor,
                 timestamp,
@@ -286,14 +296,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               })
             );
 
-            /**
-             * If we have a set of "SpacePluginCreated" events in the same block as a set of "ProposalProcessed" events
-             * we need to check if any of the processed proposals are because an initial content IPFS URI was passed
-             * during space creation.
-             *
-             * If there are processed proposals as a result of an initial content uri, we need to create the appropriate
-             * proposals, proposed versions, actions, etc. before we actually set the proposal as "ACCEPTED"
-             */
             if (spacePluginCreatedResponse.success) {
               const initialProposalsToWrite = getInitialProposalsForSpaces(
                 spacePluginCreatedResponse.data.spacesCreated,
