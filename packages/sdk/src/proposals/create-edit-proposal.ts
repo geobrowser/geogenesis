@@ -3,13 +3,17 @@ import { createGeoId } from '../id'
 import { Edit, IpfsContentType, Op as OpBinary, OpType, Payload } from '../proto/ipfs_pb'
 
 function stringToBytes(text: string) {
- return Uint8Array.from(Array.from(text).map(letter => letter.charCodeAt(0)))
+  return Uint8Array.from(Array.from(text).map(letter => letter.charCodeAt(0)))
+}
+
+interface CreateEditProposalArgs {
+  name: string;
+  ops: Op[],
+  author: string
 }
 
 export function createEditProposal(
-  name: string,
-  ops: Op[],
-  author: string,
+  { name, ops, author }: CreateEditProposalArgs
 ): Uint8Array {
   return new Edit({
     type: IpfsContentType.EDIT,

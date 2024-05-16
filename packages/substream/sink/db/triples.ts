@@ -23,4 +23,8 @@ export class Triples {
       })
       .run(pool);
   }
+
+  static async insert(triples: S.triples.Insertable[]) {
+    return await db.insert('triples', triples).run(pool);
+  }
 }

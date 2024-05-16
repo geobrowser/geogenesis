@@ -48,7 +48,11 @@ export function getFetchIpfsContentEffect(
           const parsedCid = uri.replace('ipfs://', '');
           const url = `${IPFS_GATEWAY}${parsedCid}`;
 
-          return await fetch(url);
+          return await fetch(url, {
+            headers: {
+              'Content-Type': 'application/octet-stream',
+            },
+          });
         },
         catch: error => {
           return new FailedFetchingIpfsContentError(`Failed fetching IPFS content from uri ${uri}. ${String(error)}`);
@@ -79,7 +83,11 @@ export function getFetchIpfsContentEffect(
             const parsedCid = uri.replace('ipfs://', '');
             const url = `https://api.thegraph.com/ipfs/api/v0/cat?arg=${parsedCid}`;
 
-            return await fetch(url);
+            return await fetch(url, {
+              headers: {
+                'Content-Type': 'application/octet-stream',
+              },
+            });
           },
           catch: error => {
             return new FailedFetchingIpfsContentError(`Failed fetching IPFS content from uri ${uri}. ${String(error)}`);

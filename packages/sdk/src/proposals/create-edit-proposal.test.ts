@@ -4,7 +4,7 @@ import { Edit, IpfsContentType, Op } from '../proto/ipfs_pb';
 
 describe("create-edit-proposal", () => {
   it("encodes and decodes Edit correctly", () => {
-    const editBinary = createEditProposal("test", [{
+    const editBinary = createEditProposal({name: "test", ops: [{
       op: 'SET_TRIPLE',
       payload: {
         attributeId: btoa('test-attribute-id'),
@@ -14,7 +14,7 @@ describe("create-edit-proposal", () => {
           value: btoa('test value')
         }
       }
-    }], '0x1234')
+    }], author: '0x1234'})
 
     const result = Edit.fromBinary(editBinary)
     expect(result.name).toBe('test')

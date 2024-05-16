@@ -191,18 +191,19 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       is_stale: false,
     },
     /* Giving these entities an attribute of attribute */
-    ...attributes.map(
-      (attribute): s.triples.Insertable => ({
-        entity_id: id,
-        attribute_id: SYSTEM_IDS.ATTRIBUTES,
-        value_type: 'TEXT',
-        entity_value_id: attribute,
-        space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-        created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-        created_at: ROOT_SPACE_CREATED_AT,
-        is_stale: false,
-      })
-    ),
+    // @TODO: These need to be migrated to a collection
+    // ...attributes.map(
+    //   (attribute): s.triples.Insertable => ({
+    //     entity_id: id,
+    //     attribute_id: SYSTEM_IDS.ATTRIBUTES,
+    //     value_type: 'TEXT',
+    //     entity_value_id: attribute,
+    //     space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+    //     created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    //     created_at: ROOT_SPACE_CREATED_AT,
+    //     is_stale: false,
+    //   })
+    // ),
   ])
   .flat();
 
@@ -245,13 +246,12 @@ export function bootstrapRoot() {
         Accounts.upsert([account]),
         Entities.upsert(geoEntities),
 
+        Triples.insert(namesTriples),
+        Triples.upsert(typeTriples),
+        Triples.insert(attributeTriples),
+
         Proposals.upsert([proposal]),
       ]);
-
-      // Conflict cannot affect row a second time
-      await Triples.upsert(namesTriples);
-      await Triples.upsert(typeTriples);
-      await Triples.upsert(attributeTriples);
     },
     catch: error => new BootstrapRootError(String(error)),
   });

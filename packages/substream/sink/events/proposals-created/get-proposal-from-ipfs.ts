@@ -207,6 +207,12 @@ export function getProposalFromIpfs(
         return mappedProposal;
       }
       default:
+        slog({
+          level: 'error',
+          message: `Unsupported content type ${validIpfsMetadata.type}`,
+          requestId: block.requestId,
+        });
+        return null;
         // @TODO: Use more explicitly typed error
         throw new Error('Unsupported content type');
     }
