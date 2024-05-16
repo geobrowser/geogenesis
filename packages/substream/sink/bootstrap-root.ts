@@ -4,6 +4,7 @@ import type * as s from 'zapatos/schema';
 
 import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
 import { SYSTEM_IDS } from './constants/system-ids';
+import { Accounts, Entities, Proposals, Spaces, Triples } from './db';
 import { pool } from './utils/pool';
 
 const entities: string[] = [
@@ -190,18 +191,19 @@ const typeTriples: s.triples.Insertable[] = Object.entries(types)
       is_stale: false,
     },
     /* Giving these entities an attribute of attribute */
-    ...attributes.map(
-      (attribute): s.triples.Insertable => ({
-        entity_id: id,
-        attribute_id: SYSTEM_IDS.ATTRIBUTES,
-        value_type: 'TEXT',
-        entity_value_id: attribute,
-        space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-        created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-        created_at: ROOT_SPACE_CREATED_AT,
-        is_stale: false,
-      })
-    ),
+    // @TODO: These need to be migrated to a collection
+    // ...attributes.map(
+    //   (attribute): s.triples.Insertable => ({
+    //     entity_id: id,
+    //     attribute_id: SYSTEM_IDS.ATTRIBUTES,
+    //     value_type: 'TEXT',
+    //     entity_value_id: attribute,
+    //     space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+    //     created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    //     created_at: ROOT_SPACE_CREATED_AT,
+    //     is_stale: false,
+    //   })
+    // ),
   ])
   .flat();
 
@@ -240,13 +242,15 @@ export function bootstrapRoot() {
     try: async () => {
       // @TODO: Create versions for the entities
       await Promise.all([
-        db.insert('spaces', space).run(pool),
-        db.insert('accounts', account).run(pool),
-        db.insert('geo_entities', geoEntities).run(pool),
-        db.insert('triples', namesTriples).run(pool),
-        db.insert('triples', typeTriples).run(pool),
-        db.insert('triples', attributeTriples).run(pool),
-        db.insert('proposals', proposal).run(pool),
+        Spaces.upsert([space]),
+        Accounts.upsert([account]),
+        Entities.upsert(geoEntities),
+
+        Triples.insert(namesTriples),
+        Triples.upsert(typeTriples),
+        Triples.insert(attributeTriples),
+
+        Proposals.upsert([proposal]),
       ]);
     },
     catch: error => new BootstrapRootError(String(error)),

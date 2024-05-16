@@ -2,7 +2,7 @@
 
 import { Client, Context, CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-client';
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { VotingMode, createContentProposal, createGeoId } from '@geogenesis/sdk';
+import { VotingMode, createContentProposal, createEditProposal, createGeoId } from '@geogenesis/sdk';
 import { getAddress } from 'viem';
 
 import { useWalletClient } from 'wagmi';
@@ -39,86 +39,97 @@ export function CreateDao({ type }: Props) {
     const collectionItemId = createGeoId();
     const entityA = createGeoId();
 
-    const initialContent = createContentProposal('Initial proposal for space', [
+    const initialContent = createEditProposal(
       {
-        entityId: entityA,
-        attributeId: SYSTEM_IDS.NAME,
-        type: 'createTriple',
-        value: {
-          type: 'string',
-          id: createGeoId(),
-          value: 'Entity A is in a Collection',
-        },
-      },
-      {
-        entityId,
-        attributeId: SYSTEM_IDS.NAME,
-        type: 'createTriple',
-        value: {
-          type: 'string',
-          id: createGeoId(),
-          value: 'Collections test space',
-        },
-      },
-      {
-        entityId,
-        attributeId: SYSTEM_IDS.TYPES,
-        type: 'createTriple',
-        value: {
-          type: 'entity',
-          id: SYSTEM_IDS.SPACE_CONFIGURATION,
-        },
-      },
-      {
-        entityId: collectionId,
-        type: 'createTriple',
-        attributeId: SYSTEM_IDS.TYPES,
-        value: {
-          type: 'entity',
-          id: SYSTEM_IDS.COLLECTION_TYPE,
-        },
-      },
-      {
-        entityId: collectionItemId,
-        attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
-        type: 'createTriple',
-        value: {
-          type: 'entity',
-          id: collectionId,
-        },
-      },
-      {
-        attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
-        entityId: collectionItemId,
-        type: 'createTriple',
-        value: {
-          type: 'entity',
-          id: entityA,
-        },
-      },
-      {
-        attributeId: 'types',
-        entityId: collectionItemId,
-        type: 'createTriple',
-        value: {
-          type: 'entity',
-          id: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
-        },
-      },
-      {
-        attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-        entityId: collectionItemId,
-        type: 'createTriple',
-        value: {
-          type: 'string',
-          id: createGeoId(),
-          value: 'a0',
-        },
-      },
-    ]);
+        name: 'Proposal for space with binary-based edits proposal',
+        author: getAddress(wallet.account.address),
+        ops: [
+          {
+            op: 'SET_TRIPLE',
+            payload: {
+              entityId,
+              attributeId: SYSTEM_IDS.NAME,
+              value: {
+                type: 'TEXT',
+                value: 'Binary encoding test space',
+              },
+            },
+          },
+          {
+            op: 'SET_TRIPLE',
+            payload: {
+              entityId,
+              attributeId: SYSTEM_IDS.TYPES,
+              value: {
+                type: 'ENTITY',
+                value: SYSTEM_IDS.SPACE_CONFIGURATION,
+              },
+            },
+          },
+        ],
+      }
+
+      // {
+      //   entityId: entityA,
+      //   attributeId: SYSTEM_IDS.NAME,
+      //   type: 'createTriple',
+      //   value: {
+      //     type: 'string',
+      //     id: createGeoId(),
+      //     value: 'Entity A is in a Collection',
+      //   },
+      // },
+      // },
+      // {
+      //   entityId: collectionId,
+      //   type: 'createTriple',
+      //   attributeId: SYSTEM_IDS.TYPES,
+      //   value: {
+      //     type: 'entity',
+      //     id: SYSTEM_IDS.COLLECTION_TYPE,
+      //   },
+      // },
+      // {
+      //   entityId: collectionItemId,
+      //   attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
+      //   type: 'createTriple',
+      //   value: {
+      //     type: 'entity',
+      //     id: collectionId,
+      //   },
+      // },
+      // {
+      //   attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
+      //   entityId: collectionItemId,
+      //   type: 'createTriple',
+      //   value: {
+      //     type: 'entity',
+      //     id: entityA,
+      //   },
+      // },
+      // {
+      //   attributeId: 'types',
+      //   entityId: collectionItemId,
+      //   type: 'createTriple',
+      //   value: {
+      //     type: 'entity',
+      //     id: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
+      //   },
+      // },
+      // {
+      //   attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
+      //   entityId: collectionItemId,
+      //   type: 'createTriple',
+      //   value: {
+      //     type: 'string',
+      //     id: createGeoId(),
+      //     value: 'a0',
+      //   },
+      // },
+    );
 
     const storage = new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs);
-    const firstBlockContentUri = await storage.uploadObject(initialContent);
+    const firstBlockContentUri = await storage.uploadBinary(initialContent);
 
     const spacePluginInstallItem = getSpacePluginInstallItem({
       firstBlockContentUri: `ipfs://${firstBlockContentUri}`,
@@ -151,6 +162,7 @@ export function CreateDao({ type }: Props) {
         plugins: [governancePluginInstallItem, spacePluginInstallItem],
       };
 
+      console.log('Creating DAO!', createParams);
       const steps = client.methods.createDao(createParams);
 
       for await (const step of steps) {

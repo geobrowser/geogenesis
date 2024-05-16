@@ -4,7 +4,6 @@ import {
   type EditProposal,
   type EditorshipProposal,
   type MembershipProposal,
-  type Op,
   type ProposalCreated,
   type SubspaceProposal,
 } from './parser';
@@ -12,7 +11,7 @@ import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Edit, IpfsContentType, IpfsMetadata, Membership, Subspace, decode } from '~/sink/proto';
-import type { BlockEvent } from '~/sink/types';
+import type { BlockEvent, Op } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { slog } from '~/sink/utils/slog';
 
@@ -207,6 +206,12 @@ export function getProposalFromIpfs(
         return mappedProposal;
       }
       default:
+        slog({
+          level: 'error',
+          message: `Unsupported content type ${validIpfsMetadata.type}`,
+          requestId: block.requestId,
+        });
+        return null;
         // @TODO: Use more explicitly typed error
         throw new Error('Unsupported content type');
     }

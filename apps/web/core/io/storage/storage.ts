@@ -7,6 +7,33 @@ export interface IStorageClient {
 export class StorageClient implements IStorageClient {
   constructor(public ipfsUrl: string) {}
 
+  async uploadBinary(binary: Uint8Array): Promise<string> {
+    const blob = new Blob([binary], { type: 'application/octet-stream' });
+    const formData = new FormData();
+    formData.append('file', blob);
+
+    const url = `${this.ipfsUrl}/api/v0/add`;
+
+    console.log(`Posting to url`, url);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (response.status >= 300) {
+      const text = await response.text();
+      console.log(text);
+      return text;
+    }
+
+    const { Hash } = await response.json();
+
+    console.log('ipfs hash', Hash);
+
+    return Hash;
+  }
+
   async uploadObject(object: unknown): Promise<string> {
     const blob = new Blob([JSON.stringify(object)], { type: 'application/json' });
     const formData = new FormData();

@@ -7,9 +7,9 @@ import { bootstrapRoot } from '../bootstrap-root';
 import { Ops, Proposals, ProposedVersions } from '../db';
 import { populateApprovedContentProposal } from '../entries/populate-approved-content-proposal';
 import { mapIpfsProposalToSchemaProposalByType } from '../events/proposals-created/map-proposals';
-import { type EditProposal, type Op } from '../events/proposals-created/parser';
+import { type EditProposal } from '../events/proposals-created/parser';
 import { Decoder } from '../proto';
-import type { BlockEvent } from '../types';
+import type { BlockEvent, Op } from '../types';
 import { retryEffect } from '../utils/retry-effect';
 import { pool } from '~/sink/utils/pool';
 

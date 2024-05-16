@@ -10,3 +10,39 @@ export interface BlockEvent {
 }
 
 export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';
+
+// We hardcode our Op type instead of deriving it from the Zod types.
+// This is due to zod having issues generating disciminate types from
+// discriminate unions. See `ZodEditDeleteTriplePayload` and `ZodEditDeleteTriplePayload`
+// above.
+//
+// For now we cast the value depending on the op type during decoding and
+// trust that it is constructed into the correct ormat once it's decoded.
+export type Op =
+  | {
+      opType: 'SET_TRIPLE';
+      payload: {
+        entityId: string;
+        attributeId: string;
+        value: {
+          type: ValueType;
+          value: string;
+        };
+      };
+    }
+  | {
+      opType: 'DELETE_TRIPLE';
+      payload: {
+        entityId: string;
+        attributeId: string;
+        value: {};
+      };
+    };
+
+export type Edit = {
+  name: string;
+  version: string;
+  ops: Op[];
+  authors: string[];
+  proposalId: string;
+};
