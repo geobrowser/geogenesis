@@ -44,7 +44,7 @@ BEGIN
         SELECT t.entity_value_id
         FROM triples t
         WHERE t.entity_id = e_row.id
-        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1'
+        AND t.attribute_id = '8f151ba4de204e3c9cb499ddf96f48f1'
     );
 END;
 $$ LANGUAGE plpgsql STRICT STABLE;
@@ -75,7 +75,7 @@ BEGIN
         SELECT t.entity_value_id
         FROM triples t
         WHERE t.entity_id = e_row.id
-        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1'
+        AND t.attribute_id = '8f151ba4de204e3c9cb499ddf96f48f1'
     );
 END;
 $$ LANGUAGE plpgsql STRICT STABLE;
@@ -112,7 +112,7 @@ BEGIN
         SELECT DISTINCT t.entity_value_id AS attribute_id
         FROM entity_types et
         JOIN triples t ON t.entity_id = et.type_id
-        AND t.attribute_id = '01412f83-8189-4ab1-8365-65c7fd358cc1'
+        AND t.attribute_id = '8f151ba4de204e3c9cb499ddf96f48f1'
     )
     SELECT e.*
     FROM geo_entities e

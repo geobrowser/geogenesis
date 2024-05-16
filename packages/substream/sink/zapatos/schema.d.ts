@@ -112,6 +112,179 @@ declare module 'zapatos/schema' {
   }
 
   /**
+   * **collection_items**
+   * - Table in database
+   */
+  export namespace collection_items {
+    export type Table = 'collection_items';
+    export interface Selectable {
+      /**
+      * **collection_items.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id: string;
+      /**
+      * **collection_items.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id: string;
+      /**
+      * **collection_items.index**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      index: string | null;
+      /**
+      * **collection_items.collection_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      collection_id: string;
+      /**
+      * **collection_items.entity_reference_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_reference_id: string;
+    }
+    export interface JSONSelectable {
+      /**
+      * **collection_items.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id: string;
+      /**
+      * **collection_items.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id: string;
+      /**
+      * **collection_items.index**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      index: string | null;
+      /**
+      * **collection_items.collection_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      collection_id: string;
+      /**
+      * **collection_items.entity_reference_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_reference_id: string;
+    }
+    export interface Whereable {
+      /**
+      * **collection_items.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **collection_items.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **collection_items.index**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      index?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **collection_items.collection_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      collection_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **collection_items.entity_reference_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_reference_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+    }
+    export interface Insertable {
+      /**
+      * **collection_items.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **collection_items.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **collection_items.index**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      index?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **collection_items.collection_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      collection_id: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **collection_items.entity_reference_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_reference_id: string | db.Parameter<string> | db.SQLFragment;
+    }
+    export interface Updatable {
+      /**
+      * **collection_items.id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **collection_items.entity_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **collection_items.index**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      index?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **collection_items.collection_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      collection_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **collection_items.entity_reference_id**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      entity_reference_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+    }
+    export type UniqueIndex = 'collection_items_pkey';
+    export type Column = keyof Selectable;
+    export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
+    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
+    export type SQL = SQLExpression | SQLExpression[];
+  }
+
+  /**
    * **collections**
    * - Table in database
    */
@@ -4511,20 +4684,20 @@ declare module 'zapatos/schema' {
   /* --- aggregate types --- */
 
   export namespace public {  
-    export type Table = accounts.Table | collections.Table | cursors.Table | geo_entities.Table | geo_entity_types.Table | log_entries.Table | onchain_profiles.Table | ops.Table | proposal_votes.Table | proposals.Table | proposed_editors.Table | proposed_members.Table | proposed_subspaces.Table | proposed_versions.Table | space_editors.Table | space_members.Table | space_subspaces.Table | spaces.Table | triples.Table | versions.Table;
-    export type Selectable = accounts.Selectable | collections.Selectable | cursors.Selectable | geo_entities.Selectable | geo_entity_types.Selectable | log_entries.Selectable | onchain_profiles.Selectable | ops.Selectable | proposal_votes.Selectable | proposals.Selectable | proposed_editors.Selectable | proposed_members.Selectable | proposed_subspaces.Selectable | proposed_versions.Selectable | space_editors.Selectable | space_members.Selectable | space_subspaces.Selectable | spaces.Selectable | triples.Selectable | versions.Selectable;
-    export type JSONSelectable = accounts.JSONSelectable | collections.JSONSelectable | cursors.JSONSelectable | geo_entities.JSONSelectable | geo_entity_types.JSONSelectable | log_entries.JSONSelectable | onchain_profiles.JSONSelectable | ops.JSONSelectable | proposal_votes.JSONSelectable | proposals.JSONSelectable | proposed_editors.JSONSelectable | proposed_members.JSONSelectable | proposed_subspaces.JSONSelectable | proposed_versions.JSONSelectable | space_editors.JSONSelectable | space_members.JSONSelectable | space_subspaces.JSONSelectable | spaces.JSONSelectable | triples.JSONSelectable | versions.JSONSelectable;
-    export type Whereable = accounts.Whereable | collections.Whereable | cursors.Whereable | geo_entities.Whereable | geo_entity_types.Whereable | log_entries.Whereable | onchain_profiles.Whereable | ops.Whereable | proposal_votes.Whereable | proposals.Whereable | proposed_editors.Whereable | proposed_members.Whereable | proposed_subspaces.Whereable | proposed_versions.Whereable | space_editors.Whereable | space_members.Whereable | space_subspaces.Whereable | spaces.Whereable | triples.Whereable | versions.Whereable;
-    export type Insertable = accounts.Insertable | collections.Insertable | cursors.Insertable | geo_entities.Insertable | geo_entity_types.Insertable | log_entries.Insertable | onchain_profiles.Insertable | ops.Insertable | proposal_votes.Insertable | proposals.Insertable | proposed_editors.Insertable | proposed_members.Insertable | proposed_subspaces.Insertable | proposed_versions.Insertable | space_editors.Insertable | space_members.Insertable | space_subspaces.Insertable | spaces.Insertable | triples.Insertable | versions.Insertable;
-    export type Updatable = accounts.Updatable | collections.Updatable | cursors.Updatable | geo_entities.Updatable | geo_entity_types.Updatable | log_entries.Updatable | onchain_profiles.Updatable | ops.Updatable | proposal_votes.Updatable | proposals.Updatable | proposed_editors.Updatable | proposed_members.Updatable | proposed_subspaces.Updatable | proposed_versions.Updatable | space_editors.Updatable | space_members.Updatable | space_subspaces.Updatable | spaces.Updatable | triples.Updatable | versions.Updatable;
-    export type UniqueIndex = accounts.UniqueIndex | collections.UniqueIndex | cursors.UniqueIndex | geo_entities.UniqueIndex | geo_entity_types.UniqueIndex | log_entries.UniqueIndex | onchain_profiles.UniqueIndex | ops.UniqueIndex | proposal_votes.UniqueIndex | proposals.UniqueIndex | proposed_editors.UniqueIndex | proposed_members.UniqueIndex | proposed_subspaces.UniqueIndex | proposed_versions.UniqueIndex | space_editors.UniqueIndex | space_members.UniqueIndex | space_subspaces.UniqueIndex | spaces.UniqueIndex | triples.UniqueIndex | versions.UniqueIndex;
-    export type Column = accounts.Column | collections.Column | cursors.Column | geo_entities.Column | geo_entity_types.Column | log_entries.Column | onchain_profiles.Column | ops.Column | proposal_votes.Column | proposals.Column | proposed_editors.Column | proposed_members.Column | proposed_subspaces.Column | proposed_versions.Column | space_editors.Column | space_members.Column | space_subspaces.Column | spaces.Column | triples.Column | versions.Column;
+    export type Table = accounts.Table | collection_items.Table | collections.Table | cursors.Table | geo_entities.Table | geo_entity_types.Table | log_entries.Table | onchain_profiles.Table | ops.Table | proposal_votes.Table | proposals.Table | proposed_editors.Table | proposed_members.Table | proposed_subspaces.Table | proposed_versions.Table | space_editors.Table | space_members.Table | space_subspaces.Table | spaces.Table | triples.Table | versions.Table;
+    export type Selectable = accounts.Selectable | collection_items.Selectable | collections.Selectable | cursors.Selectable | geo_entities.Selectable | geo_entity_types.Selectable | log_entries.Selectable | onchain_profiles.Selectable | ops.Selectable | proposal_votes.Selectable | proposals.Selectable | proposed_editors.Selectable | proposed_members.Selectable | proposed_subspaces.Selectable | proposed_versions.Selectable | space_editors.Selectable | space_members.Selectable | space_subspaces.Selectable | spaces.Selectable | triples.Selectable | versions.Selectable;
+    export type JSONSelectable = accounts.JSONSelectable | collection_items.JSONSelectable | collections.JSONSelectable | cursors.JSONSelectable | geo_entities.JSONSelectable | geo_entity_types.JSONSelectable | log_entries.JSONSelectable | onchain_profiles.JSONSelectable | ops.JSONSelectable | proposal_votes.JSONSelectable | proposals.JSONSelectable | proposed_editors.JSONSelectable | proposed_members.JSONSelectable | proposed_subspaces.JSONSelectable | proposed_versions.JSONSelectable | space_editors.JSONSelectable | space_members.JSONSelectable | space_subspaces.JSONSelectable | spaces.JSONSelectable | triples.JSONSelectable | versions.JSONSelectable;
+    export type Whereable = accounts.Whereable | collection_items.Whereable | collections.Whereable | cursors.Whereable | geo_entities.Whereable | geo_entity_types.Whereable | log_entries.Whereable | onchain_profiles.Whereable | ops.Whereable | proposal_votes.Whereable | proposals.Whereable | proposed_editors.Whereable | proposed_members.Whereable | proposed_subspaces.Whereable | proposed_versions.Whereable | space_editors.Whereable | space_members.Whereable | space_subspaces.Whereable | spaces.Whereable | triples.Whereable | versions.Whereable;
+    export type Insertable = accounts.Insertable | collection_items.Insertable | collections.Insertable | cursors.Insertable | geo_entities.Insertable | geo_entity_types.Insertable | log_entries.Insertable | onchain_profiles.Insertable | ops.Insertable | proposal_votes.Insertable | proposals.Insertable | proposed_editors.Insertable | proposed_members.Insertable | proposed_subspaces.Insertable | proposed_versions.Insertable | space_editors.Insertable | space_members.Insertable | space_subspaces.Insertable | spaces.Insertable | triples.Insertable | versions.Insertable;
+    export type Updatable = accounts.Updatable | collection_items.Updatable | collections.Updatable | cursors.Updatable | geo_entities.Updatable | geo_entity_types.Updatable | log_entries.Updatable | onchain_profiles.Updatable | ops.Updatable | proposal_votes.Updatable | proposals.Updatable | proposed_editors.Updatable | proposed_members.Updatable | proposed_subspaces.Updatable | proposed_versions.Updatable | space_editors.Updatable | space_members.Updatable | space_subspaces.Updatable | spaces.Updatable | triples.Updatable | versions.Updatable;
+    export type UniqueIndex = accounts.UniqueIndex | collection_items.UniqueIndex | collections.UniqueIndex | cursors.UniqueIndex | geo_entities.UniqueIndex | geo_entity_types.UniqueIndex | log_entries.UniqueIndex | onchain_profiles.UniqueIndex | ops.UniqueIndex | proposal_votes.UniqueIndex | proposals.UniqueIndex | proposed_editors.UniqueIndex | proposed_members.UniqueIndex | proposed_subspaces.UniqueIndex | proposed_versions.UniqueIndex | space_editors.UniqueIndex | space_members.UniqueIndex | space_subspaces.UniqueIndex | spaces.UniqueIndex | triples.UniqueIndex | versions.UniqueIndex;
+    export type Column = accounts.Column | collection_items.Column | collections.Column | cursors.Column | geo_entities.Column | geo_entity_types.Column | log_entries.Column | onchain_profiles.Column | ops.Column | proposal_votes.Column | proposals.Column | proposed_editors.Column | proposed_members.Column | proposed_subspaces.Column | proposed_versions.Column | space_editors.Column | space_members.Column | space_subspaces.Column | spaces.Column | triples.Column | versions.Column;
   
-    export type AllBaseTables = [accounts.Table, collections.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, ops.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, proposed_versions.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, triples.Table, versions.Table];
+    export type AllBaseTables = [accounts.Table, collection_items.Table, collections.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, ops.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, proposed_versions.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, triples.Table, versions.Table];
     export type AllForeignTables = [];
     export type AllViews = [];
     export type AllMaterializedViews = [];
-    export type AllTablesAndViews = [accounts.Table, collections.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, ops.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, proposed_versions.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, triples.Table, versions.Table];
+    export type AllTablesAndViews = [accounts.Table, collection_items.Table, collections.Table, cursors.Table, geo_entities.Table, geo_entity_types.Table, log_entries.Table, onchain_profiles.Table, ops.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, proposed_versions.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, triples.Table, versions.Table];
   }
 
 
@@ -5047,6 +5220,7 @@ declare module 'zapatos/schema' {
 
   export type SelectableForTable<T extends Table> = {
     "accounts": accounts.Selectable;
+    "collection_items": collection_items.Selectable;
     "collections": collections.Selectable;
     "cursors": cursors.Selectable;
     "geo_entities": geo_entities.Selectable;
@@ -5072,6 +5246,7 @@ declare module 'zapatos/schema' {
 
   export type JSONSelectableForTable<T extends Table> = {
     "accounts": accounts.JSONSelectable;
+    "collection_items": collection_items.JSONSelectable;
     "collections": collections.JSONSelectable;
     "cursors": cursors.JSONSelectable;
     "geo_entities": geo_entities.JSONSelectable;
@@ -5097,6 +5272,7 @@ declare module 'zapatos/schema' {
 
   export type WhereableForTable<T extends Table> = {
     "accounts": accounts.Whereable;
+    "collection_items": collection_items.Whereable;
     "collections": collections.Whereable;
     "cursors": cursors.Whereable;
     "geo_entities": geo_entities.Whereable;
@@ -5122,6 +5298,7 @@ declare module 'zapatos/schema' {
 
   export type InsertableForTable<T extends Table> = {
     "accounts": accounts.Insertable;
+    "collection_items": collection_items.Insertable;
     "collections": collections.Insertable;
     "cursors": cursors.Insertable;
     "geo_entities": geo_entities.Insertable;
@@ -5147,6 +5324,7 @@ declare module 'zapatos/schema' {
 
   export type UpdatableForTable<T extends Table> = {
     "accounts": accounts.Updatable;
+    "collection_items": collection_items.Updatable;
     "collections": collections.Updatable;
     "cursors": cursors.Updatable;
     "geo_entities": geo_entities.Updatable;
@@ -5172,6 +5350,7 @@ declare module 'zapatos/schema' {
 
   export type UniqueIndexForTable<T extends Table> = {
     "accounts": accounts.UniqueIndex;
+    "collection_items": collection_items.UniqueIndex;
     "collections": collections.UniqueIndex;
     "cursors": cursors.UniqueIndex;
     "geo_entities": geo_entities.UniqueIndex;
@@ -5197,6 +5376,7 @@ declare module 'zapatos/schema' {
 
   export type ColumnForTable<T extends Table> = {
     "accounts": accounts.Column;
+    "collection_items": collection_items.Column;
     "collections": collections.Column;
     "cursors": cursors.Column;
     "geo_entities": geo_entities.Column;
@@ -5222,6 +5402,7 @@ declare module 'zapatos/schema' {
 
   export type SQLForTable<T extends Table> = {
     "accounts": accounts.SQL;
+    "collection_items": collection_items.SQL;
     "collections": collections.SQL;
     "cursors": cursors.SQL;
     "geo_entities": geo_entities.SQL;

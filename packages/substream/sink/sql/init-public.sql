@@ -266,3 +266,4 @@ ALTER TABLE
 
 ALTER TABLE
     public.triple_versions DISABLE TRIGGER ALL;
+

@@ -2,9 +2,16 @@ import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as s from 'zapatos/schema';
 
-import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
+import {
+  INITIAL_COLLECTION_ITEM_INDEX,
+  ROOT_SPACE_CREATED_AT,
+  ROOT_SPACE_CREATED_AT_BLOCK,
+  ROOT_SPACE_CREATED_BY_ID,
+} from './constants/constants';
 import { SYSTEM_IDS } from './constants/system-ids';
-import { Accounts, Entities, Proposals, Spaces, Triples } from './db';
+import { Accounts, Collections, Entities, Proposals, Spaces, Triples } from './db';
+import { CollectionItems } from './db/collection-items';
+import { createGeoId } from './utils/create-geo-id';
 import { pool } from './utils/pool';
 
 const entities: string[] = [
@@ -177,35 +184,129 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
   ])
   .flat();
 
-const typeTriples: s.triples.Insertable[] = Object.entries(types)
-  .map(([id, attributes]): s.triples.Insertable[] => [
-    /* Giving these entities a type of type */
-    {
-      entity_id: id,
-      attribute_id: SYSTEM_IDS.TYPES,
-      value_type: 'ENTITY',
-      entity_value_id: SYSTEM_IDS.SCHEMA_TYPE,
-      space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-      created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-      created_at: ROOT_SPACE_CREATED_AT,
-      is_stale: false,
-    },
-    /* Giving these entities an attribute of attribute */
-    // @TODO: These need to be migrated to a collection
-    // ...attributes.map(
-    //   (attribute): s.triples.Insertable => ({
-    //     entity_id: id,
-    //     attribute_id: SYSTEM_IDS.ATTRIBUTES,
-    //     value_type: 'TEXT',
-    //     entity_value_id: attribute,
-    //     space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-    //     created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-    //     created_at: ROOT_SPACE_CREATED_AT,
-    //     is_stale: false,
-    //   })
-    // ),
-  ])
-  .flat();
+const typeTriplesEffect = Effect.gen(function* (_) {
+  const collectionsToWrite: s.collections.Insertable[] = [];
+  const collectionItemsToWrite: s.collection_items.Insertable[] = [];
+
+  const triples = Object.entries(types)
+    .map(([id, attributes]): s.triples.Insertable[] => {
+      const collectionEntityId = createGeoId();
+
+      collectionsToWrite.push({ id: collectionEntityId, entity_id: collectionEntityId });
+
+      const collectionItemsForAttributes = attributes
+        .map((attributeId): s.triples.Insertable[] => {
+          const collectionItemEntityId = createGeoId();
+
+          collectionItemsToWrite.push({
+            id: collectionItemEntityId,
+            entity_id: collectionItemEntityId,
+            collection_id: collectionEntityId,
+            entity_reference_id: attributeId,
+            index: INITIAL_COLLECTION_ITEM_INDEX,
+          });
+
+          return [
+            // Collection item type
+            {
+              entity_id: collectionItemEntityId,
+              attribute_id: SYSTEM_IDS.TYPES,
+              value_type: 'ENTITY',
+              entity_value_id: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
+              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+              created_at: ROOT_SPACE_CREATED_AT,
+              is_stale: false,
+            },
+            // Collection reference
+            {
+              entity_id: collectionItemEntityId,
+              attribute_id: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
+              value_type: 'ENTITY',
+              entity_value_id: collectionEntityId,
+              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+              created_at: ROOT_SPACE_CREATED_AT,
+              is_stale: false,
+            },
+            // Entity reference
+            {
+              entity_id: collectionItemEntityId,
+              attribute_id: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
+              value_type: 'ENTITY',
+              entity_value_id: attributeId,
+              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+              created_at: ROOT_SPACE_CREATED_AT,
+              is_stale: false,
+            },
+            // Fractional index / order
+            {
+              entity_id: collectionItemEntityId,
+              attribute_id: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
+              value_type: 'TEXT',
+              text_value: INITIAL_COLLECTION_ITEM_INDEX,
+              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+              created_at: ROOT_SPACE_CREATED_AT,
+              is_stale: false,
+            },
+          ];
+        })
+        .flat();
+
+      return [
+        /* Giving these entities a type of type */
+        {
+          entity_id: id,
+          attribute_id: SYSTEM_IDS.TYPES,
+          value_type: 'ENTITY',
+          entity_value_id: SYSTEM_IDS.SCHEMA_TYPE,
+          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+          created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+          created_at: ROOT_SPACE_CREATED_AT,
+          is_stale: false,
+        },
+
+        // Create a collection entity with type Collection. We might be
+        // adding multiple attributes so need to use a collection list
+        // many entity references.
+        {
+          entity_id: collectionEntityId,
+          attribute_id: SYSTEM_IDS.TYPES,
+          value_type: 'ENTITY',
+          entity_value_id: SYSTEM_IDS.COLLECTION_TYPE,
+          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+          created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+          created_at: ROOT_SPACE_CREATED_AT,
+          is_stale: false,
+        },
+
+        // Create a triple on the type entity pointing to the new collection
+        {
+          entity_id: id,
+          attribute_id: SYSTEM_IDS.ATTRIBUTES,
+          value_type: 'COLLECTION',
+          entity_value_id: collectionEntityId,
+          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+          created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+          created_at: ROOT_SPACE_CREATED_AT,
+          is_stale: false,
+        },
+
+        // Create the collection + collection items to map multiple
+        // attributes to the "Attributes" attribute (lol)
+        ...collectionItemsForAttributes,
+      ];
+    })
+    .flat();
+
+  return {
+    typeTriples: triples,
+    collections: collectionsToWrite,
+    collectionItems: collectionItemsToWrite,
+  };
+});
 
 const space: s.spaces.Insertable = {
   id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
@@ -238,21 +339,44 @@ export class BootstrapRootError extends Error {
 }
 
 export function bootstrapRoot() {
-  return Effect.tryPromise({
-    try: async () => {
-      // @TODO: Create versions for the entities
-      await Promise.all([
-        Spaces.upsert([space]),
-        Accounts.upsert([account]),
-        Entities.upsert(geoEntities),
+  return Effect.gen(function* (_) {
+    // When binding the attributes schema to a type entity we
+    // create collections to store many attributes. We need
+    // to insert these collections into the Collections table.
+    const { typeTriples, collections, collectionItems } = yield* _(typeTriplesEffect);
 
-        Triples.insert(namesTriples),
-        Triples.upsert(typeTriples),
-        Triples.insert(attributeTriples),
+    yield _(
+      Effect.tryPromise({
+        try: async () => {
+          // const collectionsForTypeIds = typeTriples
+          //   .filter(t => t.attribute_id === SYSTEM_IDS.TYPES && t.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE)
+          //   .map((m): s.collections.Insertable => ({ id: m.entity_id, entity_id: m.entity_id }));
 
-        Proposals.upsert([proposal]),
-      ]);
-    },
-    catch: error => new BootstrapRootError(String(error)),
+          // // @TODO: Collect collection items
+          // const collectionItemEntityIdsForTypeIds = typeTriples
+          //   .filter(t => t.attribute_id === SYSTEM_IDS.TYPES && t.entity_value_id === SYSTEM_IDS.COLLECTION_ITEM_TYPE)
+          //   .map(m => m.entity_id);
+
+          // // Map all of the triples to the
+          // const collectionItemTriples = typeTriples.console.log('collections', collectionsForTypeIds);
+
+          // @TODO: Create versions for the entities
+          await Promise.all([
+            Spaces.upsert([space]),
+            Accounts.upsert([account]),
+            Entities.upsert(geoEntities),
+
+            Triples.insert(namesTriples),
+            Triples.upsert(typeTriples),
+            Triples.insert(attributeTriples),
+
+            Proposals.upsert([proposal]),
+            Collections.upsert(collections),
+            CollectionItems.upsert(collectionItems),
+          ]);
+        },
+        catch: error => new BootstrapRootError(String(error)),
+      })
+    );
   });
 }

@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { createGeoId } from '../../';
+import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants';
 
 interface CreateCollectionItemArgs {
   spaceId: string; // 0x...
@@ -48,8 +49,6 @@ type CreateCollectionItemIndexAction = {
     value: string;
   };
 };
-
-const INITIAL_INDEX_VALUE = 'a0';
 
 export function createCollectionItem(
   args: CreateCollectionItemArgs
@@ -99,7 +98,7 @@ export function createCollectionItem(
       value: {
         type: 'string',
         id: createGeoId(),
-        value: INITIAL_INDEX_VALUE,
+        value: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
       },
     },
   ] as const;
