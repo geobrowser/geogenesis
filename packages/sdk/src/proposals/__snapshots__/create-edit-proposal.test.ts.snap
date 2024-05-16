@@ -1,0 +1,17 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`create-edit-proposal > encodes and decodes Edit correctly 1`] = `
+[
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "attributeId": "dGVzdC1hdHRyaWJ1dGUtaWQ=",
+      "entityId": "dGVzdC1lbnRpdHktaWQ=",
+      "value": {
+        "type": "TEXT",
+        "value": "dGVzdCB2YWx1ZQ==",
+      },
+    },
+  },
+]
+`;

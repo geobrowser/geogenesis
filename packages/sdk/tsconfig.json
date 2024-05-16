@@ -13,8 +13,8 @@
     "noUncheckedIndexedAccess": true,
 
     /* Module resolution when transpiling with TypeScript */
-    "moduleResolution": "NodeNext",
-    "module": "NodeNext",
+    "moduleResolution": "Bundler",
+    "module": "Preserve",
     "outDir": "dist",
     "sourceMap": true,
 

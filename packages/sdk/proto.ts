@@ -1,0 +1,1 @@
+export * from './src/proto/ipfs_pb.js'

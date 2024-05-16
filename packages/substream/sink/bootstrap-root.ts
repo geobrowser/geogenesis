@@ -4,6 +4,7 @@ import type * as s from 'zapatos/schema';
 
 import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
 import { SYSTEM_IDS } from './constants/system-ids';
+import { Accounts, Entities, Proposals, Spaces, Triples } from './db';
 import { pool } from './utils/pool';
 
 const entities: string[] = [
@@ -240,14 +241,17 @@ export function bootstrapRoot() {
     try: async () => {
       // @TODO: Create versions for the entities
       await Promise.all([
-        db.insert('spaces', space).run(pool),
-        db.insert('accounts', account).run(pool),
-        db.insert('geo_entities', geoEntities).run(pool),
-        db.insert('triples', namesTriples).run(pool),
-        db.insert('triples', typeTriples).run(pool),
-        db.insert('triples', attributeTriples).run(pool),
-        db.insert('proposals', proposal).run(pool),
+        Spaces.upsert([space]),
+        Accounts.upsert([account]),
+        Entities.upsert(geoEntities),
+
+        Proposals.upsert([proposal]),
       ]);
+
+      // Conflict cannot affect row a second time
+      await Triples.upsert(namesTriples);
+      await Triples.upsert(typeTriples);
+      await Triples.upsert(attributeTriples);
     },
     catch: error => new BootstrapRootError(String(error)),
   });

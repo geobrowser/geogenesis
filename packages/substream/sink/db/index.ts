@@ -10,3 +10,4 @@ export * from './spaces';
 export * from './subspaces';
 export * from './triples';
 export * from './ops';
+export * from './entities';
