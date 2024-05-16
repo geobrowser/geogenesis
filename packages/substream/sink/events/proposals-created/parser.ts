@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { ValueType } from '~/sink/types';
+import type { Op } from '~/sink/types';
 
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
@@ -154,42 +154,6 @@ export const ZodEdit = z.object({
   authors: z.array(z.string()),
   proposalId: z.string(),
 });
-
-// We hardcode our Op type instead of deriving it from the Zod types.
-// This is due to zod having issues generating disciminate types from
-// discriminate unions. See `ZodEditDeleteTriplePayload` and `ZodEditDeleteTriplePayload`
-// above.
-//
-// For now we cast the value depending on the op type during decoding and
-// trust that it is constructed into the correct ormat once it's decoded.
-export type Op =
-  | {
-      opType: 'SET_TRIPLE';
-      payload: {
-        entityId: string;
-        attributeId: string;
-        value: {
-          type: ValueType;
-          value: string;
-        };
-      };
-    }
-  | {
-      opType: 'DELETE_TRIPLE';
-      payload: {
-        entityId: string;
-        attributeId: string;
-        value: {};
-      };
-    };
-
-export type Edit = {
-  name: string;
-  version: string;
-  ops: Op[];
-  authors: string[];
-  proposalId: string;
-};
 
 export type EditProposal = Proposal & {
   type: 'EDIT';
