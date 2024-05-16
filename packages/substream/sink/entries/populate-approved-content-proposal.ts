@@ -4,8 +4,7 @@ import type * as Schema from 'zapatos/schema';
 
 import { type SchemaTripleEdit, mapSchemaTriples } from '../events/proposal-processed/map-triples';
 import { populateTriples } from '../events/proposal-processed/populate-triples';
-import type { Op } from '../events/proposals-created/parser';
-import type { BlockEvent } from '../types';
+import type { BlockEvent, Op } from '../types';
 import { upsertChunked } from '../utils/db';
 import { createVersionId } from '../utils/id';
 import { pool } from '../utils/pool';
