@@ -49,67 +49,67 @@ export default function CollectionsPage() {
       spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
     });
 
-    createMany([
-      {
-        ...typeTriple,
-        id: createTripleId({
-          spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
-          entityId: typeTriple.entityId,
-          attributeId: typeTriple.attributeId,
-        }),
-        space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
-        attributeName: 'Types',
-        entityName: 'Collection Entity A',
-        value: {
-          ...typeTriple.value,
-          name: '',
-        },
-      },
-      {
-        ...collectionIdTriple,
-        id: createTripleId({
-          spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
-          entityId: collectionIdTriple.entityId,
-          attributeId: collectionIdTriple.attributeId,
-        }),
-        space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
-        attributeName: 'Collection ID',
-        entityName: 'Collection Entity A',
-        value: {
-          ...collectionIdTriple.value,
-          name: '',
-        },
-      },
-      {
-        ...entityIdTriple,
-        id: createTripleId({
-          spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
-          entityId: entityIdTriple.entityId,
-          attributeId: entityIdTriple.attributeId,
-        }),
-        space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
-        attributeName: 'Entity ID',
-        entityName: 'Collection Entity A',
-        value: {
-          ...entityIdTriple.value,
-          name: createGeoId(),
-        },
-      },
-      {
-        ...orderTriple,
-        id: createTripleId({
-          spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
-          entityId: orderTriple.entityId,
-          attributeId: orderTriple.attributeId,
-        }),
-        space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
-        attributeName: 'Index',
-        entityName: 'Collection Entity A',
-        value: {
-          ...orderTriple.value,
-        },
-      },
-    ]);
+    // createMany([
+    //   {
+    //     ...typeTriple,
+    //     id: createTripleId({
+    //       spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+    //       entityId: typeTriple.entityId,
+    //       attributeId: typeTriple.attributeId,
+    //     }),
+    //     space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+    //     attributeName: 'Types',
+    //     entityName: 'Collection Entity A',
+    //     value: {
+    //       ...typeTriple.value,
+    //       name: '',
+    //     },
+    //   },
+    //   {
+    //     ...collectionIdTriple,
+    //     id: createTripleId({
+    //       spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+    //       entityId: collectionIdTriple.entityId,
+    //       attributeId: collectionIdTriple.attributeId,
+    //     }),
+    //     space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+    //     attributeName: 'Collection ID',
+    //     entityName: 'Collection Entity A',
+    //     value: {
+    //       ...collectionIdTriple.value,
+    //       name: '',
+    //     },
+    //   },
+    //   {
+    //     ...entityIdTriple,
+    //     id: createTripleId({
+    //       spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+    //       entityId: entityIdTriple.entityId,
+    //       attributeId: entityIdTriple.attributeId,
+    //     }),
+    //     space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+    //     attributeName: 'Entity ID',
+    //     entityName: 'Collection Entity A',
+    //     value: {
+    //       ...entityIdTriple.value,
+    //       name: createGeoId(),
+    //     },
+    //   },
+    //   {
+    //     ...orderTriple,
+    //     id: createTripleId({
+    //       spaceId: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+    //       entityId: orderTriple.entityId,
+    //       attributeId: orderTriple.attributeId,
+    //     }),
+    //     space: '0xF4781fA765A5D73DFa457F5d0d495344a787b57F',
+    //     attributeName: 'Index',
+    //     entityName: 'Collection Entity A',
+    //     value: {
+    //       ...orderTriple.value,
+    //     },
+    //   },
+    // ]);
   };
 
   // Group collection item triples by entity id

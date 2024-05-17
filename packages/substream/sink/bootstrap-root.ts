@@ -1,18 +1,17 @@
+import { SYSTEM_IDS, createCollectionItem, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
-import * as db from 'zapatos/db';
 import type * as s from 'zapatos/schema';
 
+import { ROOT_SPACE_ADDRESS } from '../../ids/system-ids';
 import {
   INITIAL_COLLECTION_ITEM_INDEX,
   ROOT_SPACE_CREATED_AT,
   ROOT_SPACE_CREATED_AT_BLOCK,
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
-import { SYSTEM_IDS } from './constants/system-ids';
 import { Accounts, Collections, Entities, Proposals, Spaces, Triples } from './db';
 import { CollectionItems } from './db/collection-items';
-import { createGeoId } from './utils/create-geo-id';
-import { pool } from './utils/pool';
+import { getTripleFromOp } from './events/get-triple-from-op';
 
 const entities: string[] = [
   SYSTEM_IDS.TYPES,
@@ -41,6 +40,8 @@ const entities: string[] = [
   SYSTEM_IDS.DATE,
   SYSTEM_IDS.WEB_URL,
   SYSTEM_IDS.PERSON_TYPE,
+  SYSTEM_IDS.AVATAR_ATTRIBUTE,
+  SYSTEM_IDS.COVER_ATTRIBUTE,
 
   // Collections
   SYSTEM_IDS.COLLECTION_TYPE,
@@ -184,7 +185,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
   ])
   .flat();
 
-const typeTriplesEffect = Effect.gen(function* (_) {
+const getTypeTriples = () => {
   const collectionsToWrite: s.collections.Insertable[] = [];
   const collectionItemsToWrite: s.collection_items.Insertable[] = [];
 
@@ -192,12 +193,17 @@ const typeTriplesEffect = Effect.gen(function* (_) {
     .map(([id, attributes]): s.triples.Insertable[] => {
       const collectionEntityId = createGeoId();
 
-      collectionsToWrite.push({ id: collectionEntityId, entity_id: collectionEntityId });
+      if (attributes.length > 0) {
+        collectionsToWrite.push({ id: collectionEntityId, entity_id: collectionEntityId });
+      }
 
       const collectionItemsForAttributes = attributes
         .map((attributeId): s.triples.Insertable[] => {
           const collectionItemEntityId = createGeoId();
 
+          // This is used to write the collection item to the collection_items
+          // table in the database. The below objects are used to write the
+          // triples for each collection item.
           collectionItemsToWrite.push({
             id: collectionItemEntityId,
             entity_id: collectionItemEntityId,
@@ -206,52 +212,20 @@ const typeTriplesEffect = Effect.gen(function* (_) {
             index: INITIAL_COLLECTION_ITEM_INDEX,
           });
 
-          return [
-            // Collection item type
-            {
-              entity_id: collectionItemEntityId,
-              attribute_id: SYSTEM_IDS.TYPES,
-              value_type: 'ENTITY',
-              entity_value_id: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
-              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-              is_stale: false,
-            },
-            // Collection reference
-            {
-              entity_id: collectionItemEntityId,
-              attribute_id: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
-              value_type: 'ENTITY',
-              entity_value_id: collectionEntityId,
-              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-              is_stale: false,
-            },
-            // Entity reference
-            {
-              entity_id: collectionItemEntityId,
-              attribute_id: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
-              value_type: 'ENTITY',
-              entity_value_id: attributeId,
-              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-              is_stale: false,
-            },
-            // Fractional index / order
-            {
-              entity_id: collectionItemEntityId,
-              attribute_id: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-              value_type: 'TEXT',
-              text_value: INITIAL_COLLECTION_ITEM_INDEX,
-              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-              is_stale: false,
-            },
-          ];
+          const collectionItemTriples = createCollectionItem({
+            collectionId: collectionEntityId,
+            entityId: attributeId,
+            spaceId: ROOT_SPACE_ADDRESS,
+          });
+
+          return collectionItemTriples.map(op =>
+            getTripleFromOp(op, ROOT_SPACE_ADDRESS, {
+              blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
+              cursor: '',
+              requestId: '',
+              timestamp: ROOT_SPACE_CREATED_AT,
+            })
+          );
         })
         .flat();
 
@@ -306,7 +280,7 @@ const typeTriplesEffect = Effect.gen(function* (_) {
     collections: collectionsToWrite,
     collectionItems: collectionItemsToWrite,
   };
-});
+};
 
 const space: s.spaces.Insertable = {
   id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
@@ -343,23 +317,11 @@ export function bootstrapRoot() {
     // When binding the attributes schema to a type entity we
     // create collections to store many attributes. We need
     // to insert these collections into the Collections table.
-    const { typeTriples, collections, collectionItems } = yield* _(typeTriplesEffect);
+    const { typeTriples, collections, collectionItems } = getTypeTriples();
 
     yield _(
       Effect.tryPromise({
         try: async () => {
-          // const collectionsForTypeIds = typeTriples
-          //   .filter(t => t.attribute_id === SYSTEM_IDS.TYPES && t.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE)
-          //   .map((m): s.collections.Insertable => ({ id: m.entity_id, entity_id: m.entity_id }));
-
-          // // @TODO: Collect collection items
-          // const collectionItemEntityIdsForTypeIds = typeTriples
-          //   .filter(t => t.attribute_id === SYSTEM_IDS.TYPES && t.entity_value_id === SYSTEM_IDS.COLLECTION_ITEM_TYPE)
-          //   .map(m => m.entity_id);
-
-          // // Map all of the triples to the
-          // const collectionItemTriples = typeTriples.console.log('collections', collectionsForTypeIds);
-
           // @TODO: Create versions for the entities
           await Promise.all([
             Spaces.upsert([space]),

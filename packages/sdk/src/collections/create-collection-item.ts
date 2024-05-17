@@ -1,104 +1,117 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-
-import { createGeoId } from '../../';
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '../../constants';
+import { createGeoId } from '../id';
+import { SYSTEM_IDS } from '../system-ids';
 
 interface CreateCollectionItemArgs {
   spaceId: string; // 0x...
   collectionId: string; // uuid
-  entityId: string; // uuid (usually)
+  entityId: string; // uuid
 }
 
-type CreateCollectionItemTypeAction = {
-  attributeId: typeof SYSTEM_IDS.TYPES;
-  entityId: string;
-  type: 'createTriple';
-  value: {
-    type: 'entity';
-    id: typeof SYSTEM_IDS.COLLECTION_ITEM_TYPE;
+type CreateCollectionItemTypeOp = {
+  opType: 'SET_TRIPLE';
+  payload: {
+    attributeId: typeof SYSTEM_IDS.TYPES;
+    entityId: string;
+    value: {
+      type: 'ENTITY';
+      value: typeof SYSTEM_IDS.COLLECTION_ITEM_TYPE;
+    };
   };
 };
 
-type CreateCollectionItemCollectionReferenceAction = {
-  attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE;
-  entityId: string;
-  type: 'createTriple';
-  value: {
-    type: 'entity';
-    id: string;
+type CreateCollectionItemCollectionReferenceOp = {
+  opType: 'SET_TRIPLE';
+  payload: {
+    attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE;
+    entityId: string;
+    value: {
+      type: 'ENTITY';
+      value: string;
+    };
   };
 };
 
-type CreateCollectionItemEntityReferenceAction = {
-  attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE;
-  entityId: string;
-  type: 'createTriple';
-  value: {
-    type: 'entity';
-    id: string;
+type CreateCollectionItemEntityReferenceOp = {
+  opType: 'SET_TRIPLE';
+  payload: {
+    attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE;
+    entityId: string;
+    value: {
+      type: 'ENTITY';
+      value: string;
+    };
   };
 };
 
-type CreateCollectionItemIndexAction = {
-  attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_INDEX;
-  entityId: string;
-  type: 'createTriple';
-  value: {
-    type: 'string';
-    id: string;
-    value: string;
+interface CreateCollectionItemIndexOp {
+  opType: 'SET_TRIPLE';
+  payload: {
+    attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_INDEX;
+    entityId: string;
+    value: {
+      type: 'TEXT';
+      value: string;
+    };
   };
 };
 
 export function createCollectionItem(
   args: CreateCollectionItemArgs
 ): readonly [
-  CreateCollectionItemTypeAction,
-  CreateCollectionItemCollectionReferenceAction,
-  CreateCollectionItemEntityReferenceAction,
-  CreateCollectionItemIndexAction,
+  CreateCollectionItemTypeOp,
+  CreateCollectionItemCollectionReferenceOp,
+  CreateCollectionItemEntityReferenceOp,
+  CreateCollectionItemIndexOp,
 ] {
   const newEntityId = createGeoId();
 
   return [
     // Type of Collection Item
     {
-      attributeId: SYSTEM_IDS.TYPES,
-      entityId: newEntityId,
-      type: 'createTriple',
-      value: {
-        type: 'entity',
-        id: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
-      },
+      opType: 'SET_TRIPLE',
+      payload: {
+        attributeId: SYSTEM_IDS.TYPES,
+        entityId: newEntityId,
+        value: {
+          type: 'ENTITY',
+          value: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
+        },
+      }
     },
     // Entity value for the collection itself
     {
-      attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
-      entityId: newEntityId,
-      type: 'createTriple',
-      value: {
-        type: 'entity',
-        id: args.collectionId,
-      },
+      opType: 'SET_TRIPLE',
+      payload: {
+        attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
+        entityId: newEntityId,
+        value: {
+          type: 'ENTITY',
+          value: args.collectionId,
+        },
+      }
     },
     // Entity value for the entity referenced by this collection item
     {
-      attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
-      entityId: newEntityId,
-      type: 'createTriple',
-      value: {
-        type: 'entity',
-        id: args.entityId,
-      },
+      opType: 'SET_TRIPLE',
+      payload: {
+        attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
+        entityId: newEntityId,
+        value: {
+          type: 'ENTITY',
+          value: args.entityId,
+        },
+      }
     },
     {
-      attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-      entityId: newEntityId,
-      type: 'createTriple',
-      value: {
-        type: 'string',
-        id: createGeoId(),
-        value: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+      opType: 'SET_TRIPLE',
+      payload: {
+        attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
+        entityId: newEntityId,
+        value: {
+          type: 'TEXT',
+          value: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+        }
       },
     },
   ] as const;

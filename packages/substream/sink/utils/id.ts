@@ -1,4 +1,4 @@
-import { createGeoId } from './create-geo-id';
+import { createGeoId } from '@geogenesis/sdk';
 
 export function createActionId(): string {
   return createGeoId();

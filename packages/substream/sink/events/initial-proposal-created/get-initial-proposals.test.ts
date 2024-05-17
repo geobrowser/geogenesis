@@ -1,9 +1,9 @@
+import { createGeoId } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
 import type { EditProposal } from '../proposals-created/parser';
 import type { SpacePluginCreated } from '../spaces-created/parser';
 import { getInitialProposalsForSpaces } from './get-initial-proposals';
-import { createGeoId } from '~/sink/utils/create-geo-id';
 
 describe('get-initial-proposals', () => {
   it('proposal is in set of new spaces', () => {

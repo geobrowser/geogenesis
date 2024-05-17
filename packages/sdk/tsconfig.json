@@ -37,10 +37,10 @@
 
     /* When building a library in a monorepo */
     "composite": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "paths": {
+      "~/*": ["./*"],
+      "@geogenesis/*": ["../*"]
+    }
   },
-  "paths": {
-    "~/*": ["./*"],
-    "@geogenesis/*": ["../*"]
-  }
 }

@@ -35,7 +35,7 @@ export type Op =
       payload: {
         entityId: string;
         attributeId: string;
-        value: {};
+        value: Record<string, never>;
       };
     };
 
