@@ -226,53 +226,6 @@ const getTypeTriples = () => {
               timestamp: ROOT_SPACE_CREATED_AT,
             })
           );
-
-          return [
-            // Collection item type
-            {
-              entity_id: collectionItemEntityId,
-              attribute_id: SYSTEM_IDS.TYPES,
-              value_type: 'ENTITY',
-              entity_value_id: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
-              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-              is_stale: false,
-            },
-            // Collection reference
-            {
-              entity_id: collectionItemEntityId,
-              attribute_id: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
-              value_type: 'ENTITY',
-              entity_value_id: collectionEntityId,
-              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-              is_stale: false,
-            },
-            // Entity reference
-            {
-              entity_id: collectionItemEntityId,
-              attribute_id: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
-              value_type: 'ENTITY',
-              entity_value_id: attributeId,
-              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-              is_stale: false,
-            },
-            // Fractional index / order
-            {
-              entity_id: collectionItemEntityId,
-              attribute_id: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-              value_type: 'TEXT',
-              text_value: INITIAL_COLLECTION_ITEM_INDEX,
-              space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-              is_stale: false,
-            },
-          ];
         })
         .flat();
 
