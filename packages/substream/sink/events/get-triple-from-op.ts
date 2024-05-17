@@ -2,7 +2,7 @@ import type * as S from 'zapatos/schema';
 
 import type { BlockEvent, Op } from '../types';
 
-export function triplesFromOp(op: Op, spaceId: string, block: BlockEvent): S.triples.Insertable {
+export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.triples.Insertable {
   const { entityId, attributeId } = op.payload;
   const entity_id = entityId;
   const attribute_id = attributeId;
@@ -38,6 +38,9 @@ export function triplesFromOp(op: Op, spaceId: string, block: BlockEvent): S.tri
     value_type: 'TEXT', // this doesn't matter for deletes, but we populate it anyway for more ergonomic types
     created_at: block.timestamp,
     created_at_block: block.blockNumber,
+    collection_value_id: null,
+    entity_value_id: null,
+    text_value: null,
     is_stale: false,
   };
 }

@@ -1,6 +1,6 @@
 import type * as S from 'zapatos/schema';
 
-import { triplesFromOp } from '../triples-from-op';
+import { getTripleFromOp } from '../get-triple-from-op';
 import { type BlockEvent, type Op, type TripleOp } from '~/sink/types';
 
 export interface OpWithCreatedBy {
@@ -20,7 +20,7 @@ export function mapSchemaTriples(
     return {
       createdById: edit.createdById,
       op: op.opType,
-      triple: triplesFromOp(op, edit.spaceId, block),
+      triple: getTripleFromOp(op, edit.spaceId, block),
     };
   });
 }

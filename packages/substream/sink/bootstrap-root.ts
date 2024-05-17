@@ -11,7 +11,7 @@ import {
 } from './constants/constants';
 import { Accounts, Collections, Entities, Proposals, Spaces, Triples } from './db';
 import { CollectionItems } from './db/collection-items';
-import { triplesFromOp } from './events/triples-from-op';
+import { getTripleFromOp } from './events/get-triple-from-op';
 
 const entities: string[] = [
   SYSTEM_IDS.TYPES,
@@ -219,7 +219,7 @@ const getTypeTriples = () => {
           });
 
           return collectionItemTriples.map(op =>
-            triplesFromOp(op, ROOT_SPACE_ADDRESS, {
+            getTripleFromOp(op, ROOT_SPACE_ADDRESS, {
               blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
               cursor: '',
               requestId: '',
