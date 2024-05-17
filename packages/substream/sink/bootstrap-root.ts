@@ -193,7 +193,9 @@ const getTypeTriples = () => {
     .map(([id, attributes]): s.triples.Insertable[] => {
       const collectionEntityId = createGeoId();
 
-      collectionsToWrite.push({ id: collectionEntityId, entity_id: collectionEntityId });
+      if (attributes.length > 0) {
+        collectionsToWrite.push({ id: collectionEntityId, entity_id: collectionEntityId });
+      }
 
       const collectionItemsForAttributes = attributes
         .map((attributeId): s.triples.Insertable[] => {
