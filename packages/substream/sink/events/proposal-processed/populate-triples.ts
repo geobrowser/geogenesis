@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
@@ -7,7 +7,8 @@ import { type BlockEvent } from '../../types';
 import { pool } from '../../utils/pool';
 import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
-import { Triples } from '~/sink/db';
+import { Collections, Triples } from '~/sink/db';
+import { CollectionItems } from '~/sink/db/collection-items';
 
 interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
@@ -338,22 +339,37 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
         if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
           const insertCollectionEffect = Effect.tryPromise({
             try: () =>
-              db
-                .upsert(
-                  'collections',
-                  {
-                    id: triple.entity_value_id?.toString()!, // we know it exists because of the above check
-                    entity_id: triple.entity_value_id?.toString()!,
-                  },
-                  ['id'],
-                  { updateColumns: db.doNothing }
-                )
-                .run(pool),
+              Collections.upsert([
+                {
+                  id: triple.entity_id, // we know it exists because of the above check
+                  entity_id: triple.entity_id,
+                },
+              ]),
             catch: error => new Error(`Failed to create collection item ${String(error)}`),
           });
 
           yield* awaited(insertCollectionEffect, retryEffect);
         }
+
+        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_ITEM_TYPE) {
+          const schemaCollectionItem = getCollectionItemTriplesFromSchemaTriples(
+            schemaTriples,
+            triple.entity_id.toString()
+          );
+
+          if (schemaCollectionItem) {
+            console.log('adding collection item', schemaCollectionItem);
+
+            const insertCollectionItemEffect = Effect.tryPromise({
+              try: () => CollectionItems.upsert([schemaCollectionItem]),
+              catch: error => new Error(`Failed to create collection item ${String(error)}`),
+            });
+
+            yield* awaited(insertCollectionItemEffect, retryEffect);
+          }
+        }
+
+        // @TODO: Update the collection item row if we change any of the values
       }
 
       /**
@@ -383,7 +399,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
                   id: triple.entity_value_id?.toString()!,
                 })
                 .run(pool),
-            catch: () => new Error('Failed to create type'),
+            catch: () => new Error('Failed to delete collection'),
           });
 
           yield* awaited(deleteCollectionEffect, retryEffect);
@@ -391,4 +407,38 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
       }
     }
   });
+}
+
+function getCollectionItemTriplesFromSchemaTriples(
+  schemaTriples: OpWithCreatedBy[],
+  entityId: string
+): Schema.collection_items.Insertable | null {
+  // Grab other triples in this edit that match the collection item's entity id. We
+  // want to add all of the collection item properties to the item in the
+  // collection_items table.
+  const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
+
+  const collectionItemIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.COLLECTION_ITEM_INDEX);
+  const collectionItemEntityReferenceId = otherTriples.find(
+    t => t.triple.attribute_id === SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE
+  );
+  const collectionItemCollectionReferenceId = otherTriples.find(
+    t => t.triple.attribute_id === SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE
+  );
+
+  const indexValue = collectionItemIndex?.triple.text_value;
+  const entityReferenceId = collectionItemEntityReferenceId?.triple.entity_value_id;
+  const collectionReferenceId = collectionItemCollectionReferenceId?.triple.entity_value_id;
+
+  if (!indexValue || !entityReferenceId || !collectionReferenceId) {
+    return null;
+  }
+
+  return {
+    id: entityId,
+    entity_id: entityId,
+    collection_id: collectionReferenceId.toString(),
+    entity_reference_id: entityReferenceId.toString(),
+    index: indexValue,
+  };
 }
