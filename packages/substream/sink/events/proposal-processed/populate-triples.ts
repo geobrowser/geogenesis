@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
@@ -5,8 +6,7 @@ import type * as Schema from 'zapatos/schema';
 import { type BlockEvent } from '../../types';
 import { pool } from '../../utils/pool';
 import { retryEffect } from '../../utils/retry-effect';
-import { type OpWithCreatedBy, mapSchemaTriples } from './map-triples';
-import { SYSTEM_IDS } from '~/sink/constants/system-ids';
+import { type OpWithCreatedBy } from './map-triples';
 import { Triples } from '~/sink/db';
 
 interface PopulateTriplesArgs {

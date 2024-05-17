@@ -1,4 +1,5 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
+import { createGeoId } from '@geogenesis/sdk';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { Effect, Secret, Stream } from 'effect';
@@ -45,7 +46,6 @@ import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/pa
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { Telemetry } from './telemetry';
-import { createGeoId } from './utils/create-geo-id';
 import { slog } from './utils/slog';
 import { createSink, createStream } from './vendor/sink/src';
 

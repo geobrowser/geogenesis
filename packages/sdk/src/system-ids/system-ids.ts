@@ -5,11 +5,6 @@ export const SPACE = '362c1dbddc6444bba3c4652f38a642d7';
 export const INDEXED_SPACE = '306598522df542f69ad72921c33ad84b';
 export const ATTRIBUTE = '808a04ceb21c4d888ad12e240613e5ca';
 
-/* We could wire this up to the substream, but since we're hardcoding quite a bit already in bootstrapRoot.ts, this is probably fine */
-export const ROOT_SPACE_CREATED_AT = 0;
-export const ROOT_SPACE_CREATED_AT_BLOCK = 678;
-export const ROOT_SPACE_CREATED_BY_ID = '0x66703c058795B9Cb215fbcc7c6b07aee7D216F24';
-
 /**
  * Collections are a data model that enable us to create references between some
  * arbitrary id and a set of entity ids.

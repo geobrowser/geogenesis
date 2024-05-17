@@ -1,7 +1,7 @@
+import { createGeoId } from '@geogenesis/sdk';
 import fs from 'fs';
 
 import { Edit, EditLegacy, IpfsContentType, IpfsMetadata, Membership, Subspace } from '../proto';
-import { createGeoId } from '../utils/create-geo-id';
 
 const write = (type: IpfsContentType, name: string) => {
   const legacy = EditLegacy.fromBinary(fs.readFileSync('data-2.pb'));

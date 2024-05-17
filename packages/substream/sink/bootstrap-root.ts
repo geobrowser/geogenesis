@@ -1,18 +1,17 @@
+import { SYSTEM_IDS, createCollectionItem, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
-import * as db from 'zapatos/db';
 import type * as s from 'zapatos/schema';
 
+import { ROOT_SPACE_ADDRESS } from '../../ids/system-ids';
 import {
   INITIAL_COLLECTION_ITEM_INDEX,
   ROOT_SPACE_CREATED_AT,
   ROOT_SPACE_CREATED_AT_BLOCK,
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
-import { SYSTEM_IDS } from './constants/system-ids';
 import { Accounts, Collections, Entities, Proposals, Spaces, Triples } from './db';
 import { CollectionItems } from './db/collection-items';
-import { createGeoId } from './utils/create-geo-id';
-import { pool } from './utils/pool';
+import { triplesFromOp } from './events/triples-from-op';
 
 const entities: string[] = [
   SYSTEM_IDS.TYPES,
@@ -184,7 +183,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
   ])
   .flat();
 
-const typeTriplesEffect = Effect.gen(function* (_) {
+const getTypeTriples = () => {
   const collectionsToWrite: s.collections.Insertable[] = [];
   const collectionItemsToWrite: s.collection_items.Insertable[] = [];
 
@@ -198,6 +197,9 @@ const typeTriplesEffect = Effect.gen(function* (_) {
         .map((attributeId): s.triples.Insertable[] => {
           const collectionItemEntityId = createGeoId();
 
+          // This is used to write the collection item to the collection_items
+          // table in the database. The below objects are used to write the
+          // triples for each collection item.
           collectionItemsToWrite.push({
             id: collectionItemEntityId,
             entity_id: collectionItemEntityId,
@@ -205,6 +207,21 @@ const typeTriplesEffect = Effect.gen(function* (_) {
             entity_reference_id: attributeId,
             index: INITIAL_COLLECTION_ITEM_INDEX,
           });
+
+          const collectionItemTriples = createCollectionItem({
+            collectionId: collectionEntityId,
+            entityId: attributeId,
+            spaceId: ROOT_SPACE_ADDRESS,
+          });
+
+          return collectionItemTriples.map(op =>
+            triplesFromOp(op, ROOT_SPACE_ADDRESS, {
+              blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
+              cursor: '',
+              requestId: '',
+              timestamp: ROOT_SPACE_CREATED_AT,
+            })
+          );
 
           return [
             // Collection item type
@@ -306,7 +323,7 @@ const typeTriplesEffect = Effect.gen(function* (_) {
     collections: collectionsToWrite,
     collectionItems: collectionItemsToWrite,
   };
-});
+};
 
 const space: s.spaces.Insertable = {
   id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
@@ -343,7 +360,7 @@ export function bootstrapRoot() {
     // When binding the attributes schema to a type entity we
     // create collections to store many attributes. We need
     // to insert these collections into the Collections table.
-    const { typeTriples, collections, collectionItems } = yield* _(typeTriplesEffect);
+    const { typeTriples, collections, collectionItems } = getTypeTriples();
 
     yield _(
       Effect.tryPromise({
