@@ -206,9 +206,9 @@ const getTypeTriples = () => {
           // triples for each collection item.
           collectionItemsToWrite.push({
             id: collectionItemEntityId,
-            entity_id: collectionItemEntityId,
+            collection_item_entity_id: collectionItemEntityId,
             collection_id: collectionEntityId,
-            entity_reference_id: attributeId,
+            entity_id: attributeId,
             index: INITIAL_COLLECTION_ITEM_INDEX,
           });
 

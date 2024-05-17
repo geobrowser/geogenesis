@@ -5,10 +5,10 @@ CREATE TABLE public.collections (
 
 CREATE TABLE public.collection_items (
     id text PRIMARY KEY NOT NULL,
-    entity_id text REFERENCES public.geo_entities(id) NOT NULL,
+    collection_item_entity_id text REFERENCES public.geo_entities(id) NOT NULL,
     index text,
     collection_id text REFERENCES public.collections(id) NOT NULL,
-    entity_reference_id text REFERENCES public.geo_entities(id) NOT NULL
+    entity_id text REFERENCES public.geo_entities(id) NOT NULL
 );
 
 CREATE OR REPLACE FUNCTION public.spaces_metadata(e_row spaces)
@@ -73,7 +73,7 @@ $$ LANGUAGE plpgsql STRICT STABLE;
 --     FROM triples t1
 --     JOIN triples t2 ON t1.entity_id = t2.entity_id
 --     JOIN triples t3 ON t1.entity_id = t3.entity_id
---     JOIN triples t4 ON t1.entity_id = t4.entity_id 
+--     JOIN triples t4 ON t1.entity_id = t4.entity_id
 --     WHERE t1.entity_id = e_row.entity_id
 --       AND t1.attribute_id = 'types'
 --       AND t1.entity_value_id = '0e8d692b94d74c64bcb30eb4d55503ef' -- Collection Item type

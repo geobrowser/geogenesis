@@ -436,9 +436,9 @@ function getCollectionItemTriplesFromSchemaTriples(
 
   return {
     id: entityId,
-    entity_id: entityId,
+    collection_item_entity_id: entityId,
     collection_id: collectionReferenceId.toString(),
-    entity_reference_id: entityReferenceId.toString(),
+    entity_id: entityReferenceId.toString(),
     index: indexValue,
   };
 }

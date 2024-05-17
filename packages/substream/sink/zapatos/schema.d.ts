@@ -125,11 +125,11 @@ declare module 'zapatos/schema' {
       */
       id: string;
       /**
-      * **collection_items.entity_id**
+      * **collection_items.collection_item_entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_id: string;
+      collection_item_entity_id: string;
       /**
       * **collection_items.index**
       * - `text` in database
@@ -143,11 +143,11 @@ declare module 'zapatos/schema' {
       */
       collection_id: string;
       /**
-      * **collection_items.entity_reference_id**
+      * **collection_items.entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_reference_id: string;
+      entity_id: string;
     }
     export interface JSONSelectable {
       /**
@@ -157,11 +157,11 @@ declare module 'zapatos/schema' {
       */
       id: string;
       /**
-      * **collection_items.entity_id**
+      * **collection_items.collection_item_entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_id: string;
+      collection_item_entity_id: string;
       /**
       * **collection_items.index**
       * - `text` in database
@@ -175,11 +175,11 @@ declare module 'zapatos/schema' {
       */
       collection_id: string;
       /**
-      * **collection_items.entity_reference_id**
+      * **collection_items.entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_reference_id: string;
+      entity_id: string;
     }
     export interface Whereable {
       /**
@@ -189,11 +189,11 @@ declare module 'zapatos/schema' {
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **collection_items.entity_id**
+      * **collection_items.collection_item_entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      collection_item_entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **collection_items.index**
       * - `text` in database
@@ -207,11 +207,11 @@ declare module 'zapatos/schema' {
       */
       collection_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **collection_items.entity_reference_id**
+      * **collection_items.entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_reference_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -221,11 +221,11 @@ declare module 'zapatos/schema' {
       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **collection_items.entity_id**
+      * **collection_items.collection_item_entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_id: string | db.Parameter<string> | db.SQLFragment;
+      collection_item_entity_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **collection_items.index**
       * - `text` in database
@@ -239,11 +239,11 @@ declare module 'zapatos/schema' {
       */
       collection_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **collection_items.entity_reference_id**
+      * **collection_items.entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_reference_id: string | db.Parameter<string> | db.SQLFragment;
+      entity_id: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -253,11 +253,11 @@ declare module 'zapatos/schema' {
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **collection_items.entity_id**
+      * **collection_items.collection_item_entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      collection_item_entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **collection_items.index**
       * - `text` in database
@@ -271,11 +271,11 @@ declare module 'zapatos/schema' {
       */
       collection_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **collection_items.entity_reference_id**
+      * **collection_items.entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      entity_reference_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'collection_items_pkey';
     export type Column = keyof Selectable;
