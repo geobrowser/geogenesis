@@ -322,18 +322,6 @@ export function bootstrapRoot() {
     yield _(
       Effect.tryPromise({
         try: async () => {
-          // const collectionsForTypeIds = typeTriples
-          //   .filter(t => t.attribute_id === SYSTEM_IDS.TYPES && t.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE)
-          //   .map((m): s.collections.Insertable => ({ id: m.entity_id, entity_id: m.entity_id }));
-
-          // // @TODO: Collect collection items
-          // const collectionItemEntityIdsForTypeIds = typeTriples
-          //   .filter(t => t.attribute_id === SYSTEM_IDS.TYPES && t.entity_value_id === SYSTEM_IDS.COLLECTION_ITEM_TYPE)
-          //   .map(m => m.entity_id);
-
-          // // Map all of the triples to the
-          // const collectionItemTriples = typeTriples.console.log('collections', collectionsForTypeIds);
-
           // @TODO: Create versions for the entities
           await Promise.all([
             Spaces.upsert([space]),
