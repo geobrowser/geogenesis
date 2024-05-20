@@ -116,7 +116,7 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
     case 'URL':
       return { type: 'URL', value: networkTriple.textValue };
     case 'COLLECTION':
-      return { type: 'COLLECTION', value: networkTriple.collectionValue.id };
+      return { type: 'COLLECTION', id: networkTriple.collectionValue.id };
   }
 }
 
@@ -139,7 +139,7 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
     case 'URL':
       return { type: 'URL', value: networkAction.textValue };
     case 'COLLECTION':
-      return { type: 'COLLECTION', value: networkAction.collectionValue.id };
+      return { type: 'COLLECTION', id: networkAction.collectionValue.id };
   }
 }
 
