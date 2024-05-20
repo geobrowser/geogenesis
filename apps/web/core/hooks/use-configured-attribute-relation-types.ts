@@ -3,7 +3,7 @@ import { pipe } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
 
 import { Services } from '../services';
-import { Action as IAction, Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
+import { Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
 import { Triple } from '../utils/triple';
 import { Value } from '../utils/value';
 import { useActionsStore } from './use-actions-store';
@@ -14,12 +14,12 @@ import { useActionsStore } from './use-actions-store';
  * expects to consume.
  */
 export const mapMergedTriplesToRelationValueTypes = (
-  actions: Array<IAction>,
+  triples: Array<ITriple>,
   relationTypeTriples: Array<ITriple>
 ): RelationValueTypesByAttributeId => {
   // We need to re-merge local actions with the server triples since we don't re-run RQ in useConfiguredAttributeRelationTypes
   // when actions change.
-  const mergedTriples = Triple.fromActions(actions, relationTypeTriples);
+  const mergedTriples = Triple.merge(triples, relationTypeTriples);
 
   return pipe(
     mergedTriples,
