@@ -40,33 +40,28 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
 
   const tripleToEditableField = (triple: Triple) => {
     switch (triple.value.type) {
-      case 'string':
+      case 'TEXT':
         return (
-          <Text key={`string-${triple.attributeId}-${triple.value.id}-${triple.id}`} as="p">
+          <Text key={`string-${triple.attributeId}-${triple.value.value}`} as="p">
             {triple.value.value}
           </Text>
         );
-      case 'image':
-        return (
-          <ImageZoom
-            key={`image-${triple.attributeId}-${triple.value.id}-${triple.id}`}
-            imageSrc={triple.value.value}
-          />
-        );
-      case 'date':
+      case 'IMAGE':
+        return <ImageZoom key={`image-${triple.attributeId}-${triple.value.value}}`} imageSrc={triple.value.value} />;
+      case 'TIME':
         return <DateField isEditing={false} value={triple.value.value} />;
-      case 'url':
+      case 'URL':
         return <WebUrlField isEditing={false} value={triple.value.value} />;
-      case 'entity': {
+      case 'ENTITY': {
         return (
-          <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">
+          <div key={`entity-${triple.attributeId}-${triple.value.id}}`} className="mt-1">
             <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.id)}>
               {triple.value.name || triple.value.id}
             </LinkableChip>
           </div>
         );
       }
-      case 'number':
+      case 'NUMBER':
         return null;
     }
   };

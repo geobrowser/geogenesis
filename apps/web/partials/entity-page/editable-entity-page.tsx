@@ -9,8 +9,8 @@ import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Triple as ITriple, RelationValueTypesByAttributeId, TripleValueType } from '~/core/types';
-import type { Entity as EntityType } from '~/core/types';
+import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
+import type { AppEntityValue, Entity as EntityType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
@@ -219,7 +219,7 @@ function EntityAttributes({
 
   const visibleTriples = [...triples, ...visibleSchemaTriples];
 
-  const entityValueTriples = triples.filter(triple => triple.value.type === 'entity');
+  const entityValueTriples = triples.filter(triple => triple.value.type === 'ENTITY');
 
   // Some triples are rendered outside of the normal attribute list to better control their styling.
   const filteredAttributeIds = [SYSTEM_IDS.NAME, SYSTEM_IDS.DESCRIPTION];
@@ -420,7 +420,7 @@ function EntityAttributes({
 
   const tripleToEditableField = (attributeId: string, triple: ITriple, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
-      case 'string':
+      case 'TEXT':
         return (
           <PageStringField
             key={triple.attributeId}
@@ -435,7 +435,7 @@ function EntityAttributes({
             }}
           />
         );
-      case 'image':
+      case 'IMAGE':
         return (
           <PageImageField
             key={triple.attributeId}
@@ -449,9 +449,9 @@ function EntityAttributes({
             }}
           />
         );
-      case 'number':
+      case 'NUMBER':
         return null;
-      case 'date':
+      case 'TIME':
         return (
           <DateField
             isEditing
@@ -459,7 +459,7 @@ function EntityAttributes({
             onBlur={v => (triple.placeholder ? createDateTripleFromPlaceholder(triple, v) : updateDateValue(triple, v))}
           />
         );
-      case 'url':
+      case 'URL':
         return (
           <WebUrlField
             isEditing
@@ -472,7 +472,7 @@ function EntityAttributes({
             }}
           />
         );
-      case 'entity':
+      case 'ENTITY':
         if (isEmptyEntity) {
           const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
 
@@ -490,7 +490,7 @@ function EntityAttributes({
                 }
                 itemIds={entityValueTriples
                   .filter(triple => triple.attributeId === attributeId)
-                  .map(triple => triple.value.id)}
+                  .map(triple => (triple.value as AppEntityValue).id)}
                 attributeId={attributeId}
               />
             </div>
@@ -547,17 +547,17 @@ function EntityAttributes({
       </div>
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
-        const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
+        const isEntityGroup = triples.find(triple => triple.value.type === 'ENTITY');
 
         const tripleType: TripleValueType = triples[0].value.type || 'string';
 
-        const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
+        const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'ENTITY' && !triples[0].value.id;
         const attributeName = triples[0].attributeName;
         const isPlaceholder = triples[0].placeholder;
         const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
 
         // only show multiple editable fields for relations
-        const renderedTriples = tripleType === 'entity' ? triples : [triples[0]];
+        const renderedTriples = tripleType === 'ENTITY' ? triples : [triples[0]];
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
@@ -586,7 +586,7 @@ function EntityAttributes({
                   allowedTypes={relationTypes}
                   entityValueIds={entityValueTriples
                     .filter(triple => triple.attributeId === attributeId)
-                    .map(triple => triple.value.id)}
+                    .map(triple => (triple.value as AppEntityValue).id)}
                   attributeId={attributeId}
                 />
               )}
@@ -612,7 +612,7 @@ function EntityAttributes({
                             </div>
                           ),
                           value: 'string',
-                          onClick: () => onChangeTriple('string', triples),
+                          onClick: () => onChangeTriple('TEXT', triples),
                           disabled: false,
                         },
                         {
@@ -624,7 +624,7 @@ function EntityAttributes({
                             </div>
                           ),
                           value: 'entity',
-                          onClick: () => onChangeTriple('entity', triples),
+                          onClick: () => onChangeTriple('ENTITY', triples),
                           disabled: false,
                         },
                         {
@@ -636,7 +636,7 @@ function EntityAttributes({
                             </div>
                           ),
                           value: 'image',
-                          onClick: () => onChangeTriple('image', triples),
+                          onClick: () => onChangeTriple('IMAGE', triples),
                           disabled: false,
                         },
                         {
@@ -648,7 +648,7 @@ function EntityAttributes({
                             </div>
                           ),
                           value: 'date',
-                          onClick: () => onChangeTriple('date', triples),
+                          onClick: () => onChangeTriple('TIME', triples),
                           disabled: false,
                         },
                         {
@@ -660,7 +660,7 @@ function EntityAttributes({
                             </div>
                           ),
                           value: 'url',
-                          onClick: () => onChangeTriple('url', triples),
+                          onClick: () => onChangeTriple('URL', triples),
                           disabled: false,
                         },
                       ]}
