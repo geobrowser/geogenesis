@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Op } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
 
 import { ID } from '~/core/id';
@@ -178,3 +179,30 @@ export const getValue = (triple: Triple): string | null => {
       throw new Error('checkbox not supported');
   }
 };
+
+export function prepareTriplesForPublishing(triples: Triple[], spaceId: string): Op[] {
+  const triplesToPublish = triples.filter(t => t.space === spaceId && !t.hasBeenPublished);
+  return triplesToPublish.map((t): Op => {
+    if (t.isDeleted) {
+      return {
+        type: 'DELETE_TRIPLE',
+        payload: {
+          entityId: t.entityId,
+          attributeId: t.attributeId,
+        },
+      };
+    }
+
+    return {
+      type: 'SET_TRIPLE',
+      payload: {
+        entityId: t.entityId,
+        attributeId: t.attributeId,
+        value: {
+          type: t.value.type,
+          value: t.value.type === 'ENTITY' || t.value.type === 'COLLECTION' ? t.value.id : t.value.value,
+        },
+      },
+    };
+  });
+}

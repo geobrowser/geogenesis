@@ -1,4 +1,3 @@
-import { ProfileRegistryAbi } from '@geogenesis/sdk/abis';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import {
   Op,
@@ -9,18 +8,14 @@ import {
   getProcessGeoProposalArguments,
   getRemoveSubspaceArguments,
 } from '@geogenesis/sdk';
+import { ProfileRegistryAbi } from '@geogenesis/sdk/abis';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import * as Effect from 'effect/Effect';
 
 import { WalletClient } from 'wagmi';
-import {
-  GetWalletClientResult,
-  prepareWriteContract,
-  waitForTransaction,
-  writeContract,
-} from 'wagmi/actions';
+import { GetWalletClientResult, prepareWriteContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
-import { AppOp, ReviewState } from '../../types';
+import { ReviewState } from '../../types';
 import { Storage } from '../storage';
 import { IStorageClient } from '../storage/storage';
 import { fetchSpace } from '../subgraph';

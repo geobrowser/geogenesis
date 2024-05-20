@@ -27,7 +27,7 @@ export type AppCollectionValue = {
 
 export type AppCheckboxValue = {
   type: 'CHECKBOX';
-  value: boolean;
+  value: string;
 };
 
 export type Value = AppEntityValue | AppCollectionValue | AppCheckboxValue | AppValue;

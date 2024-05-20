@@ -62,7 +62,7 @@ const getTeamMembers = async (spaceId: string) => {
   }
 
   roleTriples.forEach(triple => {
-    if (triple.value.type !== 'entity') return;
+    if (triple.value.type !== 'ENTITY') return;
 
     const teamMember = {
       entityId: triple.entityId,

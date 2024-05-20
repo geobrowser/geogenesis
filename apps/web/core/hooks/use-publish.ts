@@ -3,12 +3,13 @@ import * as React from 'react';
 import { useWalletClient } from 'wagmi';
 
 import { Services } from '../services';
-import { ReviewState } from '../types';
+import { Triple as ITriple, ReviewState } from '../types';
 import { Action } from '../utils/action';
+import { Triple } from '../utils/triple';
 import { useActionsStore } from './use-actions-store';
 
 interface MakeProposalOptions {
-  actions: IAction[];
+  triples: ITriple[];
   onChangePublishState: (newState: ReviewState) => void;
   spaceId: string;
   name: string;
@@ -28,13 +29,13 @@ export function usePublish() {
    * side effects.
    */
   const makeProposal = React.useCallback(
-    async ({ actions: actionsToPublish, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
+    async ({ triples: triplesToPublish, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
       if (!wallet) return;
-      if (actionsToPublish.length < 1) return;
+      if (triplesToPublish.length < 1) return;
 
       await publishService.makeProposal({
         storageClient,
-        actions: Action.prepareActionsForPublishing(actionsToPublish),
+        ops: Triple.prepareTriplesForPublishing(triplesToPublish, spaceId),
         name,
         onChangePublishState,
         space: spaceId,
@@ -42,14 +43,8 @@ export function usePublish() {
       });
 
       const actionsBeingPublished = new Set(
-        actionsToPublish.map(a => {
-          switch (a.type) {
-            case 'createTriple':
-            case 'deleteTriple':
-              return a.id;
-            case 'editTriple':
-              return a.after.id; // after and before should the same id
-          }
+        triplesToPublish.map(a => {
+          return a.id;
         })
       );
 
@@ -59,19 +54,11 @@ export function usePublish() {
       // If the actionsBySpace[spaceId] is empty, then we return an empty array
       const nonPublishedActions = actionsBySpace[spaceId]
         ? actionsBySpace[spaceId].filter(a => {
-            switch (a.type) {
-              case 'createTriple':
-              case 'deleteTriple':
-                return !actionsBeingPublished.has(a.id);
-              case 'editTriple':
-                return !actionsBeingPublished.has(a.after.id);
-              default:
-                return false;
-            }
+            return !actionsBeingPublished.has(a.id);
           })
         : [];
 
-      const publishedActions = actionsToPublish.map(action => ({
+      const publishedActions = triplesToPublish.map(action => ({
         ...action,
         // We keep published actions in memory to keep the UI optimistic. This is mostly done
         // because there is a period between publishing actions and the subgraph finishing indexing
@@ -105,13 +92,13 @@ export function useBulkPublish() {
    * to IPFS + transact the IPFS hash onto Polygon.
    */
   const makeBulkProposal = React.useCallback(
-    async ({ actions, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
+    async ({ triples, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
       if (!wallet) return;
-      if (actions.length < 1) return;
+      if (triples.length < 1) return;
 
       await publish.makeProposal({
         storageClient,
-        actions,
+        ops: Triple.prepareTriplesForPublishing(triples, spaceId),
         name,
         onChangePublishState,
         space: spaceId,
