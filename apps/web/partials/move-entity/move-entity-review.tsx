@@ -12,7 +12,7 @@ import { usePublish } from '~/core/hooks/use-publish';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMoveEntity } from '~/core/state/move-entity-store';
-import { CreateTripleAction, DeleteTripleAction, ReviewState } from '~/core/types';
+import { ReviewState } from '~/core/types';
 import { getImagePath, sleepWithCallback } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';

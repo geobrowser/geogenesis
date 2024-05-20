@@ -154,7 +154,7 @@ const ReviewChanges = () => {
       const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
       await makeProposal({
-        actions: actionsToPublish,
+        triples: actionsToPublish,
         spaceId: activeSpace,
         name: proposalName,
         onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),

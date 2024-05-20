@@ -19,7 +19,7 @@ import { ID } from '~/core/id';
 import { fetchProfile } from '~/core/io/subgraph';
 import { Services } from '~/core/services';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
+import { OmitStrict, Triple } from '~/core/types';
 import { NavUtils, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
@@ -91,7 +91,7 @@ export const CreateProfileDialog = () => {
         return;
       }
 
-      const actions: CreateTripleAction[] = [];
+      const triples: Triple[] = [];
 
       // Add triples for a Person entity
       if (name !== '') {
@@ -102,15 +102,12 @@ export const CreateProfileDialog = () => {
           attributeName: 'Name',
           space: onchainProfile.homeSpaceId,
           value: {
-            type: 'string',
+            type: 'TEXT',
             value: name,
-            id: ID.createValueId(),
           },
         };
 
-        actions.push({
-          type: 'createTriple',
-          // @TODO: Somehow link to on-chain profilePerson
+        triples.push({
           id: ID.createTripleId(nameTripleWithoutId),
           ...nameTripleWithoutId,
         });
@@ -124,14 +121,12 @@ export const CreateProfileDialog = () => {
           attributeName: 'Avatar',
           space: onchainProfile.homeSpaceId,
           value: {
-            type: 'image',
+            type: 'IMAGE',
             value: avatar,
-            id: ID.createValueId(),
           },
         };
 
-        actions.push({
-          type: 'createTriple',
+        triples.push({
           id: ID.createTripleId(avatarTripleWithoutId),
           ...avatarTripleWithoutId,
         });
@@ -144,7 +139,7 @@ export const CreateProfileDialog = () => {
         entityName: name ?? '',
         space: onchainProfile.homeSpaceId,
         value: {
-          type: 'entity',
+          type: 'ENTITY',
           name: 'Person',
           id: SYSTEM_IDS.PERSON_TYPE,
         },
@@ -157,20 +152,18 @@ export const CreateProfileDialog = () => {
         entityName: name ?? '',
         space: onchainProfile.homeSpaceId,
         value: {
-          type: 'entity',
+          type: 'ENTITY',
           name: 'Space',
           id: SYSTEM_IDS.SPACE_CONFIGURATION,
         },
       };
 
-      actions.push({
-        type: 'createTriple',
+      triples.push({
         id: ID.createTripleId(personTypeTriple),
         ...personTypeTriple,
       });
 
-      actions.push({
-        type: 'createTriple',
+      triples.push({
         id: ID.createTripleId(spaceTypeTriple),
         ...spaceTypeTriple,
       });
@@ -179,7 +172,7 @@ export const CreateProfileDialog = () => {
         setStatus('creating-profile');
 
         await makeProposal({
-          actions,
+          triples: triples,
           name: `Creating profile for ${address}`,
           spaceId: onchainProfile.homeSpaceId,
           onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
