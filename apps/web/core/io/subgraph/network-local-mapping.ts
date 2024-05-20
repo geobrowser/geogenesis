@@ -1,5 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { Op, ProposalStatus, ProposalType } from '@geogenesis/sdk';
+import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import {
