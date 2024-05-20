@@ -9,7 +9,7 @@ import * as React from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { Services } from '~/core/services';
-import { AppEntityValue, AppTriple } from '~/core/types';
+import { Triple as ITriple } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
@@ -18,7 +18,7 @@ import { ValueTypeId } from '~/core/value-types';
 
 import { useEntityStoreInstance } from './entity-store-provider';
 
-export const createInitialSchemaTriples = (spaceId: string, entityId: string): AppTriple[] => {
+export const createInitialSchemaTriples = (spaceId: string, entityId: string): ITriple[] => {
   const nameTriple = Triple.withId({
     space: spaceId,
     entityId,
@@ -87,7 +87,7 @@ export function useEntityPageStore() {
 
   const triples = React.useMemo(() => {
     return pipe(
-      allActions,
+      Triple.merge(allActions, initialTriples),
       A.filter(t => t.entityId === id),
       triples =>
         // We may be referencing attributes/entities from other spaces whose name has changed.

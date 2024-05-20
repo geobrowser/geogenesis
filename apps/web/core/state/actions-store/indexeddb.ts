@@ -1,13 +1,12 @@
 import Dexie, { Table } from 'dexie';
 
-import { AppTriple } from '~/core/types';
+import { Triple } from '~/core/types';
 
 const DB_NAME = 'geogenesis';
-const TABLE_NAME = 'actionsStore';
 const VERSION = 1;
 
 export class Geo extends Dexie {
-  actions!: Table<AppTriple>;
+  triples!: Table<Triple>;
 
   constructor() {
     super(DB_NAME);

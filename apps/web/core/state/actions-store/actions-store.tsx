@@ -1,20 +1,22 @@
 import { atom, useAtom } from 'jotai';
 
-import { AppOp, AppTriple, DeleteTripleAppOp, OmitStrict, SetTripleAppOp, SpaceTriples } from '~/core/types';
+import { getAppTripleId } from '~/core/id/create-id';
+import { DeleteTripleAppOp, Triple as ITriple, OmitStrict, SetTripleAppOp, SpaceTriples } from '~/core/types';
+import { Triple } from '~/core/utils/triple';
 
 import { store } from '../jotai-store';
 import { db } from './indexeddb';
 
-const atomWithAsyncStorage = (initialValue: AppTriple[] = []) => {
-  const baseAtom = atom<AppTriple[]>(initialValue);
+const atomWithAsyncStorage = (initialValue: ITriple[] = []) => {
+  const baseAtom = atom<ITriple[]>(initialValue);
 
-  baseAtom.onMount = setValue => {
-    (async () => {
-      const storedActions = await db.actions.toArray();
+  // baseAtom.onMount = setValue => {
+  //   (async () => {
+  //     const storedActions = await db.triples.toArray();
 
-      setValue(storedActions);
-    })();
-  };
+  //     setValue(storedActions);
+  //   })();
+  // };
 
   return baseAtom;
 };
@@ -38,14 +40,11 @@ type StoreOp =
   | OmitStrict<SetTripleAppOp, 'id'>
   | OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
 
-const getAppTripleId = (op: StoreOp, spaceId: string) => `${spaceId}:${op.entityId}:${op.attributeId}`;
-
 const upsert = (op: StoreOp, spaceId: string) => {
-  const triple: AppTriple = {
-    ...op,
+  const triple: ITriple = {
     id: getAppTripleId(op, spaceId),
-    attributeName: op.type === 'SET_TRIPLE' ? op.attributeName : null,
-    entityName: op.type === 'SET_TRIPLE' ? op.entityName : null,
+    entityId: op.entityId,
+    attributeId: op.attributeId,
     value:
       op.type === 'SET_TRIPLE'
         ? op.value
@@ -54,10 +53,13 @@ const upsert = (op: StoreOp, spaceId: string) => {
             type: 'TEXT',
             value: '',
           },
-    hasBeenPublished: false,
+
+    entityName: op.type === 'SET_TRIPLE' ? op.entityName : null,
+    attributeName: op.type === 'SET_TRIPLE' ? op.attributeName : null,
     space: spaceId,
+    hasBeenPublished: false,
     isDeleted: false,
-    timestamp: new Date().toISOString(),
+    timestamp: Triple.timestamp(),
     placeholder: false,
   };
 
@@ -121,9 +123,9 @@ export function useActions(spaceId?: string) {
   }
 
   return {
-    allActions: [],
+    allActions,
     allSpacesWithActions: [],
-    actionsFromSpace: [],
+    actionsFromSpace: allActions.filter(a => a.space === spaceId),
     actionsByEntityId: {},
     actions: {},
 

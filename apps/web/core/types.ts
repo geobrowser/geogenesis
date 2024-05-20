@@ -53,6 +53,9 @@ export type Triple = {
   entityName: string | null;
   attributeName: string | null;
 
+  // We keep published triples optimistically in the store. It can take a while for the blockchain
+  // to process our transaction, then a few seconds for the subgraph to pick it up and index it.
+  // We keep the published triples so we can continue to render them locally while the backend catches up.
   id?: string; // `${spaceId}:${entityId}:${attributeId}`
   placeholder?: boolean;
   hasBeenPublished?: boolean;
@@ -60,18 +63,8 @@ export type Triple = {
   isDeleted?: boolean;
 };
 
-// We keep published triples optimistically in the store. It can take a while for the blockchain
-// to process our transaction, then a few seconds for the subgraph to pick it up and index it.
-// We keep the published triples so we can continue to render them locally while the backend catches up.
-export type AppTriple = Triple & {
-  id: string; // `${spaceId}:${entityId}:${attributeId}`
-  placeholder?: boolean;
-  hasBeenPublished?: boolean;
-  timestamp?: string; // ISO-8601
-  isDeleted?: boolean;
-};
-
 export type SpaceConfigEntity = Entity & {
+  spaceId: string;
   image: string;
 };
 
@@ -250,7 +243,7 @@ export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: Value }
 export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: Value };
 
 export type SpaceId = string;
-export type SpaceTriples = Record<SpaceId, AppTriple[]>;
+export type SpaceTriples = Record<SpaceId, Triple[]>;
 
 export type EntityId = string;
 export type AttributeId = string;

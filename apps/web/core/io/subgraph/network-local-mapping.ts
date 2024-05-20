@@ -265,7 +265,8 @@ export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamE
 
   const spaceConfigWithImage: SpaceConfigEntity = metadata
     ? {
-        id: spaceId,
+        id: metadata.id,
+        spaceId: spaceId,
         name: metadata.name,
         description: null,
         image:
@@ -275,7 +276,8 @@ export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamE
         nameTripleSpaces: EntityModule.nameTriples(spaceConfigTriples).map(t => t.space),
       }
     : {
-        id: spaceId,
+        id: '',
+        spaceId: spaceId,
         name: null,
         description: null,
         image: PLACEHOLDER_SPACE_IMAGE,

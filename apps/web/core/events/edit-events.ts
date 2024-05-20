@@ -568,6 +568,7 @@ const listener =
       case 'UPDATE_STRING_VALUE': {
         const { value, triple } = event.payload;
 
+        console.log('update string value', { value, triple });
         return upsert(
           {
             ...triple,

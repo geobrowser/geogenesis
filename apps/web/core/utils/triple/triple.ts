@@ -2,6 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
 
 import { ID } from '~/core/id';
+import { getAppTripleId } from '~/core/id/create-id';
 import { AppEntityValue, AppTriple, OmitStrict, Triple, Value } from '~/core/types';
 import { ValueTypeId, valueTypes } from '~/core/value-types';
 
@@ -102,6 +103,23 @@ export function empty(spaceId: string, entityId: string, type: TripleValueType =
  */
 export function ensureStableId<T extends Triple>(triple: T): T {
   return triple;
+}
+
+export function merge(local: Triple[], remote: Triple[]): Triple[] {
+  const localTripleIds = new Set(local.map(t => t.id));
+  const remoteTriplesWithoutLocalTriples = remote.filter(t => !localTripleIds.has(getAppTripleId(t, t.space)));
+
+  return [
+    ...remoteTriplesWithoutLocalTriples.map(t => ({
+      ...t,
+      hasBeenPublished: false,
+      isDeleted: false,
+      placeholder: false,
+      id: getAppTripleId(t, t.space),
+      timestamp: timestamp(),
+    })),
+    ...local,
+  ];
 }
 
 export function fromActions(actions: ActionType[] | undefined, triples: Triple[]): Triple[] {

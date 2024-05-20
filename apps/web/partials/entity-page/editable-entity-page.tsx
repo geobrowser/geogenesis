@@ -10,7 +10,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
-import type { AppEntityValue, AppTriple, Entity as EntityType } from '~/core/types';
+import type { AppEntityValue, Entity as EntityType, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
@@ -64,6 +64,10 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
+  //
+  // There may be some deleted triples locally. We check the actions to make sure that there are
+  // actually 0 actions in the case that there are 0 local triples as the local triples here
+  // are only the ones where `isDeleted` is false.
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
 
   // Always default to the local state for the name
@@ -415,7 +419,7 @@ function EntityAttributes({
     });
   };
 
-  const tripleToEditableField = (attributeId: string, triple: AppTriple, isEmptyEntity: boolean) => {
+  const tripleToEditableField = (attributeId: string, triple: Triple, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
       case 'TEXT':
         return (
