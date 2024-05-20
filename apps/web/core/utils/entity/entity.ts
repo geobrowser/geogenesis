@@ -129,7 +129,7 @@ export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
  * if you have a collection of Entities from the network and want to display any updates
  * that were made to them during local editing.
  */
-export function mergeActionsWithEntities(actions: Record<string, AppOp[]>, networkEntities: IEntity[]): IEntity[] {
+export function mergeActionsWithEntities(actions: Record<string, ITriple[]>, networkEntities: IEntity[]): IEntity[] {
   return pipe(
     actions,
     D.values,

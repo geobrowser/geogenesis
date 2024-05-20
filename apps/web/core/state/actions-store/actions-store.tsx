@@ -1,7 +1,16 @@
 import { atom, useAtom } from 'jotai';
 
+import * as React from 'react';
+
 import { getAppTripleId } from '~/core/id/create-id';
-import { DeleteTripleAppOp, Triple as ITriple, OmitStrict, SetTripleAppOp, SpaceTriples } from '~/core/types';
+import {
+  DeleteTripleAppOp,
+  EntityActions,
+  Triple as ITriple,
+  OmitStrict,
+  SetTripleAppOp,
+  SpaceTriples,
+} from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 
 import { store } from '../jotai-store';
@@ -100,16 +109,57 @@ const deleteActionsFromSpace = (spaceId: string, actionIdsToDelete: Array<string
   store.set(localTriplesAtom, []);
 };
 
+function getSpaceTriples(triples: ITriple[]) {
+  const triplesBySpace: SpaceTriples = {};
+
+  for (const triple of triples) {
+    const spaceId = triple.space;
+    if (!spaceId) continue;
+
+    if (!triplesBySpace[spaceId]) {
+      triplesBySpace[spaceId] = [];
+    }
+
+    triplesBySpace[spaceId] = [...triplesBySpace[spaceId], triple];
+  }
+
+  return triplesBySpace;
+}
+
 export function useActions(spaceId?: string) {
   const [allActions, setActions] = useAtom(localTriplesAtom);
+
+  const actions = React.useMemo(() => {
+    return getSpaceTriples(allActions);
+  }, [allActions]);
+
+  const actionsByEntityId = React.useMemo(() => {
+    return allActions.reduce<EntityActions>((acc, action) => {
+      const tripleFromAction = Triple.merge([action], [])[0];
+
+      if (!tripleFromAction) return acc;
+
+      acc[action.entityId] = {
+        ...acc[action.entityId],
+        [action.attributeId]: tripleFromAction,
+      };
+
+      return acc;
+    }, {});
+  }, [allActions]);
+
+  const allSpacesWithActions = React.useMemo(() => {
+    // Only return spaces where at least one action has not been published
+    return Object.keys(actions).filter(spaceId => actions[spaceId].every(triple => triple?.hasBeenPublished !== true));
+  }, [actions]);
 
   if (!spaceId) {
     return {
       allActions,
-      allSpacesWithActions: [],
+      allSpacesWithActions,
       actionsFromSpace: [],
-      actionsByEntityId: {},
-      actions: {},
+      actionsByEntityId,
+      actions,
 
       addActions: setActions,
       upsert,
@@ -124,10 +174,10 @@ export function useActions(spaceId?: string) {
 
   return {
     allActions,
-    allSpacesWithActions: [],
-    actionsFromSpace: allActions.filter(a => a.space === spaceId),
-    actionsByEntityId: {},
-    actions: {},
+    allSpacesWithActions,
+    actionsFromSpace: actions[spaceId] ?? [],
+    actionsByEntityId,
+    actions,
 
     addActions: setActions,
     upsert,
