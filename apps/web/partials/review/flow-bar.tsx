@@ -12,7 +12,6 @@ import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
-import { Action } from '~/core/utils/action';
 
 import { Button } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -21,22 +20,17 @@ import { Warning } from '~/design-system/icons/warning';
 import { Spinner } from '~/design-system/spinner';
 
 export const FlowBar = () => {
-  return null;
   const { state: statusBarState } = useStatusBar();
   const [toast] = useToast();
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
   const { allActions, allSpacesWithActions } = useActionsStore();
 
-  const allUnpublishedSquashedActions = Action.prepareActionsForPublishing(allActions);
-  const actionsCount = allUnpublishedSquashedActions.length;
+  const actionsCount = allActions.length;
 
   const entitiesCount = pipe(
-    allUnpublishedSquashedActions,
-    A.groupBy(action => {
-      if (action.type === 'deleteTriple' || action.type === 'createTriple') return action.entityId;
-      return action.after.entityId;
-    }),
+    allActions,
+    A.groupBy(action => action.entityId),
     D.keys,
     A.length
   );
