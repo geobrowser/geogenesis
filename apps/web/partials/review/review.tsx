@@ -642,7 +642,7 @@ const ChangedAttribute = ({
   if (!before && !after) return null;
 
   switch (attribute.type) {
-    case 'string': {
+    case 'TEXT': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
@@ -684,7 +684,7 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'entity': {
+    case 'ENTITY': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
           <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
@@ -745,7 +745,7 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'image': {
+    case 'IMAGE': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
           <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
@@ -779,7 +779,7 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'date': {
+    case 'TIME': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
           <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
@@ -805,7 +805,7 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'url': {
+    case 'URL': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
@@ -1025,7 +1025,7 @@ type TableFilterProps = {
 };
 
 const TableFilter = ({ filter }: TableFilterProps) => {
-  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
+  const value = filter.valueType === 'ENTITY' ? filter.valueName : filter.value;
 
   return (
     <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
