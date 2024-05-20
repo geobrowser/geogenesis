@@ -358,8 +358,6 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           );
 
           if (schemaCollectionItem) {
-            console.log('adding collection item', schemaCollectionItem);
-
             const insertCollectionItemEffect = Effect.tryPromise({
               try: () => CollectionItems.upsert([schemaCollectionItem]),
               catch: error => new Error(`Failed to create collection item ${String(error)}`),
