@@ -66,7 +66,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
-  const { create, remove } = useActionsStore();
+  const { upsert, remove } = useActionsStore();
 
   useEffect(() => {
     if (avatar !== teamMember.avatar || name !== teamMember.name || roleEntityId !== initialRoleEntityId) {
@@ -106,34 +106,35 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     if (hasChangedAvatar) {
       if (hasSpaceAvatar) {
         if (hasRemovedAvatar) {
-          remove(spaceAvatar);
+          remove(spaceAvatar, spaceId);
         } else if (hasAvatar) {
-          remove(spaceAvatar);
-          create(
-            Triple.withId({
+          remove(spaceAvatar, spaceId);
+          upsert(
+            {
               ...spaceAvatar,
+              type: 'SET_TRIPLE',
               value: {
-                ...spaceAvatar.value,
-                type: 'image',
+                type: 'IMAGE',
                 value: Value.toImageValue(avatar),
               },
-            })
+            },
+            spaceId
           );
         }
       } else if (hasAvatar) {
-        create(
-          Triple.withId({
-            space: spaceId,
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: entityId,
             entityName: name,
             attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
             attributeName: 'Avatar',
             value: {
-              type: 'image',
-              id: ID.createValueId(),
+              type: 'IMAGE',
               value: Value.toImageValue(avatar),
             },
-          })
+          },
+          spaceId
         );
       }
     }
@@ -148,9 +149,9 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     if (hasChangedName) {
       if (hasSpaceName) {
         if (hasRemovedName) {
-          remove(spaceName);
+          remove(spaceName, spaceId);
         } else {
-          remove(spaceName);
+          remove(spaceName, spaceId);
           create(
             Triple.withId({
               ...spaceName,
@@ -188,7 +189,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     // Update role attribute
     if (hasChangedRole && hasSpaceRole && hasRole) {
-      remove(spaceRole);
+      remove(spaceRole, spaceId);
       create(
         Triple.withId({
           ...spaceRole,
@@ -243,10 +244,10 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     spaceTriples.forEach(triple => {
       // Remove person type
       if (triple.value.id === SYSTEM_IDS.PERSON_TYPE) {
-        remove(triple);
+        remove(triple, spaceId);
       } else {
         // Update entity id of existing name/role (and possibly avatar) triples
-        remove(triple);
+        remove(triple, spaceId);
         create(
           Triple.withId({
             space: triple.space,
@@ -274,7 +275,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     // Update entity id of existing role (and possibly name/avatar) triples
     spaceTriples.forEach(triple => {
-      remove(triple);
+      remove(triple, spaceId);
       create(
         Triple.withId({
           space: triple.space,
@@ -354,7 +355,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     const spaceTriples = entity.triples.filter(triple => triple.space === spaceId);
 
     spaceTriples.forEach(triple => {
-      remove(triple);
+      remove(triple, spaceId);
     });
 
     setStatus('removed');
@@ -564,7 +565,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 };
 
 const getInitialRoleName = (role: TripleType): string => {
-  if (role.value.type === 'entity') {
+  if (role.value.type === 'ENTITY') {
     return role.value.name ?? 'No entity name';
   } else {
     return 'No entity name';
