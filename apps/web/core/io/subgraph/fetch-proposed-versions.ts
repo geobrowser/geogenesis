@@ -8,14 +8,9 @@ import { Profile, ProposedVersion, SpaceWithMetadata } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
+import { entityFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import {
-  SubstreamEntity,
-  SubstreamProposedVersion,
-  fromNetworkOps,
-  fromNetworkTriples,
-} from './network-local-mapping';
-import { geoEntityFragment, tripleFragment } from './fragments';
+import { SubstreamEntity, SubstreamProposedVersion, fromNetworkOps, fromNetworkTriples } from './network-local-mapping';
 
 const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
   proposedVersions(filter: {entityId: {equalTo: ${JSON.stringify(
@@ -39,7 +34,7 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
           nodes {
             id
             name
-            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+            triples(filter: {isStale: {equalTo: false}}) {
               nodes {
                 ${tripleFragment}
               }
@@ -52,7 +47,7 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
         id
         metadata {
           nodes {
-            ${geoEntityFragment}
+            ${entityFragment}
           }           
         }
       }
@@ -151,7 +146,7 @@ export async function fetchProposedVersions({
   return proposedVersions.map(v => {
     const maybeProfile = v.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
     const onchainProfile = v.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-    const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+    const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
 
     const profile: Profile = maybeProfile
       ? {
@@ -172,7 +167,7 @@ export async function fetchProposedVersions({
         };
 
     const spaceConfig = v.space.metadata.nodes[0] as SubstreamEntity | undefined;
-    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 
     const spaceWithMetadata: SpaceWithMetadata = {
       id: v.space.id,

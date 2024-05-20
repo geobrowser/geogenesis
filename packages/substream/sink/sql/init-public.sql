@@ -12,7 +12,7 @@ CREATE TABLE public.cursors (
 
 COMMENT ON TABLE public.cursors IS '@name substreamCursor';
 
-CREATE TABLE public.geo_entities (
+CREATE TABLE public.entities (
     id text PRIMARY KEY,
     name character varying,
     description character varying,
@@ -34,13 +34,13 @@ CREATE TABLE public.spaces (
     main_voting_plugin_address text,
     member_access_plugin_address text,
     personal_space_admin_plugin_address text,
-    configuration_id text REFERENCES public.geo_entities(id)
+    configuration_id text REFERENCES public.entities(id)
 );
 
-CREATE TABLE public.geo_entity_types (
+CREATE TABLE public.entity_types (
     id serial PRIMARY KEY,
-    entity_id text NOT NULL REFERENCES public.geo_entities(id),
-    type_id text NOT NULL REFERENCES public.geo_entities(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    type_id text NOT NULL REFERENCES public.entities(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     CONSTRAINT geo_entity_types_unique_entity_type_pair UNIQUE (entity_id, type_id)
@@ -55,9 +55,9 @@ CREATE TABLE public.onchain_profiles (
 );
 
 -- ALTER TABLE
---     public.geo_entities
+--     public.entities
 -- ADD
---     CONSTRAINT attribute_value_type_id_fk FOREIGN KEY (attribute_value_type_id) REFERENCES public.geo_entities(id);
+--     CONSTRAINT attribute_value_type_id_fk FOREIGN KEY (attribute_value_type_id) REFERENCES public.entities(id);
 CREATE TABLE public.log_entries (
     id text PRIMARY KEY,
     created_at_block text NOT NULL,
@@ -97,7 +97,7 @@ CREATE TABLE public.proposed_versions (
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
-    entity_id text NOT NULL REFERENCES public.geo_entities(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
     proposal_id text NOT NULL REFERENCES public.proposals(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
@@ -131,13 +131,13 @@ CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLE
 CREATE TABLE public.triples (
     PRIMARY KEY (space_id, entity_id, attribute_id),
     space_id text NOT NULL REFERENCES public.spaces(id),
-    entity_id text NOT NULL REFERENCES public.geo_entities(id),
-    attribute_id text NOT NULL REFERENCES public.geo_entities(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    attribute_id text NOT NULL REFERENCES public.entities(id),
     value_type triple_value_type NOT NULL,
     number_value text,
     text_value text,
-    entity_value_id text REFERENCES public.geo_entities(id),
-    collection_value_id text REFERENCES public.geo_entities(id),
+    entity_value_id text REFERENCES public.entities(id),
+    collection_value_id text REFERENCES public.entities(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     is_stale boolean NOT NULL
@@ -149,7 +149,7 @@ CREATE TABLE public.versions (
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     proposed_version_id text NOT NULL REFERENCES public.proposed_versions(id),
-    entity_id text NOT NULL REFERENCES public.geo_entities(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
@@ -170,13 +170,13 @@ CREATE TABLE public.ops (
     id text PRIMARY KEY NOT NULL,
     type op_type NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
-    entity_id text NOT NULL REFERENCES public.geo_entities(id),
-    attribute_id text NOT NULL REFERENCES public.geo_entities(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    attribute_id text NOT NULL REFERENCES public.entities(id),
     value_type triple_value_type NOT NULL,
     number_value text,
     text_value text,
-    entity_value_id text REFERENCES public.geo_entities(id),
-    collection_value_id text REFERENCES public.geo_entities(id),
+    entity_value_id text REFERENCES public.entities(id),
+    collection_value_id text REFERENCES public.entities(id),
     proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL
@@ -235,10 +235,10 @@ ALTER TABLE
     public.accounts DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.geo_entities DISABLE TRIGGER ALL;
+    public.entities DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.geo_entity_types DISABLE TRIGGER ALL;
+    public.entity_types DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.log_entries DISABLE TRIGGER ALL;

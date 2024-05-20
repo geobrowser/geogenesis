@@ -6,14 +6,14 @@ import { Environment } from '~/core/environment';
 import { Entity as IEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import { entityFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
-import { geoEntityFragment, tripleFragment } from './fragments';
 
 function getFetchEntityQuery(id: string) {
   return `query {
-    geoEntity(id: ${JSON.stringify(id)}) {
-      ${geoEntityFragment}
+    entity(id: ${JSON.stringify(id)}) {
+      ${entityFragment}
     }
   }`;
 }
@@ -24,7 +24,7 @@ export interface FetchEntityOptions {
 }
 
 interface NetworkResult {
-  geoEntity: SubstreamEntity | null;
+  entity: SubstreamEntity | null;
 }
 
 export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity | null> {
@@ -61,14 +61,14 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
           );
 
           return {
-            geoEntity: null,
+            entity: null,
           };
         default:
           console.error(
             `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${endpoint} id: ${options.id}`
           );
           return {
-            geoEntity: null,
+            entity: null,
           };
       }
     }
@@ -77,13 +77,13 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const entity = result.geoEntity;
+  const entity = result.entity;
 
   if (!entity) {
     return null;
   }
 
-  const networkTriples = entity.triplesByEntityId.nodes;
+  const networkTriples = entity.triples.nodes;
   const triples = fromNetworkTriples(networkTriples);
   const nameTriples = Entity.nameTriples(triples);
 

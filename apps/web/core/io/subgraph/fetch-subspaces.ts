@@ -5,9 +5,9 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { OmitStrict, Space } from '~/core/types';
 
+import { entityFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, getSpaceConfigFromMetadata } from './network-local-mapping';
-import { geoEntityFragment } from './fragments';
 
 const getFetchSpacesQuery = (spaceId: string) => `query {
   spaceSubspaces(filter: { parentSpaceId: { equalTo: "${spaceId}" } }) {
@@ -17,7 +17,7 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
 
         metadata {
           nodes {
-            ${geoEntityFragment}
+            ${entityFragment}
           }
         }
       }

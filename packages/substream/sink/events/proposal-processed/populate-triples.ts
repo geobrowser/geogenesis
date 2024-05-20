@@ -136,7 +136,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           try: () =>
             db
               .upsert(
-                'geo_entities',
+                'entities',
                 {
                   id: triple.entity_id,
                   name: triple.text_value,
@@ -203,7 +203,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           try: () =>
             db
               .upsert(
-                'geo_entities',
+                'entities',
                 {
                   id: triple.entity_id,
                   name: maybeNameTripleForEntity ? maybeNameTripleForEntity.text_value : null,
@@ -242,7 +242,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           try: () =>
             db
               .upsert(
-                'geo_entities',
+                'entities',
                 {
                   id: triple.entity_id,
                   description: triple.text_value,
@@ -281,7 +281,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           try: () =>
             db
               .upsert(
-                'geo_entities',
+                'entities',
                 {
                   id: triple.entity_id,
                   description: null,
@@ -320,7 +320,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           try: () =>
             db
               .upsert(
-                'geo_entity_types',
+                'entity_types',
                 {
                   entity_id: triple.entity_id,
                   type_id: triple.entity_value_id?.toString()!,
@@ -380,7 +380,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
         const deleteTypeEffect = Effect.tryPromise({
           try: () =>
             db
-              .deletes('geo_entity_types', {
+              .deletes('entity_types', {
                 entity_id: triple.entity_id,
                 type_id: triple.entity_value_id?.toString(),
               })

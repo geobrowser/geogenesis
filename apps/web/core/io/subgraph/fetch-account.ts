@@ -8,9 +8,9 @@ import { Profile } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
+import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
-import { tripleFragment } from './fragments';
 
 export interface FetchAccountOptions {
   address: string;
@@ -37,7 +37,7 @@ function getAccountQuery(address: string) {
         nodes {
           id
           name
-          triplesByEntityId(filter: { isStale: { equalTo: false } }) {
+          triples(filter: { isStale: { equalTo: false } }) {
             nodes {
               ${tripleFragment}
             }
@@ -111,7 +111,7 @@ export async function fetchAccount(
   const account = networkResult.account;
   const maybeProfile = account.geoProfiles.nodes[0] as SubstreamEntity | undefined;
   const onchainProfile = account.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+  const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
 
   const profile: Profile = maybeProfile
     ? {

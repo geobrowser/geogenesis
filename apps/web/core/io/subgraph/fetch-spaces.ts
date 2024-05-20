@@ -7,9 +7,9 @@ import { Environment } from '~/core/environment';
 import { Space, SpaceConfigEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import { entityFragment, spaceMetadataFragment, spacePluginsFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
-import { geoEntityFragment, spaceMetadataFragment, spacePluginsFragment } from './fragments';
 
 const getFetchSpacesQuery = () => `query {
   spaces {
@@ -34,7 +34,7 @@ const getFetchSpacesQuery = () => `query {
   
       metadata {
         nodes {
-          ${geoEntityFragment}
+          ${entityFragment}
         }
       }
     }

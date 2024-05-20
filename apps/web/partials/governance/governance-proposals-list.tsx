@@ -7,6 +7,7 @@ import React from 'react';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { fetchProfile } from '~/core/io/subgraph';
+import { tripleFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
 import { OmitStrict, Profile, Proposal, Vote } from '~/core/types';
@@ -17,7 +18,6 @@ import { Avatar } from '~/design-system/avatar';
 
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceStatusChip } from './governance-status-chip';
-import { tripleFragment } from '~/core/io/subgraph/fragments';
 
 interface Props {
   spaceId: string;
@@ -139,7 +139,7 @@ const getFetchSpaceProposalsQuery = (
           nodes {
             id
             name
-            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+            triples(filter: {isStale: {equalTo: false}}) {
               nodes {
                 ${tripleFragment}
               }
@@ -237,7 +237,7 @@ async function fetchActiveProposals({
   return proposals.map(p => {
     const maybeProfile = p.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
     const onchainProfile = p.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-    const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+    const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
 
     const profile: Profile = maybeProfile
       ? {

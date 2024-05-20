@@ -8,7 +8,7 @@ import * as React from 'react';
 
 import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
-import { geoEntityFragment } from '~/core/io/subgraph/fragments';
+import { entityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { EditorProvider } from '~/core/state/editor-store';
@@ -189,7 +189,7 @@ const getFetchSpacesQuery = () => `query {
       }
       metadata {
         nodes {
-          ${geoEntityFragment}
+          ${entityFragment}
         }
       }
     }
@@ -287,8 +287,6 @@ export default async function Layout({ children, params }: Props) {
 
   const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
   const tabs = await buildTabsForSpacePage(props.space.spaceConfig?.types ?? [], params);
-
-  console.log('space config types', Entity.types(props.space?.spaceConfig?.triples ?? []));
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>

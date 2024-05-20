@@ -7,7 +7,7 @@ import { graphql } from './subgraph/graphql';
 
 function getFetchEntityTypeQuery(id: string) {
   return `query {
-    geoEntity(id: "${id}") {
+    entity(id: "${id}") {
       types {
         nodes {
           id
@@ -23,7 +23,7 @@ interface FetchEntityTypeOptions {
 }
 
 interface NetworkResult {
-  geoEntity: { types: { nodes: { id: string }[] } } | null;
+  entity: { types: { nodes: { id: string }[] } } | null;
 }
 
 export async function fetchEntityType(options: FetchEntityTypeOptions) {
@@ -58,8 +58,8 @@ export async function fetchEntityType(options: FetchEntityTypeOptions) {
       }
     }
 
-    if (!resultOrError.right.geoEntity) return [];
-    return resultOrError.right.geoEntity.types.nodes.map(node => node.id);
+    if (!resultOrError.right.entity) return [];
+    return resultOrError.right.entity.types.nodes.map(node => node.id);
   });
 
   return await Effect.runPromise(graphqlFetchWithErrorFallbacks);

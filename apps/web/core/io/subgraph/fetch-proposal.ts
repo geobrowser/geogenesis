@@ -8,9 +8,9 @@ import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
+import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkOps, fromNetworkTriples } from './network-local-mapping';
-import { tripleFragment } from './fragments';
 
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
@@ -25,7 +25,7 @@ export const getFetchProposalQuery = (id: string) => `query {
         nodes {
           id
           name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+          triples(filter: {isStale: {equalTo: false}}) {
             nodes {
               ${tripleFragment}
             }
@@ -52,7 +52,7 @@ export const getFetchProposalQuery = (id: string) => `query {
             nodes {
               id
               name
-              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+              triples(filter: {isStale: {equalTo: false}}) {
                 nodes {
                   ${tripleFragment}
                 }
@@ -75,7 +75,7 @@ export const getFetchProposalQuery = (id: string) => `query {
         nodes {
           id
           name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+          triples(filter: {isStale: {equalTo: false}}) {
             nodes {
               ${tripleFragment}
             }
@@ -183,7 +183,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   const maybeProfile = proposal.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
   const onchainProfile = proposal.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+  const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
 
   const profile: Profile = maybeProfile
     ? {
@@ -204,7 +204,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
       };
 
   const spaceConfig = proposal.space.metadata.nodes[0] as SubstreamEntity | undefined;
-  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 
   const spaceWithMetadata: SpaceWithMetadata = {
     id: proposal.space.id,
@@ -223,7 +223,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
         const onchainProfile = proposal.createdBy.onchainProfiles.nodes[0] as
           | { homeSpaceId: string; id: string }
           | undefined;
-        const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+        const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
         const voter = maybeProfile
           ? {
               id: v.account.id,

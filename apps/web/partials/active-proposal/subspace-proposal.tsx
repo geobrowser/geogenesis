@@ -4,7 +4,7 @@ import Image from 'next/legacy/image';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { fetchSpace } from '~/core/io/subgraph';
-import { geoEntityFragment } from '~/core/io/subgraph/fragments';
+import { entityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { Proposal } from '~/core/types';
@@ -119,7 +119,7 @@ const getSubspaceInProposalQuery = (proposalId: string) => `query {
 
         metadata {
           nodes {
-            ${geoEntityFragment}
+            ${entityFragment}
           }           
         }
       }
