@@ -16,7 +16,7 @@ import { TableBlockSdk } from '../blocks-sdk';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { ID } from '../id';
 import { Services } from '../services';
-import { EntityValue, Triple as ITriple, OmitStrict } from '../types';
+import { AppEntityValue, AppEntityValue as EntityValue, Triple as ITriple, OmitStrict } from '../types';
 import { Action } from '../utils/action';
 import { Triple } from '../utils/triple';
 import { getImagePath } from '../utils/utils';
@@ -102,7 +102,7 @@ export function useEditorStore() {
             attrs: {
               spaceId,
               id: blockId,
-              typeId: rowTypeTriple.value.id,
+              typeId: (rowTypeTriple.value as AppEntityValue).id,
               typeName: Value.nameOfEntityValue(rowTypeTriple),
             },
           };

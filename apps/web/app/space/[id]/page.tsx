@@ -7,7 +7,6 @@ import type { Metadata } from 'next';
 
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { Triple as ITriple } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 

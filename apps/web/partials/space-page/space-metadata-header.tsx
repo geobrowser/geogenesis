@@ -122,7 +122,7 @@ export function SpacePageMetadataHeader({
                     setIsCompareOpen(true);
                   }}
                   changeCount={Action.getChangeCount(
-                    p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
+                    p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.ops), [])
                   )}
                   createdAt={p.createdAt}
                   createdBy={p.createdBy}

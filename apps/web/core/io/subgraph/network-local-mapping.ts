@@ -17,7 +17,7 @@ import { Entity as EntityModule } from '~/core/utils/entity';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 type NetworkTextValue = { valueType: 'TEXT'; textValue: string };
-type NetworkImageValue = { valueType: 'IMAGE'; entityValue: { id: string; } };
+type NetworkImageValue = { valueType: 'IMAGE'; entityValue: { id: string } };
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 type NetworkTimeValue = { valueType: 'TIME'; textValue: string };
 type NetworkUrlValue = { valueType: 'URL'; textValue: string };
@@ -230,7 +230,7 @@ export function fromNetworkOps(networkOps: SubstreamOp[], spaceId: string): AppO
               entityName: networkOp.entity.name,
               attributeId: networkOp.attribute.id,
               attributeName: networkOp.attribute.name,
-              value,            
+              value,
             };
 
             return op;
@@ -244,7 +244,7 @@ export function fromNetworkOps(networkOps: SubstreamOp[], spaceId: string): AppO
               entityName: networkOp.entity.name,
               attributeId: networkOp.attribute.id,
               attributeName: networkOp.attribute.name,
-              value,            
+              value,
             };
 
             return op;

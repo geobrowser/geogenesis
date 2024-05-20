@@ -288,7 +288,7 @@ export default async function Layout({ children, params }: Props) {
   const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
   const tabs = await buildTabsForSpacePage(props.space.spaceConfig?.types ?? [], params);
 
-  console.log('space config types', props.space?.spaceConfig?.id);
+  console.log('space config types', Entity.types(props.space?.spaceConfig?.triples ?? []));
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
