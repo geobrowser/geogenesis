@@ -22,8 +22,8 @@ export type AppEntityValue = {
 
 export type Value = AppEntityValue | AppValue;
 
-export type AppOp = {
-  type: Op['type'];
+export type SetTripleAppOp = {
+  type: 'SET_TRIPLE';
   id: string;
   attributeId: string;
   entityId: string;
@@ -31,6 +31,15 @@ export type AppOp = {
   entityName: string | null;
   value: Value;
 };
+
+export type DeleteTripleAppOp = {
+  type: 'DELETE_TRIPLE';
+  id: string;
+  attributeId: string;
+  entityId: string;
+};
+
+export type AppOp = SetTripleAppOp | DeleteTripleAppOp;
 
 export type Triple = {
   space: string;
@@ -40,7 +49,17 @@ export type Triple = {
 
   entityName: string | null;
   attributeName: string | null;
+};
+
+// We keep published triples optimistically in the store. It can take a while for the blockchain
+// to process our transaction, then a few seconds for the subgraph to pick it up and index it.
+// We keep the published triples so we can continue to render them locally while the backend catches up.
+export type AppTriple = Triple & {
+  id: string; // `${spaceId}:${entityId}:${attributeId}`
   placeholder?: boolean;
+  hasBeenPublished: boolean;
+  timestamp: string; // ISO-8601
+  isDeleted: boolean;
 };
 
 export type SpaceConfigEntity = Entity & {
@@ -94,15 +113,6 @@ export type FilterClause = {
 };
 
 export type FilterState = FilterClause[];
-
-// We keep published triples optimistically in the store. It can take a while for the blockchain
-// to process our transaction, then a few seconds for the subgraph to pick it up and index it.
-// We keep the published triples so we can continue to render them locally while the backend catches up.
-export type AppTriple = Triple & {
-  hasBeenPublished: boolean;
-  timestamp: string; // ISO-8601
-  isDeleted: boolean;
-};
 
 export type Entity = {
   id: string;
@@ -231,7 +241,7 @@ export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: Value }
 export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: Value };
 
 export type SpaceId = string;
-export type SpaceActions = Record<SpaceId, Op[]>;
+export type SpaceTriples = Record<SpaceId, AppTriple[]>;
 
 export type EntityId = string;
 export type AttributeId = string;

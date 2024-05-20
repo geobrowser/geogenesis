@@ -5,7 +5,7 @@ import React from 'react';
 
 import { MockNetworkData, Storage } from '~/core/io';
 import { Providers } from '~/core/providers';
-import { actionsAtom } from '~/core/state/actions-store/actions-store';
+import { localTriplesAtom } from '~/core/state/actions-store/actions-store';
 import { editableAtom } from '~/core/state/editable-store';
 import { store } from '~/core/state/jotai-provider';
 import { StatusBarContext, StatusBarState } from '~/core/state/status-bar-store';
@@ -43,7 +43,7 @@ describe('Flow Bar', () => {
     );
 
     act(() =>
-      store.set(actionsAtom, [
+      store.set(localTriplesAtom, [
         {
           ...MockNetworkData.makeStubTriple('Alice'),
           type: 'createTriple',
@@ -79,7 +79,7 @@ describe('Flow Bar', () => {
     act(() => {
       store.set(editableAtom, true);
       act(() =>
-        store.set(actionsAtom, [
+        store.set(localTriplesAtom, [
           {
             ...MockNetworkData.makeStubTriple('Alice'),
             type: 'createTriple',
@@ -105,7 +105,7 @@ describe('Flow Bar', () => {
     act(() => {
       store.set(editableAtom, true);
       act(() =>
-        store.set(actionsAtom, [
+        store.set(localTriplesAtom, [
           {
             ...MockNetworkData.makeStubTriple('Alice'),
             type: 'createTriple',
@@ -138,7 +138,7 @@ describe('Flow Bar', () => {
     act(() => {
       store.set(editableAtom, true);
       act(() =>
-        store.set(actionsAtom, [
+        store.set(localTriplesAtom, [
           {
             ...MockNetworkData.makeStubTriple('Alice'),
             type: 'createTriple',
@@ -156,7 +156,7 @@ describe('Flow Bar', () => {
 
     // create -> create should only be one change
     act(() => {
-      store.set(actionsAtom, [newAction1]);
+      store.set(localTriplesAtom, [newAction1]);
     });
 
     expect(screen.queryByText('1 edit')).toBeInTheDocument();
@@ -168,7 +168,7 @@ describe('Flow Bar', () => {
 
     // create -> delete should be 0 changes
     act(() => {
-      store.set(actionsAtom, [newAction1, newAction2]);
+      store.set(localTriplesAtom, [newAction1, newAction2]);
     });
 
     expect(screen.queryByText('Review edit')).not.toBeInTheDocument();
@@ -185,8 +185,8 @@ describe('Flow Bar', () => {
 
     // create -> edit should only be one change
     act(() => {
-      store.set(actionsAtom, [newAction1]);
-      store.set(actionsAtom, [newAction1, newAction3]);
+      store.set(localTriplesAtom, [newAction1]);
+      store.set(localTriplesAtom, [newAction1, newAction3]);
     });
 
     expect(screen.queryByText('1 edit')).toBeInTheDocument();
@@ -196,7 +196,7 @@ describe('Flow Bar', () => {
       // Passing the previous entityId as a parameter to add this triple to the same entity
       const newTriple = MockNetworkData.makeStubTriple('Bob', 'Alice');
 
-      store.set(actionsAtom, [newAction1, { ...newTriple, type: 'createTriple' }]);
+      store.set(localTriplesAtom, [newAction1, { ...newTriple, type: 'createTriple' }]);
     });
 
     expect(screen.queryByText('2 edits')).toBeInTheDocument();
@@ -207,7 +207,7 @@ describe('Flow Bar', () => {
       // Passing the previous entityId as a parameter to add this triple to the same entity
       const newTriple1 = MockNetworkData.makeStubTriple('Bob', 'Charlie');
       const newTriple2 = MockNetworkData.makeStubTriple('Charlie');
-      store.set(actionsAtom, [
+      store.set(localTriplesAtom, [
         newAction1,
         { ...newTriple1, type: 'createTriple' },
         { ...newTriple2, type: 'createTriple' },
@@ -244,7 +244,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(actionsAtom, [
+      store.set(localTriplesAtom, [
         {
           ...MockNetworkData.makeStubTriple('Alice'),
           type: 'createTriple',
@@ -279,7 +279,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(actionsAtom, [
+      store.set(localTriplesAtom, [
         {
           ...MockNetworkData.makeStubTriple('Alice'),
           type: 'createTriple',
@@ -314,7 +314,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(actionsAtom, [
+      store.set(localTriplesAtom, [
         {
           ...MockNetworkData.makeStubTriple('Alice'),
           type: 'createTriple',
@@ -349,7 +349,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(actionsAtom, [
+      store.set(localTriplesAtom, [
         {
           ...MockNetworkData.makeStubTriple('Alice'),
           type: 'createTriple',
@@ -384,7 +384,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(actionsAtom, [
+      store.set(localTriplesAtom, [
         {
           ...MockNetworkData.makeStubTriple('Alice'),
           type: 'createTriple',
@@ -419,7 +419,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(actionsAtom, [
+      store.set(localTriplesAtom, [
         {
           ...MockNetworkData.makeStubTriple('Alice'),
           type: 'createTriple',

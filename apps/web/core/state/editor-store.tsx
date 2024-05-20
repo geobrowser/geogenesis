@@ -38,7 +38,7 @@ const markdownConverter = new Showdown.Converter();
 export function useEditorStore() {
   const { id: entityId, spaceId, initialBlockIdsTriple, initialBlockTriples } = useEditorInstance();
   const { subgraph } = Services.useServices();
-  const { create, update, remove, allActions } = useActionsStore();
+  const { upsert, remove, allActions } = useActionsStore();
   const { name } = useEntityPageStore();
 
   const blockIdsTriple = React.useMemo(() => {
@@ -158,19 +158,20 @@ export function useEditorStore() {
       const existingBlockTriple = getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.TYPES });
 
       if (!existingBlockTriple) {
-        create(
-          Triple.withId({
-            space: spaceId,
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: blockEntityId,
             entityName: entityName,
             attributeId: SYSTEM_IDS.TYPES,
             attributeName: 'Types',
             value: blockTypeValue,
-          })
+          },
+          spaceId
         );
       }
     },
-    [create, getBlockTriple, spaceId]
+    [upsert, getBlockTriple, spaceId]
   );
 
   // Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
@@ -179,33 +180,19 @@ export function useEditorStore() {
       const blockEntityId = getNodeId(node);
       const entityName = getNodeName(node);
 
-      const existingBlockTriple = getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.NAME });
-      const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== entityName;
-      const isTableNode = node.type === 'tableNode';
-
-      if (!existingBlockTriple) {
-        create(
-          Triple.withId({
-            space: spaceId,
-            entityId: blockEntityId,
-            entityName: entityName,
-            attributeId: SYSTEM_IDS.NAME,
-            attributeName: 'Name',
-            value: { id: ID.createValueId(), type: 'string', value: entityName },
-          })
-        );
-      } else if (!isTableNode && isUpdated) {
-        update(
-          Triple.ensureStableId({
-            ...existingBlockTriple,
-            entityName,
-            value: { ...existingBlockTriple.value, type: 'string', value: entityName },
-          }),
-          existingBlockTriple
-        );
-      }
+      upsert(
+        {
+          type: 'SET_TRIPLE',
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
+          value: { type: 'TEXT', value: entityName },
+        },
+        spaceId
+      );
     },
-    [create, getBlockTriple, spaceId, update]
+    [upsert, getBlockTriple, spaceId]
   );
 
   // Helper function for upserting a new block markdown content triple for TEXT_BLOCKs only
@@ -231,40 +218,19 @@ export function useEditorStore() {
         markdown = markdown.replaceAll('\n<!-- -->\n', '');
       }
 
-      const triple = Triple.withId({
-        space: spaceId,
-        entityId: blockEntityId,
-        entityName: entityName,
-        attributeId: SYSTEM_IDS.MARKDOWN_CONTENT,
-        attributeName: 'Markdown Content',
-        value: { id: ID.createValueId(), type: 'string', value: markdown },
-      });
-
-      const existingBlockTriple = getBlockTriple(triple);
-      const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== markdown;
-
-      if (!existingBlockTriple) {
-        create(
-          Triple.withId({
-            space: spaceId,
-            entityId: blockEntityId,
-            entityName: entityName,
-            attributeId: SYSTEM_IDS.MARKDOWN_CONTENT,
-            attributeName: 'Markdown Content',
-            value: { id: ID.createValueId(), type: 'string', value: markdown },
-          })
-        );
-      } else if (isUpdated) {
-        update(
-          Triple.ensureStableId({
-            ...existingBlockTriple,
-            value: { ...existingBlockTriple.value, type: 'string', value: markdown },
-          }),
-          existingBlockTriple
-        );
-      }
+      upsert(
+        {
+          type: 'SET_TRIPLE',
+          entityId: blockEntityId,
+          entityName: entityName,
+          attributeId: SYSTEM_IDS.MARKDOWN_CONTENT,
+          attributeName: 'Markdown Content',
+          value: { type: 'TEXT', value: markdown },
+        },
+        spaceId
+      );
     },
-    [create, getBlockTriple, spaceId, update]
+    [upsert, getBlockTriple]
   );
 
   // Helper function for creating backlinks to the parent entity
@@ -272,22 +238,19 @@ export function useEditorStore() {
     (node: JSONContent) => {
       const blockEntityId = getNodeId(node);
 
-      const existingBlockTriple = getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.PARENT_ENTITY });
-
-      if (!existingBlockTriple) {
-        create(
-          Triple.withId({
-            space: spaceId,
-            entityId: blockEntityId,
-            entityName: getNodeName(node),
-            attributeId: SYSTEM_IDS.PARENT_ENTITY,
-            attributeName: 'Parent Entity',
-            value: { id: entityId, type: 'entity', name },
-          })
-        );
-      }
+      upsert(
+        {
+          type: 'SET_TRIPLE',
+          entityId: blockEntityId,
+          entityName: getNodeName(node),
+          attributeId: SYSTEM_IDS.PARENT_ENTITY,
+          attributeName: 'Markdown Content',
+          value: { id: entityId, type: 'ENTITY', name },
+        },
+        spaceId
+      );
     },
-    [create, getBlockTriple, entityId, name, spaceId]
+    [upsert, getBlockTriple, entityId, name, spaceId]
   );
 
   // Helper function for creating a new row type triple for TABLE_BLOCKs only

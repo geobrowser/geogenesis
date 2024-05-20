@@ -21,6 +21,7 @@ import { Warning } from '~/design-system/icons/warning';
 import { Spinner } from '~/design-system/spinner';
 
 export const FlowBar = () => {
+  return null;
   const { state: statusBarState } = useStatusBar();
   const [toast] = useToast();
   const { editable } = useEditable();

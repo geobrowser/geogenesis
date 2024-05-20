@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { Action } from '../utils/action';
-import { actionsAtom } from './actions-store/actions-store';
+import { localTriplesAtom } from './actions-store/actions-store';
 import { db } from './actions-store/indexeddb';
 import { store } from './jotai-store';
 
@@ -14,8 +14,8 @@ export const Persistence = () => {
     //
     // We only store unpublished, squashed actions in indexeddb to avoid the
     // database growing indefinitely.
-    const unsub = store.sub(actionsAtom, async () => {
-      const newActions = store.get(actionsAtom);
+    const unsub = store.sub(localTriplesAtom, async () => {
+      const newActions = store.get(localTriplesAtom);
 
       // Dexie docs recommend putting all batched operations in a transaction scope
       // https://dexie.org/docs/Tutorial/Best-Practices#5-use-transaction-scopes-whenever-you-plan-to-make-more-than-one-operation
