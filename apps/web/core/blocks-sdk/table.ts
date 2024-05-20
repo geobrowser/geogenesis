@@ -3,7 +3,7 @@ import { getAddress } from 'viem';
 
 import { Entity as IEntity, Triple as ITriple, ValueType as TripleValueType } from '~/core/types';
 
-import { Triple } from '../utils/triple';
+import { useActionsStore } from '../hooks/use-actions-store';
 
 export function upsertName({
   newName,
@@ -17,23 +17,20 @@ export function upsertName({
   entityId: string;
   spaceId: string;
   api: {
-    create: (triple: ITriple) => void;
-    update: (triple: ITriple, oldTriple: ITriple) => void;
+    upsert: ReturnType<typeof useActionsStore>['upsert'];
   };
 }) {
-  if (!nameTriple)
-    return api.create(
-      Triple.withId({
-        attributeId: SYSTEM_IDS.NAME,
-        entityId: entityId,
-        entityName: newName,
-        attributeName: 'Name',
-        space: spaceId,
-        value: { type: 'TEXT', value: newName },
-      })
-    );
-
-  api.update({ ...nameTriple, value: { ...nameTriple.value, type: 'TEXT', value: newName } }, nameTriple);
+  return api.upsert(
+    {
+      type: 'SET_TRIPLE',
+      attributeId: SYSTEM_IDS.NAME,
+      entityId: entityId,
+      entityName: newName,
+      attributeName: 'Name',
+      value: { type: 'TEXT', value: newName },
+    },
+    spaceId
+  );
 }
 
 /**

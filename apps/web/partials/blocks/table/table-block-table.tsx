@@ -80,7 +80,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { create, update, remove, actions } = useActionsStore();
+    const { upsert, remove, actions } = useActionsStore();
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -96,7 +96,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const cellTriples = pipe(
       actions[space],
-      actions => Triple.fromActions(actions, cellData.triples),
+      actions => Triple.merge(actions, cellData.triples),
       A.filter(triple => {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;
@@ -117,8 +117,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           key={Entity.name(cellTriples)}
           triples={cellTriples}
           cell={cellData}
-          create={create}
-          update={update}
           remove={remove}
           space={space}
           valueType={valueType}
@@ -222,7 +220,7 @@ export const TableBlockTable = ({ rows, space, columns, shownIndexes }: Props) =
                 {cells.map((cell, index: number) => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
-                  const isExpandable = firstTriple && firstTriple.value.type === 'string';
+                  const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
                   const isShown = shownIndexes.includes(index);
 
                   return (

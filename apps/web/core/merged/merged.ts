@@ -66,7 +66,7 @@ export class Merged implements IMergedDataSource {
     const actions = options.space ? this.store.actions[options.space] : this.store.allActions;
 
     // Merge any local actions with the network triples
-    const updatedTriples = Triple.fromActions(actions, networkTriples);
+    const updatedTriples = Triple.merge(actions, networkTriples);
     const mergedTriplesWithName = Triple.withLocalNames(actions, updatedTriples);
 
     // Apply any server filters to locally created data.
@@ -91,11 +91,11 @@ export class Merged implements IMergedDataSource {
         }
 
         if (filter.field === 'linked-to') {
-          return t.value.type === 'entity' && t.value.id === filter.value;
+          return t.value.type === 'ENTITY' && t.value.id === filter.value;
         }
 
         if (filter.field === 'value') {
-          return t.value.type === 'entity' && t.value.name === filter.value;
+          return t.value.type === 'ENTITY' && t.value.name === filter.value;
         }
       });
     }
@@ -297,9 +297,9 @@ export class Merged implements IMergedDataSource {
 
 function filterValue(value: Value, valueToFilter: string) {
   switch (value.type) {
-    case 'string':
+    case 'TEXT':
       return value.value === valueToFilter;
-    case 'entity':
+    case 'ENTITY':
       return value.id === valueToFilter;
     default:
       return false;

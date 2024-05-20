@@ -3,14 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Subgraph } from '~/core/io/';
 import { fetchVersion } from '~/core/io/subgraph/fetch-version';
 import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
-import type {
-  Action as ActionType,
-  Entity as EntityType,
-  ProposedVersion,
-  Triple as TripleType,
-  TripleValueType,
-  Version,
-} from '~/core/types';
+import type { Entity as EntityType, Triple as TripleType, ValueType as TripleValueType, Version } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
@@ -462,7 +455,7 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
 
     selectedVersion.triples.map(triple => {
       switch (triple.value.type) {
-        case 'entity': {
+        case 'ENTITY': {
           changes[entityId] = {
             ...changes[entityId],
             attributes: {
@@ -504,7 +497,7 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
   if (previousVersion) {
     previousVersion.triples.map(triple => {
       switch (triple.value.type) {
-        case 'entity': {
+        case 'ENTITY': {
           changes[entityId] = {
             ...changes[entityId],
             attributes: {
@@ -662,7 +655,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
 
       selectedVersion.triples.map(triple => {
         switch (triple.value.type) {
-          case 'entity': {
+          case 'ENTITY': {
             changes[entityId] = {
               ...changes[entityId],
               attributes: {
@@ -704,7 +697,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
     if (previousVersion && !previousVersion.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
       previousVersion.triples.map(triple => {
         switch (triple.value.type) {
-          case 'entity': {
+          case 'ENTITY': {
             changes[entityId] = {
               ...changes[entityId],
               attributes: {

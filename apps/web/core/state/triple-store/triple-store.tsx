@@ -78,7 +78,7 @@ export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number
     const localActions = actions[space] ?? [];
 
     // We want to merge any local actions with the network triples
-    const updatedTriples = Triple.fromActions(localActions, networkTriples);
+    const updatedTriples = Triple.merge(localActions, networkTriples);
     return Triple.withLocalNames(localActions, updatedTriples);
   }, [actions, networkData, space]);
 

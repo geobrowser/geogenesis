@@ -138,18 +138,12 @@ export function mergeActionsWithEntities(actions: Record<string, AppOp[]>, netwo
     // display any description or type metadata in the search results list.
     actions => {
       const entityIds = actions.map(a => {
-        switch (a.type) {
-          case 'createTriple':
-          case 'deleteTriple':
-            return a.entityId;
-          case 'editTriple':
-            return a.after.entityId;
-        }
+        return a.entityId;
       });
 
       const networkEntity = networkEntities.find(e => A.isNotEmpty(entityIds) && e.id === A.head(entityIds));
       const triplesForNetworkEntity = networkEntity?.triples ?? [];
-      const updatedTriples = Triple.fromActions(actions, triplesForNetworkEntity);
+      const updatedTriples = Triple.merge(actions, triplesForNetworkEntity);
       return Triple.withLocalNames(actions, updatedTriples);
     },
     entitiesFromTriples
@@ -160,7 +154,7 @@ export function mergeActionsWithEntity(allActionsInStore: Action[], networkEntit
   const triplesForEntity = pipe(
     allActionsInStore,
     actions => actionsForEntityId(actions, networkEntity.id),
-    actions => Triple.fromActions(actions, networkEntity.triples),
+    actions => Triple.merge(actions, networkEntity.triples),
     triples => Triple.withLocalNames(allActionsInStore, triples)
   );
 
@@ -176,7 +170,7 @@ export function mergeActionsWithEntity(allActionsInStore: Action[], networkEntit
 
 export function fromActions(allActionsInStore: Action[], entityId: string): IEntity {
   const actions = actionsForEntityId(allActionsInStore, entityId);
-  const triplesForEntity = Triple.fromActions(actions, []);
+  const triplesForEntity = Triple.merge(actions, []);
   const triplesForEntityWithLocalNames = Triple.withLocalNames(allActionsInStore, triplesForEntity);
 
   return {

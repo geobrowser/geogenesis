@@ -59,7 +59,7 @@ export function useTypesStore(): {
 
     if (!spaceConfigId) {
       const localSpaceConfigId = triplesFromSpaceActions.find(
-        t => t.value.type === 'entity' && t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
+        t => t.value.type === 'ENTITY' && t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
       )?.entityId;
 
       const localForeignTriples = pipe(
@@ -72,8 +72,8 @@ export function useTypesStore(): {
         // entity whose entityId === t.value.id
         A.map(t => ({
           id: t.id,
-          entityId: t.value.type === 'entity' ? t.value.id : '',
-          entityName: t.value.type === 'entity' ? (t.value.name ? t.value.name : '') : '', // lol
+          entityId: t.value.type === 'ENTITY' ? t.value.id : '',
+          entityName: t.value.type === 'ENTITY' ? (t.value.name ? t.value.name : '') : '', // lol
           space: t.space,
         }))
       );
@@ -91,8 +91,8 @@ export function useTypesStore(): {
       // entity whose entityId === t.value.id
       A.map(t => ({
         id: t.id,
-        entityId: t.value.type === 'entity' ? t.value.id : '',
-        entityName: t.value.type === 'entity' ? (t.value.name ? t.value.name : '') : '', // lol
+        entityId: t.value.type === 'ENTITY' ? t.value.id : '',
+        entityName: t.value.type === 'ENTITY' ? (t.value.name ? t.value.name : '') : '', // lol
         space: t.space,
       }))
     );
@@ -117,7 +117,7 @@ export function useTypesStore(): {
       return isCreate || isDelete || isRemove;
     });
 
-    const triplesFromActions = Triple.fromActions(localActions, initialTypes);
+    const triplesFromActions = Triple.merge(localActions, initialTypes);
     return [...Triple.withLocalNames(globalActions, triplesFromActions), ...localForeignTypes];
   }, [localForeignTypes, initialTypes, space, actions]);
 

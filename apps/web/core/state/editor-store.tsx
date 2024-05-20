@@ -42,8 +42,8 @@ export function useEditorStore() {
   const { name } = useEntityPageStore();
 
   const blockIdsTriple = React.useMemo(() => {
-    const entityChanges = Triple.fromActions(
-      Action.forEntityId(allActions, entityId),
+    const entityChanges = Triple.merge(
+      allActions.filter(a => a.entityId === entityId),
       initialBlockIdsTriple ? [initialBlockIdsTriple] : []
     );
     const blocksIdTriple: ITriple | undefined = entityChanges.find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
@@ -59,7 +59,7 @@ export function useEditorStore() {
   const blockTriples = React.useMemo(() => {
     return pipe(
       allActions,
-      actions => Triple.fromActions(actions, initialBlockTriples),
+      actions => Triple.merge(actions, initialBlockTriples),
       A.filter(t => blockIds.includes(t.entityId)),
       triples =>
         // We may be referencing attributes/entities from other spaces whose name has changed.
@@ -392,7 +392,7 @@ export function useEditorStore() {
       // Delete any local triples associated with the deleted block entities
       const localTriplesForDeletedBlocks = pipe(
         allActions,
-        actions => Triple.fromActions(actions, []),
+        actions => Triple.merge(actions, []),
         triples => triples.filter(t => removedBlockIds.includes(t.entityId))
       );
 
