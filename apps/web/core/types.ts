@@ -1,5 +1,7 @@
 import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
-import { Op } from '@geogenesis/sdk'
+import { Op } from '@geogenesis/sdk';
+import { string } from 'effect/dist/declarations/src/Equivalence';
+
 import { SubstreamEntity } from './io/subgraph/network-local-mapping';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
@@ -10,7 +12,7 @@ export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX'
 export type AppValue = {
   type: 'TEXT' | 'NUMBER' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'IMAGE';
   value: string;
-}
+};
 
 export type AppEntityValue = {
   type: 'ENTITY';
@@ -21,14 +23,14 @@ export type AppEntityValue = {
 export type Value = AppEntityValue | AppValue;
 
 export type AppOp = {
-  type: Op['type']
+  type: Op['type'];
   id: string;
   attributeId: string;
   entityId: string;
   attributeName: string | null;
   entityName: string | null;
   value: Value;
-}
+};
 
 export type Triple = {
   space: string;
@@ -93,11 +95,13 @@ export type FilterClause = {
 
 export type FilterState = FilterClause[];
 
-// We keep published actions optimistically in the store. It can take a while for the blockchain
+// We keep published triples optimistically in the store. It can take a while for the blockchain
 // to process our transaction, then a few seconds for the subgraph to pick it up and index it.
-// We keep the published actions so we can continue to render them locally while the backend catches up.
-type Publishable = {
-  hasBeenPublished?: boolean;
+// We keep the published triples so we can continue to render them locally while the backend catches up.
+export type AppTriple = Triple & {
+  hasBeenPublished: boolean;
+  timestamp: string; // ISO-8601
+  isDeleted: boolean;
 };
 
 export type Entity = {

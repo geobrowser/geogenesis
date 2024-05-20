@@ -3,15 +3,7 @@ import { atom, useAtom } from 'jotai';
 import * as React from 'react';
 
 import { ID } from '~/core/id';
-import {
-  Action as ActionType,
-  CreateTripleAction,
-  DeleteTripleAction,
-  EditTripleAction,
-  EntityActions,
-  Triple as ITriple,
-  SpaceActions,
-} from '~/core/types';
+import { EntityActions, Triple as ITriple, SpaceActions } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Triple } from '~/core/utils/triple';
 
@@ -161,49 +153,13 @@ const deleteActionsFromSpace = (spaceId: string, actionIdsToDelete: Array<string
 export function useActions(spaceId?: string) {
   const [allActions, setActions] = useAtom(actionsAtom);
 
-  const actions = React.useMemo(() => {
-    return getSpaceActions(allActions);
-  }, [allActions]);
-
-  const allSpacesWithActions = React.useMemo(() => {
-    // Only return spaces where at least one action has not been published
-    return Object.keys(actions).filter(spaceId => !actions[spaceId].every(action => action?.hasBeenPublished === true));
-  }, [actions]);
-
-  const actionsByEntityId = React.useMemo(() => {
-    return allActions.reduce<EntityActions>((acc, action) => {
-      const tripleFromAction = Triple.fromActions([action], [])[0];
-
-      if (!tripleFromAction) return acc;
-
-      switch (action.type) {
-        case 'createTriple':
-        case 'deleteTriple':
-          acc[action.entityId] = {
-            ...acc[action.entityId],
-            [action.attributeId]: tripleFromAction,
-          };
-
-          return acc;
-
-        case 'editTriple':
-          acc[action.after.entityId] = {
-            ...acc[action.after.entityId],
-            [action.after.attributeId]: tripleFromAction,
-          };
-
-          return acc;
-      }
-    }, {});
-  }, [allActions]);
-
   if (!spaceId) {
     return {
       allActions,
-      allSpacesWithActions,
+      allSpacesWithActions: [],
       actionsFromSpace: [],
-      actionsByEntityId,
-      actions,
+      actionsByEntityId: {},
+      actions: {},
 
       addActions: setActions,
       create,
@@ -219,11 +175,11 @@ export function useActions(spaceId?: string) {
   }
 
   return {
-    allActions,
-    allSpacesWithActions,
-    actionsFromSpace: actions[spaceId] ?? [],
-    actionsByEntityId,
-    actions,
+    allActions: [],
+    allSpacesWithActions: [],
+    actionsFromSpace: [],
+    actionsByEntityId: {},
+    actions: {},
 
     addActions: setActions,
     create,
