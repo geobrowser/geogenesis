@@ -10,7 +10,7 @@ export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'IMAGE';
 
 export type AppValue = {
-  type: 'TEXT' | 'NUMBER' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'IMAGE';
+  type: 'TEXT' | 'NUMBER' | 'URL' | 'TIME' | 'IMAGE';
   value: string;
 };
 
@@ -20,7 +20,17 @@ export type AppEntityValue = {
   name: string | null;
 };
 
-export type Value = AppEntityValue | AppValue;
+export type AppCollectionValue = {
+  type: 'COLLECTION';
+  id: string;
+};
+
+export type AppCheckboxValue = {
+  type: 'CHECKBOX';
+  value: boolean;
+};
+
+export type Value = AppEntityValue | AppCollectionValue | AppCheckboxValue | AppValue;
 
 export type SetTripleAppOp = {
   type: 'SET_TRIPLE';

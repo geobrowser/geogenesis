@@ -3,10 +3,10 @@ import { A, pipe } from '@mobily/ts-belt';
 
 import { ID } from '~/core/id';
 import { getAppTripleId } from '~/core/id/create-id';
-import { AppEntityValue, AppTriple, OmitStrict, Triple, Value } from '~/core/types';
+import { AppEntityValue, OmitStrict, Triple, ValueType as TripleValueType, Value } from '~/core/types';
 import { ValueTypeId, valueTypes } from '~/core/value-types';
 
-export function withId(triple: OmitStrict<AppTriple, 'id'>): AppTriple {
+export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {
     ...triple,
     id: ID.createTripleId(triple),
@@ -21,7 +21,7 @@ export function emptyPlaceholder(
   spaceId: string,
   entityId: string,
   valueTypeId: ValueTypeId = SYSTEM_IDS.TEXT
-): AppTriple {
+): Triple {
   const type = valueTypes[valueTypeId] ?? 'string';
 
   return {
@@ -32,39 +32,38 @@ export function emptyPlaceholder(
 
 export function emptyValue(type: TripleValueType): Value {
   const tripleValue: Record<TripleValueType, Value> = {
-    string: {
-      id: ID.createValueId(),
-      type: 'string',
+    TEXT: {
+      type: 'TEXT',
       value: '',
-    } as StringValue,
-    entity: {
+    },
+    ENTITY: {
+      type: 'ENTITY',
       id: '',
-      type: 'entity',
-      name: '',
-    } as EntityValue,
-    collection: {
+      name: null,
+    } as AppEntityValue,
+    COLLECTION: {
       id: '',
-      type: 'collection',
+      type: 'COLLECTION',
     },
-    number: {
-      id: ID.createValueId(),
-      type: 'number',
-      value: '',
-    } as NumberValue,
-    image: {
-      id: ID.createValueId(),
-      type: 'image',
+    NUMBER: {
+      type: 'NUMBER',
       value: '',
     },
-    date: {
-      id: ID.createValueId(),
-      type: 'date',
+    IMAGE: {
+      type: 'IMAGE',
       value: '',
     },
-    url: {
-      id: ID.createValueId(),
-      type: 'url',
+    TIME: {
+      type: 'TIME',
       value: '',
+    },
+    URL: {
+      type: 'URL',
+      value: '',
+    },
+    CHECKBOX: {
+      type: 'CHECKBOX',
+      value: false,
     },
   };
 
@@ -73,7 +72,7 @@ export function emptyValue(type: TripleValueType): Value {
 
 // New, empty triples should generate unique triple IDs so they are distinguishable from
 // other newly created triples locally.
-export function empty(spaceId: string, entityId: string, type: TripleValueType = 'string'): Triple {
+export function empty(spaceId: string, entityId: string, type: TripleValueType = 'TEXT'): Triple {
   const emptyTriple: OmitStrict<Triple, 'id'> = {
     entityId: entityId,
     attributeId: '',
@@ -122,60 +121,6 @@ export function merge(local: Triple[], remote: Triple[]): Triple[] {
   ];
 }
 
-export function fromActions(actions: ActionType[] | undefined, triples: Triple[]): Triple[] {
-  if (!actions) return triples;
-
-  const newTriples: Triple[] = [...triples].reverse();
-
-  // If our actions have modified one of the network triples, we don't want to add that
-  // network triple to the triples array
-  actions.forEach(action => {
-    switch (action.type) {
-      case 'createTriple': {
-        // We may add a triple that has the same attributeId as other triples. We want to insert
-        // the new triple into the triples array in the same place as the other triples so the
-        // list doesn't reorder.
-        const indexOfSiblingTriples = newTriples.findIndex(t => t.attributeId === action.attributeId);
-        if (indexOfSiblingTriples === -1) {
-          newTriples.push(ensureStableId(action));
-          break;
-        }
-
-        newTriples.splice(indexOfSiblingTriples, 0, action);
-        break;
-      }
-      case 'deleteTriple': {
-        const index = newTriples.findIndex(t => t.id === action.id);
-        if (index === -1) {
-          break;
-        }
-
-        newTriples.splice(index, 1);
-        break;
-      }
-      case 'editTriple': {
-        const index = newTriples.findIndex(t => t.id === action.before.id);
-        if (index === -1) {
-          newTriples.push(ensureStableId(action.after));
-          break;
-        }
-
-        newTriples[index] = ensureStableId(action.after);
-        break;
-      }
-    }
-  });
-
-  // We might be merging actions into a set of triples that have already been merged. In this
-  // case we need to replace the existing triple instead of adding a new one. Failing to do
-  // this will result in duplicate triples in the store since we have added the `createTriple`
-  // action multiple times.
-  //
-  // One option to solve this is to handle this edge-case in the `createTriple` part of the above
-  // switch. For now, though, the simplest way is to remove duplicate triples here.
-  return A.uniqBy(newTriples, t => t.id).reverse();
-}
-
 /**
  * This function applies locally changed entity names to all triples being rendered.
  */
@@ -215,19 +160,21 @@ export function withLocalNames(appTriples: Triple[], triples: Triple[]): Triple[
 
 export const getValue = (triple: Triple): string | null => {
   switch (triple.value.type) {
-    case 'number':
+    case 'NUMBER':
       return triple.value.value;
-    case 'string':
+    case 'TEXT':
       return triple.value.value;
-    case 'entity':
+    case 'ENTITY':
       return triple.value.id;
-    case 'image':
+    case 'IMAGE':
       return triple.value.value;
-    case 'date':
+    case 'TIME':
       return triple.value.value;
-    case 'url':
+    case 'URL':
       return triple.value.value;
-    case 'collection':
+    case 'COLLECTION':
       return triple.value.id;
+    case 'CHECKBOX':
+      throw new Error('checkbox not supported');
   }
 };
