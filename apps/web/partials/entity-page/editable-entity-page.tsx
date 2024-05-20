@@ -10,7 +10,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
-import type { AppEntityValue, Entity as EntityType } from '~/core/types';
+import type { AppEntityValue, AppTriple, Entity as EntityType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
@@ -57,7 +57,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     attributeRelationTypes,
   } = useEntityPageStore();
 
-  const { create, update, remove } = useActionsStore();
+  const { remove, upsert } = useActionsStore();
 
   const { actionsFromSpace } = useActionsStore(spaceId);
   const { subgraph, config } = Services.useServices();
@@ -76,8 +76,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
       entityName: name,
     },
     api: {
-      create,
-      update,
+      upsert,
       remove,
     },
   });
@@ -402,7 +401,6 @@ function EntityAttributes({
       type: 'EDIT_ENTITY_NAME',
       payload: {
         name: e.target.value,
-        triple: nameTriple,
       },
     });
   };
@@ -413,12 +411,11 @@ function EntityAttributes({
       payload: {
         name,
         description: e.target.value,
-        triple: descriptionTriple,
       },
     });
   };
 
-  const tripleToEditableField = (attributeId: string, triple: ITriple, isEmptyEntity: boolean) => {
+  const tripleToEditableField = (attributeId: string, triple: AppTriple, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
       case 'TEXT':
         return (
@@ -611,7 +608,7 @@ function EntityAttributes({
                               Text
                             </div>
                           ),
-                          value: 'string',
+                          value: 'TEXT',
                           onClick: () => onChangeTriple('TEXT', triples),
                           disabled: false,
                         },
@@ -623,7 +620,7 @@ function EntityAttributes({
                               Relation
                             </div>
                           ),
-                          value: 'entity',
+                          value: 'ENTITY',
                           onClick: () => onChangeTriple('ENTITY', triples),
                           disabled: false,
                         },
@@ -635,7 +632,7 @@ function EntityAttributes({
                               Image
                             </div>
                           ),
-                          value: 'image',
+                          value: 'IMAGE',
                           onClick: () => onChangeTriple('IMAGE', triples),
                           disabled: false,
                         },
@@ -647,7 +644,7 @@ function EntityAttributes({
                               Date
                             </div>
                           ),
-                          value: 'date',
+                          value: 'TIME',
                           onClick: () => onChangeTriple('TIME', triples),
                           disabled: false,
                         },
@@ -659,7 +656,7 @@ function EntityAttributes({
                               Web URL
                             </div>
                           ),
-                          value: 'url',
+                          value: 'URL',
                           onClick: () => onChangeTriple('URL', triples),
                           disabled: false,
                         },

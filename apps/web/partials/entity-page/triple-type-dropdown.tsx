@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { TripleValueType } from '~/core/types';
+import { ValueType as TripleValueType } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
 import { Date } from '~/design-system/icons/date';
@@ -20,13 +20,14 @@ import { ColorName } from '~/design-system/theme/colors';
 const MotionContent = motion(DropdownPrimitive.Content);
 
 const icons: Record<TripleValueType, React.FunctionComponent<{ color?: ColorName }>> = {
-  date: Date,
-  entity: Relation,
-  collection: Relation,
-  string: Text,
-  number: Text,
-  image: Image,
-  url: Url,
+  TIME: Date,
+  ENTITY: Relation,
+  COLLECTION: Relation,
+  TEXT: Text,
+  NUMBER: Text,
+  IMAGE: Image,
+  URL: Url,
+  CHECKBOX: Relation,
 };
 
 interface Props {

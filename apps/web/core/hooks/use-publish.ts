@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useWalletClient } from 'wagmi';
 
 import { Services } from '../services';
-import { Action as IAction, ReviewState } from '../types';
+import { ReviewState } from '../types';
 import { Action } from '../utils/action';
 import { useActionsStore } from './use-actions-store';
 

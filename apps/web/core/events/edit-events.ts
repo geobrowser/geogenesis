@@ -5,7 +5,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { ImageValue, Triple as TripleType, TripleValueType } from '~/core/types';
+import { AppEntityValue, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { groupBy } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
@@ -18,7 +18,6 @@ export type EditEvent =
       type: 'EDIT_ENTITY_NAME';
       payload: {
         name: string;
-        triple?: TripleType;
       };
     }
   | {
@@ -26,7 +25,6 @@ export type EditEvent =
       payload: {
         name: string;
         description: string;
-        triple?: TripleType;
       };
     }
   | {
@@ -180,8 +178,7 @@ export type EditEvent =
     };
 
 interface EditApi {
-  create: ReturnType<typeof useActionsStore>['create'];
-  update: ReturnType<typeof useActionsStore>['update'];
+  upsert: ReturnType<typeof useActionsStore>['upsert'];
   remove: ReturnType<typeof useActionsStore>['remove'];
 }
 
@@ -195,83 +192,67 @@ interface ListenerConfig {
 }
 
 const listener =
-  ({ api: { create, update, remove }, context }: ListenerConfig) =>
+  ({ api: { upsert, remove }, context }: ListenerConfig) =>
   (event: EditEvent) => {
     switch (event.type) {
       case 'EDIT_ENTITY_NAME': {
-        const { name, triple } = event.payload;
+        const { name } = event.payload;
 
-        if (!triple) {
-          return create(
-            Triple.withId({
-              space: context.spaceId,
-              entityId: context.entityId,
-              entityName: name,
-              attributeId: SYSTEM_IDS.NAME,
-              attributeName: 'Name',
-              value: { id: ID.createValueId(), type: 'string', value: name },
-            })
-          );
-        }
-
-        return update(
-          Triple.ensureStableId({
-            ...triple,
+        return upsert(
+          {
+            type: 'SET_TRIPLE',
+            entityId: context.entityId,
             entityName: name,
-            value: { ...triple.value, type: 'string', value: name },
-          }),
-          triple
+            attributeId: SYSTEM_IDS.NAME,
+            attributeName: 'Name',
+            value: { type: 'TEXT', value: name },
+          },
+          context.spaceId
         );
       }
       case 'EDIT_ENTITY_DESCRIPTION': {
-        const { name, description, triple } = event.payload;
+        const { name, description } = event.payload;
 
-        if (!triple) {
-          return create(
-            Triple.withId({
-              space: context.spaceId,
-              entityId: context.entityId,
-              attributeId: SYSTEM_IDS.DESCRIPTION,
-              attributeName: SYSTEM_IDS.DESCRIPTION,
-              entityName: name,
-              value: {
-                id: ID.createValueId(),
-                type: 'string',
-                value: description,
-              },
-            })
-          );
-        }
-
-        return update(
-          Triple.ensureStableId({
-            ...triple,
-            value: { ...triple.value, type: 'string', value: description },
-          }),
-          triple
+        return upsert(
+          {
+            type: 'SET_TRIPLE',
+            entityId: context.entityId,
+            attributeId: SYSTEM_IDS.DESCRIPTION,
+            attributeName: SYSTEM_IDS.DESCRIPTION,
+            entityName: name,
+            value: {
+              type: 'TEXT',
+              value: description,
+            },
+          },
+          context.spaceId
         );
       }
       case 'CREATE_NEW_TRIPLE':
-        return create({ ...Triple.empty(context.spaceId, context.entityId), entityName: context.entityName });
+        return upsert(
+          { ...Triple.empty(context.spaceId, context.entityId), entityName: context.entityName, type: 'SET_TRIPLE' },
+          context.spaceId
+        );
       case 'REMOVE_TRIPLE':
-        return remove(event.payload.triple);
+        return remove(event.payload.triple, context.spaceId);
       case 'CHANGE_COLUMN_VALUE_TYPE': {
         const { valueType, valueTypeTriple, cellTriples } = event.payload;
 
-        update(
-          Triple.ensureStableId({
+        upsert(
+          {
             ...valueTypeTriple,
+            type: 'SET_TRIPLE',
             value: {
-              type: 'entity',
+              type: 'ENTITY',
               id: valueType,
               name: valueTypeNames[valueType],
             },
-          }),
-          valueTypeTriple
+          },
+          context.spaceId
         );
 
         const currentType = cellTriples[0]?.value.type;
-        const isRelationFromRelationToText = currentType === 'entity' && valueType === SYSTEM_IDS.TEXT;
+        const isRelationFromRelationToText = currentType === 'ENTITY' && valueType === SYSTEM_IDS.TEXT;
 
         if (isRelationFromRelationToText) {
           // Handles the case when the column is changed from relation to text.
@@ -287,71 +268,69 @@ const listener =
             if (!isCellPopulated) return;
 
             triples.forEach(triple => {
-              remove(triple);
+              remove(triple, context.spaceId);
             });
 
             const firstTriple = triples[0];
 
-            create(
-              Triple.withId({
+            upsert(
+              {
                 ...firstTriple,
-                value: { id: ID.createValueId(), type: 'string', value: migratedName },
-              })
+                type: 'SET_TRIPLE',
+                value: { type: 'TEXT', value: migratedName },
+              },
+              context.spaceId
             );
           });
         } else {
-          return cellTriples.forEach(triple => remove(triple));
+          return cellTriples.forEach(triple => remove(triple, context.spaceId));
         }
       }
       case 'CHANGE_TRIPLE_TYPE': {
         const { type, triples } = event.payload;
-
         const value = Triple.emptyValue(type);
-
         return triples.forEach(triple => {
-          const isString = type === 'string';
-          const isImage = type === 'image';
-          const isDate = type === 'date';
-
-          const retainTripleValueId = isString || isImage || isDate;
-
-          const newValue = retainTripleValueId ? { ...value, id: triple.value.id } : value;
-
-          update(
-            Triple.ensureStableId({
+          upsert(
+            {
               ...triple,
-              value: newValue,
-            }),
-            triple
+              value,
+              type: 'SET_TRIPLE',
+            },
+            context.spaceId
           );
         });
       }
 
       case 'REMOVE_ENTITY': {
         const { triple } = event.payload;
-
-        return remove(triple);
+        return remove(triple, context.spaceId);
       }
 
       case 'REMOVE_PAGE_ENTITY': {
         const { triple, isLastEntity } = event.payload;
 
-        if (triple.value.type === 'entity') {
+        if (triple.value.type === 'ENTITY') {
           // When we remove the last linked entity, we just want to create a new, empty triple.
           // This is so we can keep the Attribute field available for the user to add a new entity
           // if they want to replace the one they just deleted.
           if (isLastEntity) {
-            create({
-              ...Triple.empty(triple.space, triple.entityId),
-              entityName: triple.entityName,
-              attributeId: triple.attributeId,
-              attributeName: triple.attributeName,
-              value: { id: '', type: 'entity', name: '' },
-            });
+            upsert(
+              {
+                type: 'SET_TRIPLE',
+                entityId: triple.entityId,
+                entityName: triple.entityName,
+                attributeId: triple.attributeId,
+                attributeName: triple.attributeName,
+                value: { id: '', type: 'ENTITY', name: '' },
+              },
+              context.spaceId
+            );
           }
+        } else {
+          remove(triple, context.spaceId);
         }
 
-        return remove(triple);
+        return;
       }
       case 'LINK_ATTRIBUTE': {
         const { newAttribute, oldAttribute, triplesByAttributeId } = event.payload;
@@ -364,13 +343,15 @@ const listener =
           }
 
           triplesToUpdate.forEach(triple => {
-            const newTriple = Triple.ensureStableId({
-              ...triple,
-              attributeId: newAttribute.id,
-              attributeName: newAttribute.name,
-            });
-
-            update(newTriple, triple);
+            upsert(
+              {
+                ...triple,
+                attributeId: newAttribute.id,
+                attributeName: newAttribute.name,
+                type: 'SET_TRIPLE',
+              },
+              context.spaceId
+            );
           });
         }
 
@@ -384,58 +365,58 @@ const listener =
         // field in place for better UX in the entity page
         if (
           triplesByAttributeId[attribute.id]?.length === 1 &&
-          triplesByAttributeId[attribute.id][0].value.type === 'entity' &&
-          !triplesByAttributeId[attribute.id][0].value.id
+          triplesByAttributeId[attribute.id][0].value.type === 'ENTITY' &&
+          !(triplesByAttributeId[attribute.id][0].value as AppEntityValue).id
         ) {
-          return update(
-            Triple.ensureStableId({
+          return upsert(
+            {
               ...triplesByAttributeId[attribute.id][0],
+              type: 'SET_TRIPLE',
               value: {
-                ...triplesByAttributeId[attribute.id][0].value,
-                type: 'entity',
+                type: 'ENTITY',
                 id: linkedEntity.id,
                 name: linkedEntity.name,
               },
               attributeName: triplesByAttributeId[attribute.id][0].attributeName,
               entityName: entityName,
-            }),
-            triplesByAttributeId[attribute.id][0]
+            },
+            context.spaceId
           );
         }
 
-        return create(
-          Triple.withId({
-            space: context.spaceId,
+        return upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: entityName,
             attributeId: attribute.id,
             attributeName: triplesByAttributeId[attribute.id][0].attributeName,
             value: {
-              type: 'entity',
+              type: 'ENTITY',
               id: linkedEntity.id,
               name: linkedEntity.name,
             },
-          })
+          },
+          context.spaceId
         );
       }
       case 'CREATE_STRING_TRIPLE_WITH_VALUE': {
         const { value, attributeId, attributeName } = event.payload;
-
         if (!value) return;
 
-        return create(
-          Triple.withId({
-            space: context.spaceId,
+        return upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
             attributeId,
             attributeName,
             value: {
-              type: 'string',
-              id: ID.createValueId(),
+              type: 'TEXT',
               value: value,
             },
-          })
+          },
+          context.spaceId
         );
       }
 
@@ -444,19 +425,19 @@ const listener =
 
         if (!value) return;
 
-        return create(
-          Triple.withId({
-            space: context.spaceId,
+        return upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
             attributeId,
             attributeName,
             value: {
-              type: 'url',
-              id: ID.createValueId(),
+              type: 'URL',
               value: value,
             },
-          })
+          },
+          context.spaceId
         );
       }
 
@@ -465,19 +446,19 @@ const listener =
 
         if (!value) return;
 
-        return create(
-          Triple.withId({
-            space: context.spaceId,
+        return upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
             attributeId,
             attributeName,
             value: {
-              type: 'date',
-              id: ID.createValueId(),
+              type: 'TIME',
               value: value,
             },
-          })
+          },
+          context.spaceId
         );
       }
 
@@ -486,58 +467,58 @@ const listener =
 
         if (!imageSrc) return;
 
-        return create(
-          Triple.withId({
-            space: context.spaceId,
+        return upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
             attributeId,
             attributeName,
             value: {
-              type: 'image',
-              id: ID.createValueId(),
+              type: 'IMAGE',
               value: Value.toImageValue(imageSrc),
             },
-          })
+          },
+          context.spaceId
         );
       }
       case 'CREATE_ENTITY_TRIPLE': {
         const { attributeId, attributeName } = event.payload;
 
-        return create(
-          Triple.withId({
-            space: context.spaceId,
+        return upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
-            attributeId: attributeId,
-            attributeName: attributeName,
-            placeholder: false,
+            attributeId,
+            attributeName,
             value: {
-              type: 'entity',
+              type: 'ENTITY',
               id: '',
               name: '',
             },
-          })
+          },
+          context.spaceId
         );
       }
 
       case 'CREATE_ENTITY_TRIPLE_WITH_VALUE': {
         const { entityId, entityName, attributeId, attributeName } = event.payload;
 
-        return create(
-          Triple.withId({
-            space: context.spaceId,
+        return upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
-            attributeId: attributeId,
-            attributeName: attributeName,
-            placeholder: false,
+            attributeId,
+            attributeName,
             value: {
-              type: 'entity',
+              type: 'ENTITY',
               id: entityId,
               name: entityName,
             },
-          })
+          },
+          context.spaceId
         );
       }
 
@@ -548,7 +529,7 @@ const listener =
           entityName: '',
           attributeId: SYSTEM_IDS.TYPES,
           attributeName: 'Types',
-          value: { id: SYSTEM_IDS.ATTRIBUTE, type: 'entity', name: 'Attribute' },
+          value: { id: SYSTEM_IDS.ATTRIBUTE, type: 'ENTITY', name: 'Attribute' },
         });
 
         const newAttributeNameTriple = Triple.withId({
@@ -557,7 +538,7 @@ const listener =
           entityName: '',
           attributeId: SYSTEM_IDS.NAME,
           attributeName: 'Name',
-          value: { id: ID.createValueId(), type: 'string', value: '' },
+          value: { type: 'TEXT', value: '' },
         });
 
         const newTypeTriple = Triple.withId({
@@ -566,7 +547,7 @@ const listener =
           entityName: context.entityName,
           attributeId: SYSTEM_IDS.ATTRIBUTES,
           attributeName: 'Attributes',
-          value: { id: newAttributeTriple.entityId, type: 'entity', name: newAttributeNameTriple.entityName },
+          value: { id: newAttributeTriple.entityId, type: 'ENTITY', name: newAttributeNameTriple.entityName },
         });
 
         const newValueTypeTriple = Triple.withId({
@@ -575,77 +556,72 @@ const listener =
           entityName: '',
           attributeId: SYSTEM_IDS.VALUE_TYPE,
           attributeName: 'Value type',
-          value: { id: SYSTEM_IDS.TEXT, type: 'entity', name: 'Text' },
+          value: { id: SYSTEM_IDS.TEXT, type: 'ENTITY', name: 'Text' },
         });
 
-        create(newAttributeNameTriple);
-        create(newAttributeTriple);
-        create(newValueTypeTriple);
-        return create(newTypeTriple);
+        upsert({ ...newAttributeNameTriple, type: 'SET_TRIPLE' }, context.spaceId);
+        upsert({ ...newAttributeTriple, type: 'SET_TRIPLE' }, context.spaceId);
+        upsert({ ...newValueTypeTriple, type: 'SET_TRIPLE' }, context.spaceId);
+        return upsert({ ...newTypeTriple, type: 'SET_TRIPLE' }, context.spaceId);
       }
 
       case 'UPDATE_STRING_VALUE': {
         const { value, triple } = event.payload;
 
-        return update(
+        return upsert(
           {
             ...triple,
-            placeholder: false,
-            value: { ...triple.value, type: 'string', value },
+            type: 'SET_TRIPLE',
+            value: { type: 'TEXT', value },
           },
-          triple
+          context.spaceId
         );
       }
 
       case 'UPDATE_URL_VALUE': {
         const { value, triple } = event.payload;
 
-        return update(
+        return upsert(
           {
             ...triple,
-            placeholder: false,
-            value: { ...triple.value, type: 'url', value },
+            type: 'SET_TRIPLE',
+            value: { type: 'URL', value },
           },
-          triple
+          context.spaceId
         );
       }
 
       case 'UPDATE_DATE_VALUE': {
         const { value, triple } = event.payload;
 
-        return update(
+        return upsert(
           {
             ...triple,
-            placeholder: false,
-            value: { ...triple.value, type: 'date', value },
+            type: 'SET_TRIPLE',
+            value: { type: 'TIME', value },
           },
-          triple
+          context.spaceId
         );
       }
 
       case 'REMOVE_IMAGE': {
         const { triple } = event.payload;
-        const newValue: ImageValue = { ...triple.value, type: 'image', value: '' };
-
-        return update(
-          Triple.ensureStableId({
-            ...triple,
-            value: newValue,
-          }),
-          triple
-        );
+        return remove(triple, context.spaceId);
       }
 
       case 'UPLOAD_IMAGE': {
         const { imageSrc, triple } = event.payload;
-        const newValue: ImageValue = { ...triple.value, type: 'image', value: Value.toImageValue(imageSrc) };
 
-        return update(
-          Triple.ensureStableId({
+        return upsert(
+          {
             ...triple,
-            value: newValue,
-          }),
-          triple
+            type: 'SET_TRIPLE',
+            value: {
+              type: 'IMAGE',
+              value: Value.toImageValue(imageSrc),
+            },
+          },
+          context.spaceId
         );
       }
     }

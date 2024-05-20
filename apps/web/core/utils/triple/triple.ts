@@ -2,30 +2,25 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
 
 import { ID } from '~/core/id';
-import {
-  Action as ActionType,
-  EntityValue,
-  NumberValue,
-  OmitStrict,
-  StringValue,
-  Triple,
-  TripleValueType,
-  Value,
-} from '~/core/types';
+import { AppEntityValue, AppTriple, OmitStrict, Triple, Value } from '~/core/types';
 import { ValueTypeId, valueTypes } from '~/core/value-types';
 
-export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
+export function withId(triple: OmitStrict<AppTriple, 'id'>): AppTriple {
   return {
     ...triple,
     id: ID.createTripleId(triple),
   };
 }
 
+export function timestamp() {
+  return new Date().toISOString();
+}
+
 export function emptyPlaceholder(
   spaceId: string,
   entityId: string,
   valueTypeId: ValueTypeId = SYSTEM_IDS.TEXT
-): Triple {
+): AppTriple {
   const type = valueTypes[valueTypeId] ?? 'string';
 
   return {
@@ -166,17 +161,9 @@ export function fromActions(actions: ActionType[] | undefined, triples: Triple[]
 /**
  * This function applies locally changed entity names to all triples being rendered.
  */
-export function withLocalNames(actions: ActionType[], triples: Triple[]): Triple[] {
+export function withLocalNames(appTriples: Triple[], triples: Triple[]): Triple[] {
   const newEntityNames = pipe(
-    actions,
-    A.map(a => {
-      switch (a.type) {
-        case 'editTriple':
-          return a.after;
-        default:
-          return a;
-      }
-    }),
+    appTriples,
     A.reduce({} as Record<string, string>, (acc, entity) => {
       if (entity.entityName) acc[entity.entityId] = entity.entityName;
       return acc;
@@ -197,11 +184,11 @@ export function withLocalNames(actions: ActionType[], triples: Triple[]): Triple
     }
 
     // The triple has a an entity value whose name changed
-    if (newEntityNames[triple.value.id]) {
+    if (newEntityNames[(triple.value as AppEntityValue).id]) {
       newTriple.value = {
         ...triple.value,
-        name: newEntityNames[triple.value.id],
-      } as EntityValue;
+        name: newEntityNames[(triple.value as AppEntityValue).id],
+      } as AppEntityValue;
     }
 
     return newTriple;

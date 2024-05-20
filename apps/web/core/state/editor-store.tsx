@@ -268,15 +268,16 @@ export function useEditorStore() {
       const existingRowTypeTriple = getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.ROW_TYPE });
 
       if (!existingRowTypeTriple) {
-        create(
-          Triple.withId({
-            space: spaceId,
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: blockEntityId,
             entityName: getNodeName(node),
             attributeId: SYSTEM_IDS.ROW_TYPE,
             attributeName: 'Row Type',
-            value: { id: rowTypeEntityId, type: 'entity', name: rowTypeEntityName },
-          })
+            value: { type: 'ENTITY', name: rowTypeEntityName, id: rowTypeEntityId },
+          },
+          spaceId
         );
 
         // Make sure that we only add it for new tables by also checking that the row type triple doesn't exist.
@@ -286,33 +287,33 @@ export function useEditorStore() {
         const existingFilterTriple = getBlockTriple({ entityId: blockEntityId, attributeId: SYSTEM_IDS.FILTER });
 
         if (!existingFilterTriple) {
-          create(
-            Triple.withId({
-              space: spaceId,
+          upsert(
+            {
+              type: 'SET_TRIPLE',
               entityId: blockEntityId,
               entityName: getNodeName(node),
               attributeId: SYSTEM_IDS.FILTER,
-              attributeName: 'Filter',
+              attributeName: 'Row Type',
               value: {
-                id: ID.createValueId(),
-                type: 'string',
+                type: 'TEXT',
                 value: TableBlockSdk.createGraphQLStringFromFilters(
                   [
                     {
                       columnId: SYSTEM_IDS.SPACE,
-                      valueType: 'string',
+                      valueType: 'TEXT',
                       value: spaceId,
                     },
                   ],
                   rowTypeEntityId
                 ),
               },
-            })
+            },
+            spaceId
           );
         }
       }
     },
-    [create, getBlockTriple, spaceId]
+    [upsert, getBlockTriple, spaceId]
   );
 
   // Helper function for creating a new block image triple for IMAGE_BLOCKs only
@@ -327,18 +328,19 @@ export function useEditorStore() {
 
       const { src } = node.attrs;
 
-      create(
-        Triple.withId({
-          space: spaceId,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId: blockEntityId,
           entityName: getNodeName(node),
           attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
           attributeName: 'Image',
-          value: { id: ID.createValueId(), type: 'image', value: Value.toImageValue(src) },
-        })
+          value: { type: 'IMAGE', value: Value.toImageValue(src) },
+        },
+        spaceId
       );
     },
-    [create, spaceId]
+    [upsert, spaceId]
   );
 
   // Helper function to create or update the block IDs on an entity
@@ -348,22 +350,20 @@ export function useEditorStore() {
       const existingBlockTriple = blockIdsTriple;
       const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== JSON.stringify(newBlockIds);
 
-      if (!existingBlockTriple) {
-        const triple = Triple.withId({
-          space: spaceId,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId: entityId,
           entityName: name,
           attributeId: SYSTEM_IDS.BLOCKS,
-          attributeName: 'Blocks',
+          attributeName: 'Image',
           value: {
-            id: ID.createValueId(),
-            type: 'string',
+            type: 'TEXT',
             value: JSON.stringify(newBlockIds),
           },
-        });
-
-        return create(triple);
-      }
+        },
+        spaceId
+      );
 
       if (!isUpdated) return;
 
@@ -386,7 +386,7 @@ export function useEditorStore() {
 
       // To delete an entity we delete all of its triples
       remoteBlocks.forEach(block => {
-        block.triples.forEach(t => remove(t));
+        block.triples.forEach(t => remove(t, spaceId));
       });
 
       // Delete any local triples associated with the deleted block entities
@@ -396,25 +396,25 @@ export function useEditorStore() {
         triples => triples.filter(t => removedBlockIds.includes(t.entityId))
       );
 
-      localTriplesForDeletedBlocks.forEach(t => remove(t));
+      localTriplesForDeletedBlocks.forEach(t => remove(t, spaceId));
 
       // We delete the existingBlockTriple if the page content is completely empty
       if (newBlockIds.length === 0) {
-        return remove(existingBlockTriple);
+        return remove(existingBlockTriple, spaceId);
       }
 
       const updatedTriple = Triple.ensureStableId({
         ...existingBlockTriple,
         value: {
           ...existingBlockTriple.value,
-          type: 'string',
+          type: 'TEXT',
           value: JSON.stringify(newBlockIds),
         },
       });
 
-      return update(updatedTriple, existingBlockTriple);
+      return upsert({ ...updatedTriple, type: 'SET_TRIPLE' }, spaceId);
     },
-    [allActions, blockIds, blockIdsTriple, create, entityId, name, remove, subgraph, update, spaceId]
+    [allActions, blockIds, blockIdsTriple, upsert, entityId, name, remove, subgraph, spaceId]
   );
 
   // Iterate over the content's of a TipTap editor to create or update triple blocks
@@ -491,13 +491,13 @@ const getNodeId = (node: JSONContent): string => node.attrs?.id ?? node?.content
 const getBlockTypeValue = (nodeType?: string): EntityValue => {
   switch (nodeType) {
     case 'paragraph':
-      return { id: SYSTEM_IDS.TEXT_BLOCK, type: 'entity', name: 'Text Block' };
+      return { id: SYSTEM_IDS.TEXT_BLOCK, type: 'ENTITY', name: 'Text Block' };
     case 'image':
-      return { id: SYSTEM_IDS.IMAGE_BLOCK, type: 'entity', name: 'Image Block' };
+      return { id: SYSTEM_IDS.IMAGE_BLOCK, type: 'ENTITY', name: 'Image Block' };
     case 'tableNode':
-      return { id: SYSTEM_IDS.TABLE_BLOCK, type: 'entity', name: 'Table Block' };
+      return { id: SYSTEM_IDS.TABLE_BLOCK, type: 'ENTITY', name: 'Table Block' };
     default:
-      return { id: SYSTEM_IDS.TEXT_BLOCK, type: 'entity', name: 'Text Block' };
+      return { id: SYSTEM_IDS.TEXT_BLOCK, type: 'ENTITY', name: 'Text Block' };
   }
 };
 

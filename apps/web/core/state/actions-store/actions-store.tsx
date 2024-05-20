@@ -21,12 +21,22 @@ const atomWithAsyncStorage = (initialValue: AppTriple[] = []) => {
 
 export const localTriplesAtom = atomWithAsyncStorage();
 
-const remove = (triple: AppOp) => {
-  const allActions = store.get(localTriplesAtom);
-  store.set(localTriplesAtom, [...allActions, ...[]]);
+const remove = (op: OmitStrict<StoreOp, 'type'>, spaceId: string) => {
+  // We don't delete from our local store, but instead just set a tombstone
+  // on the row. This is so we can still publish the changes as an op
+  upsert(
+    {
+      ...op,
+      type: 'DELETE_TRIPLE',
+    },
+    spaceId
+  );
 };
 
-type StoreOp = OmitStrict<SetTripleAppOp, 'id'> | OmitStrict<DeleteTripleAppOp, 'id'>;
+// @TODO: Write about why we have FOUR representations for an op (store op, app op, substream op, ipfs op)
+type StoreOp =
+  | OmitStrict<SetTripleAppOp, 'id'>
+  | OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
 
 const getAppTripleId = (op: StoreOp, spaceId: string) => `${spaceId}:${op.entityId}:${op.attributeId}`;
 
@@ -58,8 +68,6 @@ const upsert = (op: StoreOp, spaceId: string) => {
   if (op.type === 'DELETE_TRIPLE') {
     triple.isDeleted = true;
   }
-
-  console.log('triple', triple.isDeleted);
 
   store.set(localTriplesAtom, [...nonMatchingTriples, triple]);
 };

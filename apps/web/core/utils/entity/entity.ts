@@ -28,9 +28,7 @@ export function description(triples: ITriple[]): string | null {
 }
 
 export function descriptionTriple(triples: ITriple[]): ITriple | undefined {
-  return triples.find(
-    triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION || triple.attributeName === SYSTEM_IDS.DESCRIPTION
-  );
+  return triples.find(triple => triple.attributeId === SYSTEM_IDS.DESCRIPTION);
 }
 
 /**
@@ -233,7 +231,7 @@ export function cover(triples: ITriple[] | undefined): string | null {
 export const getParentEntityId = (triples: ITriple[] = []) => {
   const parentEntityTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY);
 
-  const parentEntityId = parentEntityTriple?.value.type === 'entity' ? parentEntityTriple.value.id : null;
+  const parentEntityId = parentEntityTriple?.value.type === 'ENTITY' ? parentEntityTriple.value.id : null;
 
   return parentEntityId;
 };

@@ -37,6 +37,9 @@ export type DeleteTripleAppOp = {
   id: string;
   attributeId: string;
   entityId: string;
+  attributeName: string | null;
+  entityName: string | null;
+  value: Value;
 };
 
 export type AppOp = SetTripleAppOp | DeleteTripleAppOp;
@@ -49,6 +52,12 @@ export type Triple = {
 
   entityName: string | null;
   attributeName: string | null;
+
+  id?: string; // `${spaceId}:${entityId}:${attributeId}`
+  placeholder?: boolean;
+  hasBeenPublished?: boolean;
+  timestamp?: string; // ISO-8601
+  isDeleted?: boolean;
 };
 
 // We keep published triples optimistically in the store. It can take a while for the blockchain
@@ -57,9 +66,9 @@ export type Triple = {
 export type AppTriple = Triple & {
   id: string; // `${spaceId}:${entityId}:${attributeId}`
   placeholder?: boolean;
-  hasBeenPublished: boolean;
-  timestamp: string; // ISO-8601
-  isDeleted: boolean;
+  hasBeenPublished?: boolean;
+  timestamp?: string; // ISO-8601
+  isDeleted?: boolean;
 };
 
 export type SpaceConfigEntity = Entity & {

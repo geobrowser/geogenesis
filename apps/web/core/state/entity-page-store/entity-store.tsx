@@ -9,7 +9,7 @@ import * as React from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { Services } from '~/core/services';
-import { Triple as ITriple } from '~/core/types';
+import { AppEntityValue, AppTriple } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
@@ -18,19 +18,22 @@ import { ValueTypeId } from '~/core/value-types';
 
 import { useEntityStoreInstance } from './entity-store-provider';
 
-export const createInitialSchemaTriples = (spaceId: string, entityId: string): ITriple[] => {
+export const createInitialSchemaTriples = (spaceId: string, entityId: string): AppTriple[] => {
   const nameTriple = Triple.withId({
     space: spaceId,
     entityId,
     entityName: '',
     attributeName: 'Name',
     attributeId: SYSTEM_IDS.NAME,
-    placeholder: true,
     value: {
-      id: '',
-      type: 'string',
+      type: 'TEXT',
       value: '',
     },
+
+    placeholder: true,
+    hasBeenPublished: false,
+    isDeleted: false,
+    timestamp: Triple.timestamp(),
   });
 
   const descriptionTriple = Triple.withId({
@@ -39,12 +42,15 @@ export const createInitialSchemaTriples = (spaceId: string, entityId: string): I
     entityName: '',
     attributeName: 'Description',
     attributeId: SYSTEM_IDS.DESCRIPTION,
-    placeholder: true,
     value: {
-      id: '',
-      type: 'string',
+      type: 'TEXT',
       value: '',
     },
+
+    placeholder: true,
+    hasBeenPublished: false,
+    isDeleted: false,
+    timestamp: Triple.timestamp(),
   });
 
   const typeTriple = Triple.withId({
@@ -53,12 +59,16 @@ export const createInitialSchemaTriples = (spaceId: string, entityId: string): I
     entityName: '',
     attributeName: 'Types',
     attributeId: SYSTEM_IDS.TYPES,
-    placeholder: true,
     value: {
       id: '',
-      type: 'entity',
+      type: 'ENTITY',
       name: '',
     },
+
+    placeholder: true,
+    hasBeenPublished: false,
+    isDeleted: false,
+    timestamp: Triple.timestamp(),
   });
 
   return [nameTriple, descriptionTriple, typeTriple];
@@ -78,13 +88,12 @@ export function useEntityPageStore() {
   const triples = React.useMemo(() => {
     return pipe(
       allActions,
-      actions => Action.squashChanges(actions),
-      actions => Triple.fromActions(actions, initialTriples),
       A.filter(t => t.entityId === id),
       triples =>
         // We may be referencing attributes/entities from other spaces whose name has changed.
         // We pass _all_ local changes instead of just the current space changes.
-        Triple.withLocalNames(allActions, triples)
+        Triple.withLocalNames(allActions, triples),
+      A.filter(t => t.isDeleted === false)
     );
   }, [allActions, id, initialTriples]);
 
@@ -97,7 +106,9 @@ export function useEntityPageStore() {
   persist the Attribute field. Filtering out those entities here.
   */
   const typeTriples = React.useMemo(() => {
-    return triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id !== '');
+    return triples.filter(
+      triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.type === 'ENTITY' && triple.value.id !== ''
+    );
   }, [triples]);
 
   const { data: schemaTriples } = useQuery({
@@ -118,7 +129,7 @@ export function useEntityPageStore() {
             filter: [
               {
                 field: 'entity-id',
-                value: triple.value.id,
+                value: triple.value.type === 'ENTITY' ? triple.value.id : '',
               },
               {
                 field: 'attribute-id',
@@ -143,7 +154,7 @@ export function useEntityPageStore() {
             filter: [
               {
                 field: 'entity-id',
-                value: attribute.value.id,
+                value: attribute.value.type === 'ENTITY' ? attribute.value.id : '',
               },
               {
                 field: 'attribute-id',
