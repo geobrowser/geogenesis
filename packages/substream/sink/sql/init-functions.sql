@@ -105,7 +105,7 @@ BEGIN
         SELECT t.entity_value_id AS type_id
         FROM triples t
         WHERE t.entity_id = e_row.id
-        AND t.attribute_id = 'type'
+        AND t.attribute_id = '8f151ba4de204e3c9cb499ddf96f48f1'
     ),
     type_attributes AS (
         -- For each type, fetch the associated attributes
