@@ -21,8 +21,8 @@ BEGIN
         SELECT t.*
         FROM triples t
         WHERE t.space_id = e_row.id
-        AND t.attribute_id = 'type'
-        AND t.entity_value_id = '1d5d0c2a-db23-466c-a0b0-9abe879df457' -- space configuration
+        AND t.attribute_id = '8f151ba4de204e3c9cb499ddf96f48f1'
+        AND t.entity_value_id = '1d5d0c2adb23466ca0b09abe879df457' -- space configuration
         AND t.is_stale = FALSE
     )
     SELECT e.*
@@ -49,39 +49,6 @@ BEGIN
     INNER JOIN onchain_profiles_ids opids ON e.id = opids.id;
 END;
 $$ LANGUAGE plpgsql STRICT STABLE;
-
--- if an entity is a collection, return all the items in the collection
--- with links to the entities themselves
-
--- CREATE TYPE public.collection_item AS (
---    entity_id text,
---    collection_id text,
---    index text
--- );
-
--- COMMENT ON TYPE public.collection_item IS
---   E'@foreignKey (collection_id) references public.collections(entity_id)';
-
--- COMMENT ON TYPE public.collection_item IS
---   E'@foreignKey (entity_id) references public.geo_entities(id)';
-
--- CREATE OR REPLACE FUNCTION public.collections_items(e_row collections)
--- RETURNS SETOF public.collection_item AS $$
--- BEGIN
---     RETURN QUERY
---     SELECT t3.entity_value_id as collection_id, t2.entity_value_id as entity_id, t4.text_value as index
---     FROM triples t1
---     JOIN triples t2 ON t1.entity_id = t2.entity_id
---     JOIN triples t3 ON t1.entity_id = t3.entity_id
---     JOIN triples t4 ON t1.entity_id = t4.entity_id
---     WHERE t1.entity_id = e_row.entity_id
---       AND t1.attribute_id = 'types'
---       AND t1.entity_value_id = '0e8d692b94d74c64bcb30eb4d55503ef' -- Collection Item type
---       AND t2.attribute_id = '53d1e5f26f234bf29e8842b02f437970' -- entity id of the collection item's entity value
---       AND t3.attribute_id = '487e084b41324b05b15ab6e147d58244' -- entity id of the collection
---       AND t4.attribute_id = 'ede47e6930b044998ea4aafbda449609'; -- fractional index of the collection item
--- END;
--- $$ LANGUAGE plpgsql STRICT STABLE;
 
 ALTER TABLE
     public.collections DISABLE TRIGGER ALL;

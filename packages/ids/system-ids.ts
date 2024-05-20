@@ -1,9 +1,9 @@
 export const IMAGE_ATTRIBUTE = '457a27af7b0b485cac07aa37756adafa'
 export const DESCRIPTION = 'Description'
 export const NAME = 'a126ca530c8e48d5b88882c734c38935'
-export const SPACE = 'space'
+export const SPACE = '362c1dbddc6444bba3c4652f38a642d7'
 export const INDEXED_SPACE = '306598522df542f69ad72921c33ad84b'
-export const ATTRIBUTE = 'attribute'
+export const ATTRIBUTE = '808a04ceb21c4d888ad12e240613e5ca'
 
 /**
  * Collections are a data model that enable us to create references between some
@@ -59,7 +59,7 @@ export const COLLECTION_ITEM_INDEX = 'ede47e6930b044998ea4aafbda449609'
   Example Usage: Rhonda Patrick > TYPES > Person
   Note that we should probably convert "type" to "types" or a UUID in the future.
   */
-export const TYPES = 'type'
+export const TYPES = '8f151ba4de204e3c9cb499ddf96f48f1'
 
 /* Example Usage: Person > ATTRIBUTES > Age */
 export const ATTRIBUTES = '01412f8381894ab1836565c7fd358cc1'
