@@ -10,6 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from './network-local-mapping';
+import { geoEntityFragment, tripleFragment } from './fragments';
 
 const getVersionsQuery = (entityId: string, offset: number, proposalId?: string) => {
   const filter = [
@@ -41,27 +42,7 @@ const getVersionsQuery = (entityId: string, offset: number, proposalId?: string)
               name
               triplesByEntityId(filter: {isStale: {equalTo: false}}) {
                 nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
+                  ${tripleFragment}
                 }
               }
             }
@@ -72,34 +53,8 @@ const getVersionsQuery = (entityId: string, offset: number, proposalId?: string)
           id
           metadata {
             nodes {
-              id
-              name
-              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-                nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
-                }
-              }
-            }
+              ${geoEntityFragment}
+            }           
           }
         }
 

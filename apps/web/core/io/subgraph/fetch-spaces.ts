@@ -9,58 +9,32 @@ import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
+import { geoEntityFragment, spaceMetadataFragment, spacePluginsFragment } from './fragments';
 
 const getFetchSpacesQuery = () => `query {
   spaces {
     nodes {
       id
       isRootSpace
-      mainVotingPluginAddress
-      memberAccessPluginAddress
-      spacePluginAddress
-
+      ${spacePluginsFragment}
+  
       spaceEditors {
         nodes {
           accountId
         }
       }
-
+  
       spaceMembers {
         nodes {
           accountId
         }
       }
+  
       createdAtBlock
-      
+  
       metadata {
         nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
+          ${geoEntityFragment}
         }
       }
     }

@@ -10,6 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
+import { tripleFragment } from './fragments';
 
 const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
   proposals(first: ${first}, filter: {spaceId: {equalTo: ${JSON.stringify(
@@ -29,27 +30,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
             name
             triplesByEntityId(filter: {isStale: {equalTo: false}}) {
               nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
+                ${tripleFragment}
               }
             }
           }
@@ -71,27 +52,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
             name
             triplesByEntityId(filter: {isStale: {equalTo: false}}) {
               nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
+                ${tripleFragment}
               }
             }
           }

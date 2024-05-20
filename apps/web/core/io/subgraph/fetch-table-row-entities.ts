@@ -8,6 +8,7 @@ import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
+import { tripleFragment } from './fragments';
 
 // this differs from the fetchEntities method in that we pass in a custom graphql string that represents
 // the set of custom Table filters set on the table. These filters have small differences from the other
@@ -23,27 +24,7 @@ function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
         name
         triplesByEntityId(filter: { isStale: { equalTo: false } }) {
           nodes {
-            id
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-            isProtected
-            space {
-              id
-            }
+            ${tripleFragment}
           }
         }
       }

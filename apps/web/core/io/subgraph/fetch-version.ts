@@ -9,7 +9,8 @@ import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamVersion, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from './network-local-mapping';
+import { geoEntityFragment, tripleFragment } from './fragments';
 
 const getVersionsQuery = (versionId: string) => `query {
   version(id: ${JSON.stringify(versionId)}) {
@@ -32,27 +33,7 @@ const getVersionsQuery = (versionId: string) => `query {
           name
           triplesByEntityId(filter: {isStale: {equalTo: false}}) {
             nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
+              ${tripleFragment}
             }
           }
         }
@@ -63,34 +44,8 @@ const getVersionsQuery = (versionId: string) => `query {
       id
       metadata {
         nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
-        }
+          ${geoEntityFragment}
+        }           
       }
     }
 

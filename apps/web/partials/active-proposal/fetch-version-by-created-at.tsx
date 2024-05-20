@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { fetchProfile } from '~/core/io/subgraph';
+import { geoEntityFragment, tripleFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
 import { Profile, SpaceWithMetadata, Version } from '~/core/types';
@@ -52,27 +53,7 @@ const getVersionsQuery = ({
               name
               triplesByEntityId(filter: {isStale: {equalTo: false}}) {
                 nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
+                  ${tripleFragment}
                 }
               }
             }
@@ -83,34 +64,8 @@ const getVersionsQuery = ({
           id
           metadata {
             nodes {
-              id
-              name
-              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-                nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
-                }
-              }
-            }
+              ${geoEntityFragment}
+            }           
           }
         }
 

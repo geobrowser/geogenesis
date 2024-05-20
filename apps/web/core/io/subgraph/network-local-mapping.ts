@@ -17,22 +17,22 @@ import { Entity as EntityModule } from '~/core/utils/entity';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 
-type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
+type NetworkTextValue = { valueType: 'TEXT'; textValue: string };
 
-type NetworkImageValue = { valueType: 'IMAGE'; stringValue: string };
+type NetworkImageValue = { valueType: 'IMAGE'; entityValue: { id: string; name: string | null } };
 
 // Right now we can end up with a null entityValue until we handle triple validation on the subgraph
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 
-type NetworkDateValue = { valueType: 'DATE'; stringValue: string };
+type NetworkDateValue = { valueType: 'DATE'; textValue: string };
 
-type NetworkUrlValue = { valueType: 'URL'; stringValue: string };
+type NetworkUrlValue = { valueType: 'URL'; textValue: string };
 
 type NetworkCollectionValue = { valueType: 'COLLECTION'; collectionValue: { id: string } };
 
 type NetworkValue =
   | NetworkNumberValue
-  | NetworkStringValue
+  | NetworkTextValue
   | NetworkEntityValue
   | NetworkImageValue
   | NetworkDateValue
@@ -40,11 +40,8 @@ type NetworkValue =
   | NetworkCollectionValue;
 
 export type SubstreamTriple = NetworkValue & {
-  id: string;
   entity: { id: string; name: string | null };
   attribute: { id: string; name: string | null };
-  valueId: string;
-  isProtected: boolean;
   space: Space;
 };
 
@@ -54,9 +51,10 @@ type CreatedBy = {
   onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
 };
 
-export type SubstreamAction = OmitStrict<SubstreamTriple, 'space' | 'isProtected'> &
+export type SubstreamAction = OmitStrict<SubstreamTriple, 'space'> &
   NetworkValue & {
-    actionType: 'createTriple' | 'deleteTriple';
+    id: string;
+    actionType: 'SET_TRIPLE' | 'DELETE_TRIPLE';
     // @TODO: This should be a reference
     entityValue: string | null;
   };
@@ -108,12 +106,12 @@ export type SubstreamProposal = {
 
 export function extractValue(networkTriple: SubstreamTriple | SubstreamAction): Value {
   switch (networkTriple.valueType) {
-    case 'STRING':
-      return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
+    case 'TEXT':
+      return { type: 'string', value: networkTriple.textValue };
     case 'IMAGE':
-      return { type: 'image', id: networkTriple.valueId, value: networkTriple.stringValue };
+      return { type: 'image', value: networkTriple.entityValue.id };
     case 'NUMBER':
-      return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
+      return { type: 'number', value: networkTriple.numberValue };
     case 'ENTITY':
       return {
         type: 'entity',
@@ -121,22 +119,22 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamAction): 
         name: networkTriple.entityValue.name,
       };
     case 'DATE':
-      return { type: 'date', id: networkTriple.valueId, value: networkTriple.stringValue };
+      return { type: 'date', value: networkTriple.textValue };
     case 'URL':
-      return { type: 'url', id: networkTriple.valueId, value: networkTriple.stringValue };
+      return { type: 'url', value: networkTriple.textValue };
     case 'COLLECTION':
-      return { type: 'collection', id: networkTriple.valueId };
+      return { type: 'collection', value: networkTriple.collectionValue.id };
   }
 }
 
 export function extractActionValue(networkAction: SubstreamAction): Value {
   switch (networkAction.valueType) {
-    case 'STRING':
-      return { type: 'string', id: networkAction.valueId, value: networkAction.stringValue };
+    case 'TEXT':
+      return { type: 'string', value: networkAction.textValue };
     case 'IMAGE':
-      return { type: 'image', id: networkAction.valueId, value: networkAction.stringValue };
+      return { type: 'image', value: networkAction.entityValue.id };
     case 'NUMBER':
-      return { type: 'number', id: networkAction.valueId, value: networkAction.numberValue };
+      return { type: 'number', value: networkAction.numberValue };
     case 'ENTITY':
       return {
         type: 'entity',
@@ -144,11 +142,11 @@ export function extractActionValue(networkAction: SubstreamAction): Value {
         name: null,
       };
     case 'DATE':
-      return { type: 'date', id: networkAction.valueId, value: networkAction.stringValue };
+      return { type: 'date', value: networkAction.textValue };
     case 'URL':
-      return { type: 'url', id: networkAction.valueId, value: networkAction.stringValue };
+      return { type: 'url', value: networkAction.textValue };
     case 'COLLECTION':
-      return { type: 'collection', id: networkAction.valueId };
+      return { type: 'collection', value: networkAction.collectionValue.id };
   }
 }
 
@@ -165,18 +163,18 @@ export function getActionFromChangeStatus(action: Action) {
 
 function networkTripleHasEmptyValue(networkTriple: SubstreamTriple | SubstreamAction): boolean {
   switch (networkTriple.valueType) {
-    case 'STRING':
-      return !networkTriple.stringValue;
+    case 'TEXT':
+      return !networkTriple.textValue;
     case 'NUMBER':
       return !networkTriple.numberValue;
     case 'ENTITY':
       return !networkTriple.entityValue;
     case 'IMAGE':
-      return !networkTriple.stringValue;
+      return !networkTriple.entityValue;
     case 'DATE':
-      return !networkTriple.stringValue;
+      return !networkTriple.textValue;
     case 'URL':
-      return !networkTriple.stringValue;
+      return !networkTriple.textValue;
     case 'COLLECTION':
       return !networkTriple.collectionValue;
   }
@@ -184,18 +182,18 @@ function networkTripleHasEmptyValue(networkTriple: SubstreamTriple | SubstreamAc
 
 function substreamTripleHasEmptyValue(networkTriple: SubstreamAction): boolean {
   switch (networkTriple.valueType) {
-    case 'STRING':
-      return !networkTriple.stringValue;
+    case 'TEXT':
+      return !networkTriple.textValue;
     case 'NUMBER':
       return !networkTriple.numberValue;
     case 'ENTITY':
       return !networkTriple.entityValue;
     case 'IMAGE':
-      return !networkTriple.stringValue;
+      return !networkTriple.entityValue;
     case 'DATE':
-      return !networkTriple.stringValue;
+      return !networkTriple.textValue;
     case 'URL':
-      return !networkTriple.stringValue;
+      return !networkTriple.textValue;
     case 'COLLECTION':
       return !networkTriple.collectionValue;
   }
@@ -216,7 +214,6 @@ export function fromNetworkTriples(networkTriples: SubstreamTriple[]): Triple[] 
       }
 
       return {
-        id: networkTriple.id,
         entityId: networkTriple.entity.id,
         entityName: networkTriple.entity.name,
         attributeId: networkTriple.attribute.id,
@@ -243,7 +240,7 @@ export function fromNetworkActions(networkActions: SubstreamAction[], spaceId: s
         const value = extractActionValue(networkAction);
 
         switch (networkAction.actionType) {
-          case 'createTriple': {
+          case 'SET_TRIPLE': {
             return {
               type: 'createTriple' as const,
               id: networkAction.id,
@@ -256,7 +253,7 @@ export function fromNetworkActions(networkActions: SubstreamAction[], spaceId: s
             };
           }
 
-          case 'deleteTriple': {
+          case 'DELETE_TRIPLE': {
             return {
               type: 'deleteTriple' as const,
               id: networkAction.id,

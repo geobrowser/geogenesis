@@ -15,6 +15,7 @@ import {
   fromNetworkActions,
   fromNetworkTriples,
 } from './subgraph/network-local-mapping';
+import { geoEntityFragment, tripleFragment } from './subgraph/fragments';
 
 const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: string) => {
   const filter = [
@@ -34,34 +35,8 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
           id
           metadata {
             nodes {
-              id
-              name
-              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-                nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
-                }
-              }
-            }
+              ${geoEntityFragment}
+            }           
           }
         }
         createdAtBlock
@@ -83,27 +58,7 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
               name
               triplesByEntityId(filter: {isStale: {equalTo: false}}) {
                 nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
+                  ${tripleFragment}
                 }
               }
             }

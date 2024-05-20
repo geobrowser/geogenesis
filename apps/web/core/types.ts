@@ -13,13 +13,11 @@ export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date' 
 
 export type NumberValue = {
   type: 'number';
-  id: string;
   value: string;
 };
 
 export type StringValue = {
   type: 'string';
-  id: string;
   value: string;
 };
 
@@ -31,31 +29,27 @@ export type EntityValue = {
 
 export type ImageValue = {
   type: 'image';
-  id: string;
-  value: string;
+  value: string; // @TODO: This is an entity
 };
 
 export type DateValue = {
   type: 'date';
-  id: string;
   value: string;
 };
 
 export type UrlValue = {
   type: 'url';
-  id: string;
   value: string;
 };
 
 export type CollectionValue = {
   type: 'collection';
-  id: string;
+  value: string;
 };
 
 export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue | UrlValue | CollectionValue;
 
 export type Triple = {
-  id: string;
   entityId: string;
   entityName: string | null;
   attributeId: string;
@@ -139,7 +133,7 @@ type Publishable = {
   hasBeenPublished?: boolean;
 };
 
-export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
+export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction & Identifiable;
 
 export type Entity = {
   id: string;

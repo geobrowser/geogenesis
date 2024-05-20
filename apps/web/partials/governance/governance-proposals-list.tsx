@@ -17,6 +17,7 @@ import { Avatar } from '~/design-system/avatar';
 
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceStatusChip } from './governance-status-chip';
+import { tripleFragment } from '~/core/io/subgraph/fragments';
 
 interface Props {
   spaceId: string;
@@ -140,27 +141,7 @@ const getFetchSpaceProposalsQuery = (
             name
             triplesByEntityId(filter: {isStale: {equalTo: false}}) {
               nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
+                ${tripleFragment}
               }
             }
           }

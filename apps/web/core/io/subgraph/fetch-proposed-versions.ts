@@ -15,6 +15,7 @@ import {
   fromNetworkActions,
   fromNetworkTriples,
 } from './network-local-mapping';
+import { geoEntityFragment, tripleFragment } from './fragments';
 
 const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
   proposedVersions(filter: {entityId: {equalTo: ${JSON.stringify(
@@ -40,27 +41,7 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
             name
             triplesByEntityId(filter: {isStale: {equalTo: false}}) {
               nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
+                ${tripleFragment}
               }
             }
           }
@@ -71,34 +52,8 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
         id
         metadata {
           nodes {
-            id
-            name
-            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-              nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
-              }
-            }
-          }
+            ${geoEntityFragment}
+          }           
         }
       }
 

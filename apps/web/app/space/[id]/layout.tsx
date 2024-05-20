@@ -33,6 +33,7 @@ import { SpaceToAdd } from '~/partials/space-page/types';
 
 import { cachedFetchSpace } from './cached-fetch-space';
 import { getSubspacesForSpace } from './fetch-subspaces-for-space';
+import { geoEntityFragment } from '~/core/io/subgraph/fragments';
 
 interface Props {
   params: { id: string };
@@ -188,33 +189,7 @@ const getFetchSpacesQuery = () => `query {
       }
       metadata {
         nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
+          ${geoEntityFragment}
         }
       }
     }

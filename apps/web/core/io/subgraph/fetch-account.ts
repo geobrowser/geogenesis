@@ -10,6 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
+import { tripleFragment } from './fragments';
 
 export interface FetchAccountOptions {
   address: string;
@@ -38,27 +39,7 @@ function getAccountQuery(address: string) {
           name
           triplesByEntityId(filter: { isStale: { equalTo: false } }) {
             nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
+              ${tripleFragment}
             }
           }
         }

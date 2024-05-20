@@ -2,6 +2,7 @@ import { Effect, Either } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
+import { geoEntityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { SpaceWithMetadata } from '~/core/types';
@@ -19,33 +20,7 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
 
         metadata {
           nodes {
-            id
-            name
-            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-              nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
-              }
-            }
+            ${geoEntityFragment}
           }
         }
       }

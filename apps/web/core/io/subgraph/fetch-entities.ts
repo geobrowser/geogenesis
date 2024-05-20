@@ -9,6 +9,7 @@ import { Entity } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
+import { tripleFragment } from './fragments';
 
 function getFetchEntitiesQuery(
   query: string | undefined,
@@ -43,27 +44,7 @@ function getFetchEntitiesQuery(
         name
         triplesByEntityId(filter: { isStale: { equalTo: false } }) {
           nodes {
-            id
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-            isProtected
-            space {
-              id
-            }
+           ${tripleFragment} 
           }
         }
       }

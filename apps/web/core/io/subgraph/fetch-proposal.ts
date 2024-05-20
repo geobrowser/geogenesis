@@ -10,6 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
+import { tripleFragment } from './fragments';
 
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
@@ -26,27 +27,7 @@ export const getFetchProposalQuery = (id: string) => `query {
           name
           triplesByEntityId(filter: {isStale: {equalTo: false}}) {
             nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
+              ${tripleFragment}
             }
           }
         }
@@ -73,27 +54,7 @@ export const getFetchProposalQuery = (id: string) => `query {
               name
               triplesByEntityId(filter: {isStale: {equalTo: false}}) {
                 nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
+                  ${tripleFragment}
                 }
               }
             }
@@ -116,27 +77,7 @@ export const getFetchProposalQuery = (id: string) => `query {
           name
           triplesByEntityId(filter: {isStale: {equalTo: false}}) {
             nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
+              ${tripleFragment}
             }
           }
         }
