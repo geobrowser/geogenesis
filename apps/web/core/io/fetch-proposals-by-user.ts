@@ -12,7 +12,7 @@ import { graphql } from './subgraph/graphql';
 import {
   SubstreamEntity,
   SubstreamProposal,
-  fromNetworkActions,
+  fromNetworkOps,
   fromNetworkTriples,
 } from './subgraph/network-local-mapping';
 import { geoEntityFragment, tripleFragment } from './subgraph/fragments';
@@ -216,7 +216,7 @@ export async function fetchProposalsByUser({
           ...v,
           space: spaceWithMetadata,
           createdBy: profile,
-          actions: fromNetworkActions(v.actions.nodes, userId),
+          actions: fromNetworkOps(v.actions.nodes, userId),
         };
       }),
     };

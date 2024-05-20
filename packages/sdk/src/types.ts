@@ -1,6 +1,6 @@
 import type { CreateTripleAction, DeleteTripleAction } from '../legacy';
 
-export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';
+export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION' | 'IMAGE';
 
 export type Value = {
   type: ValueType;
@@ -11,7 +11,7 @@ export type Value = {
  * @see: Operations data spec is still WIP
  */
 export type SetTripleOp = {
-  op: 'SET_TRIPLE';
+  type: 'SET_TRIPLE';
   payload: {
     entityId: string;
     attributeId: string;
@@ -23,7 +23,7 @@ export type SetTripleOp = {
  * @see: Operations data spec is still WIP
  */
 export type DeleteTripleOp = {
-  op: 'DELETE_TRIPLE';
+  type: 'DELETE_TRIPLE';
   payload: {
     entityId: string;
     attributeId: string;

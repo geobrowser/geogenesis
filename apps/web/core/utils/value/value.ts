@@ -1,35 +1,41 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
-import type { EntityValue, Triple } from '~/core/types';
+import type { AppEntityValue, Triple } from '~/core/types';
 
 import { getImageHash } from '../utils';
 
 export function nameOfEntityValue(triple?: Triple) {
   if (!triple) return null;
 
-  return triple?.value?.type === 'entity' ? triple.value.name : null;
+  return triple.value.type === 'ENTITY' ? triple.value.name : null;
+}
+
+export function entityValue(triple: Triple) {
+  if (!triple) return null;
+
+  return triple.value.type === 'ENTITY' ? triple.value.id : null;
 }
 
 export function stringValue(triple?: Triple) {
   if (!triple) return null;
 
-  return triple?.value?.type === 'string' ? triple.value.value : null;
+  return triple.value.type === 'TEXT' ? triple.value.value : null;
 }
 
 export function urlValue(triple?: Triple) {
   if (!triple) return null;
 
-  return triple?.value?.type === 'url' ? triple.value.value : null;
+  return triple.value.type === 'URL' ? triple.value.value : null;
 }
 
-export function dateValue(triple?: Triple) {
+export function timeValue(triple?: Triple) {
   if (!triple) return null;
 
-  return triple?.value?.type === 'date' ? triple.value.value : null;
+  return triple.value.type === 'TIME' ? triple.value.value : null;
 }
 
 export function imageValue(triple: Triple) {
-  return triple?.value?.type === 'image' ? triple.value.value : null;
+  return triple.value.type === 'IMAGE' ? triple.value.value : null;
 }
 
 // Get the image triple value from an image path
@@ -48,10 +54,10 @@ export function toImageValue(rawValue: string) {
   }
 }
 
-export function isRelationValueType(t: Triple): t is Triple & { value: EntityValue } {
-  return t.value.type === 'entity' && t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE;
+export function isRelationValueType(t: Triple): t is Triple & { value: AppEntityValue } {
+  return t.value.type === 'ENTITY' && t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE;
 }
 
-export function isRelationValue(t: Triple): t is Triple & { value: EntityValue } {
-  return t.value.type === 'entity';
+export function isRelationValue(t: Triple): t is Triple & { value: AppEntityValue } {
+  return t.value.type === 'ENTITY';
 }

@@ -1,61 +1,43 @@
 import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
-import {
-  CreateTripleAction as CreateTripleActionSchema,
-  DeleteTripleAction as DeleteTripleActionSchema,
-} from '@geogenesis/sdk/legacy';
-
+import { Op } from '@geogenesis/sdk'
 import { SubstreamEntity } from './io/subgraph/network-local-mapping';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date' | 'url' | 'collection';
+export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'IMAGE';
 
-export type NumberValue = {
-  type: 'number';
+export type AppValue = {
+  type: 'TEXT' | 'NUMBER' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'IMAGE';
   value: string;
-};
+}
 
-export type StringValue = {
-  type: 'string';
-  value: string;
-};
-
-export type EntityValue = {
-  type: 'entity';
+export type AppEntityValue = {
+  type: 'ENTITY';
   id: string;
   name: string | null;
 };
 
-export type ImageValue = {
-  type: 'image';
-  value: string; // @TODO: This is an entity
-};
+export type Value = AppEntityValue | AppValue;
 
-export type DateValue = {
-  type: 'date';
-  value: string;
-};
-
-export type UrlValue = {
-  type: 'url';
-  value: string;
-};
-
-export type CollectionValue = {
-  type: 'collection';
-  value: string;
-};
-
-export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue | UrlValue | CollectionValue;
+export type AppOp = {
+  type: Op['type']
+  id: string;
+  attributeId: string;
+  entityId: string;
+  attributeName: string | null;
+  entityName: string | null;
+  value: Value;
+}
 
 export type Triple = {
-  entityId: string;
-  entityName: string | null;
-  attributeId: string;
-  attributeName: string | null;
-  value: Value;
   space: string;
+  entityId: string;
+  attributeId: string;
+  value: Value;
+
+  entityName: string | null;
+  attributeName: string | null;
   placeholder?: boolean;
 };
 
@@ -111,29 +93,12 @@ export type FilterClause = {
 
 export type FilterState = FilterClause[];
 
-export type CreateTripleAction = CreateTripleActionSchema & Identifiable & Triple & Publishable;
-export type DeleteTripleAction = DeleteTripleActionSchema & Identifiable & Triple & Publishable;
-
-export type EditTripleAction = {
-  type: 'editTriple';
-  before: DeleteTripleAction;
-  after: CreateTripleAction;
-} & Publishable &
-  Identifiable;
-
-// We associate an ID with actions locally so we can diff and merge them as they change locally.
-type Identifiable = {
-  id: string;
-};
-
 // We keep published actions optimistically in the store. It can take a while for the blockchain
 // to process our transaction, then a few seconds for the subgraph to pick it up and index it.
 // We keep the published actions so we can continue to render them locally while the backend catches up.
 type Publishable = {
   hasBeenPublished?: boolean;
 };
-
-export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction & Identifiable;
 
 export type Entity = {
   id: string;
@@ -223,7 +188,7 @@ export type ProposedVersion = {
   createdAt: number;
   createdAtBlock: string;
   space: SpaceWithMetadata;
-  actions: Action[];
+  ops: AppOp[];
   entity: {
     id: string;
     name: string;
@@ -255,14 +220,14 @@ export type RelationValueType = {
 
 export type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
 
-export type TripleWithStringValue = OmitStrict<Triple, 'value'> & { value: StringValue };
-export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & { value: EntityValue };
-export type TripleWithImageValue = OmitStrict<Triple, 'value'> & { value: ImageValue };
-export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: DateValue };
-export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: UrlValue };
+export type TripleWithStringValue = OmitStrict<Triple, 'value'> & { value: Value };
+export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & { value: AppEntityValue };
+export type TripleWithImageValue = OmitStrict<Triple, 'value'> & { value: Value };
+export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: Value };
+export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: Value };
 
 export type SpaceId = string;
-export type SpaceActions = Record<SpaceId, Action[]>;
+export type SpaceActions = Record<SpaceId, Op[]>;
 
 export type EntityId = string;
 export type AttributeId = string;

@@ -7,9 +7,9 @@ import { Environment } from '~/core/environment';
 import { Space, SpaceConfigEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import { spaceMetadataFragment, spacePluginsFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
-import { spaceMetadataFragment, spacePluginsFragment, tripleFragment } from './fragments';
 
 const getFetchSpaceQuery = (id: string) => `query {
   space(id: "${id}") {
@@ -121,7 +121,6 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     isRootSpace: networkSpace.isRootSpace,
     editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
     members: networkSpace.spaceMembers.nodes.map(account => account.accountId),
-    // @TODO: Map the name and image of a space from the space configuration
     spaceConfig: spaceConfigWithImage,
     createdAtBlock: networkSpace.createdAtBlock,
 

@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, D, pipe } from '@mobily/ts-belt';
 
-import { Action, EntityType, Entity as IEntity, Triple as ITriple } from '~/core/types';
+import { AppOp, EntityType, Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { ValueTypeId } from '~/core/value-types';
 
 import { Triple } from '../triple';
@@ -24,7 +24,7 @@ import { Value } from '../value';
  */
 export function description(triples: ITriple[]): string | null {
   const triple = descriptionTriple(triples);
-  return triple?.value.type === 'string' ? triple.value.value : null;
+  return triple?.value.type === 'TEXT' ? triple.value.value : null;
 }
 
 export function descriptionTriple(triples: ITriple[]): ITriple | undefined {
@@ -49,7 +49,7 @@ export function types(triples: ITriple[], currentSpace?: string): EntityType[] {
     .flatMap(([, triples]) => {
       if (triples.length === 1) {
         return triples.flatMap(triple =>
-          triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []
+          triple.value.type === 'ENTITY' ? { id: triple.value.id, name: triple.value.name } : []
         );
       }
 
@@ -59,12 +59,12 @@ export function types(triples: ITriple[], currentSpace?: string): EntityType[] {
       if (triples.length > 1 && currentSpace) {
         return triples
           .filter(triple => triple.space === currentSpace)
-          .flatMap(triple => (triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []));
+          .flatMap(triple => (triple.value.type === 'ENTITY' ? { id: triple.value.id, name: triple.value.name } : []));
       }
 
       if (triples.length > 1) {
         return triples.flatMap(triple =>
-          triple.value.type === 'entity' ? { id: triple.value.id, name: triple.value.name } : []
+          triple.value.type === 'ENTITY' ? { id: triple.value.id, name: triple.value.name } : []
         );
       }
 
@@ -79,7 +79,7 @@ export function types(triples: ITriple[], currentSpace?: string): EntityType[] {
  */
 export function name(triples: ITriple[]): string | null {
   const triple = nameTriple(triples);
-  return triple?.value.type === 'string' ? triple?.value.value : null;
+  return triple?.value.type === 'TEXT' ? triple?.value.value : null;
 }
 
 export function nameTriple(triples: ITriple[]): ITriple | undefined {
@@ -97,7 +97,7 @@ export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
 export function valueTypeId(triples: ITriple[]): ValueTypeId | null {
   // Returns SYSTEM_IDS.TEXT, SYSTEM_IDS.RELATION, etc... or null if not found
   const triple = valueTypeTriple(triples);
-  return triple?.value.type === 'entity' ? (triple?.value.id as ValueTypeId) : null;
+  return triple?.value.type === 'ENTITY' ? (triple?.value.id as ValueTypeId) : null;
 }
 
 /**
@@ -131,7 +131,7 @@ export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
  * if you have a collection of Entities from the network and want to display any updates
  * that were made to them during local editing.
  */
-export function mergeActionsWithEntities(actions: Record<string, Action[]>, networkEntities: IEntity[]): IEntity[] {
+export function mergeActionsWithEntities(actions: Record<string, AppOp[]>, networkEntities: IEntity[]): IEntity[] {
   return pipe(
     actions,
     D.values,

@@ -12,7 +12,7 @@ import { graphql } from './graphql';
 import {
   SubstreamEntity,
   SubstreamProposedVersion,
-  fromNetworkActions,
+  fromNetworkOps,
   fromNetworkTriples,
 } from './network-local-mapping';
 import { geoEntityFragment, tripleFragment } from './fragments';
@@ -179,7 +179,7 @@ export async function fetchProposedVersion({
   return {
     ...proposedVersion,
     space: spaceWithMetadata,
-    actions: fromNetworkActions(proposedVersion.actions.nodes, proposedVersion.space.id),
+    ops: fromNetworkOps(proposedVersion.actions.nodes, proposedVersion.space.id),
     createdBy: profile,
   };
 }

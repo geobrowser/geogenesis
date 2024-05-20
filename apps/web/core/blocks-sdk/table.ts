@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { getAddress } from 'viem';
 
 import { ID } from '~/core/id';
-import { Entity as IEntity, Triple as ITriple, TripleValueType } from '~/core/types';
+import { Entity as IEntity, Triple as ITriple } from '~/core/types';
 
 import { Triple } from '../utils/triple';
 

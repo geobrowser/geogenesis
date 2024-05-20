@@ -8,6 +8,7 @@ import * as React from 'react';
 
 import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
+import { geoEntityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { EditorProvider } from '~/core/state/editor-store';
@@ -33,7 +34,6 @@ import { SpaceToAdd } from '~/partials/space-page/types';
 
 import { cachedFetchSpace } from './cached-fetch-space';
 import { getSubspacesForSpace } from './fetch-subspaces-for-space';
-import { geoEntityFragment } from '~/core/io/subgraph/fragments';
 
 interface Props {
   params: { id: string };
@@ -285,8 +285,10 @@ export default async function Layout({ children, params }: Props) {
   ]);
   const coverUrl = Entity.cover(props.triples);
 
-  const typeNames = props.space?.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
-  const tabs = await buildTabsForSpacePage(props.space?.spaceConfig?.types ?? [], params);
+  const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
+  const tabs = await buildTabsForSpacePage(props.space.spaceConfig?.types ?? [], params);
+
+  console.log('space config types', props.space?.spaceConfig?.id);
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>

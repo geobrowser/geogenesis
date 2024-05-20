@@ -2,6 +2,7 @@ export interface IStorageClient {
   /** Upload a JSON-safe object */
   uploadObject(object: unknown): Promise<string>;
   uploadFile(file: File): Promise<string>;
+  uploadBinary(binary: Uint8Array): Promise<string>
 }
 
 export class StorageClient implements IStorageClient {

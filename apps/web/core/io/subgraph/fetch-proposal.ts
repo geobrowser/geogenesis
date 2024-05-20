@@ -9,7 +9,7 @@ import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, SubstreamProposal, fromNetworkOps, fromNetworkTriples } from './network-local-mapping';
 import { tripleFragment } from './fragments';
 
 export const getFetchProposalQuery = (id: string) => `query {
@@ -254,7 +254,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
         ...v,
         createdBy: profile,
         space: spaceWithMetadata,
-        actions: fromNetworkActions(v.actions.nodes, proposal.space.id),
+        actions: fromNetworkOps(v.actions.nodes, proposal.space.id),
       };
     }),
   };

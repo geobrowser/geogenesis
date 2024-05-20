@@ -268,7 +268,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         <DateField
           isEditing={true}
           onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateDateTripleValue(firstTriple, date))}
-          value={Value.dateValue(firstTriple) ?? ''}
+          value={Value.timeValue(firstTriple) ?? ''}
           variant="tableCell"
         />
       )}
