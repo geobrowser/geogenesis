@@ -16,13 +16,13 @@ export type AppValue = {
 
 export type AppEntityValue = {
   type: 'ENTITY';
-  id: string;
+  value: string;
   name: string | null;
 };
 
 export type AppCollectionValue = {
   type: 'COLLECTION';
-  id: string;
+  value: string; // @TODO: Really it's an object of a bunch of shit
 };
 
 export type AppCheckboxValue = {

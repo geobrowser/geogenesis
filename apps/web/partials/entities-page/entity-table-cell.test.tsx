@@ -176,7 +176,7 @@ describe('EntityTableCell', () => {
               name: 'some attribute name',
             },
             {
-              id: 'some entity id',
+              value: 'some entity id',
               type: 'ENTITY',
               name: 'some entity name',
             }

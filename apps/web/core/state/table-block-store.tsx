@@ -208,7 +208,7 @@ export function useTableBlock() {
           if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
 
           acc[relationType.entityId].push({
-            typeId: relationType.value.id,
+            typeId: relationType.value.value,
 
             // We can safely cast here because we filter for entity type values above.
             typeName: (relationType.value as AppEntityValue).name,

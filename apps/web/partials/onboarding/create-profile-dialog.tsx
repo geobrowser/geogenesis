@@ -141,7 +141,7 @@ export const CreateProfileDialog = () => {
         value: {
           type: 'ENTITY',
           name: 'Person',
-          id: SYSTEM_IDS.PERSON_TYPE,
+          value: SYSTEM_IDS.PERSON_TYPE,
         },
       };
 
@@ -154,7 +154,7 @@ export const CreateProfileDialog = () => {
         value: {
           type: 'ENTITY',
           name: 'Space',
-          id: SYSTEM_IDS.SPACE_CONFIGURATION,
+          value: SYSTEM_IDS.SPACE_CONFIGURATION,
         },
       };
 

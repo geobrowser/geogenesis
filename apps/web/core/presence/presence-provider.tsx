@@ -85,7 +85,7 @@ interface HasEntityChangesProps extends Props {
 function HasEntityChanges({ entityId, spaceId, children, address }: HasEntityChangesProps) {
   const { actionsFromSpace } = useActionsStore(spaceId);
   const updateMyPresence = EntityPresenceContext.useUpdateMyPresence();
-  const hasChangesToEntity = Action.getChangeCount(Action.forEntityId(actionsFromSpace, entityId)) > 0;
+  const hasChangesToEntity = actionsFromSpace.filter(a => a.entityId === entityId).length > 0;
 
   useEffect(() => {
     updateMyPresence({ address, hasChangesToEntity });

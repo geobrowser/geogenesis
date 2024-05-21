@@ -122,7 +122,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
         attributeName: 'Role',
         value: {
           type: 'ENTITY',
-          id: role.id,
+          value: role.id,
           name: role.name,
         },
       },

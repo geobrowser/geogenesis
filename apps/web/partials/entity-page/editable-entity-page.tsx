@@ -10,7 +10,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
-import type { AppEntityValue, Entity as EntityType, Triple } from '~/core/types';
+import type { Entity as EntityType, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
@@ -481,7 +481,7 @@ function EntityAttributes({
             <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
               <EntityTextAutocomplete
                 spaceId={spaceId}
-                key={`entity-${attributeId}-${triple.value.id}`}
+                key={`entity-${attributeId}-${triple.value.value}`}
                 placeholder="Add value..."
                 allowedTypes={relationTypes}
                 onDone={result =>
@@ -491,7 +491,7 @@ function EntityAttributes({
                 }
                 itemIds={entityValueTriples
                   .filter(triple => triple.attributeId === attributeId)
-                  .map(triple => (triple.value as AppEntityValue).id)}
+                  .map(triple => triple.value.value)}
                 attributeId={attributeId}
               />
             </div>
@@ -499,12 +499,12 @@ function EntityAttributes({
         }
 
         return (
-          <div key={`entity-${triple.value.id}`}>
+          <div key={`entity-${triple.value.value}`}>
             <DeletableChipButton
-              href={NavUtils.toEntity(triple.space, triple.value.id)}
+              href={NavUtils.toEntity(triple.space, triple.value.value)}
               onClick={() => removeOrResetEntityTriple(triple)}
             >
-              {triple.value.name || triple.value.id}
+              {triple.value.name || triple.value.value}
             </DeletableChipButton>
           </div>
         );
@@ -552,7 +552,7 @@ function EntityAttributes({
 
         const tripleType: TripleValueType = triples[0].value.type || 'string';
 
-        const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'ENTITY' && !triples[0].value.id;
+        const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'ENTITY' && !triples[0].value.value;
         const attributeName = triples[0].attributeName;
         const isPlaceholder = triples[0].placeholder;
         const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
@@ -587,7 +587,7 @@ function EntityAttributes({
                   allowedTypes={relationTypes}
                   entityValueIds={entityValueTriples
                     .filter(triple => triple.attributeId === attributeId)
-                    .map(triple => (triple.value as AppEntityValue).id)}
+                    .map(triple => triple.value.value)}
                   attributeId={attributeId}
                 />
               )}

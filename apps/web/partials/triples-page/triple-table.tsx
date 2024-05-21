@@ -78,7 +78,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         }
 
         if (value.type === 'ENTITY') {
-          return <LinkableChip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</LinkableChip>;
+          return <LinkableChip href={NavUtils.toEntity(space, value.value)}>{value.name ?? value.value}</LinkableChip>;
         }
 
         if (value.type === 'IMAGE') {

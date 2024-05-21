@@ -102,7 +102,7 @@ export function useEditorStore() {
             attrs: {
               spaceId,
               id: blockId,
-              typeId: (rowTypeTriple.value as AppEntityValue).id,
+              typeId: rowTypeTriple.value.value,
               typeName: Value.nameOfEntityValue(rowTypeTriple),
             },
           };
@@ -245,7 +245,7 @@ export function useEditorStore() {
           entityName: getNodeName(node),
           attributeId: SYSTEM_IDS.PARENT_ENTITY,
           attributeName: 'Markdown Content',
-          value: { id: entityId, type: 'ENTITY', name },
+          value: { value: entityId, type: 'ENTITY', name },
         },
         spaceId
       );
@@ -275,7 +275,7 @@ export function useEditorStore() {
             entityName: getNodeName(node),
             attributeId: SYSTEM_IDS.ROW_TYPE,
             attributeName: 'Row Type',
-            value: { type: 'ENTITY', name: rowTypeEntityName, id: rowTypeEntityId },
+            value: { type: 'ENTITY', name: rowTypeEntityName, value: rowTypeEntityId },
           },
           spaceId
         );
@@ -491,13 +491,13 @@ const getNodeId = (node: JSONContent): string => node.attrs?.id ?? node?.content
 const getBlockTypeValue = (nodeType?: string): EntityValue => {
   switch (nodeType) {
     case 'paragraph':
-      return { id: SYSTEM_IDS.TEXT_BLOCK, type: 'ENTITY', name: 'Text Block' };
+      return { value: SYSTEM_IDS.TEXT_BLOCK, type: 'ENTITY', name: 'Text Block' };
     case 'image':
-      return { id: SYSTEM_IDS.IMAGE_BLOCK, type: 'ENTITY', name: 'Image Block' };
+      return { value: SYSTEM_IDS.IMAGE_BLOCK, type: 'ENTITY', name: 'Image Block' };
     case 'tableNode':
-      return { id: SYSTEM_IDS.TABLE_BLOCK, type: 'ENTITY', name: 'Table Block' };
+      return { value: SYSTEM_IDS.TABLE_BLOCK, type: 'ENTITY', name: 'Table Block' };
     default:
-      return { id: SYSTEM_IDS.TEXT_BLOCK, type: 'ENTITY', name: 'Text Block' };
+      return { value: SYSTEM_IDS.TEXT_BLOCK, type: 'ENTITY', name: 'Text Block' };
   }
 };
 

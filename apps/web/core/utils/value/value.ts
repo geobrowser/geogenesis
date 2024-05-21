@@ -13,7 +13,7 @@ export function nameOfEntityValue(triple?: Triple) {
 export function entityValue(triple: Triple) {
   if (!triple) return null;
 
-  return triple.value.type === 'ENTITY' ? triple.value.id : null;
+  return triple.value.type === 'ENTITY' ? triple.value.value : null;
 }
 
 export function stringValue(triple?: Triple) {

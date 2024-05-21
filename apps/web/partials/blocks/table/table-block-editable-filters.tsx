@@ -38,13 +38,13 @@ export function TableBlockEditableFilters() {
         return {
           columnId: c.id,
           columnName: Entity.name(c.triples) ?? '',
-          valueType: maybeValueType ? valueTypes[maybeValueType] : 'string',
+          valueType: maybeValueType ? valueTypes[maybeValueType] : 'TEXT',
           value: '',
           valueName: null,
         };
       })
       // Filter out any columns with names and any columns that are not entity or string value types
-      .flatMap(c => (c.columnName !== '' && (c.valueType === 'entity' || c.valueType === 'string') ? [c] : [])),
+      .flatMap(c => (c.columnName !== '' && (c.valueType === 'ENTITY' || c.valueType === 'TEXT') ? [c] : [])),
   ];
 
   const onCreateFilter = ({

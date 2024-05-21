@@ -47,7 +47,7 @@ export function types(triples: ITriple[], currentSpace?: string): EntityType[] {
     .flatMap(([, triples]) => {
       if (triples.length === 1) {
         return triples.flatMap(triple =>
-          triple.value.type === 'ENTITY' ? { id: triple.value.id, name: triple.value.name } : []
+          triple.value.type === 'ENTITY' ? { id: triple.value.value, name: triple.value.name } : []
         );
       }
 
@@ -57,12 +57,14 @@ export function types(triples: ITriple[], currentSpace?: string): EntityType[] {
       if (triples.length > 1 && currentSpace) {
         return triples
           .filter(triple => triple.space === currentSpace)
-          .flatMap(triple => (triple.value.type === 'ENTITY' ? { id: triple.value.id, name: triple.value.name } : []));
+          .flatMap(triple =>
+            triple.value.type === 'ENTITY' ? { id: triple.value.value, name: triple.value.name } : []
+          );
       }
 
       if (triples.length > 1) {
         return triples.flatMap(triple =>
-          triple.value.type === 'ENTITY' ? { id: triple.value.id, name: triple.value.name } : []
+          triple.value.type === 'ENTITY' ? { id: triple.value.value, name: triple.value.name } : []
         );
       }
 
@@ -95,7 +97,7 @@ export function valueTypeTriple(triples: ITriple[]): ITriple | undefined {
 export function valueTypeId(triples: ITriple[]): ValueTypeId | null {
   // Returns SYSTEM_IDS.TEXT, SYSTEM_IDS.RELATION, etc... or null if not found
   const triple = valueTypeTriple(triples);
-  return triple?.value.type === 'ENTITY' ? (triple?.value.id as ValueTypeId) : null;
+  return triple?.value.type === 'ENTITY' ? (triple?.value.value as ValueTypeId) : null;
 }
 
 /**

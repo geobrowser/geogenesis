@@ -5,7 +5,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { AppEntityValue, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
+import { Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { groupBy } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
@@ -244,7 +244,7 @@ const listener =
             type: 'SET_TRIPLE',
             value: {
               type: 'ENTITY',
-              id: valueType,
+              value: valueType,
               name: valueTypeNames[valueType],
             },
           },
@@ -321,7 +321,7 @@ const listener =
                 entityName: triple.entityName,
                 attributeId: triple.attributeId,
                 attributeName: triple.attributeName,
-                value: { id: '', type: 'ENTITY', name: '' },
+                value: { value: '', type: 'ENTITY', name: '' },
               },
               context.spaceId
             );
@@ -366,7 +366,7 @@ const listener =
         if (
           triplesByAttributeId[attribute.id]?.length === 1 &&
           triplesByAttributeId[attribute.id][0].value.type === 'ENTITY' &&
-          !(triplesByAttributeId[attribute.id][0].value as AppEntityValue).id
+          !triplesByAttributeId[attribute.id][0].value.value
         ) {
           return upsert(
             {
@@ -374,7 +374,7 @@ const listener =
               type: 'SET_TRIPLE',
               value: {
                 type: 'ENTITY',
-                id: linkedEntity.id,
+                value: linkedEntity.id,
                 name: linkedEntity.name,
               },
               attributeName: triplesByAttributeId[attribute.id][0].attributeName,
@@ -393,7 +393,7 @@ const listener =
             attributeName: triplesByAttributeId[attribute.id][0].attributeName,
             value: {
               type: 'ENTITY',
-              id: linkedEntity.id,
+              value: linkedEntity.id,
               name: linkedEntity.name,
             },
           },
@@ -494,7 +494,7 @@ const listener =
             attributeName,
             value: {
               type: 'ENTITY',
-              id: '',
+              value: '',
               name: '',
             },
           },
@@ -514,7 +514,7 @@ const listener =
             attributeName,
             value: {
               type: 'ENTITY',
-              id: entityId,
+              value: entityId,
               name: entityName,
             },
           },
@@ -529,7 +529,7 @@ const listener =
           entityName: '',
           attributeId: SYSTEM_IDS.TYPES,
           attributeName: 'Types',
-          value: { id: SYSTEM_IDS.ATTRIBUTE, type: 'ENTITY', name: 'Attribute' },
+          value: { value: SYSTEM_IDS.ATTRIBUTE, type: 'ENTITY', name: 'Attribute' },
         });
 
         const newAttributeNameTriple = Triple.withId({
@@ -547,7 +547,7 @@ const listener =
           entityName: context.entityName,
           attributeId: SYSTEM_IDS.ATTRIBUTES,
           attributeName: 'Attributes',
-          value: { id: newAttributeTriple.entityId, type: 'ENTITY', name: newAttributeNameTriple.entityName },
+          value: { value: newAttributeTriple.entityId, type: 'ENTITY', name: newAttributeNameTriple.entityName },
         });
 
         const newValueTypeTriple = Triple.withId({
@@ -556,7 +556,7 @@ const listener =
           entityName: '',
           attributeId: SYSTEM_IDS.VALUE_TYPE,
           attributeName: 'Value type',
-          value: { id: SYSTEM_IDS.TEXT, type: 'ENTITY', name: 'Text' },
+          value: { value: SYSTEM_IDS.TEXT, type: 'ENTITY', name: 'Text' },
         });
 
         upsert({ ...newAttributeNameTriple, type: 'SET_TRIPLE' }, context.spaceId);

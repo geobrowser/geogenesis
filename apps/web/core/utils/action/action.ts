@@ -12,8 +12,6 @@ export const getValue = (op: AppOp, fallback: boolean | string = false): string 
   switch (op.value.type) {
     case 'ENTITY':
     case 'COLLECTION':
-      value = op.value.id;
-      break;
     case 'TEXT':
     case 'NUMBER':
     case 'IMAGE':

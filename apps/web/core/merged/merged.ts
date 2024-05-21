@@ -91,7 +91,7 @@ export class Merged implements IMergedDataSource {
         }
 
         if (filter.field === 'linked-to') {
-          return t.value.type === 'ENTITY' && t.value.id === filter.value;
+          return t.value.type === 'ENTITY' && t.value.value === filter.value;
         }
 
         if (filter.field === 'value') {

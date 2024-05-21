@@ -59,7 +59,7 @@ export function useTypesStore(): {
 
     if (!spaceConfigId) {
       const localSpaceConfigId = triplesFromSpaceActions.find(
-        t => t.value.type === 'ENTITY' && t.value.id === SYSTEM_IDS.SPACE_CONFIGURATION
+        t => t.value.type === 'ENTITY' && t.value.value === SYSTEM_IDS.SPACE_CONFIGURATION
       )?.entityId;
 
       const localForeignTriples = pipe(
@@ -72,7 +72,7 @@ export function useTypesStore(): {
         // entity whose entityId === t.value.id
         A.map(t => ({
           id: t.id,
-          entityId: t.value.type === 'ENTITY' ? t.value.id : '',
+          entityId: t.value.type === 'ENTITY' ? t.value.value : '',
           entityName: t.value.type === 'ENTITY' ? (t.value.name ? t.value.name : '') : '', // lol
           space: t.space,
         }))
@@ -91,7 +91,7 @@ export function useTypesStore(): {
       // entity whose entityId === t.value.id
       A.map(t => ({
         id: t.id,
-        entityId: t.value.type === 'ENTITY' ? t.value.id : '',
+        entityId: t.value.type === 'ENTITY' ? t.value.value : '',
         entityName: t.value.type === 'ENTITY' ? (t.value.name ? t.value.name : '') : '', // lol
         space: t.space,
       }))
@@ -105,16 +105,7 @@ export function useTypesStore(): {
 
     const globalActions = actions[space.id] || [];
     const localActions = globalActions.filter(a => {
-      const isCreate =
-        a.type === 'createTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
-      const isDelete =
-        a.type === 'deleteTriple' && a.attributeId === SYSTEM_IDS.TYPES && a.value.id === SYSTEM_IDS.SCHEMA_TYPE;
-      const isRemove =
-        a.type === 'editTriple' &&
-        a.before.attributeId === SYSTEM_IDS.TYPES &&
-        a.before.value.id === SYSTEM_IDS.SCHEMA_TYPE;
-
-      return isCreate || isDelete || isRemove;
+      return a.attributeId === SYSTEM_IDS.TYPES && a.value.value === SYSTEM_IDS.SCHEMA_TYPE && !a.isDeleted;
     });
 
     const triplesFromActions = Triple.merge(localActions, initialTypes);

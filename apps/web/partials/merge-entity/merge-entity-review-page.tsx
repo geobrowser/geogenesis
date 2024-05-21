@@ -116,9 +116,9 @@ function EntityReviewAttributes({
         return <WebUrlField isEditing={false} value={triple.value.value} />;
       case 'ENTITY': {
         return (
-          <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">
-            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.id)}>
-              {triple.value.name || triple.value.id}
+          <div key={`entity-${triple.attributeId}-${triple.value.value}-${triple.id}`} className="mt-1">
+            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.value)}>
+              {triple.value.name || triple.value.value}
             </LinkableChip>
           </div>
         );

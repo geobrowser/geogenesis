@@ -89,7 +89,7 @@ function useOptimisticAttributes({
         attributeName: 'Attributes',
         value: {
           type: 'ENTITY',
-          id: attribute.id,
+          value: attribute.id,
           name: attribute.name,
         },
       },
@@ -125,7 +125,7 @@ function useOptimisticAttributes({
         space: spaceId,
         value: {
           type: 'ENTITY',
-          id: nameTriple.entityId,
+          value: nameTriple.entityId,
           name: nameTriple.entityName,
         },
       }),
@@ -145,7 +145,7 @@ function useOptimisticAttributes({
         remove(attributeValueTypeTriple, attributeSpace);
       }
 
-      const oldValueTypeId = attributeValueTypeTriple.value.id;
+      const oldValueTypeId = attributeValueTypeTriple.value.value;
 
       // We want to make sure that the ID is actually one of the value types
       // before we run any migrations.
@@ -173,7 +173,7 @@ function useOptimisticAttributes({
         space: attributeSpace,
         value: {
           type: 'ENTITY',
-          id: newValueTypeId,
+          value: newValueTypeId,
           name: valueTypeNames[newValueTypeId],
         },
       });
@@ -219,7 +219,7 @@ function useOptimisticAttributes({
 
       // Fetch the the entities for each of the Attribute in the type
       const maybeAttributeEntities = await Promise.all(
-        attributeTriples.map(t => merged.fetchEntity({ id: t.value.id }))
+        attributeTriples.map(t => merged.fetchEntity({ id: t.value.value }))
       );
 
       return maybeAttributeEntities.filter(Entity.isNonNull);
@@ -379,7 +379,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownInd
                 // do not show name column
                 if (index === 0) return null;
 
-                const shownColumnTriple = shownColumnTriples.find(triple => triple.value.id === column.id) ?? null;
+                const shownColumnTriple = shownColumnTriples.find(triple => triple.value.value === column.id) ?? null;
 
                 return (
                   <ToggleColumn
@@ -440,7 +440,7 @@ const ToggleColumn = ({
           attributeName,
           value: {
             type: 'ENTITY',
-            id,
+            value: id,
             name,
           },
         },
@@ -633,7 +633,7 @@ function SchemaAttributes() {
         {attributes?.map(attributeEntity => {
           const valueTypeId: ValueTypeId | undefined = attributeEntity.triples.find(
             t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
-          )?.value.id as ValueTypeId;
+          )?.value.value as ValueTypeId;
 
           const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
 

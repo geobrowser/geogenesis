@@ -60,7 +60,7 @@ export const createInitialSchemaTriples = (spaceId: string, entityId: string): I
     attributeName: 'Types',
     attributeId: SYSTEM_IDS.TYPES,
     value: {
-      id: '',
+      value: '',
       type: 'ENTITY',
       name: '',
     },
@@ -107,7 +107,7 @@ export function useEntityPageStore() {
   */
   const typeTriples = React.useMemo(() => {
     return triples.filter(
-      triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.type === 'ENTITY' && triple.value.id !== ''
+      triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.type === 'ENTITY' && triple.value.value !== ''
     );
   }, [triples]);
 
@@ -129,7 +129,7 @@ export function useEntityPageStore() {
             filter: [
               {
                 field: 'entity-id',
-                value: triple.value.type === 'ENTITY' ? triple.value.id : '',
+                value: triple.value.type === 'ENTITY' ? triple.value.value : '',
               },
               {
                 field: 'attribute-id',
@@ -154,7 +154,7 @@ export function useEntityPageStore() {
             filter: [
               {
                 field: 'entity-id',
-                value: attribute.value.type === 'ENTITY' ? attribute.value.id : '',
+                value: attribute.value.type === 'ENTITY' ? attribute.value.value : '',
               },
               {
                 field: 'attribute-id',
@@ -169,19 +169,19 @@ export function useEntityPageStore() {
 
       const valueTypesToAttributesMap = attributeTriples.reduce<Record<string, ValueTypeId | undefined>>(
         (acc, attribute) => {
-          acc[attribute.value.id] = valueTypeTriples.find(t => t.entityId === attribute.value.id)?.value
-            .id as ValueTypeId;
+          acc[attribute.value.value] = valueTypeTriples.find(t => t.entityId === attribute.value.value)?.value
+            .value as ValueTypeId;
           return acc;
         },
         {}
       );
 
       const schemaTriples = attributeTriples.map(attribute => {
-        const valueType = valueTypesToAttributesMap[attribute.value.id];
+        const valueType = valueTypesToAttributesMap[attribute.value.value];
 
         return {
           ...Triple.emptyPlaceholder(spaceId, id, valueType),
-          attributeId: attribute.value.id,
+          attributeId: attribute.value.value,
           attributeName: Value.nameOfEntityValue(attribute),
         };
       });

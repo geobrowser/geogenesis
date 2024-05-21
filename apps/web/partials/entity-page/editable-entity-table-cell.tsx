@@ -4,7 +4,7 @@ import { memo } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { AppEntityValue, Cell, Triple } from '~/core/types';
+import { Cell, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
@@ -205,7 +205,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           {triples.map(triple => (
             <div key={`entity-${triple.value}`}>
               <DeletableChipButton
-                href={NavUtils.toEntity(triple.space, (triple.value as AppEntityValue).id)}
+                href={NavUtils.toEntity(triple.space, triple.value.value)}
                 onClick={() => removeEntityTriple(triple)}
               >
                 {Value.nameOfEntityValue(triple)}
@@ -217,7 +217,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             onDone={entity => createEntityTripleWithValue(attributeId, entity)}
             entityValueIds={entityValueTriples
               .filter(triple => triple.attributeId === attributeId)
-              .map(triple => (triple.value as AppEntityValue).id)}
+              .map(triple => triple.value.value)}
             allowedTypes={typesToFilter}
             spaceId={space}
             attributeId={attributeId}
@@ -230,9 +230,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           spaceId={space}
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
-          itemIds={entityValueTriples
-            .filter(t => t.attributeId === attributeId)
-            .map(t => (t.value as AppEntityValue).id)}
+          itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.value)}
           allowedTypes={typesToFilter}
           attributeId={attributeId}
           containerClassName="!z-20"

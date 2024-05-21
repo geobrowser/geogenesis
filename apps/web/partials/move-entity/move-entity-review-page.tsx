@@ -55,8 +55,8 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
       case 'ENTITY': {
         return (
           <div key={`entity-${triple.attributeId}-${triple.id}`} className="mt-1">
-            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.id)}>
-              {triple.value.name || triple.value.id}
+            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.value)}>
+              {triple.value.name || triple.value.value}
             </LinkableChip>
           </div>
         );

@@ -74,7 +74,7 @@ function AttributeSearch({
     allowedTypes: [SYSTEM_IDS.SCHEMA_TYPE],
   });
 
-  const { create, remove } = useActionsStore();
+  const { upsert, remove } = useActionsStore();
   const { spaces } = useSpaces();
 
   const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId });
@@ -85,40 +85,33 @@ function AttributeSearch({
   const onSelect = async (result: Entity) => {
     if (!attributeSpaceId) return;
 
-    create(
-      Triple.withId({
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: attributeId,
         attributeId: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
         attributeName: 'Relation Value Types',
         entityName: attributeName,
-
-        // Ensure that we create the triple for the relation value type in the same space
-        // as the attribute itself. Eventually we might want space-scoped triples for data
-        // in which case we would want to set triple in the current space instead.
-        space: attributeSpaceId,
         value: {
-          type: 'entity',
-          id: result.id,
+          type: 'ENTITY',
+          value: result.id,
           name: result.name,
         },
-      })
+      },
+      // Ensure that we create the triple for the relation value type in the same space
+      // as the attribute itself. Eventually we might want space-scoped triples for data
+      // in which case we would want to set triple in the current space instead.
+      attributeSpaceId
     );
   };
 
   const onRemove = ({ typeId, spaceIdOfAttribute, typeName }: RelationValueType) => {
     remove(
-      Triple.withId({
+      {
         entityId: attributeId,
         attributeId: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
-        attributeName: 'Relation Value Types',
-        entityName: attributeName,
-        space: spaceIdOfAttribute,
-        value: {
-          type: 'entity',
-          id: typeId,
-          name: typeName,
-        },
-      })
+      },
+      spaceIdOfAttribute
     );
   };
 

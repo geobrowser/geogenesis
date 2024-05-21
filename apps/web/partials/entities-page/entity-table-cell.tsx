@@ -36,8 +36,8 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
 
         if (value.type === 'ENTITY') {
           return (
-            <LinkableChip key={value.id} href={NavUtils.toEntity(space, value.id)}>
-              {value.name ?? value.id}
+            <LinkableChip key={value.value} href={NavUtils.toEntity(space, value.value)}>
+              {value.name ?? value.value}
             </LinkableChip>
           );
         }

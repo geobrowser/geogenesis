@@ -197,7 +197,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
           ...spaceRole,
           value: {
             type: 'ENTITY',
-            id: roleEntityId,
+            value: roleEntityId,
             name: roleName,
           },
         },
@@ -245,7 +245,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     spaceTriples.forEach(triple => {
       // Remove person type
-      if (triple.value.id === SYSTEM_IDS.PERSON_TYPE) {
+      if (triple.value.value === SYSTEM_IDS.PERSON_TYPE) {
         remove(triple, spaceId);
       } else {
         // Update entity id of existing name/role (and possibly avatar) triples
@@ -342,7 +342,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
         attributeName: 'Types',
         value: {
           type: 'ENTITY',
-          id: SYSTEM_IDS.PERSON_TYPE,
+          value: SYSTEM_IDS.PERSON_TYPE,
           name: 'Person',
         },
       },
@@ -577,4 +577,4 @@ const getInitialRoleName = (role: TripleType): string => {
   }
 };
 
-const getInitialRoleEntityId = (role: TripleType): string => role.value.id;
+const getInitialRoleEntityId = (role: TripleType): string => role.value.value;

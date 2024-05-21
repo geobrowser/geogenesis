@@ -39,11 +39,11 @@ export function emptyValue(type: TripleValueType): Value {
     },
     ENTITY: {
       type: 'ENTITY',
-      id: '',
+      value: '',
       name: null,
     } as AppEntityValue,
     COLLECTION: {
-      id: '',
+      value: '',
       type: 'COLLECTION',
     },
     NUMBER: {
@@ -148,10 +148,10 @@ export function withLocalNames(appTriples: Triple[], triples: Triple[]): Triple[
     }
 
     // The triple has a an entity value whose name changed
-    if (newEntityNames[(triple.value as AppEntityValue).id]) {
+    if (newEntityNames[triple.value.value]) {
       newTriple.value = {
         ...triple.value,
-        name: newEntityNames[(triple.value as AppEntityValue).id],
+        name: newEntityNames[triple.value.value],
       } as AppEntityValue;
     }
 
@@ -162,19 +162,12 @@ export function withLocalNames(appTriples: Triple[], triples: Triple[]): Triple[
 export const getValue = (triple: Triple): string | null => {
   switch (triple.value.type) {
     case 'NUMBER':
-      return triple.value.value;
     case 'TEXT':
-      return triple.value.value;
     case 'ENTITY':
-      return triple.value.id;
     case 'IMAGE':
-      return triple.value.value;
     case 'TIME':
-      return triple.value.value;
     case 'URL':
-      return triple.value.value;
     case 'COLLECTION':
-      return triple.value.id;
     case 'CHECKBOX':
       throw new Error('checkbox not supported');
   }
@@ -200,7 +193,7 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
         attributeId: t.attributeId,
         value: {
           type: t.value.type,
-          value: t.value.type === 'ENTITY' || t.value.type === 'COLLECTION' ? t.value.id : t.value.value,
+          value: t.value.value,
         },
       },
     };

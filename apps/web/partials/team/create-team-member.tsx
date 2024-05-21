@@ -101,7 +101,7 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
         attributeName: 'Role',
         value: {
           type: 'ENTITY',
-          id: role.id,
+          value: role.id,
           name: role.name,
         },
       },
@@ -118,7 +118,7 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
         attributeName: 'Types',
         value: {
           type: 'ENTITY',
-          id: SYSTEM_IDS.PERSON_TYPE,
+          value: SYSTEM_IDS.PERSON_TYPE,
           name: 'Person',
         },
       },

@@ -29,7 +29,7 @@ export const mapMergedTriplesToRelationValueTypes = (
         if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
 
         acc[relationType.entityId].push({
-          typeId: relationType.value.id,
+          typeId: relationType.value.value,
           typeName: relationType.value.name,
           spaceIdOfAttribute: relationType.space,
         });

@@ -107,7 +107,7 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
     case 'ENTITY':
       return {
         type: 'ENTITY',
-        id: networkTriple.entityValue.id,
+        value: networkTriple.entityValue.id,
         name: networkTriple.entityValue.name,
       };
     case 'TIME':
@@ -115,7 +115,7 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
     case 'URL':
       return { type: 'URL', value: networkTriple.textValue };
     case 'COLLECTION':
-      return { type: 'COLLECTION', id: networkTriple.collectionValue.id };
+      return { type: 'COLLECTION', value: networkTriple.collectionValue.id };
   }
 }
 
@@ -130,7 +130,7 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
     case 'ENTITY':
       return {
         type: 'ENTITY',
-        id: networkAction.entityValue,
+        value: networkAction.entityValue,
         name: null,
       };
     case 'TIME':
@@ -138,7 +138,7 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
     case 'URL':
       return { type: 'URL', value: networkAction.textValue };
     case 'COLLECTION':
-      return { type: 'COLLECTION', id: networkAction.collectionValue.id };
+      return { type: 'COLLECTION', value: networkAction.collectionValue.id };
   }
 }
 

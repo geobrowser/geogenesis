@@ -8,11 +8,9 @@ import { useMergedData } from '../hooks/use-merged-data';
 import { ID } from '../id';
 import { Merged } from '../merged';
 import {
-  Action,
-  DeleteTripleAction,
-  EditTripleAction,
+  AppOp,
   Triple as ITriple,
-  TripleValueType,
+  ValueType as TripleValueType,
   TripleWithDateValue,
   TripleWithStringValue,
   TripleWithUrlValue,
@@ -43,8 +41,7 @@ export type MigrateAction =
 
 interface MigrateHubConfig {
   actionsApi: {
-    create: ReturnType<typeof useActionsStore>['create'];
-    update: ReturnType<typeof useActionsStore>['update'];
+    upsert: ReturnType<typeof useActionsStore>['upsert'];
     remove: ReturnType<typeof useActionsStore>['remove'];
   };
   queryClient: QueryClient;
@@ -52,10 +49,10 @@ interface MigrateHubConfig {
 }
 
 export interface IMigrateHub {
-  dispatch: (action: MigrateAction) => Promise<Action[]>;
+  dispatch: (action: MigrateAction) => Promise<AppOp[]>;
 }
 
-async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise<Action[]> {
+async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise<AppOp[]> {
   switch (action.type) {
     case 'DELETE_ENTITY': {
       const { entityId } = action.payload;
@@ -107,9 +104,9 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
       });
 
       return triplesReferencingEntity.map(
-        (t): DeleteTripleAction => ({
+        (t): AppOp => ({
           ...t,
-          type: 'deleteTriple',
+          type: 'DELETE_TRIPLE',
         })
       );
     }
@@ -188,9 +185,9 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
           // can migrate to date
           // can migrate to url
           // delete otherwise
-          case 'string': {
+          case 'TEXT': {
             switch (newValueType) {
-              case 'url': {
+              case 'URL': {
                 const maybeMigratedTriple = migrateStringTripleToUrlTriple(
                   // Should be safe to cast here since we've type narrowed with the above
                   // switch statements.
@@ -206,7 +203,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
                 break;
               }
 
-              case 'date': {
+              case 'TIME': {
                 const maybeMigratedTriple = migrateStringTripleToDateTriple(
                   // Should be safe to cast here since we've type narrowed with the above
                   // switch statements.
@@ -229,8 +226,8 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
 
           // can migrate to string
           // delete otherwise
-          case 'date': {
-            if (newValueType === 'string') {
+          case 'TIME': {
+            if (newValueType === 'TEXT') {
               const newTriple = migrateDateTripleToStringTriple(
                 // Should be safe to cast here since we've type narrowed with the above
                 // switch statements.
@@ -247,8 +244,8 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
 
           // can migrate to string
           // delete otherwise
-          case 'url': {
-            if (newValueType === 'string') {
+          case 'URL': {
+            if (newValueType === 'TEXT') {
               const newTriple = migrateUrlTripleToStringTriple(
                 // Should be safe to cast here since we've type narrowed with the above
                 // switch statements.
@@ -299,7 +296,7 @@ function migrateHub(config: MigrateHubConfig): IMigrateHub {
 }
 
 export function useMigrateHub() {
-  const { create, update, remove, addActionsToSpaces } = useActionsStore();
+  const { upsert, remove, addActionsToSpaces } = useActionsStore();
   const queryClient = useQueryClient();
   const merged = useMergedData();
 
@@ -308,14 +305,13 @@ export function useMigrateHub() {
   const hub = React.useMemo(() => {
     return migrateHub({
       actionsApi: {
-        create,
-        update,
+        upsert,
         remove,
       },
       merged,
       queryClient,
     });
-  }, [create, update, remove, queryClient, merged]);
+  }, [remove, queryClient, merged]);
 
   const dispatch = React.useCallback(
     async (action: MigrateAction) => {
@@ -323,7 +319,7 @@ export function useMigrateHub() {
 
       const actionsToBatch = groupBy([...actions], action => {
         switch (action.type) {
-          case 'createTriple':
+          case 'SET_TRIPLE':
           case 'deleteTriple':
             return action.space;
           case 'editTriple':
