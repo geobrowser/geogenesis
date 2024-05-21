@@ -64,7 +64,7 @@ export function emptyValue(type: TripleValueType): Value {
     },
     CHECKBOX: {
       type: 'CHECKBOX',
-      value: false,
+      value: '',
     },
   };
 
