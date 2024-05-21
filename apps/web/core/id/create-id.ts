@@ -14,7 +14,7 @@ export function getAppTripleId(triple: Pick<Triple, 'entityId' | 'attributeId'>,
  * Triple id encoding should match between client and network.
  * As a future improvement, we could try to run the same code between assemblyscript/typescript.
  */
-export function createTripleId(triple: OmitStrict<Triple, 'id'>): string {
+export function createTripleId(triple: Pick<Triple, 'attributeId' | 'space' | 'entityId'>): string {
   return `${triple.space}:${triple.entityId}:${triple.attributeId}`;
 }
 

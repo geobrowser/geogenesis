@@ -1,5 +1,6 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { parse } from 'csv/sync';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
@@ -12,9 +13,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
+import { createTripleId } from '~/core/id/create-id';
 import { Subgraph } from '~/core/io';
 import { Entity as EntityType, Triple as TripleType } from '~/core/types';
-import type { Space } from '~/core/types';
+import type { AppOp, Space, Value } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
 
@@ -32,7 +34,7 @@ import { Upload } from '~/design-system/icons/upload';
 import { Url } from '~/design-system/icons/url';
 import { Select } from '~/design-system/select';
 
-import { actionsAtom, examplesAtom, headersAtom, loadingAtom, publishAtom, recordsAtom, stepAtom } from './atoms';
+import { examplesAtom, headersAtom, loadingAtom, publishAtom, recordsAtom, stepAtom, triplesAtom } from './atoms';
 
 dayjs.extend(utc);
 
@@ -50,7 +52,7 @@ type EntityAttributesType = Record<string, { index: number; type: SupportedValue
 export const Generate = ({ spaceId }: GenerateProps) => {
   const { isEditor } = useAccessControl(spaceId);
 
-  const [actions, setActions] = useAtom(actionsAtom);
+  const [actions, setActions] = useAtom(triplesAtom);
   const [isLoading, setIsLoading] = useAtom(loadingAtom);
   const [step, setStep] = useAtom(stepAtom);
   const setIsPublishOpen = useSetAtom(publishAtom);
@@ -159,7 +161,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
       }
 
       // @TODO: Use actual type
-      const newActions: Array<any> = [];
+      const newTriples: Array<TripleType> = [];
 
       entities.forEach(entity => {
         const newEntityId = typeof entityIdIndex === 'number' ? entity[entityIdIndex] : ID.createEntityId();
@@ -167,36 +169,30 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         if (typeof entityNameIndex !== 'number' || !entityType) return;
 
         // Create new entity + set entity name
-        newActions.push({
-          ...Triple.withId({
-            space: spaceId,
-            entityId: newEntityId,
-            entityName: entity[entityNameIndex],
-            attributeId: 'name',
-            attributeName: 'Name',
-            value: {
-              type: 'TEXT',
-              value: entity[entityNameIndex],
-            },
-          }),
-          type: 'createTriple',
+        newTriples.push({
+          space: spaceId,
+          entityId: newEntityId,
+          entityName: entity[entityNameIndex],
+          attributeId: SYSTEM_IDS.NAME,
+          attributeName: 'Name',
+          value: {
+            type: 'TEXT',
+            value: entity[entityNameIndex],
+          },
         });
 
         // Create entity type
-        newActions.push({
-          ...Triple.withId({
-            space: spaceId,
-            entityId: newEntityId,
-            entityName: entity[entityNameIndex],
-            attributeId: 'type',
-            attributeName: 'Types',
-            value: {
-              type: 'ENTITY',
-              value: entityType.id,
-              name: entityType.name,
-            },
-          }),
-          type: 'createTriple',
+        newTriples.push({
+          space: spaceId,
+          entityId: newEntityId,
+          entityName: entity[entityNameIndex],
+          attributeId: 'type',
+          attributeName: 'Types',
+          value: {
+            type: 'ENTITY',
+            value: entityType.id,
+            name: entityType.name,
+          },
         });
 
         // Create entity attribute values
@@ -216,60 +212,51 @@ export const Generate = ({ spaceId }: GenerateProps) => {
               minute: '0',
             });
 
-            newActions.push({
-              ...Triple.withId({
-                space: spaceId,
-                entityId: newEntityId,
-                entityName: entity[entityNameIndex],
-                attributeId,
-                attributeName: entityAttributes[attributeId]?.name ?? '',
-                value: {
-                  type: 'TIME',
-                  value: dateValue,
-                },
-              }),
-              type: 'createTriple',
+            newTriples.push({
+              space: spaceId,
+              entityId: newEntityId,
+              entityName: entity[entityNameIndex],
+              attributeId,
+              attributeName: entityAttributes[attributeId]?.name ?? '',
+              value: {
+                type: 'TIME',
+                value: dateValue,
+              },
             });
           } else if (entityAttributes[attributeId]?.type === 'ENTITY') {
             const values = entity[entityAttributes[attributeId].index].split(',');
 
             values.forEach(value => {
-              newActions.push({
-                ...Triple.withId({
-                  space: spaceId,
-                  entityId: newEntityId,
-                  entityName: entity[entityNameIndex],
-                  attributeId,
-                  attributeName: entityAttributes[attributeId]?.name ?? '',
-                  value: {
-                    type: 'ENTITY',
-                    value: value,
-                    name: relatedEntitiesMap.get(value) ?? null,
-                  },
-                }),
-                type: 'createTriple',
-              });
-            });
-          } else {
-            newActions.push({
-              ...Triple.withId({
+              newTriples.push({
                 space: spaceId,
                 entityId: newEntityId,
                 entityName: entity[entityNameIndex],
                 attributeId,
                 attributeName: entityAttributes[attributeId]?.name ?? '',
                 value: {
-                  type: entityAttributes[attributeId]?.type ?? 'TEXT',
-                  value: entity[entityAttributes[attributeId].index],
+                  type: 'ENTITY',
+                  value: value,
+                  name: relatedEntitiesMap.get(value) ?? null,
                 },
-              }),
-              type: 'createTriple',
+              });
+            });
+          } else {
+            newTriples.push({
+              space: spaceId,
+              entityId: newEntityId,
+              entityName: entity[entityNameIndex],
+              attributeId,
+              attributeName: entityAttributes[attributeId]?.name ?? '',
+              value: {
+                type: entityAttributes[attributeId]?.type ?? 'TEXT',
+                value: entity[entityAttributes[attributeId].index],
+              } as Value,
             });
           }
         });
       });
 
-      setActions(newActions);
+      setActions(newTriples);
     };
 
     try {

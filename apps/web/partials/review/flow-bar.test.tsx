@@ -7,9 +7,8 @@ import { MockNetworkData, Storage } from '~/core/io';
 import { Providers } from '~/core/providers';
 import { localTriplesAtom } from '~/core/state/actions-store/actions-store';
 import { editableAtom } from '~/core/state/editable-store';
-import { store } from '~/core/state/jotai-provider';
+import { store } from '~/core/state/jotai-store';
 import { StatusBarContext, StatusBarState } from '~/core/state/status-bar-store';
-import { CreateTripleAction, DeleteTripleAction, EditTripleAction } from '~/core/types';
 
 import { FlowBar } from './flow-bar';
 
@@ -19,11 +18,7 @@ import { FlowBar } from './flow-bar';
 describe('Flow Bar', () => {
   it('Should not render the flow bar when there are not changes', () => {
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <FlowBar />
       </Providers>
     );
@@ -33,11 +28,7 @@ describe('Flow Bar', () => {
 
   it('Should not render the flow bar when there are changes but not in edit mode', () => {
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <FlowBar />
       </Providers>
     );
@@ -46,7 +37,6 @@ describe('Flow Bar', () => {
       store.set(localTriplesAtom, [
         {
           ...MockNetworkData.makeStubTriple('Alice'),
-          type: 'createTriple',
         },
       ])
     );
@@ -65,11 +55,7 @@ describe('Flow Bar', () => {
     };
 
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
           <FlowBar />
         </StatusBarContext.Provider>
@@ -78,14 +64,7 @@ describe('Flow Bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      act(() =>
-        store.set(localTriplesAtom, [
-          {
-            ...MockNetworkData.makeStubTriple('Alice'),
-            type: 'createTriple',
-          },
-        ])
-      );
+      act(() => store.set(localTriplesAtom, [MockNetworkData.makeStubTriple('Alice')]));
     });
 
     expect(screen.queryByText('Review edit')).not.toBeInTheDocument();
@@ -93,25 +72,14 @@ describe('Flow Bar', () => {
 
   it('Should render the flow bar when there are changes and in edit mode', () => {
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <FlowBar />
       </Providers>
     );
 
     act(() => {
       store.set(editableAtom, true);
-      act(() =>
-        store.set(localTriplesAtom, [
-          {
-            ...MockNetworkData.makeStubTriple('Alice'),
-            type: 'createTriple',
-          },
-        ])
-      );
+      act(() => store.set(localTriplesAtom, [MockNetworkData.makeStubTriple('Alice')]));
     });
 
     expect(screen.queryByRole('button')).toBeInTheDocument();
@@ -126,96 +94,26 @@ describe('Flow Bar', () => {
    */
   it('Should show correct counts', () => {
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <FlowBar />
       </Providers>
     );
 
     act(() => {
       store.set(editableAtom, true);
-      act(() =>
-        store.set(localTriplesAtom, [
-          {
-            ...MockNetworkData.makeStubTriple('Alice'),
-            type: 'createTriple',
-          },
-        ])
-      );
+      act(() => store.set(localTriplesAtom, [MockNetworkData.makeStubTriple('Alice')]));
     });
 
     expect(screen.queryByText('1 edit')).toBeInTheDocument();
 
-    const newAction1: CreateTripleAction = {
-      ...MockNetworkData.makeStubTriple('Alice'),
-      type: 'createTriple',
-    };
+    const newTriple1 = MockNetworkData.makeStubTriple('Alice');
 
     // create -> create should only be one change
     act(() => {
-      store.set(localTriplesAtom, [newAction1]);
+      store.set(localTriplesAtom, [newTriple1]);
     });
 
     expect(screen.queryByText('1 edit')).toBeInTheDocument();
-
-    const newAction2: DeleteTripleAction = {
-      ...MockNetworkData.makeStubTriple('Alice'),
-      type: 'deleteTriple',
-    };
-
-    // create -> delete should be 0 changes
-    act(() => {
-      store.set(localTriplesAtom, [newAction1, newAction2]);
-    });
-
-    expect(screen.queryByText('Review edit')).not.toBeInTheDocument();
-
-    const newAction3: EditTripleAction = {
-      id: '',
-      type: 'editTriple',
-      before: {
-        ...newAction1,
-        type: 'deleteTriple',
-      },
-      after: { ...newAction1, value: { ...newAction1.value, id: 'Bob' }, type: 'createTriple' },
-    };
-
-    // create -> edit should only be one change
-    act(() => {
-      store.set(localTriplesAtom, [newAction1]);
-      store.set(localTriplesAtom, [newAction1, newAction3]);
-    });
-
-    expect(screen.queryByText('1 edit')).toBeInTheDocument();
-
-    // Multiple changes to the same entity should show the correct count
-    act(() => {
-      // Passing the previous entityId as a parameter to add this triple to the same entity
-      const newTriple = MockNetworkData.makeStubTriple('Bob', 'Alice');
-
-      store.set(localTriplesAtom, [newAction1, { ...newTriple, type: 'createTriple' }]);
-    });
-
-    expect(screen.queryByText('2 edits')).toBeInTheDocument();
-    expect(screen.queryByText('1 entity in 1 space')).toBeInTheDocument();
-
-    // Changes to multiple entities should show the correct count
-    act(() => {
-      // Passing the previous entityId as a parameter to add this triple to the same entity
-      const newTriple1 = MockNetworkData.makeStubTriple('Bob', 'Charlie');
-      const newTriple2 = MockNetworkData.makeStubTriple('Charlie');
-      store.set(localTriplesAtom, [
-        newAction1,
-        { ...newTriple1, type: 'createTriple' },
-        { ...newTriple2, type: 'createTriple' },
-      ]);
-    });
-
-    expect(screen.queryByText('3 edits')).toBeInTheDocument();
-    expect(screen.queryByText('2 entities in 1 space')).toBeInTheDocument();
   });
 });
 
@@ -231,11 +129,7 @@ describe('Status bar', () => {
     };
 
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
           <FlowBar />
         </StatusBarContext.Provider>
@@ -244,12 +138,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(localTriplesAtom, [
-        {
-          ...MockNetworkData.makeStubTriple('Alice'),
-          type: 'createTriple',
-        },
-      ]);
+      store.set(localTriplesAtom, [MockNetworkData.makeStubTriple('Alice')]);
     });
 
     expect(screen.queryByText('Review edit')).toBeInTheDocument();
@@ -266,11 +155,7 @@ describe('Status bar', () => {
     };
 
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
           <FlowBar />
         </StatusBarContext.Provider>
@@ -279,12 +164,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(localTriplesAtom, [
-        {
-          ...MockNetworkData.makeStubTriple('Alice'),
-          type: 'createTriple',
-        },
-      ]);
+      store.set(localTriplesAtom, [MockNetworkData.makeStubTriple('Alice')]);
     });
 
     expect(screen.queryByText('Uploading changes to IPFS')).toBeInTheDocument();
@@ -301,11 +181,7 @@ describe('Status bar', () => {
     };
 
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
           <FlowBar />
         </StatusBarContext.Provider>
@@ -314,12 +190,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(localTriplesAtom, [
-        {
-          ...MockNetworkData.makeStubTriple('Alice'),
-          type: 'createTriple',
-        },
-      ]);
+      store.set(localTriplesAtom, [MockNetworkData.makeStubTriple('Alice')]);
     });
 
     expect(screen.queryByText('Sign your transaction')).toBeInTheDocument();
@@ -336,11 +207,7 @@ describe('Status bar', () => {
     };
 
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
           <FlowBar />
         </StatusBarContext.Provider>
@@ -349,12 +216,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(localTriplesAtom, [
-        {
-          ...MockNetworkData.makeStubTriple('Alice'),
-          type: 'createTriple',
-        },
-      ]);
+      store.set(localTriplesAtom, [MockNetworkData.makeStubTriple('Alice')]);
     });
 
     expect(screen.queryByText('Adding your changes to The Graph')).toBeInTheDocument();
@@ -371,11 +233,7 @@ describe('Status bar', () => {
     };
 
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
           <FlowBar />
         </StatusBarContext.Provider>
@@ -384,12 +242,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(localTriplesAtom, [
-        {
-          ...MockNetworkData.makeStubTriple('Alice'),
-          type: 'createTriple',
-        },
-      ]);
+      store.set(localTriplesAtom, [MockNetworkData.makeStubTriple('Alice')]);
     });
 
     expect(screen.queryByText('Changes published!')).toBeInTheDocument();
@@ -406,11 +259,7 @@ describe('Status bar', () => {
     };
 
     render(
-      <Providers
-        onConnectionChange={async () => {
-          //
-        }}
-      >
+      <Providers>
         <StatusBarContext.Provider value={{ state: initialState, dispatch: initialDispatch }}>
           <FlowBar />
         </StatusBarContext.Provider>
@@ -419,12 +268,7 @@ describe('Status bar', () => {
 
     act(() => {
       store.set(editableAtom, true);
-      store.set(localTriplesAtom, [
-        {
-          ...MockNetworkData.makeStubTriple('Alice'),
-          type: 'createTriple',
-        },
-      ]);
+      store.set(localTriplesAtom, [MockNetworkData.makeStubTriple('Alice')]);
     });
 
     expect(screen.queryByText('An error has occurred')).toBeInTheDocument();

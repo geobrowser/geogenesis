@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
@@ -14,7 +13,6 @@ import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
 import { Triple as TripleType } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
 import { getImagePath, partition } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';

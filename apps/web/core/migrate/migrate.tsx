@@ -319,14 +319,7 @@ export function useMigrateHub() {
   const dispatch = React.useCallback(
     async (action: MigrateAction) => {
       const actions = await hub.dispatch(action);
-
-      const actionsToBatch = groupBy([...actions], action => {
-        switch (action.type) {
-          case 'SET_TRIPLE':
-          case 'DELETE_TRIPLE':
-            return action.space;
-        }
-      });
+      const actionsToBatch = groupBy([...actions], action => action.space);
 
       if (Object.keys(actionsToBatch).length === 0) {
         return;
