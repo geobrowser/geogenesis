@@ -44,19 +44,11 @@ export function useTableBlock() {
   // the entire block entity again when the name changes as changes to
   // the name triple should not affect any of the data fetching.
   const actionsForEntityId = React.useMemo(() => {
-    return Entity.actionsForEntityId(allActions, entityId);
+    return allActions.filter(t => t.entityId === entityId);
   }, [allActions, entityId]);
 
   const actionsForEntityIdWithoutName = React.useMemo(() => {
-    return actionsForEntityId.filter(a => {
-      switch (a.type) {
-        case 'createTriple':
-        case 'deleteTriple':
-          return a.attributeId !== SYSTEM_IDS.NAME;
-        case 'editTriple':
-          return a.after.attributeId !== SYSTEM_IDS.NAME;
-      }
-    });
+    return actionsForEntityId.filter(a => a.attributeId !== SYSTEM_IDS.NAME);
   }, [actionsForEntityId]);
 
   // We only re-fetch the block entity when actions besides changes

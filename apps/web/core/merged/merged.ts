@@ -151,14 +151,13 @@ export class Merged implements IMergedDataSource {
   fetchEntity = async (options: Parameters<Subgraph.ISubgraph['fetchEntity']>[0]) => {
     try {
       const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id });
+      const localTriplesForEntityId = this.store.allActions.filter(a => a.entityId === options.id);
 
-      const actionsForEntityId = Entity.actionsForEntityId(this.store.allActions, options.id);
-
-      if (actionsForEntityId.length === 0) return maybeNetworkEntity;
+      if (localTriplesForEntityId.length === 0) return maybeNetworkEntity;
 
       // If not networkEntity we need to just return the local entity
       if (!maybeNetworkEntity) {
-        return Entity.fromActions(this.store.allActions, options.id);
+        return Entity.fromTriples(this.store.allActions, options.id);
       }
 
       // If the network entity exists, we need to merge the local actions with the network entity.

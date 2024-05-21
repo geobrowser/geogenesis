@@ -152,12 +152,11 @@ export function mergeActionsWithEntities(actions: Record<string, ITriple[]>, net
   );
 }
 
-export function mergeActionsWithEntity(allActionsInStore: Action[], networkEntity: IEntity): IEntity {
+export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEntity: IEntity): IEntity {
   const triplesForEntity = pipe(
-    allActionsInStore,
-    actions => actionsForEntityId(actions, networkEntity.id),
+    allTriplesInStore.filter(t => t.entityId === networkEntity.id),
     actions => Triple.merge(actions, networkEntity.triples),
-    triples => Triple.withLocalNames(allActionsInStore, triples)
+    triples => Triple.withLocalNames(allTriplesInStore, triples)
   );
 
   return {
@@ -170,10 +169,13 @@ export function mergeActionsWithEntity(allActionsInStore: Action[], networkEntit
   };
 }
 
-export function fromActions(allActionsInStore: Action[], entityId: string): IEntity {
-  const actions = actionsForEntityId(allActionsInStore, entityId);
-  const triplesForEntity = Triple.merge(actions, []);
-  const triplesForEntityWithLocalNames = Triple.withLocalNames(allActionsInStore, triplesForEntity);
+export function fromTriples(allTriplesInStore: ITriple[], entityId: string): IEntity {
+  const triplesForEntity = Triple.merge(
+    allTriplesInStore.filter(t => t.entityId === entityId),
+    []
+  );
+
+  const triplesForEntityWithLocalNames = Triple.withLocalNames(allTriplesInStore, triplesForEntity);
 
   return {
     id: entityId,
@@ -183,18 +185,6 @@ export function fromActions(allActionsInStore: Action[], entityId: string): IEnt
     types: types(triplesForEntityWithLocalNames, triplesForEntityWithLocalNames[0]?.space),
     triples: triplesForEntityWithLocalNames,
   };
-}
-
-export function actionsForEntityId(allActionsInStore: Action[], id: string): Action[] {
-  return allActionsInStore.filter(a => {
-    switch (a.type) {
-      case 'createTriple':
-      case 'deleteTriple':
-        return a.entityId === id;
-      case 'editTriple':
-        return a.after.entityId === id;
-    }
-  });
 }
 
 /**
@@ -222,12 +212,12 @@ export function cover(triples: ITriple[] | undefined): string | null {
 }
 
 /**
- * This function traverses through all the triples associated with an entity and attempts to find the parent entity ID of a block entity.
+ * This function traverses through all the triples associated with a block entity and attempts to find the parent entity ID.
  */
 export const getParentEntityId = (triples: ITriple[] = []) => {
   const parentEntityTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY);
 
-  const parentEntityId = parentEntityTriple?.value.type === 'ENTITY' ? parentEntityTriple.value.id : null;
+  const parentEntityId = parentEntityTriple?.value.type === 'ENTITY' ? parentEntityTriple.value.value : null;
 
   return parentEntityId;
 };
