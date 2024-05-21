@@ -1,3 +1,4 @@
+import { DeleteTripleOp } from '@geogenesis/sdk';
 import { QueryClient } from '@tanstack/query-core';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -6,10 +7,12 @@ import React, { useTransition } from 'react';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { useMergedData } from '../hooks/use-merged-data';
 import { ID } from '../id';
+import { createTripleId } from '../id/create-id';
 import { Merged } from '../merged';
 import {
   AppOp,
   Triple as ITriple,
+  SetTripleAppOp,
   ValueType as TripleValueType,
   TripleWithDateValue,
   TripleWithStringValue,
@@ -39,6 +42,10 @@ export type MigrateAction =
       };
     };
 
+type MigrateOp = AppOp & {
+  space: string;
+};
+
 interface MigrateHubConfig {
   actionsApi: {
     upsert: ReturnType<typeof useActionsStore>['upsert'];
@@ -49,10 +56,10 @@ interface MigrateHubConfig {
 }
 
 export interface IMigrateHub {
-  dispatch: (action: MigrateAction) => Promise<AppOp[]>;
+  dispatch: (action: MigrateAction) => Promise<MigrateOp[]>;
 }
 
-async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise<AppOp[]> {
+async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise<MigrateOp[]> {
   switch (action.type) {
     case 'DELETE_ENTITY': {
       const { entityId } = action.payload;
@@ -104,9 +111,11 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
       });
 
       return triplesReferencingEntity.map(
-        (t): AppOp => ({
+        (t): MigrateOp => ({
           ...t,
           type: 'DELETE_TRIPLE',
+          space: t.space,
+          id: createTripleId(t),
         })
       );
     }
@@ -169,7 +178,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
        * existing triples with the old type.
        */
       const triplesToDelete: ITriple[] = [];
-      const triplesToUpdate: ITriple[][] = [];
+      const triplesToUpdate: ITriple[] = [];
 
       for (const triple of triplesWithAttribute) {
         const value = triple.value;
@@ -199,7 +208,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
                   break;
                 }
 
-                triplesToUpdate.push([maybeMigratedTriple, triple]);
+                triplesToUpdate.push(maybeMigratedTriple);
                 break;
               }
 
@@ -215,7 +224,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
                   break;
                 }
 
-                triplesToUpdate.push([maybeMigratedTriple, triple]);
+                triplesToUpdate.push(maybeMigratedTriple);
                 break;
               }
             }
@@ -234,7 +243,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
                 triple as TripleWithDateValue
               );
 
-              triplesToUpdate.push([newTriple, triple]);
+              triplesToUpdate.push(newTriple);
               break;
             }
 
@@ -252,7 +261,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
                 triple as TripleWithUrlValue
               );
 
-              triplesToUpdate.push([newTriple, triple]);
+              triplesToUpdate.push(newTriple);
               break;
             }
 
@@ -266,25 +275,19 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
         }
       }
 
-      const deleteActions: DeleteTripleAction[] = triplesToDelete.map(t => ({
+      const deleteActions: MigrateOp[] = triplesToDelete.map(t => ({
         ...t,
-        type: 'deleteTriple',
+        type: 'DELETE_TRIPLE',
+        id: createTripleId(t),
       }));
 
-      const updateActions: EditTripleAction[] = triplesToUpdate.map(([newTriple, oldTriple]) => ({
-        id: ID.createEntityId(),
-        type: 'editTriple',
-        before: {
-          ...oldTriple,
-          type: 'deleteTriple',
-        },
-        after: {
-          ...newTriple,
-          type: 'createTriple',
-        },
+      const upsertActions: MigrateOp[] = triplesToUpdate.map(newTriple => ({
+        ...newTriple,
+        type: 'SET_TRIPLE',
+        id: createTripleId(newTriple),
       }));
 
-      return [...deleteActions, ...updateActions];
+      return [...deleteActions, ...upsertActions];
     }
   }
 }
@@ -320,10 +323,8 @@ export function useMigrateHub() {
       const actionsToBatch = groupBy([...actions], action => {
         switch (action.type) {
           case 'SET_TRIPLE':
-          case 'deleteTriple':
+          case 'DELETE_TRIPLE':
             return action.space;
-          case 'editTriple':
-            return action.before.space;
         }
       });
 

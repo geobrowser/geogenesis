@@ -300,7 +300,7 @@ function filterValue(value: Value, valueToFilter: string) {
     case 'TEXT':
       return value.value === valueToFilter;
     case 'ENTITY':
-      return value.id === valueToFilter;
+      return value.value === valueToFilter;
     default:
       return false;
   }
