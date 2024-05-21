@@ -152,31 +152,32 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
           remove(spaceName, spaceId);
         } else {
           remove(spaceName, spaceId);
-          create(
-            Triple.withId({
+          upsert(
+            {
+              type: 'SET_TRIPLE',
               ...spaceName,
               value: {
-                ...spaceName.value,
-                type: 'string',
+                type: 'TEXT',
                 value: name,
               },
-            })
+            },
+            spaceId
           );
         }
       } else {
-        create(
-          Triple.withId({
-            space: spaceId,
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId,
             entityName: name,
             attributeId: SYSTEM_IDS.NAME,
             attributeName: 'Name',
             value: {
-              type: 'string',
-              id: ID.createValueId(),
+              type: 'TEXT',
               value: name,
             },
-          })
+          },
+          spaceId
         );
       }
     }
@@ -190,16 +191,17 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     // Update role attribute
     if (hasChangedRole && hasSpaceRole && hasRole) {
       remove(spaceRole, spaceId);
-      create(
-        Triple.withId({
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           ...spaceRole,
           value: {
-            ...spaceRole.value,
-            type: 'entity',
+            type: 'ENTITY',
             id: roleEntityId,
             name: roleName,
           },
-        })
+        },
+        spaceId
       );
     }
 
@@ -248,15 +250,16 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
       } else {
         // Update entity id of existing name/role (and possibly avatar) triples
         remove(triple, spaceId);
-        create(
-          Triple.withId({
-            space: triple.space,
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: entityId,
             entityName: triple.entityName,
             attributeId: triple.attributeId,
             attributeName: triple.attributeName,
             value: triple.value,
-          })
+          },
+          triple.space
         );
       }
     });
@@ -276,15 +279,16 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     // Update entity id of existing role (and possibly name/avatar) triples
     spaceTriples.forEach(triple => {
       remove(triple, spaceId);
-      create(
-        Triple.withId({
-          space: triple.space,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId: newEntityId,
           entityName: triple.entityName,
           attributeId: triple.attributeId,
           attributeName: triple.attributeName,
           value: triple.value,
-        })
+        },
+        triple.space
       );
     });
 
@@ -292,19 +296,19 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     // Add name attribute (if not already in space triples)
     if (!nameSpaceTriple) {
-      create(
-        Triple.withId({
-          space: spaceId,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId: newEntityId,
           entityName: teamMember.name,
           attributeId: SYSTEM_IDS.NAME,
           attributeName: 'Name',
           value: {
-            type: 'string',
-            id: ID.createValueId(),
+            type: 'TEXT',
             value: teamMember.name,
           },
-        })
+        },
+        spaceId
       );
     }
 
@@ -312,36 +316,37 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     // Add avatar (if person has an avatar and its not already in space triples)
     if (!avatarSpaceTriple && teamMember.avatar) {
-      create(
-        Triple.withId({
-          space: spaceId,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId: newEntityId,
           entityName: teamMember.name,
           attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
           attributeName: 'Avatar',
           value: {
-            type: 'image',
-            id: ID.createValueId(),
+            type: 'IMAGE',
             value: teamMember.avatar,
           },
-        })
+        },
+        spaceId
       );
     }
 
     // Add person type
-    create(
-      Triple.withId({
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: newEntityId,
         attributeId: SYSTEM_IDS.TYPES,
         entityName: teamMember.name,
         attributeName: 'Types',
-        space: spaceId,
         value: {
-          type: 'entity',
+          type: 'ENTITY',
           id: SYSTEM_IDS.PERSON_TYPE,
           name: 'Person',
         },
-      })
+      },
+      spaceId
     );
 
     setStatus('unlinked');
