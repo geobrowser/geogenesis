@@ -59,7 +59,7 @@ const getData = async ({
 
   // This can be empty if there are no types in the Space
   const initialTypes = [...initialSpaceTypes, ...initialForeignTypes];
-  const defaultTypeId = configEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.DEFAULT_TYPE)?.value.id;
+  const defaultTypeId = configEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.DEFAULT_TYPE)?.value.value;
 
   const initialSelectedType =
     initialTypes.find(t => t.entityId === (initialParams.typeId || defaultTypeId)) || initialTypes[0] || null;
@@ -77,12 +77,12 @@ const getData = async ({
         {
           columnId: SYSTEM_IDS.NAME,
           value: initialParams.query,
-          valueType: 'string',
+          valueType: 'TEXT',
         },
         {
           columnId: SYSTEM_IDS.SPACE,
           value: spaceId,
-          valueType: 'string',
+          valueType: 'TEXT',
         },
       ],
       typeId

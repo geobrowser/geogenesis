@@ -30,7 +30,7 @@ export function migrateStringTripleToDateTriple(triple: TripleWithStringValue): 
     ...triple,
     value: {
       ...triple.value,
-      type: 'date',
+      type: 'TIME',
       value: dateValue,
     },
   });
@@ -43,7 +43,7 @@ export function migrateDateTripleToStringTriple(triple: TripleWithDateValue): Tr
     ...triple,
     value: {
       ...triple.value,
-      type: 'string',
+      type: 'TEXT',
       value: `${month}/${day}/${year}`,
     },
   });
@@ -60,7 +60,7 @@ export function migrateStringTripleToUrlTriple(triple: TripleWithStringValue): T
     ...triple,
     value: {
       ...triple.value,
-      type: 'url',
+      type: 'URL',
       value: triple.value.value,
     },
   });
@@ -71,7 +71,7 @@ export function migrateUrlTripleToStringTriple(triple: TripleWithUrlValue): Trip
     ...triple,
     value: {
       ...triple.value,
-      type: 'string',
+      type: 'TEXT',
       value: triple.value.value,
     },
   });
