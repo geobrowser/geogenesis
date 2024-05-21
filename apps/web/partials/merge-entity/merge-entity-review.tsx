@@ -63,7 +63,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
   }
 
   const { triples: entityOneTriples } = useEntityPageStore(); // triples from entity page
-  const { create, remove } = useActionsStore();
+  const { upsert, remove } = useActionsStore();
 
   //  triples from subgraph for second entity -  @TODO merge with local data since there could be changes
   const entityTwoTriples = useEntityById(entityIdTwo);
@@ -95,14 +95,15 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
 
       if (!mergedEntitySpaceId) throw new Error('SpaceID not found for merging entities.');
 
-      unmergedTriples.forEach(t => remove(t)); // delete the triples that aren't merged
+      unmergedTriples.forEach(t => remove(t, t.space)); // delete the triples that aren't merged
       mergedTriples.forEach(t => {
-        create(
-          Triple.withId({
+        upsert(
+          {
             ...t,
+            type: 'SET_TRIPLE',
             entityId: mergedEntityId,
-            space: mergedEntitySpaceId,
-          })
+          },
+          t.space
         );
       }); // create the triples that are merged
 
@@ -129,7 +130,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
     unmergedTriples,
     mergedTriples,
     remove,
-    create,
+    upsert,
   ]);
 
   function handleCheckboxSelect({

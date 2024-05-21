@@ -117,6 +117,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           key={Entity.name(cellTriples)}
           triples={cellTriples}
           cell={cellData}
+          upsert={upsert}
           remove={remove}
           space={space}
           valueType={valueType}

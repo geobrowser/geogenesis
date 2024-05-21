@@ -13,14 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
-import {
-  DateValue,
-  Entity as EntityType,
-  EntityValue,
-  StringValue,
-  Triple as TripleType,
-  UrlValue,
-} from '~/core/types';
+import { Entity as EntityType, Triple as TripleType } from '~/core/types';
 import type { Space } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
@@ -48,7 +41,7 @@ type GenerateProps = {
   space: Space;
 };
 
-export type SupportedValueType = 'string' | 'date' | 'url' | 'entity';
+export type SupportedValueType = 'TEXT' | 'TIME' | 'URL' | 'ENTITY';
 
 export type UnsupportedValueType = 'number' | 'image';
 
@@ -132,7 +125,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     const generateActions = async () => {
       const attributes = Object.keys(entityAttributes);
 
-      const relationAttributes = Object.values(entityAttributes).filter(({ type }) => type === 'entity');
+      const relationAttributes = Object.values(entityAttributes).filter(({ type }) => type === 'ENTITY');
       const relatedEntityIdsSet: Set<string> = new Set();
 
       entities.forEach(entity => {
@@ -165,6 +158,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         });
       }
 
+      // @TODO: Use actual type
       const newActions: Array<any> = [];
 
       entities.forEach(entity => {
@@ -181,8 +175,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             attributeId: 'name',
             attributeName: 'Name',
             value: {
-              type: 'string',
-              id: ID.createValueId(),
+              type: 'TEXT',
               value: entity[entityNameIndex],
             },
           }),
@@ -198,7 +191,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             attributeId: 'type',
             attributeName: 'Types',
             value: {
-              type: 'entity',
+              type: 'ENTITY',
               id: entityType.id,
               name: entityType.name,
             },
@@ -208,7 +201,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
 
         // Create entity attribute values
         attributes.forEach(attributeId => {
-          if (entityAttributes[attributeId]?.type === 'date') {
+          if (entityAttributes[attributeId]?.type === 'TIME') {
             const date = dayjs.utc(entity[entityAttributes[attributeId].index], 'MM/DD/YYYY');
 
             if (!date.isValid()) {
@@ -231,14 +224,13 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 attributeId,
                 attributeName: entityAttributes[attributeId]?.name ?? '',
                 value: {
-                  type: 'date',
-                  id: ID.createValueId(),
+                  type: 'TIME',
                   value: dateValue,
-                } as DateValue,
+                },
               }),
               type: 'createTriple',
             });
-          } else if (entityAttributes[attributeId]?.type === 'entity') {
+          } else if (entityAttributes[attributeId]?.type === 'ENTITY') {
             const values = entity[entityAttributes[attributeId].index].split(',');
 
             values.forEach(value => {
@@ -250,10 +242,10 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                   attributeId,
                   attributeName: entityAttributes[attributeId]?.name ?? '',
                   value: {
-                    type: 'entity',
+                    type: 'ENTITY',
                     id: value,
-                    name: relatedEntitiesMap.get(value),
-                  } as EntityValue,
+                    name: relatedEntitiesMap.get(value) ?? null,
+                  },
                 }),
                 type: 'createTriple',
               });
@@ -267,10 +259,9 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 attributeId,
                 attributeName: entityAttributes[attributeId]?.name ?? '',
                 value: {
-                  type: entityAttributes[attributeId]?.type ?? 'string',
-                  id: ID.createValueId(),
+                  type: entityAttributes[attributeId]?.type ?? 'TEXT',
                   value: entity[entityAttributes[attributeId].index],
-                } as StringValue | UrlValue,
+                },
               }),
               type: 'createTriple',
             });
@@ -458,7 +449,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 <div key={attribute.value.id}>
                   <div className="flex items-center justify-between">
                     <div className="text-metadataMedium">
-                      {attribute.value.type === 'entity' ? attribute.value.name : null}
+                      {attribute.value.type === 'ENTITY' ? attribute.value.name : null}
                     </div>
                     <div className="text-footnoteMedium">Optional</div>
                   </div>
@@ -511,7 +502,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                           newEntityAttributes[attribute.value.id] = {
                             ...newEntityAttributes[attribute.value.id],
                             index: parseInt(value, 10),
-                            name: attribute.value.type === 'entity' ? attribute.value.name ?? '' : '',
+                            name: attribute.value.type === 'ENTITY' ? attribute.value.name ?? '' : '',
                           };
                         } else {
                           delete newEntityAttributes[attribute.value.id];
@@ -545,7 +536,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                     <div key={attribute.value.id}>
                       <div className="flex items-center justify-between">
                         <div className="text-metadataMedium">
-                          {attribute.value.type === 'entity' && attribute.value.name}
+                          {attribute.value.type === 'ENTITY' && attribute.value.name}
                         </div>
                         <div className="text-footnoteMedium">Optional</div>
                       </div>
@@ -617,7 +608,7 @@ const getAttributes = (entityType: EntityType | undefined) => {
   if (entityType) {
     entityType?.triples.forEach((triple: TripleType) => {
       if (triple.attributeName === 'Attributes') {
-        if (triple.value.type === 'entity' && triple.value.name && UNSUPPORTED_ATTRIBUTES.includes(triple.value.name)) {
+        if (triple.value.type === 'ENTITY' && triple.value.name && UNSUPPORTED_ATTRIBUTES.includes(triple.value.name)) {
           unsupportedAttributes.push(triple);
         } else {
           supportedAttributes.push(triple);

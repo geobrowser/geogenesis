@@ -30,11 +30,11 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
   return (
     <div className="flex flex-wrap gap-2">
       {triples.map(({ value }) => {
-        if (value.type === 'collection') {
+        if (value.type === 'COLLECTION') {
           return null;
         }
 
-        if (value.type === 'entity') {
+        if (value.type === 'ENTITY') {
           return (
             <LinkableChip key={value.id} href={NavUtils.toEntity(space, value.id)}>
               {value.name ?? value.id}
@@ -42,19 +42,19 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
           );
         }
 
-        if (value.type === 'image') {
-          return <ImageZoom key={value.id} imageSrc={value.value} variant="table-cell" />;
+        if (value.type === 'IMAGE') {
+          return <ImageZoom key={value.value} imageSrc={value.value} variant="table-cell" />;
         }
 
-        if (value.type === 'url') {
-          return <WebUrlField variant="tableCell" isEditing={false} key={value.id} value={value.value} />;
+        if (value.type === 'URL') {
+          return <WebUrlField variant="tableCell" isEditing={false} key={value.value} value={value.value} />;
         }
 
-        if (value.type === 'date') {
-          return <DateField variant="tableCell" isEditing={false} key={value.id} value={value.value} />;
+        if (value.type === 'TIME') {
+          return <DateField variant="tableCell" isEditing={false} key={value.value} value={value.value} />;
         }
 
-        return <CellContent key={value.id} isExpanded={isExpanded} value={value.value} />;
+        return <CellContent key={value.value} isExpanded={isExpanded} value={value.value} />;
       })}
     </div>
   );

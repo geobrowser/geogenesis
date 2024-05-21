@@ -61,7 +61,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
 
     try {
       await makeBulkProposal({
-        actions,
+        ops: actions,
         spaceId,
         name: proposalName,
         onChangePublishState: reviewState => console.log(reviewState),

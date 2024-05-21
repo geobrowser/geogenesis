@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { TripleValueType } from '~/core/types';
+import { ValueType as TripleValueType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { valueTypes } from '~/core/value-types';
 

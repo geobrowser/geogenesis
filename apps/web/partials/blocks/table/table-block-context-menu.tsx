@@ -76,23 +76,24 @@ function useOptimisticAttributes({
 }) {
   const [optimisticAttributes, setOptimisticAttributes] = useAtom(optimisticAttributesAtom);
   const merged = useMergedData();
-  const { create, remove } = useActionsStore();
+  const { upsert, remove } = useActionsStore();
   const migrateHub = useMigrateHub();
 
   const onAddAttribute = (attribute: IEntity) => {
-    create(
-      Triple.withId({
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: entityId,
         entityName: attribute.name,
         attributeId: SYSTEM_IDS.ATTRIBUTES,
         attributeName: 'Attributes',
-        space: spaceId,
         value: {
-          type: 'entity',
+          type: 'ENTITY',
           id: attribute.id,
           name: attribute.name,
         },
-      })
+      },
+      spaceId
     );
 
     setOptimisticAttributes([...optimisticAttributes, attribute]);
@@ -123,11 +124,12 @@ function useOptimisticAttributes({
         entityName: entityName,
         space: spaceId,
         value: {
-          type: 'entity',
+          type: 'ENTITY',
           id: nameTriple.entityId,
           name: nameTriple.entityName,
         },
-      })
+      }),
+      spaceId
     );
 
     setOptimisticAttributes(optimisticAttributes.filter(a => a.id !== attribute.id));
@@ -139,7 +141,9 @@ function useOptimisticAttributes({
     const attributeSpace = attribute.nameTripleSpaces?.[0];
 
     if (attributeValueTypeTriple) {
-      remove(attributeValueTypeTriple);
+      if (attributeSpace) {
+        remove(attributeValueTypeTriple, attributeSpace);
+      }
 
       const oldValueTypeId = attributeValueTypeTriple.value.id;
 
@@ -168,7 +172,7 @@ function useOptimisticAttributes({
         attributeName: 'Value type',
         space: attributeSpace,
         value: {
-          type: 'entity',
+          type: 'ENTITY',
           id: newValueTypeId,
           name: valueTypeNames[newValueTypeId],
         },
@@ -188,7 +192,7 @@ function useOptimisticAttributes({
       });
 
       // Create a new Value Type triple with the new value type
-      create(newTriple);
+      upsert({ ...newTriple, type: 'SET_TRIPLE' }, newTriple.space);
     }
   };
 
@@ -417,7 +421,7 @@ const ToggleColumn = ({
   entityId,
   entityName,
 }: ToggleColumnProps) => {
-  const { create, remove } = useActionsStore(space);
+  const { upsert, remove } = useActionsStore(space);
 
   const { id, name } = column;
   const isShown = shownIndexes.includes(index);
@@ -427,26 +431,27 @@ const ToggleColumn = ({
     const attributeName = 'Shown Columns';
 
     if (!isShown) {
-      create(
-        Triple.withId({
-          space,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId,
           entityName,
           attributeId,
           attributeName,
           value: {
-            type: 'entity',
+            type: 'ENTITY',
             id,
             name,
           },
-        })
+        },
+        space
       );
     } else {
       if (shownColumnTriple) {
-        remove(shownColumnTriple);
+        remove(shownColumnTriple, space);
       }
     }
-  }, [create, entityId, entityName, id, isShown, name, remove, shownColumnTriple, space]);
+  }, [upsert, entityId, entityName, id, isShown, name, remove, shownColumnTriple, space]);
 
   return (
     <MenuItem>
@@ -586,7 +591,7 @@ function AddAttribute() {
 
 function SchemaAttributes() {
   const { type } = useTableBlock();
-  const { create, update } = useActionsStore();
+  const { upsert } = useActionsStore();
 
   const {
     optimisticAttributes: attributes,
@@ -602,39 +607,22 @@ function SchemaAttributes() {
     // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
     const attributeSpace = attribute.nameTripleSpaces?.[0];
 
-    if (!attributeSpace) {
+    if (!attributeSpace || !oldNameTriple) {
       console.error("The entity doesn't have a name triple space");
       return;
     }
 
-    if (!oldNameTriple) {
-      return create(
-        Triple.withId({
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          entityId: attribute.id,
-          entityName: attribute.name,
-          space: attributeSpace,
-          value: {
-            type: 'string',
-            id: ID.createValueId(),
-            value: newName,
-          },
-        })
-      );
-    }
-
-    update(
+    upsert(
       {
         ...oldNameTriple,
+        type: 'SET_TRIPLE',
         entityName: newName,
         value: {
-          type: 'string',
-          id: oldNameTriple.value.id,
+          type: 'TEXT',
           value: newName,
         },
       },
-      oldNameTriple
+      attributeSpace
     );
   };
 
