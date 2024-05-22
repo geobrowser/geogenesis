@@ -30,7 +30,7 @@ import {
 } from '~/partials/onboarding/dialog';
 
 import { Cookie } from '../cookie';
-import { VarsLive } from '../environment/environment';
+import { Environment } from '../environment';
 import { CONDUIT_TESTNET } from './conduit-chain';
 
 // const LOCAL_CHAIN: Chain = {
@@ -63,7 +63,7 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
       },
     }),
     // We need to use another provider if using a local chain
-    ...(VarsLive.appEnv === 'development' ? [publicProvider()] : []),
+    ...(Environment.VarsLive.appEnv === 'development' ? [publicProvider()] : []),
   ]
 );
 
@@ -112,7 +112,7 @@ const createRealWalletConfig = () => {
         chains,
         options: {
           showQrModal: false,
-          projectId: VarsLive.walletConnectProjectId,
+          projectId: Environment.VarsLive.walletConnectProjectId,
           metadata: {
             name: 'Geo Genesis',
             description: "Browse and organize the world's public knowledge and information in a decentralized way.",
@@ -146,12 +146,12 @@ const createMockWalletConfig = () => {
       chains,
       publicClient: getMockPublicClient(),
       autoConnect: false,
-      walletConnectProjectId: VarsLive.walletConnectProjectId,
+      walletConnectProjectId: Environment.VarsLive.walletConnectProjectId,
     })
   );
 };
 
-const wagmiConfig = VarsLive.isTestEnv ? createMockWalletConfig() : createRealWalletConfig();
+const wagmiConfig = Environment.VarsLive.isTestEnv ? createMockWalletConfig() : createRealWalletConfig();
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const onConnect = React.useCallback(({ address }: { address?: string }) => {
@@ -206,7 +206,7 @@ export function GeoConnectButton() {
           return (
             <Button
               onClick={
-                VarsLive.isTestEnv
+                Environment.VarsLive.isTestEnv
                   ? () => {
                       console.log('Test environment detected: using mock wallet');
                       connect({

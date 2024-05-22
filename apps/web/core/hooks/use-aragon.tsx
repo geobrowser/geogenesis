@@ -8,7 +8,7 @@ import { providers } from 'ethers';
 
 import * as React from 'react';
 
-import { VarsLive } from '../environment/environment';
+import { Environment } from '../environment';
 import { useEthersSigner } from '../wallet/ethers-adapters';
 
 export function useAragon() {
@@ -18,7 +18,7 @@ export function useAragon() {
     () => ({
       network: SupportedNetworks.LOCAL, // I don't think this matters
       signer: ethersSigner,
-      web3Providers: new providers.JsonRpcProvider(Secret.value(VarsLive.rpcEndpoint)),
+      web3Providers: new providers.JsonRpcProvider(Secret.value(Environment.VarsLive.rpcEndpoint)),
       DAOFactory: DAO_FACTORY_ADDRESS,
       ENSRegistry: ENS_REGISTRY_ADDRESS,
     }),
