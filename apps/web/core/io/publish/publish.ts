@@ -30,11 +30,19 @@ export class WaitForTransactionBlockError extends Error {
 }
 
 export class TransactionPrepareFailedError extends Error {
-  _tag = 'TransactionPrepareFailedError';
+  readonly _tag = 'TransactionPrepareFailedError';
 }
 
 export class TransactionWriteFailedError extends Error {
-  _tag = 'TransactionWriteFailedError';
+  readonly _tag = 'TransactionWriteFailedError';
+}
+
+export class InvalidIpfsQmHashError extends Error {
+  readonly _tag = 'InvalidIpfsQmHashError';
+}
+
+export class IpfsUploadError extends Error {
+  readonly _tag = 'IpfsUploadError';
 }
 
 export type MakeProposalOptions = {
@@ -55,38 +63,65 @@ export async function makeProposal({
   name,
 }: MakeProposalOptions): Promise<void> {
   onChangePublishState('publishing-ipfs');
-  const cids: string[] = [];
+  const ipfsEffect = Effect.gen(function* (_) {
+    const cids: string[] = [];
 
-  for (let i = 0; i < actions.length; i += UPLOAD_CHUNK_SIZE) {
-    console.log(`Publishing ${i / UPLOAD_CHUNK_SIZE}/${Math.ceil(actions.length / UPLOAD_CHUNK_SIZE)}`);
+    for (let i = 0; i < actions.length; i += UPLOAD_CHUNK_SIZE) {
+      console.log(`Publishing ${i / UPLOAD_CHUNK_SIZE}/${Math.ceil(actions.length / UPLOAD_CHUNK_SIZE)}`);
 
-    const chunk = actions.slice(i, i + UPLOAD_CHUNK_SIZE);
+      const chunk = actions.slice(i, i + UPLOAD_CHUNK_SIZE);
 
-    const root: Root = {
-      type: 'root',
-      version: '0.0.1',
-      actions: chunk.flatMap(getActionFromChangeStatus),
-      name,
-    };
+      const root: Root = {
+        type: 'root',
+        version: '0.0.1',
+        actions: chunk.flatMap(getActionFromChangeStatus),
+        name,
+      };
 
-    const cidString = await storageClient.uploadObject(root);
-    cids.push(`ipfs://${cidString}`);
-  }
+      const cidString = yield* _(
+        Effect.tryPromise({
+          try: () => storageClient.uploadObject(root),
+          catch: error => new IpfsUploadError(String(error)),
+        })
+      );
 
-  const prepareTxEffect = Effect.tryPromise({
-    try: () =>
-      prepareWriteContract({
-        abi: SpaceAbi,
-        address: space as unknown as `0x${string}`,
-        functionName: 'addEntries',
-        walletClient: wallet,
-        args: [cids],
-      }),
-    catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+      if (!cidString.startsWith('Qm')) {
+        return yield* _(
+          Effect.fail(
+            new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.')
+          )
+        );
+      }
+
+      cids.push(`ipfs://${cidString}`);
+    }
+
+    return cids;
   });
 
+  const prepareTxEffect = (cids: string[]) =>
+    Effect.tryPromise({
+      try: () =>
+        prepareWriteContract({
+          abi: SpaceAbi,
+          address: space as unknown as `0x${string}`,
+          functionName: 'addEntries',
+          walletClient: wallet,
+          args: [cids],
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    });
+
   const writeTxEffect = Effect.gen(function* (awaited) {
-    const contractConfig = yield* awaited(prepareTxEffect);
+    const cids = yield* awaited(ipfsEffect);
+
+    if (cids.some(cid => !cid.startsWith('ipfs://Qm'))) {
+      return yield* awaited(
+        Effect.fail(new IpfsUploadErrorV2('Failure when uploading content to IPFS. Did not recieve valid Qm hash.'))
+      );
+    }
+
+    const contractConfig = yield* awaited(prepareTxEffect(cids));
 
     onChangePublishState('signing-wallet');
 
