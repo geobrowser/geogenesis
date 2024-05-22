@@ -27,15 +27,19 @@ export class WaitForTransactionBlockError extends Error {
 }
 
 export class TransactionPrepareFailedError extends Error {
-  _tag = 'TransactionPrepareFailedError';
+  readonly _tag = 'TransactionPrepareFailedError';
 }
 
 export class TransactionWriteFailedError extends Error {
-  _tag = 'TransactionWriteFailedError';
+  readonly _tag = 'TransactionWriteFailedError';
 }
 
 export class IpfsUploadFailedError extends Error {
-  _tag = 'IpfsUploadFailedError';
+  readonly _tag = 'IpfsUploadFailedError';
+}
+
+export class InvalidIpfsQmHashError extends Error {
+  readonly _tag = 'InvalidIpfsQmHashError';
 }
 
 export type MakeProposalServerOptions = {
@@ -73,7 +77,14 @@ export async function makeProposalServer({
 
     const uploadEffect = Effect.retry(
       Effect.tryPromise({
-        try: () => storageClient.uploadObject(root),
+        try: async () => {
+          const cidString = await storageClient.uploadObject(root);
+          if (!cidString.startsWith('Qm')) {
+            throw new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.');
+          }
+
+          return cidString;
+        },
         catch: error => new IpfsUploadFailedError(`IPFS upload failed: ${error}`),
       }),
       Schedule.exponential('100 millis').pipe(Schedule.jittered)
