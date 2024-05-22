@@ -7,7 +7,7 @@ import * as Schedule from 'effect/Schedule';
 import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { StorageClient } from '~/core/io/storage/storage';
-import { Op } from '~/core/utils/op';
+import { Ops } from '~/core/utils/ops';
 import { slog } from '~/core/utils/utils';
 
 import { geoAccount, publicClient, walletClient } from '../../client';
@@ -80,7 +80,7 @@ export async function makePersonEffect(
       // Add triples for a Person entity
       if (username) {
         ops.push(
-          Op.create({
+          Ops.create({
             entityId: profileId,
             attributeId: SYSTEM_IDS.NAME,
             value: {
@@ -93,7 +93,7 @@ export async function makePersonEffect(
 
       if (avatarUri) {
         ops.push(
-          Op.create({
+          Ops.create({
             entityId: profileId,
             attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
             value: {
@@ -106,7 +106,7 @@ export async function makePersonEffect(
 
       // Add Types: Person to the profile entity
       ops.push(
-        Op.create({
+        Ops.create({
           entityId: profileId,
           attributeId: SYSTEM_IDS.TYPES,
           value: {
@@ -117,7 +117,7 @@ export async function makePersonEffect(
       );
 
       ops.push(
-        Op.create({
+        Ops.create({
           entityId: profileId,
           attributeId: SYSTEM_IDS.TYPES,
           value: {

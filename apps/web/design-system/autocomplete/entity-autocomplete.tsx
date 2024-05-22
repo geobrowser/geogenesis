@@ -14,7 +14,6 @@ import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { Triple } from '~/core/utils/triple';
 
 import { SquareButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
@@ -59,7 +58,7 @@ interface Props {
 
 export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes, spaceId, attributeId }: Props) {
   const [, setToast] = useToast();
-  const { create } = useActionsStore();
+  const { upsert } = useActionsStore();
   const autocomplete = useAutocomplete({
     allowedTypes: allowedTypes?.map(type => type.typeId),
   });
@@ -88,55 +87,57 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
     const newEntityId = ID.createEntityId();
 
     // Create new entity with name and types
-    create(
-      Triple.withId({
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: newEntityId,
         attributeId: SYSTEM_IDS.NAME,
         entityName: autocomplete.query,
         attributeName: 'Name',
-        space: spaceId,
         value: {
-          type: 'string',
-          id: ID.createValueId(),
+          type: 'TEXT',
           value: autocomplete.query,
         },
-      })
+      },
+      spaceId
     );
 
     if (allowedTypes) {
       allowedTypes.forEach(type => {
-        create(
-          Triple.withId({
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: autocomplete.query,
             attributeName: 'Types',
-            space: spaceId,
             value: {
-              type: 'entity',
-              id: type.typeId,
+              type: 'ENTITY',
+              value: type.typeId,
               name: type.typeName,
             },
-          })
+          },
+          spaceId
         );
       });
     }
 
     if (relationValueTypesForAttribute) {
       relationValueTypesForAttribute.forEach(type => {
-        create(
-          Triple.withId({
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: autocomplete.query,
             attributeName: 'Types',
-            space: spaceId,
             value: {
-              type: 'entity',
-              id: type.typeId,
+              type: 'ENTITY',
+              value: type.typeId,
               name: type.typeName,
             },
-          })
+          },
+          spaceId
         );
       });
     }

@@ -8,7 +8,7 @@ import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } 
 import { Environment } from '~/core/environment';
 import { StorageClient } from '~/core/io/storage/storage';
 import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
-import { Op } from '~/core/utils/op';
+import { Ops } from '~/core/utils/ops';
 import { slog } from '~/core/utils/utils';
 
 import { geoAccount, publicClient, walletClient } from '../../client';
@@ -81,7 +81,7 @@ export async function makeNonprofitEffect(
       // Add triples for a Person entity
       if (username) {
         ops.push(
-          Op.create({
+          Ops.create({
             entityId: profileId,
             attributeId: SYSTEM_IDS.NAME,
             value: {
@@ -94,7 +94,7 @@ export async function makeNonprofitEffect(
 
       if (avatarUri) {
         ops.push(
-          Op.create({
+          Ops.create({
             entityId: profileId,
             attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
             value: {
@@ -107,7 +107,7 @@ export async function makeNonprofitEffect(
 
       // Add Types: Nonprofit Organization and Project to the profile entity
       ops.push(
-        Op.create({
+        Ops.create({
           entityId: profileId,
           attributeId: SYSTEM_IDS.TYPES,
           value: {
@@ -118,7 +118,7 @@ export async function makeNonprofitEffect(
       );
 
       ops.push(
-        Op.create({
+        Ops.create({
           entityId: profileId,
           attributeId: SYSTEM_IDS.TYPES,
           value: {
@@ -129,7 +129,7 @@ export async function makeNonprofitEffect(
       );
 
       ops.push(
-        Op.create({
+        Ops.create({
           entityId: profileId,
           attributeId: SYSTEM_IDS.TYPES,
           value: {

@@ -7,7 +7,7 @@ import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
 import { SpaceType } from '~/core/types';
 import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
-import { Op } from '~/core/utils/op';
+import { Ops } from '~/core/utils/ops';
 import { slog } from '~/core/utils/utils';
 
 import { geoAccount, publicClient, walletClient } from '../../client';
@@ -36,7 +36,7 @@ export function makeCreateEntitiesEffect(
 
       // Add triples for a Person entity
       ops.push(
-        Op.create({
+        Ops.create({
           entityId: newEntityId,
           attributeId: SYSTEM_IDS.NAME,
           value: {
@@ -47,7 +47,7 @@ export function makeCreateEntitiesEffect(
       );
 
       ops.push(
-        Op.create({
+        Ops.create({
           entityId: newEntityId,
           attributeId: SYSTEM_IDS.TYPES,
           value: {
@@ -59,7 +59,7 @@ export function makeCreateEntitiesEffect(
 
       if (spaceAvatarUri) {
         ops.push(
-          Op.create({
+          Ops.create({
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
             value: {
@@ -72,7 +72,7 @@ export function makeCreateEntitiesEffect(
 
       if (type === 'company') {
         ops.push(
-          Op.create({
+          Ops.create({
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             value: {
@@ -86,7 +86,7 @@ export function makeCreateEntitiesEffect(
       // Nonprofit spaces have both Nonprofit _and_ Project added as types
       if (type === 'nonprofit') {
         ops.push(
-          Op.create({
+          Ops.create({
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             value: {
@@ -97,7 +97,7 @@ export function makeCreateEntitiesEffect(
         );
 
         ops.push(
-          Op.create({
+          Ops.create({
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             value: {
