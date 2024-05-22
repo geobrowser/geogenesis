@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { OmitStrict, Space } from '~/core/types';
 
+import { entityFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, getSpaceConfigFromMetadata } from './network-local-mapping';
 
@@ -16,33 +17,7 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
 
         metadata {
           nodes {
-            id
-            name
-            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-              nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
-              }
-            }
+            ${entityFragment}
           }
         }
       }

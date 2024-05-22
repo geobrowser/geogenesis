@@ -10,9 +10,8 @@ export const makeStubTriple = (name: string, entityId?: string): Triple => {
     attributeId: 'name',
     attributeName: 'Name',
     value: {
-      type: 'string',
+      type: 'TEXT',
       value: name,
-      id: `s~${name}`,
     },
     space: 's',
   };
@@ -43,9 +42,9 @@ export const makeStubTripleWithType = (typeId: string): Triple => {
     attributeId: SYSTEM_IDS.TYPES,
     attributeName: 'Types',
     value: {
-      type: 'entity',
+      type: 'ENTITY',
       name: `valueName~${typeId}`,
-      id: typeId,
+      value: typeId,
     },
     space: 's',
   };
@@ -59,9 +58,9 @@ export const makeStubTextAttribute = (name: string): Triple => {
     attributeId: SYSTEM_IDS.ATTRIBUTE,
     attributeName: 'Types',
     value: {
-      type: 'entity',
+      type: 'ENTITY',
       name: 'Text',
-      id: SYSTEM_IDS.TEXT,
+      value: SYSTEM_IDS.TEXT,
     },
     space: 's',
   };
@@ -75,9 +74,9 @@ export const makeStubRelationAttribute = (name: string): Triple => {
     attributeId: SYSTEM_IDS.ATTRIBUTE,
     attributeName: 'Types',
     value: {
-      type: 'entity',
+      type: 'ENTITY',
       name: 'Text',
-      id: SYSTEM_IDS.RELATION,
+      value: SYSTEM_IDS.RELATION,
     },
     space: 's',
   };
@@ -91,9 +90,8 @@ export const makeStubTripleWithStringValue = (value: string): TripleWithStringVa
     attributeId: `attributeId~${value}`,
     attributeName: `attributeName~${value}`,
     value: {
-      type: 'string',
+      type: 'TEXT',
       value,
-      id: `s~${value}`,
     },
     space: `space~${value}`,
   };
@@ -107,9 +105,8 @@ export const makeStubTripleWithDateValue = (value: string): TripleWithDateValue 
     attributeId: `attributeId~${value}`,
     attributeName: `attributeName~${value}`,
     value: {
-      type: 'date',
+      type: 'TIME',
       value,
-      id: `d~${value}`,
     },
     space: `space~${value}`,
   };
@@ -123,9 +120,8 @@ export const makeStubTripleWithUrlValue = (value: string): TripleWithUrlValue =>
     attributeId: `attributeId~${value}`,
     attributeName: `attributeName~${value}`,
     value: {
-      type: 'url',
+      type: 'URL',
       value,
-      id: `u~${value}`,
     },
     space: `space~${value}`,
   };

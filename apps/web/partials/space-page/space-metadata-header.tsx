@@ -10,7 +10,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
-import { Action as IAction } from '~/core/types';
+import { AppOp } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -121,9 +121,7 @@ export function SpacePageMetadataHeader({
                     setSelectedProposal(p.id);
                     setIsCompareOpen(true);
                   }}
-                  changeCount={Action.getChangeCount(
-                    p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
-                  )}
+                  changeCount={p.proposedVersions.reduce<AppOp[]>((acc, version) => acc.concat(version.ops), []).length}
                   createdAt={p.createdAt}
                   createdBy={p.createdBy}
                   name={p.name}

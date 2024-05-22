@@ -8,8 +8,9 @@ import { Profile, SpaceWithMetadata, Version } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
+import { entityFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamVersion, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from './network-local-mapping';
 
 const getVersionsQuery = (versionId: string) => `query {
   version(id: ${JSON.stringify(versionId)}) {
@@ -30,29 +31,9 @@ const getVersionsQuery = (versionId: string) => `query {
         nodes {
           id
           name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+          triples(filter: {isStale: {equalTo: false}}) {
             nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
+              ${tripleFragment}
             }
           }
         }
@@ -63,34 +44,8 @@ const getVersionsQuery = (versionId: string) => `query {
       id
       metadata {
         nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
-        }
+          ${entityFragment}
+        }           
       }
     }
 
@@ -196,7 +151,7 @@ export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersion
   // of the user and fetch the Profile for the user with the matching wallet address.
   const maybeProfile = version.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
   const onchainProfile = version.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+  const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
 
   const profile: Profile = maybeProfile
     ? {
@@ -219,7 +174,7 @@ export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersion
   const networkTriples = version.tripleVersions.nodes.flatMap(tv => tv.triple);
 
   const spaceConfig = version.space.metadata.nodes[0] as SubstreamEntity | undefined;
-  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 
   const spaceWithMetadata: SpaceWithMetadata = {
     id: version.space.id,

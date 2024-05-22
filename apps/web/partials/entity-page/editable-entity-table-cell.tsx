@@ -3,6 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/ids';
 import { memo } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
+import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Cell, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -19,9 +20,8 @@ interface Props {
   cell: Cell;
   space: string;
   triples: Triple[];
-  create: (triple: Triple) => void;
-  update: (triple: Triple, oldTriple: Triple) => void;
-  remove: (triple: Triple) => void;
+  upsert: ReturnType<typeof useActionsStore>['upsert'];
+  remove: ReturnType<typeof useActionsStore>['remove'];
   valueType: string;
   columnName: string;
   columnRelationTypes?: { typeId: string; typeName: string | null }[];
@@ -31,8 +31,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   cell,
   space,
   triples,
-  create,
-  update,
+  upsert,
   remove,
   columnName,
   valueType,
@@ -45,8 +44,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       entityName: Entity.name(triples) ?? '',
     },
     api: {
-      create,
-      update,
+      upsert,
       remove,
     },
   });
@@ -54,7 +52,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const entityName = Entity.name(triples) || '';
   const attributeId = cell.columnId;
 
-  const entityValueTriples = triples.filter(t => t.value.type === 'entity');
+  const entityValueTriples = triples.filter(t => t.value.type === 'ENTITY');
 
   const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
   const firstTriple = triples[0];
@@ -195,7 +193,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       <TableStringField
         placeholder="Entity name..."
         value={entityName}
-        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: firstTriple, name: e.target.value } })}
+        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { name: e.target.value } })}
       />
     );
   }
@@ -205,9 +203,9 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       {isPopulatedRelation && (
         <>
           {triples.map(triple => (
-            <div key={`entity-${triple.value.id}`}>
+            <div key={`entity-${triple.value}`}>
               <DeletableChipButton
-                href={NavUtils.toEntity(triple.space, triple.value.id)}
+                href={NavUtils.toEntity(triple.space, triple.value.value)}
                 onClick={() => removeEntityTriple(triple)}
               >
                 {Value.nameOfEntityValue(triple)}
@@ -219,7 +217,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             onDone={entity => createEntityTripleWithValue(attributeId, entity)}
             entityValueIds={entityValueTriples
               .filter(triple => triple.attributeId === attributeId)
-              .map(triple => triple.value.id)}
+              .map(triple => triple.value.value)}
             allowedTypes={typesToFilter}
             spaceId={space}
             attributeId={attributeId}
@@ -232,7 +230,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           spaceId={space}
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
-          itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.id)}
+          itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.value)}
           allowedTypes={typesToFilter}
           attributeId={attributeId}
           containerClassName="!z-20"
@@ -268,7 +266,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         <DateField
           isEditing={true}
           onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateDateTripleValue(firstTriple, date))}
-          value={Value.dateValue(firstTriple) ?? ''}
+          value={Value.timeValue(firstTriple) ?? ''}
           variant="tableCell"
         />
       )}

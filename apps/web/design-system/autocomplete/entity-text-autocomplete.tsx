@@ -14,7 +14,6 @@ import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { Triple } from '~/core/utils/triple';
 
 import { Divider } from '~/design-system/divider';
 import { Dots } from '~/design-system/dots';
@@ -48,7 +47,7 @@ export function EntityTextAutocomplete({
   className = '',
 }: Props) {
   const [, setToast] = useToast();
-  const { create } = useActionsStore();
+  const { upsert } = useActionsStore();
   const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
     allowedTypes: allowedTypes?.map(type => type.typeId),
   });
@@ -63,55 +62,57 @@ export function EntityTextAutocomplete({
     const newEntityId = ID.createEntityId();
 
     // Create new entity with name and types
-    create(
-      Triple.withId({
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: newEntityId,
         attributeId: SYSTEM_IDS.NAME,
         entityName: query,
         attributeName: 'Name',
-        space: spaceId,
         value: {
-          type: 'string',
-          id: ID.createValueId(),
+          type: 'TEXT',
           value: query,
         },
-      })
+      },
+      spaceId
     );
 
     if (allowedTypes) {
       allowedTypes.forEach(type => {
-        create(
-          Triple.withId({
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: query,
             attributeName: 'Types',
-            space: spaceId,
             value: {
-              type: 'entity',
-              id: type.typeId,
+              type: 'ENTITY',
+              value: type.typeId,
               name: type.typeName,
             },
-          })
+          },
+          spaceId
         );
       });
     }
 
     if (relationValueTypesForAttribute) {
       relationValueTypesForAttribute.forEach(type => {
-        create(
-          Triple.withId({
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: query,
             attributeName: 'Types',
-            space: spaceId,
             value: {
-              type: 'entity',
-              id: type.typeId,
+              type: 'ENTITY',
+              value: type.typeId,
               name: type.typeName,
             },
-          })
+          },
+          spaceId
         );
       });
     }

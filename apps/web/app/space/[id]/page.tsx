@@ -1,4 +1,4 @@
-import { COMPANY_TYPE, NONPROFIT_TYPE, PERSON_TYPE } from '@geogenesis/ids/system-ids';
+import { COMPANY_TYPE, NONPROFIT_TYPE, PERSON_TYPE, TYPES } from '@geogenesis/ids/system-ids';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -6,8 +6,9 @@ import * as React from 'react';
 import type { Metadata } from 'next';
 
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
-import { Triple } from '~/core/types';
+import { Triple as ITriple } from '~/core/types';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
+import { Value } from '~/core/utils/value';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
@@ -138,14 +139,14 @@ const getData = async (spaceId: string) => {
 
 export type SpacePageType = 'person' | 'company' | 'nonprofit';
 
-const getSpaceType = (triples: Array<Triple>): SpacePageType | null => {
-  const typeTriples = triples.filter(triple => triple.attributeId === 'type');
+const getSpaceType = (triples: Array<ITriple>): SpacePageType | null => {
+  const typeTriples = triples.filter(triple => triple.attributeId === TYPES);
 
-  if (typeTriples.some(triple => triple.value.id === PERSON_TYPE)) {
+  if (typeTriples.some(triple => Value.entityValue(triple) === PERSON_TYPE)) {
     return 'person';
-  } else if (typeTriples.some(triple => triple.value.id === COMPANY_TYPE)) {
+  } else if (typeTriples.some(triple => Value.entityValue(triple) === COMPANY_TYPE)) {
     return 'company';
-  } else if (typeTriples.some(triple => triple.value.id === NONPROFIT_TYPE)) {
+  } else if (typeTriples.some(triple => Value.entityValue(triple) === NONPROFIT_TYPE)) {
     return 'nonprofit';
   } else {
     return null;

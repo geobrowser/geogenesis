@@ -132,7 +132,7 @@ const types: Record<string, string[]> = {
   ],
 };
 
-const geoEntities: s.geo_entities.Insertable[] = entities.map(entity => ({
+const geoEntities: s.entities.Insertable[] = entities.map(entity => ({
   id: entity,
   name: names[entity],
   // is_attribute: attributes[entity] ? true : false,

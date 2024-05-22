@@ -7,6 +7,7 @@ import { FilterField, FilterState } from '~/core/types';
 
 import { graphql } from './graphql';
 import { SubstreamTriple, fromNetworkTriples } from './network-local-mapping';
+import { tripleFragment } from './fragments';
 
 interface GetFetchTriplesQueryOptions {
   where: string;
@@ -17,27 +18,7 @@ interface GetFetchTriplesQueryOptions {
 const getFetchTriplesQuery = ({ where, skip, first }: GetFetchTriplesQueryOptions) => `query {
   triples(filter: {${where}}, first: ${first}, offset: ${skip}) {
     nodes {
-      id
-      attribute {
-        id
-        name
-      }
-      entity {
-        id
-        name
-      }
-      entityValue {
-        id
-        name
-      }
-      numberValue
-      stringValue
-      valueType
-      valueId
-      isProtected
-      space {
-        id
-      }
+      ${tripleFragment}
     }
   }
 }`;

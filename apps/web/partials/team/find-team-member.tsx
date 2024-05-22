@@ -69,7 +69,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
   const [, setToast] = useToast();
-  const { create } = useActionsStore();
+  const { upsert } = useActionsStore();
 
   const handleAddLinkedTeamMember = () => {
     if (!person || !name || !role) return;
@@ -78,54 +78,55 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
 
     // Add name attribute
     if (linkedName !== name) {
-      create(
-        Triple.withId({
-          space: spaceId,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId: linkedEntityId,
           entityName: name,
           attributeId: SYSTEM_IDS.NAME,
           attributeName: 'Name',
           value: {
-            type: 'string',
-            id: ID.createValueId(),
+            type: 'TEXT',
             value: name,
           },
-        })
+        },
+        spaceId
       );
     }
 
     // Add avatar attribute
     if (avatar && linkedAvatar !== avatar) {
-      create(
-        Triple.withId({
-          space: spaceId,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId: linkedEntityId,
           entityName: name,
           attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
           attributeName: 'Avatar',
           value: {
-            type: 'image',
-            id: ID.createValueId(),
+            type: 'IMAGE',
             value: Value.toImageValue(avatar),
           },
-        })
+        },
+        spaceId
       );
     }
 
     // Add role attribute
-    create(
-      Triple.withId({
-        space: spaceId,
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: linkedEntityId,
         entityName: name,
         attributeId: ROLE_ATTRIBUTE,
         attributeName: 'Role',
         value: {
-          type: 'entity',
-          id: role.id,
+          type: 'ENTITY',
+          value: role.id,
           name: role.name,
         },
-      })
+      },
+      spaceId
     );
 
     setHasAddedTeamMember(true);

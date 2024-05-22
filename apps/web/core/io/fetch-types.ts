@@ -33,7 +33,7 @@ export async function fetchForeignTypeTriples(space: Space): Promise<Triple[]> {
     ],
   });
 
-  const foreignTypesIds = foreignTypesFromSpaceConfig.map(triple => triple.value.id);
+  const foreignTypesIds = foreignTypesFromSpaceConfig.map(triple => triple.value.value);
 
   const foreignTypes = await Promise.all(
     foreignTypesIds.map(entityId =>

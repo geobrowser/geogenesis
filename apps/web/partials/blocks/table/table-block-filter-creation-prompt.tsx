@@ -8,7 +8,7 @@ import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { Entity, Space, TripleValueType } from '~/core/types';
+import { Entity, Space, ValueType as TripleValueType } from '~/core/types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
@@ -172,7 +172,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
     onCreate({
       columnId: state.selectedColumn,
       value: getFilterValue(state.value),
-      valueType: options.find(o => o.columnId === state.selectedColumn)?.valueType ?? 'string',
+      valueType: options.find(o => o.columnId === state.selectedColumn)?.valueType ?? 'TEXT',
       valueName: getFilterValueName(state.value),
     });
     dispatch({ type: 'done' });
@@ -247,7 +247,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                         selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectSpaceValue}
                       />
-                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'entity' ? (
+                    ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'ENTITY' ? (
                       <TableBlockEntityFilterInput
                         typeIdToFilter={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
                         selectedValue={getFilterValueName(state.value) ?? ''}

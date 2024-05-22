@@ -63,7 +63,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
 
   const createForeignType = (typeEntity: Entity) => {
     const foreignTypeTriple = typeEntity.triples.find(
-      triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id === SYSTEM_IDS.SCHEMA_TYPE
+      triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.value === SYSTEM_IDS.SCHEMA_TYPE
     );
 
     if (!foreignTypeTriple) return;
@@ -86,7 +86,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
 
   // Prevent non-types or current space types from showing up in the autocomplete results
   const filteredAutocompleteResults = autocomplete.results.filter(result => {
-    const typeIds = result.triples.map(triple => triple.value.id);
+    const typeIds = result.triples.map(triple => triple.value.value);
     return !spaceTypeIds.includes(result.id) && typeIds.includes(SYSTEM_IDS.SCHEMA_TYPE);
   });
 

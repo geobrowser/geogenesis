@@ -1,9 +1,8 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import {
-  Action,
+  AppOp,
   Entity,
   OmitStrict,
   ProposedVersion,
@@ -16,35 +15,25 @@ import {
 import { Entity as EntityModule } from '~/core/utils/entity';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
-
-type NetworkStringValue = { valueType: 'STRING'; stringValue: string };
-
-type NetworkImageValue = { valueType: 'IMAGE'; stringValue: string };
-
-// Right now we can end up with a null entityValue until we handle triple validation on the subgraph
+type NetworkTextValue = { valueType: 'TEXT'; textValue: string };
+type NetworkImageValue = { valueType: 'IMAGE'; entityValue: { id: string } };
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
-
-type NetworkDateValue = { valueType: 'DATE'; stringValue: string };
-
-type NetworkUrlValue = { valueType: 'URL'; stringValue: string };
-
+type NetworkTimeValue = { valueType: 'TIME'; textValue: string };
+type NetworkUrlValue = { valueType: 'URL'; textValue: string };
 type NetworkCollectionValue = { valueType: 'COLLECTION'; collectionValue: { id: string } };
 
 type NetworkValue =
   | NetworkNumberValue
-  | NetworkStringValue
+  | NetworkTextValue
   | NetworkEntityValue
   | NetworkImageValue
-  | NetworkDateValue
+  | NetworkTimeValue
   | NetworkUrlValue
   | NetworkCollectionValue;
 
 export type SubstreamTriple = NetworkValue & {
-  id: string;
   entity: { id: string; name: string | null };
   attribute: { id: string; name: string | null };
-  valueId: string;
-  isProtected: boolean;
   space: Space;
 };
 
@@ -54,21 +43,22 @@ type CreatedBy = {
   onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
 };
 
-export type SubstreamAction = OmitStrict<SubstreamTriple, 'space' | 'isProtected'> &
+export type SubstreamOp = OmitStrict<SubstreamTriple, 'space'> &
   NetworkValue & {
-    actionType: 'createTriple' | 'deleteTriple';
+    id: string;
+    type: 'SET_TRIPLE' | 'DELETE_TRIPLE';
     // @TODO: This should be a reference
     entityValue: string | null;
   };
 
 export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
-  triplesByEntityId: { nodes: SubstreamTriple[] };
+  triples: { nodes: SubstreamTriple[] };
 };
 
 export type SubstreamSpace = { id: string; metadata: { nodes: SubstreamEntity[] } };
 
 export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy' | 'space'> & {
-  actions: { nodes: SubstreamAction[] };
+  actions: { nodes: SubstreamOp[] };
 
   createdBy: CreatedBy;
   space: SubstreamSpace;
@@ -106,102 +96,91 @@ export type SubstreamProposal = {
   proposedVersions: { nodes: SubstreamProposedVersion[] };
 };
 
-export function extractValue(networkTriple: SubstreamTriple | SubstreamAction): Value {
+export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Value {
   switch (networkTriple.valueType) {
-    case 'STRING':
-      return { type: 'string', id: networkTriple.valueId, value: networkTriple.stringValue };
+    case 'TEXT':
+      return { type: 'TEXT', value: networkTriple.textValue };
     case 'IMAGE':
-      return { type: 'image', id: networkTriple.valueId, value: networkTriple.stringValue };
+      return { type: 'IMAGE', value: networkTriple.entityValue.id };
     case 'NUMBER':
-      return { type: 'number', id: networkTriple.valueId, value: networkTriple.numberValue };
+      return { type: 'NUMBER', value: networkTriple.numberValue };
     case 'ENTITY':
       return {
-        type: 'entity',
-        id: networkTriple.entityValue.id,
+        type: 'ENTITY',
+        value: networkTriple.entityValue.id,
         name: networkTriple.entityValue.name,
       };
-    case 'DATE':
-      return { type: 'date', id: networkTriple.valueId, value: networkTriple.stringValue };
+    case 'TIME':
+      return { type: 'TIME', value: networkTriple.textValue };
     case 'URL':
-      return { type: 'url', id: networkTriple.valueId, value: networkTriple.stringValue };
+      return { type: 'URL', value: networkTriple.textValue };
     case 'COLLECTION':
-      return { type: 'collection', id: networkTriple.valueId };
+      return { type: 'COLLECTION', value: networkTriple.collectionValue.id };
   }
 }
 
-export function extractActionValue(networkAction: SubstreamAction): Value {
+export function extractActionValue(networkAction: SubstreamOp): Value {
   switch (networkAction.valueType) {
-    case 'STRING':
-      return { type: 'string', id: networkAction.valueId, value: networkAction.stringValue };
+    case 'TEXT':
+      return { type: 'TEXT', value: networkAction.textValue };
     case 'IMAGE':
-      return { type: 'image', id: networkAction.valueId, value: networkAction.stringValue };
+      return { type: 'IMAGE', value: networkAction.entityValue.id };
     case 'NUMBER':
-      return { type: 'number', id: networkAction.valueId, value: networkAction.numberValue };
+      return { type: 'NUMBER', value: networkAction.numberValue };
     case 'ENTITY':
       return {
-        type: 'entity',
-        id: networkAction.entityValue,
+        type: 'ENTITY',
+        value: networkAction.entityValue,
         name: null,
       };
-    case 'DATE':
-      return { type: 'date', id: networkAction.valueId, value: networkAction.stringValue };
+    case 'TIME':
+      return { type: 'TIME', value: networkAction.textValue };
     case 'URL':
-      return { type: 'url', id: networkAction.valueId, value: networkAction.stringValue };
+      return { type: 'URL', value: networkAction.textValue };
     case 'COLLECTION':
-      return { type: 'collection', id: networkAction.valueId };
+      return { type: 'COLLECTION', value: networkAction.collectionValue.id };
   }
 }
 
-export function getActionFromChangeStatus(action: Action) {
-  switch (action.type) {
-    case 'createTriple':
-    case 'deleteTriple':
-      return [action];
-
-    case 'editTriple':
-      return [action.before, action.after];
-  }
-}
-
-function networkTripleHasEmptyValue(networkTriple: SubstreamTriple | SubstreamAction): boolean {
+function networkTripleHasEmptyValue(networkTriple: SubstreamTriple | SubstreamOp): boolean {
   switch (networkTriple.valueType) {
-    case 'STRING':
-      return !networkTriple.stringValue;
+    case 'TEXT':
+      return !networkTriple.textValue;
     case 'NUMBER':
       return !networkTriple.numberValue;
     case 'ENTITY':
       return !networkTriple.entityValue;
     case 'IMAGE':
-      return !networkTriple.stringValue;
-    case 'DATE':
-      return !networkTriple.stringValue;
+      return !networkTriple.entityValue;
+    case 'TIME':
+      return !networkTriple.textValue;
     case 'URL':
-      return !networkTriple.stringValue;
+      return !networkTriple.textValue;
     case 'COLLECTION':
       return !networkTriple.collectionValue;
   }
 }
 
-function substreamTripleHasEmptyValue(networkTriple: SubstreamAction): boolean {
+function substreamTripleHasEmptyValue(networkTriple: SubstreamOp): boolean {
   switch (networkTriple.valueType) {
-    case 'STRING':
-      return !networkTriple.stringValue;
+    case 'TEXT':
+      return !networkTriple.textValue;
     case 'NUMBER':
       return !networkTriple.numberValue;
     case 'ENTITY':
       return !networkTriple.entityValue;
     case 'IMAGE':
-      return !networkTriple.stringValue;
-    case 'DATE':
-      return !networkTriple.stringValue;
+      return !networkTriple.entityValue;
+    case 'TIME':
+      return !networkTriple.textValue;
     case 'URL':
-      return !networkTriple.stringValue;
+      return !networkTriple.textValue;
     case 'COLLECTION':
       return !networkTriple.collectionValue;
   }
 }
 
-function networkTripleHasEmptyAttribute(networkTriple: SubstreamAction | SubstreamTriple): boolean {
+function networkTripleHasEmptyAttribute(networkTriple: SubstreamOp | SubstreamTriple): boolean {
   return !networkTriple.attribute || !networkTriple.attribute.id;
 }
 
@@ -216,7 +195,6 @@ export function fromNetworkTriples(networkTriples: SubstreamTriple[]): Triple[] 
       }
 
       return {
-        id: networkTriple.id,
         entityId: networkTriple.entity.id,
         entityName: networkTriple.entity.name,
         attributeId: networkTriple.attribute.id,
@@ -228,45 +206,47 @@ export function fromNetworkTriples(networkTriples: SubstreamTriple[]): Triple[] 
     .flatMap(triple => (triple ? [triple] : []));
 }
 
-export function fromNetworkActions(networkActions: SubstreamAction[], spaceId: string): Action[] {
+export function fromNetworkOps(networkOps: SubstreamOp[], spaceId: string): AppOp[] {
   try {
-    const newActions = networkActions
-      .map(networkAction => {
+    const newActions = networkOps
+      .map(networkOp => {
         // There's an edge-case bug where the value can be null even though it should be an object.
         // Right now we're not doing any triple validation, but once we do we will no longer be indexing
         // empty triples. This is likely a result of very old data that does not map to the expected
         // type for value types.
-        if (substreamTripleHasEmptyValue(networkAction) || networkTripleHasEmptyAttribute(networkAction)) {
+        if (substreamTripleHasEmptyValue(networkOp) || networkTripleHasEmptyAttribute(networkOp)) {
           return null;
         }
 
-        const value = extractActionValue(networkAction);
+        const value = extractActionValue(networkOp);
 
-        switch (networkAction.actionType) {
-          case 'createTriple': {
-            return {
-              type: 'createTriple' as const,
-              id: networkAction.id,
-              entityId: networkAction.entity.id,
-              entityName: networkAction.entity.name,
-              attributeId: networkAction.attribute.id,
-              attributeName: networkAction.attribute.name,
+        switch (networkOp.type) {
+          case 'SET_TRIPLE': {
+            const op: AppOp = {
+              type: 'SET_TRIPLE',
+              id: networkOp.id,
+              entityId: networkOp.entity.id,
+              entityName: networkOp.entity.name,
+              attributeId: networkOp.attribute.id,
+              attributeName: networkOp.attribute.name,
               value,
-              space: spaceId,
             };
+
+            return op;
           }
 
-          case 'deleteTriple': {
-            return {
-              type: 'deleteTriple' as const,
-              id: networkAction.id,
-              entityId: networkAction.entity.id,
-              entityName: networkAction.entity.name,
-              attributeId: networkAction.attribute.id,
-              attributeName: networkAction.attribute.name,
+          case 'DELETE_TRIPLE': {
+            const op: AppOp = {
+              type: 'DELETE_TRIPLE',
+              id: networkOp.id,
+              entityId: networkOp.entity.id,
+              entityName: networkOp.entity.name,
+              attributeId: networkOp.attribute.id,
+              attributeName: networkOp.attribute.name,
               value,
-              space: spaceId,
             };
+
+            return op;
           }
         }
       })
@@ -280,11 +260,12 @@ export function fromNetworkActions(networkActions: SubstreamAction[], spaceId: s
 }
 
 export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamEntity | undefined) {
-  const spaceConfigTriples = fromNetworkTriples(metadata?.triplesByEntityId.nodes ?? []);
+  const spaceConfigTriples = fromNetworkTriples(metadata?.triples.nodes ?? []);
 
   const spaceConfigWithImage: SpaceConfigEntity = metadata
     ? {
-        id: spaceId,
+        id: metadata.id,
+        spaceId: spaceId,
         name: metadata.name,
         description: null,
         image:
@@ -294,7 +275,8 @@ export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamE
         nameTripleSpaces: EntityModule.nameTriples(spaceConfigTriples).map(t => t.space),
       }
     : {
-        id: spaceId,
+        id: '',
+        spaceId: spaceId,
         name: null,
         description: null,
         image: PLACEHOLDER_SPACE_IMAGE,

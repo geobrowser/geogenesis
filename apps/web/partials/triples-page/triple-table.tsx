@@ -73,15 +73,15 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
       case 'value': {
         const value = cellData as Value;
 
-        if (value.type === 'collection') {
+        if (value.type === 'COLLECTION') {
           return null;
         }
 
-        if (value.type === 'entity') {
-          return <LinkableChip href={NavUtils.toEntity(space, value.id)}>{value.name ?? value.id}</LinkableChip>;
+        if (value.type === 'ENTITY') {
+          return <LinkableChip href={NavUtils.toEntity(space, value.value)}>{value.name ?? value.value}</LinkableChip>;
         }
 
-        if (value.type === 'image') {
+        if (value.type === 'IMAGE') {
           return <ImageZoom imageSrc={value.value} variant="avatar" />;
         }
 
@@ -149,7 +149,7 @@ export const TripleTable = ({ space, triples }: Props) => {
 
                 return (
                   <TableCell
-                    isExpandable={cell.column.id === 'value' && (cell.getValue() as Value).type === 'string'}
+                    isExpandable={cell.column.id === 'value' && (cell.getValue() as Value).type === 'TEXT'}
                     isExpanded={expandedCells[cellId]}
                     width={cell.column.getSize()}
                     key={cell.id}

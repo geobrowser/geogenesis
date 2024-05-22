@@ -7,6 +7,7 @@ import { Environment } from '~/core/environment';
 import { Entity as EntityType, FilterField, FilterState } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
@@ -19,14 +20,14 @@ function getFetchEntitiesQuery(
 ) {
   const typeIdsString =
     typeIds && typeIds.length > 0
-      ? `geoEntityTypesByEntityId: { some: { typeId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } }`
+      ? `entityTypes: { some: { typeId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } }`
       : // Filter out block entities by default
-        `geoEntityTypesByEntityId: { every: { typeId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.TABLE_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.INDEXED_SPACE}"] } } }`;
+        `entityTypes: { every: { typeId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.TABLE_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.INDEXED_SPACE}"] } } }`;
 
   const constructedWhere =
     entityOfWhere !== ''
       ? `{ name: { startsWithInsensitive: ${JSON.stringify(query)} }
-        triplesByEntityId: {
+        triples: {
           some: {
             ${entityOfWhere}
             isStale: { equalTo: false }
@@ -37,33 +38,13 @@ function getFetchEntitiesQuery(
       : `{name: {startsWithInsensitive: ${JSON.stringify(query)}} ${typeIdsString} }`;
 
   return `query {
-    geoEntities(filter: ${constructedWhere} first: ${first} offset: ${skip} orderBy: NAME_ASC) {
+    entities(filter: ${constructedWhere} first: ${first} offset: ${skip} orderBy: NAME_ASC) {
       nodes {
         id
         name
-        triplesByEntityId(filter: { isStale: { equalTo: false } }) {
+        triples(filter: { isStale: { equalTo: false } }) {
           nodes {
-            id
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-            isProtected
-            space {
-              id
-            }
+           ${tripleFragment} 
           }
         }
       }
@@ -82,7 +63,7 @@ export interface FetchEntitiesOptions {
 }
 
 interface NetworkResult {
-  geoEntities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamEntity[] };
 }
 
 export async function fetchEntities(options: FetchEntitiesOptions): Promise<EntityType[]> {
@@ -140,7 +121,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
           );
 
           return {
-            geoEntities: { nodes: [] },
+            entities: { nodes: [] },
           };
 
         default:
@@ -148,7 +129,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
             `${error._tag}: Unable to fetch entities, queryId: ${queryId}query: ${options.query} skip: ${options.skip} first: ${options.first} filter: ${options.filter}`
           );
           return {
-            geoEntities: { nodes: [] },
+            entities: { nodes: [] },
           };
       }
     }
@@ -156,12 +137,12 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
     return resultOrError.right;
   });
 
-  const { geoEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const sortedResults = sortSearchResultsByRelevance(geoEntities.nodes);
+  const sortedResults = sortSearchResultsByRelevance(entities.nodes);
 
   return sortedResults.map(result => {
-    const networkTriples = result.triplesByEntityId.nodes;
+    const networkTriples = result.triples.nodes;
 
     // If there is no latest version just return an empty entity.
     if (networkTriples.length === 0) {

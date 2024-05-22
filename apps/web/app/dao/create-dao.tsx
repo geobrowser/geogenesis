@@ -19,13 +19,13 @@ import {
   getSpacePluginInstallItem,
 } from './encodings';
 
-interface Props {
+interface Prtypes {
   type: 'personal' | 'governance';
 }
 
-const ops: Op[] = [
+const types: Op[] = [
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: '30314f95b10d4d08972552306de3b677',
       attributeId: 'c1f4cb6fece44c3ca447ab005b756972',
@@ -33,7 +33,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: 'f1b9fd886388436e95b551aafaea77e5',
       attributeId: '8f151ba4de204e3c9cb499ddf96f48f1',
@@ -41,7 +41,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: 'f1b9fd886388436e95b551aafaea77e5',
       attributeId: 'beaba5cba67741a8b35377030613fc70',
@@ -49,7 +49,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: 'f1b9fd886388436e95b551aafaea77e5',
       attributeId: '34f535072e6b42c5a84443981a77cfa2',
@@ -57,7 +57,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: '7e3178e1e50f4c5ebc783889377a2309',
       attributeId: '8f151ba4de204e3c9cb499ddf96f48f1',
@@ -65,7 +65,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: '30314f95b10d4d08972552306de3b677',
       attributeId: 'c43b537bcff742718822717fdf2c9c01',
@@ -73,15 +73,15 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: 'f1b9fd886388436e95b551aafaea77e5',
       attributeId: '9b1f76ff9711404c861e59dc3fa7d037',
-      value: { type: 'TEXT', value: 'The Root space is the top level space for the canonical global graph.' },
+      value: { type: 'TEXT', value: 'The Root space is the ttype level space for the canonical global graph.' },
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: 'f1b9fd886388436e95b551aafaea77e5',
       attributeId: 'a126ca530c8e48d5b88882c734c38935',
@@ -89,7 +89,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: 'e9b2ca5149f743b7ab1e57f5a65d8009',
       attributeId: 'a126ca530c8e48d5b88882c734c38935',
@@ -97,7 +97,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: 'e9b2ca5149f743b7ab1e57f5a65d8009',
       attributeId: 'dd4999b977f04c2ba02b5a26b233854e',
@@ -105,19 +105,19 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: 'e9b2ca5149f743b7ab1e57f5a65d8009',
       attributeId: 'f88047cebd8d4fbf83f658e84ee533e4',
       value: {
         type: 'TEXT',
         value:
-          'The Root space is the top level space for the canonical global graph. Its subspaces are the top level spaces that people see on the home page. It also defines Types, Attributes, Goals, and Policies that are global in nature and can be used by other spaces.\n\n',
+          'The Root space is the ttype level space for the canonical global graph. Its subspaces are the ttype level spaces that petypele see on the home page. It also defines Types, Attributes, Goals, and Policies that are global in nature and can be used by other spaces.\n\n',
       },
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: '30314f95b10d4d08972552306de3b677',
       attributeId: 'ede47e6930b044998ea4aafbda449609',
@@ -125,7 +125,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: '43f688823e3f4fff82d15f2ebafab79e',
       attributeId: '8f151ba4de204e3c9cb499ddf96f48f1',
@@ -133,7 +133,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: '30314f95b10d4d08972552306de3b677',
       attributeId: '8f151ba4de204e3c9cb499ddf96f48f1',
@@ -141,7 +141,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: 'e9b2ca5149f743b7ab1e57f5a65d8009',
       attributeId: '8f151ba4de204e3c9cb499ddf96f48f1',
@@ -149,7 +149,7 @@ const ops: Op[] = [
     },
   },
   {
-    op: 'SET_TRIPLE',
+    type: 'SET_TRIPLE',
     payload: {
       entityId: '43f688823e3f4fff82d15f2ebafab79e',
       attributeId: '334b8ac01be14079b1707e11d0f9eb8d',
@@ -162,11 +162,11 @@ const ops: Op[] = [
 ];
 
 // this route is only for testing creating a DAO on the frontend
-export function CreateDao({ type }: Props) {
+export function CreateDao({ type }: Prtypes) {
   const sdkContextParams = useAragon();
   const { data: wallet } = useWalletClient();
 
-  if (!sdkContextParams) throw new Error('geoPluginContext is undefined');
+  if (!sdkContextParams) throw new Error('getypeluginContext is undefined');
   const client: Client = new Client(new Context(sdkContextParams));
 
   const handleCreateDao = async () => {
@@ -179,11 +179,11 @@ export function CreateDao({ type }: Props) {
 
     const initialContent = createEditProposal(
       {
-        name: '1.0.1: Proposal for space with binary-based edits proposal',
+        name: '1.0.1: Prtypeosal for space with binary-based edits prtypeosal',
         author: getAddress(wallet.account.address),
         ops: [
           {
-            op: 'SET_TRIPLE',
+            type: 'SET_TRIPLE',
             payload: {
               entityId,
               attributeId: SYSTEM_IDS.NAME,
@@ -194,7 +194,7 @@ export function CreateDao({ type }: Props) {
             },
           },
           {
-            op: 'SET_TRIPLE',
+            type: 'SET_TRIPLE',
             payload: {
               entityId,
               attributeId: SYSTEM_IDS.TYPES,
@@ -204,7 +204,7 @@ export function CreateDao({ type }: Props) {
               },
             },
           },
-          ...ops,
+          ...types,
         ],
       }
 

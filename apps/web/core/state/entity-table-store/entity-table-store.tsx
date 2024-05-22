@@ -10,7 +10,7 @@ import { useMergedData } from '~/core/hooks/use-merged-data';
 import { FetchRowsOptions } from '~/core/io/fetch-rows';
 import { Services } from '~/core/services';
 import { createForeignType as insertForeignType, createType as insertType } from '~/core/type/create-type';
-import { Column, EntityValue, GeoType, Triple as TripleType, TripleValueType } from '~/core/types';
+import { AppEntityValue, Column, GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triple } from '~/core/utils/triple';
 
@@ -35,7 +35,7 @@ export function useEntityTable() {
   const { space, initialSelectedType, spaceId } = useEntityTableStoreInstance();
   const { triples } = useLocalStore();
   const merged = useMergedData();
-  const { allActions, create } = useActionsStore();
+  const { allActions, upsert } = useActionsStore();
 
   const [query, setQuery] = useAtom(queryAtom);
   const [pageNumber, setPageNumber] = useAtom(pageNumberAtom);
@@ -54,13 +54,13 @@ export function useEntityTable() {
       {
         columnId: SYSTEM_IDS.NAME,
         value: query,
-        valueType: 'string',
+        valueType: 'TEXT',
       },
       // Only return rows that are in the current space
       {
         columnId: SYSTEM_IDS.SPACE,
         value: spaceId,
-        valueType: 'string',
+        valueType: 'TEXT',
       },
     ],
     selectedType?.entityId ?? null
@@ -147,10 +147,10 @@ export function useEntityTable() {
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
       // Merge all local and server triples
-      const mergedTriples = Triple.fromActions(allActions, relationTypeEntities);
+      const mergedTriples = Triple.merge(allActions, relationTypeEntities);
 
       const relationTypes = mergedTriples.filter(
-        t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
+        t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'ENTITY'
       );
 
       return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
@@ -158,10 +158,10 @@ export function useEntityTable() {
           if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
 
           acc[relationType.entityId].push({
-            typeId: relationType.value.id,
+            typeId: relationType.value.value,
 
             // We can safely cast here because we filter for entity type values above.
-            typeName: (relationType.value as EntityValue).name,
+            typeName: (relationType.value as AppEntityValue).name,
             spaceId: relationType.space,
           });
 
@@ -197,11 +197,11 @@ export function useEntityTable() {
   );
 
   const createForeignType = (foreignType: TripleType) => {
-    insertForeignType(foreignType, spaceId, space?.spaceConfig?.id ?? null, create);
+    insertForeignType(foreignType, spaceId, space?.spaceConfig?.id ?? null, upsert);
   };
 
   const createType = (entityName: string) => {
-    return insertType(entityName, spaceId, create);
+    return insertType(entityName, spaceId, upsert);
   };
 
   return {

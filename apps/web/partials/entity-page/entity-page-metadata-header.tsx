@@ -52,7 +52,8 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
   const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
 
   const showMore = !isOnePage && !isLastPage;
-  const types = triples.length === 0 && actionsFromSpace.length === 0 ? serverTypes : Entity.types(triples);
+  // const types = triples.length === 0 && actionsFromSpace.length === 0 ? serverTypes : Entity.types(triples);
+  const types = serverTypes;
 
   return (
     <div className="flex items-center justify-between text-text">

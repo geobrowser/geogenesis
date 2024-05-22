@@ -22,7 +22,7 @@ export function createEditProposal(
     version: '0.0.1',
     ops: ops.map(o => {
       return new OpBinary({
-        opType: o.op === 'SET_TRIPLE' ? OpType.SET_TRIPLE : OpType.DELETE_TRIPLE,
+        opType: o.type === 'SET_TRIPLE' ? OpType.SET_TRIPLE : OpType.DELETE_TRIPLE,
         payload: Payload.fromJson(o.payload) // janky but works
       })
     }),

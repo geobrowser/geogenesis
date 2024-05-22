@@ -19,8 +19,7 @@ import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Action as ActionType, Proposal as ProposalType } from '~/core/types';
-import { Action } from '~/core/utils/action';
+import type { AppOp, Proposal as ProposalType } from '~/core/types';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entity } from '~/core/utils/entity';
@@ -234,9 +233,10 @@ const Proposals = () => {
   if (proposals.selected) {
     const proposal: ProposalType = proposals.selected;
 
-    selectedVersionChangeCount = Action.getChangeCount(
-      proposal.proposedVersions.reduce<ActionType[]>((acc, version) => acc.concat(version.actions), [])
-    );
+    selectedVersionChangeCount = proposal.proposedVersions.reduce<AppOp[]>(
+      (acc, version) => acc.concat(version.ops),
+      []
+    ).length;
   }
 
   const selectedVersionFormattedLastEditedDate = new Date(proposals.selected.createdAt * 1000).toLocaleDateString(
@@ -261,9 +261,10 @@ const Proposals = () => {
   if (proposals.previous) {
     const proposal: ProposalType = proposals.previous;
 
-    previousVersionChangeCount = Action.getChangeCount(
-      proposal.proposedVersions.reduce<ActionType[]>((acc, version) => acc.concat(version.actions), [])
-    );
+    previousVersionChangeCount = proposal.proposedVersions.reduce<AppOp[]>(
+      (acc, version) => acc.concat(version.ops),
+      []
+    ).length;
 
     previousVersionFormattedLastEditedDate = new Date(proposal.createdAt * 1000).toLocaleDateString(undefined, {
       day: '2-digit',
@@ -603,7 +604,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
   if (JSON.stringify(before) === JSON.stringify(after)) return <></>;
 
   switch (attribute.type) {
-    case 'string': {
+    case 'TEXT': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
@@ -637,7 +638,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'entity': {
+    case 'ENTITY': {
       if (!Array.isArray(before) || !Array.isArray(after)) return <></>;
 
       const diffs = diffArrays(before, after);
@@ -683,7 +684,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'image': {
+    case 'IMAGE': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
           <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
@@ -711,7 +712,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'date': {
+    case 'TIME': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
           <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
@@ -729,7 +730,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'url': {
+    case 'URL': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
@@ -867,7 +868,7 @@ type TableFilterProps = {
 };
 
 const TableFilter = ({ filter }: TableFilterProps) => {
-  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
+  const value = filter.valueType === 'ENTITY' ? filter.valueName : filter.value;
 
   return (
     <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">

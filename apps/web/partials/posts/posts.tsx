@@ -105,7 +105,7 @@ const Post = ({ spaceName, spaceAvatar, spaceId, post, isEditing }: PostProps) =
   const { remove } = useActionsStore();
 
   const handleDelete = () => {
-    post.triples.forEach(triple => remove(triple));
+    post.triples.forEach(triple => remove(triple, spaceId));
     onOpenChange(false);
   };
 

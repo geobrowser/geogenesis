@@ -25,12 +25,15 @@ export const createInitialSchemaTriples = (spaceId: string, entityId: string): I
     entityName: '',
     attributeName: 'Name',
     attributeId: SYSTEM_IDS.NAME,
-    placeholder: true,
     value: {
-      id: '',
-      type: 'string',
+      type: 'TEXT',
       value: '',
     },
+
+    placeholder: true,
+    hasBeenPublished: false,
+    isDeleted: false,
+    timestamp: Triple.timestamp(),
   });
 
   const descriptionTriple = Triple.withId({
@@ -39,12 +42,15 @@ export const createInitialSchemaTriples = (spaceId: string, entityId: string): I
     entityName: '',
     attributeName: 'Description',
     attributeId: SYSTEM_IDS.DESCRIPTION,
-    placeholder: true,
     value: {
-      id: '',
-      type: 'string',
+      type: 'TEXT',
       value: '',
     },
+
+    placeholder: true,
+    hasBeenPublished: false,
+    isDeleted: false,
+    timestamp: Triple.timestamp(),
   });
 
   const typeTriple = Triple.withId({
@@ -53,12 +59,16 @@ export const createInitialSchemaTriples = (spaceId: string, entityId: string): I
     entityName: '',
     attributeName: 'Types',
     attributeId: SYSTEM_IDS.TYPES,
-    placeholder: true,
     value: {
-      id: '',
-      type: 'entity',
+      value: '',
+      type: 'ENTITY',
       name: '',
     },
+
+    placeholder: true,
+    hasBeenPublished: false,
+    isDeleted: false,
+    timestamp: Triple.timestamp(),
   });
 
   return [nameTriple, descriptionTriple, typeTriple];
@@ -77,14 +87,13 @@ export function useEntityPageStore() {
 
   const triples = React.useMemo(() => {
     return pipe(
-      allActions,
-      actions => Action.squashChanges(actions),
-      actions => Triple.fromActions(actions, initialTriples),
+      Triple.merge(allActions, initialTriples),
       A.filter(t => t.entityId === id),
       triples =>
         // We may be referencing attributes/entities from other spaces whose name has changed.
         // We pass _all_ local changes instead of just the current space changes.
-        Triple.withLocalNames(allActions, triples)
+        Triple.withLocalNames(allActions, triples),
+      A.filter(t => t.isDeleted === false)
     );
   }, [allActions, id, initialTriples]);
 
@@ -97,7 +106,9 @@ export function useEntityPageStore() {
   persist the Attribute field. Filtering out those entities here.
   */
   const typeTriples = React.useMemo(() => {
-    return triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.id !== '');
+    return triples.filter(
+      triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.type === 'ENTITY' && triple.value.value !== ''
+    );
   }, [triples]);
 
   const { data: schemaTriples } = useQuery({
@@ -118,7 +129,7 @@ export function useEntityPageStore() {
             filter: [
               {
                 field: 'entity-id',
-                value: triple.value.id,
+                value: triple.value.type === 'ENTITY' ? triple.value.value : '',
               },
               {
                 field: 'attribute-id',
@@ -143,7 +154,7 @@ export function useEntityPageStore() {
             filter: [
               {
                 field: 'entity-id',
-                value: attribute.value.id,
+                value: attribute.value.type === 'ENTITY' ? attribute.value.value : '',
               },
               {
                 field: 'attribute-id',
@@ -158,19 +169,19 @@ export function useEntityPageStore() {
 
       const valueTypesToAttributesMap = attributeTriples.reduce<Record<string, ValueTypeId | undefined>>(
         (acc, attribute) => {
-          acc[attribute.value.id] = valueTypeTriples.find(t => t.entityId === attribute.value.id)?.value
-            .id as ValueTypeId;
+          acc[attribute.value.value] = valueTypeTriples.find(t => t.entityId === attribute.value.value)?.value
+            .value as ValueTypeId;
           return acc;
         },
         {}
       );
 
       const schemaTriples = attributeTriples.map(attribute => {
-        const valueType = valueTypesToAttributesMap[attribute.value.id];
+        const valueType = valueTypesToAttributesMap[attribute.value.value];
 
         return {
           ...Triple.emptyPlaceholder(spaceId, id, valueType),
-          attributeId: attribute.value.id,
+          attributeId: attribute.value.value,
           attributeName: Value.nameOfEntityValue(attribute),
         };
       });

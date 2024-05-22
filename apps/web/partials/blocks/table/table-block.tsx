@@ -67,7 +67,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     ...(blockEntity?.triples ?? []).filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS),
   ];
 
-  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.id) ?? []), 'name'];
+  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.value) ?? []), 'name'];
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have

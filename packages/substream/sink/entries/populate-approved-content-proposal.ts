@@ -70,7 +70,7 @@ export function populateApprovedContentProposal(
           try: () =>
             // We update the name and description for an entity when mapping
             // through triples.
-            upsertChunked('geo_entities', entities, 'id', {
+            upsertChunked('entities', entities, 'id', {
               updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
               noNullUpdateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
             }),

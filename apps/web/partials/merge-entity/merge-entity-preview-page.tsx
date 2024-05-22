@@ -21,7 +21,7 @@ export function MergeEntityPreviewPage({ entityId, triples }: Props) {
 
   return (
     <div className="rounded border border-grey-02 shadow-button">
-      <div className="p-5 pb-6 border-b border-grey-02">
+      <div className="border-b border-grey-02 p-5 pb-6">
         <Text as="p" variant="bodySemibold">
           Entity ID
         </Text>
@@ -39,33 +39,28 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
 
   const tripleToEditableField = (triple: Triple) => {
     switch (triple.value.type) {
-      case 'string':
+      case 'TEXT':
         return (
-          <Text key={`string-${triple.attributeId}-${triple.value.id}-${triple.id}`} as="p">
+          <Text key={`string-${triple.attributeId}-${triple.id}`} as="p">
             {triple.value.value}
           </Text>
         );
-      case 'image':
-        return (
-          <ImageZoom
-            key={`image-${triple.attributeId}-${triple.value.id}-${triple.id}`}
-            imageSrc={triple.value.value}
-          />
-        );
-      case 'date':
+      case 'IMAGE':
+        return <ImageZoom key={`image-${triple.attributeId}-${triple.id}`} imageSrc={triple.value.value} />;
+      case 'TIME':
         return <DateField isEditing={false} value={triple.value.value} />;
-      case 'url':
+      case 'URL':
         return <WebUrlField isEditing={false} value={triple.value.value} />;
-      case 'entity': {
+      case 'ENTITY': {
         return (
-          <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">
-            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.id)}>
-              {triple.value.name || triple.value.id}
+          <div key={`entity-${triple.attributeId}-${triple.value.value}-${triple.id}`} className="mt-1">
+            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.value)}>
+              {triple.value.name || triple.value.value}
             </LinkableChip>
           </div>
         );
       }
-      case 'number':
+      case 'NUMBER':
         return null;
     }
   };
@@ -77,7 +72,7 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="break-words">
-            <div className="p-5 border-b border-grey-02">
+            <div className="border-b border-grey-02 p-5">
               <Text as="p" variant="bodySemibold">
                 {triples[0].attributeName || attributeId}
               </Text>

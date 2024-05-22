@@ -7,6 +7,7 @@ import { Environment } from '~/core/environment';
 import { Space, SpaceConfigEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import { spaceMetadataFragment, spacePluginsFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
 
@@ -14,9 +15,7 @@ const getFetchSpaceQuery = (id: string) => `query {
   space(id: "${id}") {
     id
     isRootSpace
-    mainVotingPluginAddress
-    memberAccessPluginAddress
-    spacePluginAddress
+    ${spacePluginsFragment}
 
     spaceEditors {
       nodes {
@@ -29,37 +28,12 @@ const getFetchSpaceQuery = (id: string) => `query {
         accountId
       }
     }
+
     createdAtBlock
 
     metadata {
       nodes {
-        id
-        name
-        triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-          nodes {
-            id
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-            isProtected
-            space {
-              id
-            }
-          }
-        }
+        ${spaceMetadataFragment}
       }
     }
   }
@@ -147,7 +121,6 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     isRootSpace: networkSpace.isRootSpace,
     editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
     members: networkSpace.spaceMembers.nodes.map(account => account.accountId),
-    // @TODO: Map the name and image of a space from the space configuration
     spaceConfig: spaceConfigWithImage,
     createdAtBlock: networkSpace.createdAtBlock,
 

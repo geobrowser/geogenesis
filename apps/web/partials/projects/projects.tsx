@@ -106,7 +106,7 @@ const Project = ({ spaceName, spaceAvatar, spaceId, project, isEditing }: Projec
   const { remove } = useActionsStore();
 
   const handleDelete = () => {
-    project.triples.forEach(triple => remove(triple));
+    project.triples.forEach(triple => remove(triple, triple.space));
     onOpenChange(false);
   };
 

@@ -6,6 +6,7 @@ import { Environment } from '~/core/environment';
 import { Entity as IEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
@@ -17,33 +18,13 @@ import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 // following the pre-existing pattern.
 function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
   return `query {
-    geoEntities(filter: ${filter} first: ${first} offset: ${skip} orderBy: UPDATED_AT_DESC) {
+    entities(filter: ${filter} first: ${first} offset: ${skip} orderBy: UPDATED_AT_DESC) {
       nodes {
         id
         name
-        triplesByEntityId(filter: { isStale: { equalTo: false } }) {
+        triples(filter: { isStale: { equalTo: false } }) {
           nodes {
-            id
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-            isProtected
-            space {
-              id
-            }
+            ${tripleFragment}
           }
         }
       }
@@ -60,7 +41,7 @@ export interface FetchTableRowEntitiesOptions {
 }
 
 interface NetworkResult {
-  geoEntities: { nodes: SubstreamEntity[] };
+  entities: { nodes: SubstreamEntity[] };
 }
 
 export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<IEntity[]> {
@@ -96,7 +77,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
           );
 
           return {
-            geoEntities: { nodes: [] },
+            entities: { nodes: [] },
           };
 
         default:
@@ -105,7 +86,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
           );
 
           return {
-            geoEntities: { nodes: [] },
+            entities: { nodes: [] },
           };
       }
     }
@@ -113,10 +94,10 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
     return resultOrError.right;
   });
 
-  const { geoEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  return geoEntities.nodes.map(result => {
-    const networkTriples = result.triplesByEntityId.nodes;
+  return entities.nodes.map(result => {
+    const networkTriples = result.triples.nodes;
 
     // If there is no latest version just return an empty entity.
     if (networkTriples.length === 0) {

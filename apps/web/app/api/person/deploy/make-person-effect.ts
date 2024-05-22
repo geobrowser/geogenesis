@@ -1,13 +1,13 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Op as IOp } from '@geogenesis/sdk';
 import { LegacySpaceAbi } from '@geogenesis/sdk/legacy';
 import * as Effect from 'effect/Effect';
 import * as Schedule from 'effect/Schedule';
 
 import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
-import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
+import { Ops } from '~/core/utils/ops';
 import { slog } from '~/core/utils/utils';
 
 import { geoAccount, publicClient, walletClient } from '../../client';
@@ -75,89 +75,57 @@ export async function makePersonEffect(
   // The id for this entity is the same as the on-chain profile id.
   const profileEffect = Effect.tryPromise({
     try: async () => {
-      const actions: CreateTripleAction[] = [];
+      const ops: IOp[] = [];
 
       // Add triples for a Person entity
       if (username) {
-        const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
-          entityId: profileId,
-          entityName: username ?? '',
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          space: spaceAddress,
-          value: {
-            type: 'string',
-            value: username,
-            id: ID.createValueId(),
-          },
-        };
-
-        actions.push({
-          type: 'createTriple',
-          id: ID.createTripleId(nameTripleWithoutId),
-          ...nameTripleWithoutId,
-        });
+        ops.push(
+          Ops.create({
+            entityId: profileId,
+            attributeId: SYSTEM_IDS.NAME,
+            value: {
+              type: 'TEXT',
+              value: username,
+            },
+          })
+        );
       }
 
       if (avatarUri) {
-        const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
-          entityId: profileId,
-          entityName: username ?? '',
-          attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-          attributeName: 'Avatar',
-          space: spaceAddress,
-          value: {
-            type: 'image',
-            value: avatarUri,
-            id: ID.createValueId(),
-          },
-        };
-
-        actions.push({
-          type: 'createTriple',
-          id: ID.createTripleId(avatarTripleWithoutId),
-          ...avatarTripleWithoutId,
-        });
+        ops.push(
+          Ops.create({
+            entityId: profileId,
+            attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+            value: {
+              type: 'IMAGE',
+              value: avatarUri,
+            },
+          })
+        );
       }
 
       // Add Types: Person to the profile entity
-      const typeTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        entityId: profileId,
-        entityName: username ?? '',
-        space: spaceAddress,
-        value: {
-          type: 'entity',
-          name: 'Person',
-          id: SYSTEM_IDS.PERSON_TYPE,
-        },
-      };
+      ops.push(
+        Ops.create({
+          entityId: profileId,
+          attributeId: SYSTEM_IDS.TYPES,
+          value: {
+            type: 'ENTITY',
+            value: SYSTEM_IDS.PERSON_TYPE,
+          },
+        })
+      );
 
-      const spaceTypeTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        entityId: profileId,
-        entityName: username ?? '',
-        space: spaceAddress,
-        value: {
-          type: 'entity',
-          name: 'Space',
-          id: SYSTEM_IDS.SPACE_CONFIGURATION,
-        },
-      };
-
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(typeTriple),
-        ...typeTriple,
-      });
-
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(spaceTypeTriple),
-        ...spaceTypeTriple,
-      });
+      ops.push(
+        Ops.create({
+          entityId: profileId,
+          attributeId: SYSTEM_IDS.TYPES,
+          value: {
+            type: 'ENTITY',
+            value: SYSTEM_IDS.SPACE_CONFIGURATION,
+          },
+        })
+      );
 
       slog({
         requestId,
@@ -166,7 +134,7 @@ export async function makePersonEffect(
       });
 
       const proposalEffect = await makeProposalServer({
-        actions,
+        ops,
         name: `Creating profile for ${userAccount}`,
         space: spaceAddress,
         storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),

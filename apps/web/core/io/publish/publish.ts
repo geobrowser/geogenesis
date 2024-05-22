@@ -1,6 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import {
+  Op,
   createContentProposal,
+  createEditProposal,
   createSubspaceProposal,
   getAcceptSubspaceArguments,
   getProcessGeoProposalArguments,
@@ -13,20 +15,10 @@ import * as Effect from 'effect/Effect';
 import { WalletClient } from 'wagmi';
 import { GetWalletClientResult, prepareWriteContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
-import { Action, ReviewState } from '../../types';
+import { ReviewState } from '../../types';
 import { Storage } from '../storage';
 import { IStorageClient } from '../storage/storage';
 import { fetchSpace } from '../subgraph';
-
-function getActionFromChangeStatus(action: Action) {
-  switch (action.type) {
-    case 'createTriple':
-    case 'deleteTriple':
-      return [action];
-    case 'editTriple':
-      return [action.before, action.after];
-  }
-}
 
 export class TransactionRevertedError extends Error {
   readonly _tag = 'TransactionRevertedError';
@@ -54,7 +46,7 @@ export class IpfsUploadError extends Error {
 
 export type MakeProposalOptions = {
   wallet: WalletClient;
-  actions: Action[];
+  ops: Op[];
   space: string;
   onChangePublishState: (newState: ReviewState) => void;
   name: string;
@@ -63,7 +55,7 @@ export type MakeProposalOptions = {
 
 export async function makeProposal({
   storageClient,
-  actions,
+  ops,
   wallet,
   onChangePublishState,
   space,
@@ -76,8 +68,8 @@ export async function makeProposal({
     return;
   }
 
-  const proposal = createContentProposal(name, actions.flatMap(getActionFromChangeStatus));
-  const cidString = await storageClient.uploadObject(proposal);
+  const proposal = createEditProposal({ name, ops, author: wallet.account.address });
+  const cidString = await storageClient.uploadBinary(proposal);
 
   const prepareTxEffect = Effect.tryPromise({
     try: () =>

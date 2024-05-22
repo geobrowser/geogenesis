@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { Provider as JotaiProvider, createStore } from 'jotai';
+import { Provider as JotaiProvider } from 'jotai';
 
 import * as React from 'react';
 

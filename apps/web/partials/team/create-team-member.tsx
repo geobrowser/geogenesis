@@ -50,7 +50,7 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
   const [, setToast] = useToast();
-  const { create } = useActionsStore();
+  const { upsert } = useActionsStore();
 
   const handleAddUnlinkedTeamMember = () => {
     if (!name || !role) return;
@@ -58,69 +58,71 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
     const newEntityId = ID.createEntityId();
 
     // Add name attribute
-    create(
-      Triple.withId({
-        space: spaceId,
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: newEntityId,
         entityName: name,
         attributeId: SYSTEM_IDS.NAME,
         attributeName: 'Name',
         value: {
-          type: 'string',
-          id: ID.createValueId(),
+          type: 'TEXT',
           value: name,
         },
-      })
+      },
+      spaceId
     );
 
     // Add avatar attribute
     if (avatar) {
-      create(
-        Triple.withId({
-          space: spaceId,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId: newEntityId,
           entityName: name,
           attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
           attributeName: 'Avatar',
           value: {
-            type: 'image',
-            id: ID.createValueId(),
+            type: 'IMAGE',
             value: Value.toImageValue(avatar),
           },
-        })
+        },
+        spaceId
       );
     }
 
     // Add role attribute
-    create(
-      Triple.withId({
-        space: spaceId,
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: newEntityId,
         entityName: name,
         attributeId: SYSTEM_IDS.ROLE_ATTRIBUTE,
         attributeName: 'Role',
         value: {
-          type: 'entity',
-          id: role.id,
+          type: 'ENTITY',
+          value: role.id,
           name: role.name,
         },
-      })
+      },
+      spaceId
     );
 
     // Add person type
-    create(
-      Triple.withId({
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: newEntityId,
-        attributeId: SYSTEM_IDS.TYPES,
         entityName: name,
+        attributeId: SYSTEM_IDS.TYPES,
         attributeName: 'Types',
-        space: spaceId,
         value: {
-          type: 'entity',
-          id: SYSTEM_IDS.PERSON_TYPE,
+          type: 'ENTITY',
+          value: SYSTEM_IDS.PERSON_TYPE,
           name: 'Person',
         },
-      })
+      },
+      spaceId
     );
 
     setHasAddedTeamMember(true);

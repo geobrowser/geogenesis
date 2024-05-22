@@ -66,7 +66,7 @@ export class Merged implements IMergedDataSource {
     const actions = options.space ? this.store.actions[options.space] : this.store.allActions;
 
     // Merge any local actions with the network triples
-    const updatedTriples = Triple.fromActions(actions, networkTriples);
+    const updatedTriples = Triple.merge(actions, networkTriples);
     const mergedTriplesWithName = Triple.withLocalNames(actions, updatedTriples);
 
     // Apply any server filters to locally created data.
@@ -91,11 +91,11 @@ export class Merged implements IMergedDataSource {
         }
 
         if (filter.field === 'linked-to') {
-          return t.value.type === 'entity' && t.value.id === filter.value;
+          return t.value.type === 'ENTITY' && t.value.value === filter.value;
         }
 
         if (filter.field === 'value') {
-          return t.value.type === 'entity' && t.value.name === filter.value;
+          return t.value.type === 'ENTITY' && t.value.name === filter.value;
         }
       });
     }
@@ -151,14 +151,13 @@ export class Merged implements IMergedDataSource {
   fetchEntity = async (options: Parameters<Subgraph.ISubgraph['fetchEntity']>[0]) => {
     try {
       const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id });
+      const localTriplesForEntityId = this.store.allActions.filter(a => a.entityId === options.id);
 
-      const actionsForEntityId = Entity.actionsForEntityId(this.store.allActions, options.id);
-
-      if (actionsForEntityId.length === 0) return maybeNetworkEntity;
+      if (localTriplesForEntityId.length === 0) return maybeNetworkEntity;
 
       // If not networkEntity we need to just return the local entity
       if (!maybeNetworkEntity) {
-        return Entity.fromActions(this.store.allActions, options.id);
+        return Entity.fromTriples(this.store.allActions, options.id);
       }
 
       // If the network entity exists, we need to merge the local actions with the network entity.
@@ -297,10 +296,10 @@ export class Merged implements IMergedDataSource {
 
 function filterValue(value: Value, valueToFilter: string) {
   switch (value.type) {
-    case 'string':
+    case 'TEXT':
       return value.value === valueToFilter;
-    case 'entity':
-      return value.id === valueToFilter;
+    case 'ENTITY':
+      return value.value === valueToFilter;
     default:
       return false;
   }
