@@ -58,7 +58,7 @@ export async function fetchAccount(
   options: FetchAccountOptions
 ): Promise<{ address: string; profile: Profile; onchainProfile: OnchainProfile | null } | null> {
   const queryId = uuid();
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+  const config = Environment.getConfig();
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
     endpoint: config.api,

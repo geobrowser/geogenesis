@@ -59,7 +59,7 @@ type NetworkResult = {
 
 export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | null> {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,

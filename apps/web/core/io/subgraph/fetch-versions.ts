@@ -111,7 +111,7 @@ export async function fetchVersions({
   page = 0,
 }: FetchVersionsOptions): Promise<Version[]> {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,

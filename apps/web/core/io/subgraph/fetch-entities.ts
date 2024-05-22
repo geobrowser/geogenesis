@@ -68,7 +68,7 @@ interface NetworkResult {
 
 export async function fetchEntities(options: FetchEntitiesOptions): Promise<EntityType[]> {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const fieldFilters = Object.fromEntries(options.filter.map(clause => [clause.field, clause.value])) as Record<
     FilterField,

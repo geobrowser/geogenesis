@@ -133,7 +133,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchProposalQuery(options.id),
     signal: options?.signal,
   });

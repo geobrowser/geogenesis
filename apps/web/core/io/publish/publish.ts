@@ -1,7 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import {
   Op,
-  createContentProposal,
   createEditProposal,
   createSubspaceProposal,
   getAcceptSubspaceArguments,

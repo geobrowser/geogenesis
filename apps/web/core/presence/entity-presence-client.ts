@@ -1,5 +1,7 @@
 import { createClient } from '@liveblocks/client';
 
+import { Environment } from '../environment';
+
 export const client = createClient({
-  publicApiKey: process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY ?? 'pk_bananas',
+  publicApiKey: Environment.VarsLive.liveBlocksPublicKey ?? 'pk_bananas',
 });

@@ -89,7 +89,7 @@ interface NetworkResult {
 
 async function getProposalsCount({ id }: Props['params']) {
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: `
     query {
       activeProposals: proposals(

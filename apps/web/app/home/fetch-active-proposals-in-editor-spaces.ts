@@ -143,7 +143,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
   }`;
 
   const permissionlessSpacesEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: substreamQuery,
   });
 

@@ -124,7 +124,7 @@ export async function fetchProposalsByUser({
   const offset = page * 5;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchUserProposalsQuery(userId, offset, spaceId),
     signal,
   });
