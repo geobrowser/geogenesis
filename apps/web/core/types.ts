@@ -1,6 +1,4 @@
 import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
-import { Op } from '@geogenesis/sdk';
-import { string } from 'effect/dist/declarations/src/Equivalence';
 
 import { SubstreamEntity } from './io/subgraph/network-local-mapping';
 
@@ -22,12 +20,12 @@ export type AppEntityValue = {
 
 export type AppCollectionValue = {
   type: 'COLLECTION';
-  value: string; // @TODO: Really it's an object of a bunch of shit
+  value: string; // @TODO: Really it's an object of a bunch of stuff
 };
 
 export type AppCheckboxValue = {
   type: 'CHECKBOX';
-  value: string;
+  value: string; // @TODO: Really it's a boolean
 };
 
 export type Value = AppEntityValue | AppCollectionValue | AppCheckboxValue | AppValue;
@@ -63,11 +61,13 @@ export type Triple = {
   entityName: string | null;
   attributeName: string | null;
 
-  // We keep published triples optimistically in the store. It can take a while for the blockchain
-  // to process our transaction, then a few seconds for the subgraph to pick it up and index it.
-  // We keep the published triples so we can continue to render them locally while the backend catches up.
+  // We have a set of application-specific metadata that we attach to each local version of a triple.
   id?: string; // `${spaceId}:${entityId}:${attributeId}`
   placeholder?: boolean;
+  // We keep published triples optimistically in the store. It can take a while for the blockchain
+  // to process our transaction, then a few seconds for the subgraph to pick it up and index it.
+  // We keep the published triples so we can continue to render them locally while the backend
+  // catches up.
   hasBeenPublished?: boolean;
   timestamp?: string; // ISO-8601
   isDeleted?: boolean;

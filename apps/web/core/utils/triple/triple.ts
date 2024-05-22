@@ -173,6 +173,10 @@ export const getValue = (triple: Triple): string | null => {
   }
 };
 
+export function squash(triples: Triple[]): Triple[] {
+  return triples;
+}
+
 export function prepareTriplesForPublishing(triples: Triple[], spaceId: string): Op[] {
   const triplesToPublish = triples.filter(t => t.space === spaceId && !t.hasBeenPublished);
   return triplesToPublish.map((t): Op => {

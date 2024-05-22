@@ -24,11 +24,12 @@ import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Action as ActionType, Entity as EntityType, Space } from '~/core/types';
+import type { Entity as EntityType, Space, Triple as TripleType } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entity } from '~/core/utils/entity';
+import { Triple } from '~/core/utils/triple';
 import { GeoDate, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -137,8 +138,8 @@ const ReviewChanges = () => {
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
   const { actionsFromSpace, clear } = useActionsStore(activeSpace);
   const { makeProposal } = usePublish();
-  const actions = Action.unpublishedChanges(actionsFromSpace);
-  const [data, isLoading] = useChanges(actions, activeSpace);
+  const triples = Triple.squash(actionsFromSpace);
+  const [data, isLoading] = useChanges(triples, activeSpace);
 
   // Publishing logic
   const { data: wallet } = useWalletClient();
@@ -940,11 +941,11 @@ const labelClassNames = `text-footnote text-grey-04`;
 
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
-export const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
+export const useChanges = (triples: Array<TripleType> = [], spaceId: string) => {
   const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
-    queryKey: ['changes', spaceId, actions],
-    queryFn: async () => Change.fromActions(Action.prepareActionsForPublishing(actions), subgraph),
+    queryKey: ['changes', spaceId, triples],
+    queryFn: async () => Change.fromTriples(Triple.squash(triples), subgraph),
   });
 
   return [data, isLoading] as const;
