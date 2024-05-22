@@ -30,7 +30,6 @@ import {
 } from '~/partials/onboarding/dialog';
 
 import { Cookie } from '../cookie';
-import { Environment } from '../environment';
 import { VarsLive } from '../environment/environment';
 import { CONDUIT_TESTNET } from './conduit-chain';
 
