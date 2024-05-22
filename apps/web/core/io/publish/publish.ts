@@ -117,7 +117,9 @@ export async function makeProposal({
 
     if (cids.some(cid => !cid.startsWith('ipfs://Qm'))) {
       return yield* awaited(
-        Effect.fail(new IpfsUploadErrorV2('Failure when uploading content to IPFS. Did not recieve valid Qm hash.'))
+        Effect.fail(
+          new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.')
+        )
       );
     }
 
