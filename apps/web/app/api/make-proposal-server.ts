@@ -82,6 +82,8 @@ export async function makeProposalServer({
           if (!cidString.startsWith('Qm')) {
             throw new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.');
           }
+
+          return cidString;
         },
         catch: error => new IpfsUploadFailedError(`IPFS upload failed: ${error}`),
       }),
@@ -89,7 +91,6 @@ export async function makeProposalServer({
     );
 
     const cidString = await Effect.runPromise(uploadEffect);
-
     cids.push(`ipfs://${cidString}`);
   }
 
