@@ -265,6 +265,7 @@ export type SpaceType = 'default' | 'company' | 'nonprofit';
 export type CollectionItem = {
   id: string; // id of the collection item entity itself
   collectionId: string; // pointing to the collection referenced by the collection item
-  entity: Entity; // pointing to the entity referenced by the collection item
+  // @TODO: It's an actual entity
+  entity: string; // pointing to the entity referenced by the collection item
   index: string; // the order of the item in the list
 };
