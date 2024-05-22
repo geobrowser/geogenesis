@@ -267,7 +267,7 @@ export function CreateDao({ type }: Prtypes) {
       // },
     );
 
-    const storage = new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs);
+    const storage = new StorageClient(Environment.getConfig().ipfs);
     const firstBlockContentUri = await storage.uploadBinary(initialContent);
 
     const spacePluginInstallItem = getSpacePluginInstallItem({

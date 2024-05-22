@@ -129,7 +129,7 @@ export async function fetchProposals({
   const offset = page * first;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchSpaceProposalsQuery(spaceId, first, offset),
     signal,
   });

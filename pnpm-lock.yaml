@@ -92,7 +92,7 @@ importers:
       dayjs: ^1.11.9
       dexie: ^3.2.4
       diff: ^5.1.0
-      effect: 2.0.0-next.48
+      effect: 3.2.3
       eslint: ^8.21.0
       eslint-config-next: ^13.0.6
       eslint-config-prettier: ^8.5.0
@@ -185,7 +185,7 @@ importers:
       dayjs: 1.11.9
       dexie: 3.2.4
       diff: 5.1.0
-      effect: 2.0.0-next.48
+      effect: 3.2.3
       ethers: 5.7.2
       framer-motion: 10.15.2_biqbaboplfbrettd7655fr4n2y
       immer: 9.0.16
@@ -7481,12 +7481,12 @@ packages:
     resolution: {integrity: sha1-WQxhFWsK4vTwJVcyoViyZrxWsh0=}
     dev: false
 
-  /effect/2.0.0-next.48:
-    resolution: {integrity: sha512-vwMIl39m8fMBeXoGIdSwMi2lrg7NltyrGMK0N/liGDl7G9LXvERKOCipNcobSIGO0V7hjaXEWgL6W/KEWEww+g==}
-    dev: false
-
   /effect/2.4.19:
     resolution: {integrity: sha512-z/rn878Po3n522g/AYUDHD1SsZaZdvRxlTCLQ8xl8H6xA82nBwwooD1mdn/73Uywmp7d84oay3w3528r0Uyd0w==}
+    dev: false
+
+  /effect/3.2.3:
+    resolution: {integrity: sha512-tI0pzouV9BnZFHXNDoMCn9L76RFr23FMyzQ8syl+hxNtkn5aRdcQLeapv8acix+O4sQjQA4MpT8H3X9jfTs6hg==}
     dev: false
 
   /electron-to-chromium/1.4.284:
@@ -8296,7 +8296,7 @@ packages:
       debug: 4.3.4
       enhanced-resolve: 5.12.0
       eslint: 8.21.0
-      eslint-plugin-import: 2.26.0_m2m4u4ujm3f6v75yfbf66l5qly
+      eslint-plugin-import: 2.26.0_vfkjhpyu3ul4ompvtbiazva2r4
       get-tsconfig: 4.7.2
       globby: 13.1.2
       is-core-module: 2.13.0

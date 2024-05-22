@@ -153,7 +153,7 @@ export async function makeNonprofitEffect(
         ops,
         name: `Creating profile for ${userAccount}`,
         space: spaceAddress,
-        storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
+        storageClient: new StorageClient(Environment.getConfig().ipfs),
         account: geoAccount,
         wallet: walletClient,
         publicClient: publicClient,

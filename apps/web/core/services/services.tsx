@@ -21,7 +21,7 @@ interface Props {
 
 export function ServicesProvider({ children }: Props) {
   const services = useMemo((): Services => {
-    let config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+    let config = Environment.getConfig();
     const storageClient = new Storage.StorageClient(config.ipfs);
 
     return {

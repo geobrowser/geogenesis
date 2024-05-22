@@ -48,7 +48,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchTableRowsQuery(options.filter, options.first, options.skip),
     signal: options?.signal,
   });

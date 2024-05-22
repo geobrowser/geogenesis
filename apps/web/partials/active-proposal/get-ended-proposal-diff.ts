@@ -10,8 +10,6 @@ import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
-import { fetchVersionsByCreatedAt } from './fetch-version-by-created-at';
-
 export async function getEndedProposalDiff(
   selectedProposal: Proposal,
   previousProposalId: string | null,

@@ -5,9 +5,9 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
 
+import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamTriple, fromNetworkTriples } from './network-local-mapping';
-import { tripleFragment } from './fragments';
 
 interface GetFetchTriplesQueryOptions {
   where: string;
@@ -38,7 +38,7 @@ interface NetworkResult {
 
 export async function fetchTriples(options: FetchTriplesOptions) {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const fieldFilters = Object.fromEntries(options.filter.map(clause => [clause.field, clause.value])) as Record<
     FilterField,
@@ -64,7 +64,7 @@ export async function fetchTriples(options: FetchTriplesOptions) {
     .join(' ');
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchTriplesQuery({ where, skip: options.skip, first: options.first }),
     signal: options?.signal,
   });

@@ -30,7 +30,7 @@ export async function fetchProposalCountByUser({ userId, signal }: FetchUserProp
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.PUBLIC_NEXT_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchUserProposalCountQuery(userId),
     signal,
   });
