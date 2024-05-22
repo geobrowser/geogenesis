@@ -482,7 +482,7 @@ export function useEditorStore() {
             entityId: typeOp.payload.entityId,
             value: {
               type: 'ENTITY',
-              name: 'Collection',
+              name: 'Collection Item',
               value: typeOp.payload.value.value,
             },
           },
@@ -552,8 +552,8 @@ export function useEditorStore() {
       removedCollectionItems.forEach(c => {
         remove(
           {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
-            entityId: c.entity,
+            attributeId: SYSTEM_IDS.TYPES,
+            entityId: c.id,
           },
           spaceId
         );
@@ -561,7 +561,7 @@ export function useEditorStore() {
         remove(
           {
             attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
-            entityId: c.entity,
+            entityId: c.id,
           },
           spaceId
         );
@@ -569,7 +569,7 @@ export function useEditorStore() {
         remove(
           {
             attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
-            entityId: c.entity,
+            entityId: c.id,
           },
           spaceId
         );
@@ -577,7 +577,7 @@ export function useEditorStore() {
         remove(
           {
             attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-            entityId: c.entity,
+            entityId: c.id,
           },
           spaceId
         );
