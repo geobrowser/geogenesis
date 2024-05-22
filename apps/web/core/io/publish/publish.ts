@@ -1,4 +1,3 @@
-import { ProfileRegistryAbi } from '@geogenesis/sdk/abis';
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import {
   createContentProposal,
@@ -7,16 +6,12 @@ import {
   getProcessGeoProposalArguments,
   getRemoveSubspaceArguments,
 } from '@geogenesis/sdk';
+import { ProfileRegistryAbi } from '@geogenesis/sdk/abis';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import * as Effect from 'effect/Effect';
 
 import { WalletClient } from 'wagmi';
-import {
-  GetWalletClientResult,
-  prepareWriteContract,
-  waitForTransaction,
-  writeContract,
-} from 'wagmi/actions';
+import { GetWalletClientResult, prepareWriteContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
 import { Action, ReviewState } from '../../types';
 import { Storage } from '../storage';
@@ -42,11 +37,19 @@ export class WaitForTransactionBlockError extends Error {
 }
 
 export class TransactionPrepareFailedError extends Error {
-  _tag = 'TransactionPrepareFailedError';
+  readonly _tag = 'TransactionPrepareFailedError';
 }
 
 export class TransactionWriteFailedError extends Error {
-  _tag = 'TransactionWriteFailedError';
+  readonly _tag = 'TransactionWriteFailedError';
+}
+
+export class InvalidIpfsQmHashError extends Error {
+  readonly _tag = 'InvalidIpfsQmHashError';
+}
+
+export class IpfsUploadError extends Error {
+  readonly _tag = 'IpfsUploadError';
 }
 
 export type MakeProposalOptions = {

@@ -27,15 +27,19 @@ export class WaitForTransactionBlockError extends Error {
 }
 
 export class TransactionPrepareFailedError extends Error {
-  _tag = 'TransactionPrepareFailedError';
+  readonly _tag = 'TransactionPrepareFailedError';
 }
 
 export class TransactionWriteFailedError extends Error {
-  _tag = 'TransactionWriteFailedError';
+  readonly _tag = 'TransactionWriteFailedError';
 }
 
 export class IpfsUploadFailedError extends Error {
-  _tag = 'IpfsUploadFailedError';
+  readonly _tag = 'IpfsUploadFailedError';
+}
+
+export class InvalidIpfsQmHashError extends Error {
+  readonly _tag = 'InvalidIpfsQmHashError';
 }
 
 export type MakeProposalServerOptions = {
