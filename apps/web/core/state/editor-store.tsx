@@ -14,10 +14,8 @@ import { htmlToPlainText } from '~/partials/editor/editor-utils';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { useActionsStore } from '../hooks/use-actions-store';
-import { ID } from '../id';
 import { Services } from '../services';
-import { AppEntityValue, AppEntityValue as EntityValue, Triple as ITriple, OmitStrict } from '../types';
-import { Action } from '../utils/action';
+import { AppEntityValue as EntityValue, Triple as ITriple, OmitStrict } from '../types';
 import { Triple } from '../utils/triple';
 import { getImagePath } from '../utils/utils';
 import { Value } from '../utils/value';
@@ -53,6 +51,7 @@ export function useEditorStore() {
   }, [allActions, entityId, initialBlockIdsTriple]);
 
   const blockIds = React.useMemo(() => {
+    // @TODO: This should be a list of the collection item ids
     return blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
   }, [blockIdsTriple]);
 
@@ -348,6 +347,13 @@ export function useEditorStore() {
   const upsertBlocksTriple = React.useCallback(
     async (newBlockIds: string[]) => {
       const existingBlockTriple = blockIdsTriple;
+
+      /**
+       * 1. Need the collection item entity id representing the collection
+       * 2. Need the entity id of each block (or do we need the entity id of each collection item?)
+       * 3. Need the collection representing each block and each property in the collection
+       * 4. Need to re-order the items appropriately when the list changes
+       */
       const isUpdated = existingBlockTriple && Value.stringValue(existingBlockTriple) !== JSON.stringify(newBlockIds);
 
       upsert(
@@ -356,7 +362,7 @@ export function useEditorStore() {
           entityId: entityId,
           entityName: name,
           attributeId: SYSTEM_IDS.BLOCKS,
-          attributeName: 'Image',
+          attributeName: 'Blocks',
           value: {
             type: 'TEXT',
             value: JSON.stringify(newBlockIds),
