@@ -3,6 +3,7 @@ import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import {
   AppOp,
+  CollectionItem,
   Entity,
   OmitStrict,
   ProposedVersion,
@@ -26,9 +27,12 @@ type NetworkCollectionValue = {
     id: string;
     collectionItems: {
       nodes: {
+        collectionItemEntityId: string;
+        index: string;
         entity: {
           id: string;
           name: string | null;
+          types: { nodes: { id: string }[] };
         };
       }[];
     };
@@ -129,11 +133,22 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
     case 'URL':
       return { type: 'URL', value: networkTriple.textValue };
     case 'COLLECTION':
-      console.log(
-        'network triple collection',
-        JSON.stringify(networkTriple.collectionValue.collectionItems.nodes, null, 2)
-      );
-      return { type: 'COLLECTION', value: networkTriple.collectionValue.id, items: [] };
+      return {
+        type: 'COLLECTION',
+        value: networkTriple.collectionValue.id,
+        items: networkTriple.collectionValue.collectionItems.nodes.map((c): CollectionItem => {
+          return {
+            id: c.collectionItemEntityId,
+            collectionId: networkTriple.collectionValue.id,
+            index: c.index,
+            entity: {
+              id: c.entity.id,
+              name: c.entity.name,
+              types: c.entity.types.nodes.map(t => t.id),
+            },
+          };
+        }),
+      };
   }
 }
 

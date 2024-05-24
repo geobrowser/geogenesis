@@ -7,7 +7,7 @@ import { Metadata } from 'next';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
-import { Entity as IEntity, Triple } from '~/core/types';
+import { CollectionItem, Entity as IEntity, Triple } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
@@ -85,6 +85,8 @@ export default async function ProfileLayout({ children, params }: Props) {
           spaceId={params.id}
           initialBlockIdsTriple={profile.blockIdsTriple}
           initialBlockTriples={profile.blockTriples}
+          initialBlockCollectionItems={profile.blockCollectionItems}
+          initialBlockCollectionItemTriples={profile.blockCollectionItemTriples}
         >
           <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
           <EntityPageContentContainer>
@@ -126,6 +128,8 @@ async function getProfilePage(entityId: string): Promise<
     coverUrl: string | null;
     blockTriples: Triple[];
     blockIdsTriple: Triple | null;
+    blockCollectionItems: CollectionItem[];
+    blockCollectionItemTriples: Triple[];
   }
 > {
   const person = await cachedFetchEntity(entityId);
@@ -142,25 +146,39 @@ async function getProfilePage(entityId: string): Promise<
       description: null,
       blockTriples: [],
       blockIdsTriple: null,
+      blockCollectionItems: [],
+      blockCollectionItemTriples: [],
     };
   }
 
-  const blockIdsTriple = person?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+  const blockIdsTriple =
+    person?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
 
-  const blockTriples = (
-    await Promise.all(
+  const blockCollectionItems =
+    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
+
+  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
+
+  const [blockTriples, collectionItemTriples] = await Promise.all([
+    Promise.all(
       blockIds.map(blockId => {
         return cachedFetchEntity(blockId);
       })
-    )
-  ).flatMap(entity => entity?.triples ?? []);
+    ),
+    Promise.all(
+      blockCollectionItems.map(item => {
+        return cachedFetchEntity(item.id);
+      })
+    ),
+  ]);
 
   return {
     ...person,
     avatarUrl: Entity.avatar(person.triples),
     coverUrl: Entity.cover(person.triples),
-    blockTriples,
     blockIdsTriple,
+    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
+    blockCollectionItems,
+    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
   };
 }

@@ -296,6 +296,8 @@ export default async function Layout({ children, params }: Props) {
           spaceId={props.spaceId}
           initialBlockIdsTriple={props.blockIdsTriple}
           initialBlockTriples={props.blockTriples}
+          initialBlockCollectionItems={props.blockCollectionItems}
+          initialBlockCollectionItemTriples={props.blockCollectionItemTriples}
         >
           <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
           <EntityPageContentContainer>
@@ -362,16 +364,26 @@ const getData = async (spaceId: string) => {
 
   const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
 
-  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+  const blockIdsTriple =
+    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
 
-  const blockTriples = (
-    await Promise.all(
+  const blockCollectionItems =
+    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
+
+  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
+
+  const [blockTriples, collectionItemTriples] = await Promise.all([
+    Promise.all(
       blockIds.map(blockId => {
         return Subgraph.fetchEntity({ id: blockId });
       })
-    )
-  ).flatMap(entity => entity?.triples ?? []);
+    ),
+    Promise.all(
+      blockCollectionItems.map(item => {
+        return Subgraph.fetchEntity({ id: item.id });
+      })
+    ),
+  ]);
 
   return {
     triples: entity?.triples ?? [],
@@ -382,7 +394,9 @@ const getData = async (spaceId: string) => {
 
     // For entity page editor
     blockIdsTriple,
-    blockTriples,
+    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
+    blockCollectionItems,
+    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
 
     space,
   };

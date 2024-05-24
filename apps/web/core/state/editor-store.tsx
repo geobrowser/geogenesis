@@ -35,7 +35,13 @@ const markdownConverter = new Showdown.Converter();
  *    markdown content, image src, table configuration, etc.
  */
 export function useEditorStore() {
-  const { id: entityId, spaceId, initialBlockIdsTriple, initialBlockTriples } = useEditorInstance();
+  const {
+    id: entityId,
+    spaceId,
+    initialBlockIdsTriple,
+    initialBlockTriples,
+    initialBlockCollectionItemTriples,
+  } = useEditorInstance();
   const { subgraph } = Services.useServices();
   const { upsert, remove, allActions: allTriples } = useActionsStore();
   const { name } = useEntityPageStore();
@@ -66,7 +72,7 @@ export function useEditorStore() {
           a.value.value === blocksCollectionId
       ),
       // @TODO This should be merged with remote collection item data
-      []
+      initialBlockCollectionItemTriples
     ).map(t => t.entityId);
 
     // Gather all of the triples for each collection item associated with the block list's
@@ -74,7 +80,7 @@ export function useEditorStore() {
     // the collection item itself.
     const allTriplesForCollectionItems = Triple.merge(
       allTriples.filter(t => collectionItemTriplesForCollection.includes(t.entityId)),
-      []
+      initialBlockCollectionItemTriples
     );
 
     const collectionItemTriplesByCollectionItemId = groupBy(allTriplesForCollectionItems, c => c.entityId);
@@ -117,7 +123,7 @@ export function useEditorStore() {
         }
         return 0;
       });
-  }, [allTriples, blocksCollectionId]);
+  }, [allTriples, blocksCollectionId, initialBlockCollectionItemTriples]);
 
   const blockIds = React.useMemo(() => {
     return collectionItems.map(ci => ci.entity.id);
@@ -720,16 +726,28 @@ interface Props {
   spaceId: string;
   initialBlockIdsTriple: ITriple | null;
   initialBlockTriples: ITriple[];
+  initialBlockCollectionItems: CollectionItem[];
+  initialBlockCollectionItemTriples: ITriple[];
   children: React.ReactNode;
 }
 
-export const EditorProvider = ({ id, spaceId, initialBlockIdsTriple, initialBlockTriples, children }: Props) => {
+export const EditorProvider = ({
+  id,
+  spaceId,
+  initialBlockIdsTriple,
+  initialBlockTriples,
+  initialBlockCollectionItems,
+  initialBlockCollectionItemTriples,
+  children,
+}: Props) => {
   const value = React.useMemo(() => {
     return {
       id,
       spaceId,
       initialBlockIdsTriple,
       initialBlockTriples,
+      initialBlockCollectionItems,
+      initialBlockCollectionItemTriples,
     };
   }, [id, spaceId, initialBlockIdsTriple, initialBlockTriples]);
 

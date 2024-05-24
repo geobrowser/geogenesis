@@ -16,6 +16,8 @@ export const tripleFragment = `
     id
     collectionItems {
       nodes {
+        index
+        collectionItemEntityId
         entity {
           id
           name
