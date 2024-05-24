@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS, createCollection, createCollectionItem } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createCollection, createCollectionItem, reorderCollectionItem } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
 import { Editor } from '@tiptap/core';
 import { JSONContent, generateHTML, generateJSON } from '@tiptap/react';
@@ -452,7 +452,9 @@ export function useEditorStore() {
             value: {
               type: 'COLLECTION',
               value: collectionId,
-              // @TODO: What do we put here?
+              // @TODO: What do we put here? We aren't using it in the UI anywhere
+              // so maybe we can just leave it empty since we don't actually render
+              // the blocks list in the triples list.
               items: [],
             },
           },
@@ -487,13 +489,13 @@ export function useEditorStore() {
         upsert(
           {
             type: 'SET_TRIPLE',
-            attributeName: 'Types',
+            attributeName: 'Collection reference',
             entityName: null,
             attributeId: collectionOp.payload.attributeId,
             entityId: collectionOp.payload.entityId,
             value: {
               type: 'ENTITY',
-              name: 'Collection Reference',
+              name: null,
               value: collectionOp.payload.value.value,
             },
           },
@@ -503,30 +505,42 @@ export function useEditorStore() {
         upsert(
           {
             type: 'SET_TRIPLE',
-            attributeName: 'Types',
+            attributeName: 'Entity reference',
             entityName: null,
             attributeId: entityOp.payload.attributeId,
             entityId: entityOp.payload.entityId,
             value: {
               type: 'ENTITY',
-              name: 'Entity Reference',
+              name: null,
               value: entityOp.payload.value.value,
             },
           },
           spaceId
         );
 
+        const position = newBlockIds.indexOf(addedBlock);
+        const beforeBlockIndex = newBlockIds[position - 1] as string | undefined;
+        const afterBlockIndex = newBlockIds[position + 1] as string | undefined;
+
+        const beforeCollectionItemIndex = collectionItems.find(c => c.entity.id === beforeBlockIndex)?.index;
+        const afterCollectionItemIndex = collectionItems.find(c => c.entity.id === afterBlockIndex)?.index;
+
+        const newTripleOrdering = reorderCollectionItem({
+          collectionItemId: indexOp.payload.entityId,
+          beforeIndex: beforeCollectionItemIndex,
+          afterIndex: afterCollectionItemIndex,
+        });
+
         upsert(
           {
             type: 'SET_TRIPLE',
-            attributeName: 'Types',
+            attributeName: 'Index',
             entityName: null,
             attributeId: indexOp.payload.attributeId,
             entityId: indexOp.payload.entityId,
             value: {
               type: 'TEXT',
-              // @TODO: Set index manually via fractional indexing
-              value: indexOp.payload.value.value,
+              value: newTripleOrdering.payload.value.value,
             },
           },
           spaceId
