@@ -71,7 +71,6 @@ export function useEditorStore() {
           a.attributeId === SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE &&
           a.value.value === blocksCollectionId
       ),
-      // @TODO This should be merged with remote collection item data
       initialBlockCollectionItemTriples
     ).map(t => t.entityId);
 
