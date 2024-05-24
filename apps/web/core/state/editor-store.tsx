@@ -413,24 +413,10 @@ export function useEditorStore() {
       const existingBlocksCollectionId = blocksCollectionId;
       const prevBlockIds = blockIds;
 
-      // @TODO: How do we keep in sync blocks and collections here? Should we have some super
-      // data structure that tracks it all, and when we update the list we update everything
-      // in one place?
-      //
-      // We receive block ids and need to turn that into both blocks + collections in a single
-      // data structure.
-      //
-      // We can't create new collection items every render as that will cause conflicts later.
-      // We have to add/remove only the changed collection items.
-      //
-      // Once the collection item is created we only care about the block id (entity id) and
-      // the index.
-      //
-      // 1. Receive new block ids
-      // 2. Determine which blocks have been added and which have been removed from the list
-      // 3. If a block has been added we create a new collection item with the index
-      // 4. If a block is deleted we delete the collection item triples and the block triples
-      // 5. Update some data structure somewhere with the updated block content and the updated collection item values
+      /**
+       * @TODO: Rethink the best way to structure state of the edit in the Geo state
+       * vs. the Editor state.
+       */
 
       // Returns the blockIds that exist in prevBlockIds, but do not exist in newBlockIds
       const removedBlockIds = A.difference(prevBlockIds, newBlockIds);
@@ -600,7 +586,6 @@ export function useEditorStore() {
       const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
 
       // To delete an entity we delete all of its triples
-      // @TODO: Remove all of the collection items and collections for each remote block as well
       remoteBlocks.forEach(block => {
         block.triples.forEach(t => remove(t, spaceId));
       });
