@@ -69,6 +69,19 @@ CREATE TABLE public.log_entries (
     json text
 );
 
+CREATE TABLE public.collections (
+    id text PRIMARY KEY NOT NULL,
+    entity_id text REFERENCES public.entities(id) NOT NULL
+);
+
+CREATE TABLE public.collection_items (
+    id text PRIMARY KEY NOT NULL,
+    collection_item_entity_id text REFERENCES public.entities(id) NOT NULL,
+    index text,
+    collection_id text REFERENCES public.collections(id) NOT NULL,
+    entity_id text REFERENCES public.entities(id) NOT NULL
+);
+
 CREATE TYPE public.proposal_type as ENUM ('CONTENT', 'ADD_SUBSPACE', 'REMOVE_SUBSPACE', 'ADD_EDITOR', 'REMOVE_EDITOR', 'ADD_MEMBER', 'REMOVE_MEMBER');
 CREATE TYPE public.proposal_status as ENUM ('proposed', 'accepted', 'rejected', 'canceled', 'executed');
 
@@ -137,7 +150,7 @@ CREATE TABLE public.triples (
     number_value text,
     text_value text,
     entity_value_id text REFERENCES public.entities(id),
-    collection_value_id text REFERENCES public.entities(id),
+    collection_value_id text REFERENCES public.collections(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     is_stale boolean NOT NULL

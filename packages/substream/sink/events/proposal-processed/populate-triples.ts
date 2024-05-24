@@ -49,6 +49,68 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
       const isDescriptionDeleteAction = isDeleteTriple && isDescriptionAttribute && isStringValueType;
 
       /**
+       * We associate the triple data for the name and description triples with the entity itself to make
+       * querying the name and description of an entity easier.
+       *
+       * There's probably a better way to do this in SQL.
+       */
+      if (isAddType) {
+        const insertTypeEffect = Effect.tryPromise({
+          try: () =>
+            db
+              .upsert(
+                'entity_types',
+                {
+                  entity_id: triple.entity_id,
+                  type_id: triple.entity_value_id?.toString()!,
+                  created_at: block.timestamp,
+                  created_at_block: block.blockNumber,
+                },
+                ['entity_id', 'type_id'],
+                { updateColumns: db.doNothing }
+              )
+              .run(pool),
+          catch: () => new Error('Failed to create type'),
+        });
+
+        yield* awaited(insertTypeEffect, retryEffect);
+
+        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
+          const insertCollectionEffect = Effect.tryPromise({
+            try: () =>
+              Collections.upsert([
+                {
+                  id: triple.entity_id, // we know it exists because of the above check
+                  entity_id: triple.entity_id,
+                },
+              ]),
+            catch: error => new Error(`Failed to create collection item ${String(error)}`),
+          });
+
+          yield* awaited(insertCollectionEffect, retryEffect);
+        }
+
+        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_ITEM_TYPE) {
+          const schemaCollectionItem = getCollectionItemTriplesFromSchemaTriples(
+            schemaTriples,
+            triple.entity_id.toString()
+          );
+
+          if (schemaCollectionItem) {
+            console.log('invalid collection item', JSON.stringify(schemaCollectionItem, null, 2));
+            const insertCollectionItemEffect = Effect.tryPromise({
+              try: () => CollectionItems.upsert([schemaCollectionItem]),
+              catch: error => new Error(`Failed to create collection item ${String(error)}`),
+            });
+
+            yield* awaited(insertCollectionItemEffect, retryEffect);
+          }
+        }
+
+        // @TODO: Update the collection item row if we change any of the values
+      }
+
+      /**
        * Insert all new triples and existing triples into the triple_versions join table.
        *
        * The new Version should include all triples that were added as part of this proposal, and
@@ -307,67 +369,6 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
         });
 
         yield* awaited(deleteDescriptionEffect, retryEffect);
-      }
-
-      /**
-       * We associate the triple data for the name and description triples with the entity itself to make
-       * querying the name and description of an entity easier.
-       *
-       * There's probably a better way to do this in SQL.
-       */
-      if (isAddType) {
-        const insertTypeEffect = Effect.tryPromise({
-          try: () =>
-            db
-              .upsert(
-                'entity_types',
-                {
-                  entity_id: triple.entity_id,
-                  type_id: triple.entity_value_id?.toString()!,
-                  created_at: block.timestamp,
-                  created_at_block: block.blockNumber,
-                },
-                ['entity_id', 'type_id'],
-                { updateColumns: db.doNothing }
-              )
-              .run(pool),
-          catch: () => new Error('Failed to create type'),
-        });
-
-        yield* awaited(insertTypeEffect, retryEffect);
-
-        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
-          const insertCollectionEffect = Effect.tryPromise({
-            try: () =>
-              Collections.upsert([
-                {
-                  id: triple.entity_id, // we know it exists because of the above check
-                  entity_id: triple.entity_id,
-                },
-              ]),
-            catch: error => new Error(`Failed to create collection item ${String(error)}`),
-          });
-
-          yield* awaited(insertCollectionEffect, retryEffect);
-        }
-
-        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_ITEM_TYPE) {
-          const schemaCollectionItem = getCollectionItemTriplesFromSchemaTriples(
-            schemaTriples,
-            triple.entity_id.toString()
-          );
-
-          if (schemaCollectionItem) {
-            const insertCollectionItemEffect = Effect.tryPromise({
-              try: () => CollectionItems.upsert([schemaCollectionItem]),
-              catch: error => new Error(`Failed to create collection item ${String(error)}`),
-            });
-
-            yield* awaited(insertCollectionItemEffect, retryEffect);
-          }
-        }
-
-        // @TODO: Update the collection item row if we change any of the values
       }
 
       /**
