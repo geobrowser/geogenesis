@@ -96,7 +96,11 @@ export function useEditorStore() {
           id: collectionItemId,
           collectionId,
           // @TODO: it's actually an entity
-          entity: entityId,
+          entity: {
+            id: entityId,
+            name: null,
+            types: [],
+          },
           index,
         };
       }
@@ -116,7 +120,7 @@ export function useEditorStore() {
   }, [allTriples, blocksCollectionId]);
 
   const blockIds = React.useMemo(() => {
-    return collectionItems.map(ci => ci.entity);
+    return collectionItems.map(ci => ci.entity.id);
   }, [collectionItems]);
 
   const blockTriples = React.useMemo(() => {
@@ -546,7 +550,7 @@ export function useEditorStore() {
       // to delete.
       if (!removedBlockIds) return;
 
-      const removedCollectionItems = collectionItems.filter(c => removedBlockIds.includes(c.entity));
+      const removedCollectionItems = collectionItems.filter(c => removedBlockIds.includes(c.entity.id));
 
       // Delete all collection items referencing the removed blocks
       removedCollectionItems.forEach(c => {

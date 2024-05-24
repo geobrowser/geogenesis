@@ -12,6 +12,22 @@ export const tripleFragment = `
     name
   }
   numberValue
+  collectionValue {
+    id
+    collectionItems {
+      nodes {
+        entity {
+          id
+          name
+          types {
+            nodes {
+              id
+            }
+          }
+        }
+      }
+    }
+  }
   textValue
   valueType
   space {

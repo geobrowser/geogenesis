@@ -20,7 +20,20 @@ type NetworkImageValue = { valueType: 'IMAGE'; entityValue: { id: string } };
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 type NetworkTimeValue = { valueType: 'TIME'; textValue: string };
 type NetworkUrlValue = { valueType: 'URL'; textValue: string };
-type NetworkCollectionValue = { valueType: 'COLLECTION'; collectionValue: { id: string } };
+type NetworkCollectionValue = {
+  valueType: 'COLLECTION';
+  collectionValue: {
+    id: string;
+    collectionItems: {
+      nodes: {
+        entity: {
+          id: string;
+          name: string | null;
+        };
+      }[];
+    };
+  };
+};
 
 type NetworkValue =
   | NetworkNumberValue
@@ -76,6 +89,7 @@ export type SubstreamVersion = {
   entity: {
     id: string;
     name: string;
+    types: { nodes: { id: string } };
   };
 };
 
@@ -115,6 +129,10 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
     case 'URL':
       return { type: 'URL', value: networkTriple.textValue };
     case 'COLLECTION':
+      console.log(
+        'network triple collection',
+        JSON.stringify(networkTriple.collectionValue.collectionItems.nodes, null, 2)
+      );
       return { type: 'COLLECTION', value: networkTriple.collectionValue.id, items: [] };
   }
 }
