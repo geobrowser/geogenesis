@@ -54,6 +54,7 @@ export function emptyValue(type: TripleValueType): Value {
     IMAGE: {
       type: 'IMAGE',
       value: '',
+      image: '',
     },
     TIME: {
       type: 'TIME',
