@@ -25,22 +25,21 @@ export const createIdExtension = (spaceId: string) => {
       ];
     },
     onBlur() {
-      /*
-      Responsible for setting the "id" attribute on all news nodes
-      Fires before the Editor's onBlur event which saves the editor blocks to the entity store
-    */
       const { view, state } = this.editor;
       const { tr, doc } = state;
 
-      // Check if we have two nodes with the same id, if we do, replace the second one
+      // If an editor adds content to the top of an editing with existing content we can
+      // end up with two blocks that have the same id. The below functionality de-dupes
+      // these ids and creates a new id for the second instance of the id.
+      //
+      // Functionally this means that adding a new block at the top keeps the id for the
+      // first block, but replaces the content, while creating a new block and id for
+      // what was the original content, but is now a new block with new content.
       const nodeIds = new Set<string>();
 
       const newNodes = findChildren(doc, node => {
-        // If we've encountered this node id already we should add it to the new nodes list.
-        // This can happen if we add a block to the beginning of the editor when there's
-        // already content within the editor.
+        // Check if we have two nodes with the same id, if we do, replace the second one
         if (node.attrs.id !== null && nodeIds.has(node.attrs.id) && nodeTypes.includes(node.type.name)) {
-          console.log('encountered before');
           return true;
         } else {
           nodeIds.add(node.attrs.id);
@@ -56,10 +55,10 @@ export const createIdExtension = (spaceId: string) => {
         });
       });
 
-      console.log('newNodes', newNodes);
-
-      tr.setMeta('addToHistory', false);
-      view.dispatch(tr);
+      if (newNodes.length > 0) {
+        tr.setMeta('addToHistory', false);
+        view.dispatch(tr);
+      }
     },
   });
 };

@@ -447,24 +447,15 @@ export function useEditorStore() {
        * @TODO: Rethink the best way to structure state of the edit in the Geo state
        * vs. the Editor state.
        */
-      // @TODO: We need to see if we have the same blocks but the order has changed
-      // and update the index of the re-ordered block.
+      // We store the new collection items being created so we can check if the new
+      // ordering for a block is dependent on other blocks being created at the same time.
       //
-      // This is kind of difficult since we don't actually know which block has changed.
-      // When we inspect the "moved" blocks it will look like multiple blocks moved
-      // instead of a single block. We might need to move control of making these changes
-      // to the block itself instead of this `upsertBlocksTriple` function.
-      //
-      // This refactor might make this blob of editor state a lot easier to reason about
-      // actually since each block controls its own state instead of this "God" manager
-      // controlling everything. Each block controlling its own state aligns with
-      // the collection item model more closely.
-      //
-      // Each block needs
-      // 1) Collection id
-      // 2) The index value for the before and after items in the list so we can calculate
-      //    the new index of the moved block.
-      console.log('block changes', { prevBlockIds, newBlockIds, addedBlockIds });
+      // @TODO: Ideally this isn't needed as ordering should be updated as the users are making
+      // changes, but right now that would require updating the actions store for every keystroke
+      // which could cause performance problems in the app. We need more granular reactive state
+      // from our store to prevent potentially re-rendering _everything_ that depends on the store
+      // when changes are made anywhere.
+      const newCollectionItems: CollectionItem[] = [];
 
       for (const addedBlock of addedBlockIds) {
         const [typeOp, collectionOp, entityOp, indexOp] = createCollectionItem({
@@ -527,16 +518,21 @@ export function useEditorStore() {
         const beforeBlockIndex = newBlockIds[position - 1] as string | undefined;
         const afterBlockIndex = newBlockIds[position + 1] as string | undefined;
 
-        const beforeCollectionItemIndex = collectionItems.find(c => c.entity.id === beforeBlockIndex)?.index;
-        const afterCollectionItemIndex = collectionItems.find(c => c.entity.id === afterBlockIndex)?.index;
+        // Check both the existing collection items and any that are created as part of this
+        // same update tick. This is necessary as right now we don't update the Geo state
+        // until the user blurs the editor. See the comment earlier in this function.
+        const beforeCollectionItemIndex =
+          collectionItems.find(c => c.entity.id === beforeBlockIndex)?.index ??
+          newCollectionItems.find(c => c.entity.id === beforeBlockIndex)?.index;
+        const afterCollectionItemIndex =
+          collectionItems.find(c => c.entity.id === afterBlockIndex)?.index ??
+          newCollectionItems.find(c => c.entity.id === afterBlockIndex)?.index;
 
         const newTripleOrdering = reorderCollectionItem({
           collectionItemId: indexOp.payload.entityId,
           beforeIndex: beforeCollectionItemIndex,
           afterIndex: afterCollectionItemIndex,
         });
-
-        console.log('new triple ordering', newTripleOrdering.payload.value.value);
 
         upsert(
           {
@@ -552,6 +548,19 @@ export function useEditorStore() {
           },
           spaceId
         );
+
+        newCollectionItems.push({
+          collectionId,
+          entity: {
+            id: entityOp.payload.value.value, // The id of the block the item points to
+            // These don't matter. All we care about is the entity id for the
+            // purpose of getting the index.
+            name: null,
+            types: [],
+          },
+          id: entityOp.payload.entityId, // The id of the collection item itself
+          index: newTripleOrdering.payload.value.value,
+        });
       }
 
       // If a block is deleted we want to make sure that we delete the block entity as well.

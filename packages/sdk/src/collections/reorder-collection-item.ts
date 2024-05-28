@@ -21,6 +21,7 @@ type ReorderCollectionItemOp = {
   };
 };
 
+// @TODO: Do we want jittering?
 export function reorderCollectionItem(args: ReorderCollectionItemArgs): ReorderCollectionItemOp {
   const newIndex = generateKeyBetween(args.beforeIndex, args.afterIndex);
 
