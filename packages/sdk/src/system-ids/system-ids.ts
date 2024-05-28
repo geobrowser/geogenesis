@@ -73,9 +73,6 @@ export const VALUE_TYPE = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 /* Example Usage: Thumbnail > VALUE_TYPE > IMAGE */
 export const IMAGE = 'ba4e41460010499da0a3caaa7f579d0e';
 
-// @TODO: Replace with actual attribute id
-export const IMAGE_SOURCE_ATTRIBUTE = 'ba4e41460010499da0a3caaa7f579d05'
-
 /* Example Usage: City > VALUE_TYPE > RELATION */
 export const RELATION = '14611456b4664cab920d2245f59ce828';
 
@@ -91,6 +88,9 @@ export const WEB_URL = 'dfc221d98cce4f0b9353e437a98387e3';
 // This sets the type of values which can be set as part of a relation value.
 // e.g. An attribute called People can only accept values of type Person
 export const RELATION_VALUE_RELATIONSHIP_TYPE = 'cfa6a2f5151f43bfa684f7f0228f63ff';
+
+export const IMAGE_COMPOUND_TYPE = 'ba4e41460010499da0a3caaa7f579d10'
+export const IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE = 'ba4e41460010499da0a3caaa7f579d05'
 
 /* Note that this is a temporary workaround for production MVP release. As such, this system ID isn't included in the bootstrap process.*/
 export const DEFAULT_TYPE = 'aeebbd5e4d794d24ae99239e9142d9ed';

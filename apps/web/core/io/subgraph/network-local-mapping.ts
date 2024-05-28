@@ -131,11 +131,11 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
       return { type: 'TEXT', value: networkTriple.textValue };
     case 'IMAGE': {
       // Image values are stored in the data model as an entity with triple with
-      // a "IMAGE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
+      // a "IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
       // be a URL pointing to the resource location of the image contents,
       // usually an IPFS hash.
       const imageValueTriple = networkTriple.imageValue.triples.nodes.find(
-        t => t.attributeId === SYSTEM_IDS.IMAGE_SOURCE_ATTRIBUTE
+        t => t.attributeId === SYSTEM_IDS.IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE
       );
 
       return {
@@ -186,7 +186,7 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
       // be a URL pointing to the resource location of the image contents,
       // usually an IPFS hash.
       const imageValueTriple = networkAction.imageValue.triples.nodes.find(
-        t => t.attributeId === SYSTEM_IDS.IMAGE_SOURCE_ATTRIBUTE
+        t => t.attributeId === SYSTEM_IDS.IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE
       );
 
       return {
