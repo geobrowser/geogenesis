@@ -32,7 +32,22 @@ export const createIdExtension = (spaceId: string) => {
       const { view, state } = this.editor;
       const { tr, doc } = state;
 
-      const newNodes = findChildren(doc, node => node.attrs.id === null && nodeTypes.includes(node.type.name));
+      // Check if we have two nodes with the same id, if we do, replace the second one
+      const nodeIds = new Set<string>();
+
+      const newNodes = findChildren(doc, node => {
+        // If we've encountered this node id already we should add it to the new nodes list.
+        // This can happen if we add a block to the beginning of the editor when there's
+        // already content within the editor.
+        if (node.attrs.id !== null && nodeIds.has(node.attrs.id) && nodeTypes.includes(node.type.name)) {
+          console.log('encountered before');
+          return true;
+        } else {
+          nodeIds.add(node.attrs.id);
+        }
+
+        return node.attrs.id === null && nodeTypes.includes(node.type.name);
+      });
 
       newNodes.forEach(({ node, pos }) => {
         tr.setNodeMarkup(pos, undefined, {
@@ -40,6 +55,8 @@ export const createIdExtension = (spaceId: string) => {
           id: ID.createEntityId(),
         });
       });
+
+      console.log('newNodes', newNodes);
 
       tr.setMeta('addToHistory', false);
       view.dispatch(tr);

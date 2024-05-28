@@ -398,32 +398,13 @@ export function useEditorStore() {
   // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
   const upsertBlocksTriple = React.useCallback(
     async (newBlockIds: string[]) => {
-      // 1. Receive a new list of block ids, this comes from the block itself and not the collection item
-      // 2. Create a collection if it doesn't exist yet
-      // 3. Upsert the blocks triple
-      // 4. Compare the ordering of the block ids we currently have to the ordering we receive
-      //    We receive a list of blocks, so we need to look at their corresponding collection items
-
-      /**
-       * 1. Need the collection item entity id representing the collection
-       * 2. Need the entity id of each block (or do we need the entity id of each collection item?)
-       * 3. Need the collection representing each block and each property in the collection
-       * 4. Need to re-order the items appropriately when the list changes
-       */
       const existingBlocksCollectionId = blocksCollectionId;
       const prevBlockIds = blockIds;
-
-      /**
-       * @TODO: Rethink the best way to structure state of the edit in the Geo state
-       * vs. the Editor state.
-       */
 
       // Returns the blockIds that exist in prevBlockIds, but do not exist in newBlockIds
       const removedBlockIds = A.difference(prevBlockIds, newBlockIds);
       const addedBlockIds = A.difference(newBlockIds, prevBlockIds);
       const collectionId = existingBlocksCollectionId ? existingBlocksCollectionId : createCollection();
-
-      console.log('blocks data', { existingBlocksCollectionId, oldBlockIds: blockIds, newBlockIds, addedBlockIds });
 
       if (!existingBlocksCollectionId && newBlockIds.length > 0) {
         upsert(
@@ -461,6 +442,29 @@ export function useEditorStore() {
           spaceId
         );
       }
+
+      /**
+       * @TODO: Rethink the best way to structure state of the edit in the Geo state
+       * vs. the Editor state.
+       */
+      // @TODO: We need to see if we have the same blocks but the order has changed
+      // and update the index of the re-ordered block.
+      //
+      // This is kind of difficult since we don't actually know which block has changed.
+      // When we inspect the "moved" blocks it will look like multiple blocks moved
+      // instead of a single block. We might need to move control of making these changes
+      // to the block itself instead of this `upsertBlocksTriple` function.
+      //
+      // This refactor might make this blob of editor state a lot easier to reason about
+      // actually since each block controls its own state instead of this "God" manager
+      // controlling everything. Each block controlling its own state aligns with
+      // the collection item model more closely.
+      //
+      // Each block needs
+      // 1) Collection id
+      // 2) The index value for the before and after items in the list so we can calculate
+      //    the new index of the moved block.
+      console.log('block changes', { prevBlockIds, newBlockIds, addedBlockIds });
 
       for (const addedBlock of addedBlockIds) {
         const [typeOp, collectionOp, entityOp, indexOp] = createCollectionItem({
@@ -519,6 +523,7 @@ export function useEditorStore() {
         );
 
         const position = newBlockIds.indexOf(addedBlock);
+        // @TODO: noUncheckedIndexAccess
         const beforeBlockIndex = newBlockIds[position - 1] as string | undefined;
         const afterBlockIndex = newBlockIds[position + 1] as string | undefined;
 
@@ -530,6 +535,8 @@ export function useEditorStore() {
           beforeIndex: beforeCollectionItemIndex,
           afterIndex: afterCollectionItemIndex,
         });
+
+        console.log('new triple ordering', newTripleOrdering.payload.value.value);
 
         upsert(
           {
@@ -678,6 +685,8 @@ export function useEditorStore() {
 
   return {
     blockIds,
+    collectionId: blocksCollectionId,
+    collectionItems,
     editorJson,
     updateEditorBlocks,
   };
