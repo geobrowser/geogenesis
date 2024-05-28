@@ -1,5 +1,5 @@
 export const IMAGE_ATTRIBUTE = '457a27af7b0b485cac07aa37756adafa'
-export const DESCRIPTION = 'Description'
+export const DESCRIPTION = '9b1f76ff9711404c861e59dc3fa7d037'
 export const NAME = 'a126ca530c8e48d5b88882c734c38935'
 export const SPACE = '362c1dbddc6444bba3c4652f38a642d7'
 export const INDEXED_SPACE = '306598522df542f69ad72921c33ad84b'
@@ -33,21 +33,21 @@ export const COLLECTION_TYPE = 'c373a33052df47b3a6d2df552bda4b44'
  * Collection item type. This is the entity representing the Join between the
  * the Collection and the Entity
  */
-export const COLLECTION_ITEM_TYPE = '0e8d692b94d74c64bcb30eb4d55503ef'
+export const COLLECTION_ITEM_TYPE = 'c167ef23fb2a40449ed945123ce7d2a9'
 
 /**
  * Collection item's collection reference. This is the attribute that references
  * the Collection id
  */
 export const COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE =
-  '487e084b41324b05b15ab6e147d58244'
+  'c43b537bcff742718822717fdf2c9c01'
 
 /**
  * Collection item's entity reference. This is the attribute that references
  * the Entity id for a given Collection item entry
  */
 export const COLLECTION_ITEM_ENTITY_REFERENCE =
-  '53d1e5f26f234bf29e8842b02f437970'
+  'c1f4cb6fece44c3ca447ab005b756972'
 
 /**
  * Collection item's ordering within the collection. Collections are unordered by

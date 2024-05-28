@@ -1,9 +1,10 @@
+import { createGeoId } from '@geogenesis/sdk';
 import { v4, validate, version } from 'uuid';
 
-import { OmitStrict, Triple } from '../types';
+import { Triple } from '../types';
 
 export function createEntityId() {
-  return v4();
+  return createGeoId();
 }
 
 export function getAppTripleId(triple: Pick<Triple, 'entityId' | 'attributeId'>, spaceId: string) {

@@ -1,16 +1,3 @@
-CREATE TABLE public.collections (
-    id text PRIMARY KEY NOT NULL,
-    entity_id text REFERENCES public.entities(id) NOT NULL
-);
-
-CREATE TABLE public.collection_items (
-    id text PRIMARY KEY NOT NULL,
-    collection_item_entity_id text REFERENCES public.entities(id) NOT NULL,
-    index text,
-    collection_id text REFERENCES public.collections(id) NOT NULL,
-    entity_id text REFERENCES public.entities(id) NOT NULL
-);
-
 CREATE OR REPLACE FUNCTION public.spaces_metadata(e_row spaces)
 RETURNS SETOF public.entities AS $$
 BEGIN

@@ -20,7 +20,8 @@ export type AppEntityValue = {
 
 export type AppCollectionValue = {
   type: 'COLLECTION';
-  value: string; // @TODO: Really it's an object of a bunch of stuff
+  value: string;
+  items: CollectionItem[];
 };
 
 export type AppCheckboxValue = {
@@ -260,3 +261,15 @@ export type AttributeId = string;
 export type EntityActions = Record<EntityId, Record<AttributeId, Triple>>;
 
 export type SpaceType = 'default' | 'company' | 'nonprofit';
+
+export type CollectionItem = {
+  id: string; // id of the collection item entity itself
+  collectionId: string; // pointing to the collection referenced by the collection item
+  // @TODO: It's an actual entity
+  entity: {
+    id: string;
+    name: string | null;
+    types: string[];
+  }; // pointing to the entity referenced by the collection item
+  index: string; // the order of the item in the list
+};

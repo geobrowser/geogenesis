@@ -44,6 +44,7 @@ export function emptyValue(type: TripleValueType): Value {
     } as AppEntityValue,
     COLLECTION: {
       value: '',
+      items: [],
       type: 'COLLECTION',
     },
     NUMBER: {

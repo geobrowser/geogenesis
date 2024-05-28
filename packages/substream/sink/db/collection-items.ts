@@ -11,4 +11,16 @@ export class CollectionItems {
       })
       .run(pool);
   }
+
+  static async remove(collectionItem: S.collection_items.Whereable) {
+    return await db.deletes('collection_items', collectionItem).run(pool);
+  }
+
+  static async update(collection_item: S.collection_items.Updatable) {
+    return await db
+      .update('collection_items', collection_item, {
+        id: collection_item.id,
+      })
+      .run(pool);
+  }
 }

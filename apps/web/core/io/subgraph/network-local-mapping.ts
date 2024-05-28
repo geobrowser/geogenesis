@@ -3,6 +3,7 @@ import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import {
   AppOp,
+  CollectionItem,
   Entity,
   OmitStrict,
   ProposedVersion,
@@ -20,7 +21,23 @@ type NetworkImageValue = { valueType: 'IMAGE'; entityValue: { id: string } };
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 type NetworkTimeValue = { valueType: 'TIME'; textValue: string };
 type NetworkUrlValue = { valueType: 'URL'; textValue: string };
-type NetworkCollectionValue = { valueType: 'COLLECTION'; collectionValue: { id: string } };
+type NetworkCollectionValue = {
+  valueType: 'COLLECTION';
+  collectionValue: {
+    id: string;
+    collectionItems: {
+      nodes: {
+        collectionItemEntityId: string;
+        index: string;
+        entity: {
+          id: string;
+          name: string | null;
+          types: { nodes: { id: string }[] };
+        };
+      }[];
+    };
+  };
+};
 
 type NetworkValue =
   | NetworkNumberValue
@@ -76,6 +93,7 @@ export type SubstreamVersion = {
   entity: {
     id: string;
     name: string;
+    types: { nodes: { id: string } };
   };
 };
 
@@ -115,7 +133,22 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
     case 'URL':
       return { type: 'URL', value: networkTriple.textValue };
     case 'COLLECTION':
-      return { type: 'COLLECTION', value: networkTriple.collectionValue.id };
+      return {
+        type: 'COLLECTION',
+        value: networkTriple.collectionValue.id,
+        items: networkTriple.collectionValue.collectionItems.nodes.map((c): CollectionItem => {
+          return {
+            id: c.collectionItemEntityId,
+            collectionId: networkTriple.collectionValue.id,
+            index: c.index,
+            entity: {
+              id: c.entity.id,
+              name: c.entity.name,
+              types: c.entity.types.nodes.map(t => t.id),
+            },
+          };
+        }),
+      };
   }
 }
 
@@ -138,7 +171,7 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
     case 'URL':
       return { type: 'URL', value: networkAction.textValue };
     case 'COLLECTION':
-      return { type: 'COLLECTION', value: networkAction.collectionValue.id };
+      return { type: 'COLLECTION', value: networkAction.collectionValue.id, items: [] };
   }
 }
 

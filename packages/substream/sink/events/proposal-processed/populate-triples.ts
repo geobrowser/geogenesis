@@ -17,7 +17,7 @@ interface PopulateTriplesArgs {
 }
 
 export function populateTriples({ schemaTriples, block, versions }: PopulateTriplesArgs) {
-  return Effect.gen(function* (awaited) {
+  return Effect.gen(function* (_) {
     /**
      * Changes to data in Geo are modeled as "actions." You can create a triple or delete a triple.
      * A client might publish _many_ actions, some of which are operations on the same triple. e.g.,
@@ -88,7 +88,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
         // });
 
         // @TODO: Parallelize with Effect.all
-        yield* awaited(insertTripleEffect, retryEffect);
+        yield* _(insertTripleEffect, retryEffect);
         // yield* awaited(insertTripleVersionEffect, retryEffect);
       }
 
@@ -161,7 +161,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
             ),
         });
 
-        yield* awaited(insertNameEffect, retryEffect);
+        yield* _(insertNameEffect, retryEffect);
       }
 
       /**
@@ -197,7 +197,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
             ),
         });
 
-        const maybeNameTripleForEntity = yield* awaited(maybeNameTripleForEntityEffect);
+        const maybeNameTripleForEntity = yield* _(maybeNameTripleForEntityEffect);
 
         const deleteNameEffect = Effect.tryPromise({
           try: () =>
@@ -228,7 +228,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
             ),
         });
 
-        yield* awaited(deleteNameEffect, retryEffect);
+        yield* _(deleteNameEffect, retryEffect);
       }
 
       /**
@@ -267,7 +267,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
             ),
         });
 
-        yield* awaited(insertDescriptionEffect, retryEffect);
+        yield* _(insertDescriptionEffect, retryEffect);
       }
 
       /**
@@ -306,7 +306,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
             ),
         });
 
-        yield* awaited(deleteDescriptionEffect, retryEffect);
+        yield* _(deleteDescriptionEffect, retryEffect);
       }
 
       /**
@@ -334,21 +334,21 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           catch: () => new Error('Failed to create type'),
         });
 
-        yield* awaited(insertTypeEffect, retryEffect);
+        yield* _(insertTypeEffect, retryEffect);
 
         if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
           const insertCollectionEffect = Effect.tryPromise({
             try: () =>
               Collections.upsert([
                 {
-                  id: triple.entity_id, // we know it exists because of the above check
+                  id: triple.entity_id,
                   entity_id: triple.entity_id,
                 },
               ]),
             catch: error => new Error(`Failed to create collection item ${String(error)}`),
           });
 
-          yield* awaited(insertCollectionEffect, retryEffect);
+          yield* _(insertCollectionEffect, retryEffect);
         }
 
         if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_ITEM_TYPE) {
@@ -363,11 +363,28 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
               catch: error => new Error(`Failed to create collection item ${String(error)}`),
             });
 
-            yield* awaited(insertCollectionItemEffect, retryEffect);
+            yield* _(insertCollectionItemEffect, retryEffect);
           }
         }
 
-        // @TODO: Update the collection item row if we change any of the values
+        // Update the collection item row if we change any of the values. At this point
+        // the triple has already been inserted, we just need to update the collection
+        // item itself with the new collection item values.
+        //
+        // Really only the index changes ad-hoc. The other triples are only ever created
+        // or deleted at the time of creating or deleting the entire collection item.
+        if (triple.attribute_id === SYSTEM_IDS.COLLECTION_ITEM_INDEX) {
+          const insertCollectionItemIndexEffect = Effect.tryPromise({
+            try: () =>
+              CollectionItems.update({
+                id: triple.entity_id,
+                index: triple.text_value,
+              }),
+            catch: error => new Error(`Failed to update collection item fractional index ${String(error)}`),
+          });
+
+          yield* _(insertCollectionItemIndexEffect, retryEffect);
+        }
       }
 
       /**
@@ -387,26 +404,43 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
               .run(pool),
           catch: () => new Error('Failed to delete type'),
         });
-        yield* awaited(deleteTypeEffect, retryEffect);
+        yield* _(deleteTypeEffect, retryEffect);
 
         if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
           const deleteCollectionEffect = Effect.tryPromise({
             try: () =>
-              db
-                .deletes('collections', {
-                  id: triple.entity_value_id?.toString()!,
-                })
-                .run(pool),
-            catch: () => new Error('Failed to delete collection'),
+              Collections.remove({
+                id: triple.entity_id,
+              }),
+            catch: error => new Error(`Failed to delete collection ${String(error)}`),
           });
 
-          yield* awaited(deleteCollectionEffect, retryEffect);
+          yield* _(deleteCollectionEffect, retryEffect);
+        }
+
+        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_ITEM_TYPE) {
+          const insertCollectionItemEffect = Effect.tryPromise({
+            try: () =>
+              CollectionItems.remove({
+                id: triple.entity_id,
+              }),
+            catch: error => new Error(`Failed to delete collection item ${String(error)}`),
+          });
+
+          yield* _(insertCollectionItemEffect, retryEffect);
         }
       }
     }
   });
 }
 
+/**
+ * Handle creating the database representation of a collection item when a new collection item
+ * is created. We need to gather all of the required triples to fully flesh out the collection
+ * item's data. We could do this linearly, but we want to ensure that all of the properties
+ * exist before creating the item. If not all properties exist we don't create the collection
+ * item.
+ */
 function getCollectionItemTriplesFromSchemaTriples(
   schemaTriples: OpWithCreatedBy[],
   entityId: string

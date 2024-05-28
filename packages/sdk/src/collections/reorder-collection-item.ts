@@ -9,28 +9,31 @@ interface ReorderCollectionItemArgs {
   afterIndex?: string;
 }
 
-type ReorderCollectionItemAction = {
-  attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_INDEX;
-  entityId: string;
-  type: 'createTriple';
-  value: {
-    type: 'string';
-    id: string;
-    value: string;
+type ReorderCollectionItemOp = {
+  type: 'SET_TRIPLE';
+  payload: {
+    attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_INDEX;
+    entityId: string;
+    value: {
+      type: 'TEXT';
+      value: string;
+    };
   };
 };
 
-export function reorderCollectionItem(args: ReorderCollectionItemArgs): ReorderCollectionItemAction {
+// @TODO: Do we want jittering?
+export function reorderCollectionItem(args: ReorderCollectionItemArgs): ReorderCollectionItemOp {
   const newIndex = generateKeyBetween(args.beforeIndex, args.afterIndex);
 
   return {
-    attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-    entityId: args.collectionItemId,
-    type: 'createTriple',
-    value: {
-      type: 'string',
-      id: createGeoId(),
-      value: newIndex,
-    },
+    type: 'SET_TRIPLE',
+    payload: {
+      attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
+      entityId: args.collectionItemId,
+      value: {
+        type: 'TEXT',
+        value: newIndex,
+      },
+    }
   };
 }
