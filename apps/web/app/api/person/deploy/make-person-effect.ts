@@ -97,7 +97,8 @@ export async function makePersonEffect(
             entityId: profileId,
             attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
             value: {
-              type: 'IMAGE',
+              // @TODO: create the image entity
+              type: 'ENTITY',
               value: avatarUri,
             },
           })

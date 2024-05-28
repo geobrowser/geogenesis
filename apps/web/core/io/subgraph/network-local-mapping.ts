@@ -153,7 +153,6 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
     case 'ENTITY': {
       // The entity is an image
       if (networkTriple.entityValue.types.nodes.some(t => t.id === SYSTEM_IDS.IMAGE)) {
-        console.log('is an image', networkTriple.entityValue);
         // Image values are stored in the data model as an entity with triple with
         // a "IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
         // be a URL pointing to the resource location of the image contents,
