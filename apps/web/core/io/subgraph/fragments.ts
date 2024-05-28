@@ -9,10 +9,12 @@ export const tripleFragment = `
   }
   entityValue {
     id
+    types {
+      nodes {
+        id
+      }
+    }
     name
-  }
-  imageValue {
-    id
     triples {
       nodes {
         attributeId

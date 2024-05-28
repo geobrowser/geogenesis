@@ -47,9 +47,9 @@ declare module 'zapatos/schema' {
   export namespace every {
     export type subspace_proposal_type = ['ADD_SUBSPACE', 'REMOVE_SUBSPACE'];
   }
-  export type triple_value_type = 'CHECKBOX' | 'COLLECTION' | 'ENTITY' | 'GEO_LOCATION' | 'IMAGE' | 'NUMBER' | 'TEXT' | 'TIME' | 'URL';
+  export type triple_value_type = 'CHECKBOX' | 'COLLECTION' | 'ENTITY' | 'GEO_LOCATION' | 'NUMBER' | 'TEXT' | 'TIME' | 'URL';
   export namespace every {
-    export type triple_value_type = ['CHECKBOX', 'COLLECTION', 'ENTITY', 'GEO_LOCATION', 'IMAGE', 'NUMBER', 'TEXT', 'TIME', 'URL'];
+    export type triple_value_type = ['CHECKBOX', 'COLLECTION', 'ENTITY', 'GEO_LOCATION', 'NUMBER', 'TEXT', 'TIME', 'URL'];
   }
   export type vote_type = 'accept' | 'reject';
   export namespace every {
@@ -4199,12 +4199,6 @@ declare module 'zapatos/schema' {
       */
       text_value: string | null;
       /**
-      * **triples.image_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      image_value_id: string | null;
-      /**
       * **triples.entity_value_id**
       * - `text` in database
       * - Nullable, no default
@@ -4272,12 +4266,6 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       text_value: string | null;
-      /**
-      * **triples.image_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      image_value_id: string | null;
       /**
       * **triples.entity_value_id**
       * - `text` in database
@@ -4347,12 +4335,6 @@ declare module 'zapatos/schema' {
       */
       text_value?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **triples.image_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      image_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
       * **triples.entity_value_id**
       * - `text` in database
       * - Nullable, no default
@@ -4421,12 +4403,6 @@ declare module 'zapatos/schema' {
       */
       text_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
-      * **triples.image_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      image_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
-      /**
       * **triples.entity_value_id**
       * - `text` in database
       * - Nullable, no default
@@ -4494,12 +4470,6 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       text_value?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
-      /**
-      * **triples.image_value_id**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      image_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **triples.entity_value_id**
       * - `text` in database

@@ -9,16 +9,7 @@ export interface BlockEvent {
   requestId: string; // uuid
 }
 
-export type ValueType =
-  | 'TEXT'
-  | 'NUMBER'
-  | 'ENTITY'
-  | 'COLLECTION'
-  | 'CHECKBOX'
-  | 'URL'
-  | 'TIME'
-  | 'GEO_LOCATION'
-  | 'IMAGE';
+export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';
 
 // We hardcode our Op type instead of deriving it from the Zod types.
 // This is due to zod having issues generating disciminate types from

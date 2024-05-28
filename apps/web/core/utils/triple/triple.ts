@@ -195,6 +195,24 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
       };
     }
 
+    // We store image entities as an `IMAGE` value type in the app to make
+    // rendering them more ergonomic. Before publishing we need to map this
+    // representation back to the protocol's expectation representation for
+    // images which is an `ENTITY` value type.
+    if (t.value.type === 'IMAGE') {
+      return {
+        type: 'SET_TRIPLE',
+        payload: {
+          entityId: t.entityId,
+          attributeId: t.attributeId,
+          value: {
+            type: 'ENTITY',
+            value: t.value.value,
+          },
+        },
+      };
+    }
+
     return {
       type: 'SET_TRIPLE',
       payload: {

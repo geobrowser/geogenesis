@@ -5,7 +5,18 @@ import { SubstreamEntity } from './io/subgraph/network-local-mapping';
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'IMAGE';
+export type ValueType =
+  | 'TEXT'
+  | 'NUMBER'
+  | 'ENTITY'
+  | 'COLLECTION'
+  | 'CHECKBOX'
+  | 'URL'
+  | 'TIME'
+  // IMAGE is only a value type in the web app. It's modeled as an Entity on the server,
+  // but we create a "helper" value type to map the contents of the image to a more
+  // ergnomic way of rendering it.
+  | 'IMAGE';
 
 export type AppValue = {
   type: 'TEXT' | 'NUMBER' | 'URL' | 'TIME';

@@ -17,8 +17,28 @@ import { Entity as EntityModule } from '~/core/utils/entity';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 type NetworkTextValue = { valueType: 'TEXT'; textValue: string };
-type NetworkImageValue = { valueType: 'IMAGE'; imageValue: SubstreamImage };
-type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
+type NetworkEntityValue = {
+  valueType: 'ENTITY';
+  entityValue: {
+    id: string;
+    name: string | null;
+    types: {
+      nodes: {
+        id: string;
+      }[];
+    };
+    // We only fetch the triples that matter for the compound types that
+    // we might be rendering. e.g., an Entity might be of type "Image",
+    // in which case we need the textValue of the IMAGE_URL attribute triple.
+    triples: {
+      nodes: {
+        valueType: string;
+        attributeId: string;
+        textValue: string;
+      }[];
+    };
+  };
+};
 type NetworkTimeValue = { valueType: 'TIME'; textValue: string };
 type NetworkUrlValue = { valueType: 'URL'; textValue: string };
 type NetworkCollectionValue = {
@@ -43,7 +63,6 @@ type NetworkValue =
   | NetworkNumberValue
   | NetworkTextValue
   | NetworkEntityValue
-  | NetworkImageValue
   | NetworkTimeValue
   | NetworkUrlValue
   | NetworkCollectionValue;
@@ -129,29 +148,33 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
   switch (networkTriple.valueType) {
     case 'TEXT':
       return { type: 'TEXT', value: networkTriple.textValue };
-    case 'IMAGE': {
-      // Image values are stored in the data model as an entity with triple with
-      // a "IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
-      // be a URL pointing to the resource location of the image contents,
-      // usually an IPFS hash.
-      const imageValueTriple = networkTriple.imageValue.triples.nodes.find(
-        t => t.attributeId === SYSTEM_IDS.IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE
-      );
-
-      return {
-        type: 'IMAGE',
-        value: networkTriple.imageValue.id,
-        image: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
-      };
-    }
     case 'NUMBER':
       return { type: 'NUMBER', value: networkTriple.numberValue };
-    case 'ENTITY':
+    case 'ENTITY': {
+      // The entity is an image
+      if (networkTriple.entityValue.types.nodes.some(t => t.id === SYSTEM_IDS.IMAGE)) {
+        console.log('is an image', networkTriple.entityValue);
+        // Image values are stored in the data model as an entity with triple with
+        // a "IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
+        // be a URL pointing to the resource location of the image contents,
+        // usually an IPFS hash.
+        const imageValueTriple = networkTriple.entityValue.triples.nodes.find(
+          t => t.attributeId === SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE
+        );
+
+        return {
+          type: 'IMAGE',
+          value: networkTriple.entityValue.id,
+          image: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
+        };
+      }
+
       return {
         type: 'ENTITY',
         value: networkTriple.entityValue.id,
         name: networkTriple.entityValue.name,
       };
+    }
     case 'TIME':
       return { type: 'TIME', value: networkTriple.textValue };
     case 'URL':
@@ -180,29 +203,33 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
   switch (networkAction.valueType) {
     case 'TEXT':
       return { type: 'TEXT', value: networkAction.textValue };
-    case 'IMAGE': {
-      // Image values are stored in the data model as an entity with triple with
-      // a "IMAGE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
-      // be a URL pointing to the resource location of the image contents,
-      // usually an IPFS hash.
-      const imageValueTriple = networkAction.imageValue.triples.nodes.find(
-        t => t.attributeId === SYSTEM_IDS.IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE
-      );
 
-      return {
-        type: 'IMAGE',
-        value: networkAction.imageValue.id,
-        image: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
-      };
-    }
     case 'NUMBER':
       return { type: 'NUMBER', value: networkAction.numberValue };
-    case 'ENTITY':
+    case 'ENTITY': {
+      // The entity is an image
+      if (networkAction.entityValue.types.nodes.some(t => t.id === SYSTEM_IDS.IMAGE)) {
+        // Image values are stored in the data model as an entity with triple with
+        // a "IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
+        // be a URL pointing to the resource location of the image contents,
+        // usually an IPFS hash.
+        const imageValueTriple = networkAction.entityValue.triples.nodes.find(
+          t => t.attributeId === SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE
+        );
+
+        return {
+          type: 'IMAGE',
+          value: networkAction.entityValue.id,
+          image: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
+        };
+      }
+
       return {
         type: 'ENTITY',
-        value: networkAction.entityValue,
-        name: null,
+        value: networkAction.entityValue.id,
+        name: networkAction.entityValue.name,
       };
+    }
     case 'TIME':
       return { type: 'TIME', value: networkAction.textValue };
     case 'URL':
@@ -220,8 +247,6 @@ function networkTripleHasEmptyValue(networkTriple: SubstreamTriple | SubstreamOp
       return !networkTriple.numberValue;
     case 'ENTITY':
       return !networkTriple.entityValue;
-    case 'IMAGE':
-      return !networkTriple.imageValue;
     case 'TIME':
       return !networkTriple.textValue;
     case 'URL':
@@ -239,8 +264,6 @@ function substreamTripleHasEmptyValue(networkTriple: SubstreamOp): boolean {
       return !networkTriple.numberValue;
     case 'ENTITY':
       return !networkTriple.entityValue;
-    case 'IMAGE':
-      return !networkTriple.imageValue;
     case 'TIME':
       return !networkTriple.textValue;
     case 'URL':
