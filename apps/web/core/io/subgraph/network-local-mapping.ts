@@ -1,4 +1,4 @@
-import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
+import { ProposalStatus, ProposalType, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import {
@@ -17,7 +17,7 @@ import { Entity as EntityModule } from '~/core/utils/entity';
 
 type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
 type NetworkTextValue = { valueType: 'TEXT'; textValue: string };
-type NetworkImageValue = { valueType: 'IMAGE'; entityValue: { id: string } };
+type NetworkImageValue = { valueType: 'IMAGE'; imageValue: SubstreamImage };
 type NetworkEntityValue = { valueType: 'ENTITY'; entityValue: { id: string; name: string | null } };
 type NetworkTimeValue = { valueType: 'TIME'; textValue: string };
 type NetworkUrlValue = { valueType: 'URL'; textValue: string };
@@ -72,6 +72,16 @@ export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
   triples: { nodes: SubstreamTriple[] };
 };
 
+export type SubstreamImage = {
+  triples: {
+    nodes: {
+      valueType: string;
+      attributeId: string;
+      textValue: string;
+    }[];
+  };
+};
+
 export type SubstreamSpace = { id: string; metadata: { nodes: SubstreamEntity[] } };
 
 export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy' | 'space'> & {
@@ -118,8 +128,20 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
   switch (networkTriple.valueType) {
     case 'TEXT':
       return { type: 'TEXT', value: networkTriple.textValue };
-    case 'IMAGE':
-      return { type: 'IMAGE', value: networkTriple.entityValue.id };
+    case 'IMAGE': {
+      // Image values are stored in the data model as an entity with triple with
+      // a "IMAGE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
+      // be a URL pointing to the resource location of the image contents,
+      // usually an IPFS hash.
+      const imageValueTriple = networkTriple.imageValue.triples.nodes.find(
+        t => t.attributeId === SYSTEM_IDS.IMAGE_SOURCE_ATTRIBUTE
+      );
+
+      return {
+        type: 'IMAGE',
+        value: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
+      };
+    }
     case 'NUMBER':
       return { type: 'NUMBER', value: networkTriple.numberValue };
     case 'ENTITY':
@@ -156,8 +178,21 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
   switch (networkAction.valueType) {
     case 'TEXT':
       return { type: 'TEXT', value: networkAction.textValue };
-    case 'IMAGE':
-      return { type: 'IMAGE', value: networkAction.entityValue.id };
+    case 'IMAGE': {
+      // Image values are stored in the data model as an entity with triple with
+      // a "IMAGE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
+      // be a URL pointing to the resource location of the image contents,
+      // usually an IPFS hash.
+      // Qmek78DbxutTwqEQNzs7owYseDXxn788n9Lib14mmaMgoW
+      const imageValueTriple = networkAction.imageValue.triples.nodes.find(
+        t => t.attributeId === SYSTEM_IDS.IMAGE_SOURCE_ATTRIBUTE
+      );
+
+      return {
+        type: 'IMAGE',
+        value: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
+      };
+    }
     case 'NUMBER':
       return { type: 'NUMBER', value: networkAction.numberValue };
     case 'ENTITY':
@@ -184,7 +219,7 @@ function networkTripleHasEmptyValue(networkTriple: SubstreamTriple | SubstreamOp
     case 'ENTITY':
       return !networkTriple.entityValue;
     case 'IMAGE':
-      return !networkTriple.entityValue;
+      return !networkTriple.imageValue;
     case 'TIME':
       return !networkTriple.textValue;
     case 'URL':

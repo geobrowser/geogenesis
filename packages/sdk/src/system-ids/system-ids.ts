@@ -73,6 +73,9 @@ export const VALUE_TYPE = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 /* Example Usage: Thumbnail > VALUE_TYPE > IMAGE */
 export const IMAGE = 'ba4e41460010499da0a3caaa7f579d0e';
 
+// @TODO: Replace with actual attribute id
+export const IMAGE_SOURCE_ATTRIBUTE = 'ba4e41460010499da0a3caaa7f579d05'
+
 /* Example Usage: City > VALUE_TYPE > RELATION */
 export const RELATION = '14611456b4664cab920d2245f59ce828';
 

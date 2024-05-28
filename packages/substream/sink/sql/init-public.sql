@@ -16,6 +16,8 @@ CREATE TABLE public.entities (
     id text PRIMARY KEY,
     name character varying,
     description character varying,
+    cover text,
+    avatar text,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
@@ -139,7 +141,7 @@ CREATE TABLE public.space_subspaces (
     CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
-CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URL', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
+CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URL', 'CHECKBOX', 'TIME', 'GEO_LOCATION', 'IMAGE');
 
 CREATE TABLE public.triples (
     PRIMARY KEY (space_id, entity_id, attribute_id),
@@ -149,6 +151,7 @@ CREATE TABLE public.triples (
     value_type triple_value_type NOT NULL,
     number_value text,
     text_value text,
+    image_value_id text REFERENCES public.entities(id),
     entity_value_id text REFERENCES public.entities(id),
     collection_value_id text REFERENCES public.collections(id),
     created_at integer NOT NULL,

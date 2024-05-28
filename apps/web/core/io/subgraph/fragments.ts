@@ -11,6 +11,15 @@ export const tripleFragment = `
     id
     name
   }
+  imageValue {
+    triples {
+      nodes {
+        attributeId
+        textValue
+        valueType
+      }
+    }
+  }
   numberValue
   collectionValue {
     id
