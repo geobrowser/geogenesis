@@ -1,6 +1,7 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { createGeoId } from '@geogenesis/sdk';
 
 import { useMemo } from 'react';
 
@@ -467,6 +468,8 @@ const listener =
 
         if (!imageSrc) return;
 
+        // @TODO: Also create the entity that stores the image
+
         return upsert(
           {
             type: 'SET_TRIPLE',
@@ -476,7 +479,8 @@ const listener =
             attributeName,
             value: {
               type: 'IMAGE',
-              value: Value.toImageValue(imageSrc),
+              image: Value.toImageValue(imageSrc),
+              value: createGeoId(),
             },
           },
           context.spaceId
@@ -612,13 +616,16 @@ const listener =
       case 'UPLOAD_IMAGE': {
         const { imageSrc, triple } = event.payload;
 
+        // @TODO: Also create the entity that stores the image
+
         return upsert(
           {
             ...triple,
             type: 'SET_TRIPLE',
             value: {
               type: 'IMAGE',
-              value: Value.toImageValue(imageSrc),
+              value: createGeoId(),
+              image: Value.toImageValue(imageSrc),
             },
           },
           context.spaceId

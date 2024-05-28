@@ -2,6 +2,7 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { createGeoId } from '@geogenesis/sdk';
 import cx from 'classnames';
 import Link from 'next/link';
 
@@ -115,7 +116,9 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
               type: 'SET_TRIPLE',
               value: {
                 type: 'IMAGE',
-                value: Value.toImageValue(avatar),
+                // @TODO: Create the image entity
+                value: createGeoId(),
+                image: Value.toImageValue(avatar),
               },
             },
             spaceId
@@ -131,7 +134,9 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
             attributeName: 'Avatar',
             value: {
               type: 'IMAGE',
-              value: Value.toImageValue(avatar),
+              // @TODO: Create the image entity
+              value: createGeoId(),
+              image: Value.toImageValue(avatar),
             },
           },
           spaceId
@@ -325,7 +330,9 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
           attributeName: 'Avatar',
           value: {
             type: 'IMAGE',
-            value: teamMember.avatar,
+            // @TODO: Create the image entity
+            value: createGeoId(),
+            image: teamMember.avatar,
           },
         },
         spaceId

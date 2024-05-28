@@ -206,7 +206,8 @@ describe('EntityTableCell', () => {
               },
               {
                 type: 'IMAGE',
-                value: 'some image value',
+                value: 'id',
+                image: 'some image value',
               }
             ),
           ],
@@ -221,7 +222,8 @@ describe('EntityTableCell', () => {
             },
             {
               type: 'IMAGE',
-              value: 'some image value',
+              value: 'id',
+              image: 'some image value',
             }
           ),
         ]}

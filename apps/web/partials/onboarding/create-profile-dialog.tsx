@@ -1,6 +1,7 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { createGeoId } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import { Command } from 'cmdk';
@@ -122,7 +123,9 @@ export const CreateProfileDialog = () => {
           space: onchainProfile.homeSpaceId,
           value: {
             type: 'IMAGE',
-            value: avatar,
+            // @TODO: Create the image entity
+            value: createGeoId(),
+            image: avatar,
           },
         };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { createGeoId } from '@geogenesis/sdk';
 import { useAtom, useSetAtom } from 'jotai';
 
 import { useCallback, useRef, useState } from 'react';
@@ -84,7 +85,9 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
           attributeName: 'Avatar',
           value: {
             type: 'IMAGE',
-            value: Value.toImageValue(avatar),
+            // @TODO: Create the image entity
+            value: createGeoId(),
+            image: Value.toImageValue(avatar),
           },
         },
         spaceId

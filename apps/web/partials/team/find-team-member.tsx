@@ -2,6 +2,7 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { createGeoId } from '@geogenesis/sdk';
 import cx from 'classnames';
 import { useAtom, useSetAtom } from 'jotai';
 
@@ -105,7 +106,9 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
           attributeName: 'Avatar',
           value: {
             type: 'IMAGE',
-            value: Value.toImageValue(avatar),
+            // @TODO: Create the image entity
+            value: createGeoId(),
+            image: Value.toImageValue(avatar),
           },
         },
         spaceId
