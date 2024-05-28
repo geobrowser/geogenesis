@@ -434,6 +434,13 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
   });
 }
 
+/**
+ * Handle creating the database representation of a collection item when a new collection item
+ * is created. We need to gather all of the required triples to fully flesh out the collection
+ * item's data. We could do this linearly, but we want to ensure that all of the properties
+ * exist before creating the item. If not all properties exist we don't create the collection
+ * item.
+ */
 function getCollectionItemTriplesFromSchemaTriples(
   schemaTriples: OpWithCreatedBy[],
   entityId: string
