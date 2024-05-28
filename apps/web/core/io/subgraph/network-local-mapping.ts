@@ -73,6 +73,7 @@ export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
 };
 
 export type SubstreamImage = {
+  id: string;
   triples: {
     nodes: {
       valueType: string;
@@ -139,7 +140,8 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
 
       return {
         type: 'IMAGE',
-        value: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
+        value: networkTriple.imageValue.id,
+        image: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
       };
     }
     case 'NUMBER':
@@ -183,14 +185,14 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
       // a "IMAGE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
       // be a URL pointing to the resource location of the image contents,
       // usually an IPFS hash.
-      // Qmek78DbxutTwqEQNzs7owYseDXxn788n9Lib14mmaMgoW
       const imageValueTriple = networkAction.imageValue.triples.nodes.find(
         t => t.attributeId === SYSTEM_IDS.IMAGE_SOURCE_ATTRIBUTE
       );
 
       return {
         type: 'IMAGE',
-        value: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
+        value: networkAction.imageValue.id,
+        image: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
       };
     }
     case 'NUMBER':
@@ -238,7 +240,7 @@ function substreamTripleHasEmptyValue(networkTriple: SubstreamOp): boolean {
     case 'ENTITY':
       return !networkTriple.entityValue;
     case 'IMAGE':
-      return !networkTriple.entityValue;
+      return !networkTriple.imageValue;
     case 'TIME':
       return !networkTriple.textValue;
     case 'URL':

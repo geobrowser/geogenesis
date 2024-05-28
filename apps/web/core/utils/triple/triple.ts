@@ -169,6 +169,9 @@ export const getValue = (triple: Triple): string | null => {
     case 'TIME':
     case 'URL':
     case 'COLLECTION':
+      return triple.value.value;
+    case 'IMAGE':
+      return triple.value.image;
     case 'CHECKBOX':
       throw new Error('checkbox not supported');
   }

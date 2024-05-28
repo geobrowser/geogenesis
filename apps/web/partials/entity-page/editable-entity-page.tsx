@@ -441,7 +441,7 @@ function EntityAttributes({
           <PageImageField
             key={triple.attributeId}
             variant="avatar"
-            imageSrc={triple.value.value}
+            imageSrc={triple.value.image}
             onImageChange={imageSrc => {
               uploadImage(triple, imageSrc);
             }}

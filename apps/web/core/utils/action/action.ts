@@ -14,10 +14,12 @@ export const getValue = (op: AppOp, fallback: boolean | string = false): string 
     case 'COLLECTION':
     case 'TEXT':
     case 'NUMBER':
-    case 'IMAGE':
     case 'TIME':
     case 'URL':
       value = op.value.value;
+      break;
+    case 'IMAGE':
+      value = op.value.image;
       break;
     case 'CHECKBOX':
       throw new Error('checkbox value not supported');

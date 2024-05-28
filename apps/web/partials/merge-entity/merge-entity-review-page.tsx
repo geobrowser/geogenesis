@@ -109,7 +109,7 @@ function EntityReviewAttributes({
           </Text>
         );
       case 'IMAGE':
-        return <ImageZoom key={`image-${triple.attributeId}-${triple.id}`} imageSrc={triple.value.value} />;
+        return <ImageZoom key={`image-${triple.attributeId}-${triple.id}`} imageSrc={triple.value.image} />;
       case 'TIME':
         return <DateField isEditing={false} value={triple.value.value} />;
       case 'URL':

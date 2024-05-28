@@ -12,6 +12,7 @@ export const tripleFragment = `
     name
   }
   imageValue {
+    id
     triples {
       nodes {
         attributeId

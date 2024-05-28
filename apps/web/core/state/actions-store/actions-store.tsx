@@ -54,6 +54,10 @@ const upsert = (op: StoreOp, spaceId: string) => {
     id: getAppTripleId(op, spaceId),
     entityId: op.entityId,
     attributeId: op.attributeId,
+    // How do we make this work well with local image triples? We want
+    // to store just the image itself to make rendering images easy,
+    // but that's not actually how we publish the images. Maybe we
+    // need to update it on Triple.prepareForPublishing...?
     value:
       op.type === 'SET_TRIPLE'
         ? op.value

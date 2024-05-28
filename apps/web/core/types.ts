@@ -8,7 +8,7 @@ export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'IMAGE';
 
 export type AppValue = {
-  type: 'TEXT' | 'NUMBER' | 'URL' | 'TIME' | 'IMAGE';
+  type: 'TEXT' | 'NUMBER' | 'URL' | 'TIME';
   value: string;
 };
 
@@ -16,6 +16,20 @@ export type AppEntityValue = {
   type: 'ENTITY';
   value: string;
   name: string | null;
+};
+
+// Images are stored as an entity instead of the actual image resource url.
+// This is so we can add additional metadata about the image to the entity
+// representing the image, e.g., image type, dimensions, etc.
+//
+// In the app we want to be able to easily render the actual image contents
+// so we store it as `.image` on the value itself. At publish time this
+// helper property is ignored in favor of just the entity's id which is
+// stored in the `value` property.
+export type AppImageValue = {
+  type: 'IMAGE';
+  value: string; // id of the entity that stores the image source
+  image: string; // the image source itself
 };
 
 export type AppCollectionValue = {
@@ -29,7 +43,7 @@ export type AppCheckboxValue = {
   value: string; // @TODO: Really it's a boolean
 };
 
-export type Value = AppEntityValue | AppCollectionValue | AppCheckboxValue | AppValue;
+export type Value = AppEntityValue | AppCollectionValue | AppCheckboxValue | AppImageValue | AppValue;
 
 export type SetTripleAppOp = {
   type: 'SET_TRIPLE';
