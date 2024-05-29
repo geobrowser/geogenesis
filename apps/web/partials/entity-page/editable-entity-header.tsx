@@ -34,7 +34,6 @@ export function EditableHeading({
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
 
   const isEditing = editable && isEditor;
-  const nameTriple = Entity.nameTriple(triples);
 
   const name = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverName : Entity.name(triples) ?? '';
 

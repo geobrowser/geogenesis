@@ -19,6 +19,7 @@ const entities: string[] = [
   SYSTEM_IDS.SCHEMA_TYPE,
   SYSTEM_IDS.VALUE_TYPE,
   SYSTEM_IDS.RELATION,
+  SYSTEM_IDS.COLLECTION_VALUE_TYPE,
   SYSTEM_IDS.TEXT,
   SYSTEM_IDS.IMAGE,
   SYSTEM_IDS.IMAGE_ATTRIBUTE,
@@ -68,6 +69,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.SCHEMA_TYPE]: 'Type',
   [SYSTEM_IDS.VALUE_TYPE]: 'Value type',
   [SYSTEM_IDS.RELATION]: 'Relation',
+  [SYSTEM_IDS.COLLECTION_VALUE_TYPE]: 'Collection',
   [SYSTEM_IDS.TEXT]: 'Text',
 
   [SYSTEM_IDS.IMAGE]: 'Image',

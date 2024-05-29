@@ -261,6 +261,17 @@ function EntityAttributes({
     });
   };
 
+  const createCollectionItem = (collectionId: string, entity: EntitySearchResult, collectionTriple: Triple) => {
+    send({
+      type: 'CREATE_COLLECTION_ITEM',
+      payload: {
+        entity,
+        collectionId,
+        collectionTriple: collectionTriple as TripleWithCollectionValue,
+      },
+    });
+  };
+
   const deleteCollectionItem = (collectionItemId: string, collectionTriple: Triple) => {
     send({
       type: 'DELETE_COLLECTION_ITEM',
@@ -426,17 +437,6 @@ function EntityAttributes({
       payload: {
         name,
         description: e.target.value,
-      },
-    });
-  };
-
-  const addCollectionItem = (collectionId: string, entity: EntitySearchResult, collectionTriple: Triple) => {
-    send({
-      type: 'CREATE_COLLECTION_ITEM',
-      payload: {
-        entity,
-        collectionId,
-        collectionTriple: collectionTriple as TripleWithCollectionValue,
       },
     });
   };
@@ -651,7 +651,7 @@ function EntityAttributes({
                   spaceId={spaceId}
                   onDone={entity =>
                     isCollection
-                      ? addCollectionItem(triples[0].value.value, entity, triples[0])
+                      ? createCollectionItem(triples[0].value.value, entity, triples[0])
                       : addEntityValue(attributeId, entity)
                   }
                   allowedTypes={relationTypes}
