@@ -8,7 +8,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
 import { useDiff } from '~/core/state/diff-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { EntityType } from '~/core/types';
+import { EntitySearchResult } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
 import { SmallButton } from '~/design-system/button';
@@ -23,7 +23,7 @@ import { EntityPageTypeChip } from './entity-page-type-chip';
 interface EntityPageMetadataHeaderProps {
   id: string;
   spaceId: string;
-  types: Array<EntityType>;
+  types: Array<EntitySearchResult>;
 }
 
 export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: EntityPageMetadataHeaderProps) {

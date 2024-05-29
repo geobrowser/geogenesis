@@ -1,18 +1,24 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { createGeoId, createImageEntityOps } from '@geogenesis/sdk';
+import { createCollectionItem, createGeoId, createImageEntityOps } from '@geogenesis/sdk';
 
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
+import {
+  EntitySearchResult,
+  Triple as TripleType,
+  ValueType as TripleValueType,
+  TripleWithCollectionValue,
+} from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { groupBy } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { useActionsStore } from '../hooks/use-actions-store';
+import { Collections } from '../utils/collections';
 import { Images } from '../utils/images';
 
 export type EditEvent =
@@ -176,6 +182,14 @@ export type EditEvent =
       type: 'REMOVE_TRIPLE';
       payload: {
         triple: TripleType;
+      };
+    }
+  | {
+      type: 'CREATE_COLLECTION_ITEM';
+      payload: {
+        collectionId: string;
+        entity: EntitySearchResult;
+        collectionTriple: TripleWithCollectionValue;
       };
     };
 
@@ -647,6 +661,54 @@ const listener =
             },
           },
           context.spaceId
+        );
+      }
+      case 'CREATE_COLLECTION_ITEM': {
+        const { collectionId, entity, collectionTriple } = event.payload;
+        const { spaceId } = context;
+
+        const triples = Collections.createCollectionItemTriples({
+          collectionId,
+          entityId: entity.id,
+          spaceId,
+        });
+
+        // @TODO: We should probably update the collection triple here
+        // instead of in `merge`
+        const newCollectionTriple: TripleWithCollectionValue = {
+          ...collectionTriple,
+          value: {
+            ...collectionTriple.value,
+            items: [
+              ...collectionTriple.value.items,
+              {
+                collectionId: collectionTriple.entityId,
+                entity: {
+                  id: entity.id,
+                  name: entity.name,
+                  types: [],
+                },
+                id: triples[0].entityId,
+                index: triples[3].value.value,
+                value: {
+                  type: 'ENTITY',
+                  value: entity.name,
+                },
+              },
+            ],
+          },
+        };
+
+        return upsertMany(
+          [...triples, newCollectionTriple].map(t => {
+            return {
+              spaceId: t.space,
+              op: {
+                ...t,
+                type: 'SET_TRIPLE',
+              },
+            };
+          })
         );
       }
     }

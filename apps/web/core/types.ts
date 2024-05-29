@@ -156,7 +156,7 @@ export type Entity = {
   id: string;
   name: string | null;
   description: string | null;
-  types: EntityType[];
+  types: EntitySearchResult[];
   triples: Triple[];
   nameTripleSpaces?: string[];
 };
@@ -167,7 +167,7 @@ export type GeoType = {
   space: string;
 };
 
-export type EntityType = {
+export type EntitySearchResult = {
   id: string;
   name: string | null;
 };
@@ -277,6 +277,7 @@ export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & { value: AppEn
 export type TripleWithImageValue = OmitStrict<Triple, 'value'> & { value: Value };
 export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: Value };
 export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: Value };
+export type TripleWithCollectionValue = OmitStrict<Triple, 'value'> & { value: AppCollectionValue };
 
 export type SpaceId = string;
 export type SpaceTriples = Record<SpaceId, Triple[]>;
