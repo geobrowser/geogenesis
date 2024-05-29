@@ -101,7 +101,6 @@ export const Editor = React.memo(function Editor({
   // Running onBlur directly through the hook executes it twice for some reason.
   // Doing it imperatively here correctly only executes once.
   React.useEffect(() => {
-    // @TODO: Debounce this?
     function onBlur(params: { editor: TiptapEditor }) {
       // Responsible for converting all editor blocks to triples
       // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes

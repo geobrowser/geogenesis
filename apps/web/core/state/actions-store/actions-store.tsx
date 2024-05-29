@@ -90,6 +90,8 @@ const upsertMany = (ops: { op: StoreOp; spaceId: string }[]) => {
     if (op.type === 'DELETE_TRIPLE') {
       triple.isDeleted = true;
     }
+
+    triplesToWrite.push(triple);
   }
 
   // Can safely cast to string since we set the id above

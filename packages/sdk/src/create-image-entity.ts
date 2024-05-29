@@ -1,6 +1,5 @@
 import { createGeoId } from './id';
 import { SYSTEM_IDS } from './system-ids';
-import { SetTripleOp } from './types';
 
 type CreateImageEntityOpsReturnType = [
   {

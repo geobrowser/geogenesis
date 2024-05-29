@@ -10,7 +10,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
-import type { Entity as EntityType, Triple } from '~/core/types';
+import type { EntitySearchResult, Entity as EntityType, Triple, TripleWithCollectionValue } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
@@ -257,6 +257,27 @@ function EntityAttributes({
       payload: {
         triple,
         isLastEntity: groupedTriples[triple.attributeId].length === 1,
+      },
+    });
+  };
+
+  const createCollectionItem = (collectionId: string, entity: EntitySearchResult, collectionTriple: Triple) => {
+    send({
+      type: 'CREATE_COLLECTION_ITEM',
+      payload: {
+        entity,
+        collectionId,
+        collectionTriple: collectionTriple as TripleWithCollectionValue,
+      },
+    });
+  };
+
+  const deleteCollectionItem = (collectionItemId: string, collectionTriple: Triple) => {
+    send({
+      type: 'DELETE_COLLECTION_ITEM',
+      payload: {
+        collectionItemId,
+        collectionTriple: collectionTriple as TripleWithCollectionValue,
       },
     });
   };
@@ -509,6 +530,47 @@ function EntityAttributes({
             </DeletableChipButton>
           </div>
         );
+      case 'COLLECTION': {
+        const isEmptyCollection = triple.value.items.length === 0;
+
+        if (isEmptyCollection) {
+          const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
+
+          return (
+            <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
+              <EntityTextAutocomplete
+                spaceId={spaceId}
+                key={`entity-${attributeId}-${triple.value.value}`}
+                placeholder="Add value..."
+                allowedTypes={relationTypes}
+                onDone={result =>
+                  triple.placeholder
+                    ? createEntityTripleFromPlaceholder(triple, result)
+                    : addEntityValue(attributeId, result)
+                }
+                itemIds={entityValueTriples
+                  .filter(triple => triple.attributeId === attributeId)
+                  .map(triple => triple.value.value)}
+                attributeId={attributeId}
+              />
+            </div>
+          );
+        }
+
+        // @TODO: Switch from an entity to a collection when adding another item
+        return triple.value.items.map(i => {
+          return (
+            <div key={`entity-${triple.attributeId}-${triple.value.value}-${i.value.value}}`} className="mt-1">
+              <DeletableChipButton
+                href={NavUtils.toEntity(triple.space, triple.value.value)}
+                onClick={() => deleteCollectionItem(i.id, triple)}
+              >
+                {i.value.type === 'ENTITY' ? i.value.value : i.value.value}
+              </DeletableChipButton>
+            </div>
+          );
+        });
+      }
     }
   };
 
@@ -549,11 +611,14 @@ function EntityAttributes({
       </div>
       {orderedGroupedTriples.map(([attributeId, triples], index) => {
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
-        const isEntityGroup = triples.find(triple => triple.value.type === 'ENTITY');
+        const isEntity = triples.find(triple => triple.value.type === 'ENTITY');
+        const isCollection = triples.find(triple => triple.value.type === 'COLLECTION');
+        const shouldShowEntityDialog = isEntity || isCollection;
 
         const tripleType: TripleValueType = triples[0].value.type || 'string';
 
         const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'ENTITY' && !triples[0].value.value;
+        const isEmptyCollection = triples[0].value.type === 'COLLECTION' && triples[0].value.items.length === 0;
         const attributeName = triples[0].attributeName;
         const isPlaceholder = triples[0].placeholder;
         const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
@@ -577,14 +642,18 @@ function EntityAttributes({
                 {attributeName || attributeId}
               </Text>
             )}
-            {isEntityGroup && <Spacer height={4} />}
+            {shouldShowEntityDialog && <Spacer height={4} />}
             <div className="flex flex-wrap items-center gap-1">
               {renderedTriples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
               {/* This is the + button next to attribute ids with existing entity values */}
-              {isEntityGroup && !isEmptyEntity && (
+              {((isCollection && !isEmptyCollection) || (isEntity && !isEmptyEntity)) && (
                 <EntityAutocompleteDialog
                   spaceId={spaceId}
-                  onDone={entity => addEntityValue(attributeId, entity)}
+                  onDone={entity =>
+                    isCollection
+                      ? createCollectionItem(triples[0].value.value, entity, triples[0])
+                      : addEntityValue(attributeId, entity)
+                  }
                   allowedTypes={relationTypes}
                   entityValueIds={entityValueTriples
                     .filter(triple => triple.attributeId === attributeId)
@@ -593,7 +662,7 @@ function EntityAttributes({
                 />
               )}
               <div className="absolute right-0 top-6 flex items-center gap-1">
-                {isEntityGroup ? (
+                {isEntity ? (
                   <AttributeConfigurationMenu
                     trigger={<SquareButton icon={<CogSmall />} />}
                     attributeId={attributeId}

@@ -76,6 +76,7 @@ export const IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE = '334b8ac01be14079b1707e11
 
 /* Example Usage: City > VALUE_TYPE > RELATION */
 export const RELATION = '14611456b4664cab920d2245f59ce828';
+export const COLLECTION_VALUE_TYPE = 'v4611456b4444cab920d2245f59ce828';
 
 /* Example Usage: Address > VALUE_TYPE > TEXT */
 export const TEXT = '9edb6fcce4544aa5861139d7f024c010';

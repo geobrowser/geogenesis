@@ -61,6 +61,16 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
           </div>
         );
       }
+      case 'COLLECTION':
+        return triple.value.items.map(i => {
+          return (
+            <div key={`entity-${triple.attributeId}-${triple.value.value}-${i.value.value}}`} className="mt-1">
+              <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.value)}>
+                {i.value.type === 'ENTITY' ? i.value.value : i.value.value}
+              </LinkableChip>
+            </div>
+          );
+        });
       case 'NUMBER':
         return null;
     }

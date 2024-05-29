@@ -179,7 +179,7 @@ export async function fetchProposedVersions({
       ...v,
       createdBy: profile,
       space: spaceWithMetadata,
-      actions: fromNetworkOps(v.actions.nodes, spaceId),
+      actions: fromNetworkOps(v.actions.nodes),
     };
   });
 }

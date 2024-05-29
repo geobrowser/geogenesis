@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, D, pipe } from '@mobily/ts-belt';
 
-import { AppOp, EntityType, Entity as IEntity, Triple as ITriple } from '~/core/types';
+import { AppOp, EntitySearchResult, Entity as IEntity, Triple as ITriple } from '~/core/types';
 import { ValueTypeId } from '~/core/value-types';
 
 import { Triple } from '../triple';
@@ -39,7 +39,7 @@ export function descriptionTriple(triples: ITriple[]): ITriple | undefined {
  * there are Triples from multiple Spaces and they are Types, and they have the same name, we will
  * only show the Type from the current space.
  */
-export function types(triples: ITriple[], currentSpace?: string): EntityType[] {
+export function types(triples: ITriple[], currentSpace?: string): EntitySearchResult[] {
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
   const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
 

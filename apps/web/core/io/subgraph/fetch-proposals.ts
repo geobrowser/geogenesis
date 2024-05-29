@@ -221,7 +221,7 @@ export async function fetchProposals({
           ...v,
           space: spaceWithMetadata,
           createdBy: profile,
-          actions: fromNetworkOps(v.actions.nodes, spaceId),
+          actions: fromNetworkOps(v.actions.nodes),
         };
       }),
     };

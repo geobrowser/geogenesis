@@ -1,3 +1,9 @@
+export const imageValueTypeTripleFragment = `
+    attributeId
+    textValue
+    valueType
+`;
+
 export const tripleFragment = `
   attribute {
     id
@@ -17,9 +23,7 @@ export const tripleFragment = `
     name
     triples {
       nodes {
-        attributeId
-        textValue
-        valueType
+        ${imageValueTypeTripleFragment}
       }
     }
   }
@@ -38,7 +42,11 @@ export const tripleFragment = `
               id
             }
           }
-          # @TODO: Also fetch the triples in case we're rendering an image
+          triples {
+            nodes {
+              ${imageValueTypeTripleFragment}
+            }
+          }
         }
       }
     }

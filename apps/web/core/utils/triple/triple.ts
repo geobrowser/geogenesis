@@ -1,11 +1,25 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { Op } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
+import { Effect } from 'effect';
 
 import { ID } from '~/core/id';
 import { getAppTripleId } from '~/core/id/create-id';
-import { AppEntityValue, OmitStrict, Triple, ValueType as TripleValueType, Value } from '~/core/types';
+import { fetchEntity } from '~/core/io/subgraph';
+import {
+  AppEntityValue,
+  CollectionItem,
+  OmitStrict,
+  Triple,
+  ValueType as TripleValueType,
+  TripleWithCollectionValue,
+  Value,
+} from '~/core/types';
 import { ValueTypeId, valueTypes } from '~/core/value-types';
+
+import { Collections } from '../collections';
+import { Entity } from '../entity';
+import { groupBy } from '../utils';
 
 export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {
@@ -107,21 +121,58 @@ export function ensureStableId<T extends Triple>(triple: T): T {
   return triple;
 }
 
+/**
+ * This would be a lot easier as a local first representation with the same  model both
+ * for query time merging and ad-hoc runtime merging of the two triples sources.
+ */
 export function merge(local: Triple[], remote: Triple[]): Triple[] {
   const localTripleIds = new Set(local.map(t => t.id));
   const remoteTriplesWithoutLocalTriples = remote.filter(t => !localTripleIds.has(getAppTripleId(t, t.space)));
+  const remoteTriplesMappedToLocalTriples = remoteTriplesWithoutLocalTriples.map(t => ({
+    ...t,
 
-  return [
-    ...remoteTriplesWithoutLocalTriples.map(t => ({
-      ...t,
-      hasBeenPublished: false,
-      isDeleted: false,
-      placeholder: false,
-      id: getAppTripleId(t, t.space),
-      timestamp: timestamp(),
-    })),
-    ...local,
-  ];
+    hasBeenPublished: false,
+    isDeleted: false,
+    placeholder: false,
+    id: getAppTripleId(t, t.space),
+    timestamp: timestamp(),
+  }));
+
+  const triples = [...remoteTriplesMappedToLocalTriples, ...local];
+
+  return triples;
+}
+
+function collectionItemsFromTriples(triples: Record<string, Triple[]>): CollectionItem[] {
+  const items = Object.entries(triples).map(([collectionItemId, items]): CollectionItem | null => {
+    const index = items.find(i => Boolean(Collections.itemIndexValue(i)))?.value.value;
+    const collectionId = items.find(i => Boolean(Collections.itemCollectionIdValue(i)))?.value.value;
+    const entityIdTriple = items.find(i => Boolean(Collections.itemEntityIdValue(i)));
+    const entityId = entityIdTriple?.value.value;
+
+    if (!(index && collectionId && entityId)) {
+      return null;
+    }
+
+    return {
+      id: collectionItemId,
+      collectionId,
+      entity: {
+        id: entityId,
+        name: entityIdTriple?.value.type === 'ENTITY' ? entityIdTriple?.value.name : null,
+        // @TODO(local-first): The entity may not exist locally in which case this will be empty
+        types: Entity.types(triples[entityId] ?? []).map(t => t.id),
+      },
+      index,
+      value: {
+        type: 'ENTITY',
+        // @TODO(local-first): We may not have the name locally in which case the value will be null
+        value: entityIdTriple?.value.type === 'ENTITY' ? entityIdTriple?.value.name : null,
+      },
+    };
+  });
+
+  return items.flatMap(i => (i ? [i] : []));
 }
 
 /**
