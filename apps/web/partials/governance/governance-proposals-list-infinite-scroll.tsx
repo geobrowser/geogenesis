@@ -14,22 +14,14 @@ interface Props {
 export function GovernanceProposalsListInfiniteScroll({ spaceId, page = 0 }: Props) {
   const ref = React.useRef<HTMLButtonElement>(null);
   const [loadMoreNodes, setLoadMoreNodes] = React.useState<React.JSX.Element[]>([]);
-  const currentPageRef = React.useRef<number>(page);
+  const [currentPage, setCurrentPage] = React.useState(page);
 
-  const loadMore = React.useCallback(
-    async (abortController?: AbortController) => {
-      loadMoreProposalsAction(spaceId, currentPageRef.current)
-        .then(([node, next]) => {
-          if (abortController?.signal.aborted) return;
-
-          setLoadMoreNodes(prev => [...prev, node]);
-
-          currentPageRef.current = next;
-        })
-        .catch(() => {});
-    },
-    [loadMoreProposalsAction]
-  );
+  const loadMore = React.useCallback(async (abortController?: AbortController) => {
+    const [node, next] = await loadMoreProposalsAction(spaceId, currentPage);
+    if (abortController?.signal.aborted) return;
+    setLoadMoreNodes(prev => [...prev, node]);
+    setCurrentPage(next);
+  }, []);
 
   React.useEffect(() => {
     const signal = new AbortController();
