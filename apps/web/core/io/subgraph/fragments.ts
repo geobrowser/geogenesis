@@ -38,6 +38,7 @@ export const tripleFragment = `
               id
             }
           }
+          // @TODO: Also fetch the triples in case we're rendering an image
         }
       }
     }

@@ -15,6 +15,7 @@ import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
 import { Triple as TripleType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
+import { Images } from '~/core/utils/images';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
@@ -67,7 +68,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
-  const { upsert, remove } = useActionsStore();
+  const { upsert, remove, upsertMany } = useActionsStore();
 
   useEffect(() => {
     if (avatar !== teamMember.avatar || name !== teamMember.name || roleEntityId !== initialRoleEntityId) {
@@ -110,37 +111,66 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
           remove(spaceAvatar, spaceId);
         } else if (hasAvatar) {
           remove(spaceAvatar, spaceId);
-          upsert(
+
+          const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+            imageSource: Value.toImageValue(avatar),
+            spaceId,
+          });
+
+          upsertMany([
             {
-              ...spaceAvatar,
-              type: 'SET_TRIPLE',
-              value: {
-                type: 'IMAGE',
-                // @TODO: Create the image entity
-                value: createGeoId(),
-                image: Value.toImageValue(avatar),
-              },
+              op: { ...typeTriple, type: 'SET_TRIPLE' },
+              spaceId,
             },
-            spaceId
-          );
+            {
+              op: { ...urlTriple, type: 'SET_TRIPLE' },
+              spaceId,
+            },
+            {
+              op: {
+                ...spaceAvatar,
+                type: 'SET_TRIPLE',
+                value: {
+                  type: 'IMAGE',
+                  value: typeTriple.entityId,
+                  image: urlTriple.value.value,
+                },
+              },
+              spaceId,
+            },
+          ]);
         }
       } else if (hasAvatar) {
-        upsert(
+        const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+          imageSource: Value.toImageValue(avatar),
+          spaceId,
+        });
+
+        upsertMany([
           {
-            type: 'SET_TRIPLE',
-            entityId: entityId,
-            entityName: name,
-            attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-            attributeName: 'Avatar',
-            value: {
-              type: 'IMAGE',
-              // @TODO: Create the image entity
-              value: createGeoId(),
-              image: Value.toImageValue(avatar),
-            },
+            op: { ...typeTriple, type: 'SET_TRIPLE' },
+            spaceId,
           },
-          spaceId
-        );
+          {
+            op: { ...urlTriple, type: 'SET_TRIPLE' },
+            spaceId,
+          },
+          {
+            op: {
+              type: 'SET_TRIPLE',
+              entityId: entityId,
+              entityName: name,
+              attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+              attributeName: 'Avatar',
+              value: {
+                type: 'IMAGE',
+                value: typeTriple.entityId,
+                image: urlTriple.value.value,
+              },
+            },
+            spaceId,
+          },
+        ]);
       }
     }
 
@@ -321,22 +351,36 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     // Add avatar (if person has an avatar and its not already in space triples)
     if (!avatarSpaceTriple && teamMember.avatar) {
-      upsert(
+      const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+        imageSource: Value.toImageValue(teamMember.avatar),
+        spaceId,
+      });
+
+      upsertMany([
         {
-          type: 'SET_TRIPLE',
-          entityId: newEntityId,
-          entityName: teamMember.name,
-          attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-          attributeName: 'Avatar',
-          value: {
-            type: 'IMAGE',
-            // @TODO: Create the image entity
-            value: createGeoId(),
-            image: teamMember.avatar,
-          },
+          op: { ...typeTriple, type: 'SET_TRIPLE' },
+          spaceId,
         },
-        spaceId
-      );
+        {
+          op: { ...urlTriple, type: 'SET_TRIPLE' },
+          spaceId,
+        },
+        {
+          op: {
+            type: 'SET_TRIPLE',
+            entityId: newEntityId,
+            entityName: name,
+            attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+            attributeName: 'Avatar',
+            value: {
+              type: 'IMAGE',
+              value: typeTriple.entityId,
+              image: urlTriple.value.value,
+            },
+          },
+          spaceId,
+        },
+      ]);
     }
 
     // Add person type
