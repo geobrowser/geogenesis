@@ -63,7 +63,7 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
       },
     }),
     // We need to use another provider if using a local chain
-    ...(Environment.VarsLive.appEnv === 'development' ? [publicProvider()] : []),
+    ...(Environment.variables.appEnv === 'development' ? [publicProvider()] : []),
   ]
 );
 
@@ -112,7 +112,7 @@ const createRealWalletConfig = () => {
         chains,
         options: {
           showQrModal: false,
-          projectId: Environment.VarsLive.walletConnectProjectId,
+          projectId: Environment.variables.walletConnectProjectId,
           metadata: {
             name: 'Geo Genesis',
             description: "Browse and organize the world's public knowledge and information in a decentralized way.",
@@ -146,12 +146,12 @@ const createMockWalletConfig = () => {
       chains,
       publicClient: getMockPublicClient(),
       autoConnect: false,
-      walletConnectProjectId: Environment.VarsLive.walletConnectProjectId,
+      walletConnectProjectId: Environment.variables.walletConnectProjectId,
     })
   );
 };
 
-const wagmiConfig = Environment.VarsLive.isTestEnv ? createMockWalletConfig() : createRealWalletConfig();
+const wagmiConfig = Environment.variables.isTestEnv ? createMockWalletConfig() : createRealWalletConfig();
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const onConnect = React.useCallback(({ address }: { address?: string }) => {
@@ -206,7 +206,7 @@ export function GeoConnectButton() {
           return (
             <Button
               onClick={
-                Environment.VarsLive.isTestEnv
+                Environment.variables.isTestEnv
                   ? () => {
                       console.log('Test environment detected: using mock wallet');
                       connect({
