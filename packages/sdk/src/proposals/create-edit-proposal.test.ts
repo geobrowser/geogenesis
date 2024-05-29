@@ -5,7 +5,7 @@ import { Edit, IpfsContentType, Op } from '../proto/ipfs_pb';
 describe("create-edit-proposal", () => {
   it("encodes and decodes Edit correctly", () => {
     const editBinary = createEditProposal({name: "test", ops: [{
-      op: 'SET_TRIPLE',
+      type: 'SET_TRIPLE',
       payload: {
         attributeId: btoa('test-attribute-id'),
         entityId: btoa('test-entity-id'),

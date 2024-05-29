@@ -1,4 +1,4 @@
-import { Op, createContentProposal, createEditProposal, getProcessGeoProposalArguments } from '@geogenesis/sdk';
+import { Op, createEditProposal, getProcessGeoProposalArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';

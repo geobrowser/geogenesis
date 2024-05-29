@@ -1,8 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
-import { createGeoId } from '@geogenesis/sdk';
 import cx from 'classnames';
 import { useAtom, useSetAtom } from 'jotai';
 
@@ -11,14 +9,11 @@ import type { ChangeEvent } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useToast } from '~/core/hooks/use-toast';
-import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
-import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { Services } from '~/core/services';
 import { Entity as EntityType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
-import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
