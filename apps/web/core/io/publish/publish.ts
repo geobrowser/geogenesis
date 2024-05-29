@@ -1,7 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import {
   Op,
-  createEditProposal,
   createSubspaceProposal,
   getAcceptSubspaceArguments,
   getProcessGeoProposalArguments,
@@ -9,6 +8,7 @@ import {
 } from '@geogenesis/sdk';
 import { ProfileRegistryAbi } from '@geogenesis/sdk/abis';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { createEditProposal } from '@geogenesis/sdk/proto';
 import * as Effect from 'effect/Effect';
 
 import { WalletClient } from 'wagmi';

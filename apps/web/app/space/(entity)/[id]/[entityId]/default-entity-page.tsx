@@ -9,7 +9,6 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -24,6 +23,8 @@ import {
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
+
+import { cachedFetchEntity } from './cached-fetch-entity';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -66,6 +67,8 @@ export default async function DefaultEntityPage({
         spaceId={props.spaceId}
         initialBlockIdsTriple={props.blockIdsTriple}
         initialBlockTriples={props.blockTriples}
+        initialBlockCollectionItems={props.blockCollectionItems}
+        initialBlockCollectionItemTriples={props.blockCollectionItemTriples}
       >
         <MoveEntityProvider>
           {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
@@ -113,16 +116,26 @@ const getData = async (spaceId: string, entityId: string) => {
   const serverAvatarUrl = Entity.avatar(entity?.triples);
   const serverCoverUrl = Entity.cover(entity?.triples);
 
-  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+  const blockIdsTriple =
+    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
 
-  const blockTriples = (
-    await Promise.all(
+  const blockCollectionItems =
+    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
+
+  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
+
+  const [blockTriples, collectionItemTriples] = await Promise.all([
+    Promise.all(
       blockIds.map(blockId => {
-        return Subgraph.fetchEntity({ id: blockId });
+        return cachedFetchEntity(blockId);
       })
-    )
-  ).flatMap(entity => entity?.triples ?? []);
+    ),
+    Promise.all(
+      blockCollectionItems.map(item => {
+        return cachedFetchEntity(item.id);
+      })
+    ),
+  ]);
 
   return {
     triples: entity?.triples ?? [],
@@ -135,6 +148,8 @@ const getData = async (spaceId: string, entityId: string) => {
 
     // For entity page editor
     blockIdsTriple,
-    blockTriples,
+    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
+    blockCollectionItems,
+    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
   };
 };

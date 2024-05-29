@@ -1,6 +1,6 @@
 import type { Op } from '../..'
 import { createGeoId } from '../id'
-import { Edit, IpfsContentType, Op as OpBinary, OpType, Payload } from '../proto/ipfs_pb'
+import { Edit, IpfsContentType, Op as OpBinary, OpType, Payload } from './ipfs_pb'
 
 function stringToBytes(text: string) {
   return Uint8Array.from(Array.from(text).map(letter => letter.charCodeAt(0)))

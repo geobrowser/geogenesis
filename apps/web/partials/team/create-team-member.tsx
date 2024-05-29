@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { createGeoId } from '@geogenesis/sdk';
 import { useAtom, useSetAtom } from 'jotai';
 
 import { useCallback, useRef, useState } from 'react';
@@ -12,7 +11,6 @@ import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
 import { Images } from '~/core/utils/images';
-import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';

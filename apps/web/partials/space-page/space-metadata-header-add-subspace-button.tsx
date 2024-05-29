@@ -1,9 +1,5 @@
 'use client';
 
-import { getAcceptSubspaceArguments } from '@geogenesis/sdk';
-
-import { Services } from '~/core/services';
-
 export function AddSubspaceButton() {
   return (
     <>

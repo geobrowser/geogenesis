@@ -1,5 +1,6 @@
-import { Op, createContentProposal, createEditProposal, getProcessGeoProposalArguments } from '@geogenesis/sdk';
+import { Op, getProcessGeoProposalArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
 import { PrivateKeyAccount, PublicClient, WalletClient } from 'viem';

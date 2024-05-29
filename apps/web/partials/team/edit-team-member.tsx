@@ -2,7 +2,6 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
-import { createGeoId } from '@geogenesis/sdk';
 import cx from 'classnames';
 import Link from 'next/link';
 
@@ -16,7 +15,6 @@ import { Services } from '~/core/services';
 import { Triple as TripleType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
-import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
