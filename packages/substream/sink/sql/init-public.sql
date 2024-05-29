@@ -16,6 +16,8 @@ CREATE TABLE public.entities (
     id text PRIMARY KEY,
     name character varying,
     description character varying,
+    cover text,
+    avatar text,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,

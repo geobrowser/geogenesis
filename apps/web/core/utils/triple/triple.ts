@@ -54,6 +54,7 @@ export function emptyValue(type: TripleValueType): Value {
     IMAGE: {
       type: 'IMAGE',
       value: '',
+      image: '',
     },
     TIME: {
       type: 'TIME',
@@ -169,6 +170,9 @@ export const getValue = (triple: Triple): string | null => {
     case 'TIME':
     case 'URL':
     case 'COLLECTION':
+      return triple.value.value;
+    case 'IMAGE':
+      return triple.value.image;
     case 'CHECKBOX':
       throw new Error('checkbox not supported');
   }
@@ -187,6 +191,24 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
         payload: {
           entityId: t.entityId,
           attributeId: t.attributeId,
+        },
+      };
+    }
+
+    // We store image entities as an `IMAGE` value type in the app to make
+    // rendering them more ergonomic. Before publishing we need to map this
+    // representation back to the protocol's expectation representation for
+    // images which is an `ENTITY` value type.
+    if (t.value.type === 'IMAGE') {
+      return {
+        type: 'SET_TRIPLE',
+        payload: {
+          entityId: t.entityId,
+          attributeId: t.attributeId,
+          value: {
+            type: 'ENTITY',
+            value: t.value.value,
+          },
         },
       };
     }

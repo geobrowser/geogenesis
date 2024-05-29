@@ -1,6 +1,7 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
+import { createGeoId } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import { Command } from 'cmdk';
@@ -20,6 +21,7 @@ import { fetchProfile } from '~/core/io/subgraph';
 import { Services } from '~/core/services';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { OmitStrict, Triple } from '~/core/types';
+import { Images } from '~/core/utils/images';
 import { NavUtils, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
@@ -95,7 +97,7 @@ export const CreateProfileDialog = () => {
 
       // Add triples for a Person entity
       if (name !== '') {
-        const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
+        triples.push({
           entityId: onchainProfile.id,
           entityName: name ?? '',
           attributeId: SYSTEM_IDS.NAME,
@@ -105,16 +107,20 @@ export const CreateProfileDialog = () => {
             type: 'TEXT',
             value: name,
           },
-        };
-
-        triples.push({
-          id: ID.createTripleId(nameTripleWithoutId),
-          ...nameTripleWithoutId,
         });
       }
 
       if (avatar !== '') {
-        const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
+        const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+          imageSource: Value.toImageValue(avatar),
+          spaceId: onchainProfile.homeSpaceId,
+        });
+
+        triples.push(typeTriple);
+        triples.push(urlTriple);
+
+        // Set the image entity reference on the current entity
+        triples.push({
           entityId: onchainProfile.id,
           entityName: name ?? '',
           attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
@@ -122,17 +128,13 @@ export const CreateProfileDialog = () => {
           space: onchainProfile.homeSpaceId,
           value: {
             type: 'IMAGE',
-            value: avatar,
+            value: typeTriple.entityId,
+            image: urlTriple.value.value,
           },
-        };
-
-        triples.push({
-          id: ID.createTripleId(avatarTripleWithoutId),
-          ...avatarTripleWithoutId,
         });
       }
 
-      const personTypeTriple: OmitStrict<Triple, 'id'> = {
+      triples.push({
         attributeId: SYSTEM_IDS.TYPES,
         attributeName: 'Types',
         entityId: onchainProfile.id,
@@ -143,9 +145,9 @@ export const CreateProfileDialog = () => {
           name: 'Person',
           value: SYSTEM_IDS.PERSON_TYPE,
         },
-      };
+      });
 
-      const spaceTypeTriple: OmitStrict<Triple, 'id'> = {
+      triples.push({
         attributeId: SYSTEM_IDS.TYPES,
         attributeName: 'Types',
         entityId: onchainProfile.id,
@@ -156,16 +158,6 @@ export const CreateProfileDialog = () => {
           name: 'Space',
           value: SYSTEM_IDS.SPACE_CONFIGURATION,
         },
-      };
-
-      triples.push({
-        id: ID.createTripleId(personTypeTriple),
-        ...personTypeTriple,
-      });
-
-      triples.push({
-        id: ID.createTripleId(spaceTypeTriple),
-        ...spaceTypeTriple,
       });
 
       try {

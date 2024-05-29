@@ -47,7 +47,7 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
           </Text>
         );
       case 'IMAGE':
-        return <ImageZoom key={`image-${triple.attributeId}-${triple.value.value}}`} imageSrc={triple.value.value} />;
+        return <ImageZoom key={`image-${triple.attributeId}-${triple.value.value}}`} imageSrc={triple.value.image} />;
       case 'TIME':
         return <DateField isEditing={false} value={triple.value.value} />;
       case 'URL':

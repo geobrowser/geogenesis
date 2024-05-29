@@ -82,7 +82,7 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
         }
 
         if (value.type === 'IMAGE') {
-          return <ImageZoom imageSrc={value.value} variant="avatar" />;
+          return <ImageZoom imageSrc={value.image} variant="avatar" />;
         }
 
         return <CellContent isExpanded={table.options?.meta?.expandedCells[cellId]} value={value.value} />;

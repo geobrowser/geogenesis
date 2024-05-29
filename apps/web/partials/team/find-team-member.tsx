@@ -2,6 +2,7 @@
 
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { createGeoId } from '@geogenesis/sdk';
 import cx from 'classnames';
 import { useAtom, useSetAtom } from 'jotai';
 
@@ -16,6 +17,7 @@ import { fetchEntityType } from '~/core/io/fetch-entity-type';
 import { Services } from '~/core/services';
 import { Entity as EntityType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
+import { Images } from '~/core/utils/images';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
@@ -69,17 +71,19 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
   const [, setToast] = useToast();
-  const { upsert } = useActionsStore();
+  const { upsertMany } = useActionsStore();
 
   const handleAddLinkedTeamMember = () => {
     if (!person || !name || !role) return;
 
     const linkedEntityId = person.id;
+    const triplesToWrite: Parameters<typeof upsertMany>[0] = [];
 
     // Add name attribute
     if (linkedName !== name) {
-      upsert(
-        {
+      // Add name attribute
+      triplesToWrite.push({
+        op: {
           type: 'SET_TRIPLE',
           entityId: linkedEntityId,
           entityName: name,
@@ -90,14 +94,31 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
             value: name,
           },
         },
-        spaceId
-      );
+        spaceId,
+      });
     }
 
     // Add avatar attribute
     if (avatar && linkedAvatar !== avatar) {
-      upsert(
-        {
+      const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+        imageSource: Value.toImageValue(avatar),
+        spaceId,
+      });
+
+      // Create the image entity
+      triplesToWrite.push({
+        op: { ...typeTriple, type: 'SET_TRIPLE' },
+        spaceId,
+      });
+      triplesToWrite.push({
+        op: { ...urlTriple, type: 'SET_TRIPLE' },
+        spaceId,
+      });
+
+      // Set the image entity reference on the current entity
+      triplesToWrite.push({
+        spaceId,
+        op: {
           type: 'SET_TRIPLE',
           entityId: linkedEntityId,
           entityName: name,
@@ -105,20 +126,20 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
           attributeName: 'Avatar',
           value: {
             type: 'IMAGE',
-            value: Value.toImageValue(avatar),
+            value: typeTriple.entityId,
+            image: Value.toImageValue(avatar),
           },
         },
-        spaceId
-      );
+      });
     }
 
     // Add role attribute
-    upsert(
-      {
+    triplesToWrite.push({
+      op: {
         type: 'SET_TRIPLE',
         entityId: linkedEntityId,
         entityName: name,
-        attributeId: ROLE_ATTRIBUTE,
+        attributeId: SYSTEM_IDS.ROLE_ATTRIBUTE,
         attributeName: 'Role',
         value: {
           type: 'ENTITY',
@@ -126,8 +147,10 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
           name: role.name,
         },
       },
-      spaceId
-    );
+      spaceId,
+    });
+
+    upsertMany(triplesToWrite);
 
     setHasAddedTeamMember(true);
     setToast(<TeamMemberCreatedToast name={name} entityId={linkedEntityId} spaceId={spaceId} linked={true} />);

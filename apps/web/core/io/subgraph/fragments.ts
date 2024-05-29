@@ -9,7 +9,19 @@ export const tripleFragment = `
   }
   entityValue {
     id
+    types {
+      nodes {
+        id
+      }
+    }
     name
+    triples {
+      nodes {
+        attributeId
+        textValue
+        valueType
+      }
+    }
   }
   numberValue
   collectionValue {
@@ -26,6 +38,7 @@ export const tripleFragment = `
               id
             }
           }
+          // @TODO: Also fetch the triples in case we're rendering an image
         }
       }
     }

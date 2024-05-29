@@ -377,7 +377,7 @@ export function useEditorStore() {
         return null;
       }
 
-      const { src } = node.attrs;
+      const { src, id } = node.attrs;
 
       upsert(
         {
@@ -386,7 +386,7 @@ export function useEditorStore() {
           entityName: getNodeName(node),
           attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
           attributeName: 'Image',
-          value: { type: 'IMAGE', value: Value.toImageValue(src) },
+          value: { type: 'IMAGE', value: id, image: Value.toImageValue(src) },
         },
         spaceId
       );

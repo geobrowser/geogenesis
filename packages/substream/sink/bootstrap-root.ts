@@ -43,6 +43,14 @@ const entities: string[] = [
   SYSTEM_IDS.AVATAR_ATTRIBUTE,
   SYSTEM_IDS.COVER_ATTRIBUTE,
 
+  // Compound types are value types that are stored as entities but are
+  // selectable as a "native" type for a triple's value type.
+  //
+  // e.g., you can select a Text value type, or a Number, or an Image. The
+  // image is stored as an entity while the others are stored as a primitive
+  // type in the database.
+  SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE,
+
   // Collections
   SYSTEM_IDS.COLLECTION_TYPE,
   SYSTEM_IDS.COLLECTION_ITEM_TYPE,
@@ -61,7 +69,10 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.VALUE_TYPE]: 'Value type',
   [SYSTEM_IDS.RELATION]: 'Relation',
   [SYSTEM_IDS.TEXT]: 'Text',
+
   [SYSTEM_IDS.IMAGE]: 'Image',
+  [SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE]: 'Image URL',
+
   [SYSTEM_IDS.DATE]: 'Date',
   [SYSTEM_IDS.WEB_URL]: 'Web URL',
   [SYSTEM_IDS.IMAGE_ATTRIBUTE]: 'Image',
@@ -82,6 +93,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.FILTER]: 'Filter',
   [SYSTEM_IDS.WALLETS_ATTRIBUTE]: 'Wallets',
   [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: 'Relation Value Types',
+
   [SYSTEM_IDS.COLLECTION_TYPE]: 'Collection',
   [SYSTEM_IDS.COLLECTION_ITEM_TYPE]: 'Collection Item',
   [SYSTEM_IDS.COLLECTION_ITEM_INDEX]: 'Index',
@@ -110,12 +122,13 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.COLLECTION_ITEM_INDEX]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.WEB_URL,
 };
 
 const types: Record<string, string[]> = {
   [SYSTEM_IDS.TEXT]: [],
   [SYSTEM_IDS.RELATION]: [],
-  [SYSTEM_IDS.IMAGE]: [],
+  [SYSTEM_IDS.IMAGE]: [SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE],
   [SYSTEM_IDS.DATE]: [],
   [SYSTEM_IDS.WEB_URL]: [],
   [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE],

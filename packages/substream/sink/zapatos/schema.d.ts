@@ -506,6 +506,18 @@ declare module 'zapatos/schema' {
       */
       description: string | null;
       /**
+      * **entities.cover**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      cover: string | null;
+      /**
+      * **entities.avatar**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      avatar: string | null;
+      /**
       * **entities.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -555,6 +567,18 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       description: string | null;
+      /**
+      * **entities.cover**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      cover: string | null;
+      /**
+      * **entities.avatar**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      avatar: string | null;
       /**
       * **entities.created_by_id**
       * - `text` in database
@@ -606,6 +630,18 @@ declare module 'zapatos/schema' {
       */
       description?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **entities.cover**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      cover?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **entities.avatar**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      avatar?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **entities.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -656,6 +692,18 @@ declare module 'zapatos/schema' {
       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
+      * **entities.cover**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      cover?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **entities.avatar**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      avatar?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
       * **entities.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -705,6 +753,18 @@ declare module 'zapatos/schema' {
       * - Nullable, no default
       */
       description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **entities.cover**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      cover?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **entities.avatar**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      avatar?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **entities.created_by_id**
       * - `text` in database

@@ -1,6 +1,6 @@
 import type { CreateTripleAction, DeleteTripleAction } from '../legacy';
 
-export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION' | 'IMAGE';
+export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';
 
 export type Value = {
   type: ValueType;

@@ -38,7 +38,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
   unpublishedColumns,
 }: Props) {
-  const { actionsFromSpace, upsert, remove } = useActionsStore(spaceId);
+  const { actionsFromSpace, upsert, remove, upsertMany } = useActionsStore(spaceId);
 
   const localTriples = pipe(
     Triple.merge(actionsFromSpace, column.triples),
@@ -62,6 +62,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
     },
     api: {
       upsert,
+      upsertMany,
       remove,
     },
   });

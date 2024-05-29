@@ -16,8 +16,12 @@ import { Triple } from '~/core/utils/triple';
 import { store } from '../jotai-store';
 import { db } from './indexeddb';
 
-const atomWithAsyncStorage = (initialValue: ITriple[] = []) => {
-  const baseAtom = atom<ITriple[]>(initialValue);
+interface StoredTriple extends ITriple {
+  id: string;
+}
+
+const atomWithAsyncStorage = (initialValue: StoredTriple[] = []) => {
+  const baseAtom = atom<StoredTriple[]>(initialValue);
 
   // baseAtom.onMount = setValue => {
   //   (async () => {
@@ -50,41 +54,63 @@ type StoreOp =
   | OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
 
 const upsert = (op: StoreOp, spaceId: string) => {
-  const triple: ITriple = {
-    id: getAppTripleId(op, spaceId),
-    entityId: op.entityId,
-    attributeId: op.attributeId,
-    value:
-      op.type === 'SET_TRIPLE'
-        ? op.value
-        : // We don't set value as null so just use placeholder value
-          {
-            type: 'TEXT',
-            value: '',
-          },
+  upsertMany([{ op, spaceId }]);
+};
 
-    entityName: op.type === 'SET_TRIPLE' ? op.entityName : null,
-    attributeName: op.type === 'SET_TRIPLE' ? op.attributeName : null,
-    space: spaceId,
-    hasBeenPublished: false,
-    isDeleted: false,
-    timestamp: Triple.timestamp(),
-    placeholder: false,
-  };
+const upsertMany = (ops: { op: StoreOp; spaceId: string }[]) => {
+  const triplesToWrite: StoredTriple[] = [];
 
-  const nonMatchingTriples = store.get(localTriplesAtom).filter(t => {
-    return t.id !== getAppTripleId(op, spaceId);
-  });
+  for (const { op, spaceId } of ops) {
+    const triple: StoredTriple = {
+      id: getAppTripleId(op, spaceId),
+      entityId: op.entityId,
+      attributeId: op.attributeId,
+      // How do we make this work well with local image triples? We want
+      // to store just the image itself to make rendering images easy,
+      // but that's not actually how we publish the images. Maybe we
+      // need to update it on Triple.prepareForPublishing...?
+      value:
+        op.type === 'SET_TRIPLE'
+          ? op.value
+          : // We don't set value as null so just use placeholder value
+            {
+              type: 'TEXT',
+              value: '',
+            },
 
-  if (op.type === 'DELETE_TRIPLE') {
-    triple.isDeleted = true;
+      entityName: op.type === 'SET_TRIPLE' ? op.entityName : null,
+      attributeName: op.type === 'SET_TRIPLE' ? op.attributeName : null,
+      space: spaceId,
+      hasBeenPublished: false,
+      isDeleted: false,
+      timestamp: Triple.timestamp(),
+      placeholder: false,
+    };
+
+    if (op.type === 'DELETE_TRIPLE') {
+      triple.isDeleted = true;
+    }
   }
 
-  store.set(localTriplesAtom, [...nonMatchingTriples, triple]);
+  // Can safely cast to string since we set the id above
+  const tripleIdsToWrite = new Set(triplesToWrite.map(t => t.id as string));
+
+  // Unchanged triples aren't included in the existing set of triples
+  // being upserted
+  const unchangedTriples = store.get(localTriplesAtom).filter(t => {
+    return !tripleIdsToWrite.has(t.id);
+  });
+
+  store.set(localTriplesAtom, [...unchangedTriples, ...triplesToWrite]);
 };
 
 const restore = (spaceActions: SpaceTriples) => {
-  const newActionsAsArray = Object.values(spaceActions).flatMap(actions => actions);
+  const newActionsAsArray = Object.values(spaceActions)
+    .flatMap(actions => actions)
+    .map(t => ({
+      ...t,
+      id: getAppTripleId(t, t.space),
+    }));
   store.set(localTriplesAtom, newActionsAsArray);
 };
 
@@ -100,7 +126,12 @@ const clear = (spaceId?: string) => {
 
 // @TODO: This is the same as restore
 const addActionsToSpaces = (spaceActions: SpaceTriples) => {
-  const newActionsAsArray = Object.values(spaceActions).flatMap(actions => actions);
+  const newActionsAsArray = Object.values(spaceActions)
+    .flatMap(actions => actions)
+    .map(t => ({
+      ...t,
+      id: getAppTripleId(t, t.space),
+    }));
   store.set(localTriplesAtom, newActionsAsArray);
 };
 
@@ -163,6 +194,7 @@ export function useActions(spaceId?: string) {
 
       addActions: setActions,
       upsert,
+      upsertMany,
       remove,
       clear,
 
@@ -181,6 +213,7 @@ export function useActions(spaceId?: string) {
 
     addActions: setActions,
     upsert,
+    upsertMany,
     remove,
     clear,
 

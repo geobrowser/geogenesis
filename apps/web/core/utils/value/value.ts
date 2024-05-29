@@ -35,7 +35,7 @@ export function timeValue(triple?: Triple) {
 }
 
 export function imageValue(triple: Triple) {
-  return triple.value.type === 'IMAGE' ? triple.value.value : null;
+  return triple.value.type === 'IMAGE' ? triple.value.image : null;
 }
 
 // Get the image triple value from an image path
