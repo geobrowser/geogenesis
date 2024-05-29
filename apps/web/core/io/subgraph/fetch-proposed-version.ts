@@ -174,7 +174,7 @@ export async function fetchProposedVersion({
   return {
     ...proposedVersion,
     space: spaceWithMetadata,
-    ops: fromNetworkOps(proposedVersion.actions.nodes, proposedVersion.space.id),
+    ops: fromNetworkOps(proposedVersion.actions.nodes),
     createdBy: profile,
   };
 }

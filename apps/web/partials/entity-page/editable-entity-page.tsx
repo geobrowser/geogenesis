@@ -509,6 +509,47 @@ function EntityAttributes({
             </DeletableChipButton>
           </div>
         );
+      case 'COLLECTION': {
+        const isEmptyCollection = triple.value.items.length === 0;
+
+        if (isEmptyCollection) {
+          const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
+
+          return (
+            <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
+              <EntityTextAutocomplete
+                spaceId={spaceId}
+                key={`entity-${attributeId}-${triple.value.value}`}
+                placeholder="Add value..."
+                allowedTypes={relationTypes}
+                onDone={result =>
+                  triple.placeholder
+                    ? createEntityTripleFromPlaceholder(triple, result)
+                    : addEntityValue(attributeId, result)
+                }
+                itemIds={entityValueTriples
+                  .filter(triple => triple.attributeId === attributeId)
+                  .map(triple => triple.value.value)}
+                attributeId={attributeId}
+              />
+            </div>
+          );
+        }
+
+        // @TODO: Switch from an entity to a collection when adding another item
+        return triple.value.items.map(i => {
+          return (
+            <div key={`entity-${triple.attributeId}-${triple.value.value}-${i.value.value}}`} className="mt-1">
+              <DeletableChipButton
+                href={NavUtils.toEntity(triple.space, triple.value.value)}
+                onClick={() => removeOrResetEntityTriple(triple)}
+              >
+                {i.value.type === 'ENTITY' ? i.value.value : i.value.value}
+              </DeletableChipButton>
+            </div>
+          );
+        });
+      }
     }
   };
 

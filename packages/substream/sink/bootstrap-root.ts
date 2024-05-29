@@ -269,12 +269,11 @@ const getTypeTriples = () => {
           is_stale: false,
         },
 
-        // Create a triple on the type entity pointing to the new collection
         {
           entity_id: id,
           attribute_id: SYSTEM_IDS.ATTRIBUTES,
           value_type: 'COLLECTION',
-          entity_value_id: collectionEntityId,
+          collection_value_id: collectionEntityId,
           space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
           created_at: ROOT_SPACE_CREATED_AT,

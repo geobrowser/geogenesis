@@ -33,6 +33,19 @@ type Identifiable = {
   id: string;
 };
 
+type SubstreamCollectionItem = {
+  collectionItemEntityId: string;
+  index: string;
+  entity: {
+    id: string;
+    name: string | null;
+    types: { nodes: SubstreamType[] };
+    triples: {
+      nodes: SubstreamImageValueTriple[];
+    };
+  };
+};
+
 type SubstreamNumberValue = { valueType: 'NUMBER'; numberValue: string };
 type SubstreamTextValue = { valueType: 'TEXT'; textValue: string };
 type SubstreamEntityValue = {
@@ -58,18 +71,7 @@ type SubstreamCollectionValue = {
   collectionValue: {
     id: string;
     collectionItems: {
-      nodes: {
-        collectionItemEntityId: string;
-        index: string;
-        entity: {
-          id: string;
-          name: string | null;
-          types: { nodes: SubstreamType[] };
-          triples: {
-            nodes: SubstreamImageValueTriple[];
-          };
-        };
-      }[];
+      nodes: SubstreamCollectionItem[];
     };
   };
 };
@@ -232,7 +234,6 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
   switch (networkAction.valueType) {
     case 'TEXT':
       return { type: 'TEXT', value: networkAction.textValue };
-
     case 'NUMBER':
       return { type: 'NUMBER', value: networkAction.numberValue };
     case 'ENTITY': {
@@ -327,7 +328,7 @@ export function fromNetworkTriples(networkTriples: SubstreamTriple[]): Triple[] 
     .flatMap(triple => (triple ? [triple] : []));
 }
 
-export function fromNetworkOps(networkOps: SubstreamOp[], spaceId: string): AppOp[] {
+export function fromNetworkOps(networkOps: SubstreamOp[]): AppOp[] {
   try {
     const newActions = networkOps
       .map(networkOp => {

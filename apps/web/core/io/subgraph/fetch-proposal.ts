@@ -254,7 +254,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
         ...v,
         createdBy: profile,
         space: spaceWithMetadata,
-        actions: fromNetworkOps(v.actions.nodes, proposal.space.id),
+        actions: fromNetworkOps(v.actions.nodes),
       };
     }),
   };
