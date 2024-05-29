@@ -21,6 +21,7 @@ interface Props {
   space: string;
   triples: Triple[];
   upsert: ReturnType<typeof useActionsStore>['upsert'];
+  upsertMany: ReturnType<typeof useActionsStore>['upsertMany'];
   remove: ReturnType<typeof useActionsStore>['remove'];
   valueType: string;
   columnName: string;
@@ -32,6 +33,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   space,
   triples,
   upsert,
+  upsertMany,
   remove,
   columnName,
   valueType,
@@ -45,6 +47,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     },
     api: {
       upsert,
+      upsertMany,
       remove,
     },
   });

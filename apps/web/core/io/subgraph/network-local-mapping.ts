@@ -1,6 +1,7 @@
 import { ProposalStatus, ProposalType, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { getAppTripleId } from '~/core/id/create-id';
 import {
   AppOp,
   CollectionItem,

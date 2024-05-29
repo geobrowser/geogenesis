@@ -5,3 +5,4 @@ export { getProcessGeoProposalArguments, getAcceptSubspaceArguments, getAcceptEd
 export { createCollection, createCollectionItem, reorderCollectionItem } from './src/collections';
 export { createContentProposal, createSubspaceProposal, createMembershipProposal, createEditProposal } from './src/proposals';
 export { SYSTEM_IDS } from './src/system-ids'
+export {createImageEntityOps} from './src/create-image-entity'

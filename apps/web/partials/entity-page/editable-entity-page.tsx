@@ -57,7 +57,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     attributeRelationTypes,
   } = useEntityPageStore();
 
-  const { remove, upsert } = useActionsStore();
+  const { remove, upsert, upsertMany } = useActionsStore();
 
   const { actionsFromSpace } = useActionsStore(spaceId);
   const { subgraph, config } = Services.useServices();
@@ -82,6 +82,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     api: {
       upsert,
       remove,
+      upsertMany,
     },
   });
 

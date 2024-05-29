@@ -11,6 +11,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
+import { Images } from '~/core/utils/images';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
@@ -51,16 +52,17 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
   const [, setToast] = useToast();
-  const { upsert } = useActionsStore();
+  const { upsertMany } = useActionsStore();
 
   const handleAddUnlinkedTeamMember = () => {
     if (!name || !role) return;
 
     const newEntityId = ID.createEntityId();
+    const triplesToWrite: Parameters<typeof upsertMany>[0] = [];
 
     // Add name attribute
-    upsert(
-      {
+    triplesToWrite.push({
+      op: {
         type: 'SET_TRIPLE',
         entityId: newEntityId,
         entityName: name,
@@ -71,13 +73,30 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
           value: name,
         },
       },
-      spaceId
-    );
+      spaceId,
+    });
 
     // Add avatar attribute
     if (avatar) {
-      upsert(
-        {
+      const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+        imageSource: Value.toImageValue(avatar),
+        spaceId,
+      });
+
+      // Create the image entity
+      triplesToWrite.push({
+        op: { ...typeTriple, type: 'SET_TRIPLE' },
+        spaceId,
+      });
+      triplesToWrite.push({
+        op: { ...urlTriple, type: 'SET_TRIPLE' },
+        spaceId,
+      });
+
+      // Set the image entity reference on the current entity
+      triplesToWrite.push({
+        spaceId,
+        op: {
           type: 'SET_TRIPLE',
           entityId: newEntityId,
           entityName: name,
@@ -85,18 +104,16 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
           attributeName: 'Avatar',
           value: {
             type: 'IMAGE',
-            // @TODO: Create the image entity
-            value: createGeoId(),
+            value: typeTriple.entityId,
             image: Value.toImageValue(avatar),
           },
         },
-        spaceId
-      );
+      });
     }
 
     // Add role attribute
-    upsert(
-      {
+    triplesToWrite.push({
+      op: {
         type: 'SET_TRIPLE',
         entityId: newEntityId,
         entityName: name,
@@ -108,12 +125,12 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
           name: role.name,
         },
       },
-      spaceId
-    );
+      spaceId,
+    });
 
     // Add person type
-    upsert(
-      {
+    triplesToWrite.push({
+      op: {
         type: 'SET_TRIPLE',
         entityId: newEntityId,
         entityName: name,
@@ -125,8 +142,10 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
           name: 'Person',
         },
       },
-      spaceId
-    );
+      spaceId,
+    });
+
+    upsertMany(triplesToWrite);
 
     setHasAddedTeamMember(true);
     setToast(<TeamMemberCreatedToast name={name} entityId={newEntityId} spaceId={spaceId} linked={false} />);
