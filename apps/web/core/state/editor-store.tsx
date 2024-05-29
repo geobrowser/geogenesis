@@ -24,6 +24,12 @@ import { useEntityPageStore } from './entity-page-store/entity-store';
 
 const markdownConverter = new Showdown.Converter();
 
+// We don't care about the value of the collection item in the block editor or
+// any of the entity properties except the id.
+interface BlockCollectionItem extends OmitStrict<CollectionItem, 'value' | 'entity'> {
+  entityId: string;
+}
+
 /**
  * The editor store manages state for the entity page blocks editor, primarily
  * around transforming/mapping metadata for each block to our Geo entity format
@@ -88,7 +94,7 @@ export function useEditorStore() {
     // Map all of the triples for each collection item into a CollectionItem data structure.
     // If not all of the elements of the collection item exist we don't create the item.
     const items = Object.entries(collectionItemTriplesByCollectionItemId).map(
-      ([collectionItemId, items]): CollectionItem | null => {
+      ([collectionItemId, items]): BlockCollectionItem | null => {
         const index = items.find(i => Boolean(Collections.itemIndexValue(i)))?.value.value;
         const collectionId = items.find(i => Boolean(Collections.itemCollectionIdValue(i)))?.value.value;
         const entityId = items.find(i => Boolean(Collections.itemEntityIdValue(i)))?.value.value;
@@ -100,12 +106,7 @@ export function useEditorStore() {
         return {
           id: collectionItemId,
           collectionId,
-          // @TODO: it's actually an entity
-          entity: {
-            id: entityId,
-            name: null,
-            types: [],
-          },
+          entityId: entityId,
           index,
         };
       }
@@ -125,7 +126,7 @@ export function useEditorStore() {
   }, [allTriples, blocksCollectionId, initialBlockCollectionItemTriples]);
 
   const blockIds = React.useMemo(() => {
-    return collectionItems.map(ci => ci.entity.id);
+    return collectionItems.map(ci => ci.entityId);
   }, [collectionItems]);
 
   const blockTriples = React.useMemo(() => {
@@ -455,7 +456,7 @@ export function useEditorStore() {
       // which could cause performance problems in the app. We need more granular reactive state
       // from our store to prevent potentially re-rendering _everything_ that depends on the store
       // when changes are made anywhere.
-      const newCollectionItems: CollectionItem[] = [];
+      const newCollectionItems: BlockCollectionItem[] = [];
 
       for (const addedBlock of addedBlockIds) {
         const [typeOp, collectionOp, entityOp, indexOp] = createCollectionItem({
@@ -522,11 +523,11 @@ export function useEditorStore() {
         // same update tick. This is necessary as right now we don't update the Geo state
         // until the user blurs the editor. See the comment earlier in this function.
         const beforeCollectionItemIndex =
-          collectionItems.find(c => c.entity.id === beforeBlockIndex)?.index ??
-          newCollectionItems.find(c => c.entity.id === beforeBlockIndex)?.index;
+          collectionItems.find(c => c.entityId === beforeBlockIndex)?.index ??
+          newCollectionItems.find(c => c.entityId === beforeBlockIndex)?.index;
         const afterCollectionItemIndex =
-          collectionItems.find(c => c.entity.id === afterBlockIndex)?.index ??
-          newCollectionItems.find(c => c.entity.id === afterBlockIndex)?.index;
+          collectionItems.find(c => c.entityId === afterBlockIndex)?.index ??
+          newCollectionItems.find(c => c.entityId === afterBlockIndex)?.index;
 
         const newTripleOrdering = reorderCollectionItem({
           collectionItemId: indexOp.payload.entityId,
@@ -551,13 +552,7 @@ export function useEditorStore() {
 
         newCollectionItems.push({
           collectionId,
-          entity: {
-            id: entityOp.payload.value.value, // The id of the block the item points to
-            // These don't matter. All we care about is the entity id for the
-            // purpose of getting the index.
-            name: null,
-            types: [],
-          },
+          entityId: entityOp.payload.value.value, // The id of the block the item points to
           id: entityOp.payload.entityId, // The id of the collection item itself
           index: newTripleOrdering.payload.value.value,
         });
@@ -571,7 +566,7 @@ export function useEditorStore() {
       // to delete.
       if (!removedBlockIds) return;
 
-      const removedCollectionItems = collectionItems.filter(c => removedBlockIds.includes(c.entity.id));
+      const removedCollectionItems = collectionItems.filter(c => removedBlockIds.includes(c.entityId));
 
       // Delete all collection items referencing the removed blocks
       removedCollectionItems.forEach(c => {

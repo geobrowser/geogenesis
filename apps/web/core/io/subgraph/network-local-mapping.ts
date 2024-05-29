@@ -1,7 +1,6 @@
 import { ProposalStatus, ProposalType, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { getAppTripleId } from '~/core/id/create-id';
 import {
   AppOp,
   CollectionItem,
@@ -16,33 +15,45 @@ import {
 } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
 
-type NetworkNumberValue = { valueType: 'NUMBER'; numberValue: string };
-type NetworkTextValue = { valueType: 'TEXT'; textValue: string };
-type NetworkEntityValue = {
+interface SubstreamType {
+  id: string;
+}
+
+type SubstreamImageValueTriple = {
+  valueType: string;
+  attributeId: string;
+  textValue: string;
+};
+
+type Nameable = {
+  name: string | null;
+};
+
+type Identifiable = {
+  id: string;
+};
+
+type SubstreamNumberValue = { valueType: 'NUMBER'; numberValue: string };
+type SubstreamTextValue = { valueType: 'TEXT'; textValue: string };
+type SubstreamEntityValue = {
   valueType: 'ENTITY';
   entityValue: {
     id: string;
     name: string | null;
     types: {
-      nodes: {
-        id: string;
-      }[];
+      nodes: SubstreamType[];
     };
     // We only fetch the triples that matter for the compound types that
     // we might be rendering. e.g., an Entity might be of type "Image",
     // in which case we need the textValue of the IMAGE_URL attribute triple.
     triples: {
-      nodes: {
-        valueType: string;
-        attributeId: string;
-        textValue: string;
-      }[];
+      nodes: SubstreamImageValueTriple[];
     };
   };
 };
-type NetworkTimeValue = { valueType: 'TIME'; textValue: string };
-type NetworkUrlValue = { valueType: 'URL'; textValue: string };
-type NetworkCollectionValue = {
+type SubstreamTimeValue = { valueType: 'TIME'; textValue: string };
+type SubstreamUrlValue = { valueType: 'URL'; textValue: string };
+type SubstreamCollectionValue = {
   valueType: 'COLLECTION';
   collectionValue: {
     id: string;
@@ -53,24 +64,27 @@ type NetworkCollectionValue = {
         entity: {
           id: string;
           name: string | null;
-          types: { nodes: { id: string }[] };
+          types: { nodes: SubstreamType[] };
+          triples: {
+            nodes: SubstreamImageValueTriple[];
+          };
         };
       }[];
     };
   };
 };
 
-type NetworkValue =
-  | NetworkNumberValue
-  | NetworkTextValue
-  | NetworkEntityValue
-  | NetworkTimeValue
-  | NetworkUrlValue
-  | NetworkCollectionValue;
+type SubstreamValue =
+  | SubstreamNumberValue
+  | SubstreamTextValue
+  | SubstreamEntityValue
+  | SubstreamTimeValue
+  | SubstreamUrlValue
+  | SubstreamCollectionValue;
 
-export type SubstreamTriple = NetworkValue & {
-  entity: { id: string; name: string | null };
-  attribute: { id: string; name: string | null };
+export type SubstreamTriple = SubstreamValue & {
+  entity: Identifiable & Nameable;
+  attribute: Identifiable & Nameable;
   space: Space;
 };
 
@@ -81,7 +95,7 @@ type CreatedBy = {
 };
 
 export type SubstreamOp = OmitStrict<SubstreamTriple, 'space'> &
-  NetworkValue & {
+  SubstreamValue & {
     id: string;
     type: 'SET_TRIPLE' | 'DELETE_TRIPLE';
     // @TODO: This should be a reference
@@ -95,11 +109,7 @@ export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
 export type SubstreamImage = {
   id: string;
   triples: {
-    nodes: {
-      valueType: string;
-      attributeId: string;
-      textValue: string;
-    }[];
+    nodes: SubstreamImageValueTriple[];
   };
 };
 
@@ -107,7 +117,6 @@ export type SubstreamSpace = { id: string; metadata: { nodes: SubstreamEntity[] 
 
 export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy' | 'space'> & {
   actions: { nodes: SubstreamOp[] };
-
   createdBy: CreatedBy;
   space: SubstreamSpace;
 };
@@ -152,20 +161,19 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
     case 'NUMBER':
       return { type: 'NUMBER', value: networkTriple.numberValue };
     case 'ENTITY': {
-      // The entity is an image
-      if (networkTriple.entityValue.types.nodes.some(t => t.id === SYSTEM_IDS.IMAGE)) {
+      // We render certain types of Entities differently as a triple value than others.
+      // For example, for a "regular" Entity we render the name in a chip, but for an
+      // "image" Entity we want to render a specific triple's value which contains the
+      // image resource url.
+      if (isImageEntity(networkTriple.entityValue.types.nodes)) {
         // Image values are stored in the data model as an entity with triple with
         // a "IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
         // be a URL pointing to the resource location of the image contents,
         // usually an IPFS hash.
-        const imageValueTriple = networkTriple.entityValue.triples.nodes.find(
-          t => t.attributeId === SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE
-        );
-
         return {
           type: 'IMAGE',
           value: networkTriple.entityValue.id,
-          image: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
+          image: getImageUrlFromImageEntity(networkTriple.entityValue.triples.nodes) ?? '',
         };
       }
 
@@ -184,6 +192,23 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
         type: 'COLLECTION',
         value: networkTriple.collectionValue.id,
         items: networkTriple.collectionValue.collectionItems.nodes.map((c): CollectionItem => {
+          if (isImageEntity(c.entity.types.nodes)) {
+            return {
+              id: c.collectionItemEntityId,
+              collectionId: networkTriple.collectionValue.id,
+              index: c.index,
+              entity: {
+                id: c.entity.id,
+                name: c.entity.name,
+                types: flattenTypeIds(c.entity.types.nodes),
+              },
+              value: {
+                type: 'IMAGE',
+                value: getImageUrlFromImageEntity(c.entity.triples.nodes),
+              },
+            };
+          }
+
           return {
             id: c.collectionItemEntityId,
             collectionId: networkTriple.collectionValue.id,
@@ -191,7 +216,11 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
             entity: {
               id: c.entity.id,
               name: c.entity.name,
-              types: c.entity.types.nodes.map(t => t.id),
+              types: flattenTypeIds(c.entity.types.nodes),
+            },
+            value: {
+              type: 'ENTITY',
+              value: c.entity.name,
             },
           };
         }),
@@ -207,20 +236,19 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
     case 'NUMBER':
       return { type: 'NUMBER', value: networkAction.numberValue };
     case 'ENTITY': {
-      // The entity is an image
-      if (networkAction.entityValue.types.nodes.some(t => t.id === SYSTEM_IDS.IMAGE)) {
+      // We render certain types of Entities differently as a triple value than others.
+      // For example, for a "regular" Entity we render the name in a chip, but for an
+      // "image" Entity we want to render a specific triple's value which contains the
+      // image resource url.
+      if (isImageEntity(networkAction.entityValue.types.nodes)) {
         // Image values are stored in the data model as an entity with triple with
         // a "IMAGE_COMPOUND_TYPE_SOURCE_ATTRIBUTE" attribute. The value of this triple should
         // be a URL pointing to the resource location of the image contents,
         // usually an IPFS hash.
-        const imageValueTriple = networkAction.entityValue.triples.nodes.find(
-          t => t.attributeId === SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE
-        );
-
         return {
           type: 'IMAGE',
           value: networkAction.entityValue.id,
-          image: imageValueTriple?.valueType === 'URL' ? imageValueTriple.textValue : '',
+          image: getImageUrlFromImageEntity(networkAction.entityValue.triples.nodes) ?? '',
         };
       }
 
@@ -379,4 +407,17 @@ export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamE
       };
 
   return spaceConfigWithImage;
+}
+
+function getImageUrlFromImageEntity(triples: SubstreamImageValueTriple[]): string | null {
+  const triple = triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE);
+  return triple?.valueType === 'URL' ? triple.textValue : null;
+}
+
+function isImageEntity(types: SubstreamType[]): boolean {
+  return types.some(t => t.id === SYSTEM_IDS.IMAGE);
+}
+
+function flattenTypeIds(types: SubstreamType[]) {
+  return types.map(t => t.id);
 }

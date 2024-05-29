@@ -292,9 +292,16 @@ export type CollectionItem = {
   collectionId: string; // pointing to the collection referenced by the collection item
   // @TODO: It's an actual entity
   entity: {
+    // pointing to the entity referenced by the collection item
     id: string;
     name: string | null;
     types: string[];
-  }; // pointing to the entity referenced by the collection item
+  };
+  value: {
+    type: 'IMAGE' | 'ENTITY';
+    // either the name of the thing we're rendering or the image or null in the  case that
+    // it's an entity value type but does not have a name
+    value: string | null;
+  };
   index: string; // the order of the item in the list
 };
