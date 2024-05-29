@@ -78,7 +78,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { upsert, remove, actions } = useActionsStore();
+    const { upsert, remove, actions, upsertMany } = useActionsStore();
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -117,6 +117,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           cell={cellData}
           upsert={upsert}
           remove={remove}
+          upsertMany={upsertMany}
           space={space}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}
