@@ -261,6 +261,16 @@ function EntityAttributes({
     });
   };
 
+  const deleteCollectionItem = (collectionItemId: string, collectionTriple: Triple) => {
+    send({
+      type: 'DELETE_COLLECTION_ITEM',
+      payload: {
+        collectionItemId,
+        collectionTriple: collectionTriple as TripleWithCollectionValue,
+      },
+    });
+  };
+
   const linkAttribute = (
     oldAttributeId: string,
     attribute: {
@@ -553,7 +563,7 @@ function EntityAttributes({
             <div key={`entity-${triple.attributeId}-${triple.value.value}-${i.value.value}}`} className="mt-1">
               <DeletableChipButton
                 href={NavUtils.toEntity(triple.space, triple.value.value)}
-                onClick={() => removeOrResetEntityTriple(triple)}
+                onClick={() => deleteCollectionItem(i.id, triple)}
               >
                 {i.value.type === 'ENTITY' ? i.value.value : i.value.value}
               </DeletableChipButton>

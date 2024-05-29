@@ -191,6 +191,13 @@ export type EditEvent =
         entity: EntitySearchResult;
         collectionTriple: TripleWithCollectionValue;
       };
+    }
+  | {
+      type: 'DELETE_COLLECTION_ITEM';
+      payload: {
+        collectionItemId: string;
+        collectionTriple: TripleWithCollectionValue;
+      };
     };
 
 interface EditApi {
@@ -673,8 +680,6 @@ const listener =
           spaceId,
         });
 
-        // @TODO: We should probably update the collection triple here
-        // instead of in `merge`
         const newCollectionTriple: TripleWithCollectionValue = {
           ...collectionTriple,
           value: {
@@ -710,6 +715,49 @@ const listener =
             };
           })
         );
+      }
+      case 'DELETE_COLLECTION_ITEM': {
+        const { collectionItemId, collectionTriple } = event.payload;
+        const { spaceId } = context;
+
+        remove(
+          {
+            attributeId: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
+            entityId: collectionItemId,
+          },
+          spaceId
+        );
+        remove(
+          {
+            attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
+            entityId: collectionItemId,
+          },
+          spaceId
+        );
+        remove(
+          {
+            attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
+            entityId: collectionItemId,
+          },
+          spaceId
+        );
+        remove(
+          {
+            attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
+            entityId: collectionItemId,
+          },
+          spaceId
+        );
+
+        const newCollectionTriple: TripleWithCollectionValue = {
+          ...collectionTriple,
+          value: {
+            ...collectionTriple.value,
+            items: collectionTriple.value.items.filter(i => i.id !== collectionItemId),
+          },
+        };
+
+        upsert({ ...newCollectionTriple, type: 'SET_TRIPLE' }, spaceId);
       }
     }
   };
