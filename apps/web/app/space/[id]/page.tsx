@@ -1,4 +1,4 @@
-import { COMPANY_TYPE, NONPROFIT_TYPE, PERSON_TYPE, TYPES } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -140,13 +140,13 @@ const getData = async (spaceId: string) => {
 export type SpacePageType = 'person' | 'company' | 'nonprofit';
 
 const getSpaceType = (triples: Array<ITriple>): SpacePageType | null => {
-  const typeTriples = triples.filter(triple => triple.attributeId === TYPES);
+  const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
 
-  if (typeTriples.some(triple => Value.entityValue(triple) === PERSON_TYPE)) {
+  if (typeTriples.some(triple => Value.entityValue(triple) === SYSTEM_IDS.PERSON_TYPE)) {
     return 'person';
-  } else if (typeTriples.some(triple => Value.entityValue(triple) === COMPANY_TYPE)) {
+  } else if (typeTriples.some(triple => Value.entityValue(triple) === SYSTEM_IDS.COMPANY_TYPE)) {
     return 'company';
-  } else if (typeTriples.some(triple => Value.entityValue(triple) === NONPROFIT_TYPE)) {
+  } else if (typeTriples.some(triple => Value.entityValue(triple) === SYSTEM_IDS.NONPROFIT_TYPE)) {
     return 'nonprofit';
   } else {
     return null;

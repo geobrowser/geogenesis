@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { getAddress } from 'viem';
 
 import { Entity as IEntity, Triple as ITriple, ValueType as TripleValueType } from '~/core/types';

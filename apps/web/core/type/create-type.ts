@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { useActionsStore } from '../hooks/use-actions-store';
 import { ID } from '../id';

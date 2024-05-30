@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Entity, Space, Triple } from '../types';
 import { ISubgraph, fetchEntities, fetchEntity, fetchTriples } from './subgraph';

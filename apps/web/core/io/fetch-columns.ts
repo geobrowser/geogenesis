@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 

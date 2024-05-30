@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Subgraph } from '~/core/io/';
 import { fetchVersion } from '~/core/io/subgraph/fetch-version';

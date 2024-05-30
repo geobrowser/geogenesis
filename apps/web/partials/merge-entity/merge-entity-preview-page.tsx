@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Triple } from '~/core/types';
 import { NavUtils, groupBy } from '~/core/utils/utils';

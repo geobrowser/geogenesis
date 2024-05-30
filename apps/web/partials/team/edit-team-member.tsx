@@ -1,7 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 import Link from 'next/link';
 
@@ -216,7 +215,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     }
 
     // Role conditions
-    const spaceRole = spaceTriples.find(triple => triple.attributeId === ROLE_ATTRIBUTE);
+    const spaceRole = spaceTriples.find(triple => triple.attributeId === SYSTEM_IDS.ROLE_ATTRIBUTE);
     const hasChangedRole = roleEntityId !== initialRoleEntityId;
     const hasSpaceRole = !!spaceRole;
     const hasRole = !!roleEntityId && !!roleName;

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Op } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
 import { Effect } from 'effect';

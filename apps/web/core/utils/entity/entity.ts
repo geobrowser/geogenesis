@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { A, D, pipe } from '@mobily/ts-belt';
 
 import { AppOp, EntitySearchResult, Entity as IEntity, Triple as ITriple } from '~/core/types';

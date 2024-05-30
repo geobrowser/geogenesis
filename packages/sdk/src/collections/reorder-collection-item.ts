@@ -1,7 +1,6 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
 import { generateKeyBetween } from 'fractional-indexing';
+import { SYSTEM_IDS } from '../system-ids';
 
-import { createGeoId } from '../../';
 
 interface ReorderCollectionItemArgs {
   collectionItemId: string;
