@@ -49,7 +49,7 @@ const remove = (op: OmitStrict<StoreOp, 'type'>, spaceId: string) => {
 };
 
 // @TODO: Write about why we have FOUR representations for an op (store op, app op, substream op, ipfs op)
-type StoreOp =
+export type StoreOp =
   | OmitStrict<SetTripleAppOp, 'id'>
   | OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
 

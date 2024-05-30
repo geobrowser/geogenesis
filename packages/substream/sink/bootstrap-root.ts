@@ -2,7 +2,6 @@ import { SYSTEM_IDS, createCollectionItem, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as s from 'zapatos/schema';
 
-import { ROOT_SPACE_ADDRESS } from '../../ids/system-ids';
 import {
   INITIAL_COLLECTION_ITEM_INDEX,
   ROOT_SPACE_CREATED_AT,
@@ -230,11 +229,11 @@ const getTypeTriples = () => {
           const collectionItemTriples = createCollectionItem({
             collectionId: collectionEntityId,
             entityId: attributeId,
-            spaceId: ROOT_SPACE_ADDRESS,
+            spaceId: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
           });
 
           return collectionItemTriples.map(op =>
-            getTripleFromOp(op, ROOT_SPACE_ADDRESS, {
+            getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ADDRESS, {
               blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
               cursor: '',
               requestId: '',

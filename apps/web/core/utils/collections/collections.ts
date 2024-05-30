@@ -1,6 +1,6 @@
 import { SYSTEM_IDS, createCollectionItem } from '@geogenesis/sdk';
 
-import { Triple } from '~/core/types';
+import { CollectionItem, Triple } from '~/core/types';
 
 export function itemIndexValue(triple?: Triple): string | null {
   if (!triple) {
@@ -99,4 +99,36 @@ export function createCollectionItemTriples(args: OpsToTriplesArgs): Triple[] {
       },
     },
   ];
+}
+
+export function itemFromTriples(triples: Record<string, Triple[]>): CollectionItem[] {
+  const items = Object.entries(triples).map(([collectionItemId, items]): CollectionItem | null => {
+    const index = items.find(i => Boolean(itemIndexValue(i)))?.value.value;
+    const collectionId = items.find(i => Boolean(itemCollectionIdValue(i)))?.value.value;
+    const entityIdTriple = items.find(i => Boolean(itemEntityIdValue(i)));
+    const entityId = entityIdTriple?.value.value;
+    const entityName = entityIdTriple?.value.type === 'ENTITY' ? entityIdTriple?.value.name : null;
+
+    if (!(index && collectionId && entityId)) {
+      return null;
+    }
+
+    return {
+      id: collectionItemId,
+      collectionId,
+      entity: {
+        id: entityId,
+        name: entityName,
+        types: [],
+      },
+      index,
+      value: {
+        // @TODO: Image
+        type: 'ENTITY',
+        value: entityName,
+      },
+    };
+  });
+
+  return items.flatMap(c => (c ? [c] : []));
 }

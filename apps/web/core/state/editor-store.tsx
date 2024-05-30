@@ -405,7 +405,9 @@ export function useEditorStore() {
       // Returns the blockIds that exist in prevBlockIds, but do not exist in newBlockIds
       const removedBlockIds = A.difference(prevBlockIds, newBlockIds);
       const addedBlockIds = A.difference(newBlockIds, prevBlockIds);
-      const collectionId = existingBlocksCollectionId ? existingBlocksCollectionId : createCollection();
+      const collectionId = existingBlocksCollectionId
+        ? existingBlocksCollectionId
+        : createCollection().payload.entityId;
 
       if (!existingBlocksCollectionId && newBlockIds.length > 0) {
         upsert(
