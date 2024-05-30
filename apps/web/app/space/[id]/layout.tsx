@@ -68,6 +68,32 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       priority: 1 as const,
     },
     {
+      label: 'Posts',
+      href: `${NavUtils.toSpace(params.id)}/posts`,
+      priority: 1 as const,
+    },
+    // be sure to also restore actions in `generate-actions-for-company.ts`
+    // {
+    //   label: 'Products',
+    //   href: `${NavUtils.toSpace(params.id)}/products`,
+    //   priority: 1 as const,
+    // },
+    // {
+    //   label: 'Services',
+    //   href: `${NavUtils.toSpace(params.id)}/services`,
+    //   priority: 1 as const,
+    // },
+    {
+      label: 'Events',
+      href: `${NavUtils.toSpace(params.id)}/events`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Jobs',
+      href: `${NavUtils.toSpace(params.id)}/jobs`,
+      priority: 1 as const,
+    },
+    {
       label: 'Team',
       href: `${NavUtils.toSpace(params.id)}/team`,
       priority: 1 as const,
@@ -87,13 +113,13 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       priority: 1 as const,
     },
     {
-      label: 'Projects',
-      href: `${NavUtils.toSpace(params.id)}/projects`,
+      label: 'Posts',
+      href: `${NavUtils.toSpace(params.id)}/posts`,
       priority: 1 as const,
     },
     {
-      label: 'Posts',
-      href: `${NavUtils.toSpace(params.id)}/posts`,
+      label: 'Projects',
+      href: `${NavUtils.toSpace(params.id)}/projects`,
       priority: 1 as const,
     },
     {
@@ -120,6 +146,11 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       href: `${NavUtils.toSpace(params.id)}/posts`,
       priority: 1 as const,
     },
+    // {
+    //   label: 'Spaces',
+    //   href: `${NavUtils.toSpace(params.id)}/spaces`,
+    //   priority: 1 as const,
+    // },
     {
       label: 'Activity',
       href: `${NavUtils.toSpace(params.id)}/activity`,

@@ -1,23 +1,30 @@
 'use client';
 
+import { SYSTEM_IDS } from '@geogenesis/ids';
 import * as Tabs from '@radix-ui/react-tabs';
 import cx from 'classnames';
+import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
+import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 import { FetchEntitiesOptions } from '~/core/io/subgraph';
+import { cloneEntity } from '~/core/utils/contracts/clone-entity';
+
+import { cloneActionsAtom, cloneSpaceIdAtom, cloneSpaceNameAtom } from './atoms';
 
 export const Tools = () => {
   return (
-    <div>
+    <div className="focus:!outline-none *:focus:!outline-none">
       <h3 className="mb-8 font-mono text-3xl">Geo editor tools</h3>
-      <Tabs.Root defaultValue="fetchEntity" className="min-h-[100svh]">
+      <Tabs.Root defaultValue="fetchEntity" className="min-h-[100svh] focus:!outline-none">
         <Tabs.List className="flex border-b border-black bg-white px-2">
           <Trigger value="fetchEntity">fetch entity by ID</Trigger>
           <Trigger value="generateEntityIds">generate entity IDs</Trigger>
           <Trigger value="findEntities">find entities by space/type</Trigger>
+          <Trigger value="cloneEntity">clone entity into space</Trigger>
         </Tabs.List>
         <div className="mt-8 px-2">
           <Tabs.Content value="fetchEntity">
@@ -28,6 +35,9 @@ export const Tools = () => {
           </Tabs.Content>
           <Tabs.Content value="findEntities">
             <FindEntities />
+          </Tabs.Content>
+          <Tabs.Content value="cloneEntity">
+            <CloneEntity />
           </Tabs.Content>
         </div>
       </Tabs.Root>
@@ -101,6 +111,7 @@ const FetchEntity = () => {
     <form onSubmit={handleFetchEntityId}>
       <Input label="entity ID" value={entityId} onChange={({ currentTarget: { value } }: any) => setEntityId(value)} />
       <Button type="submit">fetch</Button>
+
       {entity && <Block>{entity}</Block>}
     </form>
   );
@@ -199,5 +210,45 @@ const FindEntities = () => {
       </div>
       {entities && <Block>{entities}</Block>}
     </form>
+  );
+};
+
+const CloneEntity = () => {
+  const [spaceName, setSpaceName] = useAtom(cloneSpaceNameAtom);
+  const [spaceId, setSpaceId] = useAtom(cloneSpaceIdAtom);
+  const [actions, setActions] = useAtom(cloneActionsAtom);
+
+  const { addActions } = useActionsStore();
+
+  const handleCloneEntity = async () => {
+    console.log(`cloning entity...`);
+    const newActions = await cloneEntity({
+      oldEntityId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
+      entityName: spaceName,
+      spaceId,
+    });
+    setActions(newActions);
+  };
+
+  const handleAddActions = async () => {
+    addActions(actions);
+  };
+
+  return (
+    <div className="space-y-4">
+      <Input
+        label="space name"
+        value={spaceName}
+        onChange={({ currentTarget: { value } }: any) => setSpaceName(value)}
+      />
+      <Input label="space ID" value={spaceId} onChange={({ currentTarget: { value } }: any) => setSpaceId(value)} />
+      <div className="flex gap-4">
+        <Button onClick={handleCloneEntity}>clone entity</Button>
+        {actions.length > 0 && <Button onClick={handleAddActions}>generate actions</Button>}
+      </div>
+      <div className="flex gap-4">
+        <Block className="aspect-[21/9] w-full overflow-y-scroll">{actions}</Block>
+      </div>
+    </div>
   );
 };
