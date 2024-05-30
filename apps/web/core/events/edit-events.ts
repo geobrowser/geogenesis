@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { createCollectionItem, createGeoId, createImageEntityOps } from '@geogenesis/sdk';
 
 import { useMemo } from 'react';

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { PROPOSAL_DURATION } from '~/core/constants';
 import { Subgraph } from '~/core/io';

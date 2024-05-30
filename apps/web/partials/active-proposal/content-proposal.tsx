@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import BoringAvatar from 'boring-avatars';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';

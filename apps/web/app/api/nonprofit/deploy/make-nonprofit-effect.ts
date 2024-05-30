@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Op as IOp } from '@geogenesis/sdk';
 import { LegacySpaceAbi } from '@geogenesis/sdk/legacy';
 import * as Effect from 'effect/Effect';

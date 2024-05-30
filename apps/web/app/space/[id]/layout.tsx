@@ -1,5 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 import { redirect } from 'next/navigation';
 import { v4 as uuid } from 'uuid';
@@ -62,7 +61,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       query: '',
       skip: 0,
       first: 1000,
-      filter: [{ field: 'attribute-id', value: ROLE_ATTRIBUTE }],
+      filter: [{ field: 'attribute-id', value: SYSTEM_IDS.ROLE_ATTRIBUTE }],
     });
 
     if (roleTriples.length > 0) {

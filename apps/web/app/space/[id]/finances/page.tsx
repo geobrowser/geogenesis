@@ -1,4 +1,4 @@
-import { FINANCE_OVERVIEW_TYPE } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Subgraph } from '~/core/io';
 
@@ -47,7 +47,7 @@ export default async function FinancesPage({ params, searchParams }: FinancesPag
 const getFinances = async (spaceId: string) => {
   const [financesEntity] = await Subgraph.fetchEntities({
     spaceId,
-    typeIds: [FINANCE_OVERVIEW_TYPE],
+    typeIds: [SYSTEM_IDS.FINANCE_OVERVIEW_TYPE],
     filter: [],
   });
 
