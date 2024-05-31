@@ -9,8 +9,7 @@ import * as React from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { Services } from '~/core/services';
-import { Triple as ITriple } from '~/core/types';
-import { Action } from '~/core/utils/action';
+import { Triple as ITriple, TripleWithCollectionValue } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
@@ -111,84 +110,104 @@ export function useEntityPageStore() {
     );
   }, [triples]);
 
-  const { data: schemaTriples } = useQuery({
-    initialData: createInitialSchemaTriples(spaceId, id),
-    queryKey: ['entity-page-schema-triples', spaceId, id, typeTriples],
-    queryFn: async ({ signal }) => {
-      if (typeTriples.length === 0) {
-        return [];
-      }
+  // const { data: schemaTriples } = useQuery({
+  //   initialData: createInitialSchemaTriples(spaceId, id),
+  //   queryKey: ['entity-page-schema-triples', spaceId, id, typeTriples],
+  //   queryFn: async ({ signal }) => {
+  //     if (typeTriples.length === 0) {
+  //       return [];
+  //     }
 
-      const attributesOnType = await Promise.all(
-        typeTriples.map(triple => {
-          return subgraph.fetchTriples({
-            query: '',
-            first: DEFAULT_PAGE_SIZE,
-            signal,
-            skip: 0,
-            filter: [
-              {
-                field: 'entity-id',
-                value: triple.value.type === 'ENTITY' ? triple.value.value : '',
-              },
-              {
-                field: 'attribute-id',
-                value: SYSTEM_IDS.ATTRIBUTES,
-              },
-            ],
-          });
-        })
-      );
+  //     const attributesOnType = await Promise.all(
+  //       typeTriples.map(triple => {
+  //         return subgraph.fetchTriples({
+  //           query: '',
+  //           first: DEFAULT_PAGE_SIZE,
+  //           signal,
+  //           skip: 0,
+  //           filter: [
+  //             {
+  //               field: 'entity-id',
+  //               value: triple.value.type === 'ENTITY' ? triple.value.value : '',
+  //             },
+  //             {
+  //               field: 'attribute-id',
+  //               value: SYSTEM_IDS.ATTRIBUTES,
+  //             },
+  //           ],
+  //         });
+  //       })
+  //     );
 
-      const attributeTriples = attributesOnType.flatMap(triples => triples);
+  //     const attributeTriples = attributesOnType.flatMap(triples => triples);
+  //     console.log('attributeTriples', { attributeTriples });
 
-      // @TODO: We can get the value type in the above query and parse it here instead
-      // of making another query.
-      const valueTypesForAttributes = await Promise.all(
-        attributeTriples.map(attribute => {
-          return subgraph.fetchTriples({
-            query: '',
-            first: DEFAULT_PAGE_SIZE,
-            skip: 0,
-            signal,
-            filter: [
-              {
-                field: 'entity-id',
-                value: attribute.value.type === 'ENTITY' ? attribute.value.value : '',
-              },
-              {
-                field: 'attribute-id',
-                value: SYSTEM_IDS.VALUE_TYPE,
-              },
-            ],
-          });
-        })
-      );
+  //     // @TODO: We can get the value type in the above query and parse it here instead
+  //     // of making another query.
 
-      const valueTypeTriples = valueTypesForAttributes.flatMap(triples => triples);
+  //     const valueTypesForAttributes = await Promise.all(
+  //       attributeTriples.map(attribute => {
+  //         return subgraph.fetchTriples({
+  //           query: '',
+  //           first: DEFAULT_PAGE_SIZE,
+  //           skip: 0,
+  //           signal,
+  //           filter: [
+  //             {
+  //               field: 'entity-id',
+  //               value: attribute.value.type === 'ENTITY' ? attribute.value.value : '',
+  //             },
+  //             {
+  //               field: 'attribute-id',
+  //               value: SYSTEM_IDS.VALUE_TYPE,
+  //             },
+  //           ],
+  //         });
+  //       })
+  //     );
 
-      const valueTypesToAttributesMap = attributeTriples.reduce<Record<string, ValueTypeId | undefined>>(
-        (acc, attribute) => {
-          acc[attribute.value.value] = valueTypeTriples.find(t => t.entityId === attribute.value.value)?.value
-            .value as ValueTypeId;
-          return acc;
-        },
-        {}
-      );
+  //     const valueTypeTriples = valueTypesForAttributes.flatMap(triples => triples);
+  //     console.log('test', valueTypeTriples);
 
-      const schemaTriples = attributeTriples.map(attribute => {
-        const valueType = valueTypesToAttributesMap[attribute.value.value];
+  //     const valueTypesToAttributesMap = attributeTriples.reduce<Record<string, ValueTypeId | undefined>>(
+  //       (acc, attribute) => {
+  //         if (attribute.value.type === 'COLLECTION') {
+  //           const collectionItems = (
+  //             valueTypeTriples.find(t => t.entityId === attribute.value.value) as TripleWithCollectionValue | undefined
+  //           )?.value.items;
 
-        return {
-          ...Triple.emptyPlaceholder(spaceId, id, valueType),
-          attributeId: attribute.value.value,
-          attributeName: Value.nameOfEntityValue(attribute),
-        };
-      });
+  //           if (collectionItems) {
+  //             for (const item of collectionItems) {
+  //               acc[item.entity.id] = '14611456b4664cab920d2245f59ce828';
+  //             }
+  //           }
 
-      return schemaTriples;
-    },
-  });
+  //           // acc[attribute.value.value] = collectionItems?.find(f => f.);
+
+  //           return acc;
+  //         }
+
+  //         acc[attribute.value.value] = valueTypeTriples.find(t => t.entityId === attribute.value.value)?.value
+  //           .value as ValueTypeId;
+  //         return acc;
+  //       },
+  //       {}
+  //     );
+
+  //     // @TODO: This doesn't work with collections
+  //     const schemaTriples = attributeTriples.map(attribute => {
+  //       const valueType = valueTypesToAttributesMap[attribute.value.value];
+
+  //       return {
+  //         ...Triple.emptyPlaceholder(spaceId, id, valueType),
+  //         attributeId: attribute.value.value,
+  //         attributeName: Value.nameOfEntityValue(attribute),
+  //       };
+  //     });
+
+  //     return schemaTriples;
+  //   },
+  // });
 
   const hideSchema = React.useCallback(
     (id: string) => {
@@ -207,7 +226,7 @@ export function useEntityPageStore() {
     spaceId,
     id,
 
-    schemaTriples,
+    schemaTriples: [],
     hideSchema,
     hiddenSchemaIds,
 

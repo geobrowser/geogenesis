@@ -26,7 +26,7 @@ import { ResultContent, ResultsList } from './results-list';
 interface Props {
   placeholder?: string;
   onDone: (result: { id: string; name: string | null; nameTripleSpace?: string }) => void;
-  itemIds: string[];
+  alreadySelectedIds: string[];
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
   attributeId?: string;
@@ -37,7 +37,7 @@ interface Props {
 
 export function EntityTextAutocomplete({
   placeholder,
-  itemIds,
+  alreadySelectedIds,
   onDone,
   allowedTypes,
   spaceId,
@@ -52,7 +52,7 @@ export function EntityTextAutocomplete({
     allowedTypes: allowedTypes?.map(type => type.typeId),
   });
   const containerRef = useRef<HTMLDivElement>(null);
-  const itemIdsSet = new Set(itemIds);
+  const itemIdsSet = new Set(alreadySelectedIds);
   const { spaces } = useSpaces();
 
   const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });

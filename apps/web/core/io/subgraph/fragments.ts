@@ -9,6 +9,7 @@ export const tripleFragment = `
     id
     name
   }
+  entityId
   entity {
     id
     name
