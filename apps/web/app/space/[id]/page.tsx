@@ -6,9 +6,7 @@ import * as React from 'react';
 import type { Metadata } from 'next';
 
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
-import { Triple as ITriple } from '~/core/types';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
