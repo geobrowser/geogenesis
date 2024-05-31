@@ -122,16 +122,7 @@ export function useEntityPageStore() {
       // The types on an entity is only ever one triple for a given space,
       // either a collection or an entity. We need to parse the contents
       // of the triple and fetch those here.
-      let typeTripleContents: string[] = [];
-      const typeTriple = typeTriples[0];
-
-      if (typeTriple.value.type === 'COLLECTION') {
-        typeTripleContents = typeTriple.value.items.map(i => i.entity.id);
-      }
-
-      if (typeTriple.value.type === 'ENTITY') {
-        typeTripleContents = [typeTriple.value.value];
-      }
+      const typeTripleContents = Value.idsForEntityorCollectionItems(typeTriples[0]);
 
       const maybeTypeEntities = await Promise.all(
         typeTripleContents.map(typeId => {
@@ -152,20 +143,7 @@ export function useEntityPageStore() {
         .flatMap(t => (t ? [t] : []));
 
       const attributeEntityIds = attributeTriples
-        .map(a => {
-          if (a.value.type === 'ENTITY') {
-            return [{ id: a.value.value, name: a.value.name }];
-          }
-
-          if (a.value.type === 'COLLECTION') {
-            return a.value.items.map(i => ({
-              id: i.entity.id,
-              name: i.entity.name,
-            }));
-          }
-
-          return null;
-        })
+        .map(a => Value.entitiesForEntityOrCollectionItems(a))
         // wat
         .flatMap(e => (e ? [e] : []))
         .flat();
