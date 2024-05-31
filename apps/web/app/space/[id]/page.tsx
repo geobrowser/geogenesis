@@ -73,7 +73,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function SpacePage({ params }: Props) {
   const spaceId = params.id;
   const props = await getData(spaceId);
-  const spaceType = getSpaceType(props.triples);
+  const spaceType = getSpaceType(props.spaceTypes);
 
   return (
     <>
@@ -133,23 +133,19 @@ const getData = async (spaceId: string) => {
     triples: entity?.triples ?? [],
     id: entity.id,
     spaceId,
+    spaceTypes: space?.spaceConfig?.types ?? [],
     subspaces: [],
   };
 };
 
 export type SpacePageType = 'person' | 'company' | 'nonprofit';
 
-// @TODO: Fetch the types on the entity directly instead of parsing the triples.
-// This is broken right now as the type triple might be an entity or might be
-// a collection.
-const getSpaceType = (triples: Array<ITriple>): SpacePageType | null => {
-  const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
-
-  if (typeTriples.some(triple => Value.entityValue(triple) === SYSTEM_IDS.PERSON_TYPE)) {
+const getSpaceType = (types: { id: string; name: string | null }[]): SpacePageType | null => {
+  if (types.some(type => type.id === SYSTEM_IDS.PERSON_TYPE)) {
     return 'person';
-  } else if (typeTriples.some(triple => Value.entityValue(triple) === SYSTEM_IDS.COMPANY_TYPE)) {
+  } else if (types.some(type => type.id === SYSTEM_IDS.COMPANY_TYPE)) {
     return 'company';
-  } else if (typeTriples.some(triple => Value.entityValue(triple) === SYSTEM_IDS.NONPROFIT_TYPE)) {
+  } else if (types.some(type => type.id === SYSTEM_IDS.NONPROFIT_TYPE)) {
     return 'nonprofit';
   } else {
     return null;

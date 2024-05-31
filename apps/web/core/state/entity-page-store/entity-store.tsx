@@ -111,7 +111,7 @@ export function useEntityPageStore() {
     );
   }, [triples]);
 
-  const { data: schemaTriples, isLoading } = useQuery({
+  const { data: schemaTriples } = useQuery({
     initialData: createInitialSchemaTriples(spaceId, id),
     queryKey: ['entity-page-schema-triples', spaceId, id, typeTriples],
     queryFn: async ({ signal }) => {

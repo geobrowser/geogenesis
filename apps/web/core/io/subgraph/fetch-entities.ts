@@ -164,7 +164,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
       name: result.name,
       description: Entity.description(triples),
       nameTripleSpaces: nameTriples.map(t => t.space),
-      types: Entity.types(triples),
+      types: result.types.nodes,
       triples,
     };
   });
