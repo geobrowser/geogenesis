@@ -8,12 +8,12 @@ import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
+import { useMergedData } from '~/core/hooks/use-merged-data';
 import { Services } from '~/core/services';
-import { Triple as ITriple, TripleWithCollectionValue } from '~/core/types';
+import { Triple as ITriple, TripleWithCollectionValue, ValueTypeId } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
-import { ValueTypeId } from '~/core/value-types';
 
 import { useEntityStoreInstance } from './entity-store-provider';
 
@@ -78,7 +78,7 @@ const DEFAULT_PAGE_SIZE = 100;
 export function useEntityPageStore() {
   const { spaceId, id, initialTriples } = useEntityStoreInstance();
   const { allActions } = useActionsStore();
-  const { subgraph } = Services.useServices();
+  const merged = useMergedData();
 
   const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: id });
 
@@ -103,6 +103,7 @@ export function useEntityPageStore() {
   /*
   In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to
   persist the Attribute field. Filtering out those entities here.
+  // @TODO: typeTriple singular
   */
   const typeTriples = React.useMemo(() => {
     return triples.filter(
@@ -110,104 +111,110 @@ export function useEntityPageStore() {
     );
   }, [triples]);
 
-  // const { data: schemaTriples } = useQuery({
-  //   initialData: createInitialSchemaTriples(spaceId, id),
-  //   queryKey: ['entity-page-schema-triples', spaceId, id, typeTriples],
-  //   queryFn: async ({ signal }) => {
-  //     if (typeTriples.length === 0) {
-  //       return [];
-  //     }
+  const { data: schemaTriples, isLoading } = useQuery({
+    initialData: createInitialSchemaTriples(spaceId, id),
+    queryKey: ['entity-page-schema-triples', spaceId, id, typeTriples],
+    queryFn: async ({ signal }) => {
+      if (typeTriples.length === 0) {
+        return [];
+      }
 
-  //     const attributesOnType = await Promise.all(
-  //       typeTriples.map(triple => {
-  //         return subgraph.fetchTriples({
-  //           query: '',
-  //           first: DEFAULT_PAGE_SIZE,
-  //           signal,
-  //           skip: 0,
-  //           filter: [
-  //             {
-  //               field: 'entity-id',
-  //               value: triple.value.type === 'ENTITY' ? triple.value.value : '',
-  //             },
-  //             {
-  //               field: 'attribute-id',
-  //               value: SYSTEM_IDS.ATTRIBUTES,
-  //             },
-  //           ],
-  //         });
-  //       })
-  //     );
+      // The types on an entity is only ever one triple for a given space,
+      // either a collection or an entity. We need to parse the contents
+      // of the triple and fetch those here.
+      let typeTripleContents: string[] = [];
+      const typeTriple = typeTriples[0];
 
-  //     const attributeTriples = attributesOnType.flatMap(triples => triples);
-  //     console.log('attributeTriples', { attributeTriples });
+      if (typeTriple.value.type === 'COLLECTION') {
+        typeTripleContents = typeTriple.value.items.map(i => i.entity.id);
+      }
 
-  //     // @TODO: We can get the value type in the above query and parse it here instead
-  //     // of making another query.
+      if (typeTriple.value.type === 'ENTITY') {
+        typeTripleContents = [typeTriple.value.value];
+      }
 
-  //     const valueTypesForAttributes = await Promise.all(
-  //       attributeTriples.map(attribute => {
-  //         return subgraph.fetchTriples({
-  //           query: '',
-  //           first: DEFAULT_PAGE_SIZE,
-  //           skip: 0,
-  //           signal,
-  //           filter: [
-  //             {
-  //               field: 'entity-id',
-  //               value: attribute.value.type === 'ENTITY' ? attribute.value.value : '',
-  //             },
-  //             {
-  //               field: 'attribute-id',
-  //               value: SYSTEM_IDS.VALUE_TYPE,
-  //             },
-  //           ],
-  //         });
-  //       })
-  //     );
+      const maybeTypeEntities = await Promise.all(
+        typeTripleContents.map(typeId => {
+          return merged.fetchEntity({
+            signal,
+            id: typeId,
+          });
+        })
+      );
 
-  //     const valueTypeTriples = valueTypesForAttributes.flatMap(triples => triples);
-  //     console.log('test', valueTypeTriples);
+      const typeEntities = maybeTypeEntities.flatMap(e => (e ? [e] : []));
 
-  //     const valueTypesToAttributesMap = attributeTriples.reduce<Record<string, ValueTypeId | undefined>>(
-  //       (acc, attribute) => {
-  //         if (attribute.value.type === 'COLLECTION') {
-  //           const collectionItems = (
-  //             valueTypeTriples.find(t => t.entityId === attribute.value.value) as TripleWithCollectionValue | undefined
-  //           )?.value.items;
+      // The value of these Attributes triple for each type can either be an
+      // Entity or a Collection. We need to map to the Attribute's id and
+      // name depending on the contents of the attribute.
+      const attributeTriples = typeEntities
+        .map(e => e.triples.find(t => t.attributeId === SYSTEM_IDS.ATTRIBUTES))
+        .flatMap(t => (t ? [t] : []));
 
-  //           if (collectionItems) {
-  //             for (const item of collectionItems) {
-  //               acc[item.entity.id] = '14611456b4664cab920d2245f59ce828';
-  //             }
-  //           }
+      const attributeEntityIds = attributeTriples
+        .map(a => {
+          if (a.value.type === 'ENTITY') {
+            return [{ id: a.value.value, name: a.value.name }];
+          }
 
-  //           // acc[attribute.value.value] = collectionItems?.find(f => f.);
+          if (a.value.type === 'COLLECTION') {
+            return a.value.items.map(i => ({
+              id: i.entity.id,
+              name: i.entity.name,
+            }));
+          }
 
-  //           return acc;
-  //         }
+          return null;
+        })
+        // wat
+        .flatMap(e => (e ? [e] : []))
+        .flat();
 
-  //         acc[attribute.value.value] = valueTypeTriples.find(t => t.entityId === attribute.value.value)?.value
-  //           .value as ValueTypeId;
-  //         return acc;
-  //       },
-  //       {}
-  //     );
+      // The contents returned here _should_ be a single entity and not a collection
+      const valueTypesForAttributes = await Promise.all(
+        attributeEntityIds.map(attribute => {
+          return merged.fetchTriples({
+            query: '',
+            first: DEFAULT_PAGE_SIZE,
+            skip: 0,
+            signal,
+            filter: [
+              {
+                field: 'entity-id',
+                value: attribute.id,
+              },
+              {
+                field: 'attribute-id',
+                value: SYSTEM_IDS.VALUE_TYPE,
+              },
+            ],
+          });
+        })
+      );
 
-  //     // @TODO: This doesn't work with collections
-  //     const schemaTriples = attributeTriples.map(attribute => {
-  //       const valueType = valueTypesToAttributesMap[attribute.value.value];
+      const valueTypeTriples = valueTypesForAttributes.flatMap(triples => triples);
 
-  //       return {
-  //         ...Triple.emptyPlaceholder(spaceId, id, valueType),
-  //         attributeId: attribute.value.value,
-  //         attributeName: Value.nameOfEntityValue(attribute),
-  //       };
-  //     });
+      const valueTypesToAttributesMap = attributeEntityIds.reduce<Record<string, ValueTypeId | undefined>>(
+        (acc, attribute) => {
+          acc[attribute.id] = valueTypeTriples.find(t => t.entityId === attribute.id)?.value.value as ValueTypeId;
+          return acc;
+        },
+        {}
+      );
 
-  //     return schemaTriples;
-  //   },
-  // });
+      const schemaTriples = attributeEntityIds.map(attribute => {
+        const valueType = valueTypesToAttributesMap[attribute.id];
+
+        return {
+          ...Triple.emptyPlaceholder(spaceId, id, valueType),
+          attributeId: attribute.id,
+          attributeName: attribute.name,
+        };
+      });
+
+      return schemaTriples;
+    },
+  });
 
   const hideSchema = React.useCallback(
     (id: string) => {
@@ -226,7 +233,7 @@ export function useEntityPageStore() {
     spaceId,
     id,
 
-    schemaTriples: [],
+    schemaTriples,
     hideSchema,
     hiddenSchemaIds,
 

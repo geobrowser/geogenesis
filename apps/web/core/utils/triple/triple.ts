@@ -1,25 +1,22 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Op } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
-import { Effect } from 'effect';
 
 import { ID } from '~/core/id';
 import { getAppTripleId } from '~/core/id/create-id';
-import { fetchEntity } from '~/core/io/subgraph';
 import {
   AppEntityValue,
   CollectionItem,
   OmitStrict,
   Triple,
   ValueType as TripleValueType,
-  TripleWithCollectionValue,
   Value,
+  ValueTypeId,
 } from '~/core/types';
-import { ValueTypeId, valueTypes } from '~/core/value-types';
+import { valueTypes } from '~/core/value-types';
 
 import { Collections } from '../collections';
 import { Entity } from '../entity';
-import { groupBy } from '../utils';
 
 export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {

@@ -1,13 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { ValueType as TripleValueType } from './types';
-
-export type ValueTypeId =
-  | typeof SYSTEM_IDS.TEXT
-  | typeof SYSTEM_IDS.RELATION
-  | typeof SYSTEM_IDS.IMAGE
-  | typeof SYSTEM_IDS.DATE
-  | typeof SYSTEM_IDS.WEB_URL;
+import { ValueType as TripleValueType, ValueTypeId } from './types';
 
 export const valueTypeIds: Record<TripleValueType, ValueTypeId> = {
   TEXT: SYSTEM_IDS.TEXT,

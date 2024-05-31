@@ -1,4 +1,4 @@
-import { ProposalStatus, ProposalType } from '@geogenesis/sdk';
+import { ProposalStatus, ProposalType, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { SubstreamEntity } from './io/subgraph/network-local-mapping';
 
@@ -151,6 +151,22 @@ export type FilterClause = {
 };
 
 export type FilterState = FilterClause[];
+
+export type ValueTypeId =
+  | typeof SYSTEM_IDS.TEXT
+  | typeof SYSTEM_IDS.RELATION
+  | typeof SYSTEM_IDS.IMAGE
+  | typeof SYSTEM_IDS.DATE
+  | typeof SYSTEM_IDS.WEB_URL;
+
+// export type Schema = {
+//   id: string;
+//   name: string | null;
+//   valueType: {
+//     id: string;
+//     name: string | null;
+//   };
+// };
 
 export type Entity = {
   id: string;

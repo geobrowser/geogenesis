@@ -139,6 +139,9 @@ const getData = async (spaceId: string) => {
 
 export type SpacePageType = 'person' | 'company' | 'nonprofit';
 
+// @TODO: Fetch the types on the entity directly instead of parsing the triples.
+// This is broken right now as the type triple might be an entity or might be
+// a collection.
 const getSpaceType = (triples: Array<ITriple>): SpacePageType | null => {
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
 
