@@ -96,6 +96,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const cellTriples = pipe(
       actions[space],
+      // @TODO(migration): Each cell only has one triple
       actions => Triple.merge(actions, cellData.triples),
       A.filter(triple => {
         const isRowCell = triple.entityId === cellData.entityId;
