@@ -33,7 +33,7 @@ export interface TableBlockFilter {
 }
 
 export function useEntityTable() {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { space, initialSelectedType, spaceId } = useEntityTableStoreInstance();
   const { triples } = useLocalStore();
   const merged = useMergedData();
