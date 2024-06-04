@@ -1,8 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Column } from '~/core/types';
+import { Column, ValueTypeId } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { ValueTypeId } from '~/core/value-types';
 
 export function columnName(columnId: string, columns: Column[]): string {
   const column = columns.find(c => c.id === columnId);

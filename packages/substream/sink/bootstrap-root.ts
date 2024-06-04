@@ -2,7 +2,6 @@ import { SYSTEM_IDS, createCollectionItem, createGeoId } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import type * as s from 'zapatos/schema';
 
-import { ROOT_SPACE_ADDRESS } from '../../ids/system-ids';
 import {
   INITIAL_COLLECTION_ITEM_INDEX,
   ROOT_SPACE_CREATED_AT,
@@ -43,6 +42,11 @@ const entities: string[] = [
   SYSTEM_IDS.PERSON_TYPE,
   SYSTEM_IDS.AVATAR_ATTRIBUTE,
   SYSTEM_IDS.COVER_ATTRIBUTE,
+
+  SYSTEM_IDS.WALLETS_ATTRIBUTE,
+  SYSTEM_IDS.FILTER,
+
+  SYSTEM_IDS.BROADER_SPACES,
 
   // Compound types are value types that are stored as entities but are
   // selectable as a "native" type for a triple's value type.
@@ -94,6 +98,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.COVER_ATTRIBUTE]: 'Cover',
   [SYSTEM_IDS.FILTER]: 'Filter',
   [SYSTEM_IDS.WALLETS_ATTRIBUTE]: 'Wallets',
+  [SYSTEM_IDS.BROADER_SPACES]: 'Broader Spaces',
   [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: 'Relation Value Types',
 
   [SYSTEM_IDS.COLLECTION_TYPE]: 'Collection',
@@ -125,6 +130,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.WEB_URL,
+  [SYSTEM_IDS.BROADER_SPACES]: SYSTEM_IDS.RELATION,
 };
 
 const types: Record<string, string[]> = {
@@ -135,7 +141,12 @@ const types: Record<string, string[]> = {
   [SYSTEM_IDS.WEB_URL]: [],
   [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE],
   [SYSTEM_IDS.SCHEMA_TYPE]: [SYSTEM_IDS.ATTRIBUTES],
-  [SYSTEM_IDS.SPACE_CONFIGURATION]: [SYSTEM_IDS.FOREIGN_TYPES],
+  [SYSTEM_IDS.SPACE_CONFIGURATION]: [
+    SYSTEM_IDS.FOREIGN_TYPES,
+    SYSTEM_IDS.BROADER_SPACES,
+    SYSTEM_IDS.COVER_ATTRIBUTE,
+    SYSTEM_IDS.BLOCKS,
+  ],
   [SYSTEM_IDS.IMAGE_BLOCK]: [SYSTEM_IDS.IMAGE_ATTRIBUTE, SYSTEM_IDS.PARENT_ENTITY],
   [SYSTEM_IDS.TABLE_BLOCK]: [SYSTEM_IDS.ROW_TYPE, SYSTEM_IDS.PARENT_ENTITY],
   [SYSTEM_IDS.TEXT_BLOCK]: [SYSTEM_IDS.MARKDOWN_CONTENT, SYSTEM_IDS.PARENT_ENTITY],
@@ -230,11 +241,11 @@ const getTypeTriples = () => {
           const collectionItemTriples = createCollectionItem({
             collectionId: collectionEntityId,
             entityId: attributeId,
-            spaceId: ROOT_SPACE_ADDRESS,
+            spaceId: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
           });
 
           return collectionItemTriples.map(op =>
-            getTripleFromOp(op, ROOT_SPACE_ADDRESS, {
+            getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ADDRESS, {
               blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
               cursor: '',
               requestId: '',

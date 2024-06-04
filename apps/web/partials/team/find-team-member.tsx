@@ -342,7 +342,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
                     spaceId={spaceId}
                     placeholder="Find or create role..."
                     onDone={handleChangeRole}
-                    itemIds={[]}
+                    alreadySelectedIds={[]}
                     allowedTypes={[{ typeId: '9c1922f1-d7a2-47d1-841d-234cb2f56991', typeName: 'Role' }]}
                     attributeId="9c1922f1-d7a2-47d1-841d-234cb2f56991"
                     className="!h-auto !font-medium"

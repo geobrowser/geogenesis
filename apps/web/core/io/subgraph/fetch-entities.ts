@@ -7,7 +7,7 @@ import { Environment } from '~/core/environment';
 import { Entity as EntityType, FilterField, FilterState } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
-import { tripleFragment } from './fragments';
+import { entityFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
@@ -40,13 +40,7 @@ function getFetchEntitiesQuery(
   return `query {
     entities(filter: ${constructedWhere} first: ${first} offset: ${skip} orderBy: NAME_ASC) {
       nodes {
-        id
-        name
-        triples(filter: { isStale: { equalTo: false } }) {
-          nodes {
-           ${tripleFragment} 
-          }
-        }
+        ${entityFragment}
       }
     }
   }`;
@@ -164,7 +158,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
       name: result.name,
       description: Entity.description(triples),
       nameTripleSpaces: nameTriples.map(t => t.space),
-      types: Entity.types(triples),
+      types: result.types.nodes,
       triples,
     };
   });

@@ -81,7 +81,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const deleteEntityTriple = (triple: Triple) => {
     send({
-      type: 'REMOVE_ENTITY',
+      type: 'DELETE_ENTITY',
       payload: {
         triple,
       },
@@ -111,7 +111,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const createEntityTripleWithValue = (attributeId: string, linkedEntity: { id: string; name: string | null }) => {
     send({
-      type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
+      type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
       payload: {
         attributeId,
         attributeName: columnName,
@@ -123,7 +123,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const createStringTripleWithValue = (value: string) => {
     send({
-      type: 'CREATE_STRING_TRIPLE_WITH_VALUE',
+      type: 'CREATE_TEXT_TRIPLE_FROM_PLACEHOLDER',
       payload: {
         attributeId,
         attributeName: columnName,
@@ -134,7 +134,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const createUrlTripleWithValue = (value: string) => {
     send({
-      type: 'CREATE_URL_TRIPLE_WITH_VALUE',
+      type: 'CREATE_URL_TRIPLE_FROM_PLACEHOLDER',
       payload: {
         attributeId,
         attributeName: columnName,
@@ -145,7 +145,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const createDateTripleWithValue = (value: string) => {
     send({
-      type: 'CREATE_DATE_TRIPLE_WITH_VALUE',
+      type: 'CREATE_TIME_TRIPLE_FROM_PLACEHOLDER',
       payload: {
         attributeId,
         attributeName: columnName,
@@ -166,7 +166,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const createImageWithValue = (imageSrc: string) => {
     send({
-      type: 'CREATE_IMAGE_TRIPLE_WITH_VALUE',
+      type: 'CREATE_IMAGE_TRIPLE_FROM_PLACEHOLDER',
       payload: {
         imageSrc,
         attributeId,
@@ -177,7 +177,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const deleteImage = (triple: Triple) => {
     send({
-      type: 'REMOVE_IMAGE',
+      type: 'DELETE_IMAGE_TRIPLE',
       payload: {
         triple,
       },
@@ -186,30 +186,39 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const updateStringTripleValue = (triple: Triple, value: string) => {
     send({
-      type: 'UPDATE_STRING_VALUE',
+      type: 'UPSERT_TRIPLE_VALUE',
       payload: {
         triple,
-        value,
+        value: {
+          type: 'TEXT',
+          value,
+        },
       },
     });
   };
 
   const updateUrlTripleValue = (triple: Triple, value: string) => {
     send({
-      type: 'UPDATE_URL_VALUE',
+      type: 'UPSERT_TRIPLE_VALUE',
       payload: {
         triple,
-        value,
+        value: {
+          type: 'URL',
+          value,
+        },
       },
     });
   };
 
-  const updateDateTripleValue = (triple: Triple, value: string) => {
+  const updateTimeTripleValue = (triple: Triple, value: string) => {
     send({
-      type: 'UPDATE_DATE_VALUE',
+      type: 'UPSERT_TRIPLE_VALUE',
       payload: {
         triple,
-        value,
+        value: {
+          type: 'TIME',
+          value,
+        },
       },
     });
   };
@@ -281,7 +290,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           spaceId={space}
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
-          itemIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.value)}
+          alreadySelectedIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.value)}
           allowedTypes={typesToFilter}
           attributeId={attributeId}
           containerClassName="!z-20"
@@ -316,7 +325,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       {isDateValueTypeColumn && (
         <DateField
           isEditing={true}
-          onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateDateTripleValue(firstTriple, date))}
+          onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateTimeTripleValue(firstTriple, date))}
           value={Value.timeValue(firstTriple) ?? ''}
           variant="tableCell"
         />

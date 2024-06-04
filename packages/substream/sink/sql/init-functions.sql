@@ -26,11 +26,6 @@ COMMENT ON TYPE public.attribute_with_unknown_value_type IS
   E'@foreignKey (entity_value_id) references public.entities (id)';
 
 --
--- Postgraphile function and types section
--- Note that attribute_id is hardcoded to '01412f83-8189-4ab1-8365-65c7fd358cc1' and type_id is 'type'
---
-
---
 -- Query "types" on entities to get the types of an entity or "typeCount" to get the number of types
 -- "typeCount" can be used for filtering
 --
@@ -105,14 +100,14 @@ BEGIN
         SELECT t.entity_value_id AS type_id
         FROM triples t
         WHERE t.entity_id = e_row.id
-        AND t.attribute_id = '8f151ba4de204e3c9cb499ddf96f48f1'
+        AND t.attribute_id = '8f151ba4de204e3c9cb499ddf96f48f1' -- Types
     ),
     type_attributes AS (
         -- For each type, fetch the associated attributes
-        SELECT DISTINCT t.entity_value_id AS attribute_id
+        SELECT DISTINCT t.entity_value_id AS attribute_id -- This might point to a collection in which the query will fail
         FROM entity_types et
         JOIN triples t ON t.entity_id = et.type_id
-        AND t.attribute_id = '8f151ba4de204e3c9cb499ddf96f48f1'
+        AND t.attribute_id = '01412f8381894ab1836565c7fd358cc1' -- Attributes
     )
     SELECT e.*
     FROM entities e

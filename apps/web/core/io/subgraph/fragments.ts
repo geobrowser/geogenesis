@@ -9,6 +9,7 @@ export const tripleFragment = `
     id
     name
   }
+  entityId
   entity {
     id
     name
@@ -67,6 +68,12 @@ export const spacePluginsFragment = `
 export const entityFragment = `
   id
   name
+  types {
+    nodes {
+      id
+      name
+    }
+  }
   triples(filter: {isStale: {equalTo: false}}) {
     nodes {
       ${tripleFragment}

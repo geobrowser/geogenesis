@@ -6,9 +6,7 @@ import * as React from 'react';
 import type { Metadata } from 'next';
 
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
-import { Triple as ITriple } from '~/core/types';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
@@ -73,7 +71,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function SpacePage({ params }: Props) {
   const spaceId = params.id;
   const props = await getData(spaceId);
-  const spaceType = getSpaceType(props.triples);
+  const spaceType = getSpaceType(props.spaceTypes);
 
   return (
     <>
@@ -81,7 +79,7 @@ export default async function SpacePage({ params }: Props) {
       <React.Suspense fallback={<SubspacesSkeleton />}>
         <SubspacesContainer spaceId={params.id} />
       </React.Suspense>
-      <Editor shouldHandleOwnSpacing spacePage />
+      <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
       <React.Suspense fallback={<EntityReferencedByLoading />}>
@@ -133,20 +131,19 @@ const getData = async (spaceId: string) => {
     triples: entity?.triples ?? [],
     id: entity.id,
     spaceId,
+    spaceTypes: space?.spaceConfig?.types ?? [],
     subspaces: [],
   };
 };
 
 export type SpacePageType = 'person' | 'company' | 'nonprofit';
 
-const getSpaceType = (triples: Array<ITriple>): SpacePageType | null => {
-  const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
-
-  if (typeTriples.some(triple => Value.entityValue(triple) === SYSTEM_IDS.PERSON_TYPE)) {
+const getSpaceType = (types: { id: string; name: string | null }[]): SpacePageType | null => {
+  if (types.some(type => type.id === SYSTEM_IDS.PERSON_TYPE)) {
     return 'person';
-  } else if (typeTriples.some(triple => Value.entityValue(triple) === SYSTEM_IDS.COMPANY_TYPE)) {
+  } else if (types.some(type => type.id === SYSTEM_IDS.COMPANY_TYPE)) {
     return 'company';
-  } else if (typeTriples.some(triple => Value.entityValue(triple) === SYSTEM_IDS.NONPROFIT_TYPE)) {
+  } else if (types.some(type => type.id === SYSTEM_IDS.NONPROFIT_TYPE)) {
     return 'nonprofit';
   } else {
     return null;

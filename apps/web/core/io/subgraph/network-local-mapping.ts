@@ -104,8 +104,11 @@ export type SubstreamOp = OmitStrict<SubstreamTriple, 'space'> &
     entityValue: string | null;
   };
 
-export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
+export type SubstreamEntity = OmitStrict<Entity, 'triples' | 'types' | 'nameTripleSpaces'> & {
   triples: { nodes: SubstreamTriple[] };
+  types: {
+    nodes: { id: string; name: string | null }[];
+  };
 };
 
 export type SubstreamImage = {

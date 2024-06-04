@@ -19,14 +19,13 @@ import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { ID } from '~/core/id';
 import { useMigrateHub } from '~/core/migrate/migrate';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Entity as IEntity, Triple as ITriple } from '~/core/types';
+import { Entity as IEntity, Triple as ITriple, ValueTypeId } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
-import { ValueTypeId, valueTypeNames, valueTypes } from '~/core/value-types';
+import { valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { ResultContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';

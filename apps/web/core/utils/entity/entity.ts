@@ -1,8 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { A, D, pipe } from '@mobily/ts-belt';
 
-import { AppOp, EntitySearchResult, Entity as IEntity, Triple as ITriple } from '~/core/types';
-import { ValueTypeId } from '~/core/value-types';
+import { EntitySearchResult, Entity as IEntity, Triple as ITriple, ValueTypeId } from '~/core/types';
 
 import { Triple } from '../triple';
 import { groupBy } from '../utils';

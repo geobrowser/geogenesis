@@ -78,7 +78,7 @@ export default async function DefaultEntityPage({
             )}
             {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />}
             {showSpacer && <Spacer height={40} />}
-            <Editor shouldHandleOwnSpacing />
+            <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
             <ToggleEntityPage {...props} typeId={typeId} filters={filters} />
             <Spacer height={40} />
             <Suspense fallback={<EntityReferencedByLoading />}>

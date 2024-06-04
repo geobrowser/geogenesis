@@ -11,8 +11,7 @@ export function useLocalStore() {
   const { allActions } = useActionsStore();
 
   const triples = React.useMemo(() => {
-    const triples = Triple.merge(allActions, []);
-    return Triple.withLocalNames(allActions, triples);
+    return Triple.withLocalNames(allActions, allActions);
   }, [allActions]);
 
   const entities = React.useMemo(() => {

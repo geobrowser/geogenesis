@@ -49,31 +49,31 @@ export function SpacePageMetadataHeader({
   // @TODO pathname might already include `/entities` or `/import`, resulting in a broken behavior in the context menu
   const pathname = usePathname();
 
-  const { subgraph } = Services.useServices();
+  // const { subgraph } = Services.useServices();
 
-  const {
-    data: proposals,
-    isFetching,
-    isFetchingNextPage,
-    fetchNextPage,
-  } = useInfiniteQuery({
-    queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
-    getNextPageParam: (_lastPage, pages) => pages.length,
-  });
+  // const {
+  //   data: proposals,
+  //   isFetching,
+  //   isFetchingNextPage,
+  //   fetchNextPage,
+  // } = useInfiniteQuery({
+  //   queryKey: [`space-proposals-for-space-${spaceId}`],
+  //   queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
+  //   getNextPageParam: (_lastPage, pages) => pages.length,
+  // });
 
-  const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
+  // const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
-  const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
+  // const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
 
-  const isLastPage =
-    proposals?.pages &&
-    proposals.pages.length > 1 &&
-    proposals.pages[proposals.pages.length - 1]?.[0]?.id === proposals.pages[proposals.pages.length - 2]?.[0]?.id;
+  // const isLastPage =
+  //   proposals?.pages &&
+  //   proposals.pages.length > 1 &&
+  //   proposals.pages[proposals.pages.length - 1]?.[0]?.id === proposals.pages[proposals.pages.length - 2]?.[0]?.id;
 
-  const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
+  // const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
 
-  const showMore = !isOnePage && !isLastPage;
+  // const showMore = !isOnePage && !isLastPage;
 
   const additionalTypeChips = typeNames
     .filter(t => t !== 'Space')
@@ -108,7 +108,7 @@ export function SpacePageMetadataHeader({
             <Create />
           </Link>
         )}
-        <HistoryPanel>
+        {/* <HistoryPanel>
           {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>
@@ -140,7 +140,7 @@ export function SpacePageMetadataHeader({
               )}
             </div>
           )}
-        </HistoryPanel>
+        </HistoryPanel> */}
         <Menu
           open={open}
           onOpenChange={onOpenChange}

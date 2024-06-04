@@ -92,7 +92,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
     name: entity.name,
     description: Entity.description(triples),
     nameTripleSpaces: nameTriples.map(t => t.space),
-    types: Entity.types(triples),
+    types: entity.types.nodes,
     triples,
   };
 }
