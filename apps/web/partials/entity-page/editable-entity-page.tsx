@@ -231,7 +231,6 @@ function EntityAttributes({
    */
   const tripleAttributeIds = triples.map(triple => triple.attributeId);
 
-  // @TODO: What would make something not-visible? What's non-visible mean?
   const visibleSchemaTriples = schemaTriples.filter(schemaTriple => {
     const notHidden = !hiddenSchemaIds.includes(schemaTriple.attributeId);
     const notInTriples = !tripleAttributeIds.includes(schemaTriple.attributeId);
