@@ -15,7 +15,6 @@ import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor-store';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 
 // import { SquareButton } from '~/design-system/button';
 // import { Plus } from '~/design-system/icons/plus';
@@ -31,6 +30,7 @@ import { TableNode } from './table-node';
 import { TrailingNode } from './trailing-node';
 
 interface Props {
+  spaceId: string;
   placeholder?: React.ReactNode;
   shouldHandleOwnSpacing?: boolean;
   spacePage?: boolean;
@@ -79,10 +79,11 @@ export const tiptapExtensions = [
 
 export const Editor = React.memo(function Editor({
   shouldHandleOwnSpacing,
+  spaceId,
   placeholder = null,
   spacePage = false,
 }: Props) {
-  const { spaceId } = useEntityPageStore();
+  console.log('editor is rerendering');
   const { editorJson, blockIds, updateEditorBlocks } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const [hasUpdatedEditorJson, setHasUpdatedEditorJson] = React.useState(false);

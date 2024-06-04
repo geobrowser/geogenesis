@@ -1,9 +1,10 @@
 'use client';
 
 import { SYSTEM_IDS, createCollection, createCollectionItem, reorderCollectionItem } from '@geogenesis/sdk';
-import { A, pipe } from '@mobily/ts-belt';
+import { A } from '@mobily/ts-belt';
 import { Editor } from '@tiptap/core';
 import { JSONContent, generateHTML, generateJSON } from '@tiptap/react';
+import { atom, useAtomValue } from 'jotai';
 import pluralize from 'pluralize';
 import Showdown from 'showdown';
 
@@ -13,14 +14,13 @@ import { tiptapExtensions } from '~/partials/editor/editor';
 import { htmlToPlainText } from '~/partials/editor/editor-utils';
 
 import { TableBlockSdk } from '../blocks-sdk';
-import { useActionsStore } from '../hooks/use-actions-store';
-import { Services } from '../services';
+import { fetchEntity } from '../io/subgraph';
 import { CollectionItem, AppEntityValue as EntityValue, Triple as ITriple, OmitStrict } from '../types';
 import { Collections } from '../utils/collections';
 import { Triple } from '../utils/triple';
 import { getImagePath, groupBy } from '../utils/utils';
 import { Value } from '../utils/value';
-import { useEntityPageStore } from './entity-page-store/entity-store';
+import { activeTriplesForEntityIdSelector, localTriplesAtom, remove, upsert } from './actions-store/actions-store';
 
 const markdownConverter = new Showdown.Converter();
 
@@ -30,35 +30,12 @@ interface BlockCollectionItem extends OmitStrict<CollectionItem, 'value' | 'enti
   entityId: string;
 }
 
-/**
- * The editor store manages state for the entity page blocks editor, primarily
- * around transforming/mapping metadata for each block to our Geo entity format
- * and back to Tiptap's JSON format.
- *
- * 1. Maps our entity/block format to Tiptap's JSON format
- * 2. Tracks the triple with the editor block ids
- * 3. Manages the metadata for each block entity, e.g., the block name, block type,
- *    markdown content, image src, table configuration, etc.
- */
-export function useEditorStore() {
-  const {
-    id: entityId,
-    spaceId,
-    initialBlockIdsTriple,
-    initialBlockTriples,
-    initialBlockCollectionItemTriples,
-  } = useEditorInstance();
-  const { subgraph } = Services.useServices();
-  const { upsert, remove, allActions: allTriples } = useActionsStore();
-  const { name } = useEntityPageStore();
-
-  const blocksCollectionId = React.useMemo(() => {
-    const entityChanges = Triple.merge(
-      allTriples.filter(a => a.entityId === entityId),
-      initialBlockIdsTriple ? [initialBlockIdsTriple] : []
-    );
+const createBlocksCollectionIdAtom = (initialBlocksIdsTriple: ITriple | null, entityId: string) => {
+  return atom(get => {
+    const triplesForEntityId = get(localTriplesAtom).filter(activeTriplesForEntityIdSelector(entityId));
+    const entityChanges = Triple.merge(triplesForEntityId, initialBlocksIdsTriple ? [initialBlocksIdsTriple] : []);
     const blocksIdTriple: ITriple | undefined = entityChanges.find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
-    const triple = blocksIdTriple ?? initialBlockIdsTriple;
+    const triple = blocksIdTriple ?? initialBlocksIdsTriple;
 
     if (triple?.value.type !== 'COLLECTION') {
       return null;
@@ -66,16 +43,23 @@ export function useEditorStore() {
 
     // Favor the local version of the blockIdsTriple's collection value id if it exists
     return triple?.value.value ?? null;
-  }, [allTriples, entityId, initialBlockIdsTriple]);
+  });
+};
 
-  const collectionItems = React.useMemo(() => {
-    // Gather the entity ids of each collection item associated with the block list's
-    // collection entity id
-    const collectionItemTriplesForCollection = Triple.merge(
-      allTriples.filter(
+const createCollectionItemsAtom = (initialBlockCollectionItemTriples: ITriple[], blocksCollectionId: string | null) => {
+  return atom(get => {
+    if (!blocksCollectionId) {
+      return [];
+    }
+
+    const localTriples = get(localTriplesAtom);
+
+    const collectionItemEntityIdsForCollectionId = Triple.merge(
+      localTriples.filter(
         a =>
           a.attributeId === SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE &&
-          a.value.value === blocksCollectionId
+          a.value.value === blocksCollectionId &&
+          a.isDeleted === false
       ),
       initialBlockCollectionItemTriples
     ).map(t => t.entityId);
@@ -84,7 +68,7 @@ export function useEditorStore() {
     // collection entity id. We use this below to create the data structure representing
     // the collection item itself.
     const allTriplesForCollectionItems = Triple.merge(
-      allTriples.filter(t => collectionItemTriplesForCollection.includes(t.entityId)),
+      localTriples.filter(t => collectionItemEntityIdsForCollectionId.includes(t.entityId)),
       initialBlockCollectionItemTriples
     );
 
@@ -123,22 +107,58 @@ export function useEditorStore() {
         }
         return 0;
       });
-  }, [allTriples, blocksCollectionId, initialBlockCollectionItemTriples]);
+  });
+};
+
+const createBlockTriplesAtom = (initialBlockTriples: ITriple[], blockIds: string[]) => {
+  return atom(get => {
+    const localTriplesForBlockIds = get(localTriplesAtom).filter(
+      t => blockIds.includes(t.entityId) && t.isDeleted === false
+    );
+    return Triple.merge(localTriplesForBlockIds, initialBlockTriples);
+  });
+};
+
+/**
+ * The editor store manages state for the entity page blocks editor, primarily
+ * around transforming/mapping metadata for each block to our Geo entity format
+ * and back to Tiptap's JSON format.
+ *
+ * 1. Maps our entity/block format to Tiptap's JSON format
+ * 2. Tracks the triple with the editor block ids
+ * 3. Manages the metadata for each block entity, e.g., the block name, block type,
+ *    markdown content, image src, table configuration, etc.
+ */
+export function useEditorStore() {
+  const {
+    id: entityId,
+    spaceId,
+    initialBlockIdsTriple,
+    initialBlockTriples,
+    initialBlockCollectionItemTriples,
+  } = useEditorInstance();
+
+  const blocksCollectionId = useAtomValue(
+    React.useMemo(
+      () => createBlocksCollectionIdAtom(initialBlockIdsTriple, entityId),
+      [initialBlockIdsTriple, entityId]
+    )
+  );
+
+  const collectionItems = useAtomValue(
+    React.useMemo(
+      () => createCollectionItemsAtom(initialBlockCollectionItemTriples, blocksCollectionId),
+      [initialBlockCollectionItemTriples, blocksCollectionId]
+    )
+  );
 
   const blockIds = React.useMemo(() => {
     return collectionItems.map(ci => ci.entityId);
   }, [collectionItems]);
 
-  const blockTriples = React.useMemo(() => {
-    return pipe(
-      Triple.merge(allTriples, initialBlockTriples),
-      A.filter(t => blockIds.includes(t.entityId)),
-      triples =>
-        // We may be referencing attributes/entities from other spaces whose name has changed.
-        // We pass _all_ local changes instead of just the current space changes.
-        Triple.withLocalNames(allTriples, triples)
-    );
-  }, [allTriples, blockIds, initialBlockTriples]);
+  const blockTriples = useAtomValue(
+    React.useMemo(() => createBlockTriplesAtom(initialBlockTriples, blockIds), [initialBlockTriples, blockIds])
+  );
 
   // Transforms our block triples back into a TipTap-friendly JSON format
   const editorJson = React.useMemo(() => {
@@ -430,7 +450,8 @@ export function useEditorStore() {
           {
             type: 'SET_TRIPLE',
             entityId: entityId,
-            entityName: name,
+            // entityName: name,
+            entityName: '@TODO: Replace',
             attributeId: SYSTEM_IDS.BLOCKS,
             attributeName: 'Blocks',
             value: {
@@ -608,7 +629,7 @@ export function useEditorStore() {
       // Fetch all the subgraph data for all the deleted block entities.
       const maybeRemoteBlocks = await Promise.all(
         // @TODO: Can use a single fetchEntities with id_in
-        removedBlockIds.map(async blockId => subgraph.fetchEntity({ id: blockId }))
+        removedBlockIds.map(async blockId => fetchEntity({ id: blockId }))
       );
       const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
 
@@ -618,13 +639,14 @@ export function useEditorStore() {
       });
 
       // Delete any local triples associated with the deleted block entities
-      const localTriplesForDeletedBlocks = pipe(
-        allTriples,
-        actions => Triple.merge(actions, []),
-        triples => triples.filter(t => removedBlockIds.includes(t.entityId))
-      );
+      // @TODO: Put back
+      // const localTriplesForDeletedBlocks = pipe(
+      //   allTriples,
+      //   actions => Triple.merge(actions, []),
+      //   triples => triples.filter(t => removedBlockIds.includes(t.entityId))
+      // );
 
-      localTriplesForDeletedBlocks.forEach(t => remove(t, spaceId));
+      // localTriplesForDeletedBlocks.forEach(t => remove(t, spaceId));
 
       // We delete the existingBlockTriple if the page content is completely empty
       if (newBlockIds.length === 0) {
@@ -646,7 +668,8 @@ export function useEditorStore() {
         );
       }
     },
-    [allTriples, blockIds, blocksCollectionId, upsert, entityId, name, remove, subgraph, spaceId, collectionItems]
+    // [allTriples, blockIds, blocksCollectionId, upsert, entityId, name, remove, subgraph, spaceId, collectionItems]
+    [blockIds, blocksCollectionId, upsert, entityId, remove, spaceId, collectionItems]
   );
 
   // Iterate over the content's of a TipTap editor to create or update triple blocks

@@ -1,20 +1,19 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { A, pipe } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
+import { atom, useAtomValue } from 'jotai';
 
 import * as React from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { useMergedData } from '~/core/hooks/use-merged-data';
-import { Services } from '~/core/services';
-import { Triple as ITriple, TripleWithCollectionValue, ValueTypeId } from '~/core/types';
+import { Triple as ITriple, ValueTypeId } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
+import { createTriplesForEntityAtom, localTriplesAtom } from '../actions-store/actions-store';
 import { useEntityStoreInstance } from './entity-store-provider';
 
 export const createInitialSchemaTriples = (spaceId: string, entityId: string): ITriple[] => {
@@ -77,27 +76,19 @@ const DEFAULT_PAGE_SIZE = 100;
 
 export function useEntityPageStore() {
   const { spaceId, id, initialTriples } = useEntityStoreInstance();
-  const { allActions } = useActionsStore();
   const merged = useMergedData();
 
   const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: id });
 
   const [hiddenSchemaIds, setHiddenSchemaIds] = React.useState<string[]>([]);
+  const [schemaTriples, setSchemaTriples] = React.useState(createInitialSchemaTriples(spaceId, id));
 
-  const triples = React.useMemo(() => {
-    return pipe(
-      Triple.merge(allActions, initialTriples),
-      A.filter(t => t.entityId === id),
-      triples =>
-        // We may be referencing attributes/entities from other spaces whose name has changed.
-        // We pass _all_ local changes instead of just the current space changes.
-        Triple.withLocalNames(allActions, triples),
-      A.filter(t => t.isDeleted === false)
-    );
-  }, [allActions, id, initialTriples]);
+  const triples = useAtomValue(
+    React.useMemo(() => createTriplesForEntityAtom(initialTriples, id), [initialTriples, id])
+  );
 
   const name = React.useMemo(() => {
-    return Entity.name(triples) || '';
+    return Entity.name(triples) ?? '';
   }, [triples]);
 
   /*
@@ -111,7 +102,7 @@ export function useEntityPageStore() {
     );
   }, [triples]);
 
-  const { data: schemaTriples } = useQuery({
+  useQuery({
     initialData: createInitialSchemaTriples(spaceId, id),
     queryKey: ['entity-page-schema-triples', spaceId, id, typeTriples],
     queryFn: async ({ signal }) => {
@@ -190,7 +181,10 @@ export function useEntityPageStore() {
         };
       });
 
-      return schemaTriples;
+      // We're setting the schema triples in state instead of using the returned useQuery value
+      // since useQuery doesn't do a _great_ job of persisting the previous query data for the
+      // current UX that we have, even when using `keepPreviousData`.
+      setSchemaTriples(schemaTriples);
     },
   });
 

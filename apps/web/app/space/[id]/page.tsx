@@ -79,7 +79,7 @@ export default async function SpacePage({ params }: Props) {
       <React.Suspense fallback={<SubspacesSkeleton />}>
         <SubspacesContainer spaceId={params.id} />
       </React.Suspense>
-      <Editor shouldHandleOwnSpacing spacePage />
+      <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
       <React.Suspense fallback={<EntityReferencedByLoading />}>

@@ -36,7 +36,18 @@ const atomWithAsyncStorage = (initialValue: StoredTriple[] = []) => {
 
 export const localTriplesAtom = atomWithAsyncStorage();
 
-const remove = (op: OmitStrict<StoreOp, 'type'>, spaceId: string) => {
+export const activeTriplesForEntityIdSelector = (entityId: string) => (triple: StoredTriple) => {
+  return triple.entityId === entityId && triple.isDeleted === false;
+};
+
+export const createTriplesForEntityAtom = (initialTriples: ITriple[], entityId: string) => {
+  return atom(get => {
+    const triplesForEntityId = get(localTriplesAtom).filter(activeTriplesForEntityIdSelector(entityId));
+    return Triple.merge(triplesForEntityId, initialTriples);
+  });
+};
+
+export const remove = (op: OmitStrict<StoreOp, 'type'>, spaceId: string) => {
   // We don't delete from our local store, but instead just set a tombstone
   // on the row. This is so we can still publish the changes as an op
   upsert(
@@ -53,11 +64,11 @@ export type StoreOp =
   | OmitStrict<SetTripleAppOp, 'id'>
   | OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
 
-const upsert = (op: StoreOp, spaceId: string) => {
+export const upsert = (op: StoreOp, spaceId: string) => {
   upsertMany([{ op, spaceId }]);
 };
 
-const upsertMany = (ops: { op: StoreOp; spaceId: string }[]) => {
+export const upsertMany = (ops: { op: StoreOp; spaceId: string }[]) => {
   const triplesToWrite: StoredTriple[] = [];
 
   for (const { op, spaceId } of ops) {
