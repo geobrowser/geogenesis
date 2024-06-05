@@ -2,6 +2,8 @@ The substream service controls indexing emitted events from a substream endpoint
 
 ### Running the substream
 
+Provide the runtime environment with the keys from `.env.example`. If running locally create a `.env` file and update with the keys from `.env.example`.
+
 ```bash
 # Run from within the root of the monorepo
 pnpm install
