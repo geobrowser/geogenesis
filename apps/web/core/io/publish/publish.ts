@@ -6,8 +6,7 @@ import {
   getProcessGeoProposalArguments,
   getRemoveSubspaceArguments,
 } from '@geogenesis/sdk';
-import { ProfileRegistryAbi } from '@geogenesis/sdk/abis';
-import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { MainVotingAbi, ProfileRegistryAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
