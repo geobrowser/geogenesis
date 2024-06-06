@@ -6,6 +6,8 @@ import express from 'express';
 import { postgraphile } from 'postgraphile';
 import ConnectionFilterPlugin from 'postgraphile-plugin-connection-filter';
 
+import { IndexingStatusPlugin } from './status-plugin';
+
 dotenv.config();
 
 const postgraphileMiddleware = postgraphile(process.env.DATABASE_URL, 'public', {
@@ -15,7 +17,8 @@ const postgraphileMiddleware = postgraphile(process.env.DATABASE_URL, 'public', 
   graphileBuildOptions: {
     connectionFilterRelations: true, // default: false
   },
-  appendPlugins: [PgOrderByRelatedPlugin, ConnectionFilterPlugin, PgSimplifyInflectorPlugin],
+  disableDefaultMutations: true,
+  appendPlugins: [PgOrderByRelatedPlugin, ConnectionFilterPlugin, PgSimplifyInflectorPlugin, IndexingStatusPlugin],
 });
 
 const app = express();
@@ -28,6 +31,7 @@ const PORT = process.env.PORT || 5001;
 
 const server = app.listen(PORT, () => {
   const address = server.address();
+
   if (typeof address !== 'string') {
     const href = `http://localhost:${address?.port}${'/graphiql' || '/graphiql'}`;
     console.log(`PostGraphiQL available at ${href} 🚀`);

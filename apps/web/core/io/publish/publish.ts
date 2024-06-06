@@ -9,6 +9,7 @@ import {
 import { ProfileRegistryAbi } from '@geogenesis/sdk/abis';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
+import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
 
 import { WalletClient } from 'wagmi';
@@ -67,27 +68,49 @@ export async function makeProposal({
     return;
   }
 
-  const proposal = createEditProposal({ name, ops, author: wallet.account.address });
-  const cidString = await storageClient.uploadBinary(proposal);
+  const uploadEffect = Effect.retry(
+    Effect.tryPromise({
+      try: async () => {
+        const proposal = createEditProposal({ name, ops, author: wallet.account.address });
+        return await storageClient.uploadBinary(proposal);
+      },
+      catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
+    }),
+    Schedule.exponential('100 millis').pipe(Schedule.jittered)
+  );
 
-  const prepareTxEffect = Effect.tryPromise({
-    try: () =>
-      prepareWriteContract({
-        walletClient: wallet,
-        address: maybeSpace.mainVotingPluginAddress as `0x${string}`,
-        abi: MainVotingAbi,
-        functionName: 'createProposal',
-        // @TODO: We should abstract the proposal metadata creation and the proposal
-        // action callback args together somehow since right now you have to sync
-        // them both and ensure you're using the correct functions for each content
-        // proposal type.
-        //
-        // What can happen is that you create a "CONTENT" proposal but pass a callback
-        // action that does some other action like "ADD_SUBSPACE" and it will fail since
-        // the substream won't index a mismatched proposal type and action callback args.
-        args: getProcessGeoProposalArguments(space as `0x${string}`, `ipfs://${cidString}`),
-      }),
-    catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+  const prepareTxEffect = Effect.gen(function* (_) {
+    const cidString = yield* _(uploadEffect);
+
+    if (!cidString.startsWith('ipfs://Qm')) {
+      return yield* _(
+        Effect.fail(
+          new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.')
+        )
+      );
+    }
+
+    return yield* _(
+      Effect.tryPromise({
+        try: () =>
+          prepareWriteContract({
+            walletClient: wallet,
+            address: maybeSpace.mainVotingPluginAddress as `0x${string}`,
+            abi: MainVotingAbi,
+            functionName: 'createProposal',
+            // @TODO: We should abstract the proposal metadata creation and the proposal
+            // action callback args together somehow since right now you have to sync
+            // them both and ensure you're using the correct functions for each content
+            // proposal type.
+            //
+            // What can happen is that you create a "CONTENT" proposal but pass a callback
+            // action that does some other action like "ADD_SUBSPACE" and it will fail since
+            // the substream won't index a mismatched proposal type and action callback args.
+            args: getProcessGeoProposalArguments(space as `0x${string}`, `ipfs://${cidString}`),
+          }),
+        catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+      })
+    );
   });
 
   const writeTxEffect = Effect.gen(function* (awaited) {
