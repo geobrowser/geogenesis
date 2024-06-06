@@ -15,6 +15,7 @@ const postgraphileMiddleware = postgraphile(process.env.DATABASE_URL, 'public', 
   graphileBuildOptions: {
     connectionFilterRelations: true, // default: false
   },
+  disableDefaultMutations: true,
   appendPlugins: [PgOrderByRelatedPlugin, ConnectionFilterPlugin, PgSimplifyInflectorPlugin],
 });
 
