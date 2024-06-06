@@ -16,7 +16,7 @@ import { Triple } from '~/core/utils/triple';
 import { store } from '../jotai-store';
 import { db } from './indexeddb';
 
-interface StoredTriple extends ITriple {
+export interface StoredTriple extends ITriple {
   id: string;
 }
 
@@ -45,6 +45,10 @@ export const createTriplesForEntityAtom = (initialTriples: ITriple[], entityId: 
     const triplesForEntityId = get(localTriplesAtom).filter(activeTriplesForEntityIdSelector(entityId));
     return Triple.merge(triplesForEntityId, initialTriples);
   });
+};
+
+export const isDeletedSelector = (triple: StoredTriple) => {
+  return triple.isDeleted === false;
 };
 
 export const remove = (op: OmitStrict<StoreOp, 'type'>, spaceId: string) => {

@@ -83,7 +83,6 @@ export const Editor = React.memo(function Editor({
   placeholder = null,
   spacePage = false,
 }: Props) {
-  console.log('editor is rerendering');
   const { editorJson, blockIds, updateEditorBlocks } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const [hasUpdatedEditorJson, setHasUpdatedEditorJson] = React.useState(false);
