@@ -1,6 +1,6 @@
 import { gql, makeExtendSchemaPlugin } from 'graphile-utils';
 
-import { db } from './db';
+import { pool } from './db';
 
 const INITIAL_GEO_BLOCK = 620;
 const INITIAL_BLOCK_HASH = '0xf731eaa44bd7a55e25a0252e1aa85e023a3d35d64763ae4ad6e713699a218ca2';
@@ -39,12 +39,10 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(build => {
     resolvers: {
       Query: {
         async indexingStatuses() {
-          await db.connect();
           const [head, { rows }] = await Promise.all([
             getChainHead(),
-            db.query(`select block_number from public.cursors`),
+            pool.query(`select block_number from public.cursors`),
           ]);
-          await db.end();
 
           const cursor = rows[0] as { block_number: number } | undefined;
 
