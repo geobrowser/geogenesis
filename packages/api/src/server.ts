@@ -28,6 +28,9 @@ const PORT = process.env.PORT || 5001;
 
 const server = app.listen(PORT, () => {
   const address = server.address();
+
+  const head = getChainHead();
+
   if (typeof address !== 'string') {
     const href = `http://localhost:${address?.port}${'/graphiql' || '/graphiql'}`;
     console.log(`PostGraphiQL available at ${href} 🚀`);
@@ -35,3 +38,34 @@ const server = app.listen(PORT, () => {
     console.log(`PostGraphile listening on ${address} 🚀`);
   }
 });
+
+async function getChainHead() {
+  const result = await fetch(process.env.CHAIN_RPC!, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'eth_getBlockByNumber',
+      params: ['latest', false],
+      id: 1,
+    }),
+  });
+
+  const json = (await result.json()) as {
+    result: {
+      timestamp: string; // hex encoded
+      number: string; // hex encoded
+    };
+  };
+
+  const head = {
+    timestamp: Number(json.result.timestamp),
+    number: Number(json.result.number),
+  };
+
+  console.log('head', head);
+
+  return head;
+}
