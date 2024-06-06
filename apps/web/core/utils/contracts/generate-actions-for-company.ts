@@ -20,7 +20,7 @@ export const generateActionsForCompany = async (
     cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
       entityId: spaceConfigEntityId,
-      entityName: spaceName ?? '',
+      entityName: spaceName,
       spaceId: spaceAddress,
     }),
     cloneEntity({

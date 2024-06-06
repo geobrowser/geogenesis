@@ -263,6 +263,9 @@ export const MEMBERSHIP_CONTRACT_ADDRESS =
   ]
 */
 
+// @TODO(migration)
+// migrate types to new data model
+
 // Root space
 export const ROOT_SPACE = `0x170b749413328ac9a94762031a7A05b00c1D2e34`
 export const ROOT_SPACE_CONFIGURATION = `f1b9fd88-6388-436e-95b5-51aafaea77e5`

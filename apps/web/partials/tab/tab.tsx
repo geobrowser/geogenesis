@@ -1,8 +1,9 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 
+import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 
-import { EmptyEntityPage } from '~/partials/tab/empty-entity-page';
+import { EmptyTab } from '~/partials/tab/empty-tab';
 
 import DefaultEntityPage from '~/app/space/(entity)/[id]/[entityId]/default-entity-page';
 
@@ -24,7 +25,29 @@ export const Tab = async (props: Props & { slug: string }) => {
   const entityId = await getEntityId(spaceId, pageTypeId);
 
   if (!entityId) {
-    return <EmptyEntityPage slug={slug} spaceId={spaceId} pageTypeId={pageTypeId} />;
+    const newEntityId = ID.createEntityId();
+
+    const newParams = {
+      id: spaceId,
+      entityId: newEntityId,
+    };
+
+    const newSearchParams = {
+      typeId: SYSTEM_IDS.PAGE_TYPE,
+      filters: encodeURI(JSON.stringify([[SYSTEM_IDS.PAGE_TYPE_TYPE, pageTypeId]])),
+    };
+
+    return (
+      <EmptyTab spaceId={spaceId}>
+        <DefaultEntityPage
+          params={newParams}
+          searchParams={newSearchParams}
+          showCover={false}
+          showHeading={false}
+          showHeader={false}
+        />
+      </EmptyTab>
+    );
   }
 
   const params = {
@@ -67,6 +90,8 @@ const getEntityId = async (spaceId: string, pageTypeId: string) => {
     filter: [{ field: 'attribute-id', value: SYSTEM_IDS.PAGE_TYPE_TYPE }],
   });
 
+  // @TODO(migration)
+  // migrate to `triple.value.value === pageTypeId` in new data model
   const entityId = pageTypeTriples.find(triple => triple.value.id === pageTypeId)?.entityId;
 
   return entityId ?? null;

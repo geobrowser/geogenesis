@@ -31,8 +31,7 @@ export const cloneEntity = async (options: Options) => {
   const newTriples: Array<TripleType> = [];
 
   const triplesToClone: Array<TripleType> = oldEntity.triples.filter(
-    (triple: TripleType) =>
-      ![SYSTEM_IDS.NAME, SYSTEM_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.BLOCKS].includes(triple.attributeId)
+    (triple: TripleType) => !SKIPPED_ATTRIBUTES.includes(triple.attributeId)
   );
 
   newTriples.push(
@@ -76,6 +75,8 @@ export const cloneEntity = async (options: Options) => {
     }
   });
 
+  // @TODO(migration)
+  // migrate to collection
   const blockIdsTriple =
     oldEntity.triples.find((triple: TripleType) => triple.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
 
@@ -177,6 +178,8 @@ export const cloneEntity = async (options: Options) => {
     newTriples.push(newBlockIdsTriple);
   }
 
+  // @TODO(migration)
+  // migrate all actions to ops in new data model
   const actions: Array<CreateTripleAction> = [];
 
   newTriples.forEach(triple => {
@@ -185,3 +188,5 @@ export const cloneEntity = async (options: Options) => {
 
   return actions;
 };
+
+const SKIPPED_ATTRIBUTES = [SYSTEM_IDS.NAME, SYSTEM_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.BLOCKS];

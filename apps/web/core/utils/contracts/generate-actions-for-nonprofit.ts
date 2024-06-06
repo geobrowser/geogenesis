@@ -13,7 +13,7 @@ export const generateActionsForNonprofit = async (
     cloneEntity({
       oldEntityId: SYSTEM_IDS.NONPROFIT_SPACE_CONFIGURATION_TEMPLATE,
       entityId: spaceConfigEntityId,
-      entityName: spaceName ?? '',
+      entityName: spaceName,
       spaceId: spaceAddress,
     }),
     cloneEntity({

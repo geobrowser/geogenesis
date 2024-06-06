@@ -109,7 +109,11 @@ const FetchEntity = () => {
 
   return (
     <form onSubmit={handleFetchEntityId}>
-      <Input label="entity ID" value={entityId} onChange={({ currentTarget: { value } }: any) => setEntityId(value)} />
+      <Input
+        label="entity ID"
+        value={entityId}
+        onChange={({ currentTarget: { value } }: React.ChangeEvent<HTMLInputElement>) => setEntityId(value)}
+      />
       <Button type="submit">fetch</Button>
 
       {entity && <Block>{entity}</Block>}
@@ -152,7 +156,7 @@ const GenerateEntityIds = () => {
       <Input
         label="number of IDs"
         value={quantity}
-        onChange={({ currentTarget: { value } }: any) => setQuantity(value)}
+        onChange={({ currentTarget: { value } }: React.ChangeEvent<HTMLInputElement>) => setQuantity(value)}
       />
       <div className="flex gap-4">
         <Button type="submit">generate</Button>
@@ -202,8 +206,16 @@ const FindEntities = () => {
 
   return (
     <form onSubmit={handleFindEntities} className="space-y-4">
-      <Input label="space ID" value={spaceId} onChange={({ currentTarget: { value } }: any) => setSpaceId(value)} />
-      <Input label="type ID" value={typeId} onChange={({ currentTarget: { value } }: any) => setTypeId(value)} />
+      <Input
+        label="space ID"
+        value={spaceId}
+        onChange={({ currentTarget: { value } }: React.ChangeEvent<HTMLInputElement>) => setSpaceId(value)}
+      />
+      <Input
+        label="type ID"
+        value={typeId}
+        onChange={({ currentTarget: { value } }: React.ChangeEvent<HTMLInputElement>) => setTypeId(value)}
+      />
       <div className="flex items-center gap-4">
         <Button type="submit">find</Button>
         {entities && <div>found {entities.length < 1_000 ? entities.length : '1,000+'} matching entities</div>}
@@ -239,9 +251,13 @@ const CloneEntity = () => {
       <Input
         label="space name"
         value={spaceName}
-        onChange={({ currentTarget: { value } }: any) => setSpaceName(value)}
+        onChange={({ currentTarget: { value } }: React.ChangeEvent<HTMLInputElement>) => setSpaceName(value)}
       />
-      <Input label="space ID" value={spaceId} onChange={({ currentTarget: { value } }: any) => setSpaceId(value)} />
+      <Input
+        label="space ID"
+        value={spaceId}
+        onChange={({ currentTarget: { value } }: React.ChangeEvent<HTMLInputElement>) => setSpaceId(value)}
+      />
       <div className="flex gap-4">
         <Button onClick={handleCloneEntity}>clone entity</Button>
         {actions.length > 0 && <Button onClick={handleAddActions}>generate actions</Button>}
