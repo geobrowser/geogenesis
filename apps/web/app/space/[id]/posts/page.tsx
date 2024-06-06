@@ -1,4 +1,4 @@
-import { POST_TYPE } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Subgraph } from '~/core/io';
 import { Triple } from '~/core/types';
@@ -40,7 +40,7 @@ const getPosts = async (spaceId: string) => {
 
   const postEntities = await Subgraph.fetchEntities({
     spaceId,
-    typeIds: [POST_TYPE],
+    typeIds: [SYSTEM_IDS.POST_TYPE],
     filter: [],
   });
 

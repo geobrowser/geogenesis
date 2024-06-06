@@ -40,7 +40,7 @@ function getFetchProfileQuery(address: string) {
 
 export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): Promise<OnchainProfile | null> {
   const queryId = uuid();
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+  const config = Environment.getConfig();
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
     endpoint: config.api,

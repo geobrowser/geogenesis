@@ -1,9 +1,9 @@
+import { createGeoId } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
-import type { ContentProposal } from '../proposals-created/parser';
+import type { EditProposal } from '../proposals-created/parser';
 import type { SpacePluginCreated } from '../spaces-created/parser';
 import { getInitialProposalsForSpaces } from './get-initial-proposals';
-import { createGeoId } from '~/sink/utils/create-geo-id';
 
 describe('get-initial-proposals', () => {
   it('proposal is in set of new spaces', () => {
@@ -14,7 +14,7 @@ describe('get-initial-proposals', () => {
       },
     ];
 
-    const processedProposal: ContentProposal = {
+    const processedProposal: EditProposal = {
       proposalId: createGeoId(),
       onchainProposalId: '-1',
       startTime: '0',
@@ -23,9 +23,9 @@ describe('get-initial-proposals', () => {
       pluginAddress: '',
       space: '0x7eC3D9a27F89f52FAEa2C9cCC8dFBBA1A0c6a239',
       name: 'Test',
-      type: 'CONTENT',
+      type: 'EDIT',
       creator: '',
-      actions: [],
+      ops: [],
     };
 
     const proposals = getInitialProposalsForSpaces(spacesCreated, [processedProposal]);
@@ -42,7 +42,7 @@ describe('get-initial-proposals', () => {
       },
     ];
 
-    const processedProposal: ContentProposal = {
+    const processedProposal: EditProposal = {
       proposalId: createGeoId(),
       onchainProposalId: '-1',
       startTime: '0',
@@ -51,9 +51,9 @@ describe('get-initial-proposals', () => {
       pluginAddress: '',
       space: '0x7eC3D9a27F89f52FAEa2C9cCC8dFBBA1A0c6a239',
       name: 'Test',
-      type: 'CONTENT',
+      type: 'EDIT',
       creator: '',
-      actions: [],
+      ops: [],
     };
 
     const proposals = getInitialProposalsForSpaces(spacesCreated, [processedProposal]);

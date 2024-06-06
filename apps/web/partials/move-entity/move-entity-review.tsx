@@ -12,7 +12,7 @@ import { usePublish } from '~/core/hooks/use-publish';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMoveEntity } from '~/core/state/move-entity-store';
-import { CreateTripleAction, DeleteTripleAction, ReviewState } from '~/core/types';
+import { ReviewState, Triple } from '~/core/types';
 import { getImagePath, sleepWithCallback } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -64,17 +64,13 @@ function MoveEntityReviewChanges() {
       return;
     }
 
-    const onDeleteTriples = (): DeleteTripleAction[] => {
-      return triples.map(t => ({
-        ...t,
-        type: 'deleteTriple',
-      }));
+    const onDeleteTriples = (): Triple[] => {
+      return triples;
     };
 
-    const onCreateNewTriples = (): CreateTripleAction[] => {
+    const onCreateNewTriples = (): Triple[] => {
       return triples.map(t => ({
         ...t,
-        type: 'createTriple',
         space: spaceIdTo,
       }));
     };
@@ -82,15 +78,15 @@ function MoveEntityReviewChanges() {
     const createProposalName = `Create ${triples[0]?.entityName ?? entityId} in ${spaceToName}`;
     const deleteProposalName = `Delete ${triples[0]?.entityName ?? entityId} from ${spaceFromName}`;
 
-    let createActions: CreateTripleAction[] = [];
-    let deleteActions: DeleteTripleAction[] = [];
+    let createTriples: Triple[] = [];
+    let deleteTriples: Triple[] = [];
 
     try {
       if (!firstPublishComplete) {
-        createActions = onCreateNewTriples();
+        createTriples = onCreateNewTriples();
 
         await makeProposal({
-          actions: createActions,
+          triples: createTriples,
           name: createProposalName,
           onChangePublishState: reviewState => createDispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
           spaceId: spaceIdTo,
@@ -101,7 +97,7 @@ function MoveEntityReviewChanges() {
     } catch (e: unknown) {
       if (e instanceof Error) {
         if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-          createActions = []; // reset the create actions so there aren't duplicates
+          createTriples = []; // reset the create actions so there aren't duplicates
           createDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
           return;
         }
@@ -111,10 +107,10 @@ function MoveEntityReviewChanges() {
     }
 
     try {
-      deleteActions = onDeleteTriples();
+      deleteTriples = onDeleteTriples();
 
       await makeProposal({
-        actions: deleteActions,
+        triples: deleteTriples,
         name: deleteProposalName,
         onChangePublishState: reviewState => deleteDispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
         spaceId: spaceIdFrom,
@@ -123,7 +119,7 @@ function MoveEntityReviewChanges() {
     } catch (e: unknown) {
       if (e instanceof Error) {
         if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-          deleteActions = []; // reset the delete actions so there aren't duplicates when user retries
+          deleteTriples = []; // reset the delete actions so there aren't duplicates when user retries
           deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
           return;
         }

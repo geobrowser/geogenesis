@@ -7,6 +7,7 @@ import { Environment } from '~/core/environment';
 import { Space, SpaceConfigEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 
+import { entityFragment, spaceMetadataFragment, spacePluginsFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
 
@@ -15,52 +16,25 @@ const getFetchSpacesQuery = () => `query {
     nodes {
       id
       isRootSpace
-      mainVotingPluginAddress
-      memberAccessPluginAddress
-      spacePluginAddress
-
+      ${spacePluginsFragment}
+  
       spaceEditors {
         nodes {
           accountId
         }
       }
-
+  
       spaceMembers {
         nodes {
           accountId
         }
       }
+  
       createdAtBlock
-      
+  
       metadata {
         nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
+          ${entityFragment}
         }
       }
     }
@@ -85,7 +59,7 @@ interface NetworkResult {
 
 export async function fetchSpaces() {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,

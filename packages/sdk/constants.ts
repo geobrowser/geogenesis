@@ -1,0 +1,1 @@
+export const INITIAL_COLLECTION_ITEM_INDEX_VALUE = 'a0';

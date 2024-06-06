@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -9,7 +9,7 @@ import { useMergedData } from '../hooks/use-merged-data';
 import { ID } from '../id';
 import { FetchRowsOptions } from '../io/fetch-rows';
 import { Services } from '../services';
-import { Column, EntityValue, GeoType, TripleValueType } from '../types';
+import { AppEntityValue, Column, GeoType, ValueType as TripleValueType } from '../types';
 import { Entity } from '../utils/entity';
 import { Triple } from '../utils/triple';
 import { Value } from '../utils/value';
@@ -29,7 +29,7 @@ export function useTableBlock() {
   const { subgraph } = Services.useServices();
 
   const merged = useMergedData();
-  const { allActions, create, update } = useActionsStore();
+  const { allActions, upsert } = useActionsStore();
 
   // We need to track local changes to the entity and re-fetch it when
   // any changes occur. We re-fetch instead of deriving the new entity
@@ -44,19 +44,11 @@ export function useTableBlock() {
   // the entire block entity again when the name changes as changes to
   // the name triple should not affect any of the data fetching.
   const actionsForEntityId = React.useMemo(() => {
-    return Entity.actionsForEntityId(allActions, entityId);
+    return allActions.filter(t => t.entityId === entityId);
   }, [allActions, entityId]);
 
   const actionsForEntityIdWithoutName = React.useMemo(() => {
-    return actionsForEntityId.filter(a => {
-      switch (a.type) {
-        case 'createTriple':
-        case 'deleteTriple':
-          return a.attributeId !== SYSTEM_IDS.NAME;
-        case 'editTriple':
-          return a.after.attributeId !== SYSTEM_IDS.NAME;
-      }
-    });
+    return actionsForEntityId.filter(a => a.attributeId !== SYSTEM_IDS.NAME);
   }, [actionsForEntityId]);
 
   // We only re-fetch the block entity when actions besides changes
@@ -82,7 +74,7 @@ export function useTableBlock() {
   //    current implementation fewer data structures.
   const nameTriple = React.useMemo(() => {
     const maybeNameTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
-    const mergedTriples = Triple.fromActions(actionsForEntityId, maybeNameTriple ? [maybeNameTriple] : []);
+    const mergedTriples = Triple.merge(actionsForEntityId, maybeNameTriple ? [maybeNameTriple] : []);
     return mergedTriples.find(t => t.attributeId === SYSTEM_IDS.NAME) ?? null;
   }, [blockEntity?.triples, actionsForEntityId]);
 
@@ -197,10 +189,10 @@ export function useTableBlock() {
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
       // Merge all local and server triples
-      const mergedTriples = Triple.fromActions(allActions, relationTypeEntities);
+      const mergedTriples = Triple.merge(allActions, relationTypeEntities);
 
       const relationTypes = mergedTriples.filter(
-        t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
+        t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'ENTITY'
       );
 
       return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
@@ -208,10 +200,10 @@ export function useTableBlock() {
           if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
 
           acc[relationType.entityId].push({
-            typeId: relationType.value.id,
+            typeId: relationType.value.value,
 
             // We can safely cast here because we filter for entity type values above.
-            typeName: (relationType.value as EntityValue).name,
+            typeName: (relationType.value as AppEntityValue).name,
             spaceId: relationType.space,
           });
 
@@ -252,37 +244,22 @@ export function useTableBlock() {
 
       const entityName = Entity.name(nameTriple ? [nameTriple] : []) ?? '';
 
-      if (!filterTriple) {
-        return create(
-          Triple.withId({
-            attributeId: SYSTEM_IDS.FILTER,
-            attributeName: 'Filter',
-            entityId,
-            space: spaceId,
-            entityName,
-            value: {
-              type: 'string',
-              value: newFiltersString,
-              id: ID.createValueId(),
-            },
-          })
-        );
-      }
-
-      return update(
-        Triple.ensureStableId({
-          ...filterTriple,
+      return upsert(
+        {
+          type: 'SET_TRIPLE',
+          attributeId: SYSTEM_IDS.FILTER,
+          attributeName: 'Filter',
+          entityId,
           entityName,
           value: {
-            ...filterTriple.value,
-            type: 'string',
+            type: 'TEXT',
             value: newFiltersString,
           },
-        }),
-        filterTriple
+        },
+        spaceId
       );
     },
-    [create, update, entityId, filterTriple, nameTriple, selectedType.entityId, spaceId]
+    [upsert, entityId, filterTriple, nameTriple, selectedType.entityId, spaceId]
   );
 
   const setName = React.useCallback(
@@ -292,10 +269,10 @@ export function useTableBlock() {
         nameTriple,
         spaceId,
         entityId,
-        api: { update, create },
+        api: { upsert },
       });
     },
-    [create, entityId, nameTriple, spaceId, update]
+    [upsert, entityId, nameTriple, spaceId]
   );
 
   return {

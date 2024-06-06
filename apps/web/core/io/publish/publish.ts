@@ -1,33 +1,23 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import {
-  createContentProposal,
+  Op,
   createSubspaceProposal,
   getAcceptSubspaceArguments,
   getProcessGeoProposalArguments,
   getRemoveSubspaceArguments,
 } from '@geogenesis/sdk';
-import { ProfileRegistryAbi } from '@geogenesis/sdk/abis';
-import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { MainVotingAbi, ProfileRegistryAbi } from '@geogenesis/sdk/abis';
+import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
 
 import { WalletClient } from 'wagmi';
 import { GetWalletClientResult, prepareWriteContract, waitForTransaction, writeContract } from 'wagmi/actions';
 
-import { Action, ReviewState } from '../../types';
+import { ReviewState } from '../../types';
 import { Storage } from '../storage';
 import { IStorageClient } from '../storage/storage';
 import { fetchSpace } from '../subgraph';
-
-function getActionFromChangeStatus(action: Action) {
-  switch (action.type) {
-    case 'createTriple':
-    case 'deleteTriple':
-      return [action];
-    case 'editTriple':
-      return [action.before, action.after];
-  }
-}
 
 export class TransactionRevertedError extends Error {
   readonly _tag = 'TransactionRevertedError';
@@ -55,7 +45,7 @@ export class IpfsUploadError extends Error {
 
 export type MakeProposalOptions = {
   wallet: WalletClient;
-  actions: Action[];
+  ops: Op[];
   space: string;
   onChangePublishState: (newState: ReviewState) => void;
   name: string;
@@ -64,7 +54,7 @@ export type MakeProposalOptions = {
 
 export async function makeProposal({
   storageClient,
-  actions,
+  ops,
   wallet,
   onChangePublishState,
   space,
@@ -80,8 +70,8 @@ export async function makeProposal({
   const uploadEffect = Effect.retry(
     Effect.tryPromise({
       try: async () => {
-        const proposal = createContentProposal(name, actions.flatMap(getActionFromChangeStatus));
-        return await storageClient.uploadObject(proposal);
+        const proposal = createEditProposal({ name, ops, author: wallet.account.address });
+        return await storageClient.uploadBinary(proposal);
       },
       catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
     }),

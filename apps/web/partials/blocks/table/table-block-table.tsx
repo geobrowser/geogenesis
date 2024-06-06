@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
 import {
   ColumnDef,
@@ -20,7 +20,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Cell, Column, Row } from '~/core/types';
+import { Cell, Column, Row, ValueTypeId } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { NavUtils } from '~/core/utils/utils';
@@ -80,7 +80,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { create, update, remove, actions } = useActionsStore();
+    const { upsert, remove, actions, upsertMany } = useActionsStore();
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -96,7 +96,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const cellTriples = pipe(
       actions[space],
-      actions => Triple.fromActions(actions, cellData.triples),
+      // @TODO(migration): Each cell only has one triple
+      actions => Triple.merge(actions, cellData.triples),
       A.filter(triple => {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;
@@ -117,8 +118,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           key={Entity.name(cellTriples)}
           triples={cellTriples}
           cell={cellData}
-          create={create}
-          update={update}
+          upsert={upsert}
+          upsertMany={upsertMany}
           remove={remove}
           space={space}
           valueType={valueType}
@@ -222,7 +223,7 @@ export const TableBlockTable = ({ rows, space, columns, shownIndexes }: Props) =
                 {cells.map((cell, index: number) => {
                   const cellId = `${row.original.id}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
-                  const isExpandable = firstTriple && firstTriple.value.type === 'string';
+                  const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
                   const isShown = shownIndexes.includes(index);
 
                   return (

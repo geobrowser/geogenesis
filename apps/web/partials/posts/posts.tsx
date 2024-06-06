@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 import Link from 'next/link';
 import pluralize from 'pluralize';
@@ -105,7 +105,7 @@ const Post = ({ spaceName, spaceAvatar, spaceId, post, isEditing }: PostProps) =
   const { remove } = useActionsStore();
 
   const handleDelete = () => {
-    post.triples.forEach(triple => remove(triple));
+    post.triples.forEach(triple => remove(triple, spaceId));
     onOpenChange(false);
   };
 

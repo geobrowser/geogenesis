@@ -1,22 +1,12 @@
-import { createContentProposal, getProcessGeoProposalArguments } from '@geogenesis/sdk';
+import { Op, getProcessGeoProposalArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
 import { PrivateKeyAccount, PublicClient, WalletClient } from 'viem';
 
 import { Storage } from '~/core/io';
 import { fetchSpace } from '~/core/io/subgraph';
-import { Action } from '~/core/types';
-
-function getActionFromChangeStatus(action: Action) {
-  switch (action.type) {
-    case 'createTriple':
-    case 'deleteTriple':
-      return [action];
-    case 'editTriple':
-      return [action.before, action.after];
-  }
-}
 
 export class TransactionRevertedError extends Error {
   readonly _tag = 'TransactionRevertedError';
@@ -46,7 +36,7 @@ export type MakeProposalServerOptions = {
   account: PrivateKeyAccount;
   publicClient: PublicClient;
   wallet: WalletClient;
-  actions: Action[];
+  ops: Op[];
   space: string;
   name: string;
   storageClient: Storage.IStorageClient;
@@ -54,7 +44,7 @@ export type MakeProposalServerOptions = {
 
 export async function makeProposalServer({
   account,
-  actions,
+  ops,
   wallet,
   space,
   name,
@@ -70,7 +60,7 @@ export async function makeProposalServer({
   const uploadEffect = Effect.retry(
     Effect.tryPromise({
       try: async () => {
-        const proposal = createContentProposal(name, actions.flatMap(getActionFromChangeStatus));
+        const proposal = createEditProposal({ name, ops, author: account.address });
         return await storageClient.uploadObject(proposal);
       },
       catch: error => new IpfsUploadFailedError(`IPFS upload failed: ${error}`),

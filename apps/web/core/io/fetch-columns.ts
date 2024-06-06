@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 
@@ -37,13 +37,13 @@ export async function fetchColumns({ params, api, signal }: FetchColumnsOptions)
 
   // This will return null if the entity we're fetching does not exist remotely
   const maybeRelatedColumnTriples = await Promise.all(
-    columnsTriples.map(triple => api.fetchEntity({ id: triple.value.id }))
+    columnsTriples.map(triple => api.fetchEntity({ id: triple.value.value }))
   );
 
   const relatedColumnTriples = maybeRelatedColumnTriples.flatMap(entity => (entity ? [entity] : []));
 
   const schemaColumns: Column[] = columnsTriples.map((triple, i) => ({
-    id: triple.value.id,
+    id: triple.value.value,
     triples: relatedColumnTriples[i].triples,
   }));
 

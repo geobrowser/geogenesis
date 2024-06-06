@@ -1,6 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { entityFragment, tripleFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import {
   SubstreamEntity,
@@ -88,33 +89,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
           id
           metadata {
             nodes {
-              id
-              name
-              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-                nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
-                }
-              }
+              ${entityFragment}
             }
           }
         }
@@ -132,29 +107,9 @@ export async function getActiveProposalsForSpacesWhereEditor(
             nodes {
               id
               name
-              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+              triples(filter: {isStale: {equalTo: false}}) {
                 nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
+                  ${tripleFragment}
                 }
               }
             }
@@ -188,7 +143,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
   }`;
 
   const permissionlessSpacesEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: substreamQuery,
   });
 
@@ -222,7 +177,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
       const spaceConfigWithImage = getSpaceConfigFromMetadata(p.space.id, p.space.metadata.nodes[0]);
       const maybeProfile = p.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
       const onchainProfile = p.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-      const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+      const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
 
       const profile: Profile = maybeProfile
         ? {

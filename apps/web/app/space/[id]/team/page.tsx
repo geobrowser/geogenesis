@@ -1,4 +1,4 @@
-import { AVATAR_ATTRIBUTE, NAME, ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Subgraph } from '~/core/io';
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
@@ -39,21 +39,21 @@ const getTeamMembers = async (spaceId: string) => {
       query: '',
       skip: 0,
       first: 1000,
-      filter: [{ field: 'attribute-id', value: ROLE_ATTRIBUTE }],
+      filter: [{ field: 'attribute-id', value: SYSTEM_IDS.ROLE_ATTRIBUTE }],
     }),
     Subgraph.fetchTriples({
       space: spaceId,
       query: '',
       skip: 0,
       first: 1000,
-      filter: [{ field: 'attribute-id', value: NAME }],
+      filter: [{ field: 'attribute-id', value: SYSTEM_IDS.NAME }],
     }),
     Subgraph.fetchTriples({
       space: spaceId,
       query: '',
       skip: 0,
       first: 1000,
-      filter: [{ field: 'attribute-id', value: AVATAR_ATTRIBUTE }],
+      filter: [{ field: 'attribute-id', value: SYSTEM_IDS.AVATAR_ATTRIBUTE }],
     }),
   ]);
 
@@ -62,7 +62,7 @@ const getTeamMembers = async (spaceId: string) => {
   }
 
   roleTriples.forEach(triple => {
-    if (triple.value.type !== 'entity') return;
+    if (triple.value.type !== 'ENTITY') return;
 
     const teamMember = {
       entityId: triple.entityId,

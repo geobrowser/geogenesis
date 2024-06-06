@@ -27,7 +27,7 @@ const getProposedMemberInProposalQuery = (proposalId: string) => `query {
           nodes {
             id
             name
-            triplesByEntityId {
+            triples {
               nodes {
                 id
                 attribute {
@@ -73,7 +73,7 @@ interface NetworkResult {
           nodes: {
             id: string;
             name: string;
-            triplesByEntityId: SubstreamTriple[];
+            triples: SubstreamTriple[];
           }[];
         };
       };
@@ -82,7 +82,7 @@ interface NetworkResult {
 }
 
 export async function fetchProposedMemberForProposal(proposalId: string): Promise<Profile | null> {
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
@@ -155,7 +155,7 @@ export async function fetchProposedMemberForProposal(proposalId: string): Promis
 
   const profile = proposedMemberProfiles[0];
   const onchainProfile = onchainProfiles[0];
-  const triples = fromNetworkTriples(profile.triplesByEntityId);
+  const triples = fromNetworkTriples(profile.triples);
 
   return {
     id: profile.id,

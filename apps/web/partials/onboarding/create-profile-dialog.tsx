@@ -1,6 +1,7 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { createGeoId } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import { Command } from 'cmdk';
@@ -19,7 +20,8 @@ import { ID } from '~/core/id';
 import { fetchProfile } from '~/core/io/subgraph';
 import { Services } from '~/core/services';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
+import { OmitStrict, Triple } from '~/core/types';
+import { Images } from '~/core/utils/images';
 import { NavUtils, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
@@ -91,95 +93,78 @@ export const CreateProfileDialog = () => {
         return;
       }
 
-      const actions: CreateTripleAction[] = [];
+      const triples: Triple[] = [];
 
       // Add triples for a Person entity
       if (name !== '') {
-        const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
+        triples.push({
           entityId: onchainProfile.id,
           entityName: name ?? '',
           attributeId: SYSTEM_IDS.NAME,
           attributeName: 'Name',
           space: onchainProfile.homeSpaceId,
           value: {
-            type: 'string',
+            type: 'TEXT',
             value: name,
-            id: ID.createValueId(),
           },
-        };
-
-        actions.push({
-          type: 'createTriple',
-          // @TODO: Somehow link to on-chain profilePerson
-          id: ID.createTripleId(nameTripleWithoutId),
-          ...nameTripleWithoutId,
         });
       }
 
       if (avatar !== '') {
-        const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
+        const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+          imageSource: Value.toImageValue(avatar),
+          spaceId: onchainProfile.homeSpaceId,
+        });
+
+        triples.push(typeTriple);
+        triples.push(urlTriple);
+
+        // Set the image entity reference on the current entity
+        triples.push({
           entityId: onchainProfile.id,
           entityName: name ?? '',
           attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
           attributeName: 'Avatar',
           space: onchainProfile.homeSpaceId,
           value: {
-            type: 'image',
-            value: avatar,
-            id: ID.createValueId(),
+            type: 'IMAGE',
+            value: typeTriple.entityId,
+            image: urlTriple.value.value,
           },
-        };
-
-        actions.push({
-          type: 'createTriple',
-          id: ID.createTripleId(avatarTripleWithoutId),
-          ...avatarTripleWithoutId,
         });
       }
 
-      const personTypeTriple: OmitStrict<Triple, 'id'> = {
+      triples.push({
         attributeId: SYSTEM_IDS.TYPES,
         attributeName: 'Types',
         entityId: onchainProfile.id,
         entityName: name ?? '',
         space: onchainProfile.homeSpaceId,
         value: {
-          type: 'entity',
+          type: 'ENTITY',
           name: 'Person',
-          id: SYSTEM_IDS.PERSON_TYPE,
+          value: SYSTEM_IDS.PERSON_TYPE,
         },
-      };
-
-      const spaceTypeTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        entityId: onchainProfile.id,
-        entityName: name ?? '',
-        space: onchainProfile.homeSpaceId,
-        value: {
-          type: 'entity',
-          name: 'Space',
-          id: SYSTEM_IDS.SPACE_CONFIGURATION,
-        },
-      };
-
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(personTypeTriple),
-        ...personTypeTriple,
       });
 
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(spaceTypeTriple),
-        ...spaceTypeTriple,
+      triples.push({
+        attributeId: SYSTEM_IDS.TYPES,
+        attributeName: 'Types',
+        entityId: onchainProfile.id,
+        entityName: name ?? '',
+        space: onchainProfile.homeSpaceId,
+        value: {
+          type: 'ENTITY',
+          name: 'Space',
+          value: SYSTEM_IDS.SPACE_CONFIGURATION,
+        },
       });
 
       try {
         setStatus('creating-profile');
 
         await makeProposal({
-          actions,
+          triples: triples,
           name: `Creating profile for ${address}`,
           spaceId: onchainProfile.homeSpaceId,
           onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),

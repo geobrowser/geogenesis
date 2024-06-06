@@ -10,8 +10,30 @@ export type AppConfig = {
   api: string;
 };
 
+export type IVars = Readonly<{
+  liveBlocksPublicKey: string;
+  appEnv: string;
+  walletConnectProjectId: string;
+  privyAppId: string;
+  rpcEndpoint: string;
+  geoPk: string;
+  isTestEnv: boolean;
+}>;
+
+export const variables: IVars = {
+  appEnv: process.env.NEXT_PUBLIC_APP_ENV!,
+  isTestEnv: process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true',
+  liveBlocksPublicKey: process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY!,
+  geoPk: process.env.GEO_PK!,
+  privyAppId: process.env.NEXT_PUBLIC_PRIVY_APP_ID!,
+  rpcEndpoint: process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!,
+  walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+};
+
 export const DEFAULT_ENV: AppEnv = 'production';
 
+// @TODO: This eventually completely comes from our environment instead of hardcoded here.
+// We can ensure our env matches the right schema in `make` above.
 export const options: Record<AppEnv, AppConfig> = {
   development: {
     chainId: '31337',
@@ -21,24 +43,22 @@ export const options: Record<AppEnv, AppConfig> = {
   },
   production: {
     chainId: '19411',
-    rpc: process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!,
+    rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
-    api: 'https://geo-conduit.up.railway.app/graphql',
-    // api: 'http://localhost:5001/graphql',
+    // api: 'https://geo-conduit.up.railway.app/graphql',
+    // @TODO: pass this in via env
+    api: 'http://localhost:5001/graphql',
   },
   testnet: {
     chainId: '19411',
-    rpc: process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!,
+    rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
     api: 'https://geo-conduit.up.railway.app/graphql',
   },
 };
 
-export const getConfig = (env?: string): AppConfig => {
-  if (!env) {
-    console.log(`No env passed in. Defaulting to ${DEFAULT_ENV}`);
-    return options['production'];
-  }
+export const getConfig = (): AppConfig => {
+  const env = variables.appEnv;
 
   if (!(env in options)) {
     console.error(`No config for env ${env}`);

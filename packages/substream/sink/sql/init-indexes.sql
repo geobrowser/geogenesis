@@ -6,7 +6,7 @@
 
 CREATE INDEX idx_entity_attribute ON public.triples(entity_id, attribute_id);
 
-CREATE INDEX idx_entity_attribute_value_id ON public.triples(entity_id, attribute_id, value_id);
+CREATE INDEX idx_entity_attribute_value_id ON public.triples(entity_id, attribute_id, entity_value_id);
 
 CREATE INDEX idx_entity_value_id ON public.triples(entity_value_id);
 
@@ -42,5 +42,11 @@ CREATE INDEX onchain_profile_account_id
 CREATE INDEX onchain_profile_space_id
     on onchain_profiles (home_space_id);
 
-CREATE INDEX proposed_versions_actions
-    on actions (proposed_version_id);
+CREATE INDEX proposed_versions_ops
+    on ops (proposed_version_id);
+
+CREATE INDEX collection_item_collections
+    on collection_items (collection_id);
+
+CREATE INDEX collection_item_entities
+    on collection_items (entity_reference_id);

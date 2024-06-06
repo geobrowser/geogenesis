@@ -1,4 +1,5 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
+import { createGeoId } from '@geogenesis/sdk';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { Effect, Secret, Stream } from 'effect';
@@ -19,7 +20,7 @@ import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
-import { getContentProposalFromProcessedProposalIpfsUri } from './events/proposal-processed/get-content-proposal-from-processed-proposal';
+import { getEditProposalFromInitialSpaceProposalIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
 import { handleProposalsProcessed } from './events/proposal-processed/handler';
 import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
@@ -45,7 +46,6 @@ import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/pa
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { Telemetry } from './telemetry';
-import { createGeoId } from './utils/create-geo-id';
 import { slog } from './utils/slog';
 import { createSink, createStream } from './vendor/sink/src';
 
@@ -320,13 +320,23 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
+          /**
+           * If we have a set of "SpacePluginCreated" events in the same block as a set of "ProposalProcessed" events
+           * we need to check if any of the processed proposals are because an initial content IPFS URI was passed
+           * during space creation.
+           *
+           * If there are processed proposals as a result of an initial content uri, we need to create the appropriate
+           * proposals, proposed versions, actions, etc. before we actually set the proposal as "ACCEPTED"
+           */
           if (proposalProcessedResponse.success) {
-            // Since there are potentially two handlers that we need to run, we abstract out the common
-            // data fetching needed for both here, and pass the result to the two handlers. This breaks
-            // from the normalized pattern where we have a single handler for every event. For this event
-            // there might be two handlers.
+            /**
+             * Since there are potentially two handlers that we need to run, we abstract out the common
+             * data fetching needed for both here, and pass the result to the two handlers. This breaks
+             * from the normalized pattern where we have a single handler for every event. For this event
+             * there might be two handlers.
+             */
             const proposals = yield* _(
-              getContentProposalFromProcessedProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
+              getEditProposalFromInitialSpaceProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
                 blockNumber,
                 cursor,
                 timestamp,
@@ -334,14 +344,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               })
             );
 
-            /**
-             * If we have a set of "SpacePluginCreated" events in the same block as a set of "ProposalProcessed" events
-             * we need to check if any of the processed proposals are because an initial content IPFS URI was passed
-             * during space creation.
-             *
-             * If there are processed proposals as a result of an initial content uri, we need to create the appropriate
-             * proposals, proposed versions, actions, etc. before we actually set the proposal as "ACCEPTED"
-             */
             if (spacePluginCreatedResponse.success) {
               const initialProposalsToWrite = getInitialProposalsForSpaces(
                 spacePluginCreatedResponse.data.spacesCreated,

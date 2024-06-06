@@ -4,6 +4,7 @@ import Image from 'next/legacy/image';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { fetchSpace } from '~/core/io/subgraph';
+import { entityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { Proposal } from '~/core/types';
@@ -118,34 +119,8 @@ const getSubspaceInProposalQuery = (proposalId: string) => `query {
 
         metadata {
           nodes {
-            id
-            name
-            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-              nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
-              }
-            }
-          }
+            ${entityFragment}
+          }           
         }
       }
     }
@@ -169,7 +144,7 @@ interface NetworkResult {
 }
 
 async function fetchProposedSubspace(proposalId: string, spaceId: string) {
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,

@@ -58,7 +58,7 @@ export default async function Page() {
 
       <div className="flex flex-row gap-4">
         <ClientOnly>
-          <CreateDao type="personal" />
+          <CreateDao type="governance" />
         </ClientOnly>
         <ClientOnly>
           <CreateProposal />

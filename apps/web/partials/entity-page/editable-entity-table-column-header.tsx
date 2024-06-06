@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
 
 import { memo, useState } from 'react';
@@ -38,15 +38,15 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
   unpublishedColumns,
 }: Props) {
-  const { actionsFromSpace, create, update, remove } = useActionsStore(spaceId);
+  const { actionsFromSpace, upsert, remove, upsertMany } = useActionsStore(spaceId);
 
   const localTriples = pipe(
-    Triple.fromActions(actionsFromSpace, column.triples),
+    Triple.merge(actionsFromSpace, column.triples),
     A.filter(t => t.entityId === column.id)
   );
 
   const localCellTriples = pipe(
-    Triple.fromActions(actionsFromSpace, []),
+    Triple.merge(actionsFromSpace, []),
     A.filter(triple => triple.attributeId === column.id)
   );
 
@@ -61,8 +61,8 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
       entityName: Entity.name(localTriples) ?? '',
     },
     api: {
-      create,
-      update,
+      upsert,
+      upsertMany,
       remove,
     },
   });
@@ -97,7 +97,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
         className="w-full bg-transparent text-smallTitle placeholder:text-grey-02 focus:outline-none"
         onChange={e => setLocalName(e.currentTarget.value)}
         placeholder="Column name..."
-        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { triple: nameTriple, name: e.target.value } })}
+        onBlur={e => send({ type: 'EDIT_ENTITY_NAME', payload: { name: e.target.value } })}
         value={localName}
       />
 
@@ -113,7 +113,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
                   Text
                 </div>
               ),
-              value: 'string',
+              value: 'TEXT',
               onClick: () => onChangeTripleType(SYSTEM_IDS.TEXT),
               disabled: false,
             },
@@ -125,7 +125,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
                   Relation
                 </div>
               ),
-              value: 'entity',
+              value: 'ENTITY',
               onClick: () => onChangeTripleType(SYSTEM_IDS.RELATION),
               disabled: false,
             },
@@ -137,7 +137,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
                   Image
                 </div>
               ),
-              value: 'image',
+              value: 'IMAGE',
               onClick: () => onChangeTripleType(SYSTEM_IDS.IMAGE),
               disabled: false,
             },
@@ -149,7 +149,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
                   Date
                 </div>
               ),
-              value: 'date',
+              value: 'TIME',
               onClick: () => onChangeTripleType(SYSTEM_IDS.DATE),
               disabled: false,
             },
@@ -161,7 +161,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
                   Web URL
                 </div>
               ),
-              value: 'url',
+              value: 'URL',
               onClick: () => onChangeTripleType(SYSTEM_IDS.WEB_URL),
               disabled: false,
             },

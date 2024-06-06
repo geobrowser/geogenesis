@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
 import { ErrorBoundary } from 'react-error-boundary';
 

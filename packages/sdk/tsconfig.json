@@ -13,8 +13,8 @@
     "noUncheckedIndexedAccess": true,
 
     /* Module resolution when transpiling with TypeScript */
-    "moduleResolution": "NodeNext",
-    "module": "NodeNext",
+    "moduleResolution": "Bundler",
+    "module": "Preserve",
     "outDir": "dist",
     "sourceMap": true,
 
@@ -37,10 +37,10 @@
 
     /* When building a library in a monorepo */
     "composite": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "paths": {
+      "~/*": ["./*"],
+      "@geogenesis/*": ["../*"]
+    }
   },
-  "paths": {
-    "~/*": ["./*"],
-    "@geogenesis/*": ["../*"]
-  }
 }

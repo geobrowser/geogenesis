@@ -7,6 +7,7 @@ import React from 'react';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { fetchProfile } from '~/core/io/subgraph';
+import { tripleFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
 import { OmitStrict, Profile, Proposal, Vote } from '~/core/types';
@@ -138,29 +139,9 @@ const getFetchSpaceProposalsQuery = (
           nodes {
             id
             name
-            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+            triples(filter: {isStale: {equalTo: false}}) {
               nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
+                ${tripleFragment}
               }
             }
           }
@@ -208,7 +189,7 @@ async function fetchActiveProposals({
   const offset = page * first;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchSpaceProposalsQuery(spaceId, first, offset, connectedAddress),
   });
 
@@ -256,7 +237,7 @@ async function fetchActiveProposals({
   return proposals.map(p => {
     const maybeProfile = p.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
     const onchainProfile = p.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-    const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+    const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
 
     const profile: Profile = maybeProfile
       ? {

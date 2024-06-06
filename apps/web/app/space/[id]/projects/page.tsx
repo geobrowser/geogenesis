@@ -1,4 +1,4 @@
-import { NONPROFIT_TYPE, PROJECT_TYPE } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Subgraph } from '~/core/io';
 import { Triple } from '~/core/types';
@@ -40,14 +40,15 @@ const getProjects = async (spaceId: string) => {
 
   const projectEntities = await Subgraph.fetchEntities({
     spaceId,
-    typeIds: [PROJECT_TYPE],
+    typeIds: [SYSTEM_IDS.PROJECT_TYPE],
     filter: [],
   });
 
   projectEntities
     .filter(
       project =>
-        project.nameTripleSpaces?.includes(spaceId) && !project.types.some((type: any) => type.id === NONPROFIT_TYPE)
+        project.nameTripleSpaces?.includes(spaceId) &&
+        !project.types.some(type => type.id === SYSTEM_IDS.NONPROFIT_TYPE)
     )
     .forEach(project => {
       projects.push({

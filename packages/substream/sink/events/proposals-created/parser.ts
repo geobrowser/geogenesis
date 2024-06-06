@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { type Action, ZodAction } from '../../zod';
+import type { Op } from '~/sink/types';
 
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
@@ -15,12 +15,6 @@ import { type Action, ZodAction } from '../../zod';
  * succeeds. For example, if a proposal is to add a new editor to the space, the callback would
  * be the encoded function call to add the editor to the space.
  *
- * ```ts
- * {
- *   to: `0x123...`, // The address of the membership contract
- *   data: `0x123...`, // The encoded function call parameters
- * }
- * ```
  */
 export const ZodSubstreamProposalCreated = z.object({
   proposalId: z.string(),
@@ -45,7 +39,7 @@ export const ZodProposal = z.object({
 // proposal and write to the sink correctly.
 export const ZodProposalMetadata = z.object({
   type: z.enum([
-    'CONTENT',
+    'EDIT',
     'ADD_SUBSPACE',
     'REMOVE_SUBSPACE',
     'ADD_EDITOR',
@@ -53,7 +47,7 @@ export const ZodProposalMetadata = z.object({
     'ADD_MEMBER',
     'REMOVE_MEMBER',
   ]),
-  name: z.string().optional(),
+  name: z.string(),
   // We version the data structured used to represent proposal metadata. Each
   // proposal type has their own metadata and versioning that we can change
   // independently of other proposal types.
@@ -65,20 +59,6 @@ export type ProposalMetadata = z.infer<typeof ZodProposalMetadata>;
 export type ProposalCreated = z.infer<typeof ZodSubstreamProposalCreated>;
 export type Proposal = z.infer<typeof ZodProposal>;
 
-export const ZodContentProposal = z.object({
-  proposalId: z.string(),
-  actions: z.array(ZodAction),
-});
-
-export type ContentProposal = Proposal & {
-  type: 'CONTENT';
-  name: string | null;
-  proposalId: string;
-  onchainProposalId: string;
-  pluginAddress: string;
-  actions: Action[];
-};
-
 export const ZodMembershipProposal = z.object({
   proposalId: z.string(),
   userAddress: z.string(),
@@ -86,7 +66,7 @@ export const ZodMembershipProposal = z.object({
 
 export type MembershipProposal = Proposal & {
   type: 'ADD_MEMBER' | 'REMOVE_MEMBER';
-  name: string | null;
+  name: string;
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
@@ -100,7 +80,7 @@ export const ZodEditorshipProposal = z.object({
 
 export type EditorshipProposal = Proposal & {
   type: 'ADD_EDITOR' | 'REMOVE_EDITOR';
-  name: string | null;
+  name: string;
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
@@ -114,7 +94,7 @@ export const ZodSubspaceProposal = z.object({
 
 export type SubspaceProposal = Proposal & {
   type: 'ADD_SUBSPACE' | 'REMOVE_SUBSPACE';
-  name: string | null;
+  name: string;
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
@@ -135,3 +115,51 @@ export type ProposalProcessed = z.infer<typeof ZodProposalProcessed>;
 export const ZodProposalProcessedStreamResponse = z.object({
   proposalsProcessed: z.array(ZodProposalProcessed).min(1),
 });
+
+const ZodEditSetTriplePayload = z.object({
+  entityId: z.string(),
+  attributeId: z.string(),
+  // zod has issues with discriminated unions. We set the value
+  // to any here and trust that it is constructed into the correct
+  // format once it's decoded.
+  value: z.any(),
+});
+
+const ZodEditDeleteTriplePayload = z.object({
+  entityId: z.string(),
+  attributeId: z.string(),
+  // zod has issues with discriminated unions. We set the value
+  // to any here and trust that it is constructed into the correct
+  // format once it's decoded.
+  value: z.any(),
+});
+
+const ZodSetTripleOp = z.object({
+  opType: z.literal('SET_TRIPLE'),
+  payload: ZodEditSetTriplePayload,
+});
+
+const ZodDeleteTripleOp = z.object({
+  opType: z.literal('DELETE_TRIPLE'),
+  payload: ZodEditDeleteTriplePayload,
+});
+
+export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
+
+export const ZodEdit = z.object({
+  type: z.literal('EDIT'),
+  name: z.string(),
+  version: z.string(),
+  ops: z.array(ZodOp),
+  authors: z.array(z.string()),
+  proposalId: z.string(),
+});
+
+export type EditProposal = Proposal & {
+  type: 'EDIT';
+  name: string;
+  proposalId: string;
+  onchainProposalId: string;
+  pluginAddress: string;
+  ops: Op[];
+};

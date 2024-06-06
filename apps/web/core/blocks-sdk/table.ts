@@ -1,10 +1,9 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { getAddress } from 'viem';
 
-import { ID } from '~/core/id';
-import { Entity as IEntity, Triple as ITriple, TripleValueType } from '~/core/types';
+import { Entity as IEntity, Triple as ITriple, ValueType as TripleValueType } from '~/core/types';
 
-import { Triple } from '../utils/triple';
+import { useActionsStore } from '../hooks/use-actions-store';
 
 export function upsertName({
   newName,
@@ -18,23 +17,20 @@ export function upsertName({
   entityId: string;
   spaceId: string;
   api: {
-    create: (triple: ITriple) => void;
-    update: (triple: ITriple, oldTriple: ITriple) => void;
+    upsert: ReturnType<typeof useActionsStore>['upsert'];
   };
 }) {
-  if (!nameTriple)
-    return api.create(
-      Triple.withId({
-        attributeId: SYSTEM_IDS.NAME,
-        entityId: entityId,
-        entityName: newName,
-        attributeName: 'Name',
-        space: spaceId,
-        value: { type: 'string', id: ID.createValueId(), value: newName },
-      })
-    );
-
-  api.update({ ...nameTriple, value: { ...nameTriple.value, type: 'string', value: newName } }, nameTriple);
+  return api.upsert(
+    {
+      type: 'SET_TRIPLE',
+      attributeId: SYSTEM_IDS.NAME,
+      entityId: entityId,
+      entityName: newName,
+      attributeName: 'Name',
+      value: { type: 'TEXT', value: newName },
+    },
+    spaceId
+  );
 }
 
 /**
@@ -85,12 +81,12 @@ export function createGraphQLStringFromFilters(
       // We treat Name and Space as special filters even though they are not always
       // columns on the type schema for a table. We allow users to be able to filter
       // by name and space.
-      if (filter.columnId === SYSTEM_IDS.NAME && filter.valueType === 'string') {
+      if (filter.columnId === SYSTEM_IDS.NAME && filter.valueType === 'TEXT') {
         // For the name we can just search for the name based on the indexed GeoEntity name
         return `name_starts_with_nocase: "${filter.value}"`;
       }
 
-      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'string') {
+      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
         // @HACK: We map to the checksum address when filtering by space. Old filters
         // might be using the incorrectly formatted address so we need to check for that
         // here. In the future we'll migrate to the new API's query string format which will
@@ -102,12 +98,12 @@ export function createGraphQLStringFromFilters(
         return `entityOf_: {space: "${getAddress(filter.value)}"}`;
       }
 
-      if (filter.valueType === 'entity') {
+      if (filter.valueType === 'ENTITY') {
         // value is the ID of the relation
         return `entityOf_: {attribute: "${filter.columnId}", entityValue: "${filter.value}"}`;
       }
 
-      if (filter.valueType === 'string') {
+      if (filter.valueType === 'TEXT') {
         // value is just the stringValue of the triple
         return `entityOf_: {attribute: "${filter.columnId}", stringValue_starts_with_nocase: "${filter.value}"}`;
       }
@@ -201,7 +197,7 @@ export async function createFiltersFromGraphQLString(
   if (nameValue) {
     filters.push({
       columnId: SYSTEM_IDS.NAME,
-      valueType: 'string',
+      valueType: 'TEXT',
       value: nameValue,
       valueName: null,
     });
@@ -214,7 +210,7 @@ export async function createFiltersFromGraphQLString(
   if (spaceValue) {
     filters.push({
       columnId: SYSTEM_IDS.SPACE,
-      valueType: 'string',
+      valueType: 'TEXT',
       // @HACK: We map to the checksum address when filtering by space. Old filters
       // might be using the incorrectly formatted address so we need to check for that
       // here. In the future we'll migrate to the new API's query string format which will
@@ -241,7 +237,7 @@ export async function createFiltersFromGraphQLString(
       if (maybeEntity) {
         filters.push({
           columnId: attribute,
-          valueType: 'entity',
+          valueType: 'ENTITY',
           value: entityValue,
           valueName: maybeEntity.name,
         });
@@ -260,7 +256,7 @@ export async function createFiltersFromGraphQLString(
     if (attribute && stringValue) {
       filters.push({
         columnId: attribute,
-        valueType: 'string',
+        valueType: 'TEXT',
         value: stringValue,
         valueName: null,
       });
@@ -279,19 +275,19 @@ export function createGraphQLStringFromFiltersV2(
   typeId: string | null
 ): string {
   if (!typeId) return '';
-  if (filters.length === 0) return `{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: "${typeId}" } } } }`;
+  if (filters.length === 0) return `{ entityTypes: { some: { typeId: { equalTo: "${typeId}" } } } }`;
 
   const filtersAsStrings = filters
     .map(filter => {
       // We treat Name and Space as special filters even though they are not always
       // columns on the type schema for a table. We allow users to be able to filter
       // by name and space.
-      if (filter.columnId === SYSTEM_IDS.NAME && filter.valueType === 'string') {
+      if (filter.columnId === SYSTEM_IDS.NAME && filter.valueType === 'TEXT') {
         // For the name we can just search for the name based on the indexed GeoEntity name
         return `name: { startsWithInsensitive: "${filter.value}" }`;
       }
 
-      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'string') {
+      if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
         // @HACK: We map to the checksum address when filtering by space. Old filters
         // might be using the incorrectly formatted address so we need to check for that
         // here. In the future we'll migrate to the new API's query string format which will
@@ -300,7 +296,7 @@ export function createGraphQLStringFromFiltersV2(
         // Previous versions of the subgraph did not correctly checksum the space address
         // so any queries that relied on the incorrect space address checksum will not work
         // against newer versions of the protocol.
-        return `triplesByEntityId: {
+        return `triples: {
           some: {
             spaceId: { equalTo: "${getAddress(filter.value)}" },
             isStale: { equalTo: false }
@@ -308,14 +304,14 @@ export function createGraphQLStringFromFiltersV2(
         }`;
       }
 
-      if (filter.valueType === 'entity') {
+      if (filter.valueType === 'ENTITY') {
         // value is the ID of the relation
-        return `triplesByEntityId: { some: { attributeId: { equalTo: "${filter.columnId}" }, entityValueId: { equalTo: "${filter.value}"}, isStale: { equalTo: false } } }`;
+        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, entityValueId: { equalTo: "${filter.value}"}, isStale: { equalTo: false } } }`;
       }
 
-      if (filter.valueType === 'string') {
+      if (filter.valueType === 'TEXT') {
         // value is just the stringValue of the triple
-        return `triplesByEntityId: { some: { attributeId: { equalTo: "${filter.columnId}" }, stringValue: { equalToInsensitive: "${filter.value}"}, isStale: { equalTo: false } } }`;
+        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, stringValue: { equalToInsensitive: "${filter.value}"}, isStale: { equalTo: false } } }`;
       }
 
       // We don't support other value types yet
@@ -324,11 +320,11 @@ export function createGraphQLStringFromFiltersV2(
     .flatMap(f => (f ? [f] : []));
 
   if (filtersAsStrings.length === 1) {
-    return `{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: "${typeId}" } } }, ${filtersAsStrings[0]}}`;
+    return `{ entityTypes: { some: { typeId: { equalTo: "${typeId}" } } }, ${filtersAsStrings[0]}}`;
   }
 
   // Wrap each filter expression in curly brackets
   const multiFilterQuery = filtersAsStrings.map(f => `{ ${f} }`).join(', ');
 
-  return `{ and: [{ geoEntityTypesByEntityId: { some: { typeId: { equalTo: "${typeId}" } } } } ${multiFilterQuery}] }`;
+  return `{ and: [{ entityTypes: { some: { typeId: { equalTo: "${typeId}" } } } } ${multiFilterQuery}] }`;
 }

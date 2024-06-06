@@ -1,7 +1,7 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
-import { Action, Entity, Triple } from '~/core/types';
+import { Entity, Triple } from '~/core/types';
 
 import {
   description,
@@ -20,8 +20,7 @@ const triplesWithSystemDescriptionAttribute: Triple[] = [
     attributeId: SYSTEM_IDS.DESCRIPTION,
     attributeName: 'Description',
     value: {
-      id: 'valueId',
-      type: 'string',
+      type: 'TEXT',
       value: 'banana',
     },
     space: 'spaceId',
@@ -36,8 +35,8 @@ const triplesWithSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
     attributeId: SYSTEM_IDS.DESCRIPTION,
     attributeName: 'Description',
     value: {
-      id: 'valueId',
-      type: 'entity',
+      value: 'valueId',
+      type: 'ENTITY',
       name: 'banana',
     },
     space: 'spaceId',
@@ -52,8 +51,7 @@ const triplesWithNonSystemDescriptionAttribute: Triple[] = [
     attributeId: 'attributeId',
     attributeName: 'Description',
     value: {
-      id: 'valueId',
-      type: 'string',
+      type: 'TEXT',
       value: 'banana',
     },
     space: 'spaceId',
@@ -68,8 +66,8 @@ const triplesWithNonSystemDescriptionAttributeAndValueIsEntity: Triple[] = [
     attributeId: 'attributeId',
     attributeName: 'Description',
     value: {
-      id: 'valueId',
-      type: 'entity',
+      value: 'valueId',
+      type: 'ENTITY',
       name: 'banana',
     },
     space: 'spaceId',
@@ -123,8 +121,7 @@ const triplesWithSystemNameAttribute: Triple[] = [
     entityName: 'banana',
     space: 'spaceId',
     value: {
-      id: 'valueId',
-      type: 'string',
+      type: 'TEXT',
       value: 'banana',
     },
   },
@@ -139,8 +136,8 @@ const triplesWithSystemNameAttributeAndNameIsEntity: Triple[] = [
     entityName: 'banana',
     space: 'spaceId',
     value: {
-      id: 'valueId',
-      type: 'entity',
+      value: 'valueId',
+      type: 'ENTITY',
       name: 'banana',
     },
   },
@@ -155,8 +152,7 @@ const triplesWithNonSystemNameAttribute: Triple[] = [
     entityName: 'banana',
     space: 'spaceId',
     value: {
-      id: 'valueId',
-      type: 'string',
+      type: 'TEXT',
       value: 'banana',
     },
   },
@@ -191,8 +187,8 @@ const triplesWithMultipleTypesFromSameSpace: Triple[] = [
     attributeId: 'type',
     attributeName: 'Types',
     value: {
-      id: 'valueId',
-      type: 'entity',
+      value: 'valueId',
+      type: 'ENTITY',
       name: 'banana',
     },
     space: 'spaceId',
@@ -204,8 +200,8 @@ const triplesWithMultipleTypesFromSameSpace: Triple[] = [
     attributeId: 'type',
     attributeName: 'Types',
     value: {
-      id: 'valueId',
-      type: 'entity',
+      value: 'valueId',
+      type: 'ENTITY',
       name: 'orange',
     },
     space: 'spaceId',
@@ -220,8 +216,8 @@ const triplesWithConflictingTypesFromDifferentSpaces: Triple[] = [
     attributeId: 'type',
     attributeName: 'Types',
     value: {
-      id: 'valueId',
-      type: 'entity',
+      value: 'valueId',
+      type: 'ENTITY',
       name: 'banana',
     },
     space: 'spaceId',
@@ -233,8 +229,8 @@ const triplesWithConflictingTypesFromDifferentSpaces: Triple[] = [
     attributeId: 'type',
     attributeName: 'Types',
     value: {
-      id: 'valueId',
-      type: 'entity',
+      value: 'valueId',
+      type: 'ENTITY',
       name: 'banana',
     },
     space: 'spaceId-2',
@@ -265,8 +261,7 @@ const triplesFromMultipleEntities: Triple[] = [
     attributeId: SYSTEM_IDS.NAME,
     attributeName: 'Name',
     value: {
-      id: 'valueId',
-      type: 'string',
+      type: 'TEXT',
       value: 'entity-1',
     },
     space: 'spaceId',
@@ -278,8 +273,7 @@ const triplesFromMultipleEntities: Triple[] = [
     attributeId: SYSTEM_IDS.DESCRIPTION,
     attributeName: SYSTEM_IDS.DESCRIPTION,
     value: {
-      id: 'valueId',
-      type: 'string',
+      type: 'TEXT',
       value: 'banana description',
     },
     space: 'spaceId',
@@ -291,8 +285,7 @@ const triplesFromMultipleEntities: Triple[] = [
     attributeId: SYSTEM_IDS.NAME,
     attributeName: 'Name',
     value: {
-      id: 'valueId',
-      type: 'string',
+      type: 'TEXT',
       value: 'entity-2',
     },
     space: 'spaceId',
@@ -304,8 +297,7 @@ const triplesFromMultipleEntities: Triple[] = [
     attributeId: SYSTEM_IDS.DESCRIPTION,
     attributeName: SYSTEM_IDS.DESCRIPTION,
     value: {
-      id: 'valueId',
-      type: 'string',
+      type: 'TEXT',
       value: 'apple description',
     },
     space: 'spaceId',
@@ -336,23 +328,14 @@ it('Entity.entitiesFromTriples should map Triples to Entity', () => {
   expect(entitiesFromTriples(triplesFromMultipleEntities)).toEqual(entitiesResult);
 });
 
-const localActions: Record<string, Action[]> = {
+const localActions: Record<string, Triple[]> = {
   spaceId: [
     {
       id: '5',
-      type: 'editTriple',
-      before: {
-        type: 'deleteTriple',
-        ...triplesFromMultipleEntities[0],
-      },
-      after: {
-        type: 'createTriple',
-        ...triplesFromMultipleEntities[0],
-        value: {
-          id: 'valueId',
-          type: 'string',
-          value: 'entity-1-changed',
-        },
+      ...triplesFromMultipleEntities[0],
+      value: {
+        type: 'TEXT',
+        value: 'entity-1-changed',
       },
     },
   ],

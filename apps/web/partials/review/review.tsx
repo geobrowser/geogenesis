@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import { cva } from 'class-variance-authority';
@@ -24,11 +24,12 @@ import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Action as ActionType, Entity as EntityType, Space } from '~/core/types';
+import type { Entity as EntityType, Space, Triple as TripleType } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entity } from '~/core/utils/entity';
+import { Triple } from '~/core/utils/triple';
 import { GeoDate, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -137,8 +138,8 @@ const ReviewChanges = () => {
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
   const { actionsFromSpace, clear } = useActionsStore(activeSpace);
   const { makeProposal } = usePublish();
-  const actions = Action.unpublishedChanges(actionsFromSpace);
-  const [data, isLoading] = useChanges(actions, activeSpace);
+  const triples = Triple.squash(actionsFromSpace);
+  const [data, isLoading] = useChanges(triples, activeSpace);
 
   // Publishing logic
   const { data: wallet } = useWalletClient();
@@ -151,10 +152,11 @@ const ReviewChanges = () => {
     };
 
     try {
-      const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
+      // @TODO: Selectable publishing
+      // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
       await makeProposal({
-        actions: actionsToPublish,
+        triples: actionsFromSpace,
         spaceId: activeSpace,
         name: proposalName,
         onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
@@ -642,7 +644,7 @@ const ChangedAttribute = ({
   if (!before && !after) return null;
 
   switch (attribute.type) {
-    case 'string': {
+    case 'TEXT': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
@@ -684,7 +686,7 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'entity': {
+    case 'ENTITY': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
           <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
@@ -745,7 +747,7 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'image': {
+    case 'IMAGE': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
           <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
@@ -779,7 +781,7 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'date': {
+    case 'TIME': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
           <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
@@ -805,7 +807,7 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'url': {
+    case 'URL': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
@@ -940,11 +942,11 @@ const labelClassNames = `text-footnote text-grey-04`;
 
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
-export const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
+export const useChanges = (triples: Array<TripleType> = [], spaceId: string) => {
   const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
-    queryKey: ['changes', spaceId, actions],
-    queryFn: async () => Change.fromActions(Action.prepareActionsForPublishing(actions), subgraph),
+    queryKey: ['changes', spaceId, triples],
+    queryFn: async () => Change.fromTriples(Triple.squash(triples), subgraph),
   });
 
   return [data, isLoading] as const;
@@ -1025,7 +1027,7 @@ type TableFilterProps = {
 };
 
 const TableFilter = ({ filter }: TableFilterProps) => {
-  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
+  const value = filter.valueType === 'ENTITY' ? filter.valueName : filter.value;
 
   return (
     <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">

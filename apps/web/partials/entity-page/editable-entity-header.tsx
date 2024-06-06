@@ -29,12 +29,11 @@ export function EditableHeading({
   const { triples: localTriples } = useEntityPageStore();
   const { editable } = useEditable();
   const { isEditor } = useAccessControl(spaceId);
-  const { actionsFromSpace, create, update, remove } = useActionsStore(spaceId);
+  const { actionsFromSpace, upsert, remove, upsertMany } = useActionsStore(spaceId);
 
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
 
   const isEditing = editable && isEditor;
-  const nameTriple = Entity.nameTriple(triples);
 
   const name = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverName : Entity.name(triples) ?? '';
 
@@ -45,8 +44,8 @@ export function EditableHeading({
       entityName: name ?? '',
     },
     api: {
-      create,
-      update,
+      upsertMany,
+      upsert,
       remove,
     },
   });
@@ -56,7 +55,6 @@ export function EditableHeading({
       type: 'EDIT_ENTITY_NAME',
       payload: {
         name: e.target.value,
-        triple: nameTriple,
       },
     });
   };

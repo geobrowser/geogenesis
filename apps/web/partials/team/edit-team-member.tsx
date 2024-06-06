@@ -1,7 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 import Link from 'next/link';
 
@@ -14,7 +13,7 @@ import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
 import { Triple as TripleType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Images } from '~/core/utils/images';
 import { Value } from '~/core/utils/value';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
@@ -66,7 +65,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
-  const { create, remove } = useActionsStore();
+  const { upsert, remove, upsertMany } = useActionsStore();
 
   useEffect(() => {
     if (avatar !== teamMember.avatar || name !== teamMember.name || roleEntityId !== initialRoleEntityId) {
@@ -106,35 +105,69 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     if (hasChangedAvatar) {
       if (hasSpaceAvatar) {
         if (hasRemovedAvatar) {
-          remove(spaceAvatar);
+          remove(spaceAvatar, spaceId);
         } else if (hasAvatar) {
-          remove(spaceAvatar);
-          create(
-            Triple.withId({
-              ...spaceAvatar,
-              value: {
-                ...spaceAvatar.value,
-                type: 'image',
-                value: Value.toImageValue(avatar),
+          remove(spaceAvatar, spaceId);
+
+          const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+            imageSource: Value.toImageValue(avatar),
+            spaceId,
+          });
+
+          upsertMany([
+            {
+              op: { ...typeTriple, type: 'SET_TRIPLE' },
+              spaceId,
+            },
+            {
+              op: { ...urlTriple, type: 'SET_TRIPLE' },
+              spaceId,
+            },
+            {
+              op: {
+                ...spaceAvatar,
+                type: 'SET_TRIPLE',
+                value: {
+                  type: 'IMAGE',
+                  value: typeTriple.entityId,
+                  image: urlTriple.value.value,
+                },
               },
-            })
-          );
+              spaceId,
+            },
+          ]);
         }
       } else if (hasAvatar) {
-        create(
-          Triple.withId({
-            space: spaceId,
-            entityId: entityId,
-            entityName: name,
-            attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-            attributeName: 'Avatar',
-            value: {
-              type: 'image',
-              id: ID.createValueId(),
-              value: Value.toImageValue(avatar),
+        const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+          imageSource: Value.toImageValue(avatar),
+          spaceId,
+        });
+
+        upsertMany([
+          {
+            op: { ...typeTriple, type: 'SET_TRIPLE' },
+            spaceId,
+          },
+          {
+            op: { ...urlTriple, type: 'SET_TRIPLE' },
+            spaceId,
+          },
+          {
+            op: {
+              type: 'SET_TRIPLE',
+              entityId: entityId,
+              entityName: name,
+              attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+              attributeName: 'Avatar',
+              value: {
+                type: 'IMAGE',
+                value: typeTriple.entityId,
+                image: urlTriple.value.value,
+              },
             },
-          })
-        );
+            spaceId,
+          },
+        ]);
       }
     }
 
@@ -148,57 +181,59 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     if (hasChangedName) {
       if (hasSpaceName) {
         if (hasRemovedName) {
-          remove(spaceName);
+          remove(spaceName, spaceId);
         } else {
-          remove(spaceName);
-          create(
-            Triple.withId({
+          remove(spaceName, spaceId);
+          upsert(
+            {
+              type: 'SET_TRIPLE',
               ...spaceName,
               value: {
-                ...spaceName.value,
-                type: 'string',
+                type: 'TEXT',
                 value: name,
               },
-            })
+            },
+            spaceId
           );
         }
       } else {
-        create(
-          Triple.withId({
-            space: spaceId,
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId,
             entityName: name,
             attributeId: SYSTEM_IDS.NAME,
             attributeName: 'Name',
             value: {
-              type: 'string',
-              id: ID.createValueId(),
+              type: 'TEXT',
               value: name,
             },
-          })
+          },
+          spaceId
         );
       }
     }
 
     // Role conditions
-    const spaceRole = spaceTriples.find(triple => triple.attributeId === ROLE_ATTRIBUTE);
+    const spaceRole = spaceTriples.find(triple => triple.attributeId === SYSTEM_IDS.ROLE_ATTRIBUTE);
     const hasChangedRole = roleEntityId !== initialRoleEntityId;
     const hasSpaceRole = !!spaceRole;
     const hasRole = !!roleEntityId && !!roleName;
 
     // Update role attribute
     if (hasChangedRole && hasSpaceRole && hasRole) {
-      remove(spaceRole);
-      create(
-        Triple.withId({
+      remove(spaceRole, spaceId);
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           ...spaceRole,
           value: {
-            ...spaceRole.value,
-            type: 'entity',
-            id: roleEntityId,
+            type: 'ENTITY',
+            value: roleEntityId,
             name: roleName,
           },
-        })
+        },
+        spaceId
       );
     }
 
@@ -242,20 +277,21 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     spaceTriples.forEach(triple => {
       // Remove person type
-      if (triple.value.id === SYSTEM_IDS.PERSON_TYPE) {
-        remove(triple);
+      if (triple.value.value === SYSTEM_IDS.PERSON_TYPE) {
+        remove(triple, spaceId);
       } else {
         // Update entity id of existing name/role (and possibly avatar) triples
-        remove(triple);
-        create(
-          Triple.withId({
-            space: triple.space,
+        remove(triple, spaceId);
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: entityId,
             entityName: triple.entityName,
             attributeId: triple.attributeId,
             attributeName: triple.attributeName,
             value: triple.value,
-          })
+          },
+          triple.space
         );
       }
     });
@@ -274,16 +310,17 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     // Update entity id of existing role (and possibly name/avatar) triples
     spaceTriples.forEach(triple => {
-      remove(triple);
-      create(
-        Triple.withId({
-          space: triple.space,
+      remove(triple, spaceId);
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId: newEntityId,
           entityName: triple.entityName,
           attributeId: triple.attributeId,
           attributeName: triple.attributeName,
           value: triple.value,
-        })
+        },
+        triple.space
       );
     });
 
@@ -291,19 +328,19 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     // Add name attribute (if not already in space triples)
     if (!nameSpaceTriple) {
-      create(
-        Triple.withId({
-          space: spaceId,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId: newEntityId,
           entityName: teamMember.name,
           attributeId: SYSTEM_IDS.NAME,
           attributeName: 'Name',
           value: {
-            type: 'string',
-            id: ID.createValueId(),
+            type: 'TEXT',
             value: teamMember.name,
           },
-        })
+        },
+        spaceId
       );
     }
 
@@ -311,36 +348,53 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     // Add avatar (if person has an avatar and its not already in space triples)
     if (!avatarSpaceTriple && teamMember.avatar) {
-      create(
-        Triple.withId({
-          space: spaceId,
-          entityId: newEntityId,
-          entityName: teamMember.name,
-          attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-          attributeName: 'Avatar',
-          value: {
-            type: 'image',
-            id: ID.createValueId(),
-            value: teamMember.avatar,
+      const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+        imageSource: Value.toImageValue(teamMember.avatar),
+        spaceId,
+      });
+
+      upsertMany([
+        {
+          op: { ...typeTriple, type: 'SET_TRIPLE' },
+          spaceId,
+        },
+        {
+          op: { ...urlTriple, type: 'SET_TRIPLE' },
+          spaceId,
+        },
+        {
+          op: {
+            type: 'SET_TRIPLE',
+            entityId: newEntityId,
+            entityName: name,
+            attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+            attributeName: 'Avatar',
+            value: {
+              type: 'IMAGE',
+              value: typeTriple.entityId,
+              image: urlTriple.value.value,
+            },
           },
-        })
-      );
+          spaceId,
+        },
+      ]);
     }
 
     // Add person type
-    create(
-      Triple.withId({
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: newEntityId,
         attributeId: SYSTEM_IDS.TYPES,
         entityName: teamMember.name,
         attributeName: 'Types',
-        space: spaceId,
         value: {
-          type: 'entity',
-          id: SYSTEM_IDS.PERSON_TYPE,
+          type: 'ENTITY',
+          value: SYSTEM_IDS.PERSON_TYPE,
           name: 'Person',
         },
-      })
+      },
+      spaceId
     );
 
     setStatus('unlinked');
@@ -354,7 +408,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     const spaceTriples = entity.triples.filter(triple => triple.space === spaceId);
 
     spaceTriples.forEach(triple => {
-      remove(triple);
+      remove(triple, spaceId);
     });
 
     setStatus('removed');
@@ -436,7 +490,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
                 spaceId={spaceId}
                 placeholder="Find or create role..."
                 onDone={handleChangeRole}
-                itemIds={[]}
+                alreadySelectedIds={[]}
                 allowedTypes={[{ typeId: '9c1922f1-d7a2-47d1-841d-234cb2f56991', typeName: 'Role' }]}
                 attributeId="9c1922f1-d7a2-47d1-841d-234cb2f56991"
                 className="!h-auto !font-medium"
@@ -564,11 +618,11 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 };
 
 const getInitialRoleName = (role: TripleType): string => {
-  if (role.value.type === 'entity') {
+  if (role.value.type === 'ENTITY') {
     return role.value.name ?? 'No entity name';
   } else {
     return 'No entity name';
   }
 };
 
-const getInitialRoleEntityId = (role: TripleType): string => role.value.id;
+const getInitialRoleEntityId = (role: TripleType): string => role.value.value;

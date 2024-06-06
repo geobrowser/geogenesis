@@ -1,35 +1,41 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import type { EntityValue, Triple } from '~/core/types';
+import type { AppEntityValue, Triple } from '~/core/types';
 
 import { getImageHash } from '../utils';
 
 export function nameOfEntityValue(triple?: Triple) {
   if (!triple) return null;
 
-  return triple?.value?.type === 'entity' ? triple.value.name : null;
+  return triple.value.type === 'ENTITY' ? triple.value.name : null;
+}
+
+export function entityValue(triple: Triple) {
+  if (!triple) return null;
+
+  return triple.value.type === 'ENTITY' ? triple.value.value : null;
 }
 
 export function stringValue(triple?: Triple) {
   if (!triple) return null;
 
-  return triple?.value?.type === 'string' ? triple.value.value : null;
+  return triple.value.type === 'TEXT' ? triple.value.value : null;
 }
 
 export function urlValue(triple?: Triple) {
   if (!triple) return null;
 
-  return triple?.value?.type === 'url' ? triple.value.value : null;
+  return triple.value.type === 'URL' ? triple.value.value : null;
 }
 
-export function dateValue(triple?: Triple) {
+export function timeValue(triple?: Triple) {
   if (!triple) return null;
 
-  return triple?.value?.type === 'date' ? triple.value.value : null;
+  return triple.value.type === 'TIME' ? triple.value.value : null;
 }
 
 export function imageValue(triple: Triple) {
-  return triple?.value?.type === 'image' ? triple.value.value : null;
+  return triple.value.type === 'IMAGE' ? triple.value.image : null;
 }
 
 // Get the image triple value from an image path
@@ -48,10 +54,39 @@ export function toImageValue(rawValue: string) {
   }
 }
 
-export function isRelationValueType(t: Triple): t is Triple & { value: EntityValue } {
-  return t.value.type === 'entity' && t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE;
+export function isRelationValueType(t: Triple): t is Triple & { value: AppEntityValue } {
+  return t.value.type === 'ENTITY' && t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE;
 }
 
-export function isRelationValue(t: Triple): t is Triple & { value: EntityValue } {
-  return t.value.type === 'entity';
+export function isRelationValue(t: Triple): t is Triple & { value: AppEntityValue } {
+  return t.value.type === 'ENTITY';
+}
+
+export function idsForEntityorCollectionItems(t: Triple) {
+  let typeTripleContents: string[] = [];
+
+  if (t.value.type === 'COLLECTION') {
+    typeTripleContents = t.value.items.map(i => i.entity.id);
+  }
+
+  if (t.value.type === 'ENTITY') {
+    typeTripleContents = [t.value.value];
+  }
+
+  return typeTripleContents;
+}
+
+export function entitiesForEntityOrCollectionItems(t: Triple) {
+  if (t.value.type === 'ENTITY') {
+    return [{ id: t.value.value, name: t.value.name }];
+  }
+
+  if (t.value.type === 'COLLECTION') {
+    return t.value.items.map(i => ({
+      id: i.entity.id,
+      name: i.entity.name,
+    }));
+  }
+
+  return null;
 }

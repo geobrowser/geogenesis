@@ -17,7 +17,7 @@ import { Warning } from '~/design-system/icons/warning';
 import { SlideUp } from '~/design-system/slide-up';
 
 import { DateTimeDiff, useChanges } from '../review/review';
-import { actionsAtom, actionsCountAtom, entityCountAtom, entityCountByTypeAtom, publishAtom, stepAtom } from './atoms';
+import { actionsCountAtom, entityCountAtom, entityCountByTypeAtom, publishAtom, stepAtom, triplesAtom } from './atoms';
 
 type PublishProps = {
   spaceId: string;
@@ -40,7 +40,7 @@ type PublishImportProps = {
 };
 
 const PublishImport = ({ spaceId, space }: PublishImportProps) => {
-  const actions = useAtomValue(actionsAtom);
+  const triples = useAtomValue(triplesAtom);
   const actionsCount = useAtomValue(actionsCountAtom);
   const entityCount = useAtomValue(entityCountAtom);
   const entityCountByType = useAtomValue(entityCountByTypeAtom);
@@ -61,7 +61,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
 
     try {
       await makeBulkProposal({
-        actions,
+        triples: triples,
         spaceId,
         name: proposalName,
         onChangePublishState: reviewState => console.log(reviewState),
@@ -74,7 +74,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
     }
   };
 
-  const [data, isLoading] = useChanges(actions.slice(0, 150), spaceId);
+  const [data, isLoading] = useChanges(triples.slice(0, 150), spaceId);
 
   if (isLoading || !data) {
     return null;

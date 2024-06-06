@@ -1,5 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect, Either } from 'effect';
 import { redirect } from 'next/navigation';
 import { v4 as uuid } from 'uuid';
@@ -8,6 +7,7 @@ import * as React from 'react';
 
 import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
+import { entityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { EditorProvider } from '~/core/state/editor-store';
@@ -15,7 +15,6 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
@@ -62,7 +61,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       query: '',
       skip: 0,
       first: 1000,
-      filter: [{ field: 'attribute-id', value: ROLE_ATTRIBUTE }],
+      filter: [{ field: 'attribute-id', value: SYSTEM_IDS.ROLE_ATTRIBUTE }],
     });
 
     if (roleTriples.length > 0) {
@@ -188,33 +187,7 @@ const getFetchSpacesQuery = () => `query {
       }
       metadata {
         nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
+          ${entityFragment}
         }
       }
     }
@@ -234,7 +207,7 @@ interface NetworkResult {
 
 async function getSpacesForSubspaceManagement(): Promise<{ totalCount: number; spaces: SpaceToAdd[] }> {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
@@ -310,8 +283,8 @@ export default async function Layout({ children, params }: Props) {
   ]);
   const coverUrl = Entity.cover(props.triples);
 
-  const typeNames = props.space?.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
-  const tabs = await buildTabsForSpacePage(props.space?.spaceConfig?.types ?? [], params);
+  const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
+  const tabs = await buildTabsForSpacePage(props.space.spaceConfig?.types ?? [], params);
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
@@ -321,6 +294,8 @@ export default async function Layout({ children, params }: Props) {
           spaceId={props.spaceId}
           initialBlockIdsTriple={props.blockIdsTriple}
           initialBlockTriples={props.blockTriples}
+          initialBlockCollectionItems={props.blockCollectionItems}
+          initialBlockCollectionItemTriples={props.blockCollectionItemTriples}
         >
           <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
           <EntityPageContentContainer>
@@ -387,16 +362,26 @@ const getData = async (spaceId: string) => {
 
   const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
 
-  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+  const blockIdsTriple =
+    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
 
-  const blockTriples = (
-    await Promise.all(
+  const blockCollectionItems =
+    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
+
+  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
+
+  const [blockTriples, collectionItemTriples] = await Promise.all([
+    Promise.all(
       blockIds.map(blockId => {
         return Subgraph.fetchEntity({ id: blockId });
       })
-    )
-  ).flatMap(entity => entity?.triples ?? []);
+    ),
+    Promise.all(
+      blockCollectionItems.map(item => {
+        return Subgraph.fetchEntity({ id: item.id });
+      })
+    ),
+  ]);
 
   return {
     triples: entity?.triples ?? [],
@@ -407,7 +392,9 @@ const getData = async (spaceId: string) => {
 
     // For entity page editor
     blockIdsTriple,
-    blockTriples,
+    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
+    blockCollectionItems,
+    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
 
     space,
   };

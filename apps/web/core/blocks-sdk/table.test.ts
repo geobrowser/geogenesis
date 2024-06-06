@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
 import { MockNetworkData } from '~/core/io';
@@ -25,7 +25,7 @@ describe('TableBlock SDK', () => {
         {
           columnId: 'type',
           value: 'Value 1',
-          valueType: 'string',
+          valueType: 'TEXT',
         },
       ],
       'type-id'
@@ -40,7 +40,7 @@ describe('TableBlock SDK', () => {
         {
           columnId: 'type',
           value: 'id 1',
-          valueType: 'entity',
+          valueType: 'ENTITY',
         },
       ],
       'type-id'
@@ -55,7 +55,7 @@ describe('TableBlock SDK', () => {
         {
           columnId: SYSTEM_IDS.NAME,
           value: 'id 1',
-          valueType: 'string',
+          valueType: 'TEXT',
         },
       ],
       'type-id'
@@ -68,17 +68,17 @@ describe('TableBlock SDK', () => {
         {
           columnId: 'type',
           value: 'Value 1',
-          valueType: 'string',
+          valueType: 'TEXT',
         },
         {
           columnId: 'type',
           value: 'id 1',
-          valueType: 'entity',
+          valueType: 'ENTITY',
         },
         {
           columnId: SYSTEM_IDS.NAME,
           value: 'id 1',
-          valueType: 'string',
+          valueType: 'TEXT',
         },
       ],
       'type-id'
@@ -92,7 +92,7 @@ describe('TableBlock SDK', () => {
       [
         {
           columnId: SYSTEM_IDS.SPACE,
-          valueType: 'string',
+          valueType: 'TEXT',
           value: '0x0000000000000000000000000000000000000000',
         },
       ],
@@ -240,7 +240,7 @@ describe('TableBlock SDK', () => {
         {
           columnId: 'type',
           value: 'Value 1',
-          valueType: 'string',
+          valueType: 'TEXT',
         },
       ],
       'type-id'
@@ -253,7 +253,7 @@ describe('TableBlock SDK', () => {
         {
           columnId: 'type',
           value: 'id 1',
-          valueType: 'entity',
+          valueType: 'ENTITY',
         },
       ],
       'type-id'
@@ -266,7 +266,7 @@ describe('TableBlock SDK', () => {
         {
           columnId: SYSTEM_IDS.NAME,
           value: 'id 1',
-          valueType: 'string',
+          valueType: 'TEXT',
         },
       ],
       'type-id'
@@ -279,17 +279,17 @@ describe('TableBlock SDK', () => {
         {
           columnId: 'type',
           value: 'Value 1',
-          valueType: 'string',
+          valueType: 'TEXT',
         },
         {
           columnId: 'type',
           value: 'id 1',
-          valueType: 'entity',
+          valueType: 'ENTITY',
         },
         {
           columnId: SYSTEM_IDS.NAME,
           value: 'id 1',
-          valueType: 'string',
+          valueType: 'TEXT',
         },
       ],
       'type-id'
@@ -301,7 +301,7 @@ describe('TableBlock SDK', () => {
       [
         {
           columnId: SYSTEM_IDS.SPACE,
-          valueType: 'string',
+          valueType: 'TEXT',
           value: '0x0000000000000000000000000000000000000000',
         },
       ],
