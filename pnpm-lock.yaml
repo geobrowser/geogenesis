@@ -259,6 +259,7 @@ importers:
       '@types/cors': ^2.8.17
       '@types/express': ^4.17.13
       '@types/node': ^20.14.2
+      '@types/pg': ^8.10.9
       '@typescript-eslint/eslint-plugin': ^6.0.0
       '@typescript-eslint/parser': ^6.0.0
       cors: ^2.8.5
@@ -273,6 +274,7 @@ importers:
       graphile-build-pg: ^4.13.0
       graphile-utils: ^4.13.0
       graphql: ^15.4.0
+      pg: ^8.7.3
       postgraphile: ^4.14.0
       postgraphile-plugin-connection-filter: ^2.3.0
       prettier: ^3.0.3
@@ -284,9 +286,10 @@ importers:
       dotenv: 16.3.1
       express: 4.18.2
       graphile-build: 4.13.0_graphql@15.5.0
-      graphile-build-pg: 4.13.0_graphql@15.5.0
+      graphile-build-pg: 4.13.0_graphql@15.5.0+pg@8.11.3
       graphile-utils: 4.13.0_63c2xjmapkyolo7vkw3x3gqe7e
       graphql: 15.5.0
+      pg: 8.11.3
       postgraphile: 4.14.0
       postgraphile-plugin-connection-filter: 2.3.0
       typescript: 5.3.2
@@ -295,6 +298,7 @@ importers:
       '@types/cors': 2.8.17
       '@types/express': 4.17.13
       '@types/node': 20.14.2
+      '@types/pg': 8.10.9
       '@typescript-eslint/eslint-plugin': 6.13.1_htrtcueika7fowsmdwmbgzazxy
       '@typescript-eslint/parser': 6.13.1_bekczya6st5f65shkeeehffngq
       eslint: 8.21.0
@@ -9293,7 +9297,7 @@ packages:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
     dev: true
 
-  /graphile-build-pg/4.13.0_graphql@15.5.0:
+  /graphile-build-pg/4.13.0_graphql@15.5.0+pg@8.11.3:
     resolution: {integrity: sha512-1FD+3wjCdK1lbICY1QVO26A7s8efSjR522LarL9Bx1M1iBJHNIpCEW2PK+LkulQjY1l5LGQ1A93GQFqi6cZ6bg==}
     engines: {node: '>=8.6'}
     peerDependencies:
@@ -9306,7 +9310,8 @@ packages:
       jsonwebtoken: 9.0.2
       lodash: 4.17.21
       lru-cache: 4.1.5
-      pg-sql2: 4.13.0
+      pg: 8.11.3
+      pg-sql2: 4.13.0_pg@8.11.3
     transitivePeerDependencies:
       - graphql
       - supports-color
@@ -9381,7 +9386,7 @@ packages:
     dependencies:
       debug: 4.3.4
       graphile-build: 4.13.0_graphql@15.5.0
-      graphile-build-pg: 4.13.0_graphql@15.5.0
+      graphile-build-pg: 4.13.0_graphql@15.5.0+pg@8.11.3
       graphql: 15.5.0
       tslib: 2.6.2
     transitivePeerDependencies:
@@ -11055,7 +11060,7 @@ packages:
   /pg-protocol/1.6.0:
     resolution: {integrity: sha512-M+PDm637OY5WM307051+bsDia5Xej6d9IR4GwJse1qA1DIhiKlksvrneZOYQq42OM+spubpcNYEo2FcKQrDk+Q==}
 
-  /pg-sql2/4.13.0:
+  /pg-sql2/4.13.0_pg@8.11.3:
     resolution: {integrity: sha512-9sUlAR+FCuOPezS+2cQCSRUEmnyYrT929DiceZIsINk4R54hCGSh1OTWIP4gbAZeUMTYeEXnwTfnnEOupLYTRQ==}
     engines: {node: '>=8.6'}
     peerDependencies:
@@ -11064,6 +11069,7 @@ packages:
       '@graphile/lru': 4.11.0
       '@types/pg': 8.10.9
       debug: 4.3.4
+      pg: 8.11.3
       tslib: 2.6.2
     transitivePeerDependencies:
       - supports-color

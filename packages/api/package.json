@@ -19,6 +19,7 @@
     "graphile-build-pg": "^4.13.0",
     "graphile-utils": "^4.13.0",
     "graphql": "^15.4.0",
+    "pg": "^8.7.3",
     "postgraphile": "^4.14.0",
     "postgraphile-plugin-connection-filter": "^2.3.0",
     "typescript": "^5.3.2"
@@ -28,6 +29,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.13",
     "@types/node": "^20.14.2",
+    "@types/pg": "^8.10.9",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.21.0",
