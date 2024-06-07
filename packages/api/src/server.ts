@@ -1,16 +1,14 @@
 import PgOrderByRelatedPlugin from '@graphile-contrib/pg-order-by-related';
 import PgSimplifyInflectorPlugin from '@graphile-contrib/pg-simplify-inflector';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import express from 'express';
 import { postgraphile } from 'postgraphile';
 import ConnectionFilterPlugin from 'postgraphile-plugin-connection-filter';
+import { DATABASE_URL, PORT } from './config';
 
 import { IndexingStatusPlugin } from './status-plugin';
 
-dotenv.config();
-
-const postgraphileMiddleware = postgraphile(process.env.DATABASE_URL, 'public', {
+const postgraphileMiddleware = postgraphile(DATABASE_URL, 'public', {
   watchPg: true,
   graphiql: true,
   enhanceGraphiql: true,
@@ -26,8 +24,6 @@ app.use(cors());
 app.use(express.json());
 app.options('*', cors());
 app.use(postgraphileMiddleware);
-
-const PORT = process.env.PORT || 5001;
 
 const server = app.listen(PORT, () => {
   const address = server.address();

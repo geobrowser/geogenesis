@@ -1,5 +1,7 @@
+import { CHAIN_RPC } from "./config";
+
 export async function getChainHead() {
-  const result = await fetch(process.env.CHAIN_RPC!, {
+  const result = await fetch(CHAIN_RPC, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -29,7 +31,7 @@ export async function getChainHead() {
 }
 
 export async function getBlockMetadata(blockNumber: number) {
-  const result = await fetch(process.env.CHAIN_RPC!, {
+  const result = await fetch(CHAIN_RPC, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

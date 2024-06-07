@@ -1,13 +1,14 @@
 import { gql, makeExtendSchemaPlugin } from 'graphile-utils';
 
-import { pool } from './db';
 import { getBlockMetadata, getChainHead } from './get-block-meta';
 import { getCursor } from './get-cursor';
 
 const INITIAL_GEO_BLOCK = 620;
 const INITIAL_BLOCK_HASH = '0xf731eaa44bd7a55e25a0252e1aa85e023a3d35d64763ae4ad6e713699a218ca2';
+const GEO_NETWORK_ID = 'geo';
+const GEO_SUBGRAPH_ID = 'geo';
 
-export const IndexingStatusPlugin = makeExtendSchemaPlugin(build => {
+export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
   return {
     typeDefs: gql`
       scalar Bytes
@@ -35,12 +36,12 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(build => {
       }
 
       extend type Query {
-        indexingStatuses: [SubgraphIndexingStatus]
+        indexingStatuses(subgraphs: [String!]): [SubgraphIndexingStatus]
       }
     `,
     resolvers: {
       Query: {
-        async indexingStatuses() {
+        async indexingStatuses(deploymentId: string) {
           const [head, cursor] = await Promise.all([getChainHead(), getCursor()]);
 
           let latestBlock: { number: number; hash: string; timestamp: number } = {
@@ -61,10 +62,10 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(build => {
 
           return [
             {
-              subgraph: 'geo',
+              subgraph: GEO_SUBGRAPH_ID,
               chains: [
                 {
-                  network: 'geo',
+                  network: GEO_NETWORK_ID,
                   chainHeadBlock: {
                     number: head.number,
                     hash: head.hash,
