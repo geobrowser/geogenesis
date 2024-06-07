@@ -1,6 +1,6 @@
 'use client';
 
-import { redirect } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -24,8 +24,10 @@ export const EmptyTab = ({ spaceId, children }: EmptyTabProps) => {
     setHasCreatedEntity(true);
   };
 
+  const router = useRouter();
+
   if (!isEditing) {
-    redirect(NavUtils.toSpace(spaceId));
+    router.push(NavUtils.toSpace(spaceId));
   }
 
   if (!hasCreatedEntity) {

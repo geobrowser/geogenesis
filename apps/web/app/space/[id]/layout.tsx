@@ -55,13 +55,13 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     filter: [{ field: 'attribute-id', value: SYSTEM_IDS.PAGE_TYPE_TYPE }],
   });
 
-  const hasPostsPage = pageTriples.findIndex(triple => triple.value.id === SYSTEM_IDS.POSTS_PAGE) !== -1;
-  // const hasProductsPage = pageTriples.findIndex(triple => triple.value.id === SYSTEM_IDS.PRODUCTS_PAGE) !== -1;
-  // const hasServicesPage = pageTriples.findIndex(triple => triple.value.id === SYSTEM_IDS.SERVICES_PAGE) !== -1;
-  const hasEventsPage = pageTriples.findIndex(triple => triple.value.id === SYSTEM_IDS.EVENTS_PAGE) !== -1;
-  const hasProjectsPage = pageTriples.findIndex(triple => triple.value.id === SYSTEM_IDS.PROJECTS_PAGE) !== -1;
-  const hasJobsPage = pageTriples.findIndex(triple => triple.value.id === SYSTEM_IDS.JOBS_PAGE) !== -1;
-  const hasFinancesPage = pageTriples.findIndex(triple => triple.value.id === SYSTEM_IDS.FINANCES_PAGE) !== -1;
+  const hasPostsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.POSTS_PAGE);
+  // const hasProductsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.PRODUCTS_PAGE);
+  // const hasServicesPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.SERVICES_PAGE);
+  const hasEventsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.EVENTS_PAGE);
+  const hasProjectsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.PROJECTS_PAGE);
+  const hasJobsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.JOBS_PAGE);
+  const hasFinancesPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.FINANCES_PAGE);
 
   if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE) || typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
     const roleTriples = await Subgraph.fetchTriples({

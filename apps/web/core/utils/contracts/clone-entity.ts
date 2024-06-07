@@ -20,8 +20,6 @@ export const cloneEntity = async (options: Options) => {
 
   const { oldEntityId, entityId = null, entityName = null, spaceId } = options;
 
-  console.info(options.entityName ? `cloning ${entityName}...` : `cloning entity...`);
-
   const oldEntity = await Subgraph.fetchEntity({ id: oldEntityId });
 
   if (!oldEntity) return [];

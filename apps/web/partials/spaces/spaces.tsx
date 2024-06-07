@@ -13,7 +13,7 @@ type SpacesProps = {
   spaces: Array<SpaceData>;
 };
 
-export const Spaces = ({ spaces = [] }: SpacesProps) => {
+export const Spaces = ({ spaces }: SpacesProps) => {
   return (
     <div className="grid grid-cols-3 gap-x-8 gap-y-10">
       {spaces.map(space => (

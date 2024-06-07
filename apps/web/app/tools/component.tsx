@@ -233,7 +233,6 @@ const CloneEntity = () => {
   const { addActions } = useActionsStore();
 
   const handleCloneEntity = async () => {
-    console.log(`cloning entity...`);
     const newActions = await cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
       entityName: spaceName,
@@ -242,7 +241,7 @@ const CloneEntity = () => {
     setActions(newActions);
   };
 
-  const handleAddActions = async () => {
+  const handleAddActions = () => {
     addActions(actions);
   };
 
