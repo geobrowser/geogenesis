@@ -7,6 +7,7 @@ import ConnectionFilterPlugin from 'postgraphile-plugin-connection-filter';
 import { DATABASE_URL, PORT } from './config';
 
 import { IndexingStatusPlugin } from './status-plugin';
+import { MetaPlugin } from './meta-plugin';
 
 const postgraphileMiddleware = postgraphile(DATABASE_URL, 'public', {
   watchPg: true,
@@ -16,7 +17,7 @@ const postgraphileMiddleware = postgraphile(DATABASE_URL, 'public', {
     connectionFilterRelations: true, // default: false
   },
   disableDefaultMutations: true,
-  appendPlugins: [PgOrderByRelatedPlugin, ConnectionFilterPlugin, PgSimplifyInflectorPlugin, IndexingStatusPlugin],
+  appendPlugins: [PgOrderByRelatedPlugin, ConnectionFilterPlugin, PgSimplifyInflectorPlugin, IndexingStatusPlugin, MetaPlugin],
 });
 
 const app = express();
