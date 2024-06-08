@@ -41,7 +41,7 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
     `,
     resolvers: {
       Query: {
-        async indexingStatuses(deploymentId: string) {
+        async indexingStatuses(subgraphs: string[]) {
           const [head, cursor] = await Promise.all([getChainHead(), getCursor()]);
 
           let latestBlock: { number: number; hash: string; timestamp: number } = {
