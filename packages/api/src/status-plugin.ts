@@ -22,6 +22,15 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
         number: BigInt!
       }
 
+      enum Health {
+        "Subgraph syncing normally"
+        healthy
+        "Subgraph syncing but with errors"
+        unhealthy
+        "Subgraph halted due to errors"
+        failed
+      }
+
       type ChainIndexingStatus {
         network: String!
         chainHeadBlock: Block
@@ -32,6 +41,8 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
 
       type SubgraphIndexingStatus {
         subgraph: String!
+        synced: Boolean!
+        health: Health!
         chains: [ChainIndexingStatus!]!
       }
 
@@ -63,6 +74,8 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
           return [
             {
               subgraph: GEO_SUBGRAPH_ID,
+              synced: true,
+              health: 'healthy',
               chains: [
                 {
                   network: GEO_NETWORK_ID,
