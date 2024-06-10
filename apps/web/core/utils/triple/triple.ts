@@ -140,7 +140,7 @@ export function merge(local: Triple[], remote: Triple[]): Triple[] {
   return triples;
 }
 
-function collectionItemsFromTriples(triples: Record<string, Triple[]>): CollectionItem[] {
+export function collectionItemsFromTriples(triples: Record<string, Triple[]>): CollectionItem[] {
   const items = Object.entries(triples).map(([collectionItemId, items]): CollectionItem | null => {
     const index = items.find(i => Boolean(Collections.itemIndexValue(i)))?.value.value;
     const collectionId = items.find(i => Boolean(Collections.itemCollectionIdValue(i)))?.value.value;

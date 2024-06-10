@@ -8,12 +8,17 @@ import * as React from 'react';
 
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { useMergedData } from '~/core/hooks/use-merged-data';
+import { useTriples } from '~/core/merged/triples';
 import { Triple as ITriple, ValueTypeId } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
-import { createTriplesForEntityAtom, localTriplesAtom } from '../actions-store/actions-store';
+import {
+  activeTriplesForEntityIdSelector,
+  createTriplesForEntityAtom,
+  localTriplesAtom,
+} from '../actions-store/actions-store';
 import { useEntityStoreInstance } from './entity-store-provider';
 
 export const createInitialSchemaTriples = (spaceId: string, entityId: string): ITriple[] => {
@@ -83,8 +88,14 @@ export function useEntityPageStore() {
   const [hiddenSchemaIds, setHiddenSchemaIds] = React.useState<string[]>([]);
   const [schemaTriples, setSchemaTriples] = React.useState(createInitialSchemaTriples(spaceId, id));
 
-  const triples = useAtomValue(
-    React.useMemo(() => createTriplesForEntityAtom(initialTriples, id), [initialTriples, id])
+  const triples = useTriples(
+    React.useMemo(
+      () => ({
+        mergeWith: initialTriples,
+        selector: activeTriplesForEntityIdSelector(id),
+      }),
+      [initialTriples, id]
+    )
   );
 
   const name = React.useMemo(() => {
