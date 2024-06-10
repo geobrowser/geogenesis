@@ -14,7 +14,7 @@ import { Services } from '~/core/services';
 import { Entity as EntityType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { Avatar } from '~/design-system/avatar';
@@ -96,7 +96,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     // Add avatar attribute
     if (avatar && linkedAvatar !== avatar) {
       const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-        imageSource: Value.toImageValue(avatar),
+        imageSource: Values.toImageValue(avatar),
         spaceId,
       });
 
@@ -122,7 +122,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
           value: {
             type: 'IMAGE',
             value: typeTriple.entityId,
-            image: Value.toImageValue(avatar),
+            image: Values.toImageValue(avatar),
           },
         },
       });
@@ -220,7 +220,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     if (event.target.files) {
       const file = event.target.files[0];
       const ipfsUri = await storageClient.uploadFile(file);
-      const imageValue = Value.toImageValue(ipfsUri);
+      const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
       setIsAvatarMenuOpen(false);
     }

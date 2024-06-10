@@ -2,7 +2,7 @@ import { SYSTEM_IDS, createImageEntityOps } from '@geogenesis/sdk';
 
 import { Triple } from '~/core/types';
 
-import { Value } from '../value';
+import { Values } from '../value';
 
 type CreateImageTriplesArgs = {
   imageSource: string;
@@ -39,7 +39,7 @@ export function createImageEntityTriples({
   imageSource,
   spaceId,
 }: CreateImageTriplesArgs): CreateImageTriplesReturnType {
-  const [typeOp, urlOp] = createImageEntityOps(Value.toImageValue(imageSource));
+  const [typeOp, urlOp] = createImageEntityOps(Values.toImageValue(imageSource));
 
   // Entity with type Image
   return [

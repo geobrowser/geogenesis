@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Services } from '../services';
 import { Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
 import { Triples } from '../utils/triples';
-import { Value } from '../utils/value';
+import { Values } from '../utils/value';
 import { useActionsStore } from './use-actions-store';
 
 /**
@@ -23,7 +23,7 @@ export const mapMergedTriplesToRelationValueTypes = (
 
   return pipe(
     mergedTriples,
-    triples => triples.filter(Value.isRelationValueType),
+    triples => triples.filter(Values.isRelationValueType),
     triples =>
       triples.reduce<RelationValueTypesByAttributeId>((acc, relationType) => {
         if (!acc[relationType.entityId]) acc[relationType.entityId] = [];

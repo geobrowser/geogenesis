@@ -5,7 +5,7 @@ import { Subgraph } from '~/core/io';
 import { getBlocksCollectionData, getCollectionItemsFromBlocksTriple } from '~/core/io/subgraph/network-local-mapping';
 import { Entity as EntityType, Triple as TripleType, Value as ValueType } from '~/core/types';
 import { Triples } from '~/core/utils/triples';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 
 import { Collections } from '../collections';
 import { groupBy } from '../utils';

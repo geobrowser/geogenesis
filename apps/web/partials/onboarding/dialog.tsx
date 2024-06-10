@@ -19,7 +19,7 @@ import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { type AccountType, createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
 import { getGeoPersonIdFromOnchainId, getImagePath, sleep } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -387,7 +387,7 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
     if (e.target.files) {
       const file = e.target.files[0];
       const ipfsUri = await storageClient.uploadFile(file);
-      const imageValue = Value.toImageValue(ipfsUri);
+      const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
     }
   };

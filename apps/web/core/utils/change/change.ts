@@ -6,7 +6,7 @@ import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
 import type { Entity as EntityType, Triple as TripleType, ValueType as TripleValueType, Version } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 
 export type ActionId = string;
 export type EntityId = string;
@@ -423,12 +423,12 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
 
   const selectedEntityBlockIdsTriple = selectedVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
   const selectedEntityBlockIds: string[] = selectedEntityBlockIdsTriple
-    ? JSON.parse(Value.stringValue(selectedEntityBlockIdsTriple) || '[]')
+    ? JSON.parse(Values.stringValue(selectedEntityBlockIdsTriple) || '[]')
     : [];
 
   const previousEntityBlockIdsTriple = previousVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
   const previousEntityBlockIds: string[] = previousEntityBlockIdsTriple
-    ? JSON.parse(Value.stringValue(previousEntityBlockIdsTriple) || '[]')
+    ? JSON.parse(Values.stringValue(previousEntityBlockIdsTriple) || '[]')
     : [];
 
   const [maybeRemoteSelectedEntityBlocks, maybeRemotePreviousEntityBlocks, maybeAdditionalRemotePreviousEntityBlocks] =
@@ -619,13 +619,13 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
     const selectedEntityBlockIdsTriple =
       selectedVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
     const selectedEntityBlockIds: string[] = selectedEntityBlockIdsTriple
-      ? JSON.parse(Value.stringValue(selectedEntityBlockIdsTriple) || '[]')
+      ? JSON.parse(Values.stringValue(selectedEntityBlockIdsTriple) || '[]')
       : [];
 
     const previousEntityBlockIdsTriple =
       previousVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
     const previousEntityBlockIds: string[] = previousEntityBlockIdsTriple
-      ? JSON.parse(Value.stringValue(previousEntityBlockIdsTriple) || '[]')
+      ? JSON.parse(Values.stringValue(previousEntityBlockIdsTriple) || '[]')
       : [];
 
     const [

@@ -5,7 +5,7 @@ import { EntitySearchResult, Entity as IEntity, Triple as ITriple, ValueTypeId }
 
 import { Triples } from '../triples';
 import { groupBy } from '../utils';
-import { Value } from '../value';
+import { Values } from '../value';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -193,7 +193,7 @@ export function avatar(triples: ITriple[] | undefined): string | null {
   if (!triples) return null;
 
   const avatarTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
-  const avatarUrl = avatarTriple !== undefined ? Value.imageValue(avatarTriple) : null;
+  const avatarUrl = avatarTriple !== undefined ? Values.imageValue(avatarTriple) : null;
 
   return avatarUrl;
 }
@@ -205,7 +205,7 @@ export function cover(triples: ITriple[] | undefined): string | null {
   if (!triples) return null;
 
   const coverTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE);
-  const coverUrl = coverTriple !== undefined ? Value.imageValue(coverTriple) : null;
+  const coverUrl = coverTriple !== undefined ? Values.imageValue(coverTriple) : null;
 
   return coverUrl;
 }

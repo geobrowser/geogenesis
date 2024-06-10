@@ -11,7 +11,7 @@ import { Services } from '../services';
 import { AppEntityValue, Column, GeoType, ValueType as TripleValueType } from '../types';
 import { Entities } from '../utils/entity';
 import { Triples } from '../utils/triples';
-import { Value } from '../utils/value';
+import { Values } from '../utils/value';
 
 export const PAGE_SIZE = 10;
 
@@ -85,7 +85,7 @@ export function useTableBlock() {
   // on the graphql representation of the filter. Memoizing it means we avoid
   // unnecessary re-renders.
   const filterString = React.useMemo(() => {
-    const stringValue = Value.stringValue(filterTriple ?? undefined);
+    const stringValue = Values.stringValue(filterTriple ?? undefined);
 
     if (stringValue && stringValue !== '') {
       return stringValue;
@@ -296,7 +296,7 @@ export function useTableBlock() {
     isLoading: isLoadingColumns || isLoadingRows || isLoadingFilterState || isLoading,
 
     nameTriple,
-    name: Value.stringValue(nameTriple ?? undefined),
+    name: Values.stringValue(nameTriple ?? undefined),
     setName,
   };
 }

@@ -23,7 +23,7 @@ import { useStatusBar } from '~/core/state/status-bar-store';
 import { OmitStrict, Triple } from '~/core/types';
 import { Images } from '~/core/utils/images';
 import { NavUtils, getImagePath, sleepWithCallback } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -112,7 +112,7 @@ export const CreateProfileDialog = () => {
 
       if (avatar !== '') {
         const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-          imageSource: Value.toImageValue(avatar),
+          imageSource: Values.toImageValue(avatar),
           spaceId: onchainProfile.homeSpaceId,
         });
 
@@ -308,7 +308,7 @@ function StepOnboarding({ onNext, address, name, setName, avatar, setAvatar, sta
     if (e.target.files) {
       const file = e.target.files[0];
       const ipfsUri = await storageClient.uploadFile(file);
-      const imageValue = Value.toImageValue(ipfsUri);
+      const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
     }
   };

@@ -11,7 +11,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
 import { Images } from '~/core/utils/images';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { Avatar } from '~/design-system/avatar';
@@ -77,7 +77,7 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
     // Add avatar attribute
     if (avatar) {
       const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-        imageSource: Value.toImageValue(avatar),
+        imageSource: Values.toImageValue(avatar),
         spaceId,
       });
 
@@ -103,7 +103,7 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
           value: {
             type: 'IMAGE',
             value: typeTriple.entityId,
-            image: Value.toImageValue(avatar),
+            image: Values.toImageValue(avatar),
           },
         },
       });
@@ -179,7 +179,7 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
     if (event.target.files) {
       const file = event.target.files[0];
       const ipfsUri = await storageClient.uploadFile(file);
-      const imageValue = Value.toImageValue(ipfsUri);
+      const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
       setIsAvatarMenuOpen(false);
     }

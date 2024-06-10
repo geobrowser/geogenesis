@@ -14,7 +14,7 @@ import { Services } from '~/core/services';
 import { Triple as TripleType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { Avatar } from '~/design-system/avatar';
@@ -110,7 +110,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
           remove(spaceAvatar, spaceId);
 
           const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-            imageSource: Value.toImageValue(avatar),
+            imageSource: Values.toImageValue(avatar),
             spaceId,
           });
 
@@ -139,7 +139,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
         }
       } else if (hasAvatar) {
         const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-          imageSource: Value.toImageValue(avatar),
+          imageSource: Values.toImageValue(avatar),
           spaceId,
         });
 
@@ -349,7 +349,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     // Add avatar (if person has an avatar and its not already in space triples)
     if (!avatarSpaceTriple && teamMember.avatar) {
       const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-        imageSource: Value.toImageValue(teamMember.avatar),
+        imageSource: Values.toImageValue(teamMember.avatar),
         spaceId,
       });
 
@@ -428,7 +428,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     if (event.target.files) {
       const file = event.target.files[0];
       const ipfsUri = await storageClient.uploadFile(file);
-      const imageValue = Value.toImageValue(ipfsUri);
+      const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
       setIsAvatarMenuOpen(false);
     }

@@ -15,7 +15,7 @@ import {
 } from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 import { groupBy } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { useActionsStore } from '../hooks/use-actions-store';
@@ -309,7 +309,7 @@ const listener =
           const cellTriplesByRow = Object.values(groupBy(cellTriples, triple => triple.entityId));
 
           return cellTriplesByRow.forEach(triples => {
-            const migratedName = triples.map(triple => Value.nameOfEntityValue(triple)).join(', ');
+            const migratedName = triples.map(triple => Values.nameOfEntityValue(triple)).join(', ');
             const isCellPopulated = triples.length > 0;
 
             if (!isCellPopulated) return;
@@ -510,7 +510,7 @@ const listener =
         if (!imageSrc) return;
 
         const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-          imageSource: Value.toImageValue(imageSrc),
+          imageSource: Values.toImageValue(imageSrc),
           spaceId: context.spaceId,
         });
 
@@ -650,7 +650,7 @@ const listener =
             value: {
               type: 'IMAGE',
               value: createGeoId(),
-              image: Value.toImageValue(imageSrc),
+              image: Values.toImageValue(imageSrc),
             },
           },
           context.spaceId

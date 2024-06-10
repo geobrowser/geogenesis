@@ -19,7 +19,7 @@ import { CollectionItem, AppEntityValue as EntityValue, Triple as ITriple, OmitS
 import { Collections } from '../utils/collections';
 import { Triples } from '../utils/triples';
 import { getImagePath, groupBy } from '../utils/utils';
-import { Value } from '../utils/value';
+import { Values } from '../utils/value';
 import { activeTriplesForEntityIdSelector, localTriplesAtom, remove, upsert } from './actions-store/actions-store';
 
 const markdownConverter = new Showdown.Converter();
@@ -195,12 +195,12 @@ export function useEditorStore() {
               spaceId,
               id: blockId,
               typeId: rowTypeTriple.value.value,
-              typeName: Value.nameOfEntityValue(rowTypeTriple),
+              typeName: Values.nameOfEntityValue(rowTypeTriple),
             },
           };
         }
 
-        const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
+        const html = markdownTriple ? markdownConverter.makeHtml(Values.stringValue(markdownTriple) || '') : '';
         /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
         const isSSR = typeof window === 'undefined';
         const json = isSSR ? { content: '' } : generateJSON(html, tiptapExtensions);
@@ -407,7 +407,7 @@ export function useEditorStore() {
           entityName: getNodeName(node),
           attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
           attributeName: 'Image',
-          value: { type: 'IMAGE', value: id, image: Value.toImageValue(src) },
+          value: { type: 'IMAGE', value: id, image: Values.toImageValue(src) },
         },
         spaceId
       );

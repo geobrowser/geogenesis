@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Triple } from '~/core/types';
 
-import { nameOfEntityValue } from './value';
+import { nameOfEntityValue } from './values';
 
 const entityValueTriple: Triple = {
   id: '',

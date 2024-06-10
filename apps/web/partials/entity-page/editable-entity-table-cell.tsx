@@ -7,7 +7,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Cell, EntitySearchResult, Triple, TripleWithCollectionValue } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 
 import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
@@ -268,7 +268,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                 href={NavUtils.toEntity(triple.space, triple.value.value)}
                 onClick={() => deleteEntityTriple(triple)}
               >
-                {Value.nameOfEntityValue(triple)}
+                {Values.nameOfEntityValue(triple)}
               </DeletableChipButton>
             </div>
           ))}
@@ -305,13 +305,13 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               ? createStringTripleWithValue(e.target.value)
               : updateStringTripleValue(firstTriple, e.target.value)
           }
-          value={Value.stringValue(firstTriple) ?? ''}
+          value={Values.stringValue(firstTriple) ?? ''}
         />
       )}
 
       {isImageValueTypeColumn && (
         <TableImageField
-          imageSrc={Value.imageValue(firstTriple) || ''}
+          imageSrc={Values.imageValue(firstTriple) || ''}
           variant="table-cell"
           onImageChange={imageSrc => {
             isEmptyCell ? createImageWithValue(imageSrc) : uploadImage(firstTriple, imageSrc);
@@ -326,7 +326,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         <DateField
           isEditing={true}
           onBlur={date => (isEmptyCell ? createDateTripleWithValue(date) : updateTimeTripleValue(firstTriple, date))}
-          value={Value.timeValue(firstTriple) ?? ''}
+          value={Values.timeValue(firstTriple) ?? ''}
           variant="tableCell"
         />
       )}
@@ -339,7 +339,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               ? createUrlTripleWithValue(e.currentTarget.value)
               : updateUrlTripleValue(firstTriple, e.currentTarget.value)
           }
-          value={Value.urlValue(firstTriple) ?? ''}
+          value={Values.urlValue(firstTriple) ?? ''}
           placeholder="Add value..."
           variant="tableCell"
         />

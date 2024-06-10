@@ -12,7 +12,7 @@ import { useTriples } from '~/core/merged/triples';
 import { Triple as ITriple, ValueTypeId } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 
 import {
   activeTriplesForEntityIdSelector,
@@ -124,7 +124,7 @@ export function useEntityPageStore() {
       // The types on an entity is only ever one triple for a given space,
       // either a collection or an entity. We need to parse the contents
       // of the triple and fetch those here.
-      const typeTripleContents = Value.idsForEntityorCollectionItems(typeTriples[0]);
+      const typeTripleContents = Values.idsForEntityorCollectionItems(typeTriples[0]);
 
       const maybeTypeEntities = await Promise.all(
         typeTripleContents.map(typeId => {
@@ -145,7 +145,7 @@ export function useEntityPageStore() {
         .flatMap(t => (t ? [t] : []));
 
       const attributeEntityIds = attributeTriples
-        .map(a => Value.entitiesForEntityOrCollectionItems(a))
+        .map(a => Values.entitiesForEntityOrCollectionItems(a))
         // wat
         .flatMap(e => (e ? [e] : []))
         .flat();
