@@ -106,6 +106,7 @@ export const GOAL_TYPE = 'f7191246-3dca-4e77-8a79-d9cdc9804127';
 export const CLAIM_TYPE = 'fa8e8e54-f742-4c00-b73c-05adee2b4545';
 
 export const PAGE_TYPE = '1a9fc4a0-0fec-4eea-a075-eec7ebd0d043';
+export const PAGE_TYPE_TYPE = '5ec8adc3-3533-4c3c-bfa4-acdfaa877bac';
 export const TAB_TYPE = '2c72ace7-5404-4455-9d22-65272a94e874';
 export const POST_TYPE = '682fbeff-41e2-42cd-a7f9-c4909136a8c5';
 
@@ -249,6 +250,39 @@ export const MEMBERSHIP_CONTRACT_ADDRESS = '0x34a94160f4B0f86d932927DFfb326354dB
     },
   ]
 */
+
+// @TODO(migration)
+// migrate types to new data model
+
+// Root space
+export const ROOT_SPACE = `0x170b749413328ac9a94762031a7A05b00c1D2e34`;
+export const ROOT_SPACE_CONFIGURATION = `f1b9fd88-6388-436e-95b5-51aafaea77e5`;
+
+// Page types
+export const POSTS_PAGE = 'e73c3db8-3200-4230-9ae9-52eddb73b566';
+export const PRODUCTS_PAGE = '6764f382-7ff2-47e2-b2ad-295791153705';
+export const SERVICES_PAGE = 'e5d69a75-5ede-4a56-b433-44e5d3fde7bc';
+export const EVENTS_PAGE = 'bb291743-4c39-4223-afba-91a08aa83478';
+export const JOBS_PAGE = 'abb47008-5655-4b27-bae8-e7dba063b394';
+export const PROJECTS_PAGE = '7171ce7a-83b9-40a2-abe2-751a54c1c245';
+export const FINANCES_PAGE = 'f20af8de-b57c-472a-b13d-0247c46a8eeb';
+export const SPACES_PAGE = '970e41c7-196e-42d3-af0e-cee755651d5b';
+
+// Page templates
+export const COMPANY_SPACE_CONFIGURATION_TEMPLATE = '8f5e618f-7816-44cb-b795-300e8078bf15';
+export const COMPANY_POSTS_PAGE_TEMPLATE = '90bd4735-b221-4059-a5cd-4f3215ab79d1';
+export const COMPANY_PRODUCTS_PAGE_TEMPLATE = '6e9da70f-357a-4fc5-b9d5-8de5840db16a';
+export const COMPANY_SERVICES_PAGE_TEMPLATE = 'd572b124-8b5e-4094-8c6c-25e531fc8a33';
+export const COMPANY_EVENTS_PAGE_TEMPLATE = '6885104d-79ea-4db2-a64c-c8e8512533ea';
+export const COMPANY_JOBS_PAGE_TEMPLATE = '9a7528b3-7fb0-41c4-92c3-1650b70aae69';
+
+export const NONPROFIT_SPACE_CONFIGURATION_TEMPLATE = 'df388a8b-27f5-4676-b237-6a59ca4a3e79';
+export const NONPROFIT_POSTS_PAGE_TEMPLATE = 'd370fe7a-f778-4a52-8398-4140cdc9bbad';
+export const NONPROFIT_PROJECTS_PAGE_TEMPLATE = 'ddce09f8-2413-449e-9735-51e2998551b9';
+export const NONPROFIT_FINANCES_PAGE_TEMPLATE = '3be01e21-8227-42e0-bd40-868957e3ede2';
+
+export const PERSON_SPACE_CONFIGURATION_TEMPLATE = '25d4b5bb-2f3a-4854-a9fe-df2f5f12b5e4';
+export const PERSON_POSTS_PAGE_TEMPLATE = '026362d4-5d41-4b8d-b6ef-8ed10ecd0d89';
 
 // Legacy attributes
 export const HIDDEN_COLUMNS = '1ed5b976-f8a4-451b-a2cc-531f85b59cab';

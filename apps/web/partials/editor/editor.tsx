@@ -150,14 +150,14 @@ export const Editor = React.memo(function Editor({
       <>
         {spacePage && (
           <NoContent
-            isEditing={false}
             options={{
+              image: '/overview.png',
               browse: {
                 title: 'There’s no space overview here yet',
                 description: 'Switch to edit mode to add an overview if you’re an editor of this space!',
-                image: '/overview.png',
               },
             }}
+            isEditing={false}
           />
         )}
         <span>{placeholder}</span>

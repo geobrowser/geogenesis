@@ -11,6 +11,7 @@ import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
 import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
+import { generateActionsForPerson } from '~/core/utils/contracts/generate-actions-for-person';
 import { slog } from '~/core/utils/utils';
 
 import { makeProposalServer } from '../../make-proposal-server';
@@ -94,27 +95,9 @@ export async function makePersonEffect(
     try: async () => {
       const actions: CreateTripleAction[] = [];
 
-      // Add triples for a Person entity
-      if (username) {
-        const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
-          entityId: profileId,
-          entityName: username ?? '',
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          space: spaceAddress,
-          value: {
-            type: 'string',
-            value: username,
-            id: ID.createValueId(),
-          },
-        };
+      const personActions = await generateActionsForPerson(profileId, username ?? '', spaceAddress);
 
-        actions.push({
-          type: 'createTriple',
-          id: ID.createTripleId(nameTripleWithoutId),
-          ...nameTripleWithoutId,
-        });
-      }
+      actions.push(...personActions);
 
       if (avatarUri) {
         const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
@@ -136,45 +119,6 @@ export async function makePersonEffect(
           ...avatarTripleWithoutId,
         });
       }
-
-      // Add Types: Person to the profile entity
-      const typeTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        entityId: profileId,
-        entityName: username ?? '',
-        space: spaceAddress,
-        value: {
-          type: 'entity',
-          name: 'Person',
-          id: SYSTEM_IDS.PERSON_TYPE,
-        },
-      };
-
-      const spaceTypeTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        entityId: profileId,
-        entityName: username ?? '',
-        space: spaceAddress,
-        value: {
-          type: 'entity',
-          name: 'Space',
-          id: SYSTEM_IDS.SPACE_CONFIGURATION,
-        },
-      };
-
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(typeTriple),
-        ...typeTriple,
-      });
-
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(spaceTypeTriple),
-        ...spaceTypeTriple,
-      });
 
       slog({
         requestId,

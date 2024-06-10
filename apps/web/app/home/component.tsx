@@ -458,7 +458,7 @@ const Notices = () => {
           id="findSpacesToJoin"
           color="orange"
           title="Find spaces to join"
-          description="Discover and join spaces where you can actively engagte with the topics and issues that captivate your interest."
+          description="Discover and join spaces where you can actively engage with the topics and issues that captivate your interest."
           element={<JoinSpaces />}
         />
         {/* <Notice
