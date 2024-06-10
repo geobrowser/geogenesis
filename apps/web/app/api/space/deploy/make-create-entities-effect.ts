@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createImageEntityOps } from '@geogenesis/sdk';
 import { Op as IOp } from '@geogenesis/sdk';
 import * as Effect from 'effect/Effect';
 
@@ -61,14 +61,20 @@ export function makeCreateEntitiesEffect(
       }
 
       if (spaceAvatarUri) {
+        const [typeOp, srcOp] = createImageEntityOps(spaceAvatarUri);
+
+        // Creates the image entity
+        ops.push(typeOp);
+        ops.push(srcOp);
+
+        // Creates the triple pointing to the image entity
         ops.push(
           Ops.create({
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
             value: {
-              // @TODO: create the image entity
               type: 'ENTITY',
-              value: spaceAvatarUri,
+              value: typeOp.payload.entityId,
             },
           })
         );

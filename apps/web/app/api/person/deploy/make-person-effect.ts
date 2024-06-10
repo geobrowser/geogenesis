@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createImageEntityOps } from '@geogenesis/sdk';
 import { Op as IOp } from '@geogenesis/sdk';
 import { LegacySpaceAbi } from '@geogenesis/sdk/legacy';
 import * as Effect from 'effect/Effect';
@@ -83,14 +83,20 @@ export async function makePersonEffect(
       ops.push(...Triple.prepareTriplesForPublishing(personTriples, spaceAddress));
 
       if (avatarUri) {
+        const [typeOp, srcOp] = createImageEntityOps(avatarUri);
+
+        // Creates the image entity
+        ops.push(typeOp);
+        ops.push(srcOp);
+
+        // Creates the triple pointing to the image entity
         ops.push(
           Ops.create({
             entityId: profileId,
             attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
             value: {
-              // @TODO: create the image entity
               type: 'ENTITY',
-              value: avatarUri,
+              value: typeOp.payload.entityId,
             },
           })
         );

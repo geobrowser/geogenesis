@@ -3,6 +3,14 @@ import { AppEnv } from '../types';
 
 type SupportedChainId = '31337' | '19411';
 
+/**
+ * 2. Collections
+ * 3. Rename triple, entity, value -> triples, entities, values
+ * 4. Next 14.3.0
+ *
+ * Look at updated APIs and types in app
+ */
+
 export type AppConfig = {
   chainId: SupportedChainId;
   rpc: string;
