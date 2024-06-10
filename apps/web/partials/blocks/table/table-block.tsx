@@ -279,7 +279,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 const getPlaceholders = (blockEntity: EntityType | null | undefined) => {
   // @TODO add defaults for list/gallery views
   let placeholderText = 'Add your first entity row to get started';
-  let placeholderImage = getImagePath('ipfs://QmdGzL5ABVKy1AqNgdtox7EidCqLgTZQ36Z96t4d1gLT3u');
+  let placeholderImage = getImagePath('ipfs://QmfC4DoT7uVNoFRbP6DBYn9T79gpLXw2Uv6qJ2G8wmqT1d');
 
   if (blockEntity) {
     const placeholderTextTriple = blockEntity.triples.find(
