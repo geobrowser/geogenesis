@@ -1,7 +1,8 @@
 import * as pg from 'pg';
+import { DATABASE_URL } from './config';
 
 export const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL!,
+  connectionString: DATABASE_URL,
   max: 97,
 });
 
