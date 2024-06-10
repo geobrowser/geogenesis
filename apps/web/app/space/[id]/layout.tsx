@@ -9,10 +9,15 @@ import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { entityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
+import {
+  SubstreamEntity,
+  getBlocksCollectionData,
+  getSpaceConfigFromMetadata,
+} from '~/core/io/subgraph/network-local-mapping';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
+import { Entity as IEntity } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -64,7 +69,8 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     filter: [{ field: 'attribute-id', value: SYSTEM_IDS.PAGE_TYPE_TYPE }],
   });
 
-  // @TODO(migration)
+  // We only fetch triples whose attribute is PAGE_TYPE_TYPE so we don't need to filter on
+  // the attribute id
   const hasPostsPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.POSTS_PAGE);
   // const hasProductsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.PRODUCTS_PAGE);
   // const hasServicesPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.SERVICES_PAGE);
@@ -423,23 +429,7 @@ const getData = async (spaceId: string) => {
   const blockIdsTriple =
     entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
 
-  const blockCollectionItems =
-    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
-
-  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
-
-  const [blockTriples, collectionItemTriples] = await Promise.all([
-    Promise.all(
-      blockIds.map(blockId => {
-        return Subgraph.fetchEntity({ id: blockId });
-      })
-    ),
-    Promise.all(
-      blockCollectionItems.map(item => {
-        return Subgraph.fetchEntity({ id: item.id });
-      })
-    ),
-  ]);
+  const { blockTriples, collectionItemTriples, blockCollectionItems } = await getBlocksCollectionData(entity);
 
   return {
     triples: entity?.triples ?? [],

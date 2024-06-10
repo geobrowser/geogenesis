@@ -15,6 +15,8 @@ import {
 } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
 
+import { Subgraph } from '..';
+
 interface SubstreamType {
   id: string;
 }
@@ -424,4 +426,42 @@ function isImageEntity(types: SubstreamType[]): boolean {
 
 function flattenTypeIds(types: SubstreamType[]) {
   return types.map(t => t.id);
+}
+
+export function getCollectionItemsFromBlocksTriple(entity: Entity) {
+  const blockIdsTriple =
+    entity.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
+
+  const blockCollectionItems =
+    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
+
+  return {
+    blockIdsTriple,
+    blockCollectionItems,
+  };
+}
+
+export async function getBlocksCollectionData(entity: Entity) {
+  const { blockCollectionItems, blockIdsTriple } = getCollectionItemsFromBlocksTriple(entity);
+  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
+
+  const [blockTriples, collectionItemTriples] = await Promise.all([
+    Promise.all(
+      blockIds.map(blockId => {
+        return Subgraph.fetchEntity({ id: blockId });
+      })
+    ),
+    Promise.all(
+      blockCollectionItems.map(item => {
+        return Subgraph.fetchEntity({ id: item.id });
+      })
+    ),
+  ]);
+
+  return {
+    blockIdsTriple,
+    blockTriples,
+    blockCollectionItems,
+    collectionItemTriples,
+  };
 }

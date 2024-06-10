@@ -1,10 +1,14 @@
-import { Op, SYSTEM_IDS } from '@geogenesis/sdk';
+import { Op, SYSTEM_IDS, createCollection, createCollectionItem } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
+import { getBlocksCollectionData, getCollectionItemsFromBlocksTriple } from '~/core/io/subgraph/network-local-mapping';
 import { Entity as EntityType, Triple as TripleType, Value as ValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
+
+import { Collections } from '../collections';
+import { groupBy } from '../utils';
 
 type Options = {
   oldEntityId: string;
@@ -69,18 +73,47 @@ export const cloneEntity = async (options: Options) => {
     }
   });
 
-  // @TODO(migration)
-  // migrate to collection
-  const blockIdsTriple =
-    oldEntity.triples.find((triple: TripleType) => triple.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+  const { blockCollectionItems, blockIdsTriple } = getCollectionItemsFromBlocksTriple(oldEntity);
 
   if (blockIdsTriple) {
-    const blockIds = blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
+    const blockIds = blockCollectionItems.map(b => b.entity.id);
 
     const newBlockIds = blockIds.map(() => {
       const newBlockId = ID.createEntityId();
       return newBlockId;
     });
+
+    // 1. Create collection
+    const collectionOp = createCollection();
+
+    // Create the collection entity by adding the collection type
+    newTriples.push({
+      space: spaceId,
+      attributeId: collectionOp.payload.attributeId,
+      entityId: collectionOp.payload.entityId,
+      entityName: null,
+      attributeName: 'Types',
+      value: {
+        // @TODO(migration): This might be a collection in the future which
+        // would create a recursive collection creation loop
+        type: 'ENTITY',
+        value: collectionOp.payload.value.value,
+        name: 'Collection',
+      },
+    });
+
+    // 2. Create collection item for each block
+    const collectionItemsTriples = newBlockIds
+      .map(id =>
+        Collections.createCollectionItemTriples({
+          collectionId: collectionOp.payload.entityId,
+          entityId: id,
+          spaceId,
+        })
+      )
+      .flat();
+
+    newTriples.push(...collectionItemsTriples);
 
     const newBlockIdsTriple = Triple.withId({
       attributeId: SYSTEM_IDS.BLOCKS,
@@ -89,10 +122,13 @@ export const cloneEntity = async (options: Options) => {
       entityId: newEntityId,
       entityName: newEntityName,
       value: {
-        type: 'TEXT',
-        value: JSON.stringify(newBlockIds),
+        type: 'COLLECTION',
+        value: collectionOp.payload.entityId,
+        items: Collections.itemFromTriples(groupBy(collectionItemsTriples, c => c.entityId)),
       },
     });
+
+    newTriples.push(newBlockIdsTriple);
 
     const blockEntities = await Promise.all(
       blockIds.map((blockId: string) => {
@@ -163,7 +199,6 @@ export const cloneEntity = async (options: Options) => {
     });
 
     newTriples.push(...newBlockTriples);
-    newTriples.push(newBlockIdsTriple);
   }
 
   return newTriples;
