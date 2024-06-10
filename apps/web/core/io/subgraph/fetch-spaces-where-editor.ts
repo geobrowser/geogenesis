@@ -71,7 +71,7 @@ export async function fetchSpacesWhereEditor(address: string) {
           };
 
         default:
-          console.error(`${error._tag}: Unable to fetch spaces, queryId: ${queryId} endpoint: ${endpoint}`);
+          console.error(`${error._tag}: Unable to fetch spaces for editor, queryId: ${queryId} endpoint: ${endpoint}`);
 
           return {
             spaces: {
