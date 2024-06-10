@@ -224,6 +224,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
         ) : (
           <TableBlockTable
             space={spaceId}
+            typeId={typeId}
             columns={columns}
             rows={rows}
             shownIndexes={shownIndexes}

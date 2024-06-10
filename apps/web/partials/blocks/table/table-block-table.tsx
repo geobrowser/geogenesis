@@ -13,11 +13,13 @@ import {
 } from '@tanstack/react-table';
 import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
+import Link from 'next/link';
 
 import { useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Column, Row } from '~/core/types';
@@ -143,6 +145,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
+  typeId: string;
   columns: Column[];
   rows: Row[];
   shownIndexes: Array<number>;
@@ -150,7 +153,15 @@ interface Props {
   placeholderImage: string;
 }
 
-export const TableBlockTable = ({ rows, space, columns, shownIndexes, placeholderText, placeholderImage }: Props) => {
+export const TableBlockTable = ({
+  rows,
+  space,
+  typeId,
+  columns,
+  shownIndexes,
+  placeholderText,
+  placeholderImage,
+}: Props) => {
   const isEditingColumns = useAtomValue(editingColumnsAtom);
 
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
@@ -182,8 +193,21 @@ export const TableBlockTable = ({ rows, space, columns, shownIndexes, placeholde
   const isEmpty = table.getRowModel().rows.length === 0;
 
   if (isEmpty) {
+    if (isEditMode) {
+      return (
+        <Link href={NavUtils.toEntity(space, ID.createEntityId(), typeId)} className="block rounded-lg bg-grey-01">
+          <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
+            <div>{placeholderText}</div>
+            <div>
+              <img src={placeholderImage} className="!h-[64px] w-auto object-contain" alt="" />
+            </div>
+          </div>
+        </Link>
+      );
+    }
+
     return (
-      <div className="rounded-lg bg-grey-01">
+      <div className="block rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
           <div>{placeholderText}</div>
           <div>
