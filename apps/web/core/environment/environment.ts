@@ -34,8 +34,9 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '137',
     rpc: 'https://polygon-rpc.com',
     ipfs: 'https://api.thegraph.com/ipfs',
-    membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-logs',
-    profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry',
+    // @TODO: This will no longer be used once we merge in our new L3 infra
+    membershipSubgraph: `https://gateway-arbitrum.network.thegraph.com/api/${process.env.NEXT_PUBLIC_GRAPH_KEY}/subgraphs/id/2VDkVan8Pm9Lz6zTuoXyBnuFr9jUkaE3jG1LWJfNF2QU`,
+    profileSubgraph: `https://gateway-arbitrum.network.thegraph.com/api/${process.env.NEXT_PUBLIC_GRAPH_KEY}/subgraphs/id/4cYtdYa4czLwo28a1Ku41xosjofQNxbyDFeBZUdqmrVb`,
     api: 'https://geo-protocol.up.railway.app/graphql',
   },
 };
