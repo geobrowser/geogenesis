@@ -10,7 +10,7 @@ import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useTriples } from '~/core/merged/triples';
 import { Triple as ITriple, ValueTypeId } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { Value } from '~/core/utils/value';
 
@@ -99,7 +99,7 @@ export function useEntityPageStore() {
   );
 
   const name = React.useMemo(() => {
-    return Entity.name(triples) ?? '';
+    return Entities.name(triples) ?? '';
   }, [triples]);
 
   /*

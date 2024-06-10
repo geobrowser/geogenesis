@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { Space, SpaceConfigEntity } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 
 import { entityFragment, spacePluginsFragment } from './fragments';
 import { graphql } from './graphql';

@@ -4,7 +4,7 @@ import { Subgraph } from '~/core/io/';
 import { fetchVersion } from '~/core/io/subgraph/fetch-version';
 import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
 import type { Entity as EntityType, Triple as TripleType, ValueType as TripleValueType, Version } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { Value } from '~/core/utils/value';
 
@@ -376,7 +376,7 @@ const getEntitiesFromActions = async (triples: TripleType[], subgraph: Subgraph.
   const parentEntitySet = new Set<EntityId>();
 
   Object.keys(entities).forEach(entityId => {
-    const parentEntityId = Entity.getParentEntityId(entities?.[entityId]?.triples);
+    const parentEntityId = Entities.getParentEntityId(entities?.[entityId]?.triples);
 
     if (parentEntityId && !entitySet.has(parentEntityId)) {
       parentEntitySet.add(parentEntityId);

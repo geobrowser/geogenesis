@@ -1,5 +1,5 @@
 import { Profile } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { fetchEntity } from './fetch-entity';
@@ -29,8 +29,8 @@ export async function fetchProfile(options: FetchProfileOptions): Promise<Profil
   return {
     id: profile.id,
     name: profile.name,
-    avatarUrl: Entity.avatar(profile.triples),
-    coverUrl: Entity.cover(profile.triples),
+    avatarUrl: Entities.avatar(profile.triples),
+    coverUrl: Entities.cover(profile.triples),
     profileLink: NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id),
     address: onchainProfile.accountId as `0x${string}`,
   };

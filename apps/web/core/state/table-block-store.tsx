@@ -9,7 +9,7 @@ import { useMergedData } from '../hooks/use-merged-data';
 import { FetchRowsOptions } from '../io/fetch-rows';
 import { Services } from '../services';
 import { AppEntityValue, Column, GeoType, ValueType as TripleValueType } from '../types';
-import { Entity } from '../utils/entity';
+import { Entities } from '../utils/entity';
 import { Triples } from '../utils/triples';
 import { Value } from '../utils/value';
 
@@ -241,7 +241,7 @@ export function useTableBlock() {
       const newFiltersString =
         newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, selectedType.entityId);
 
-      const entityName = Entity.name(nameTriple ? [nameTriple] : []) ?? '';
+      const entityName = Entities.name(nameTriple ? [nameTriple] : []) ?? '';
 
       return upsert(
         {

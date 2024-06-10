@@ -12,7 +12,7 @@ import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
 import { Triple as TripleType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
 import { Value } from '~/core/utils/value';
 
@@ -174,7 +174,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     // Name conditions
     const spaceName = spaceTriples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
     const hasChangedName = teamMember.name !== name;
-    const hasRemovedName = isLinked && linkedEntity && name === Entity.name(linkedEntity.triples);
+    const hasRemovedName = isLinked && linkedEntity && name === Entities.name(linkedEntity.triples);
     const hasSpaceName = !!spaceName;
 
     // Update name attribute

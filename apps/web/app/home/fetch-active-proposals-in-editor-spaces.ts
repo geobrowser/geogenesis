@@ -10,7 +10,7 @@ import {
   getSpaceConfigFromMetadata,
 } from '~/core/io/subgraph/network-local-mapping';
 import { OmitStrict, Profile, Vote } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
@@ -183,8 +183,8 @@ export async function getActiveProposalsForSpacesWhereEditor(
         ? {
             id: p.createdBy.id,
             address: p.createdBy.id as `0x${string}`,
-            avatarUrl: Entity.avatar(profileTriples),
-            coverUrl: Entity.cover(profileTriples),
+            avatarUrl: Entities.avatar(profileTriples),
+            coverUrl: Entities.cover(profileTriples),
             name: maybeProfile.name,
             profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
           }

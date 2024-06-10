@@ -11,7 +11,7 @@ import {
   name,
   nameTriple,
   types,
-} from './entity';
+} from './entities';
 
 const triplesWithSystemDescriptionAttribute: Triple[] = [
   {

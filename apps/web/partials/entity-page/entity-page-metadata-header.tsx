@@ -9,7 +9,7 @@ import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
 import { useDiff } from '~/core/state/diff-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { EntitySearchResult } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';

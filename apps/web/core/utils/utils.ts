@@ -3,7 +3,7 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
 import { Entity as IEntity, Proposal, Vote } from '~/core/types';
 
-import { Entity } from './entity';
+import { Entities } from './entity';
 
 export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
   return elements.flatMap((element, index) =>
@@ -168,11 +168,11 @@ export const getOpenGraphImageUrl = (value: string) => {
 
 export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
   const entityName = entity?.name ?? null;
-  const serverAvatarUrl = Entity.avatar(entity?.triples) ?? null;
-  const serverCoverUrl = Entity.cover(entity?.triples);
+  const serverAvatarUrl = Entities.avatar(entity?.triples) ?? null;
+  const serverCoverUrl = Entities.cover(entity?.triples);
   const imageUrl = serverAvatarUrl || serverCoverUrl || '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entity.description(entity?.triples ?? []);
+  const description = Entities.description(entity?.triples ?? []);
 
   return {
     entityName,

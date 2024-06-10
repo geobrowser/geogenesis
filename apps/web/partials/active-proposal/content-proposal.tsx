@@ -14,7 +14,7 @@ import { fetchEntity, fetchTriples } from '~/core/io/subgraph';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import { AttributeId, EntityId, Proposal, SpaceId, Vote } from '~/core/types';
 import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { getImagePath, isProposalEnded } from '~/core/utils/utils';
 
 import { colors } from '~/design-system/theme/colors';
@@ -589,7 +589,7 @@ const getFilters = async (rawFilter: string) => {
     }
     return {
       ...f,
-      columnName: Entity.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: Entities.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
 

@@ -7,7 +7,7 @@ import { Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -51,9 +51,9 @@ export default async function DefaultEntityPage({
   const decodedId = decodeURIComponent(params.entityId);
   const props = await getData(params.id, decodedId);
 
-  const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
-  const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
-  const types = Entity.types(props.triples);
+  const avatarUrl = Entities.avatar(props.triples) ?? props.serverAvatarUrl;
+  const coverUrl = Entities.cover(props.triples) ?? props.serverCoverUrl;
+  const types = Entities.types(props.triples);
 
   const typeId = searchParams.typeId ?? null;
 
@@ -116,8 +116,8 @@ const getData = async (spaceId: string, entityId: string) => {
     }
   }
 
-  const serverAvatarUrl = Entity.avatar(entity?.triples);
-  const serverCoverUrl = Entity.cover(entity?.triples);
+  const serverAvatarUrl = Entities.avatar(entity?.triples);
+  const serverCoverUrl = Entities.cover(entity?.triples);
 
   const blockIdsTriple =
     entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
@@ -144,7 +144,7 @@ const getData = async (spaceId: string, entityId: string) => {
     triples: entity?.triples ?? [],
     id: entityId,
     name: entity?.name ?? null,
-    description: Entity.description(entity?.triples ?? []),
+    description: Entities.description(entity?.triples ?? []),
     spaceId,
     serverAvatarUrl,
     serverCoverUrl,

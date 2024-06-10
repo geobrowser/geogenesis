@@ -22,7 +22,7 @@ import { TableBlockFilter } from '~/core/state/table-block-store';
 import type { AppOp, Proposal as ProposalType } from '~/core/types';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { formatShortAddress, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -922,7 +922,7 @@ const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph, confi
     }
     return {
       ...f,
-      columnName: Entity.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: Entities.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
 

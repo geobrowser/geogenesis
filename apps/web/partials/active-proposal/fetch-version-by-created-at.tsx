@@ -9,7 +9,7 @@ import { entityFragment, tripleFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
 import { Profile, SpaceWithMetadata, Version } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 const getVersionsQuery = ({
@@ -182,8 +182,8 @@ export async function fetchVersionsByCreatedAt({
       ? {
           id: v.createdBy.id,
           address: v.createdBy.id as `0x${string}`,
-          avatarUrl: Entity.avatar(profileTriples),
-          coverUrl: Entity.cover(profileTriples),
+          avatarUrl: Entities.avatar(profileTriples),
+          coverUrl: Entities.cover(profileTriples),
           name: maybeProfile.name,
           profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
         }
@@ -202,7 +202,7 @@ export async function fetchVersionsByCreatedAt({
     const spaceWithMetadata: SpaceWithMetadata = {
       id: v.space.id,
       name: spaceConfig?.name ?? null,
-      image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+      image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
     };
     const networkTriples = v.tripleVersions.nodes.flatMap(tv => tv.triple);
 

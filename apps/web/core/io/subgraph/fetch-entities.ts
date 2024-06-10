@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { Entity as EntityType, FilterField, FilterState } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 
 import { entityFragment } from './fragments';
 import { graphql } from './graphql';
@@ -151,12 +151,12 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
     }
 
     const triples = fromNetworkTriples(networkTriples);
-    const nameTriples = Entity.nameTriples(triples);
+    const nameTriples = Entities.nameTriples(triples);
 
     return {
       id: result.id,
       name: result.name,
-      description: Entity.description(triples),
+      description: Entities.description(triples),
       nameTripleSpaces: nameTriples.map(t => t.space),
       types: result.types.nodes,
       triples,

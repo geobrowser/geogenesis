@@ -8,7 +8,7 @@ import { memo, useState } from 'react';
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Column } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { valueTypes } from '~/core/value-types';
 
@@ -52,13 +52,13 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
-  const [localName, setLocalName] = useState(Entity.name(localTriples) ?? '');
+  const [localName, setLocalName] = useState(Entities.name(localTriples) ?? '');
 
   const send = useEditEvents({
     context: {
       entityId,
       spaceId: spaceId ?? '',
-      entityName: Entity.name(localTriples) ?? '',
+      entityName: Entities.name(localTriples) ?? '',
     },
     api: {
       upsert,
@@ -70,10 +70,10 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 ? column.triples : localTriples;
-  const nameTriple = Entity.nameTriple(triples);
-  const valueTypeTriple = Entity.valueTypeTriple(triples);
+  const nameTriple = Entities.nameTriple(triples);
+  const valueTypeTriple = Entities.valueTypeTriple(triples);
 
-  const valueType = Entity.valueTypeId(triples) ?? SYSTEM_IDS.TEXT;
+  const valueType = Entities.valueTypeId(triples) ?? SYSTEM_IDS.TEXT;
 
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
 

@@ -4,7 +4,7 @@ import { QueryClient } from '@tanstack/query-core';
 import { Subgraph } from '~/core/io';
 import { useLocalStore } from '~/core/state/local-store';
 import { Column, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triples } from '~/core/utils/triples';
 
@@ -118,7 +118,7 @@ export class Merged implements IMergedDataSource {
     // don't map to the selected filter.
     const localEntities = pipe(
       this.store.actions,
-      actions => Entity.mergeActionsWithEntities(actions, networkEntities),
+      actions => Entities.mergeActionsWithEntities(actions, networkEntities),
       A.filter(e => {
         if (!G.isString(e.name)) {
           return false;
@@ -168,11 +168,11 @@ export class Merged implements IMergedDataSource {
 
       // If not networkEntity we need to just return the local entity
       if (!maybeNetworkEntity) {
-        return Entity.fromTriples(this.store.allActions, options.id);
+        return Entities.fromTriples(this.store.allActions, options.id);
       }
 
       // If the network entity exists, we need to merge the local actions with the network entity.
-      const entity = Entity.mergeActionsWithEntity(this.store.allActions, maybeNetworkEntity);
+      const entity = Entities.mergeActionsWithEntity(this.store.allActions, maybeNetworkEntity);
 
       if (!entity) {
         return null;
@@ -259,7 +259,7 @@ export class Merged implements IMergedDataSource {
     // to them.
     const entitiesCreatedOrChangedLocally = pipe(
       this.store.actions,
-      actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
+      actions => Entities.mergeActionsWithEntities(actions, Entities.entitiesFromTriples(serverEntityTriples)),
       A.filter(e => e.types.some(t => t.id === selectedTypeEntityId)),
       A.filter(entity => {
         for (const filter of filterState) {
@@ -287,7 +287,7 @@ export class Merged implements IMergedDataSource {
       sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
     );
 
-    const entities = Entity.entitiesFromTriples([
+    const entities = Entities.entitiesFromTriples([
       // These are entities that were created locally and have the selected type
       ...entitiesCreatedOrChangedLocally.flatMap(e => e.triples),
 

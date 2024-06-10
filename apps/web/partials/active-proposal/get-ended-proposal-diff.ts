@@ -6,7 +6,7 @@ import { fetchProposal } from '~/core/io/subgraph';
 import { EntityId, Proposal, Version } from '~/core/types';
 import { Triple as TripleType } from '~/core/types';
 import { BlockChange, BlockValueType, Changeset } from '~/core/utils/change/change';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { Value } from '~/core/utils/value';
 

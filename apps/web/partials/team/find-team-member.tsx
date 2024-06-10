@@ -12,7 +12,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
 import { Entity as EntityType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
 import { Value } from '~/core/utils/value';
 
@@ -187,11 +187,11 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
 
       if (person) {
         if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
-          const avatar = Entity.avatar(person?.triples);
+          const avatar = Entities.avatar(person?.triples);
           setAvatar(avatar);
-          setName(Entity.name(person?.triples ?? []));
+          setName(Entities.name(person?.triples ?? []));
           setPerson(person);
-          setLinkedName(Entity.name(person?.triples ?? []));
+          setLinkedName(Entities.name(person?.triples ?? []));
           setLinkedAvatar(avatar);
           setHasFoundPerson(true);
         } else {

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 
 import { useActionsStore } from '../hooks/use-actions-store';
@@ -15,7 +15,7 @@ export function useLocalStore() {
   }, [allActions]);
 
   const entities = React.useMemo(() => {
-    return Entity.entitiesFromTriples(triples);
+    return Entities.entitiesFromTriples(triples);
   }, [triples]);
 
   return {

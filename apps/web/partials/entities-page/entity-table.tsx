@@ -21,7 +21,7 @@ import { useEditable } from '~/core/state/editable-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store/entity-table-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 import { Cell, Column, Row } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { NavUtils } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
@@ -56,11 +56,11 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedC
               unpublishedColumns={unpublishedColumns}
               column={column}
               entityId={column.id}
-              spaceId={Entity.nameTriple(column.triples)?.space}
+              spaceId={Entities.nameTriple(column.triples)?.space}
             />
           </div>
         ) : (
-          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
+          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entities.name(column.triples)}</Text>
         );
       },
       size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
@@ -112,7 +112,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           // cell has the correct data, but the value of the name is the value of the last
           // cell in the previous selectedType. For now we can use a key to force the
           // cell to re-mount when the selectedType and name changes.
-          key={Entity.name(cellTriples)}
+          key={Entities.name(cellTriples)}
           triples={cellTriples}
           cell={cellData}
           upsert={upsert}
@@ -127,7 +127,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     } else if (cellData && !isPlaceholderCell) {
       return (
         <EntityTableCell
-          key={Entity.name(cellData.triples)}
+          key={Entities.name(cellData.triples)}
           cell={cellData}
           triples={cellTriples}
           space={space}

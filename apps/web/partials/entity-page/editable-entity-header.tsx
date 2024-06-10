@@ -8,7 +8,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Spacer } from '~/design-system/spacer';
@@ -35,7 +35,7 @@ export function EditableHeading({
 
   const isEditing = editable && isEditor;
 
-  const name = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverName : Entity.name(triples) ?? '';
+  const name = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverName : Entities.name(triples) ?? '';
 
   const send = useEditEvents({
     context: {

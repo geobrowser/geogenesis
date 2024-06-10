@@ -28,7 +28,7 @@ import type { Entity as EntityType, Space, Triple as TripleType } from '~/core/t
 import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { GeoDate, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 
@@ -1085,7 +1085,7 @@ const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph) => {
     }
     return {
       ...f,
-      columnName: Entity.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: Entities.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
 

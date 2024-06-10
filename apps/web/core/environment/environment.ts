@@ -4,7 +4,7 @@ import { AppEnv } from '../types';
 type SupportedChainId = '31337' | '19411';
 
 /**
- * 3. Rename triple, entity, value -> triples, entities, values
+ * 3. Rename  entity, value ->  entities, values
  * 4. Next 14.3.0
  * 5. use getBlocksCollectionData everywhere
  *

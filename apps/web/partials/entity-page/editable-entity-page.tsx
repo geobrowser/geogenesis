@@ -17,7 +17,7 @@ import type {
   TripleWithCollectionValue,
   TripleWithEntityValue,
 } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
 import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-autocomplete';
@@ -77,7 +77,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
 
   // Always default to the local state for the name
-  const name = Entity.name(triples) ?? '';
+  const name = Entities.name(triples) ?? '';
 
   const send = useEditEvents({
     context: {
@@ -265,9 +265,9 @@ function EntityAttributes({
 
   const orderedGroupedTriples = Object.entries(groupedTriplesByAttributeId);
 
-  const nameTriple = Entity.nameTriple(triples);
-  const descriptionTriple = Entity.descriptionTriple(triples);
-  const description = Entity.description(triples);
+  const nameTriple = Entities.nameTriple(triples);
+  const descriptionTriple = Entities.descriptionTriple(triples);
+  const description = Entities.description(triples);
 
   const onChangeTriple = (type: TripleValueType, triple: ITriple) => {
     send({

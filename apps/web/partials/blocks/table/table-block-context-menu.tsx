@@ -22,7 +22,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMigrateHub } from '~/core/migrate/migrate';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity as IEntity, Triple as ITriple, ValueTypeId } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
@@ -221,7 +221,7 @@ function useOptimisticAttributes({
         attributeTriples.map(t => merged.fetchEntity({ id: t.value.value }))
       );
 
-      return maybeAttributeEntities.filter(Entity.isNonNull);
+      return maybeAttributeEntities.filter(Entities.isNonNull);
     },
   });
 

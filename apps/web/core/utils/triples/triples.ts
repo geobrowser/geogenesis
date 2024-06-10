@@ -16,7 +16,7 @@ import {
 import { valueTypes } from '~/core/value-types';
 
 import { Collections } from '../collections';
-import { Entity } from '../entity';
+import { Entities } from '../entity';
 
 export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {
@@ -158,7 +158,7 @@ export function collectionItemsFromTriples(triples: Record<string, Triple[]>): C
         id: entityId,
         name: entityIdTriple?.value.type === 'ENTITY' ? entityIdTriple?.value.name : null,
         // @TODO(local-first): The entity may not exist locally in which case this will be empty
-        types: Entity.types(triples[entityId] ?? []).map(t => t.id),
+        types: Entities.types(triples[entityId] ?? []).map(t => t.id),
       },
       index,
       value: {

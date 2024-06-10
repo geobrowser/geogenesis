@@ -13,7 +13,7 @@ import {
   Value,
   Vote,
 } from '~/core/types';
-import { Entity as EntityModule } from '~/core/utils/entity';
+import { Entities as EntityModule } from '~/core/utils/entity';
 
 import { fetchEntity } from './fetch-entity';
 

@@ -17,7 +17,7 @@ import {
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -344,7 +344,7 @@ export default async function Layout({ children, params }: Props) {
     getSpacesForSubspaceManagement(),
     getSubspacesForSpace(params.id),
   ]);
-  const coverUrl = Entity.cover(props.triples);
+  const coverUrl = Entities.cover(props.triples);
 
   const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
   const tabs = await buildTabsForSpacePage(props.space.spaceConfig?.types ?? [], params);
@@ -434,7 +434,7 @@ const getData = async (spaceId: string) => {
     triples: entity?.triples ?? [],
     id: entity.id,
     name: entity?.name ?? spaceName ?? '',
-    description: Entity.description(entity?.triples ?? []),
+    description: Entities.description(entity?.triples ?? []),
     spaceId,
 
     // For entity page editor

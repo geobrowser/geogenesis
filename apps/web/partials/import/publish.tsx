@@ -8,7 +8,7 @@ import { useWalletClient } from 'wagmi';
 
 import { useBulkPublish } from '~/core/hooks/use-publish';
 import type { Space } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
@@ -47,8 +47,8 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
   const setStep = useSetAtom(stepAtom);
   const setIsPublishOpen = useSetAtom(publishAtom);
 
-  const spaceName = Entity.name(space?.spaceConfig?.triples ?? []);
-  const spaceAvatar = Entity.avatar(space?.spaceConfig?.triples ?? []);
+  const spaceName = Entities.name(space?.spaceConfig?.triples ?? []);
+  const spaceAvatar = Entities.avatar(space?.spaceConfig?.triples ?? []);
 
   const [proposalName, setProposalName] = useState('');
   const isReadyToPublish = proposalName.length > 3;

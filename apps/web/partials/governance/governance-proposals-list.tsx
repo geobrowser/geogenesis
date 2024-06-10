@@ -11,7 +11,7 @@ import { tripleFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
 import { OmitStrict, Profile, Proposal, Vote } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -243,8 +243,8 @@ async function fetchActiveProposals({
       ? {
           id: p.createdBy.id,
           address: p.createdBy.id as `0x${string}`,
-          avatarUrl: Entity.avatar(profileTriples),
-          coverUrl: Entity.cover(profileTriples),
+          avatarUrl: Entities.avatar(profileTriples),
+          coverUrl: Entities.cover(profileTriples),
           name: maybeProfile.name,
           profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
         }

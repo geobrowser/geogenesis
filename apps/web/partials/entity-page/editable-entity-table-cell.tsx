@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Cell, EntitySearchResult, Triple, TripleWithCollectionValue } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 
@@ -43,7 +43,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     context: {
       entityId: cell.entityId,
       spaceId: space,
-      entityName: Entity.name(triples) ?? '',
+      entityName: Entities.name(triples) ?? '',
     },
     api: {
       upsert,
@@ -52,7 +52,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     },
   });
 
-  const entityName = Entity.name(triples) || '';
+  const entityName = Entities.name(triples) || '';
   const attributeId = cell.columnId;
 
   const entityValueTriples = triples.filter(t => t.value.type === 'ENTITY');

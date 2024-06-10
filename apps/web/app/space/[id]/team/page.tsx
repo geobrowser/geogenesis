@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Subgraph } from '~/core/io';
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import type { Triple as TripleType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { Value } from '~/core/utils/value';
 
@@ -115,7 +115,7 @@ const getTeamMembers = async (spaceId: string) => {
           teamMembers[teamMemberIndex].name = name;
         }
       } else {
-        const name = Entity.name(entity.triples);
+        const name = Entities.name(entity.triples);
 
         if (name) {
           teamMembers[teamMemberIndex].name = name;
@@ -131,20 +131,20 @@ const getTeamMembers = async (spaceId: string) => {
           teamMembers[teamMemberIndex].avatar = avatar;
         }
       } else {
-        const avatar = Entity.avatar(entity.triples);
+        const avatar = Entities.avatar(entity.triples);
 
         if (avatar) {
           teamMembers[teamMemberIndex].avatar = avatar;
         }
       }
     } else {
-      const name = Entity.name(entity.triples);
+      const name = Entities.name(entity.triples);
 
       if (name) {
         teamMembers[teamMemberIndex].name = name;
       }
 
-      const avatar = Entity.avatar(entity.triples);
+      const avatar = Entities.avatar(entity.triples);
 
       if (avatar) {
         teamMembers[teamMemberIndex].avatar = avatar;

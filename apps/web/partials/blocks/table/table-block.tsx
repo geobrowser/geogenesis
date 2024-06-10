@@ -14,7 +14,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity as EntityType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
@@ -61,7 +61,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
   const allColumns = columns.map(column => ({
     id: column.id,
-    name: Entity.name(column.triples),
+    name: Entities.name(column.triples),
   }));
 
   const shownColumnTriples = [
@@ -100,7 +100,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
     return {
       ...f,
-      columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: Entities.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
 

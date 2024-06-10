@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { Profile, ProposedVersion, SpaceWithMetadata } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { entityFragment, tripleFragment } from './fragments';
@@ -152,8 +152,8 @@ export async function fetchProposedVersions({
       ? {
           id: v.createdBy.id,
           address: v.createdBy.id as `0x${string}`,
-          avatarUrl: Entity.avatar(profileTriples),
-          coverUrl: Entity.cover(profileTriples),
+          avatarUrl: Entities.avatar(profileTriples),
+          coverUrl: Entities.cover(profileTriples),
           name: maybeProfile.name,
           profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
         }
@@ -172,7 +172,7 @@ export async function fetchProposedVersions({
     const spaceWithMetadata: SpaceWithMetadata = {
       id: v.space.id,
       name: spaceConfig?.name ?? null,
-      image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+      image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
     };
 
     return {

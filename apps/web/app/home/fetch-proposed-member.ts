@@ -4,7 +4,7 @@ import { Environment } from '~/core/environment';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamTriple, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
 import { Profile } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 const getProposedMemberInProposalQuery = (proposalId: string) => `query {
@@ -160,8 +160,8 @@ export async function fetchProposedMemberForProposal(proposalId: string): Promis
   return {
     id: profile.id,
     name: profile.name,
-    avatarUrl: Entity.avatar(triples) ?? null,
-    coverUrl: Entity.cover(triples) ?? null,
+    avatarUrl: Entities.avatar(triples) ?? null,
+    coverUrl: Entities.cover(triples) ?? null,
     address: proposedMemberAccount.id as `0x${string}`,
     profileLink: NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id),
   };

@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Cell, Triple } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { LinkableChip } from '~/design-system/chip';
@@ -22,7 +22,7 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
 
   if (isNameCell) {
     const entityId = cell.entityId;
-    const value = Entity.name(triples) || entityId; // the name might exist but be empty, fall back to the entity id in this case.
+    const value = Entities.name(triples) || entityId; // the name might exist but be empty, fall back to the entity id in this case.
 
     return <CellContent key={value} href={NavUtils.toEntity(space, entityId)} isExpanded={isExpanded} value={value} />;
   }

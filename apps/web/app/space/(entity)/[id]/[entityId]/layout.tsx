@@ -8,7 +8,7 @@ import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { CollectionItem, Entity as IEntity, Triple } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -173,8 +173,8 @@ async function getProfilePage(entityId: string): Promise<
 
   return {
     ...person,
-    avatarUrl: Entity.avatar(person.triples),
-    coverUrl: Entity.cover(person.triples),
+    avatarUrl: Entities.avatar(person.triples),
+    coverUrl: Entities.cover(person.triples),
     blockIdsTriple,
     blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
     blockCollectionItems,

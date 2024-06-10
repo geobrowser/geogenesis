@@ -5,7 +5,7 @@ import { getAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { tripleFragment } from './fragments';
@@ -117,8 +117,8 @@ export async function fetchAccount(
     ? {
         id: account.id,
         address: account.id as `0x${string}`,
-        avatarUrl: Entity.avatar(profileTriples),
-        coverUrl: Entity.cover(profileTriples),
+        avatarUrl: Entities.avatar(profileTriples),
+        coverUrl: Entities.cover(profileTriples),
         name: maybeProfile.name,
         profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
       }

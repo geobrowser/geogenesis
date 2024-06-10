@@ -6,7 +6,7 @@ import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Environment } from '../environment';
-import { Entity } from '../utils/entity';
+import { Entities } from '../utils/entity';
 import { NavUtils } from '../utils/utils';
 import { entityFragment, tripleFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
@@ -181,8 +181,8 @@ export async function fetchProposalsByUser({
       ? {
           id: p.createdBy.id,
           address: p.createdBy.id as `0x${string}`,
-          avatarUrl: Entity.avatar(profileTriples),
-          coverUrl: Entity.cover(profileTriples),
+          avatarUrl: Entities.avatar(profileTriples),
+          coverUrl: Entities.cover(profileTriples),
           name: maybeProfile.name,
           profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
         }
@@ -201,7 +201,7 @@ export async function fetchProposalsByUser({
     const spaceWithMetadata: SpaceWithMetadata = {
       id: p.space.id,
       name: spaceConfig?.name ?? null,
-      image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+      image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
     };
 
     return {
