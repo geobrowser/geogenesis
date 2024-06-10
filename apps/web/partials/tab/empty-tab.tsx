@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -26,9 +26,11 @@ export const EmptyTab = ({ spaceId, children }: EmptyTabProps) => {
 
   const router = useRouter();
 
-  if (!isEditing) {
-    router.push(NavUtils.toSpace(spaceId));
-  }
+  useEffect(() => {
+    if (!isEditing) {
+      router.push(NavUtils.toSpace(spaceId));
+    }
+  }, [isEditing, router, spaceId]);
 
   if (!hasCreatedEntity) {
     return (
