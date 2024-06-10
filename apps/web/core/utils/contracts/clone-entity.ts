@@ -1,8 +1,8 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Op, SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
-import { CreateTripleAction, Entity as EntityType, Triple as TripleType, Value as ValueType } from '~/core/types';
+import { Entity as EntityType, Triple as TripleType, Value as ValueType } from '~/core/types';
 import { Triple } from '~/core/utils/triple';
 import { Value } from '~/core/utils/value';
 
@@ -40,15 +40,14 @@ export const cloneEntity = async (options: Options) => {
       attributeName: 'Name',
       space: spaceId,
       value: {
-        type: 'string',
+        type: 'TEXT',
         value: newEntityName,
-        id: ID.createValueId(),
       },
     })
   );
 
   triplesToClone.forEach(triple => {
-    if (triple.value.type === 'entity') {
+    if (triple.value.type === 'ENTITY') {
       newTriples.push(
         Triple.withId({
           ...triple,
@@ -64,10 +63,7 @@ export const cloneEntity = async (options: Options) => {
           space: spaceId,
           entityName: newEntityName,
           entityId: newEntityId,
-          value: {
-            ...triple.value,
-            id: ID.createValueId(),
-          },
+          value: triple.value,
         })
       );
     }
@@ -93,8 +89,7 @@ export const cloneEntity = async (options: Options) => {
       entityId: newEntityId,
       entityName: newEntityName,
       value: {
-        id: ID.createValueId(),
-        type: 'string',
+        type: 'TEXT',
         value: JSON.stringify(newBlockIds),
       },
     });
@@ -118,14 +113,13 @@ export const cloneEntity = async (options: Options) => {
               space: spaceId,
               entityId: newBlockIds[index],
               value: {
-                ...triple.value,
-                type: 'entity',
+                type: 'ENTITY',
                 name: newEntityName,
-                id: newEntityId,
-              } as ValueType,
+                value: newEntityId,
+              },
             })
           );
-        } else if (triple.attributeId === SYSTEM_IDS.FILTER && triple.value.type === 'string') {
+        } else if (triple.attributeId === SYSTEM_IDS.FILTER && triple.value.type === 'TEXT') {
           let newValue = triple.value.value;
 
           const spaceRegex = /entityOf_\s*:\s*{\s*space\s*:\s*"([^"]*)"\s*}/;
@@ -142,13 +136,12 @@ export const cloneEntity = async (options: Options) => {
               space: spaceId,
               entityId: newBlockIds[index],
               value: {
-                type: 'string',
+                type: 'TEXT',
                 value: newValue,
-                id: ID.createValueId(),
               },
             })
           );
-        } else if (triple.value.type === 'entity') {
+        } else if (triple.value.type === 'ENTITY') {
           newBlockTriples.push(
             Triple.withId({
               ...triple,
@@ -162,10 +155,7 @@ export const cloneEntity = async (options: Options) => {
               ...triple,
               space: spaceId,
               entityId: newBlockIds[index],
-              value: {
-                ...triple.value,
-                id: ID.createValueId(),
-              },
+              value: triple.value,
             })
           );
         }
@@ -176,15 +166,7 @@ export const cloneEntity = async (options: Options) => {
     newTriples.push(newBlockIdsTriple);
   }
 
-  // @TODO(migration)
-  // migrate all actions to ops in new data model
-  const actions: Array<CreateTripleAction> = [];
-
-  newTriples.forEach(triple => {
-    actions.push({ type: 'createTriple', ...triple });
-  });
-
-  return actions;
+  return newTriples;
 };
 
 const SKIPPED_ATTRIBUTES = [SYSTEM_IDS.NAME, SYSTEM_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.BLOCKS];

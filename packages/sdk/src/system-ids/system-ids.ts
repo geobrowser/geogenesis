@@ -111,6 +111,7 @@ export const CLAIM_TYPE = 'fa8e8e54f7424c00b73c05adee2b4545';
 export const PAGE_TYPE = '1a9fc4a00fec4eeaa075eec7ebd0d043';
 export const TAB_TYPE = '2c72ace7540444559d2265272a94e874';
 export const POST_TYPE = '682fbeff41e242cda7f9c4909136a8c5';
+export const PAGE_TYPE_TYPE = '5ec8adc335334c3cbfa4acdfaa877bac'
 
 export const VALUES_ATTRIBUTE = 'c8e8fd5f011d4c8e8aaf1a2ffc5b48fd';
 export const VISION_ATTRIBUTE = 'c670247893c74af48f2a285a46cc19ca';
@@ -218,3 +219,46 @@ export const PERMISSIONLESS_SPACE_BEACON_ADDRESS = '0xf14C33B732851ECccA5e2c84a9
 // permissionless spaces.
 export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = '0x68930a23A91A8FA97C6053cD5057431BaD3eEB52';
 // '0x42096035524630382E73cfFAE1CA319CFa72F4dC' // mumbai
+
+// @TODO(migration)
+// migrate types to new data model
+
+// Root space
+export const ROOT_SPACE = `0x170b749413328ac9a94762031a7A05b00c1D2e34` // @TODO(migration): update when we deploy new root space
+export const ROOT_SPACE_CONFIGURATION = `f1b9fd886388436e95b551aafaea77e5`
+
+// Page types
+export const POSTS_PAGE = 'e73c3db8320042309ae952eddb73b566'
+export const PRODUCTS_PAGE = '6764f3827ff247e2b2ad295791153705'
+export const SERVICES_PAGE = 'e5d69a755ede4a56b43344e5d3fde7bc'
+export const EVENTS_PAGE = 'bb2917434c394223afba91a08aa83478'
+export const JOBS_PAGE = 'abb4700856554b27bae8e7dba063b394'
+export const PROJECTS_PAGE = '7171ce7a83b940a2abe2751a54c1c245'
+export const FINANCES_PAGE = 'f20af8deb57c472ab13d0247c46a8eeb'
+export const SPACES_PAGE = '970e41c7196e42d3af0ecee755651d5b'
+
+// Page templates
+export const COMPANY_SPACE_CONFIGURATION_TEMPLATE =
+  '8f5e618f781644cbb795300e8078bf15'
+export const COMPANY_POSTS_PAGE_TEMPLATE =
+  '90bd4735b2214059a5cd4f3215ab79d1'
+export const COMPANY_PRODUCTS_PAGE_TEMPLATE =
+  '6e9da70f357a4fc5b9d58de5840db16a'
+export const COMPANY_SERVICES_PAGE_TEMPLATE =
+  'd572b1248b5e40948c6c25e531fc8a33'
+export const COMPANY_EVENTS_PAGE_TEMPLATE =
+  '6885104d79ea4db2a64cc8e8512533ea'
+export const COMPANY_JOBS_PAGE_TEMPLATE = '9a7528b37fb041c492c31650b70aae69'
+
+export const NONPROFIT_SPACE_CONFIGURATION_TEMPLATE =
+  'df388a8b27f54676b2376a59ca4a3e79'
+export const NONPROFIT_POSTS_PAGE_TEMPLATE =
+  'd370fe7af7784a5283984140cdc9bbad'
+export const NONPROFIT_PROJECTS_PAGE_TEMPLATE =
+  'ddce09f82413449e973551e2998551b9'
+export const NONPROFIT_FINANCES_PAGE_TEMPLATE =
+  '3be01e21822742e0bd40868957e3ede2'
+
+export const PERSON_SPACE_CONFIGURATION_TEMPLATE =
+  '25d4b5bb2f3a4854a9fedf2f5f12b5e4'
+export const PERSON_POSTS_PAGE_TEMPLATE = '026362d45d414b8db6ef8ed10ecd0d89'

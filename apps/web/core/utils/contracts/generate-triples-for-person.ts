@@ -1,14 +1,12 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { cloneEntity } from './clone-entity';
 
-export const generateActionsForPerson = async (
+export const generateTriplesForPerson = async (
   spaceConfigEntityId: string,
   spaceName: string,
   spaceAddress: string
 ) => {
-  const actions = [];
-
   const [spaceConfigurationActions, postsPageActions] = await Promise.all([
     cloneEntity({
       oldEntityId: SYSTEM_IDS.PERSON_SPACE_CONFIGURATION_TEMPLATE,
@@ -23,7 +21,5 @@ export const generateActionsForPerson = async (
     }),
   ]);
 
-  actions.push(...spaceConfigurationActions, ...postsPageActions);
-
-  return actions;
+  return [...spaceConfigurationActions, ...postsPageActions];
 };

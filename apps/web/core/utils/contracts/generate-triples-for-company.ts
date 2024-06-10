@@ -1,14 +1,12 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { cloneEntity } from './clone-entity';
 
-export const generateActionsForCompany = async (
+export const generateTriplesForCompany = async (
   spaceConfigEntityId: string,
   spaceName: string,
   spaceAddress: string
 ) => {
-  const actions = [];
-
   const [
     spaceConfigurationActions,
     postsPageActions,
@@ -50,14 +48,12 @@ export const generateActionsForCompany = async (
     }),
   ]);
 
-  actions.push(
+  return [
     ...spaceConfigurationActions,
     ...postsPageActions,
     // ...productsPageActions,
     // ...servicesPageActions,
     ...eventsPageActions,
-    ...jobsPageActions
-  );
-
-  return actions;
+    ...jobsPageActions,
+  ];
 };
