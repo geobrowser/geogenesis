@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Tabs from '@radix-ui/react-tabs';
 import cx from 'classnames';
 import { useAtom } from 'jotai';

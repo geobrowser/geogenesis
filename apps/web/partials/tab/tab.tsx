@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
@@ -92,7 +92,8 @@ const getEntityId = async (spaceId: string, pageTypeId: string) => {
 
   // @TODO(migration)
   // migrate to `triple.value.value === pageTypeId` in new data model
-  const entityId = pageTypeTriples.find(triple => triple.value.id === pageTypeId)?.entityId;
+  // This might be a collection
+  const entityId = pageTypeTriples.find(triple => triple.value.value === pageTypeId)?.entityId;
 
   return entityId ?? null;
 };
