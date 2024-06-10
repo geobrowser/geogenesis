@@ -515,11 +515,13 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
                       ))}
                   </div>
                 </div>
-                <TableBlockPlaceholder
-                  columns={2}
-                  rows={2}
-                  className="mt-2 !overflow-hidden rounded-lg border border-grey-02 p-0 opacity-50 shadow-button"
-                />
+                <div className="mt-2">
+                  <TableBlockPlaceholder
+                    columns={2}
+                    rows={2}
+                    className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
+                  />
+                </div>
               </>
             )}
           </div>
@@ -546,11 +548,13 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
                       ))}
                   </div>
                 </div>
-                <TableBlockPlaceholder
-                  columns={2}
-                  rows={2}
-                  className="mt-2 !overflow-hidden rounded-lg border border-grey-02 p-0 opacity-50 shadow-button"
-                />
+                <div className="mt-2">
+                  <TableBlockPlaceholder
+                    columns={2}
+                    rows={2}
+                    className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
+                  />
+                </div>
               </>
             )}
           </div>

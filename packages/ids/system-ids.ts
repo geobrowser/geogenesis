@@ -152,6 +152,8 @@ export const SPACE_CONFIGURATION = '1d5d0c2a-db23-466c-a0b0-9abe879df457';
 export const TABLE_BLOCK = '88d59252-17ae-4d9a-a367-24710129eb47';
 
 export const SHOWN_COLUMNS = '388ad59b-1cc7-413c-a0bb-34a4de48c758';
+export const PLACEHOLDER_TEXT = '0e5f84e4-c85a-4469-8a66-5a7d46fe2786';
+export const PLACEHOLDER_IMAGE = '3f208320-9070-4795-a046-206a6efb9557';
 
 /* Example Usage: Block Entity -> TYPES -> TEXT_BLOCK */
 export const TEXT_BLOCK = '8426caa1-43d6-47d4-a6f1-00c7c1a9a320';

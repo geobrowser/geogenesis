@@ -12,5 +12,12 @@
   ],
   "devDependencies": {
     "typescript": "^5.1.6"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "trailingComma": "es5",
+    "arrowParens": "avoid",
+    "printWidth": 120,
+    "semi": true
   }
 }
