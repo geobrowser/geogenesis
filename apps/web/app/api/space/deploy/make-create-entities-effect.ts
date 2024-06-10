@@ -6,8 +6,10 @@ import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
 import { SpaceType } from '~/core/types';
+import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
 import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
 import { Ops } from '~/core/utils/ops';
+import { Triple } from '~/core/utils/triple';
 import { slog } from '~/core/utils/utils';
 
 import { geoAccount, publicClient, walletClient } from '../../client';
@@ -35,27 +37,28 @@ export function makeCreateEntitiesEffect(
       const newEntityId = ID.createEntityId();
 
       // Add triples for a Person entity
-      ops.push(
-        Ops.create({
-          entityId: newEntityId,
-          attributeId: SYSTEM_IDS.NAME,
-          value: {
-            type: 'TEXT',
-            value: spaceName,
-          },
-        })
-      );
+      if (type === 'default') {
+        ops.push(
+          Ops.create({
+            entityId: newEntityId,
+            attributeId: SYSTEM_IDS.NAME,
+            value: {
+              type: 'TEXT',
+              value: spaceName,
+            },
+          })
+        );
+      }
 
-      ops.push(
-        Ops.create({
-          entityId: newEntityId,
-          attributeId: SYSTEM_IDS.TYPES,
-          value: {
-            type: 'ENTITY',
-            value: SYSTEM_IDS.SPACE_CONFIGURATION,
-          },
-        })
-      );
+      if (type === 'company') {
+        const companyTriples = await generateTriplesForCompany(newEntityId, spaceName, spaceAddress);
+        ops.push(...Triple.prepareTriplesForPublishing(companyTriples, spaceAddress));
+      }
+
+      if (type === 'nonprofit') {
+        const nonprofitTriples = await generateTriplesForNonprofit(newEntityId, spaceName, spaceAddress);
+        ops.push(...Triple.prepareTriplesForPublishing(nonprofitTriples, spaceAddress));
+      }
 
       if (spaceAvatarUri) {
         ops.push(
@@ -69,48 +72,6 @@ export function makeCreateEntitiesEffect(
             },
           })
         );
-      }
-
-      if (type === 'company') {
-        ops.push(
-          Ops.create({
-            entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
-            value: {
-              type: 'ENTITY',
-              value: SYSTEM_IDS.COMPANY_TYPE,
-            },
-          })
-        );
-      }
-
-      // Nonprofit spaces have both Nonprofit _and_ Project added as types
-      if (type === 'nonprofit') {
-        ops.push(
-          Ops.create({
-            entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
-            value: {
-              type: 'ENTITY',
-              value: SYSTEM_IDS.NONPROFIT_TYPE,
-            },
-          })
-        );
-
-        ops.push(
-          Ops.create({
-            entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
-            value: {
-              type: 'ENTITY',
-              value: SYSTEM_IDS.PROJECT_TYPE,
-            },
-          })
-        );
-
-        const nonprofitActions = generateTriplesForNonprofit(newEntityId, spaceName, spaceAddress);
-
-        ops.push(...nonprofitActions);
       }
 
       slog({

@@ -9,6 +9,7 @@ import { Environment } from '~/core/environment';
 import { StorageClient } from '~/core/io/storage/storage';
 import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
 import { Ops } from '~/core/utils/ops';
+import { Triple } from '~/core/utils/triple';
 import { slog } from '~/core/utils/utils';
 
 import { geoAccount, publicClient, walletClient } from '../../client';
@@ -78,19 +79,8 @@ export async function makeNonprofitEffect(
     try: async () => {
       const ops: IOp[] = [];
 
-      // Add triples for a Person entity
-      if (username) {
-        ops.push(
-          Ops.create({
-            entityId: profileId,
-            attributeId: SYSTEM_IDS.NAME,
-            value: {
-              type: 'TEXT',
-              value: username,
-            },
-          })
-        );
-      }
+      const nonprofitTriples = await generateTriplesForNonprofit(profileId, username ?? '', spaceAddress);
+      ops.push(...Triple.prepareTriplesForPublishing(nonprofitTriples, spaceAddress));
 
       if (avatarUri) {
         ops.push(
@@ -105,44 +95,6 @@ export async function makeNonprofitEffect(
           })
         );
       }
-
-      // Add Types: Nonprofit Organization and Project to the profile entity
-      ops.push(
-        Ops.create({
-          entityId: profileId,
-          attributeId: SYSTEM_IDS.TYPES,
-          value: {
-            type: 'ENTITY',
-            value: SYSTEM_IDS.NONPROFIT_TYPE,
-          },
-        })
-      );
-
-      ops.push(
-        Ops.create({
-          entityId: profileId,
-          attributeId: SYSTEM_IDS.TYPES,
-          value: {
-            type: 'ENTITY',
-            value: SYSTEM_IDS.PROJECT_TYPE,
-          },
-        })
-      );
-
-      ops.push(
-        Ops.create({
-          entityId: profileId,
-          attributeId: SYSTEM_IDS.TYPES,
-          value: {
-            type: 'ENTITY',
-            value: SYSTEM_IDS.SPACE_CONFIGURATION,
-          },
-        })
-      );
-
-      const nonprofitActions = generateTriplesForNonprofit(profileId, username ?? '', spaceAddress);
-
-      ops.push(...nonprofitActions);
 
       slog({
         requestId,

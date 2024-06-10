@@ -30,9 +30,44 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
   if (!isEditing) return null;
 
   switch (spaceType) {
+    case 'company':
+      return (
+        <NoticesContainer>
+          <Notice
+            id="companyAddTeamMembers"
+            color="blue"
+            media={<img src="/team.png" alt="" className="h-24 w-auto object-contain" />}
+            title={`Add team members to your company`}
+            action={<SimpleButton href={`/space/${spaceId}/team`}>Add team members</SimpleButton>}
+          />
+          <Notice
+            id="companyFirstPost"
+            color="purple"
+            media={<img src="/posts.png" alt="" className="h-24 w-auto object-contain" />}
+            title={`Write and publish your first post`}
+            action={
+              <SimpleButton href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.POST_TYPE)}>
+                Write a post
+              </SimpleButton>
+            }
+          />
+          <Notice
+            id="companyFirstProductOrService"
+            color="yellow"
+            media={<img src="/posts.png" alt="" className="h-24 w-auto object-contain" />}
+            title={`Add products and services that your company offers`}
+            action={
+              <>
+                <SimpleButton href={`/space/${spaceId}/products`}>Add products</SimpleButton>
+                <SimpleButton href={`/space/${spaceId}/services`}>Add services</SimpleButton>
+              </>
+            }
+          />
+        </NoticesContainer>
+      );
     case 'nonprofit':
       return (
-        <ResizableContainer className="grid grid-cols-3 gap-8">
+        <NoticesContainer>
           <Notice
             id="nonprofitFirstPost"
             color="purple"
@@ -58,11 +93,19 @@ export const SpaceNotices = ({ spaceType, spaceId }: SpaceNoticesProps) => {
             title={`Add team members to your nonprofit`}
             action={<SimpleButton href={`/space/${spaceId}/team`}>Add team members</SimpleButton>}
           />
-        </ResizableContainer>
+        </NoticesContainer>
       );
     default:
       return null;
   }
+};
+
+type NoticesContainerProps = {
+  children?: React.ReactNode;
+};
+
+const NoticesContainer = ({ children }: NoticesContainerProps) => {
+  return <ResizableContainer className="grid grid-cols-3 gap-8 pb-4">{children}</ResizableContainer>;
 };
 
 type NoticeProps = {
@@ -104,7 +147,7 @@ const Notice = ({ id, color, media, title, action }: NoticeProps) => {
       <div className="relative -top-1.5 -mx-4">{media}</div>
       <div>
         <div className="text-balance text-smallTitle">{title}</div>
-        {action && <div className="mt-4">{action}</div>}
+        {action && <div className="mt-4 flex gap-2">{action}</div>}
       </div>
       <div className="absolute right-0 top-0 p-3">
         <button

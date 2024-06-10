@@ -300,3 +300,196 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
     </div>
   );
 }
+
+// const topics: { icon?: React.ReactNode; label: string; href: string }[] = [
+//   { icon: <VideoSmall />, label: 'Videos', href: '/' },
+//   { icon: <InfoSmall />, label: 'Guides and posts', href: '/' },
+// ];
+
+// const LearnMore = () => {
+//   return (
+//     <div className="flex flex-wrap gap-2">
+//       {topics.map(topic => (
+//         <Link
+//           href={topic.href}
+//           key={topic.label}
+//           className="inline-flex items-center gap-1 rounded bg-white p-1 text-breadcrumb"
+//         >
+//           {topic.icon && <span className="inline-block scale-[0.75]">{topic.icon}</span>}
+//           <span>{topic.label}</span>
+//         </Link>
+//       ))}
+//     </div>
+//   );
+// };
+
+// const JoinSpaces = () => {
+//   const { spaces } = useSpaces();
+
+//   return (
+//     <div className="flex flex-wrap gap-2 pr-16">
+//       {recommendedSpaces.map(spaceId => {
+//         const space = spaces.find(space => space.id === spaceId);
+
+//         if (!space) return null;
+
+//         const spaceImage = space.spaceConfig?.image ? getImagePath(space.spaceConfig?.image) : PLACEHOLDER_SPACE_IMAGE;
+
+//         return (
+//           <Link
+//             key={space.id}
+//             href={NavUtils.toSpace(space.id)}
+//             className="inline-flex items-center gap-1.5 rounded bg-white p-1 text-breadcrumb"
+//           >
+//             <span className="relative h-3 w-3 overflow-hidden rounded-sm">
+//               <img src={spaceImage} className="absolute inset-0 h-full w-full object-cover object-center" alt="" />
+//             </span>
+//             <span>{space.spaceConfig?.name ?? space.id}</span>
+//           </Link>
+//         );
+//       })}
+//     </div>
+//   );
+// };
+
+// const Notices = () => {
+//   return (
+//     <div className="mb-2 space-y-2">
+//       <ClientOnly>
+//         <Notice
+//           id="welcomeToYourHome"
+//           color="grey"
+//           title="Welcome to your home"
+//           description="Your area to see any proposals, member requests, editor requests and all general activity across the spaces you are involved in."
+//           media={<img src="/home.png" alt="" className="-mb-12" />}
+//         />
+//         {/* <Notice
+//           id="findOrCreateCompanySpace"
+//           color="green"
+//           title="Find / create your company space"
+//           description="Join your company space as a member or editor, or create it if it doesn’t exist."
+//           element={<FindOrCreateCompanySpace />}
+//           media={<img src="/company.png" alt="" className="-mb-12" />}
+//         /> */}
+//         <Notice
+//           id="findSpacesToJoin"
+//           color="orange"
+//           title="Find spaces to join"
+//           description="Discover and join spaces where you can actively engage with the topics and issues that captivate your interest."
+//           element={<JoinSpaces />}
+//         />
+//         {/* <Notice
+//           id="learnMore"
+//           color="purple"
+//           title="Want to learn more?"
+//           description="Watch videos and read our guides to help you get to grips with the fundamentals of using and contributing to Geo."
+//           element={<LearnMore />}
+//           media={<img src="/videos.png" alt="" />}
+//         /> */}
+//       </ClientOnly>
+//     </div>
+//   );
+// };
+
+// type NoticeProps = {
+//   id: string;
+//   color: 'grey' | 'blue' | 'green' | 'orange' | 'purple';
+//   title: string;
+//   description: string;
+//   element?: React.ReactNode;
+//   media?: React.ReactNode;
+// };
+
+// const Notice = ({ id, color, title, description, element, media }: NoticeProps) => {
+//   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
+
+//   const classNames = cva('relative flex gap-4 overflow-clip rounded-lg p-4', {
+//     variants: {
+//       color: {
+//         grey: 'bg-gradient-grey',
+//         blue: 'bg-gradient-blue',
+//         green: 'bg-gradient-green',
+//         orange: 'bg-gradient-orange',
+//         purple: 'bg-gradient-purple',
+//       },
+//     },
+//   });
+
+//   const handleDismissNotice = React.useCallback(() => {
+//     const newDismissedNotices = [...dismissedNotices, id];
+//     setDismissedNotices(newDismissedNotices);
+//   }, [id, dismissedNotices, setDismissedNotices]);
+
+//   if (dismissedNotices.includes(id)) return null;
+
+//   return (
+//     <div id={id} className={classNames({ color })}>
+//       <div>
+//         <div className="text-smallTitle">{title}</div>
+//         <div className="mt-2">{description}</div>
+//         {element && <div className="mt-2">{element}</div>}
+//       </div>
+//       {media && <div className="-mx-4 -mb-4">{media}</div>}
+//       <div>
+//         <button onClick={handleDismissNotice} className="rounded border p-1">
+//           <Close />
+//         </button>
+//       </div>
+//     </div>
+//   );
+// };
+
+// type SidebarProps = {
+//   acceptedProposalsCount: number;
+// };
+
+// const Sidebar = ({ acceptedProposalsCount }: SidebarProps) => {
+//   return (
+//     <div className="space-y-2">
+//       <Activity
+//         label="My proposals"
+//         activities={[
+//           { icon: <InProgressSmall />, label: 'In progress', count: 0 },
+//           { icon: <CheckCircleSmall />, label: 'Accepted', count: acceptedProposalsCount },
+//           { icon: <CheckCloseSmall />, label: 'Rejected', count: 0 },
+//         ]}
+//       />
+//       <Activity
+//         label="Proposals I’ve voted on"
+//         activities={[
+//           { icon: <CheckCircleSmall />, label: 'Accepted', count: 0 },
+//           { icon: <CheckCloseSmall />, label: 'Rejected', count: 0 },
+//         ]}
+//       />
+//       <Activity
+//         label="I have accepted"
+//         activities={[
+//           { icon: <Member />, label: 'Members', count: 0 },
+//           { icon: <EditSmall />, label: 'Editors', count: 0 },
+//         ]}
+//       />
+//     </div>
+//   );
+// };
+
+// type ActivityProps = {
+//   label: string;
+//   activities: { icon?: React.ReactNode; label: string; count: number }[];
+// };
+
+// const Activity = ({ label = '', activities = [] }: ActivityProps) => {
+//   return (
+//     <div className="rounded-lg border border-grey-02 p-4">
+//       <div className="text-breadcrumb text-grey-04">{label}</div>
+//       {activities.map(({ icon, label, count }) => (
+//         <div key={label} className="mt-2 flex items-center justify-between text-metadataMedium">
+//           <div className="inline-flex items-center gap-2">
+//             {icon && <div>{icon}</div>}
+//             <div>{label}</div>
+//           </div>
+//           <div>{count}</div>
+//         </div>
+//       ))}
+//     </div>
+//   );
+// };

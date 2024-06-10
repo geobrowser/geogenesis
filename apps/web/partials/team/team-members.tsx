@@ -44,14 +44,14 @@ export const TeamMembers = ({ spaceId, teamMembers = [] }: TeamMembersProps) => 
     <>
       {teamMembers.length === 0 ? (
         <NoContent
-          isEditing={isEditMode}
           options={{
+            image: '/team.png',
             browse: {
               title: 'There aren’t any team members here yet',
               description: 'Switch to edit mode to start adding your team if you’re an editor of this space',
-              image: '/team.png',
             },
           }}
+          isEditing={isEditMode}
         />
       ) : null}
       <div className="grid auto-rows-fr grid-cols-2 gap-6">

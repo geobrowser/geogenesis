@@ -7,7 +7,9 @@ import * as Schedule from 'effect/Schedule';
 import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { StorageClient } from '~/core/io/storage/storage';
+import { generateTriplesForPerson } from '~/core/utils/contracts/generate-triples-for-person';
 import { Ops } from '~/core/utils/ops';
+import { Triple } from '~/core/utils/triple';
 import { slog } from '~/core/utils/utils';
 
 import { geoAccount, publicClient, walletClient } from '../../client';
@@ -77,19 +79,8 @@ export async function makePersonEffect(
     try: async () => {
       const ops: IOp[] = [];
 
-      // Add triples for a Person entity
-      if (username) {
-        ops.push(
-          Ops.create({
-            entityId: profileId,
-            attributeId: SYSTEM_IDS.NAME,
-            value: {
-              type: 'TEXT',
-              value: username,
-            },
-          })
-        );
-      }
+      const personTriples = await generateTriplesForPerson(profileId, username ?? '', spaceAddress);
+      ops.push(...Triple.prepareTriplesForPublishing(personTriples, spaceAddress));
 
       if (avatarUri) {
         ops.push(
@@ -104,29 +95,6 @@ export async function makePersonEffect(
           })
         );
       }
-
-      // Add Types: Person to the profile entity
-      ops.push(
-        Ops.create({
-          entityId: profileId,
-          attributeId: SYSTEM_IDS.TYPES,
-          value: {
-            type: 'ENTITY',
-            value: SYSTEM_IDS.PERSON_TYPE,
-          },
-        })
-      );
-
-      ops.push(
-        Ops.create({
-          entityId: profileId,
-          attributeId: SYSTEM_IDS.TYPES,
-          value: {
-            type: 'ENTITY',
-            value: SYSTEM_IDS.SPACE_CONFIGURATION,
-          },
-        })
-      );
 
       slog({
         requestId,

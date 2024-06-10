@@ -2,31 +2,32 @@ import { cva } from 'class-variance-authority';
 import Link from 'next/link';
 
 type NoContentProps = {
-  options: {
-    browse: {
-      image: string;
-      title: string;
-      description: string;
-    };
-    edit?: {
-      image: string;
-      title: string;
-      description: string;
-      href: string;
-      color: 'grey' | 'blue' | 'green' | 'orange' | 'purple' | 'yellow';
-    };
-  };
+  href?: string;
+  options: NoContentOptions;
   isEditing: boolean;
 };
 
-export const NoContent = ({ options, isEditing }: NoContentProps) => {
+export type NoContentOptions = {
+  image: string;
+  color?: 'grey' | 'blue' | 'green' | 'orange' | 'purple' | 'yellow';
+  browse: {
+    title: string;
+    description: string;
+  };
+  edit?: {
+    title: string;
+    description: string;
+  };
+};
+
+export const NoContent = ({ href, options, isEditing }: NoContentProps) => {
   if (isEditing) {
-    if (!options.edit) return null;
+    if (!href || !options.edit) return null;
 
     return (
-      <Link href={options.edit.href} className={editClassNames({ color: options.edit.color })}>
+      <Link href={href} className={editClassNames({ color: options.color ?? 'grey' })}>
         <div className="relative top-1.5 -mx-4 shrink-0">
-          <img src={options.edit.image} alt="" className="-my-3 h-24 w-auto object-contain" />
+          <img src={options.image} alt="" className="-my-3 h-24 w-auto object-contain" />
         </div>
         <div>
           <div className="text-smallTitle text-text">{options.edit.title}</div>
@@ -39,7 +40,7 @@ export const NoContent = ({ options, isEditing }: NoContentProps) => {
   return (
     <div className="mb-8 flex items-center gap-8 overflow-clip rounded-lg bg-grey-01 p-4">
       <div className="relative top-1.5 -mx-4 shrink-0">
-        <img src={options.browse.image} alt="" className="-my-3 h-24 w-auto object-contain" />
+        <img src={options.image} alt="" className="-my-3 h-24 w-auto object-contain" />
       </div>
       <div>
         <div className="text-smallTitle text-text">{options.browse.title}</div>
