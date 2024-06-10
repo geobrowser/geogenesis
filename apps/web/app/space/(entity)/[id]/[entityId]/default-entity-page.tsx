@@ -95,8 +95,11 @@ const getData = async (spaceId: string, entityId: string) => {
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && nameTripleSpace) {
-    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${nameTripleSpace}`);
-    return redirect(NavUtils.toSpace(nameTripleSpace));
+    // But don't redirect for space configuration templates in the root space
+    if (spaceId !== SYSTEM_IDS.ROOT_SPACE || entityId === SYSTEM_IDS.ROOT_SPACE_CONFIGURATION) {
+      console.log(`Redirecting from space configuration entity ${entity.id} to space page ${nameTripleSpace}`);
+      return redirect(NavUtils.toSpace(nameTripleSpace));
+    }
   }
 
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching

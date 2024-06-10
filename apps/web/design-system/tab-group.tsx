@@ -9,9 +9,10 @@ import { usePathname } from 'next/navigation';
 import React from 'react';
 
 import { useHydrated } from '~/core/hooks/use-hydrated';
+import { useEditable } from '~/core/state/editable-store';
 
 interface TabGroupProps {
-  tabs: Array<{ href: string; label: string; badge?: string; disabled?: boolean }>;
+  tabs: Array<{ href: string; label: string; badge?: string; disabled?: boolean; hidden?: boolean }>;
   className?: string;
 }
 
@@ -19,7 +20,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   return (
     <div className={cx('flex items-center gap-6 border-b border-grey-02 pb-2', className)}>
       {tabs.map(t => (
-        <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} />
+        <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
       ))}
     </div>
   );
@@ -30,6 +31,7 @@ interface TabProps {
   label: string;
   badge?: React.ReactNode;
   disabled?: boolean;
+  hidden?: boolean;
 }
 
 const tabStyles = cva('relative inline-flex items-center gap-1.5 text-quoteMedium transition-colors duration-100', {
@@ -48,11 +50,16 @@ const tabStyles = cva('relative inline-flex items-center gap-1.5 text-quoteMediu
   },
 });
 
-function Tab({ href, label, badge, disabled }: TabProps) {
+function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   const decodedHref = decodeURIComponent(href);
   const isHydrated = useHydrated();
   const path = usePathname();
   const active = decodeURIComponent(path ?? '') === decodedHref;
+  const { editable } = useEditable();
+
+  if (!editable && hidden) {
+    return null;
+  }
 
   if (disabled) {
     return (
