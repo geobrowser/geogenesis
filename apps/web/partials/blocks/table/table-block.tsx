@@ -287,7 +287,7 @@ const getPlaceholders = (blockEntity: EntityType | null | undefined) => {
       triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
     );
 
-    if (placeholderTextTriple && placeholderTextTriple.value.type === 'string') {
+    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
       placeholderText = placeholderTextTriple.value.value;
     }
 
@@ -295,7 +295,7 @@ const getPlaceholders = (blockEntity: EntityType | null | undefined) => {
       triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
     );
 
-    if (placeholderImageTriple && placeholderImageTriple.value.type === 'image') {
+    if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
       placeholderImage = getImagePath(placeholderImageTriple.value.value);
     }
   }

@@ -6,7 +6,6 @@ import * as React from 'react';
 import { TableBlockSdk } from '../blocks-sdk';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { useMergedData } from '../hooks/use-merged-data';
-import { ID } from '../id';
 import { FetchRowsOptions } from '../io/fetch-rows';
 import { Services } from '../services';
 import { AppEntityValue, Column, GeoType, ValueType as TripleValueType } from '../types';
