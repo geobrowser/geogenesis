@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Action as ActionType, Triple as TripleType } from '~/core/types';
 
-import { empty, withId, withLocalNames } from './triple';
+import { empty, withId, withLocalNames } from './triples';
 
 describe('Triple helpers', () => {
   it('Triple.withId returns the same triple with an updated ID', () => {

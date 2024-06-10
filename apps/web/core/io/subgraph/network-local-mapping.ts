@@ -15,7 +15,7 @@ import {
 } from '~/core/types';
 import { Entity as EntityModule } from '~/core/utils/entity';
 
-import { Subgraph } from '..';
+import { fetchEntity } from './fetch-entity';
 
 interface SubstreamType {
   id: string;
@@ -448,12 +448,12 @@ export async function getBlocksCollectionData(entity: Entity) {
   const [blockTriples, collectionItemTriples] = await Promise.all([
     Promise.all(
       blockIds.map(blockId => {
-        return Subgraph.fetchEntity({ id: blockId });
+        return fetchEntity({ id: blockId });
       })
     ),
     Promise.all(
       blockCollectionItems.map(item => {
-        return Subgraph.fetchEntity({ id: item.id });
+        return fetchEntity({ id: item.id });
       })
     ),
   ]);

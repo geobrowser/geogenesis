@@ -4,7 +4,7 @@ import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 import { getBlocksCollectionData, getCollectionItemsFromBlocksTriple } from '~/core/io/subgraph/network-local-mapping';
 import { Entity as EntityType, Triple as TripleType, Value as ValueType } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { Value } from '~/core/utils/value';
 
 import { Collections } from '../collections';
@@ -37,7 +37,7 @@ export const cloneEntity = async (options: Options) => {
   );
 
   newTriples.push(
-    Triple.withId({
+    Triples.withId({
       entityId: newEntityId,
       entityName: newEntityName,
       attributeId: SYSTEM_IDS.NAME,
@@ -53,7 +53,7 @@ export const cloneEntity = async (options: Options) => {
   triplesToClone.forEach(triple => {
     if (triple.value.type === 'ENTITY') {
       newTriples.push(
-        Triple.withId({
+        Triples.withId({
           ...triple,
           space: spaceId,
           entityName: newEntityName,
@@ -62,7 +62,7 @@ export const cloneEntity = async (options: Options) => {
       );
     } else {
       newTriples.push(
-        Triple.withId({
+        Triples.withId({
           ...triple,
           space: spaceId,
           entityName: newEntityName,
@@ -115,7 +115,7 @@ export const cloneEntity = async (options: Options) => {
 
     newTriples.push(...collectionItemsTriples);
 
-    const newBlockIdsTriple = Triple.withId({
+    const newBlockIdsTriple = Triples.withId({
       attributeId: SYSTEM_IDS.BLOCKS,
       attributeName: 'Blocks',
       space: spaceId,
@@ -144,7 +144,7 @@ export const cloneEntity = async (options: Options) => {
       blockEntity.triples.forEach((triple: TripleType) => {
         if (triple.attributeId === SYSTEM_IDS.PARENT_ENTITY) {
           newBlockTriples.push(
-            Triple.withId({
+            Triples.withId({
               ...triple,
               space: spaceId,
               entityId: newBlockIds[index],
@@ -167,7 +167,7 @@ export const cloneEntity = async (options: Options) => {
           }
 
           newBlockTriples.push(
-            Triple.withId({
+            Triples.withId({
               ...triple,
               space: spaceId,
               entityId: newBlockIds[index],
@@ -179,7 +179,7 @@ export const cloneEntity = async (options: Options) => {
           );
         } else if (triple.value.type === 'ENTITY') {
           newBlockTriples.push(
-            Triple.withId({
+            Triples.withId({
               ...triple,
               space: spaceId,
               entityId: newBlockIds[index],
@@ -187,7 +187,7 @@ export const cloneEntity = async (options: Options) => {
           );
         } else {
           newBlockTriples.push(
-            Triple.withId({
+            Triples.withId({
               ...triple,
               space: spaceId,
               entityId: newBlockIds[index],

@@ -9,7 +9,7 @@ import { SpaceType } from '~/core/types';
 import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
 import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
 import { Ops } from '~/core/utils/ops';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { slog } from '~/core/utils/utils';
 
 import { geoAccount, publicClient, walletClient } from '../../client';
@@ -52,12 +52,12 @@ export function makeCreateEntitiesEffect(
 
       if (type === 'company') {
         const companyTriples = await generateTriplesForCompany(newEntityId, spaceName, spaceAddress);
-        ops.push(...Triple.prepareTriplesForPublishing(companyTriples, spaceAddress));
+        ops.push(...Triples.prepareTriplesForPublishing(companyTriples, spaceAddress));
       }
 
       if (type === 'nonprofit') {
         const nonprofitTriples = await generateTriplesForNonprofit(newEntityId, spaceName, spaceAddress);
-        ops.push(...Triple.prepareTriplesForPublishing(nonprofitTriples, spaceAddress));
+        ops.push(...Triples.prepareTriplesForPublishing(nonprofitTriples, spaceAddress));
       }
 
       if (spaceAvatarUri) {

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Services } from '../services';
 import { Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
-import { Triple } from '../utils/triple';
+import { Triples } from '../utils/triples';
 import { Value } from '../utils/value';
 import { useActionsStore } from './use-actions-store';
 
@@ -19,7 +19,7 @@ export const mapMergedTriplesToRelationValueTypes = (
 ): RelationValueTypesByAttributeId => {
   // We need to re-merge local actions with the server triples since we don't re-run RQ in useConfiguredAttributeRelationTypes
   // when actions change.
-  const mergedTriples = Triple.merge(triples, relationTypeTriples);
+  const mergedTriples = Triples.merge(triples, relationTypeTriples);
 
   return pipe(
     mergedTriples,

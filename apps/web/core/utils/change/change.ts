@@ -5,7 +5,7 @@ import { fetchVersion } from '~/core/io/subgraph/fetch-version';
 import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
 import type { Entity as EntityType, Triple as TripleType, ValueType as TripleValueType, Version } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { Value } from '~/core/utils/value';
 
 export type ActionId = string;
@@ -473,7 +473,7 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
                 type: triple.value.type ?? '',
                 name: triple.attributeName ?? '',
                 before: null,
-                after: Triple.getValue(triple) ?? '',
+                after: Triples.getValue(triple) ?? '',
                 actions: [],
               },
             },
@@ -513,7 +513,7 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
                 ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
                 type: triple.value.type ?? '',
                 name: triple.attributeName ?? '',
-                before: Triple.getValue(triple) ?? '',
+                before: Triples.getValue(triple) ?? '',
                 after: changes[entityId]?.attributes?.[triple.attributeId]?.after ?? null,
                 actions: [],
               },
@@ -673,7 +673,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
                   type: triple.value.type ?? '',
                   name: triple.attributeName ?? '',
                   before: null,
-                  after: Triple.getValue(triple) ?? '',
+                  after: Triples.getValue(triple) ?? '',
                   actions: [],
                 },
               },
@@ -713,7 +713,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
                   ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
                   type: triple.value.type ?? '',
                   name: triple.attributeName ?? '',
-                  before: Triple.getValue(triple) ?? '',
+                  before: Triples.getValue(triple) ?? '',
                   after: changes[entityId]?.attributes?.[triple.attributeId]?.after ?? null,
                   actions: [],
                 },
@@ -817,7 +817,7 @@ const getBlockValueFromTriples = (triples: TripleType[]) => {
     return tripleWithContent.entityName;
   }
 
-  return Triple.getValue(tripleWithContent);
+  return Triples.getValue(tripleWithContent);
 };
 
 const CONTENT_ATTRIBUTE_IDS = [

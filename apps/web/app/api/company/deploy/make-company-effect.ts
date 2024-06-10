@@ -9,7 +9,7 @@ import { Environment } from '~/core/environment';
 import { StorageClient } from '~/core/io/storage/storage';
 import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
 import { Ops } from '~/core/utils/ops';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { slog } from '~/core/utils/utils';
 
 import { geoAccount, publicClient, walletClient } from '../../client';
@@ -80,7 +80,7 @@ export async function makeCompanyEffect(
       const ops: IOp[] = [];
 
       const companyTriples = await generateTriplesForCompany(profileId, username ?? '', spaceAddress);
-      ops.push(...Triple.prepareTriplesForPublishing(companyTriples, spaceAddress));
+      ops.push(...Triples.prepareTriplesForPublishing(companyTriples, spaceAddress));
 
       if (avatarUri) {
         const [typeOp, srcOp] = createImageEntityOps(avatarUri);

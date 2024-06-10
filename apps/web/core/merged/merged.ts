@@ -6,7 +6,7 @@ import { useLocalStore } from '~/core/state/local-store';
 import { Column, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { useActionsStore } from '../hooks/use-actions-store';
@@ -73,8 +73,8 @@ export class Merged implements IMergedDataSource {
     const actions = options.space ? this.store.actions[options.space] : this.store.allActions;
 
     // Merge any local actions with the network triples
-    const updatedTriples = Triple.merge(actions, networkTriples);
-    const mergedTriplesWithName = Triple.withLocalNames(actions, updatedTriples);
+    const updatedTriples = Triples.merge(actions, networkTriples);
+    const mergedTriplesWithName = Triples.withLocalNames(actions, updatedTriples);
 
     // Apply any server filters to locally created data.
     let locallyFilteredTriples = mergedTriplesWithName;

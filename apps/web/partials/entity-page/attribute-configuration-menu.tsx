@@ -12,7 +12,7 @@ import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Entity, OmitStrict, RelationValueType } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent } from '~/design-system/autocomplete/results-list';

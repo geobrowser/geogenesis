@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { ID } from '../id';
 import { Triple as ITriple } from '../types';
-import { Triple } from '../utils/triple';
+import { Triples } from '../utils/triples';
 
 export function createForeignType(
   foreignType: ITriple,
@@ -14,7 +14,7 @@ export function createForeignType(
   const newSpaceConfigId = spaceConfigId || ID.createEntityId();
 
   if (!spaceConfigId) {
-    const spaceConfigNameTriple = Triple.withId({
+    const spaceConfigNameTriple = Triples.withId({
       space: spaceId,
       entityId: newSpaceConfigId,
       entityName: 'Space Configuration',
@@ -23,7 +23,7 @@ export function createForeignType(
       value: { type: 'TEXT', value: 'Space Configuration' },
     });
 
-    const spaceConfigTypeTriple = Triple.withId({
+    const spaceConfigTypeTriple = Triples.withId({
       space: spaceId,
       entityId: newSpaceConfigId,
       entityName: 'Space Configuration',
@@ -36,7 +36,7 @@ export function createForeignType(
     upsert({ ...spaceConfigTypeTriple, type: 'SET_TRIPLE' }, spaceId);
   }
 
-  const spaceConfigForeignTypeTriple = Triple.withId({
+  const spaceConfigForeignTypeTriple = Triples.withId({
     space: spaceId,
     entityId: newSpaceConfigId,
     entityName: 'Space Configuration',
@@ -51,7 +51,7 @@ export function createForeignType(
 export function createType(entityName: string, spaceId: string, upsert: ReturnType<typeof useActionsStore>['upsert']) {
   const entityId = ID.createEntityId();
 
-  const nameTriple = Triple.withId({
+  const nameTriple = Triples.withId({
     space: spaceId,
     entityId,
     entityName,
@@ -59,7 +59,7 @@ export function createType(entityName: string, spaceId: string, upsert: ReturnTy
     attributeName: 'Name',
     value: { type: 'TEXT', value: entityName },
   });
-  const typeTriple = Triple.withId({
+  const typeTriple = Triples.withId({
     space: spaceId,
     entityId,
     entityName,

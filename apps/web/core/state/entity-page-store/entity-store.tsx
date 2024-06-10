@@ -11,7 +11,7 @@ import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useTriples } from '~/core/merged/triples';
 import { Triple as ITriple, ValueTypeId } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { Value } from '~/core/utils/value';
 
 import {
@@ -22,7 +22,7 @@ import {
 import { useEntityStoreInstance } from './entity-store-provider';
 
 export const createInitialSchemaTriples = (spaceId: string, entityId: string): ITriple[] => {
-  const nameTriple = Triple.withId({
+  const nameTriple = Triples.withId({
     space: spaceId,
     entityId,
     entityName: '',
@@ -36,10 +36,10 @@ export const createInitialSchemaTriples = (spaceId: string, entityId: string): I
     placeholder: true,
     hasBeenPublished: false,
     isDeleted: false,
-    timestamp: Triple.timestamp(),
+    timestamp: Triples.timestamp(),
   });
 
-  const descriptionTriple = Triple.withId({
+  const descriptionTriple = Triples.withId({
     space: spaceId,
     entityId,
     entityName: '',
@@ -53,10 +53,10 @@ export const createInitialSchemaTriples = (spaceId: string, entityId: string): I
     placeholder: true,
     hasBeenPublished: false,
     isDeleted: false,
-    timestamp: Triple.timestamp(),
+    timestamp: Triples.timestamp(),
   });
 
-  const typeTriple = Triple.withId({
+  const typeTriple = Triples.withId({
     space: spaceId,
     entityId,
     entityName: '',
@@ -71,7 +71,7 @@ export const createInitialSchemaTriples = (spaceId: string, entityId: string): I
     placeholder: true,
     hasBeenPublished: false,
     isDeleted: false,
-    timestamp: Triple.timestamp(),
+    timestamp: Triples.timestamp(),
   });
 
   return [nameTriple, descriptionTriple, typeTriple];
@@ -186,7 +186,7 @@ export function useEntityPageStore() {
         const valueType = valueTypesToAttributesMap[attribute.id];
 
         return {
-          ...Triple.emptyPlaceholder(spaceId, id, valueType),
+          ...Triples.emptyPlaceholder(spaceId, id, valueType),
           attributeId: attribute.id,
           attributeName: attribute.name,
         };

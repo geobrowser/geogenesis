@@ -5,7 +5,7 @@ import { useWalletClient } from 'wagmi';
 import { Services } from '../services';
 import { Triple as ITriple, ReviewState } from '../types';
 import { Action } from '../utils/action';
-import { Triple } from '../utils/triple';
+import { Triples } from '../utils/triples';
 import { useActionsStore } from './use-actions-store';
 
 interface MakeProposalOptions {
@@ -35,7 +35,7 @@ export function usePublish() {
 
       await publishService.makeProposal({
         storageClient,
-        ops: Triple.prepareTriplesForPublishing(triplesToPublish, spaceId),
+        ops: Triples.prepareTriplesForPublishing(triplesToPublish, spaceId),
         name,
         onChangePublishState,
         space: spaceId,
@@ -98,7 +98,7 @@ export function useBulkPublish() {
 
       await publish.makeProposal({
         storageClient,
-        ops: Triple.prepareTriplesForPublishing(triples, spaceId),
+        ops: Triples.prepareTriplesForPublishing(triples, spaceId),
         name,
         onChangePublishState,
         space: spaceId,

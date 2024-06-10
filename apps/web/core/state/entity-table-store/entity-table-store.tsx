@@ -14,7 +14,7 @@ import { Services } from '~/core/services';
 import { createForeignType as insertForeignType, createType as insertType } from '~/core/type/create-type';
 import { AppEntityValue, Column, GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 
 import { useLocalStore } from '../local-store';
 import { useEntityTableStoreInstance } from './entity-table-store-provider';
@@ -149,7 +149,7 @@ export function useEntityTable() {
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
       // Merge all local and server triples
-      const mergedTriples = Triple.merge(allActions, relationTypeEntities);
+      const mergedTriples = Triples.merge(allActions, relationTypeEntities);
 
       const relationTypes = mergedTriples.filter(
         t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'ENTITY'

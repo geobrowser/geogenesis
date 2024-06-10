@@ -23,7 +23,7 @@ import { useMigrateHub } from '~/core/migrate/migrate';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity as IEntity, Triple as ITriple, ValueTypeId } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
@@ -116,7 +116,7 @@ function useOptimisticAttributes({
     }
 
     remove(
-      Triple.withId({
+      Triples.withId({
         attributeId: SYSTEM_IDS.ATTRIBUTES,
         attributeName: 'Attributes',
         entityId: entityId,
@@ -164,7 +164,7 @@ function useOptimisticAttributes({
     }
 
     if (attributeSpace) {
-      const newTriple = Triple.withId({
+      const newTriple = Triples.withId({
         entityId: attribute.id,
         entityName: attribute.name,
         attributeId: SYSTEM_IDS.VALUE_TYPE,

@@ -4,7 +4,7 @@ import { Subgraph } from '~/core/io';
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import type { Triple as TripleType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { Value } from '~/core/utils/value';
 
 import { TeamMembers } from '~/partials/team/team-members';
@@ -109,7 +109,7 @@ const getTeamMembers = async (spaceId: string) => {
       const nameTriple = nameTriples.find(nameTriple => nameTriple.entityId === entityId);
 
       if (nameTriple) {
-        const name = Triple.getValue(nameTriple);
+        const name = Triples.getValue(nameTriple);
 
         if (name) {
           teamMembers[teamMemberIndex].name = name;

@@ -10,7 +10,7 @@ import { FetchRowsOptions } from '../io/fetch-rows';
 import { Services } from '../services';
 import { AppEntityValue, Column, GeoType, ValueType as TripleValueType } from '../types';
 import { Entity } from '../utils/entity';
-import { Triple } from '../utils/triple';
+import { Triples } from '../utils/triples';
 import { Value } from '../utils/value';
 
 export const PAGE_SIZE = 10;
@@ -73,7 +73,7 @@ export function useTableBlock() {
   //    current implementation fewer data structures.
   const nameTriple = React.useMemo(() => {
     const maybeNameTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
-    const mergedTriples = Triple.merge(actionsForEntityId, maybeNameTriple ? [maybeNameTriple] : []);
+    const mergedTriples = Triples.merge(actionsForEntityId, maybeNameTriple ? [maybeNameTriple] : []);
     return mergedTriples.find(t => t.attributeId === SYSTEM_IDS.NAME) ?? null;
   }, [blockEntity?.triples, actionsForEntityId]);
 
@@ -188,7 +188,7 @@ export function useTableBlock() {
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
       // Merge all local and server triples
-      const mergedTriples = Triple.merge(allActions, relationTypeEntities);
+      const mergedTriples = Triples.merge(allActions, relationTypeEntities);
 
       const relationTypes = mergedTriples.filter(
         t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'ENTITY'

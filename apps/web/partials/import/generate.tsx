@@ -17,7 +17,7 @@ import { createTripleId } from '~/core/id/create-id';
 import { Subgraph } from '~/core/io';
 import { Entity as EntityType, Triple as TripleType } from '~/core/types';
 import type { AppOp, Space, Value } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
 
 import { Accordion } from '~/design-system/accordion';

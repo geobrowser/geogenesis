@@ -7,7 +7,7 @@ import { EntityId, Proposal, Version } from '~/core/types';
 import { Triple as TripleType } from '~/core/types';
 import { BlockChange, BlockValueType, Changeset } from '~/core/utils/change/change';
 import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { Value } from '~/core/utils/value';
 
 export async function getActiveProposalDiff(
@@ -281,5 +281,5 @@ const getBlockValueFromTriples = (triples: TripleType[]) => {
     return tripleWithContent.entityName;
   }
 
-  return Triple.getValue(tripleWithContent);
+  return Triples.getValue(tripleWithContent);
 };

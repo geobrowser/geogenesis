@@ -22,7 +22,7 @@ import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store/entity-table-
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 import { Cell, Column, Row } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { NavUtils } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -94,7 +94,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const cellTriples = pipe(
       actions[space],
-      actions => Triple.merge(actions, cellData.triples),
+      actions => Triples.merge(actions, cellData.triples),
       A.filter(triple => {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;

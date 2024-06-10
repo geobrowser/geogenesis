@@ -3,7 +3,7 @@ import { A, D, pipe } from '@mobily/ts-belt';
 
 import { EntitySearchResult, Entity as IEntity, Triple as ITriple, ValueTypeId } from '~/core/types';
 
-import { Triple } from '../triple';
+import { Triples } from '../triples';
 import { groupBy } from '../utils';
 import { Value } from '../value';
 
@@ -144,8 +144,8 @@ export function mergeActionsWithEntities(actions: Record<string, ITriple[]>, net
 
       const networkEntity = networkEntities.find(e => A.isNotEmpty(entityIds) && e.id === A.head(entityIds));
       const triplesForNetworkEntity = networkEntity?.triples ?? [];
-      const updatedTriples = Triple.merge(actions, triplesForNetworkEntity);
-      return Triple.withLocalNames(actions, updatedTriples);
+      const updatedTriples = Triples.merge(actions, triplesForNetworkEntity);
+      return Triples.withLocalNames(actions, updatedTriples);
     },
     entitiesFromTriples
   );
@@ -154,8 +154,8 @@ export function mergeActionsWithEntities(actions: Record<string, ITriple[]>, net
 export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEntity: IEntity): IEntity {
   const triplesForEntity = pipe(
     allTriplesInStore.filter(t => t.entityId === networkEntity.id),
-    actions => Triple.merge(actions, networkEntity.triples),
-    triples => Triple.withLocalNames(allTriplesInStore, triples)
+    actions => Triples.merge(actions, networkEntity.triples),
+    triples => Triples.withLocalNames(allTriplesInStore, triples)
   );
 
   return {
@@ -169,12 +169,12 @@ export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEnti
 }
 
 export function fromTriples(allTriplesInStore: ITriple[], entityId: string): IEntity {
-  const triplesForEntity = Triple.merge(
+  const triplesForEntity = Triples.merge(
     allTriplesInStore.filter(t => t.entityId === entityId),
     []
   );
 
-  const triplesForEntityWithLocalNames = Triple.withLocalNames(allTriplesInStore, triplesForEntity);
+  const triplesForEntityWithLocalNames = Triples.withLocalNames(allTriplesInStore, triplesForEntity);
 
   return {
     id: entityId,

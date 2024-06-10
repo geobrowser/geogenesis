@@ -11,7 +11,7 @@ import {
   SetTripleAppOp,
   SpaceTriples,
 } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 
 import { store } from '../jotai-store';
 import { db } from './indexeddb';
@@ -43,7 +43,7 @@ export const activeTriplesForEntityIdSelector = (entityId: string) => (triple: S
 export const createTriplesForEntityAtom = (initialTriples: ITriple[], entityId: string) => {
   return atom(get => {
     const triplesForEntityId = get(localTriplesAtom).filter(activeTriplesForEntityIdSelector(entityId));
-    return Triple.merge(triplesForEntityId, initialTriples);
+    return Triples.merge(triplesForEntityId, initialTriples);
   });
 };
 
@@ -98,7 +98,7 @@ export const upsertMany = (ops: { op: StoreOp; spaceId: string }[]) => {
       space: spaceId,
       hasBeenPublished: false,
       isDeleted: false,
-      timestamp: Triple.timestamp(),
+      timestamp: Triples.timestamp(),
       placeholder: false,
     };
 
@@ -183,7 +183,7 @@ export function useActions(spaceId?: string) {
 
   const actionsByEntityId = React.useMemo(() => {
     return allActions.reduce<EntityActions>((acc, action) => {
-      const tripleFromAction = Triple.merge([action], [])[0];
+      const tripleFromAction = Triples.merge([action], [])[0];
 
       if (!tripleFromAction) return acc;
 

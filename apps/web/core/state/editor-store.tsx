@@ -17,7 +17,7 @@ import { TableBlockSdk } from '../blocks-sdk';
 import { fetchEntity } from '../io/subgraph';
 import { CollectionItem, AppEntityValue as EntityValue, Triple as ITriple, OmitStrict } from '../types';
 import { Collections } from '../utils/collections';
-import { Triple } from '../utils/triple';
+import { Triples } from '../utils/triples';
 import { getImagePath, groupBy } from '../utils/utils';
 import { Value } from '../utils/value';
 import { activeTriplesForEntityIdSelector, localTriplesAtom, remove, upsert } from './actions-store/actions-store';
@@ -33,7 +33,7 @@ interface BlockCollectionItem extends OmitStrict<CollectionItem, 'value' | 'enti
 const createBlocksCollectionIdAtom = (initialBlocksIdsTriple: ITriple | null, entityId: string) => {
   return atom(get => {
     const triplesForEntityId = get(localTriplesAtom).filter(activeTriplesForEntityIdSelector(entityId));
-    const entityChanges = Triple.merge(triplesForEntityId, initialBlocksIdsTriple ? [initialBlocksIdsTriple] : []);
+    const entityChanges = Triples.merge(triplesForEntityId, initialBlocksIdsTriple ? [initialBlocksIdsTriple] : []);
     const blocksIdTriple: ITriple | undefined = entityChanges.find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
     const triple = blocksIdTriple ?? initialBlocksIdsTriple;
 
@@ -54,7 +54,7 @@ const createCollectionItemsAtom = (initialBlockCollectionItemTriples: ITriple[],
 
     const localTriples = get(localTriplesAtom);
 
-    const collectionItemEntityIdsForCollectionId = Triple.merge(
+    const collectionItemEntityIdsForCollectionId = Triples.merge(
       localTriples.filter(
         a =>
           a.attributeId === SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE &&
@@ -67,7 +67,7 @@ const createCollectionItemsAtom = (initialBlockCollectionItemTriples: ITriple[],
     // Gather all of the triples for each collection item associated with the block list's
     // collection entity id. We use this below to create the data structure representing
     // the collection item itself.
-    const allTriplesForCollectionItems = Triple.merge(
+    const allTriplesForCollectionItems = Triples.merge(
       localTriples.filter(t => collectionItemEntityIdsForCollectionId.includes(t.entityId)),
       initialBlockCollectionItemTriples
     );
@@ -115,7 +115,7 @@ const createBlockTriplesAtom = (initialBlockTriples: ITriple[], blockIds: string
     const localTriplesForBlockIds = get(localTriplesAtom).filter(
       t => blockIds.includes(t.entityId) && t.isDeleted === false
     );
-    return Triple.merge(localTriplesForBlockIds, initialBlockTriples);
+    return Triples.merge(localTriplesForBlockIds, initialBlockTriples);
   });
 };
 
@@ -181,7 +181,7 @@ export function useEditorStore() {
             attrs: {
               spaceId,
               id: blockId,
-              src: getImagePath(Triple.getValue(imageTriple) ?? ''),
+              src: getImagePath(Triples.getValue(imageTriple) ?? ''),
               alt: '',
               title: '',
             },

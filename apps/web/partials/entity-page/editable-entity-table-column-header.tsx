@@ -9,7 +9,7 @@ import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Column } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { valueTypes } from '~/core/value-types';
 
 import { Date } from '~/design-system/icons/date';
@@ -41,12 +41,12 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   const { actionsFromSpace, upsert, remove, upsertMany } = useActionsStore(spaceId);
 
   const localTriples = pipe(
-    Triple.merge(actionsFromSpace, column.triples),
+    Triples.merge(actionsFromSpace, column.triples),
     A.filter(t => t.entityId === column.id)
   );
 
   const localCellTriples = pipe(
-    Triple.merge(actionsFromSpace, []),
+    Triples.merge(actionsFromSpace, []),
     A.filter(triple => triple.attributeId === column.id)
   );
 

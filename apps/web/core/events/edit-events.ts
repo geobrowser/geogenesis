@@ -13,7 +13,7 @@ import {
   ValueType as TripleValueType,
   TripleWithCollectionValue,
 } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { groupBy } from '~/core/utils/utils';
 import { Value } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
@@ -274,7 +274,7 @@ const listener =
       case 'CREATE_NEW_TRIPLE':
         return upsert(
           {
-            ...Triple.empty(context.spaceId, context.entityId),
+            ...Triples.empty(context.spaceId, context.entityId),
             entityName: context.entityName,
             type: 'SET_TRIPLE',
           },
@@ -335,7 +335,7 @@ const listener =
       }
       case 'CHANGE_TRIPLE_TYPE': {
         const { type, triple } = event.payload;
-        const value = Triple.emptyValue(type);
+        const value = Triples.emptyValue(type);
         return upsert(
           {
             ...triple,
@@ -581,7 +581,7 @@ const listener =
         );
       }
       case 'ADD_NEW_COLUMN': {
-        const newAttributeTriple = Triple.withId({
+        const newAttributeTriple = Triples.withId({
           space: context.spaceId,
           entityId: ID.createEntityId(),
           entityName: '',
@@ -590,7 +590,7 @@ const listener =
           value: { value: SYSTEM_IDS.ATTRIBUTE, type: 'ENTITY', name: 'Attribute' },
         });
 
-        const newAttributeNameTriple = Triple.withId({
+        const newAttributeNameTriple = Triples.withId({
           space: context.spaceId,
           entityId: newAttributeTriple.entityId,
           entityName: '',
@@ -599,7 +599,7 @@ const listener =
           value: { type: 'TEXT', value: '' },
         });
 
-        const newTypeTriple = Triple.withId({
+        const newTypeTriple = Triples.withId({
           space: context.spaceId,
           entityId: context.entityId,
           entityName: context.entityName,
@@ -608,7 +608,7 @@ const listener =
           value: { value: newAttributeTriple.entityId, type: 'ENTITY', name: newAttributeNameTriple.entityName },
         });
 
-        const newValueTypeTriple = Triple.withId({
+        const newValueTypeTriple = Triples.withId({
           space: context.spaceId,
           entityId: newAttributeTriple.entityId,
           entityName: '',

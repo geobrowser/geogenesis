@@ -2,7 +2,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 
 import { TripleWithDateValue, TripleWithStringValue, TripleWithUrlValue } from '../types';
-import { Triple } from '../utils/triple';
+import { Triples } from '../utils/triples';
 import { GeoDate } from '../utils/utils';
 
 dayjs.extend(utc);
@@ -26,7 +26,7 @@ export function migrateStringTripleToDateTriple(triple: TripleWithStringValue): 
     minute: '0',
   });
 
-  return Triple.ensureStableId({
+  return Triples.ensureStableId({
     ...triple,
     value: {
       ...triple.value,
@@ -39,7 +39,7 @@ export function migrateStringTripleToDateTriple(triple: TripleWithStringValue): 
 export function migrateDateTripleToStringTriple(triple: TripleWithDateValue): TripleWithStringValue {
   const { day, month, year } = GeoDate.fromISOStringUTC(triple.value.value);
 
-  return Triple.ensureStableId({
+  return Triples.ensureStableId({
     ...triple,
     value: {
       ...triple.value,
@@ -56,7 +56,7 @@ export function migrateStringTripleToUrlTriple(triple: TripleWithStringValue): T
     return null;
   }
 
-  return Triple.ensureStableId({
+  return Triples.ensureStableId({
     ...triple,
     value: {
       ...triple.value,
@@ -67,7 +67,7 @@ export function migrateStringTripleToUrlTriple(triple: TripleWithStringValue): T
 }
 
 export function migrateUrlTripleToStringTriple(triple: TripleWithUrlValue): TripleWithStringValue {
-  return Triple.ensureStableId({
+  return Triples.ensureStableId({
     ...triple,
     value: {
       ...triple.value,

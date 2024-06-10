@@ -29,7 +29,7 @@ import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { GeoDate, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -138,7 +138,7 @@ const ReviewChanges = () => {
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
   const { actionsFromSpace, clear } = useActionsStore(activeSpace);
   const { makeProposal } = usePublish();
-  const triples = Triple.squash(actionsFromSpace);
+  const triples = Triples.squash(actionsFromSpace);
   const [data, isLoading] = useChanges(triples, activeSpace);
 
   // Publishing logic
@@ -950,7 +950,7 @@ export const useChanges = (triples: Array<TripleType> = [], spaceId: string) => 
   const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: ['changes', spaceId, triples],
-    queryFn: async () => Change.fromTriples(Triple.squash(triples), subgraph),
+    queryFn: async () => Change.fromTriples(Triples.squash(triples), subgraph),
   });
 
   return [data, isLoading] as const;

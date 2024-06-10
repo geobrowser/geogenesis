@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { GeoType, Space, Triple as TripleType } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 
 import { useLocalStore } from '../local-store';
 
@@ -108,8 +108,8 @@ export function useTypesStore(): {
       return a.attributeId === SYSTEM_IDS.TYPES && a.value.value === SYSTEM_IDS.SCHEMA_TYPE && !a.isDeleted;
     });
 
-    const triplesFromActions = Triple.merge(localActions, initialTypes);
-    return [...Triple.withLocalNames(globalActions, triplesFromActions), ...localForeignTypes];
+    const triplesFromActions = Triples.merge(localActions, initialTypes);
+    return [...Triples.withLocalNames(globalActions, triplesFromActions), ...localForeignTypes];
   }, [localForeignTypes, initialTypes, space, actions]);
 
   return {
