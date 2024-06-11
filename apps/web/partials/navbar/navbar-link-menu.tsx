@@ -37,7 +37,7 @@ export function NavbarLinkMenu() {
         align="start"
         trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
       >
-        {urlComponents.map((component, index) => {
+        {urlComponents?.map((component, index) => {
           if (index >= 2) return null; // skip the "/space/" part
           const { path, title, img } = getComponentRoute({
             urlComponents,
