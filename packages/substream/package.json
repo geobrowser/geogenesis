@@ -14,8 +14,6 @@
     "prepublishOnly": "npm run build",
     "nuke-public": "tsx ./sink/utils/executeSql.ts ./sink/sql/nukePublic.sql",
     "zapatos": "pnpm dotenv -e .env -- npx zapatos",
-    "start:from-genesis": "pnpm dotenv -e .env -- node dist/index.js --from-genesis",
-    "start:from-genesis-with-cache": "pnpm dotenv -e .env -- node dist/index.js --from-cache --from-genesis",
     "start": "pnpm dotenv -e .env -- node dist/index.js",
     "initialize": "./sink/sql/init-all.sh && pnpm zapatos",
     "test": "vitest"
