@@ -7,30 +7,6 @@ import { useAccount } from 'wagmi';
 import { Subgraph } from '../io';
 import { useHydrated } from './use-hydrated';
 
-const getQuery = (spaceId: string) => `
-  {
-    space(id: "${spaceId}") {
-      editors {
-        id
-      }
-      editorControllers {
-        id
-      }
-      admins {
-        id
-      }
-    }
-  }
-`;
-
-type NetworkResult = {
-  space: {
-    admins: { id: string }[];
-    editors: { id: string }[];
-    editorControllers: { id: string }[];
-  } | null;
-};
-
 export function useAccessControl(spaceId?: string | null) {
   // We need to wait for the client to check the status of the client-side wallet
   // before setting state. Otherwise there will be client-server hydration mismatches.
@@ -48,23 +24,20 @@ export function useAccessControl(spaceId?: string | null) {
 
   if (process.env.NODE_ENV === 'development') {
     return {
-      isAdmin: true,
-      isEditorController: true,
       isEditor: true,
+      isMember: true,
     };
   }
 
   if (!address || !hydrated || !space) {
     return {
-      isAdmin: false,
-      isEditorController: false,
       isEditor: false,
+      isMember: false,
     };
   }
 
   return {
-    isAdmin: space.admins.map(s => s.toLowerCase()).includes(address.toLowerCase()),
-    isEditorController: space.editorControllers.map(s => s.toLowerCase()).includes(address.toLowerCase()),
+    isMember: space.members.map(s => s.toLowerCase()).includes(address.toLowerCase()),
     isEditor: space.editors.map(s => s.toLowerCase()).includes(address.toLowerCase()),
   };
 }

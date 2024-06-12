@@ -6,13 +6,14 @@ import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Environment } from '../environment';
-import { Entity } from '../utils/entity';
+import { Entities } from '../utils/entity';
 import { NavUtils } from '../utils/utils';
+import { entityFragment, tripleFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
 import {
   SubstreamEntity,
   SubstreamProposal,
-  fromNetworkActions,
+  fromNetworkOps,
   fromNetworkTriples,
 } from './subgraph/network-local-mapping';
 
@@ -28,39 +29,14 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
     proposals(first: 5, filter: {${filter}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
       nodes {
         id
+        type
         name
         space {
           id
           metadata {
             nodes {
-              id
-              name
-              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-                nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
-                }
-              }
-            }
+              ${entityFragment}
+            }           
           }
         }
         createdAtBlock
@@ -80,29 +56,9 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
             nodes {
               id
               name
-              triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+              triples(filter: {isStale: {equalTo: false}}) {
                 nodes {
-                  id
-                  attribute {
-                    id
-                    name
-                  }
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    name
-                  }
-                  numberValue
-                  stringValue
-                  valueType
-                  valueId
-                  isProtected
-                  space {
-                    id
-                  }
+                  ${tripleFragment}
                 }
               }
             }
@@ -168,7 +124,7 @@ export async function fetchProposalsByUser({
   const offset = page * 5;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchUserProposalsQuery(userId, offset, spaceId),
     signal,
   });
@@ -219,14 +175,14 @@ export async function fetchProposalsByUser({
   return proposals.map(p => {
     const maybeProfile = p.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
     const onchainProfile = p.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-    const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+    const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
 
     const profile: Profile = maybeProfile
       ? {
           id: p.createdBy.id,
           address: p.createdBy.id as `0x${string}`,
-          avatarUrl: Entity.avatar(profileTriples),
-          coverUrl: Entity.cover(profileTriples),
+          avatarUrl: Entities.avatar(profileTriples),
+          coverUrl: Entities.cover(profileTriples),
           name: maybeProfile.name,
           profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
         }
@@ -240,12 +196,12 @@ export async function fetchProposalsByUser({
         };
 
     const spaceConfig = p.space.metadata.nodes[0] as SubstreamEntity | undefined;
-    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 
     const spaceWithMetadata: SpaceWithMetadata = {
       id: p.space.id,
       name: spaceConfig?.name ?? null,
-      image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+      image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
     };
 
     return {
@@ -260,7 +216,7 @@ export async function fetchProposalsByUser({
           ...v,
           space: spaceWithMetadata,
           createdBy: profile,
-          actions: fromNetworkActions(v.actions.nodes, userId),
+          actions: fromNetworkOps(v.actions.nodes),
         };
       }),
     };

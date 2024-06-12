@@ -1,20 +1,12 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Subgraph } from '~/core/io/';
 import { fetchVersion } from '~/core/io/subgraph/fetch-version';
 import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
-import type {
-  Action as ActionType,
-  Entity as EntityType,
-  ProposedVersion,
-  Triple as TripleType,
-  TripleValueType,
-  Version,
-} from '~/core/types';
-import { Action } from '~/core/utils/action';
-import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
-import { Value } from '~/core/utils/value';
+import type { Entity as EntityType, Triple as TripleType, ValueType as TripleValueType, Version } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
+import { Triples } from '~/core/utils/triples';
+import { Values } from '~/core/utils/value';
 
 export type ActionId = string;
 export type EntityId = string;
@@ -40,346 +32,337 @@ export type AttributeChange = {
   actions: Array<ActionId>;
 };
 
-export async function fromActions(actions: ActionType[], subgraph: Subgraph.ISubgraph) {
-  const entities: Record<EntityId, EntityType> = await getEntitiesFromActions(actions, subgraph);
-
+export async function fromTriples(triples: TripleType[], subgraph: Subgraph.ISubgraph) {
+  const entities: Record<EntityId, EntityType> = await getEntitiesFromActions(triples, subgraph);
   const changes: Record<EntityId, Changeset> = {};
-
   const newBlocks = new Map();
 
-  actions.forEach(action => {
-    switch (action.type) {
-      case 'createTriple': {
-        const entityId = action.entityId;
+  /**
+   * @TODO:
+   * There's a few ways that we can do a diff at review time
+   * 1) Store the original value of any triple in the case there are edits. In the case of creates or deletes we key off of the `isDeleted` flag
+   * 2) Fetch the "live" content for every entity edited by the user. This is slower but also means that we always have the latest diff.
+   */
+  // triples.forEach(action => {
+  //   switch (action.type) {
+  //     case 'createTriple': {
+  //       const entityId = action.entityId;
 
-        if (action.attributeId === SYSTEM_IDS.PARENT_ENTITY) {
-          const parentEntityId = action.id.split(':').slice(-1)[0];
-          newBlocks.set(entityId, parentEntityId);
-        }
+  //       if (action.attributeId === SYSTEM_IDS.PARENT_ENTITY) {
+  //         const parentEntityId = action.id.split(':').slice(-1)[0];
+  //         newBlocks.set(entityId, parentEntityId);
+  //       }
 
-        const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
-        const attributeId = action.attributeId;
+  //       const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
+  //       const attributeId = action.attributeId;
 
-        if (parentEntityId) {
-          const blockType = Action.getBlockType(action);
+  //       if (parentEntityId) {
+  //         const blockType = Action.getBlockType(action);
 
-          if (blockType === null) {
-            // @NOTE we're assuming this means we're creating a table block
-            if (action.attributeId === 'name') {
-              changes[parentEntityId] = {
-                ...changes[parentEntityId],
-                name: entities?.[parentEntityId]?.name ?? '',
-                blocks: {
-                  ...(changes[parentEntityId]?.blocks ?? {}),
-                  [entityId]: {
-                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-                    type: 'tableBlock',
-                    before: null,
-                    after: Action.getValue(action, ''),
-                  },
-                },
-                actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-              };
-              // @NOTE we're assuming this means we're creating a table filter
-            } else {
-              changes[parentEntityId] = {
-                ...changes[parentEntityId],
-                name: entities?.[parentEntityId]?.name ?? '',
-                blocks: {
-                  ...(changes[parentEntityId]?.blocks ?? {}),
-                  [entityId]: {
-                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-                    type: 'tableFilter',
-                    before: null,
-                    after: Action.getValue(action, ''),
-                  },
-                },
-                actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-              };
-            }
+  //         if (blockType === null) {
+  //           // @NOTE we're assuming this means we're creating a table block
+  //           if (action.attributeId === 'name') {
+  //             changes[parentEntityId] = {
+  //               ...changes[parentEntityId],
+  //               name: entities?.[parentEntityId]?.name ?? '',
+  //               blocks: {
+  //                 ...(changes[parentEntityId]?.blocks ?? {}),
+  //                 [entityId]: {
+  //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+  //                   type: 'tableBlock',
+  //                   before: null,
+  //                   after: Action.getValue(action, ''),
+  //                 },
+  //               },
+  //               actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
+  //             };
+  //             // @NOTE we're assuming this means we're creating a table filter
+  //           } else {
+  //             changes[parentEntityId] = {
+  //               ...changes[parentEntityId],
+  //               name: entities?.[parentEntityId]?.name ?? '',
+  //               blocks: {
+  //                 ...(changes[parentEntityId]?.blocks ?? {}),
+  //                 [entityId]: {
+  //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+  //                   type: 'tableFilter',
+  //                   before: null,
+  //                   after: Action.getValue(action, ''),
+  //                 },
+  //               },
+  //               actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
+  //             };
+  //           }
 
-            break;
-          }
+  //           break;
+  //         }
 
-          changes[parentEntityId] = {
-            ...changes[parentEntityId],
-            name: entities?.[parentEntityId]?.name ?? '',
-            blocks: {
-              ...(changes[parentEntityId]?.blocks ?? {}),
-              [entityId]: {
-                ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-                type: blockType,
-                before: null,
-                after: Action.getValue(action, ''),
-              },
-            },
-            actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-          };
-        } else if (action.value.type === 'entity') {
-          changes[entityId] = {
-            ...changes[entityId],
-            name: entities?.[entityId]?.name ?? '',
-            attributes: {
-              ...(changes[entityId]?.attributes ?? {}),
-              [attributeId]: {
-                ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
-                type: Action.getValueType(action),
-                name: action.attributeName ?? '',
-                before: [...(changes[entityId]?.attributes?.[attributeId]?.before ?? [])],
-                after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? []), Action.getName(action)],
-                actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
-              },
-            },
-            actions: [...(changes[entityId]?.actions ?? []), action.id],
-          };
-        } else {
-          changes[entityId] = {
-            ...changes[entityId],
-            name: entities?.[entityId]?.name ?? '',
-            attributes: {
-              ...(changes[entityId]?.attributes ?? {}),
-              [attributeId]: {
-                ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
-                type: Action.getValueType(action),
-                name: action.attributeName ?? '',
-                before: null,
-                after: Action.getValue(action, ''),
-                actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
-              },
-            },
-            actions: [...(changes[entityId]?.actions ?? []), action.id],
-          };
-        }
+  //         changes[parentEntityId] = {
+  //           ...changes[parentEntityId],
+  //           name: entities?.[parentEntityId]?.name ?? '',
+  //           blocks: {
+  //             ...(changes[parentEntityId]?.blocks ?? {}),
+  //             [entityId]: {
+  //               ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+  //               type: blockType,
+  //               before: null,
+  //               after: Action.getValue(action, ''),
+  //             },
+  //           },
+  //           actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
+  //         };
+  //       } else if (action.value.type === 'entity') {
+  //         changes[entityId] = {
+  //           ...changes[entityId],
+  //           name: entities?.[entityId]?.name ?? '',
+  //           attributes: {
+  //             ...(changes[entityId]?.attributes ?? {}),
+  //             [attributeId]: {
+  //               ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
+  //               type: Action.getValueType(action),
+  //               name: action.attributeName ?? '',
+  //               before: [...(changes[entityId]?.attributes?.[attributeId]?.before ?? [])],
+  //               after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? []), Action.getName(action)],
+  //               actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
+  //             },
+  //           },
+  //           actions: [...(changes[entityId]?.actions ?? []), action.id],
+  //         };
+  //       } else {
+  //         changes[entityId] = {
+  //           ...changes[entityId],
+  //           name: entities?.[entityId]?.name ?? '',
+  //           attributes: {
+  //             ...(changes[entityId]?.attributes ?? {}),
+  //             [attributeId]: {
+  //               ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
+  //               type: Action.getValueType(action),
+  //               name: action.attributeName ?? '',
+  //               before: null,
+  //               after: Action.getValue(action, ''),
+  //               actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
+  //             },
+  //           },
+  //           actions: [...(changes[entityId]?.actions ?? []), action.id],
+  //         };
+  //       }
 
-        break;
-      }
+  //       break;
+  //     }
 
-      case 'editTriple': {
-        const entityId = action.before.entityId;
-        const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
-        const attributeId = action.before.attributeId;
+  //     case 'editTriple': {
+  //       const entityId = action.before.entityId;
+  //       const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
+  //       const attributeId = action.before.attributeId;
 
-        if (parentEntityId) {
-          const blockType = Action.getBlockType(action.before);
+  //       if (parentEntityId) {
+  //         const blockType = Action.getBlockType(action.before);
 
-          if (blockType === null) {
-            // @NOTE we're assuming this means we're editing the name of a table block
-            if (action.before.attributeId === 'name') {
-              changes[parentEntityId] = {
-                ...changes[parentEntityId],
-                name: entities?.[parentEntityId]?.name ?? '',
-                blocks: {
-                  ...(changes[parentEntityId]?.blocks ?? {}),
-                  [entityId]: {
-                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-                    type: 'tableBlock',
-                    before:
-                      typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
-                        ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-                        : null,
-                    after: Action.getValue(action.after, ''),
-                  },
-                },
-                actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
-              };
-              // @NOTE we're assuming this means we're editing a table filter
-            } else {
-              changes[parentEntityId] = {
-                ...changes[parentEntityId],
-                name: entities?.[parentEntityId]?.name ?? '',
-                blocks: {
-                  ...(changes[parentEntityId]?.blocks ?? {}),
-                  [entityId]: {
-                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-                    type: 'tableFilter',
-                    before:
-                      typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
-                        ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-                        : Action.getValue(action.before, ''),
-                    after: Action.getValue(action.after, ''),
-                  },
-                },
-                actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
-              };
-            }
+  //         if (blockType === null) {
+  //           // @NOTE we're assuming this means we're editing the name of a table block
+  //           if (action.before.attributeId === 'name') {
+  //             changes[parentEntityId] = {
+  //               ...changes[parentEntityId],
+  //               name: entities?.[parentEntityId]?.name ?? '',
+  //               blocks: {
+  //                 ...(changes[parentEntityId]?.blocks ?? {}),
+  //                 [entityId]: {
+  //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+  //                   type: 'tableBlock',
+  //                   before:
+  //                     typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
+  //                       ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+  //                       : null,
+  //                   after: Action.getValue(action.after, ''),
+  //                 },
+  //               },
+  //               actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
+  //             };
+  //             // @NOTE we're assuming this means we're editing a table filter
+  //           } else {
+  //             changes[parentEntityId] = {
+  //               ...changes[parentEntityId],
+  //               name: entities?.[parentEntityId]?.name ?? '',
+  //               blocks: {
+  //                 ...(changes[parentEntityId]?.blocks ?? {}),
+  //                 [entityId]: {
+  //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+  //                   type: 'tableFilter',
+  //                   before:
+  //                     typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
+  //                       ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+  //                       : Action.getValue(action.before, ''),
+  //                   after: Action.getValue(action.after, ''),
+  //                 },
+  //               },
+  //               actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
+  //             };
+  //           }
 
-            break;
-          }
+  //           break;
+  //         }
 
-          changes[parentEntityId] = {
-            ...changes[parentEntityId],
-            name: entities?.[parentEntityId]?.name ?? '',
-            blocks: {
-              ...(changes[parentEntityId]?.blocks ?? {}),
-              [entityId]: {
-                ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-                type: blockType,
-                before:
-                  typeof changes[parentEntityId]?.blocks?.[entityId]?.before === 'undefined'
-                    ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-                    : Action.getValue(action.before, ''),
-                after: Action.getValue(action.after, ''),
-              },
-            },
-            actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
-          };
-        } else {
-          changes[entityId] = {
-            ...changes[entityId],
-            name: entities?.[entityId]?.name ?? '',
-            attributes: {
-              ...(changes[entityId]?.attributes ?? {}),
-              [attributeId]: {
-                ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
-                type: Action.getValueType(action.after),
-                name: action.before.attributeName ?? '',
-                before:
-                  typeof changes[entityId]?.attributes?.[attributeId]?.before !== 'undefined'
-                    ? (changes[entityId]?.attributes?.[attributeId]?.before as string | null)
-                    : Action.getName(action.before) ?? Action.getValue(action.before, ''),
-                after: Action.getValue(action.after, ''),
-                actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.before.id],
-              },
-            },
-            actions: [...(changes[entityId]?.actions ?? []), action.before.id],
-          };
-        }
+  //         changes[parentEntityId] = {
+  //           ...changes[parentEntityId],
+  //           name: entities?.[parentEntityId]?.name ?? '',
+  //           blocks: {
+  //             ...(changes[parentEntityId]?.blocks ?? {}),
+  //             [entityId]: {
+  //               ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+  //               type: blockType,
+  //               before:
+  //                 typeof changes[parentEntityId]?.blocks?.[entityId]?.before === 'undefined'
+  //                   ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+  //                   : Action.getValue(action.before, ''),
+  //               after: Action.getValue(action.after, ''),
+  //             },
+  //           },
+  //           actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
+  //         };
+  //       } else {
+  //         changes[entityId] = {
+  //           ...changes[entityId],
+  //           name: entities?.[entityId]?.name ?? '',
+  //           attributes: {
+  //             ...(changes[entityId]?.attributes ?? {}),
+  //             [attributeId]: {
+  //               ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
+  //               type: Action.getValueType(action.after),
+  //               name: action.before.attributeName ?? '',
+  //               before:
+  //                 typeof changes[entityId]?.attributes?.[attributeId]?.before !== 'undefined'
+  //                   ? (changes[entityId]?.attributes?.[attributeId]?.before as string | null)
+  //                   : Action.getName(action.before) ?? Action.getValue(action.before, ''),
+  //               after: Action.getValue(action.after, ''),
+  //               actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.before.id],
+  //             },
+  //           },
+  //           actions: [...(changes[entityId]?.actions ?? []), action.before.id],
+  //         };
+  //       }
 
-        break;
-      }
+  //       break;
+  //     }
 
-      case 'deleteTriple': {
-        const entityId = action.entityId;
-        const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
-        const attributeId = action.attributeId;
+  //     case 'deleteTriple': {
+  //       const entityId = action.entityId;
+  //       const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
+  //       const attributeId = action.attributeId;
 
-        if (parentEntityId) {
-          const blockType = Action.getBlockType(action);
+  //       if (parentEntityId) {
+  //         const blockType = Action.getBlockType(action);
 
-          if (blockType === null) {
-            // @NOTE we're assuming this means we're deleting a table block
-            if (action.attributeId === 'name') {
-              changes[parentEntityId] = {
-                ...changes[parentEntityId],
-                name: entities?.[parentEntityId]?.name ?? '',
-                blocks: {
-                  ...(changes[parentEntityId]?.blocks ?? {}),
-                  [entityId]: {
-                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-                    type: 'tableBlock',
-                    before:
-                      typeof changes[parentEntityId]?.blocks?.[entityId]?.before === 'undefined'
-                        ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-                        : Action.getValue(action, ''),
-                    after: null,
-                  },
-                },
-                actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-              };
-              // @NOTE we're assuming this means we're deleting a table filter
-            } else {
-              changes[parentEntityId] = {
-                ...changes[parentEntityId],
-                name: entities?.[parentEntityId]?.name ?? '',
-                blocks: {
-                  ...(changes[parentEntityId]?.blocks ?? {}),
-                  [entityId]: {
-                    ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-                    type: 'tableFilter',
-                    before:
-                      typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
-                        ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-                        : Action.getValue(action, ''),
-                    after: null,
-                  },
-                },
-                actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-              };
-            }
+  //         if (blockType === null) {
+  //           // @NOTE we're assuming this means we're deleting a table block
+  //           if (action.attributeId === 'name') {
+  //             changes[parentEntityId] = {
+  //               ...changes[parentEntityId],
+  //               name: entities?.[parentEntityId]?.name ?? '',
+  //               blocks: {
+  //                 ...(changes[parentEntityId]?.blocks ?? {}),
+  //                 [entityId]: {
+  //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+  //                   type: 'tableBlock',
+  //                   before:
+  //                     typeof changes[parentEntityId]?.blocks?.[entityId]?.before === 'undefined'
+  //                       ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+  //                       : Action.getValue(action, ''),
+  //                   after: null,
+  //                 },
+  //               },
+  //               actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
+  //             };
+  //             // @NOTE we're assuming this means we're deleting a table filter
+  //           } else {
+  //             changes[parentEntityId] = {
+  //               ...changes[parentEntityId],
+  //               name: entities?.[parentEntityId]?.name ?? '',
+  //               blocks: {
+  //                 ...(changes[parentEntityId]?.blocks ?? {}),
+  //                 [entityId]: {
+  //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+  //                   type: 'tableFilter',
+  //                   before:
+  //                     typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
+  //                       ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+  //                       : Action.getValue(action, ''),
+  //                   after: null,
+  //                 },
+  //               },
+  //               actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
+  //             };
+  //           }
 
-            break;
-          }
+  //           break;
+  //         }
 
-          changes[parentEntityId] = {
-            ...changes[parentEntityId],
-            name: entities?.[parentEntityId]?.name ?? '',
-            blocks: {
-              ...(changes[parentEntityId]?.blocks ?? {}),
-              [entityId]: {
-                ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-                type: blockType,
-                before:
-                  typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
-                    ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-                    : Action.getValue(action, ''),
-                after: null,
-              },
-            },
-            actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-          };
-        } else if (action.value.type === 'entity') {
-          changes[entityId] = {
-            ...changes[entityId],
-            name: entities?.[entityId]?.name ?? '',
-            attributes: {
-              ...(changes[entityId]?.attributes ?? {}),
-              [attributeId]: {
-                ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
-                type: Action.getValueType(action),
-                name: action.attributeName ?? '',
-                before: [...(changes[entityId]?.attributes?.[attributeId]?.before ?? []), Action.getName(action)],
-                after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? [])],
-                actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
-              },
-            },
-            actions: [...(changes[entityId]?.actions ?? []), action.id],
-          };
-        } else {
-          changes[entityId] = {
-            ...changes[entityId],
-            name: entities?.[entityId]?.name ?? '',
-            attributes: {
-              ...(changes[entityId]?.attributes ?? {}),
-              [attributeId]: {
-                ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
-                type: Action.getValueType(action),
-                name: action.attributeName ?? '',
-                before:
-                  typeof changes[entityId]?.attributes?.[attributeId]?.before !== 'undefined'
-                    ? (changes[entityId]?.attributes?.[attributeId]?.before as string | null)
-                    : Action.getValue(action, ''),
-                after: null,
-                actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
-              },
-            },
-            actions: [...(changes[entityId]?.actions ?? []), action.id],
-          };
-        }
+  //         changes[parentEntityId] = {
+  //           ...changes[parentEntityId],
+  //           name: entities?.[parentEntityId]?.name ?? '',
+  //           blocks: {
+  //             ...(changes[parentEntityId]?.blocks ?? {}),
+  //             [entityId]: {
+  //               ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
+  //               type: blockType,
+  //               before:
+  //                 typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
+  //                   ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
+  //                   : Action.getValue(action, ''),
+  //               after: null,
+  //             },
+  //           },
+  //           actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
+  //         };
+  //       } else if (action.value.type === 'entity') {
+  //         changes[entityId] = {
+  //           ...changes[entityId],
+  //           name: entities?.[entityId]?.name ?? '',
+  //           attributes: {
+  //             ...(changes[entityId]?.attributes ?? {}),
+  //             [attributeId]: {
+  //               ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
+  //               type: Action.getValueType(action),
+  //               name: action.attributeName ?? '',
+  //               before: [...(changes[entityId]?.attributes?.[attributeId]?.before ?? []), Action.getName(action)],
+  //               after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? [])],
+  //               actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
+  //             },
+  //           },
+  //           actions: [...(changes[entityId]?.actions ?? []), action.id],
+  //         };
+  //       } else {
+  //         changes[entityId] = {
+  //           ...changes[entityId],
+  //           name: entities?.[entityId]?.name ?? '',
+  //           attributes: {
+  //             ...(changes[entityId]?.attributes ?? {}),
+  //             [attributeId]: {
+  //               ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
+  //               type: Action.getValueType(action),
+  //               name: action.attributeName ?? '',
+  //               before:
+  //                 typeof changes[entityId]?.attributes?.[attributeId]?.before !== 'undefined'
+  //                   ? (changes[entityId]?.attributes?.[attributeId]?.before as string | null)
+  //                   : Action.getValue(action, ''),
+  //               after: null,
+  //               actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
+  //             },
+  //           },
+  //           actions: [...(changes[entityId]?.actions ?? []), action.id],
+  //         };
+  //       }
 
-        break;
-      }
-    }
-  });
+  //       break;
+  //     }
+  //   }
+  // });
 
   return { changes, entities };
 }
 
-const getEntitiesFromActions = async (actions: ActionType[], subgraph: Subgraph.ISubgraph) => {
+const getEntitiesFromActions = async (triples: TripleType[], subgraph: Subgraph.ISubgraph) => {
   const entities: Record<EntityId, EntityType> = {};
-
-  const entitySet = new Set<EntityId>();
-
-  actions.forEach(action => {
-    switch (action.type) {
-      case 'createTriple':
-      case 'deleteTriple':
-        entitySet.add(action.entityId);
-        break;
-      case 'editTriple':
-        entitySet.add(action.before.entityId);
-        break;
-    }
-  });
+  const entitySet = new Set<EntityId>(triples.map(t => t.entityId));
 
   const maybeRemoteEntities = await Promise.all(
     [...entitySet.values()].map((entityId: EntityId) => subgraph.fetchEntity({ id: entityId }))
@@ -393,7 +376,7 @@ const getEntitiesFromActions = async (actions: ActionType[], subgraph: Subgraph.
   const parentEntitySet = new Set<EntityId>();
 
   Object.keys(entities).forEach(entityId => {
-    const parentEntityId = Entity.getParentEntityId(entities?.[entityId]?.triples);
+    const parentEntityId = Entities.getParentEntityId(entities?.[entityId]?.triples);
 
     if (parentEntityId && !entitySet.has(parentEntityId)) {
       parentEntitySet.add(parentEntityId);
@@ -440,12 +423,12 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
 
   const selectedEntityBlockIdsTriple = selectedVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
   const selectedEntityBlockIds: string[] = selectedEntityBlockIdsTriple
-    ? JSON.parse(Value.stringValue(selectedEntityBlockIdsTriple) || '[]')
+    ? JSON.parse(Values.stringValue(selectedEntityBlockIdsTriple) || '[]')
     : [];
 
   const previousEntityBlockIdsTriple = previousVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
   const previousEntityBlockIds: string[] = previousEntityBlockIdsTriple
-    ? JSON.parse(Value.stringValue(previousEntityBlockIdsTriple) || '[]')
+    ? JSON.parse(Values.stringValue(previousEntityBlockIdsTriple) || '[]')
     : [];
 
   const [maybeRemoteSelectedEntityBlocks, maybeRemotePreviousEntityBlocks, maybeAdditionalRemotePreviousEntityBlocks] =
@@ -462,7 +445,7 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
 
     selectedVersion.triples.map(triple => {
       switch (triple.value.type) {
-        case 'entity': {
+        case 'ENTITY': {
           changes[entityId] = {
             ...changes[entityId],
             attributes: {
@@ -490,7 +473,7 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
                 type: triple.value.type ?? '',
                 name: triple.attributeName ?? '',
                 before: null,
-                after: Triple.getValue(triple) ?? '',
+                after: Triples.getValue(triple) ?? '',
                 actions: [],
               },
             },
@@ -504,7 +487,7 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
   if (previousVersion) {
     previousVersion.triples.map(triple => {
       switch (triple.value.type) {
-        case 'entity': {
+        case 'ENTITY': {
           changes[entityId] = {
             ...changes[entityId],
             attributes: {
@@ -530,7 +513,7 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
                 ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
                 type: triple.value.type ?? '',
                 name: triple.attributeName ?? '',
-                before: Triple.getValue(triple) ?? '',
+                before: Triples.getValue(triple) ?? '',
                 after: changes[entityId]?.attributes?.[triple.attributeId]?.after ?? null,
                 actions: [],
               },
@@ -636,13 +619,13 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
     const selectedEntityBlockIdsTriple =
       selectedVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
     const selectedEntityBlockIds: string[] = selectedEntityBlockIdsTriple
-      ? JSON.parse(Value.stringValue(selectedEntityBlockIdsTriple) || '[]')
+      ? JSON.parse(Values.stringValue(selectedEntityBlockIdsTriple) || '[]')
       : [];
 
     const previousEntityBlockIdsTriple =
       previousVersion?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
     const previousEntityBlockIds: string[] = previousEntityBlockIdsTriple
-      ? JSON.parse(Value.stringValue(previousEntityBlockIdsTriple) || '[]')
+      ? JSON.parse(Values.stringValue(previousEntityBlockIdsTriple) || '[]')
       : [];
 
     const [
@@ -662,7 +645,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
 
       selectedVersion.triples.map(triple => {
         switch (triple.value.type) {
-          case 'entity': {
+          case 'ENTITY': {
             changes[entityId] = {
               ...changes[entityId],
               attributes: {
@@ -690,7 +673,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
                   type: triple.value.type ?? '',
                   name: triple.attributeName ?? '',
                   before: null,
-                  after: Triple.getValue(triple) ?? '',
+                  after: Triples.getValue(triple) ?? '',
                   actions: [],
                 },
               },
@@ -704,7 +687,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
     if (previousVersion && !previousVersion.triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY)) {
       previousVersion.triples.map(triple => {
         switch (triple.value.type) {
-          case 'entity': {
+          case 'ENTITY': {
             changes[entityId] = {
               ...changes[entityId],
               attributes: {
@@ -730,7 +713,7 @@ export async function fromProposal(proposalId: string, previousProposalId: strin
                   ...(changes[entityId]?.attributes?.[triple.attributeId] ?? {}),
                   type: triple.value.type ?? '',
                   name: triple.attributeName ?? '',
-                  before: Triple.getValue(triple) ?? '',
+                  before: Triples.getValue(triple) ?? '',
                   after: changes[entityId]?.attributes?.[triple.attributeId]?.after ?? null,
                   actions: [],
                 },
@@ -834,7 +817,7 @@ const getBlockValueFromTriples = (triples: TripleType[]) => {
     return tripleWithContent.entityName;
   }
 
-  return Triple.getValue(tripleWithContent);
+  return Triples.getValue(tripleWithContent);
 };
 
 const CONTENT_ATTRIBUTE_IDS = [

@@ -1,6 +1,5 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -8,29 +7,19 @@ import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { Services } from '~/core/services';
-import { useDiff } from '~/core/state/diff-store';
-import { Action as IAction } from '~/core/types';
-import { Action } from '~/core/utils/action';
 import { NavUtils } from '~/core/utils/utils';
 
-import { SmallButton } from '~/design-system/button';
-import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
-import { Copy } from '~/design-system/icons/copy';
 import { Create } from '~/design-system/icons/create';
 // import { CsvImport } from '~/design-system/icons/csv-import';
 import { Menu } from '~/design-system/menu';
-import { Text } from '~/design-system/text';
-
-import { HistoryEmpty } from '../history/history-empty';
-import { HistoryItem } from '../history/history-item';
-import { HistoryPanel } from '../history/history-panel';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement;
+  addSubspaceComponent: React.ReactElement;
+  removeSubspaceComponent: React.ReactElement | null;
   typeNames: string[];
   entityId: string;
 }
@@ -40,6 +29,8 @@ export function SpacePageMetadataHeader({
   membersComponent,
   typeNames,
   entityId,
+  addSubspaceComponent,
+  removeSubspaceComponent,
 }: SpacePageMetadataHeaderProps) {
   const isEditing = useUserIsEditing(spaceId);
   const [open, onOpenChange] = React.useState(false);
@@ -47,32 +38,31 @@ export function SpacePageMetadataHeader({
   // @TODO pathname might already include `/entities` or `/import`, resulting in a broken behavior in the context menu
   const pathname = usePathname();
 
-  const { subgraph } = Services.useServices();
+  // const { subgraph } = Services.useServices();
 
-  const {
-    data: proposals,
-    isFetching,
-    isFetchingNextPage,
-    fetchNextPage,
-  } = useInfiniteQuery({
-    queryKey: [`space-proposals-for-space-${spaceId}`],
-    queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
-    getNextPageParam: (_lastPage, pages) => pages.length,
-    initialPageParam: 0,
-  });
+  // const {
+  //   data: proposals,
+  //   isFetching,
+  //   isFetchingNextPage,
+  //   fetchNextPage,
+  // } = useInfiniteQuery({
+  //   queryKey: [`space-proposals-for-space-${spaceId}`],
+  //   queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
+  //   getNextPageParam: (_lastPage, pages) => pages.length,
+  // });
 
-  const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
+  // const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
 
-  const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
+  // const isOnePage = proposals?.pages && proposals.pages[0].length < 5;
 
-  const isLastPage =
-    proposals?.pages &&
-    proposals.pages.length > 1 &&
-    proposals.pages[proposals.pages.length - 1]?.[0]?.id === proposals.pages[proposals.pages.length - 2]?.[0]?.id;
+  // const isLastPage =
+  //   proposals?.pages &&
+  //   proposals.pages.length > 1 &&
+  //   proposals.pages[proposals.pages.length - 1]?.[0]?.id === proposals.pages[proposals.pages.length - 2]?.[0]?.id;
 
-  const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
+  // const renderedProposals = !isLastPage ? proposals?.pages : proposals?.pages.slice(0, -1);
 
-  const showMore = !isOnePage && !isLastPage;
+  // const showMore = !isOnePage && !isLastPage;
 
   const additionalTypeChips = typeNames
     .filter(t => t !== 'Space')
@@ -107,7 +97,7 @@ export function SpacePageMetadataHeader({
             <Create />
           </Link>
         )}
-        <HistoryPanel>
+        {/* <HistoryPanel>
           {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>
@@ -120,9 +110,7 @@ export function SpacePageMetadataHeader({
                     setSelectedProposal(p.id);
                     setIsCompareOpen(true);
                   }}
-                  changeCount={Action.getChangeCount(
-                    p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
-                  )}
+                  changeCount={p.proposedVersions.reduce<AppOp[]>((acc, version) => acc.concat(version.ops), []).length}
                   createdAt={p.createdAt}
                   createdBy={p.createdBy}
                   name={p.name}
@@ -141,39 +129,36 @@ export function SpacePageMetadataHeader({
               )}
             </div>
           )}
-        </HistoryPanel>
+        </HistoryPanel> */}
         <Menu
           open={open}
           onOpenChange={onOpenChange}
           align="end"
           trigger={open ? <Close color="grey-04" /> : <Context color="grey-04" />}
-          className="max-w-[7rem] whitespace-nowrap"
+          className="max-w-[9rem] whitespace-nowrap"
         >
+          <div>{isEditing && addSubspaceComponent}</div>
+          <div>{isEditing && removeSubspaceComponent}</div>
+
           <button
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
+            className="flex w-full items-center bg-white px-3 py-2 text-grey-04 hover:bg-bg hover:text-text"
             onClick={onCopyId}
           >
-            <Text variant="button" className="hover:!text-text">
-              Copy ID
-            </Text>
+            <p className="text-button">Copy ID</p>
           </button>
           <Link
             href={`${pathname}/entities`}
             onClick={() => onOpenChange(false)}
-            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
+            className="flex w-full items-center bg-white px-3 py-2 text-grey-04 hover:bg-bg hover:text-text"
           >
-            <Text variant="button" className="hover:!text-text">
-              View data
-            </Text>
+            <p className="text-button">View data</p>
           </Link>
           {/* <Link
             href={`${pathname}/import`}
             onClick={() => onOpenChange(false)}
-            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2 hover:bg-bg"
           >
-            <Text variant="button" className="hover:!text-text">
-              CSV import
-            </Text>
+              <p className="text-button">CSV import</p>
           </Link> */}
         </Menu>
       </div>

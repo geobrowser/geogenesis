@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 import { DEFAULT_OPENGRAPH_IMAGE, PUBLIC_SPACES } from '~/core/constants';
 import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
 import { Entity, Space } from '~/core/types';
-import { Entity as EntityModule } from '~/core/utils/entity';
+import { Entities as EntityModule } from '~/core/utils/entity';
 
 import { Card } from '~/design-system/card';
 import { Spacer } from '~/design-system/spacer';

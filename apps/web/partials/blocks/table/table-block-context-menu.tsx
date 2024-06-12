@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
@@ -19,14 +19,13 @@ import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { ID } from '~/core/id';
 import { useMigrateHub } from '~/core/migrate/migrate';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Entity as IEntity, Triple as ITriple } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Entity as IEntity, Triple as ITriple, ValueTypeId } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
+import { Triples } from '~/core/utils/triples';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
-import { ValueTypeId, valueTypeNames, valueTypes } from '~/core/value-types';
+import { valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { ResultContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
@@ -76,23 +75,24 @@ function useOptimisticAttributes({
 }) {
   const [optimisticAttributes, setOptimisticAttributes] = useAtom(optimisticAttributesAtom);
   const merged = useMergedData();
-  const { create, remove } = useActionsStore();
+  const { upsert, remove } = useActionsStore();
   const migrateHub = useMigrateHub();
 
   const onAddAttribute = (attribute: IEntity) => {
-    create(
-      Triple.withId({
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: entityId,
         entityName: attribute.name,
         attributeId: SYSTEM_IDS.ATTRIBUTES,
         attributeName: 'Attributes',
-        space: spaceId,
         value: {
-          type: 'entity',
-          id: attribute.id,
+          type: 'ENTITY',
+          value: attribute.id,
           name: attribute.name,
         },
-      })
+      },
+      spaceId
     );
 
     setOptimisticAttributes([...optimisticAttributes, attribute]);
@@ -116,18 +116,19 @@ function useOptimisticAttributes({
     }
 
     remove(
-      Triple.withId({
+      Triples.withId({
         attributeId: SYSTEM_IDS.ATTRIBUTES,
         attributeName: 'Attributes',
         entityId: entityId,
         entityName: entityName,
         space: spaceId,
         value: {
-          type: 'entity',
-          id: nameTriple.entityId,
+          type: 'ENTITY',
+          value: nameTriple.entityId,
           name: nameTriple.entityName,
         },
-      })
+      }),
+      spaceId
     );
 
     setOptimisticAttributes(optimisticAttributes.filter(a => a.id !== attribute.id));
@@ -139,9 +140,11 @@ function useOptimisticAttributes({
     const attributeSpace = attribute.nameTripleSpaces?.[0];
 
     if (attributeValueTypeTriple) {
-      remove(attributeValueTypeTriple);
+      if (attributeSpace) {
+        remove(attributeValueTypeTriple, attributeSpace);
+      }
 
-      const oldValueTypeId = attributeValueTypeTriple.value.id;
+      const oldValueTypeId = attributeValueTypeTriple.value.value;
 
       // We want to make sure that the ID is actually one of the value types
       // before we run any migrations.
@@ -161,15 +164,15 @@ function useOptimisticAttributes({
     }
 
     if (attributeSpace) {
-      const newTriple = Triple.withId({
+      const newTriple = Triples.withId({
         entityId: attribute.id,
         entityName: attribute.name,
         attributeId: SYSTEM_IDS.VALUE_TYPE,
         attributeName: 'Value type',
         space: attributeSpace,
         value: {
-          type: 'entity',
-          id: newValueTypeId,
+          type: 'ENTITY',
+          value: newValueTypeId,
           name: valueTypeNames[newValueTypeId],
         },
       });
@@ -188,7 +191,7 @@ function useOptimisticAttributes({
       });
 
       // Create a new Value Type triple with the new value type
-      create(newTriple);
+      upsert({ ...newTriple, type: 'SET_TRIPLE' }, newTriple.space);
     }
   };
 
@@ -214,10 +217,10 @@ function useOptimisticAttributes({
 
       // Fetch the the entities for each of the Attribute in the type
       const maybeAttributeEntities = await Promise.all(
-        attributeTriples.map(t => merged.fetchEntity({ id: t.value.id }))
+        attributeTriples.map(t => merged.fetchEntity({ id: t.value.value }))
       );
 
-      return maybeAttributeEntities.filter(Entity.isNonNull);
+      return maybeAttributeEntities.filter(Entities.isNonNull);
     },
   });
 
@@ -374,7 +377,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownInd
                 // do not show name column
                 if (index === 0) return null;
 
-                const shownColumnTriple = shownColumnTriples.find(triple => triple.value.id === column.id) ?? null;
+                const shownColumnTriple = shownColumnTriples.find(triple => triple.value.value === column.id) ?? null;
 
                 return (
                   <ToggleColumn
@@ -416,7 +419,7 @@ const ToggleColumn = ({
   entityId,
   entityName,
 }: ToggleColumnProps) => {
-  const { create, remove } = useActionsStore(space);
+  const { upsert, remove } = useActionsStore(space);
 
   const { id, name } = column;
   const isShown = shownIndexes.includes(index);
@@ -426,26 +429,27 @@ const ToggleColumn = ({
     const attributeName = 'Shown Columns';
 
     if (!isShown) {
-      create(
-        Triple.withId({
-          space,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           entityId,
           entityName,
           attributeId,
           attributeName,
           value: {
-            type: 'entity',
-            id,
+            type: 'ENTITY',
+            value: id,
             name,
           },
-        })
+        },
+        space
       );
     } else {
       if (shownColumnTriple) {
-        remove(shownColumnTriple);
+        remove(shownColumnTriple, space);
       }
     }
-  }, [create, entityId, entityName, id, isShown, name, remove, shownColumnTriple, space]);
+  }, [upsert, entityId, entityName, id, isShown, name, remove, shownColumnTriple, space]);
 
   return (
     <MenuItem>
@@ -585,7 +589,7 @@ function AddAttribute() {
 
 function SchemaAttributes() {
   const { type } = useTableBlock();
-  const { create, update } = useActionsStore();
+  const { upsert } = useActionsStore();
 
   const {
     optimisticAttributes: attributes,
@@ -601,39 +605,22 @@ function SchemaAttributes() {
     // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
     const attributeSpace = attribute.nameTripleSpaces?.[0];
 
-    if (!attributeSpace) {
+    if (!attributeSpace || !oldNameTriple) {
       console.error("The entity doesn't have a name triple space");
       return;
     }
 
-    if (!oldNameTriple) {
-      return create(
-        Triple.withId({
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          entityId: attribute.id,
-          entityName: attribute.name,
-          space: attributeSpace,
-          value: {
-            type: 'string',
-            id: ID.createValueId(),
-            value: newName,
-          },
-        })
-      );
-    }
-
-    update(
+    upsert(
       {
         ...oldNameTriple,
+        type: 'SET_TRIPLE',
         entityName: newName,
         value: {
-          type: 'string',
-          id: oldNameTriple.value.id,
+          type: 'TEXT',
           value: newName,
         },
       },
-      oldNameTriple
+      attributeSpace
     );
   };
 
@@ -644,7 +631,7 @@ function SchemaAttributes() {
         {attributes?.map(attributeEntity => {
           const valueTypeId: ValueTypeId | undefined = attributeEntity.triples.find(
             t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
-          )?.value.id as ValueTypeId;
+          )?.value.value as ValueTypeId;
 
           const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
 

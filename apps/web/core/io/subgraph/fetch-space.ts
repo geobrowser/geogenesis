@@ -5,61 +5,35 @@ import { v4 as uuid } from 'uuid';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { Space, SpaceConfigEntity } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 
+import { spaceMetadataFragment, spacePluginsFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 const getFetchSpaceQuery = (id: string) => `query {
   space(id: "${id}") {
     id
     isRootSpace
-    spaceAdmins {
-      nodes {
-        accountId
-      }
-    }
+    ${spacePluginsFragment}
+
     spaceEditors {
       nodes {
         accountId
       }
     }
-    spaceEditorControllers {
+
+    spaceMembers {
       nodes {
         accountId
       }
     }
+
     createdAtBlock
 
     metadata {
       nodes {
-        id
-        name
-        triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-          nodes {
-            id
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-            isProtected
-            space {
-              id
-            }
-          }
-        }
+        ${spaceMetadataFragment}
       }
     }
   }
@@ -73,9 +47,11 @@ type NetworkResult = {
   space: {
     id: string;
     isRootSpace: boolean;
-    spaceAdmins: { nodes: { accountId: string }[] };
+    mainVotingPluginAddress: string | null;
+    memberAccessPluginAddress: string;
+    spacePluginAddress: string;
     spaceEditors: { nodes: { accountId: string }[] };
-    spaceEditorControllers: { nodes: { accountId: string }[] };
+    spaceMembers: { nodes: { accountId: string }[] };
     createdAtBlock: string;
     metadata: { nodes: SubstreamEntity[] };
   } | null;
@@ -83,7 +59,7 @@ type NetworkResult = {
 
 export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | null> {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
@@ -138,29 +114,18 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   }
 
   const networkSpace = result.space;
-
-  const spaceConfig = networkSpace.metadata.nodes[0] as SubstreamEntity | undefined;
-  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
-
-  const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
-    ? {
-        id: spaceConfig.id,
-        name: spaceConfig.name,
-        description: null,
-        image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-        triples: spaceConfigTriples,
-        types: Entity.types(spaceConfigTriples),
-        nameTripleSpaces: Entity.nameTriples(spaceConfigTriples).map(t => t.space),
-      }
-    : null;
+  const spaceConfigWithImage = getSpaceConfigFromMetadata(networkSpace.id, networkSpace.metadata.nodes[0]);
 
   return {
     id: networkSpace.id,
     isRootSpace: networkSpace.isRootSpace,
-    admins: networkSpace.spaceAdmins.nodes.map(account => account.accountId),
-    editorControllers: networkSpace.spaceEditorControllers.nodes.map(account => account.accountId),
     editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
+    members: networkSpace.spaceMembers.nodes.map(account => account.accountId),
     spaceConfig: spaceConfigWithImage,
     createdAtBlock: networkSpace.createdAtBlock,
+
+    mainVotingPluginAddress: networkSpace.mainVotingPluginAddress,
+    memberAccessPluginAddress: networkSpace.memberAccessPluginAddress,
+    spacePluginAddress: networkSpace.spacePluginAddress,
   };
 }

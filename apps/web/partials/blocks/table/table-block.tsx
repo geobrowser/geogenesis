@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -14,7 +14,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Entity as EntityType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
@@ -61,14 +61,14 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
   const allColumns = columns.map(column => ({
     id: column.id,
-    name: Entity.name(column.triples),
+    name: Entities.name(column.triples),
   }));
 
   const shownColumnTriples = [
     ...(blockEntity?.triples ?? []).filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS),
   ];
 
-  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.id) ?? []), 'name'];
+  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.value) ?? []), 'name'];
 
   const { placeholderText, placeholderImage } = getPlaceholders(blockEntity);
 
@@ -100,7 +100,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
     return {
       ...f,
-      columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: Entities.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
 
@@ -287,7 +287,7 @@ const getPlaceholders = (blockEntity: EntityType | null | undefined) => {
       triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
     );
 
-    if (placeholderTextTriple && placeholderTextTriple.value.type === 'string') {
+    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
       placeholderText = placeholderTextTriple.value.value;
     }
 
@@ -295,7 +295,7 @@ const getPlaceholders = (blockEntity: EntityType | null | undefined) => {
       triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
     );
 
-    if (placeholderImageTriple && placeholderImageTriple.value.type === 'image') {
+    if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
       placeholderImage = getImagePath(placeholderImageTriple.value.value);
     }
   }

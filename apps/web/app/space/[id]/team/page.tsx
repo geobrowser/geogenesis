@@ -1,11 +1,11 @@
-import { AVATAR_ATTRIBUTE, NAME, ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Subgraph } from '~/core/io';
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import type { Triple as TripleType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
-import { Value } from '~/core/utils/value';
+import { Entities } from '~/core/utils/entity';
+import { Triples } from '~/core/utils/triples';
+import { Values } from '~/core/utils/value';
 
 import { TeamMembers } from '~/partials/team/team-members';
 
@@ -39,21 +39,21 @@ const getTeamMembers = async (spaceId: string) => {
       query: '',
       skip: 0,
       first: 1000,
-      filter: [{ field: 'attribute-id', value: ROLE_ATTRIBUTE }],
+      filter: [{ field: 'attribute-id', value: SYSTEM_IDS.ROLE_ATTRIBUTE }],
     }),
     Subgraph.fetchTriples({
       space: spaceId,
       query: '',
       skip: 0,
       first: 1000,
-      filter: [{ field: 'attribute-id', value: NAME }],
+      filter: [{ field: 'attribute-id', value: SYSTEM_IDS.NAME }],
     }),
     Subgraph.fetchTriples({
       space: spaceId,
       query: '',
       skip: 0,
       first: 1000,
-      filter: [{ field: 'attribute-id', value: AVATAR_ATTRIBUTE }],
+      filter: [{ field: 'attribute-id', value: SYSTEM_IDS.AVATAR_ATTRIBUTE }],
     }),
   ]);
 
@@ -62,7 +62,7 @@ const getTeamMembers = async (spaceId: string) => {
   }
 
   roleTriples.forEach(triple => {
-    if (triple.value.type !== 'entity') return;
+    if (triple.value.type !== 'ENTITY') return;
 
     const teamMember = {
       entityId: triple.entityId,
@@ -109,13 +109,13 @@ const getTeamMembers = async (spaceId: string) => {
       const nameTriple = nameTriples.find(nameTriple => nameTriple.entityId === entityId);
 
       if (nameTriple) {
-        const name = Triple.getValue(nameTriple);
+        const name = Triples.getValue(nameTriple);
 
         if (name) {
           teamMembers[teamMemberIndex].name = name;
         }
       } else {
-        const name = Entity.name(entity.triples);
+        const name = Entities.name(entity.triples);
 
         if (name) {
           teamMembers[teamMemberIndex].name = name;
@@ -125,26 +125,26 @@ const getTeamMembers = async (spaceId: string) => {
       const avatarTriple = avatarTriples.find(avatarTriple => avatarTriple.entityId === entityId);
 
       if (avatarTriple) {
-        const avatar = Value.imageValue(avatarTriple);
+        const avatar = Values.imageValue(avatarTriple);
 
         if (avatar) {
           teamMembers[teamMemberIndex].avatar = avatar;
         }
       } else {
-        const avatar = Entity.avatar(entity.triples);
+        const avatar = Entities.avatar(entity.triples);
 
         if (avatar) {
           teamMembers[teamMemberIndex].avatar = avatar;
         }
       }
     } else {
-      const name = Entity.name(entity.triples);
+      const name = Entities.name(entity.triples);
 
       if (name) {
         teamMembers[teamMemberIndex].name = name;
       }
 
-      const avatar = Entity.avatar(entity.triples);
+      const avatar = Entities.avatar(entity.triples);
 
       if (avatar) {
         teamMembers[teamMemberIndex].avatar = avatar;

@@ -40,7 +40,7 @@ function getFetchProfileQuery(address: string) {
 
 export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): Promise<OnchainProfile | null> {
   const queryId = uuid();
-  const config = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV);
+  const config = Environment.getConfig();
 
   const fetchWalletsGraphqlEffect = graphql<NetworkResult>({
     endpoint: config.api,
@@ -62,9 +62,9 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProfile. queryId: ${queryId} endpoint: ${
-              config.profileSubgraph
-            } address: ${options.address}
+            `Encountered runtime graphql error in fetchProfile. queryId: ${queryId} endpoint: ${config.api} address: ${
+              options.address
+            }
             
             queryString: ${getFetchProfileQuery(options.address)}
             `,
@@ -78,7 +78,7 @@ export async function fetchOnchainProfile(options: FetchOnchainProfileOptions): 
           };
         default:
           console.error(
-            `${error._tag}: Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${config.profileSubgraph} address: ${options.address}`
+            `${error._tag}: Unable to fetch wallets to derive profile, queryId: ${queryId} endpoint: ${config.api} address: ${options.address}`
           );
 
           return {

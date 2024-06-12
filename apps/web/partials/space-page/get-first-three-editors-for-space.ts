@@ -3,13 +3,15 @@ import { cache } from 'react';
 import { Subgraph } from '~/core/io';
 import { OmitStrict, Profile } from '~/core/types';
 
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
+
 type EditorsForSpace = {
   firstThreeEditors: OmitStrict<Profile, 'coverUrl'>[];
   totalEditors: number;
 };
 
 export const getFirstThreeEditorsForSpace = cache(async (spaceId: string): Promise<EditorsForSpace> => {
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
     throw new Error("Space doesn't exist");
@@ -43,6 +45,7 @@ export const getFirstThreeEditorsForSpace = cache(async (spaceId: string): Promi
 
   return {
     firstThreeEditors,
+    // @TODO: Use total count from graphql
     totalEditors: space.editors.length,
   };
 });

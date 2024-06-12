@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import { cva } from 'class-variance-authority';
@@ -19,11 +19,10 @@ import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Action as ActionType, Proposal as ProposalType } from '~/core/types';
-import { Action } from '~/core/utils/action';
+import type { AppOp, Proposal as ProposalType } from '~/core/types';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { formatShortAddress, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -234,9 +233,10 @@ const Proposals = () => {
   if (proposals.selected) {
     const proposal: ProposalType = proposals.selected;
 
-    selectedVersionChangeCount = Action.getChangeCount(
-      proposal.proposedVersions.reduce<ActionType[]>((acc, version) => acc.concat(version.actions), [])
-    );
+    selectedVersionChangeCount = proposal.proposedVersions.reduce<AppOp[]>(
+      (acc, version) => acc.concat(version.ops),
+      []
+    ).length;
   }
 
   const selectedVersionFormattedLastEditedDate = new Date(proposals.selected.createdAt * 1000).toLocaleDateString(
@@ -261,9 +261,10 @@ const Proposals = () => {
   if (proposals.previous) {
     const proposal: ProposalType = proposals.previous;
 
-    previousVersionChangeCount = Action.getChangeCount(
-      proposal.proposedVersions.reduce<ActionType[]>((acc, version) => acc.concat(version.actions), [])
-    );
+    previousVersionChangeCount = proposal.proposedVersions.reduce<AppOp[]>(
+      (acc, version) => acc.concat(version.ops),
+      []
+    ).length;
 
     previousVersionFormattedLastEditedDate = new Date(proposal.createdAt * 1000).toLocaleDateString(undefined, {
       day: '2-digit',
@@ -397,7 +398,7 @@ const ChangedEntity = ({ change, entityId }: ChangedEntityProps) => {
         <div className="mt-2">
           {attributeIds.map((attributeId: AttributeId) => (
             <ChangedAttribute
-              key={attributeId}
+              key={`${entityId}-${attributeId}`}
               attributeId={attributeId}
               attribute={attributes[attributeId]}
               entityId={entityId}
@@ -603,14 +604,14 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
   if (JSON.stringify(before) === JSON.stringify(after)) return <></>;
 
   switch (attribute.type) {
-    case 'string': {
+    case 'TEXT': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {differences
@@ -622,7 +623,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {differences
@@ -637,14 +638,14 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'entity': {
+    case 'ENTITY': {
       if (!Array.isArray(before) || !Array.isArray(after)) return <></>;
 
       const diffs = diffArrays(before, after);
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {diffs
@@ -662,7 +663,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
                 })}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {diffs
@@ -683,10 +684,10 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'image': {
+    case 'IMAGE': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {/* @TODO: When can this be object? */}
@@ -697,7 +698,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
               )}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {/* @TODO: When can this be object? */}
@@ -711,16 +712,16 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'date': {
+    case 'TIME': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {before && <DateTimeDiff mode="before" before={before as string | null} after={after as string | null} />}
             </div>
           </div>
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {after && <DateTimeDiff mode="after" before={before as string | null} after={after as string | null} />}
@@ -729,14 +730,14 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'url': {
+    case 'URL': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="truncate text-ctaPrimary no-underline">
               {differences
@@ -748,7 +749,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="truncate text-ctaPrimary no-underline">
               {differences
@@ -785,6 +786,7 @@ const useChangesFromProposals = (selectedProposal: string, previousProposal: str
   const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${selectedProposal}-changes-from-${previousProposal}`],
+    // @TODO: Use `getEndedProposalDiff` function instead.
     queryFn: () => Change.fromProposal(selectedProposal, previousProposal, subgraph),
   });
 
@@ -866,7 +868,7 @@ type TableFilterProps = {
 };
 
 const TableFilter = ({ filter }: TableFilterProps) => {
-  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
+  const value = filter.valueType === 'ENTITY' ? filter.valueName : filter.value;
 
   return (
     <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
@@ -920,7 +922,7 @@ const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph, confi
     }
     return {
       ...f,
-      columnName: Entity.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: Entities.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
 

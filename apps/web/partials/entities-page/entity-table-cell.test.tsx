@@ -75,8 +75,7 @@ describe('EntityTableCell', () => {
                 name: 'some attribute name',
               },
               {
-                id: 'some string value',
-                type: 'string',
+                type: 'TEXT',
                 value: 'apple',
               }
             ),
@@ -91,8 +90,7 @@ describe('EntityTableCell', () => {
               name: 'some attribute name',
             },
             {
-              id: 'some string id',
-              type: 'string',
+              type: 'TEXT',
               value: 'some string value',
             }
           ),
@@ -120,8 +118,7 @@ describe('EntityTableCell', () => {
                 name: 'some attribute name',
               },
               {
-                id: 'some url id',
-                type: 'url',
+                type: 'URL',
                 value: 'some url value',
               }
             ),
@@ -136,8 +133,7 @@ describe('EntityTableCell', () => {
               name: 'some attribute name',
             },
             {
-              id: 'some url id',
-              type: 'url',
+              type: 'URL',
               value: 'some url value',
             }
           ),
@@ -165,8 +161,7 @@ describe('EntityTableCell', () => {
                 name: 'some attribute name',
               },
               {
-                id: 'some url id',
-                type: 'url',
+                type: 'URL',
                 value: 'some url value',
               }
             ),
@@ -181,8 +176,8 @@ describe('EntityTableCell', () => {
               name: 'some attribute name',
             },
             {
-              id: 'some entity id',
-              type: 'entity',
+              value: 'some entity id',
+              type: 'ENTITY',
               name: 'some entity name',
             }
           ),
@@ -210,9 +205,9 @@ describe('EntityTableCell', () => {
                 name: 'some attribute name',
               },
               {
-                id: 'some image id',
-                type: 'image',
-                value: 'some image value',
+                type: 'IMAGE',
+                value: 'id',
+                image: 'some image value',
               }
             ),
           ],
@@ -226,9 +221,9 @@ describe('EntityTableCell', () => {
               name: 'some attribute name',
             },
             {
-              id: 'some image id',
-              type: 'image',
-              value: 'some image value',
+              type: 'IMAGE',
+              value: 'id',
+              image: 'some image value',
             }
           ),
         ]}

@@ -1,73 +1,117 @@
-import {
-  CreateTripleAction as CreateTripleActionSchema,
-  DeleteTripleAction as DeleteTripleActionSchema,
-} from '@geogenesis/action-schema';
-import { ProposalStatus } from '@geogenesis/sdk';
+import { ProposalStatus, ProposalType, SYSTEM_IDS } from '@geogenesis/sdk';
+
+import { SubstreamEntity } from './io/subgraph/network-local-mapping';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type TripleValueType = 'number' | 'string' | 'entity' | 'image' | 'date' | 'url';
+export type ValueType =
+  | 'TEXT'
+  | 'NUMBER'
+  | 'ENTITY'
+  | 'COLLECTION'
+  | 'CHECKBOX'
+  | 'URL'
+  | 'TIME'
+  // IMAGE is only a value type in the web app. It's modeled as an Entity on the server,
+  // but we create a "helper" value type to map the contents of the image to a more
+  // ergnomic way of rendering it.
+  | 'IMAGE';
 
-export type NumberValue = {
-  type: 'number';
-  id: string;
+export type AppValue = {
+  type: 'TEXT' | 'NUMBER' | 'URL' | 'TIME';
   value: string;
 };
 
-export type StringValue = {
-  type: 'string';
-  id: string;
+export type AppEntityValue = {
+  type: 'ENTITY';
   value: string;
-};
-
-export type EntityValue = {
-  type: 'entity';
-  id: string;
   name: string | null;
 };
 
-export type ImageValue = {
-  type: 'image';
-  id: string;
-  value: string;
+// Images are stored as an entity instead of the actual image resource url.
+// This is so we can add additional metadata about the image to the entity
+// representing the image, e.g., image type, dimensions, etc.
+//
+// In the app we want to be able to easily render the actual image contents
+// so we store it as `.image` on the value itself. At publish time this
+// helper property is ignored in favor of just the entity's id which is
+// stored in the `value` property.
+export type AppImageValue = {
+  type: 'IMAGE';
+  value: string; // id of the entity that stores the image source
+  image: string; // the image source itself
 };
 
-export type DateValue = {
-  type: 'date';
-  id: string;
+export type AppCollectionValue = {
+  type: 'COLLECTION';
   value: string;
+  items: CollectionItem[];
 };
 
-export type UrlValue = {
-  type: 'url';
-  id: string;
-  value: string;
+export type AppCheckboxValue = {
+  type: 'CHECKBOX';
+  value: string; // @TODO: Really it's a boolean
 };
 
-export type Value = NumberValue | StringValue | EntityValue | ImageValue | DateValue | UrlValue;
+export type Value = AppEntityValue | AppCollectionValue | AppCheckboxValue | AppImageValue | AppValue;
+
+export type SetTripleAppOp = {
+  type: 'SET_TRIPLE';
+  id: string;
+  attributeId: string;
+  entityId: string;
+  attributeName: string | null;
+  entityName: string | null;
+  value: Value;
+};
+
+export type DeleteTripleAppOp = {
+  type: 'DELETE_TRIPLE';
+  id: string;
+  attributeId: string;
+  entityId: string;
+  attributeName: string | null;
+  entityName: string | null;
+  value: Value;
+};
+
+export type AppOp = SetTripleAppOp | DeleteTripleAppOp;
 
 export type Triple = {
-  id: string;
-  entityId: string;
-  entityName: string | null;
-  attributeId: string;
-  attributeName: string | null;
-  value: Value;
   space: string;
+  entityId: string;
+  attributeId: string;
+  value: Value;
+
+  entityName: string | null;
+  attributeName: string | null;
+
+  // We have a set of application-specific metadata that we attach to each local version of a triple.
+  id?: string; // `${spaceId}:${entityId}:${attributeId}`
   placeholder?: boolean;
+  // We keep published triples optimistically in the store. It can take a while for the blockchain
+  // to process our transaction, then a few seconds for the subgraph to pick it up and index it.
+  // We keep the published triples so we can continue to render them locally while the backend
+  // catches up.
+  hasBeenPublished?: boolean;
+  timestamp?: string; // ISO-8601
+  isDeleted?: boolean;
 };
 
 export type SpaceConfigEntity = Entity & {
+  spaceId: string;
   image: string;
 };
 
 export type Space = {
   id: string;
   isRootSpace: boolean;
+  mainVotingPluginAddress: string | null;
+  memberAccessPluginAddress: string;
+  spacePluginAddress: string;
   editors: string[];
-  editorControllers: string[];
-  admins: string[];
+  members: string[];
   spaceConfig: SpaceConfigEntity | null;
   createdAtBlock: string;
 };
@@ -108,35 +152,27 @@ export type FilterClause = {
 
 export type FilterState = FilterClause[];
 
-export type CreateTripleAction = CreateTripleActionSchema & Identifiable & Triple & Publishable;
-export type DeleteTripleAction = DeleteTripleActionSchema & Identifiable & Triple & Publishable;
+export type ValueTypeId =
+  | typeof SYSTEM_IDS.TEXT
+  | typeof SYSTEM_IDS.RELATION
+  | typeof SYSTEM_IDS.IMAGE
+  | typeof SYSTEM_IDS.DATE
+  | typeof SYSTEM_IDS.WEB_URL;
 
-export type EditTripleAction = {
-  type: 'editTriple';
-  before: DeleteTripleAction;
-  after: CreateTripleAction;
-} & Publishable &
-  Identifiable;
-
-// We associate an ID with actions locally so we can diff and merge them as they change locally.
-type Identifiable = {
-  id: string;
-};
-
-// We keep published actions optimistically in the store. It can take a while for the blockchain
-// to process our transaction, then a few seconds for the subgraph to pick it up and index it.
-// We keep the published actions so we can continue to render them locally while the backend catches up.
-type Publishable = {
-  hasBeenPublished?: boolean;
-};
-
-export type Action = CreateTripleAction | DeleteTripleAction | EditTripleAction;
+// export type Schema = {
+//   id: string;
+//   name: string | null;
+//   valueType: {
+//     id: string;
+//     name: string | null;
+//   };
+// };
 
 export type Entity = {
   id: string;
   name: string | null;
   description: string | null;
-  types: EntityType[];
+  types: EntitySearchResult[];
   triples: Triple[];
   nameTripleSpaces?: string[];
 };
@@ -147,7 +183,7 @@ export type GeoType = {
   space: string;
 };
 
-export type EntityType = {
+export type EntitySearchResult = {
   id: string;
   name: string | null;
 };
@@ -168,12 +204,18 @@ export interface Cell {
 export type Row = Record<string, Cell>;
 
 export type Vote = {
-  vote: 'YES' | 'NO';
-  accountId: string;
+  vote: 'ACCEPT' | 'REJECT';
+  account: {
+    id: string;
+    geoProfiles: { nodes: SubstreamEntity[] };
+    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
+  };
+  voter: Profile;
 };
 
 export type Proposal = {
   id: string;
+  type: ProposalType;
   onchainProposalId: string;
   name: string | null;
   description: string | null;
@@ -214,7 +256,7 @@ export type ProposedVersion = {
   createdAt: number;
   createdAtBlock: string;
   space: SpaceWithMetadata;
-  actions: Action[];
+  ops: AppOp[];
   entity: {
     id: string;
     name: string;
@@ -246,17 +288,36 @@ export type RelationValueType = {
 
 export type RelationValueTypesByAttributeId = Record<string, Array<RelationValueType>>;
 
-export type TripleWithStringValue = OmitStrict<Triple, 'value'> & { value: StringValue };
-export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & { value: EntityValue };
-export type TripleWithImageValue = OmitStrict<Triple, 'value'> & { value: ImageValue };
-export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: DateValue };
-export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: UrlValue };
+export type TripleWithStringValue = OmitStrict<Triple, 'value'> & { value: Value };
+export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & { value: AppEntityValue };
+export type TripleWithImageValue = OmitStrict<Triple, 'value'> & { value: Value };
+export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: Value };
+export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: Value };
+export type TripleWithCollectionValue = OmitStrict<Triple, 'value'> & { value: AppCollectionValue };
 
 export type SpaceId = string;
-export type SpaceActions = Record<SpaceId, Action[]>;
+export type SpaceTriples = Record<SpaceId, Triple[]>;
 
 export type EntityId = string;
 export type AttributeId = string;
 export type EntityActions = Record<EntityId, Record<AttributeId, Triple>>;
 
 export type SpaceType = 'default' | 'company' | 'nonprofit';
+
+export type CollectionItem = {
+  id: string; // id of the collection item entity itself
+  collectionId: string; // pointing to the collection referenced by the collection item
+  entity: {
+    // pointing to the entity referenced by the collection item
+    id: string;
+    name: string | null;
+    types: string[];
+  };
+  value: {
+    type: 'IMAGE' | 'ENTITY';
+    // either the name of the thing we're rendering or the image or null in the  case that
+    // it's an entity value type but does not have a name
+    value: string | null;
+  };
+  index: string; // the order of the item in the list
+};

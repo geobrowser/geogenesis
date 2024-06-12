@@ -1,8 +1,8 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { TripleValueType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { ValueType as TripleValueType } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 import { valueTypes } from '~/core/value-types';
 
 import { SmallButton } from '~/design-system/button';
@@ -33,18 +33,18 @@ export function TableBlockEditableFilters() {
     },
     ...columns
       .map(c => {
-        const maybeValueType = Entity.valueTypeId(c.triples);
+        const maybeValueType = Entities.valueTypeId(c.triples);
 
         return {
           columnId: c.id,
-          columnName: Entity.name(c.triples) ?? '',
-          valueType: maybeValueType ? valueTypes[maybeValueType] : 'string',
+          columnName: Entities.name(c.triples) ?? '',
+          valueType: maybeValueType ? valueTypes[maybeValueType] : 'TEXT',
           value: '',
           valueName: null,
         };
       })
       // Filter out any columns with names and any columns that are not entity or string value types
-      .flatMap(c => (c.columnName !== '' && (c.valueType === 'entity' || c.valueType === 'string') ? [c] : [])),
+      .flatMap(c => (c.columnName !== '' && (c.valueType === 'ENTITY' || c.valueType === 'TEXT') ? [c] : [])),
   ];
 
   const onCreateFilter = ({

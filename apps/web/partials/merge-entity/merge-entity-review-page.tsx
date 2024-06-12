@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 
 import { Triple } from '~/core/types';
@@ -35,11 +35,11 @@ export function MergeEntityReviewPage({
   const sortedTriples = sortEntityPageTriples(triples, []);
 
   return (
-    <div className="rounded border border-grey-02 shadow-button grow">
+    <div className="grow rounded border border-grey-02 shadow-button">
       <div
         className={cx(
           mergedEntityId === entityId ? 'bg-white' : 'bg-grey-01 opacity-70',
-          'p-5 pb-6 rounded-t border-b border-grey-02'
+          'rounded-t border-b border-grey-02 p-5 pb-6'
         )}
       >
         <div className="flex flex-row items-center justify-between">
@@ -49,16 +49,16 @@ export function MergeEntityReviewPage({
           <div className="flex flex-row items-center gap-2">
             <Text variant="metadataMedium">Merge using this ID</Text>
 
-            <div className="flex gap-2 relative">
+            <div className="relative flex gap-2">
               <input
                 type="checkbox"
-                className="relative peer shrink-0 appearance-none w-6 h-6 border-2 border-grey-02 rounded-sm bg-white checked:accent-white checked:text-text checked:border-2"
+                className="peer relative h-6 w-6 shrink-0 appearance-none rounded-sm border-2 border-grey-02 bg-white checked:border-2 checked:text-text checked:accent-white"
                 checked={mergedEntityId === entityId}
                 onChange={() => setMergedEntityId(entityId)}
               />
 
               <svg
-                className="absolute w-6 h-6 hidden peer-checked:block p-1.5 pointer-events-none"
+                className="pointer-events-none absolute hidden h-6 w-6 p-1.5 peer-checked:block"
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="none"
@@ -102,33 +102,28 @@ function EntityReviewAttributes({
 
   const tripleToEditableField = (triple: Triple) => {
     switch (triple.value.type) {
-      case 'string':
+      case 'TEXT':
         return (
-          <Text key={`string-${triple.attributeId}-${triple.value.id}-${triple.id}`} as="p">
+          <Text key={`string-${triple.attributeId}-${triple.id}`} as="p">
             {triple.value.value}
           </Text>
         );
-      case 'image':
-        return (
-          <ImageZoom
-            key={`image-${triple.attributeId}-${triple.value.id}-${triple.id}`}
-            imageSrc={triple.value.value}
-          />
-        );
-      case 'date':
+      case 'IMAGE':
+        return <ImageZoom key={`image-${triple.attributeId}-${triple.id}`} imageSrc={triple.value.image} />;
+      case 'TIME':
         return <DateField isEditing={false} value={triple.value.value} />;
-      case 'url':
+      case 'URL':
         return <WebUrlField isEditing={false} value={triple.value.value} />;
-      case 'entity': {
+      case 'ENTITY': {
         return (
-          <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">
-            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.id)}>
-              {triple.value.name || triple.value.id}
+          <div key={`entity-${triple.attributeId}-${triple.value.value}-${triple.id}`} className="mt-1">
+            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.value)}>
+              {triple.value.name || triple.value.value}
             </LinkableChip>
           </div>
         );
       }
-      case 'number':
+      case 'NUMBER':
         return null;
     }
   };
@@ -151,7 +146,7 @@ function EntityReviewAttributes({
             key={`${entityId}-${attributeId}-${index}`}
             className={cx(
               isSelected ? 'bg-white' : 'bg-grey-01 opacity-70',
-              'break-words last:rounded-b border-b border-grey-02 last:border-b-0' // no duplicate bottom-borders for the last item
+              'break-words border-b border-grey-02 last:rounded-b last:border-b-0' // no duplicate bottom-borders for the last item
             )}
           >
             <div className="p-5">
@@ -159,15 +154,15 @@ function EntityReviewAttributes({
                 <Text as="p" variant="bodySemibold">
                   {triples[0].attributeName || attributeId}
                 </Text>
-                <div className="flex gap-2 relative">
+                <div className="relative flex gap-2">
                   <input
                     type="checkbox"
-                    className="relative peer shrink-0 appearance-none w-6 h-6 border-2 border-grey-02 rounded-sm bg-white checked:accent-white checked:text-text checked:border-2"
+                    className="peer relative h-6 w-6 shrink-0 appearance-none rounded-sm border-2 border-grey-02 bg-white checked:border-2 checked:text-text checked:accent-white"
                     checked={isSelected}
                     onChange={() => onSelect({ attributeId: attributeId, selectedTriples: triples })}
                   />
                   <svg
-                    className="absolute w-6 h-6 hidden peer-checked:block p-1.5 pointer-events-none"
+                    className="pointer-events-none absolute hidden h-6 w-6 p-1.5 peer-checked:block"
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
                     fill="none"

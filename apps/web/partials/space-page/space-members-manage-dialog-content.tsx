@@ -8,12 +8,16 @@ import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 
 import { MemberRow } from './space-member-row';
+import { useProposeToRemoveMember } from './use-propose-to-remove-member';
 
 interface Props {
   members: OmitStrict<Profile, 'coverUrl'>[];
+  memberAccessPluginAddress: string;
 }
 
-export function SpaceMembersManageDialogContent({ members }: Props) {
+export function SpaceMembersManageDialogContent({ members, memberAccessPluginAddress }: Props) {
+  const { proposeToRemoveMember } = useProposeToRemoveMember(memberAccessPluginAddress);
+
   const [query, setQuery] = React.useState('');
 
   const filteredMembers = React.useMemo(() => {
@@ -25,10 +29,10 @@ export function SpaceMembersManageDialogContent({ members }: Props) {
       <Input withSearchIcon onChange={e => setQuery(e.currentTarget.value)} />
 
       <div className="divide-y divide-grey-02">
-        {filteredMembers.map(e => (
-          <div key={e.id} className="flex items-center justify-between">
-            <MemberRow editor={e} />
-            <SmallButton>Propose to remove</SmallButton>
+        {filteredMembers.map(m => (
+          <div key={m.id} className="flex items-center justify-between">
+            <MemberRow editor={m} />
+            <SmallButton onClick={() => proposeToRemoveMember(m.address)}>Propose to remove</SmallButton>
           </div>
         ))}
       </div>

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Column, Entity, Triple as ITriple, Row } from '~/core/types';
 
@@ -41,9 +41,9 @@ export function columnsFromLocalChanges(
   );
 
   const newColumns: Column[] = triplesThatAreAttributes.map(triple => ({
-    id: triple.value.id,
+    id: triple.value.value,
     triples: localTriples.filter(t => {
-      return t.entityId === triple.value.id;
+      return t.entityId === triple.value.value;
     }),
   }));
 

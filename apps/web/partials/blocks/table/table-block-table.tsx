@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
 import {
   ColumnDef,
@@ -22,9 +22,9 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Cell, Column, Row } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
-import { Triple } from '~/core/utils/triple';
+import { Cell, Column, Row, ValueTypeId } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
+import { Triples } from '~/core/utils/triples';
 import { NavUtils } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -59,11 +59,11 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedC
               unpublishedColumns={unpublishedColumns}
               column={column}
               entityId={column.id}
-              spaceId={Entity.nameTriple(column.triples)?.space}
+              spaceId={Entities.nameTriple(column.triples)?.space}
             />
           </div>
         ) : (
-          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
+          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entities.name(column.triples)}</Text>
         );
       },
       size: columnSize ? (columnSize < 150 ? 150 : columnSize) : 150,
@@ -81,7 +81,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { create, update, remove, actions } = useActionsStore();
+    const { upsert, remove, actions, upsertMany } = useActionsStore();
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -97,7 +97,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const cellTriples = pipe(
       actions[space],
-      actions => Triple.fromActions(actions, cellData.triples),
+      // @TODO(migration): Each cell only has one triple
+      actions => Triples.merge(actions, cellData.triples),
       A.filter(triple => {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;
@@ -115,11 +116,11 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           // cell has the correct data, but the value of the name is the value of the last
           // cell in the previous selectedType. For now we can use a key to force the
           // cell to re-mount when the selectedType and name changes.
-          key={Entity.name(cellTriples)}
+          key={Entities.name(cellTriples)}
           triples={cellTriples}
           cell={cellData}
-          create={create}
-          update={update}
+          upsert={upsert}
+          upsertMany={upsertMany}
           remove={remove}
           space={space}
           valueType={valueType}
@@ -130,7 +131,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     } else if (cellData && !isPlaceholderCell) {
       return (
         <EntityTableCell
-          key={Entity.name(cellTriples)}
+          key={Entities.name(cellTriples)}
           cell={cellData}
           triples={cellTriples}
           space={space}
@@ -256,7 +257,7 @@ export const TableBlockTable = ({
                   {cells.map((cell, index: number) => {
                     const cellId = `${row.original.id}-${cell.column.id}`;
                     const firstTriple = cell.getValue<Cell>()?.triples[0];
-                    const isExpandable = firstTriple && firstTriple.value.type === 'string';
+                    const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
                     const isShown = shownIndexes.includes(index);
 
                     return (

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { redirect } from 'next/navigation';
 
 import { Suspense } from 'react';
@@ -7,9 +7,8 @@ import { Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -24,6 +23,8 @@ import {
 } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
+
+import { cachedFetchEntity } from './cached-fetch-entity';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -50,9 +51,9 @@ export default async function DefaultEntityPage({
   const decodedId = decodeURIComponent(params.entityId);
   const props = await getData(params.id, decodedId);
 
-  const avatarUrl = Entity.avatar(props.triples) ?? props.serverAvatarUrl;
-  const coverUrl = Entity.cover(props.triples) ?? props.serverCoverUrl;
-  const types = Entity.types(props.triples);
+  const avatarUrl = Entities.avatar(props.triples) ?? props.serverAvatarUrl;
+  const coverUrl = Entities.cover(props.triples) ?? props.serverCoverUrl;
+  const types = Entities.types(props.triples);
 
   const typeId = searchParams.typeId ?? null;
 
@@ -66,6 +67,8 @@ export default async function DefaultEntityPage({
         spaceId={props.spaceId}
         initialBlockIdsTriple={props.blockIdsTriple}
         initialBlockTriples={props.blockTriples}
+        initialBlockCollectionItems={props.blockCollectionItems}
+        initialBlockCollectionItemTriples={props.blockCollectionItemTriples}
       >
         <MoveEntityProvider>
           {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
@@ -75,7 +78,7 @@ export default async function DefaultEntityPage({
             )}
             {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />}
             {showSpacer && <Spacer height={40} />}
-            <Editor shouldHandleOwnSpacing />
+            <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
             <ToggleEntityPage {...props} typeId={typeId} filters={filters} />
             <Spacer height={40} />
             <Suspense fallback={<EntityReferencedByLoading />}>
@@ -113,31 +116,43 @@ const getData = async (spaceId: string, entityId: string) => {
     }
   }
 
-  const serverAvatarUrl = Entity.avatar(entity?.triples);
-  const serverCoverUrl = Entity.cover(entity?.triples);
+  const serverAvatarUrl = Entities.avatar(entity?.triples);
+  const serverCoverUrl = Entities.cover(entity?.triples);
 
-  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+  const blockIdsTriple =
+    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
 
-  const blockTriples = (
-    await Promise.all(
+  const blockCollectionItems =
+    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
+
+  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
+
+  const [blockTriples, collectionItemTriples] = await Promise.all([
+    Promise.all(
       blockIds.map(blockId => {
-        return Subgraph.fetchEntity({ id: blockId });
+        return cachedFetchEntity(blockId);
       })
-    )
-  ).flatMap(entity => entity?.triples ?? []);
+    ),
+    Promise.all(
+      blockCollectionItems.map(item => {
+        return cachedFetchEntity(item.id);
+      })
+    ),
+  ]);
 
   return {
     triples: entity?.triples ?? [],
     id: entityId,
     name: entity?.name ?? null,
-    description: Entity.description(entity?.triples ?? []),
+    description: Entities.description(entity?.triples ?? []),
     spaceId,
     serverAvatarUrl,
     serverCoverUrl,
 
     // For entity page editor
     blockIdsTriple,
-    blockTriples,
+    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
+    blockCollectionItems,
+    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
   };
 };

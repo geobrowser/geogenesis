@@ -1,11 +1,11 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { pipe } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
 
 import { Services } from '../services';
-import { Action as IAction, Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
-import { Triple } from '../utils/triple';
-import { Value } from '../utils/value';
+import { Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
+import { Triples } from '../utils/triples';
+import { Values } from '../utils/value';
 import { useActionsStore } from './use-actions-store';
 
 /**
@@ -14,22 +14,22 @@ import { useActionsStore } from './use-actions-store';
  * expects to consume.
  */
 export const mapMergedTriplesToRelationValueTypes = (
-  actions: Array<IAction>,
+  triples: Array<ITriple>,
   relationTypeTriples: Array<ITriple>
 ): RelationValueTypesByAttributeId => {
   // We need to re-merge local actions with the server triples since we don't re-run RQ in useConfiguredAttributeRelationTypes
   // when actions change.
-  const mergedTriples = Triple.fromActions(actions, relationTypeTriples);
+  const mergedTriples = Triples.merge(triples, relationTypeTriples);
 
   return pipe(
     mergedTriples,
-    triples => triples.filter(Value.isRelationValueType),
+    triples => triples.filter(Values.isRelationValueType),
     triples =>
       triples.reduce<RelationValueTypesByAttributeId>((acc, relationType) => {
         if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
 
         acc[relationType.entityId].push({
-          typeId: relationType.value.id,
+          typeId: relationType.value.value,
           typeName: relationType.value.name,
           spaceIdOfAttribute: relationType.space,
         });

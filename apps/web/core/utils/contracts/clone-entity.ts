@@ -1,10 +1,14 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { Op, SYSTEM_IDS, createCollection, createCollectionItem } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
-import { CreateTripleAction, Entity as EntityType, Triple as TripleType, Value as ValueType } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
-import { Value } from '~/core/utils/value';
+import { getBlocksCollectionData, getCollectionItemsFromBlocksTriple } from '~/core/io/subgraph/network-local-mapping';
+import { Entity as EntityType, Triple as TripleType, Value as ValueType } from '~/core/types';
+import { Triples } from '~/core/utils/triples';
+import { Values } from '~/core/utils/value';
+
+import { Collections } from '../collections';
+import { groupBy } from '../utils';
 
 type Options = {
   oldEntityId: string;
@@ -33,24 +37,23 @@ export const cloneEntity = async (options: Options) => {
   );
 
   newTriples.push(
-    Triple.withId({
+    Triples.withId({
       entityId: newEntityId,
       entityName: newEntityName,
       attributeId: SYSTEM_IDS.NAME,
       attributeName: 'Name',
       space: spaceId,
       value: {
-        type: 'string',
+        type: 'TEXT',
         value: newEntityName,
-        id: ID.createValueId(),
       },
     })
   );
 
   triplesToClone.forEach(triple => {
-    if (triple.value.type === 'entity') {
+    if (triple.value.type === 'ENTITY') {
       newTriples.push(
-        Triple.withId({
+        Triples.withId({
           ...triple,
           space: spaceId,
           entityName: newEntityName,
@@ -59,45 +62,73 @@ export const cloneEntity = async (options: Options) => {
       );
     } else {
       newTriples.push(
-        Triple.withId({
+        Triples.withId({
           ...triple,
           space: spaceId,
           entityName: newEntityName,
           entityId: newEntityId,
-          value: {
-            ...triple.value,
-            id: ID.createValueId(),
-          },
+          value: triple.value,
         })
       );
     }
   });
 
-  // @TODO(migration)
-  // migrate to collection
-  const blockIdsTriple =
-    oldEntity.triples.find((triple: TripleType) => triple.attributeId === SYSTEM_IDS.BLOCKS) ?? null;
+  const { blockCollectionItems, blockIdsTriple } = getCollectionItemsFromBlocksTriple(oldEntity);
 
   if (blockIdsTriple) {
-    const blockIds = blockIdsTriple ? (JSON.parse(Value.stringValue(blockIdsTriple) || '[]') as string[]) : [];
+    const blockIds = blockCollectionItems.map(b => b.entity.id);
 
     const newBlockIds = blockIds.map(() => {
       const newBlockId = ID.createEntityId();
       return newBlockId;
     });
 
-    const newBlockIdsTriple = Triple.withId({
+    // 1. Create collection
+    const collectionOp = createCollection();
+
+    // Create the collection entity by adding the collection type
+    newTriples.push({
+      space: spaceId,
+      attributeId: collectionOp.payload.attributeId,
+      entityId: collectionOp.payload.entityId,
+      entityName: null,
+      attributeName: 'Types',
+      value: {
+        // @TODO(migration): This might be a collection in the future which
+        // would create a recursive collection creation loop
+        type: 'ENTITY',
+        value: collectionOp.payload.value.value,
+        name: 'Collection',
+      },
+    });
+
+    // 2. Create collection item for each block
+    const collectionItemsTriples = newBlockIds
+      .map(id =>
+        Collections.createCollectionItemTriples({
+          collectionId: collectionOp.payload.entityId,
+          entityId: id,
+          spaceId,
+        })
+      )
+      .flat();
+
+    newTriples.push(...collectionItemsTriples);
+
+    const newBlockIdsTriple = Triples.withId({
       attributeId: SYSTEM_IDS.BLOCKS,
       attributeName: 'Blocks',
       space: spaceId,
       entityId: newEntityId,
       entityName: newEntityName,
       value: {
-        id: ID.createValueId(),
-        type: 'string',
-        value: JSON.stringify(newBlockIds),
+        type: 'COLLECTION',
+        value: collectionOp.payload.entityId,
+        items: Collections.itemFromTriples(groupBy(collectionItemsTriples, c => c.entityId)),
       },
     });
+
+    newTriples.push(newBlockIdsTriple);
 
     const blockEntities = await Promise.all(
       blockIds.map((blockId: string) => {
@@ -113,19 +144,18 @@ export const cloneEntity = async (options: Options) => {
       blockEntity.triples.forEach((triple: TripleType) => {
         if (triple.attributeId === SYSTEM_IDS.PARENT_ENTITY) {
           newBlockTriples.push(
-            Triple.withId({
+            Triples.withId({
               ...triple,
               space: spaceId,
               entityId: newBlockIds[index],
               value: {
-                ...triple.value,
-                type: 'entity',
+                type: 'ENTITY',
                 name: newEntityName,
-                id: newEntityId,
-              } as ValueType,
+                value: newEntityId,
+              },
             })
           );
-        } else if (triple.attributeId === SYSTEM_IDS.FILTER && triple.value.type === 'string') {
+        } else if (triple.attributeId === SYSTEM_IDS.FILTER && triple.value.type === 'TEXT') {
           let newValue = triple.value.value;
 
           const spaceRegex = /entityOf_\s*:\s*{\s*space\s*:\s*"([^"]*)"\s*}/;
@@ -137,20 +167,19 @@ export const cloneEntity = async (options: Options) => {
           }
 
           newBlockTriples.push(
-            Triple.withId({
+            Triples.withId({
               ...triple,
               space: spaceId,
               entityId: newBlockIds[index],
               value: {
-                type: 'string',
+                type: 'TEXT',
                 value: newValue,
-                id: ID.createValueId(),
               },
             })
           );
-        } else if (triple.value.type === 'entity') {
+        } else if (triple.value.type === 'ENTITY') {
           newBlockTriples.push(
-            Triple.withId({
+            Triples.withId({
               ...triple,
               space: spaceId,
               entityId: newBlockIds[index],
@@ -158,14 +187,11 @@ export const cloneEntity = async (options: Options) => {
           );
         } else {
           newBlockTriples.push(
-            Triple.withId({
+            Triples.withId({
               ...triple,
               space: spaceId,
               entityId: newBlockIds[index],
-              value: {
-                ...triple.value,
-                id: ID.createValueId(),
-              },
+              value: triple.value,
             })
           );
         }
@@ -173,18 +199,9 @@ export const cloneEntity = async (options: Options) => {
     });
 
     newTriples.push(...newBlockTriples);
-    newTriples.push(newBlockIdsTriple);
   }
 
-  // @TODO(migration)
-  // migrate all actions to ops in new data model
-  const actions: Array<CreateTripleAction> = [];
-
-  newTriples.forEach(triple => {
-    actions.push({ type: 'createTriple', ...triple });
-  });
-
-  return actions;
+  return newTriples;
 };
 
 const SKIPPED_ATTRIBUTES = [SYSTEM_IDS.NAME, SYSTEM_IDS.AVATAR_ATTRIBUTE, SYSTEM_IDS.BLOCKS];

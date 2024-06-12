@@ -13,7 +13,7 @@ interface Props {
 }
 
 export const AddNewColumn = memo(function AddNewColumn({ selectedType, space }: Props) {
-  const { update, create, remove } = useActionsStore();
+  const { upsert, remove, upsertMany } = useActionsStore();
 
   const send = useEditEvents({
     context: {
@@ -22,8 +22,8 @@ export const AddNewColumn = memo(function AddNewColumn({ selectedType, space }: 
       entityName: selectedType.entityName || '',
     },
     api: {
-      create,
-      update,
+      upsert,
+      upsertMany,
       remove,
     },
   });

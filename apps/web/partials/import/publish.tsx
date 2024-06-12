@@ -8,7 +8,7 @@ import { useWalletClient } from 'wagmi';
 
 import { useBulkPublish } from '~/core/hooks/use-publish';
 import type { Space } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
@@ -17,7 +17,7 @@ import { Warning } from '~/design-system/icons/warning';
 import { SlideUp } from '~/design-system/slide-up';
 
 import { DateTimeDiff, useChanges } from '../review/review';
-import { actionsAtom, actionsCountAtom, entityCountAtom, entityCountByTypeAtom, publishAtom, stepAtom } from './atoms';
+import { actionsCountAtom, entityCountAtom, entityCountByTypeAtom, publishAtom, stepAtom, triplesAtom } from './atoms';
 
 type PublishProps = {
   spaceId: string;
@@ -40,15 +40,15 @@ type PublishImportProps = {
 };
 
 const PublishImport = ({ spaceId, space }: PublishImportProps) => {
-  const actions = useAtomValue(actionsAtom);
+  const triples = useAtomValue(triplesAtom);
   const actionsCount = useAtomValue(actionsCountAtom);
   const entityCount = useAtomValue(entityCountAtom);
   const entityCountByType = useAtomValue(entityCountByTypeAtom);
   const setStep = useSetAtom(stepAtom);
   const setIsPublishOpen = useSetAtom(publishAtom);
 
-  const spaceName = Entity.name(space?.spaceConfig?.triples ?? []);
-  const spaceAvatar = Entity.avatar(space?.spaceConfig?.triples ?? []);
+  const spaceName = Entities.name(space?.spaceConfig?.triples ?? []);
+  const spaceAvatar = Entities.avatar(space?.spaceConfig?.triples ?? []);
 
   const [proposalName, setProposalName] = useState('');
   const isReadyToPublish = proposalName.length > 3;
@@ -61,7 +61,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
 
     try {
       await makeBulkProposal({
-        actions,
+        triples: triples,
         spaceId,
         name: proposalName,
         onChangePublishState: reviewState => console.log(reviewState),
@@ -74,7 +74,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
     }
   };
 
-  const [data, isLoading] = useChanges(actions.slice(0, 150), spaceId);
+  const [data, isLoading] = useChanges(triples.slice(0, 150), spaceId);
 
   if (isLoading || !data) {
     return null;

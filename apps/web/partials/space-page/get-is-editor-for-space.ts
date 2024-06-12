@@ -1,9 +1,9 @@
 import { cache } from 'react';
 
-import { Subgraph } from '~/core/io';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 export const getIsEditorForSpace = cache(async (spaceId: string, connectedAddress?: string): Promise<boolean> => {
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
     throw new Error("Space doesn't exist");

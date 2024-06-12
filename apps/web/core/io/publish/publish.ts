@@ -1,26 +1,23 @@
-import { Root } from '@geogenesis/action-schema';
-import { GeoProfileRegistryAbi, SpaceAbi } from '@geogenesis/contracts';
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+import {
+  Op,
+  createSubspaceProposal,
+  getAcceptSubspaceArguments,
+  getProcessGeoProposalArguments,
+  getRemoveSubspaceArguments,
+} from '@geogenesis/sdk';
+import { MainVotingAbi, ProfileRegistryAbi } from '@geogenesis/sdk/abis';
+import { createEditProposal } from '@geogenesis/sdk/proto';
+import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
-import { WalletClient } from 'viem';
 
 import { Config } from 'wagmi';
 import { readContract, simulateContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions';
 
-import { UPLOAD_CHUNK_SIZE } from '~/core/constants';
-
-import { Action, ReviewState } from '../../types';
+import { ReviewState } from '../../types';
 import { Storage } from '../storage';
-
-function getActionFromChangeStatus(action: Action) {
-  switch (action.type) {
-    case 'createTriple':
-    case 'deleteTriple':
-      return [action];
-    case 'editTriple':
-      return [action.before, action.after];
-  }
-}
+import { IStorageClient } from '../storage/storage';
+import { fetchSpace } from '../subgraph';
 
 export class TransactionRevertedError extends Error {
   readonly _tag = 'TransactionRevertedError';
@@ -48,7 +45,7 @@ export class IpfsUploadError extends Error {
 
 export type MakeProposalOptions = {
   walletConfig: Config;
-  actions: Action[];
+  ops: Op[];
   space: string;
   onChangePublishState: (newState: ReviewState) => void;
   name: string;
@@ -57,73 +54,66 @@ export type MakeProposalOptions = {
 
 export async function makeProposal({
   storageClient,
-  actions,
   walletConfig,
+  ops,
   onChangePublishState,
   space,
   name,
 }: MakeProposalOptions) {
   onChangePublishState('publishing-ipfs');
-  const ipfsEffect = Effect.gen(function* (_) {
-    const cids: string[] = [];
+  const maybeSpace = await fetchSpace({ id: space });
 
-    for (let i = 0; i < actions.length; i += UPLOAD_CHUNK_SIZE) {
-      console.log(`Publishing ${i / UPLOAD_CHUNK_SIZE}/${Math.ceil(actions.length / UPLOAD_CHUNK_SIZE)}`);
+  if (!maybeSpace || !maybeSpace.mainVotingPluginAddress) {
+    return;
+  }
 
-      const chunk = actions.slice(i, i + UPLOAD_CHUNK_SIZE);
-
-      const root: Root = {
-        type: 'root',
-        version: '0.0.1',
-        actions: chunk.flatMap(getActionFromChangeStatus),
-        name,
-      };
-
-      const cidString = yield* _(
-        Effect.tryPromise({
-          try: () => storageClient.uploadObject(root),
-          catch: error => new IpfsUploadError(String(error)),
-        })
-      );
-
-      if (!cidString.startsWith('Qm')) {
-        return yield* _(
-          Effect.fail(
-            new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.')
-          )
-        );
-      }
-
-      cids.push(`ipfs://${cidString}`);
-    }
-
-    return cids;
-  });
-
-  const prepareTxEffect = (cids: string[]) =>
+  const uploadEffect = Effect.retry(
     Effect.tryPromise({
-      try: () =>
-        simulateContract(walletConfig, {
-          abi: SpaceAbi,
-          address: space as unknown as `0x${string}`,
-          functionName: 'addEntries',
-          args: [cids],
-        }),
-      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
-    });
+      try: async () => {
+        const proposal = createEditProposal({ name, ops, author: walletConfig.account.address });
+        return await storageClient.uploadBinary(proposal);
+      },
+      catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
+    }),
+    Schedule.exponential('100 millis').pipe(Schedule.jittered)
+  );
 
-  const writeTxEffect = Effect.gen(function* (awaited) {
-    const cids = yield* awaited(ipfsEffect);
+  const prepareTxEffect = Effect.gen(function* (_) {
+    const cidString = yield* _(uploadEffect);
 
-    if (cids.some(cid => !cid.startsWith('ipfs://Qm'))) {
-      return yield* awaited(
+    if (!cidString.startsWith('ipfs://Qm')) {
+      return yield* _(
         Effect.fail(
           new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.')
         )
       );
     }
 
-    const contractConfig = yield* awaited(prepareTxEffect(cids));
+    return yield* _(
+      Effect.tryPromise({
+        try: () =>
+          prepareWriteContract({
+            walletClient: wallet,
+            address: maybeSpace.mainVotingPluginAddress as `0x${string}`,
+            abi: MainVotingAbi,
+            functionName: 'createProposal',
+            // @TODO: We should abstract the proposal metadata creation and the proposal
+            // action callback args together somehow since right now you have to sync
+            // them both and ensure you're using the correct functions for each content
+            // proposal type.
+            //
+            // What can happen is that you create a "CONTENT" proposal but pass a callback
+            // action that does some other action like "ADD_SUBSPACE" and it will fail since
+            // the substream won't index a mismatched proposal type and action callback args.
+            args: getProcessGeoProposalArguments(space as `0x${string}`, `ipfs://${cidString}`),
+          }),
+        catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+      })
+    );
+  });
+
+  const writeTxEffect = Effect.gen(function* (awaited) {
+    const contractConfig = yield* awaited(prepareTxEffect);
 
     onChangePublishState('signing-wallet');
 
@@ -176,74 +166,9 @@ export async function makeProposal({
   await Effect.runPromise(publishProgram);
 }
 
-export async function uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string> {
-  const fileUri = await storageClient.uploadFile(file);
-  return fileUri;
-}
-
-export async function getRole(
-  walletConfig: Config,
-  spaceId: string,
-  role: 'EDITOR_ROLE' | 'ADMIN_ROLE' | 'EDITOR_CONTROLLER_ROLE'
-) {
-  const data = (await readContract(walletConfig, {
-    abi: SpaceAbi,
-    address: spaceId as unknown as `0x${string}`,
-    functionName: role,
-  })) as string;
-
-  return data;
-}
-
-export async function grantRole({
-  spaceId,
-  walletConfig,
-  role,
-  userAddress,
-}: {
-  spaceId: string;
-  walletConfig: Config;
-  role: string;
-  userAddress: string;
-}) {
-  const { request } = await simulateContract(walletConfig, {
-    abi: SpaceAbi,
-    address: spaceId as unknown as `0x${string}`,
-    functionName: 'grantRole',
-    args: [role, userAddress],
-  });
-
-  const txHash = await writeContract(walletConfig, request);
-  console.log(`Role granted to ${userAddress}. Transaction hash: ${txHash}`);
-  return txHash;
-}
-
-export async function revokeRole({
-  spaceId,
-  walletConfig,
-  role,
-  userAddress,
-}: {
-  spaceId: string;
-  walletConfig: Config;
-  role: string;
-  userAddress: string;
-}) {
-  const { request } = await simulateContract(walletConfig, {
-    abi: SpaceAbi,
-    address: spaceId as unknown as `0x${string}`,
-    functionName: 'revokeRole',
-    args: [role, userAddress],
-  });
-
-  const txHash = await writeContract(walletConfig, request);
-  console.log(`Role revoked from ${userAddress}. Transaction hash: ${txHash}`);
-  return txHash;
-}
-
-export async function registerGeoProfile(walletConfig: Config, spaceId: `0x${string}`): Promise<string> {
-  const { request, result } = await simulateContract(walletConfig, {
-    abi: GeoProfileRegistryAbi,
+export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${string}`): Promise<string> {
+  const contractConfig = await prepareWriteContract({
+    abi: ProfileRegistryAbi,
     address: SYSTEM_IDS.PROFILE_REGISTRY_ADDRESS,
     functionName: 'registerGeoProfile',
     args: [spaceId],
@@ -255,5 +180,116 @@ export async function registerGeoProfile(walletConfig: Config, spaceId: `0x${str
   });
 
   console.log(`Geo profile created. Transaction hash: ${waited.transactionHash}`);
-  return result as string;
+  // @TODO: Test that this is correct
+  return contractConfig.result.toString();
+}
+
+export async function uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string> {
+  const fileUri = await storageClient.uploadFile(file);
+  return fileUri;
+}
+
+interface ProposeAddSubspaceArgs {
+  wallet: GetWalletClientResult | undefined;
+  storageClient: IStorageClient;
+  // @TODO: Handle adding subspace for spaces with different governance types
+  mainVotingPluginAddress: string | null;
+  spacePluginAddress: string;
+  subspaceAddress: string;
+}
+
+// @TODO: Effectify with error handling and UI states
+export async function proposeAddSubspace({
+  wallet,
+  storageClient,
+  spacePluginAddress,
+  mainVotingPluginAddress,
+  subspaceAddress,
+}: ProposeAddSubspaceArgs) {
+  // @TODO: Handle adding subspace for spaces with different governance types
+  if (!wallet || !mainVotingPluginAddress) {
+    return;
+  }
+
+  const proposal = createSubspaceProposal({
+    name: 'Add subspace',
+    type: 'ADD_SUBSPACE',
+    spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
+  });
+
+  const hash = await storageClient.uploadObject(proposal);
+  const uri = `ipfs://${hash}` as const;
+
+  // @TODO: This will call different functions depending on the type of space we're
+  // in. Additionally, we'll have wrappers for encoding the args that we can call
+  // directly onchain.
+  const config = await simulateContract(wallet, {
+    address: mainVotingPluginAddress as `0x${string}`,
+    abi: MainVotingAbi,
+    functionName: 'createProposal',
+    // @TODO: We should abstract the proposal metadata creation and the proposal
+    // action callback args together somehow since right now you have to sync
+    // them both and ensure you're using the correct functions for each content
+    // proposal type.
+    //
+    // What can happen is that you create a "CONTENT" proposal but pass a callback
+    // action that does some other action like "ADD_SUBSPACE" and it will fail since
+    // the substream won't index a mismatched proposal type and action callback args.
+    args: getAcceptSubspaceArguments({
+      spacePluginAddress: spacePluginAddress as `0x${string}`,
+      ipfsUri: uri,
+      subspaceToAccept: subspaceAddress as `0x${string}`, // Root
+    }),
+  });
+
+  const writeResult = await writeContract(config);
+  console.log('writeResult', writeResult);
+}
+
+// @TODO: Effectify with error handling and UI states
+export async function proposeRemoveSubspace({
+  wallet,
+  storageClient,
+  spacePluginAddress,
+  mainVotingPluginAddress,
+  subspaceAddress,
+}: ProposeAddSubspaceArgs) {
+  // @TODO: Handle adding subspace for spaces with different governance types
+  if (!wallet || !mainVotingPluginAddress) {
+    return;
+  }
+
+  const proposal = createSubspaceProposal({
+    name: 'Remove subspace',
+    type: 'REMOVE_SUBSPACE',
+    spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
+  });
+
+  const hash = await storageClient.uploadObject(proposal);
+  const uri = `ipfs://${hash}` as const;
+
+  // @TODO: This will call different functions depending on the type of space we're
+  // in. Additionally, we'll have wrappers for encoding the args that we can call
+  // directly onchain.
+  const config = await simulateContract(wallet, {
+    address: mainVotingPluginAddress as `0x${string}`,
+    abi: MainVotingAbi,
+    functionName: 'createProposal',
+    // @TODO: We should abstract the proposal metadata creation and the proposal
+    // action callback args together somehow since right now you have to sync
+    // them both and ensure you're using the correct functions for each content
+    // proposal type.
+    //
+    // What can happen is that you create a "CONTENT" proposal but pass a callback
+    // action that does some other action like "ADD_SUBSPACE" and it will fail since
+    // the substream won't index a mismatched proposal type and action callback args.
+    args: getRemoveSubspaceArguments({
+      spacePluginAddress: spacePluginAddress as `0x${string}`,
+      ipfsUri: uri,
+      subspaceToAccept: subspaceAddress as `0x${string}`, // Root
+    }),
+  });
+
+  const writeResult = await writeContract(wallet, config);
+  console.log('writeResult', writeResult);
 }

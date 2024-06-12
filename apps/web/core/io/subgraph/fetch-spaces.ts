@@ -2,65 +2,37 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Space, SpaceConfigEntity } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Space } from '~/core/types';
 
+import { entityFragment, spacePluginsFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 const getFetchSpacesQuery = () => `query {
   spaces {
     nodes {
       id
       isRootSpace
-      spaceAdmins {
-        nodes {
-          accountId
-        }
-      }
+      ${spacePluginsFragment}
+  
       spaceEditors {
         nodes {
           accountId
         }
       }
-      spaceEditorControllers {
+  
+      spaceMembers {
         nodes {
           accountId
         }
       }
+  
       createdAtBlock
-      
+  
       metadata {
         nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
+          ${entityFragment}
         }
       }
     }
@@ -72,9 +44,11 @@ interface NetworkResult {
     nodes: {
       id: string;
       isRootSpace: boolean;
-      spaceAdmins: { nodes: { accountId: string }[] };
+      mainVotingPluginAddress: string | null;
+      memberAccessPluginAddress: string;
+      spacePluginAddress: string;
       spaceEditors: { nodes: { accountId: string }[] };
-      spaceEditorControllers: { nodes: { accountId: string }[] };
+      spaceMembers: { nodes: { accountId: string }[] };
       createdAtBlock: string;
       metadata: { nodes: SubstreamEntity[] };
     }[];
@@ -83,7 +57,7 @@ interface NetworkResult {
 
 export async function fetchSpaces() {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
@@ -134,29 +108,19 @@ export async function fetchSpaces() {
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaces.nodes.map((space): Space => {
-    const spaceConfig = space.metadata.nodes[0] as SubstreamEntity | undefined;
-    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
-
-    const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
-      ? {
-          id: spaceConfig.id,
-          name: spaceConfig.name,
-          description: null,
-          image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-          triples: spaceConfigTriples,
-          types: Entity.types(spaceConfigTriples),
-          nameTripleSpaces: Entity.nameTriples(spaceConfigTriples).map(t => t.space),
-        }
-      : null;
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.metadata.nodes[0]);
 
     return {
       id: space.id,
       isRootSpace: space.isRootSpace,
-      admins: space.spaceAdmins.nodes.map(account => account.accountId),
-      editorControllers: space.spaceEditorControllers.nodes.map(account => account.accountId),
       editors: space.spaceEditors.nodes.map(account => account.accountId),
+      members: space.spaceMembers.nodes.map(account => account.accountId),
       spaceConfig: spaceConfigWithImage,
       createdAtBlock: space.createdAtBlock,
+
+      mainVotingPluginAddress: space.mainVotingPluginAddress,
+      memberAccessPluginAddress: space.memberAccessPluginAddress,
+      spacePluginAddress: space.spacePluginAddress,
     };
   });
 

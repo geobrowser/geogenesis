@@ -1,8 +1,13 @@
 import { PluginInstallItem } from '@aragon/sdk-client-common';
 import { VotingMode } from '@geogenesis/sdk';
+import {
+  GOVERNANCE_PLUGIN_REPO_ADDRESS,
+  PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
+  SPACE_PLUGIN_REPO_ADDRESS,
+} from '@geogenesis/sdk/contracts';
 import { encodeAbiParameters, hexToBytes } from 'viem';
 
-import { GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS, GEO_SPACE_PLUGIN_REPO_ADDRESS, ZERO_ADDRESS } from '~/core/constants';
+import { ZERO_ADDRESS } from '~/core/constants';
 
 export function getSpacePluginInstallItem({
   firstBlockContentUri,
@@ -42,7 +47,31 @@ export function getSpacePluginInstallItem({
   ]);
 
   return {
-    id: GEO_SPACE_PLUGIN_REPO_ADDRESS,
+    id: SPACE_PLUGIN_REPO_ADDRESS,
+    data: hexToBytes(encodedParams),
+  };
+}
+
+export function getPersonalSpaceGovernancePluginInstallItem({
+  initialEditor,
+}: {
+  initialEditor: string;
+}): PluginInstallItem {
+  // Define the ABI for the prepareInstallation function's inputs. This comes from the
+  // `personal-space-admin-build-metadata.json` in our contracts repo, not from the setup plugin's ABIs.
+  const prepareInstallationInputs = [
+    {
+      name: '_initialEditorAddress',
+      type: 'address',
+      internalType: 'address',
+      description: 'The address of the first address to be granted the editor permission.',
+    },
+  ];
+
+  const encodedParams = encodeAbiParameters(prepareInstallationInputs, [initialEditor]);
+
+  return {
+    id: PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
     data: hexToBytes(encodedParams),
   };
 }
@@ -52,25 +81,12 @@ export function getGovernancePluginInstallItem(params: {
     votingMode: VotingMode;
     supportThreshold: number;
     minParticipation: number;
-    minDuration: bigint;
-    minProposerVotingPower: bigint;
+    duration: bigint;
   };
   initialEditors: `0x${string}`[];
   pluginUpgrader: `0x${string}`;
   memberAccessProposalDuration: bigint;
 }): PluginInstallItem {
-  // MajorityVotingBase.VotingSettings memory _votingSettings,
-  // address[] memory _initialEditors,
-  // uint64 _memberAccessProposalDuration,
-  // address _pluginUpgrader
-  //  struct VotingSettings {
-  //     VotingMode votingMode;
-  //     uint32 supportThreshold;
-  //     uint32 minParticipation;
-  //     uint64 minDuration;
-  //     uint256 minProposerVotingPower;
-  // }
-  // votingSettings: comes from the MainVotingPlugin
   const prepareInstallationInputs = [
     {
       components: [
@@ -91,13 +107,8 @@ export function getGovernancePluginInstallItem(params: {
         },
         {
           internalType: 'uint64',
-          name: 'minDuration',
+          name: 'duration',
           type: 'uint64',
-        },
-        {
-          internalType: 'uint256',
-          name: 'minProposerVotingPower',
-          type: 'uint256',
         },
       ],
       internalType: 'struct MajorityVotingBase.VotingSettings',
@@ -129,7 +140,7 @@ export function getGovernancePluginInstallItem(params: {
   ]);
 
   return {
-    id: GEO_GOVERNANCE_PLUGIN_REPO_ADDRESS,
+    id: GOVERNANCE_PLUGIN_REPO_ADDRESS,
     data: hexToBytes(encodedParams),
   };
 }

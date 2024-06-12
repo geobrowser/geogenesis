@@ -1,7 +1,7 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Cell, Triple } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { LinkableChip } from '~/design-system/chip';
@@ -22,7 +22,7 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
 
   if (isNameCell) {
     const entityId = cell.entityId;
-    const value = Entity.name(triples) || entityId; // the name might exist but be empty, fall back to the entity id in this case.
+    const value = Entities.name(triples) || entityId; // the name might exist but be empty, fall back to the entity id in this case.
 
     return <CellContent key={value} href={NavUtils.toEntity(space, entityId)} isExpanded={isExpanded} value={value} />;
   }
@@ -30,27 +30,31 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
   return (
     <div className="flex flex-wrap gap-2">
       {triples.map(({ value }) => {
-        if (value.type === 'entity') {
+        if (value.type === 'COLLECTION') {
+          return null;
+        }
+
+        if (value.type === 'ENTITY') {
           return (
-            <LinkableChip key={value.id} href={NavUtils.toEntity(space, value.id)}>
-              {value.name ?? value.id}
+            <LinkableChip key={value.value} href={NavUtils.toEntity(space, value.value)}>
+              {value.name ?? value.value}
             </LinkableChip>
           );
         }
 
-        if (value.type === 'image') {
-          return <ImageZoom key={value.id} imageSrc={value.value} variant="table-cell" />;
+        if (value.type === 'IMAGE') {
+          return <ImageZoom key={value.value} imageSrc={value.image} variant="table-cell" />;
         }
 
-        if (value.type === 'url') {
-          return <WebUrlField variant="tableCell" isEditing={false} key={value.id} value={value.value} />;
+        if (value.type === 'URL') {
+          return <WebUrlField variant="tableCell" isEditing={false} key={value.value} value={value.value} />;
         }
 
-        if (value.type === 'date') {
-          return <DateField variant="tableCell" isEditing={false} key={value.id} value={value.value} />;
+        if (value.type === 'TIME') {
+          return <DateField variant="tableCell" isEditing={false} key={value.value} value={value.value} />;
         }
 
-        return <CellContent key={value.id} isExpanded={isExpanded} value={value.value} />;
+        return <CellContent key={value.value} isExpanded={isExpanded} value={value.value} />;
       })}
     </div>
   );

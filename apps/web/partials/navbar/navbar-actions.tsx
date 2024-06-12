@@ -153,15 +153,12 @@ const MotionPopoverContent = motion(Popover.Content);
 const useSpaceId = () => {
   const params = useParams();
   const spaceId = params?.['id'] as string | undefined;
-
   return spaceId;
 };
 
 const useCanUserEdit = (spaceId: string | null | undefined) => {
-  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
-  const canUserEdit = isEditor || isAdmin || isEditorController;
-
-  return canUserEdit;
+  const { isEditor, isMember } = useAccessControl(spaceId);
+  return isEditor || isMember;
 };
 
 function ModeToggle() {

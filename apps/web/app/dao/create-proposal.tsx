@@ -1,54 +1,29 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { type ContentProposalMetadata, VoteOption } from '@geogenesis/sdk';
-import { encodeAbiParameters, stringToHex } from 'viem';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+import {
+  createContentProposal,
+  createGeoId,
+  createSubspaceProposal,
+  getAcceptSubspaceArguments,
+  getProcessGeoProposalArguments,
+} from '@geogenesis/sdk';
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
 
 import { useConfig, useWalletClient } from 'wagmi';
 import { simulateContract, writeContract } from 'wagmi/actions';
 
-import { ID } from '~/core/id';
 import { Services } from '~/core/services';
 
 import { Button } from '~/design-system/button';
 
 import { TEST_MAIN_VOTING_PLUGIN_ADDRESS, TEST_SPACE_PLUGIN_ADDRESS } from './constants';
-import { abi } from './main-voting-abi';
-
-const processProposalInputs = [
-  {
-    internalType: 'uint32',
-    name: '_blockIndex',
-    type: 'uint32',
-  },
-  {
-    internalType: 'uint32',
-    name: '_itemIndex',
-    type: 'uint32',
-  },
-  {
-    internalType: 'string',
-    name: '_contentUri',
-    type: 'string',
-  },
-] as const;
-
-interface Props {
-  type:
-    | 'content'
-    | 'add-member'
-    | 'remove-member'
-    | 'add-editor'
-    | 'remove-editor'
-    | 'add-subspace'
-    | 'remove-subspace';
-}
 
 // @TODO: Add metadata to ipfs. this will include the root object. If the proposal is not a content proposal it will use
 // a new type of metadata object that has the proposal type and version object
-// 1. Create the proposal metadata for content
+// 1. Create the proposal metadata for content (DONE)
 // 2. Create the proposal metadata for a subspace
-//    - Add subspace
+//    - Add subspace (DONE)
 //    - Remove subspace
 // 3. Create the proposal metadata for a member
 //    - Add member
@@ -66,7 +41,7 @@ interface Props {
 // 8. Create action for processing an editor proposal
 //    - Add editor
 //    - Remove editor
-export function CreateProposal({ type }: Props) {
+export function CreateProposal() {
   const { storageClient } = Services.useServices();
 
   const walletConfig = useConfig();
@@ -77,49 +52,58 @@ export function CreateProposal({ type }: Props) {
   }
 
   const onClick = async () => {
-    const proposal: ContentProposalMetadata = {
-      type: 'content',
-      version: '1.0.0',
-      proposalId: ID.createEntityId(),
-      name: 'Sixth proposal in the DAO',
-      actions: [
-        {
-          entityId: ID.createEntityId(),
-          attributeId: SYSTEM_IDS.NAME,
-          type: 'createTriple',
-          value: {
-            type: 'string',
-            id: ID.createValueId(),
-            value: 'Fifth entity',
-          },
+    const entityId = createGeoId();
+
+    const proposal = createContentProposal('Add space page to test DAO', [
+      {
+        entityId: '97a5909c-58e7-4da2-933a-2ce941f0701e',
+        attributeId: SYSTEM_IDS.NAME,
+        type: 'createTriple',
+        value: {
+          type: 'string',
+          id: createGeoId(),
+          value: 'Governance Space A',
         },
-      ],
-    };
+      },
+      // {
+      //   entityId: '',
+      //   attributeId: SYSTEM_IDS.TYPES,
+      //   type: 'createTriple',
+      //   value: {
+      //     type: 'entity',
+      //     id: SYSTEM_IDS.SPACE_CONFIGURATION,
+      //   },
+      // },
+    ]);
+
+    // const proposal = createSubspaceProposal({
+    //   name: 'Add subspace to test DAO',
+    //   type: 'ADD_SUBSPACE',
+    //   spaceAddress: '0x9c19615715a1B465EDf0146D36d803C3a8FC351A', // Some governance space
+    // });
 
     const hash = await storageClient.uploadObject(proposal);
-    const uri = `ipfs://${hash}`;
+    const uri = `ipfs://${hash}` as const;
 
     const config = await simulateContract(walletConfig, {
       // Main voting plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
       address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
-      abi,
+      abi: MainVotingAbi,
       functionName: 'createProposal',
-      args: [
-        stringToHex(uri),
-        [
-          {
-            // Space plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
-            to: TEST_SPACE_PLUGIN_ADDRESS,
-            value: BigInt(0),
-            data: encodeAbiParameters(processProposalInputs, [1, 2, uri]),
-          },
-        ],
-        BigInt(0),
-        BigInt(0),
-        BigInt(0),
-        VoteOption.Yes,
-        true,
-      ],
+      // @TODO: We should abstract the proposal metadata creation and the proposal
+      // action callback args together somehow since right now you have to sync
+      // them both and ensure you're using the correct functions for each content
+      // proposal type.
+      //
+      // What can happen is that you create a "CONTENT" proposal but pass a callback
+      // action that does some other action like "ADD_SUBSPACE" and it will fail since
+      // the substream won't index a mismatched proposal type and action callback args.
+      // args: getProcessGeoProposalArguments(TEST_SPACE_PLUGIN_ADDRESS, uri),
+      args: getAcceptSubspaceArguments({
+        spacePluginAddress: TEST_SPACE_PLUGIN_ADDRESS,
+        ipfsUri: uri,
+        subspaceToAccept: '0x170b749413328ac9a94762031a7A05b00c1D2e34', // Root
+      }),
     });
 
     const writeResult = await writeContract(walletConfig, config.request);

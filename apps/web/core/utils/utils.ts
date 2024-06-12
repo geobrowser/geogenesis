@@ -1,10 +1,9 @@
-import { version as uuidVersion } from 'uuid';
-import { validate as uuidValidate } from 'uuid';
+import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
-import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_PATH } from '~/core/constants';
-import { Entity as IEntity } from '~/core/types';
+import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
+import { Entity as IEntity, Proposal, Vote } from '~/core/types';
 
-import { Entity } from './entity';
+import { Entities } from './entity';
 
 export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
   return elements.flatMap((element, index) =>
@@ -16,6 +15,7 @@ export const NavUtils = {
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => `/space/${spaceId}`,
+  toProposal: (spaceId: string, proposalId: string) => `/space/${spaceId}/governance?proposalId=${proposalId}`,
   toEntity: (
     spaceId: string,
     newEntityId: string,
@@ -92,6 +92,10 @@ export class GeoDate {
     return new Date(value * 1000);
   }
 
+  static toGeoTime(value: number) {
+    return value / 1000;
+  }
+
   static isValidDate(date: Date): date is Date {
     return date instanceof Date && !isNaN(date.getMilliseconds());
   }
@@ -164,11 +168,11 @@ export const getOpenGraphImageUrl = (value: string) => {
 
 export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
   const entityName = entity?.name ?? null;
-  const serverAvatarUrl = Entity.avatar(entity?.triples) ?? null;
-  const serverCoverUrl = Entity.cover(entity?.triples);
+  const serverAvatarUrl = Entities.avatar(entity?.triples) ?? null;
+  const serverCoverUrl = Entities.cover(entity?.triples);
   const imageUrl = serverAvatarUrl || serverCoverUrl || '';
   const openGraphImageUrl = getOpenGraphImageUrl(imageUrl);
-  const description = Entity.description(entity?.triples ?? []);
+  const description = Entities.description(entity?.triples ?? []);
 
   return {
     entityName,
@@ -200,7 +204,7 @@ export const getImageHash = (value: string) => {
 export const getImagePath = (value: string) => {
   // Add the IPFS gateway path for images with the ipfs:// protocol
   if (value.startsWith('ipfs://')) {
-    return `${IPFS_GATEWAY_PATH}${getImageHash(value)}`;
+    return `${IPFS_GATEWAY_READ_PATH}${getImageHash(value)}`;
     // The image likely resolves to an image resource at some URL
   } else if (value.startsWith('http')) {
     return value;
@@ -267,6 +271,35 @@ export function toTitleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
+export function isProposalEnded(status: Proposal['status'], endTime: number) {
+  return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
+}
+
+export function getYesVotePercentage(votes: Vote[], votesCount: number) {
+  if (votesCount === 0) {
+    return 0;
+  }
+
+  return Math.floor((votes.filter(v => v.vote === 'ACCEPT').length / votesCount) * 100);
+}
+
+export function getNoVotePercentage(votes: Vote[], votesCount: number) {
+  if (votesCount === 0) {
+    return 0;
+  }
+
+  return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
+}
+
+export function getProposalTimeRemaining(endTime: number) {
+  const timeRemaining = endTime - GeoDate.toGeoTime(Date.now());
+  const days = Math.floor(timeRemaining / 86400);
+  const hours = Math.floor((timeRemaining % 86400) / 3600);
+  const minutes = Math.floor((timeRemaining % 3600) / 60);
+  const seconds = Math.floor(timeRemaining % 60);
+
+  return { days, hours, minutes, seconds };
+}
 export const uuidValidateV4 = (uuid: string) => {
   if (!uuid) return false;
 

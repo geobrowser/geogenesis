@@ -4,41 +4,16 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 import { Entity as IEntity } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 
+import { entityFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntityQuery(id: string) {
   return `query {
-    geoEntity(id: ${JSON.stringify(id)}) {
-      id
-      name
-      triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-        nodes {
-          id
-          attribute {
-            id
-            name
-          }
-          entity {
-            id
-            name
-          }
-          entityValue {
-            id
-            name
-          }
-          numberValue
-          stringValue
-          valueType
-          valueId
-          isProtected
-          space {
-            id
-          }
-        }
-      }
+    entity(id: ${JSON.stringify(id)}) {
+      ${entityFragment}
     }
   }`;
 }
@@ -49,12 +24,12 @@ export interface FetchEntityOptions {
 }
 
 interface NetworkResult {
-  geoEntity: SubstreamEntity | null;
+  entity: SubstreamEntity | null;
 }
 
 export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity | null> {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
@@ -86,14 +61,14 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
           );
 
           return {
-            geoEntity: null,
+            entity: null,
           };
         default:
           console.error(
             `${error._tag}: Unable to fetch entity, queryId: ${queryId} endpoint: ${endpoint} id: ${options.id}`
           );
           return {
-            geoEntity: null,
+            entity: null,
           };
       }
     }
@@ -102,22 +77,22 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const entity = result.geoEntity;
+  const entity = result.entity;
 
   if (!entity) {
     return null;
   }
 
-  const networkTriples = entity.triplesByEntityId.nodes;
+  const networkTriples = entity.triples.nodes;
   const triples = fromNetworkTriples(networkTriples);
-  const nameTriples = Entity.nameTriples(triples);
+  const nameTriples = Entities.nameTriples(triples);
 
   return {
     id: entity.id,
     name: entity.name,
-    description: Entity.description(triples),
+    description: Entities.description(triples),
     nameTripleSpaces: nameTriples.map(t => t.space),
-    types: Entity.types(triples),
+    types: entity.types.nodes,
     triples,
   };
 }

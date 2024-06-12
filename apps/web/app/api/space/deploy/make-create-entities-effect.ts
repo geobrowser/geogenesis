@@ -1,17 +1,18 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS, createImageEntityOps } from '@geogenesis/sdk';
+import { Op as IOp } from '@geogenesis/sdk';
 import * as Effect from 'effect/Effect';
-import { createPublicClient, createWalletClient, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { polygon } from 'viem/chains';
 
 import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
-import { CreateTripleAction, OmitStrict, SpaceType, Triple } from '~/core/types';
-import { generateActionsForCompany } from '~/core/utils/contracts/generate-actions-for-company';
-import { generateActionsForNonprofit } from '~/core/utils/contracts/generate-actions-for-nonprofit';
+import { SpaceType } from '~/core/types';
+import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
+import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
+import { Ops } from '~/core/utils/ops';
+import { Triples } from '~/core/utils/triples';
 import { slog } from '~/core/utils/utils';
 
+import { geoAccount, publicClient, walletClient } from '../../client';
 import { CreateSpaceEntitiesFailedError } from '../../errors';
 import { makeProposalServer } from '../../make-proposal-server';
 
@@ -26,83 +27,57 @@ export function makeCreateEntitiesEffect(
   requestId: string,
   { type, spaceName, spaceAvatarUri, spaceAddress }: UserConfig
 ) {
-  const account = privateKeyToAccount(process.env.GEO_PK as `0x${string}`);
-
-  const client = createWalletClient({
-    account,
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
-  const publicClient = createPublicClient({
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
   // Create the profile entity representing the new user and space configuration for this space
   // in the Geo knowledge graph.
   //
   // The id for this entity is the same as the on-chain profile id.
   const createEntitiesEffect = Effect.tryPromise({
     try: async () => {
-      const actions: CreateTripleAction[] = [];
+      const ops: IOp[] = [];
       const newEntityId = ID.createEntityId();
 
       // Add triples for a Person entity
       if (type === 'default') {
-        const nameTriple: OmitStrict<Triple, 'id'> = {
-          entityId: newEntityId,
-          entityName: spaceName,
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          space: spaceAddress,
-          value: {
-            type: 'string',
-            value: spaceName,
-            id: ID.createValueId(),
-          },
-        };
-
-        actions.push({
-          type: 'createTriple',
-          id: ID.createTripleId(nameTriple),
-          ...nameTriple,
-        });
+        ops.push(
+          Ops.create({
+            entityId: newEntityId,
+            attributeId: SYSTEM_IDS.NAME,
+            value: {
+              type: 'TEXT',
+              value: spaceName,
+            },
+          })
+        );
       }
 
       if (type === 'company') {
-        const companyActions = await generateActionsForCompany(newEntityId, spaceName, spaceAddress);
-
-        actions.push(...companyActions);
+        const companyTriples = await generateTriplesForCompany(newEntityId, spaceName, spaceAddress);
+        ops.push(...Triples.prepareTriplesForPublishing(companyTriples, spaceAddress));
       }
 
       if (type === 'nonprofit') {
-        const nonprofitActions = await generateActionsForNonprofit(newEntityId, spaceName, spaceAddress);
-
-        actions.push(...nonprofitActions);
+        const nonprofitTriples = await generateTriplesForNonprofit(newEntityId, spaceName, spaceAddress);
+        ops.push(...Triples.prepareTriplesForPublishing(nonprofitTriples, spaceAddress));
       }
 
       if (spaceAvatarUri) {
-        const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
-          entityId: newEntityId,
-          entityName: spaceName,
-          attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-          attributeName: 'Avatar',
-          space: spaceAddress,
-          value: {
-            type: 'image',
-            value: spaceAvatarUri,
-            id: ID.createValueId(),
-          },
-        };
+        const [typeOp, srcOp] = createImageEntityOps(spaceAvatarUri);
 
-        actions.push({
-          type: 'createTriple',
-          id: ID.createTripleId(avatarTripleWithoutId),
-          ...avatarTripleWithoutId,
-        });
+        // Creates the image entity
+        ops.push(typeOp);
+        ops.push(srcOp);
+
+        // Creates the triple pointing to the image entity
+        ops.push(
+          Ops.create({
+            entityId: newEntityId,
+            attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+            value: {
+              type: 'ENTITY',
+              value: typeOp.payload.entityId,
+            },
+          })
+        );
       }
 
       slog({
@@ -111,13 +86,13 @@ export function makeCreateEntitiesEffect(
       });
 
       const proposalEffect = await makeProposalServer({
-        actions,
+        ops,
         name: `Creating entities for new space ${spaceAddress}`,
         space: spaceAddress,
-        storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
-        account,
-        wallet: client,
-        publicClient,
+        storageClient: new StorageClient(Environment.getConfig().ipfs),
+        account: geoAccount,
+        wallet: walletClient,
+        publicClient: publicClient,
       });
 
       await Effect.runPromise(proposalEffect);

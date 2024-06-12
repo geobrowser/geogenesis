@@ -2,43 +2,38 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { Provider as JotaiProvider } from 'jotai';
 
 import * as React from 'react';
 
 import { Services } from './services';
-import { ActiveProposalProvider } from './state/active-proposal-store';
-import { AragonSDKProvider } from './state/aragon-dao-store';
 import { DiffProvider } from './state/diff-store';
-import { JotaiProvider } from './state/jotai-provider';
+import { store } from './state/jotai-store';
 import { StatusBarContextProvider } from './state/status-bar-store';
 import { WalletProvider } from './wallet';
 import { PrivyProvider } from './wallet/privy';
+import { ReactQueryProvider } from './query-client';
 
 interface Props {
   children: React.ReactNode;
 }
 
-const queryClient = new QueryClient();
 
 export function Providers({ children }: Props) {
   return (
     <PrivyProvider>
-      <QueryClientProvider client={queryClient}>
-        <WalletProvider>
-          <JotaiProvider>
+      <ReactQueryProvider>
+        <JotaiProvider store={store}>
+          <WalletProvider>
             <Services.Provider>
               <StatusBarContextProvider>
-                <DiffProvider>
-                  <AragonSDKProvider>
-                    <ActiveProposalProvider>{children}</ActiveProposalProvider>
-                  </AragonSDKProvider>
-                </DiffProvider>
+                <DiffProvider>{children}</DiffProvider>
               </StatusBarContextProvider>
             </Services.Provider>
-          </JotaiProvider>
-        </WalletProvider>
-        <ReactQueryDevtools initialIsOpen={false} />
-      </QueryClientProvider>
+          </WalletProvider>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </JotaiProvider>
+      </ReactQueryProvider>
     </PrivyProvider>
   );
 }

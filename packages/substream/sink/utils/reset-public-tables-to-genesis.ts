@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { runSqlFile } from './run-sql-file.js';
+import { runSqlFile } from './run-sql-file';
 
 export class ResetPublicTablesToGenesisError extends Error {
   _tag: 'ResetPublicTablesToGenesisError' = 'ResetPublicTablesToGenesisError';

@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
@@ -14,7 +14,6 @@ import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { Triple } from '~/core/utils/triple';
 
 import { Divider } from '~/design-system/divider';
 import { Dots } from '~/design-system/dots';
@@ -27,7 +26,7 @@ import { ResultContent, ResultsList } from './results-list';
 interface Props {
   placeholder?: string;
   onDone: (result: { id: string; name: string | null; nameTripleSpace?: string }) => void;
-  itemIds: string[];
+  alreadySelectedIds: string[];
   allowedTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
   attributeId?: string;
@@ -38,7 +37,7 @@ interface Props {
 
 export function EntityTextAutocomplete({
   placeholder,
-  itemIds,
+  alreadySelectedIds,
   onDone,
   allowedTypes,
   spaceId,
@@ -48,12 +47,12 @@ export function EntityTextAutocomplete({
   className = '',
 }: Props) {
   const [, setToast] = useToast();
-  const { create } = useActionsStore();
+  const { upsert } = useActionsStore();
   const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
     allowedTypes: allowedTypes?.map(type => type.typeId),
   });
   const containerRef = useRef<HTMLDivElement>(null);
-  const itemIdsSet = new Set(itemIds);
+  const itemIdsSet = new Set(alreadySelectedIds);
   const { spaces } = useSpaces();
 
   const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
@@ -63,55 +62,57 @@ export function EntityTextAutocomplete({
     const newEntityId = ID.createEntityId();
 
     // Create new entity with name and types
-    create(
-      Triple.withId({
+    upsert(
+      {
+        type: 'SET_TRIPLE',
         entityId: newEntityId,
         attributeId: SYSTEM_IDS.NAME,
         entityName: query,
         attributeName: 'Name',
-        space: spaceId,
         value: {
-          type: 'string',
-          id: ID.createValueId(),
+          type: 'TEXT',
           value: query,
         },
-      })
+      },
+      spaceId
     );
 
     if (allowedTypes) {
       allowedTypes.forEach(type => {
-        create(
-          Triple.withId({
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: query,
             attributeName: 'Types',
-            space: spaceId,
             value: {
-              type: 'entity',
-              id: type.typeId,
+              type: 'ENTITY',
+              value: type.typeId,
               name: type.typeName,
             },
-          })
+          },
+          spaceId
         );
       });
     }
 
     if (relationValueTypesForAttribute) {
       relationValueTypesForAttribute.forEach(type => {
-        create(
-          Triple.withId({
+        upsert(
+          {
+            type: 'SET_TRIPLE',
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: query,
             attributeName: 'Types',
-            space: spaceId,
             value: {
-              type: 'entity',
-              id: type.typeId,
+              type: 'ENTITY',
+              value: type.typeId,
               name: type.typeName,
             },
-          })
+          },
+          spaceId
         );
       });
     }

@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -40,33 +40,38 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
 
   const tripleToEditableField = (triple: Triple) => {
     switch (triple.value.type) {
-      case 'string':
+      case 'TEXT':
         return (
-          <Text key={`string-${triple.attributeId}-${triple.value.id}-${triple.id}`} as="p">
+          <Text key={`string-${triple.attributeId}-${triple.value.value}`} as="p">
             {triple.value.value}
           </Text>
         );
-      case 'image':
-        return (
-          <ImageZoom
-            key={`image-${triple.attributeId}-${triple.value.id}-${triple.id}`}
-            imageSrc={triple.value.value}
-          />
-        );
-      case 'date':
+      case 'IMAGE':
+        return <ImageZoom key={`image-${triple.attributeId}-${triple.value.value}}`} imageSrc={triple.value.image} />;
+      case 'TIME':
         return <DateField isEditing={false} value={triple.value.value} />;
-      case 'url':
+      case 'URL':
         return <WebUrlField isEditing={false} value={triple.value.value} />;
-      case 'entity': {
+      case 'ENTITY': {
         return (
-          <div key={`entity-${triple.attributeId}-${triple.value.id}-${triple.id}`} className="mt-1">
-            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.id)}>
-              {triple.value.name || triple.value.id}
+          <div key={`entity-${triple.attributeId}-${triple.value.value}}`} className="mt-1">
+            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.value)}>
+              {triple.value.name || triple.value.value}
             </LinkableChip>
           </div>
         );
       }
-      case 'number':
+      case 'COLLECTION':
+        return triple.value.items.map(i => {
+          return (
+            <div key={`entity-${triple.attributeId}-${triple.value.value}-${i.value.value}}`} className="mt-1">
+              <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.value)}>
+                {i.value.type === 'ENTITY' ? i.value.value : i.value.value}
+              </LinkableChip>
+            </div>
+          );
+        });
+      case 'NUMBER':
         return null;
     }
   };

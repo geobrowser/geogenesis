@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
 import { useEffect, useState } from 'react';
@@ -9,9 +9,15 @@ import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Triple as ITriple, RelationValueTypesByAttributeId, TripleValueType } from '~/core/types';
-import type { Entity as EntityType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
+import type {
+  EntitySearchResult,
+  Entity as EntityType,
+  Triple,
+  TripleWithCollectionValue,
+  TripleWithEntityValue,
+} from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
 import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-autocomplete';
@@ -57,17 +63,21 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     attributeRelationTypes,
   } = useEntityPageStore();
 
-  const { create, update, remove } = useActionsStore();
+  const { remove, upsert, upsertMany } = useActionsStore();
 
   const { actionsFromSpace } = useActionsStore(spaceId);
   const { subgraph, config } = Services.useServices();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
+  //
+  // There may be some deleted triples locally. We check the actions to make sure that there are
+  // actually 0 actions in the case that there are 0 local triples as the local triples here
+  // are only the ones where `isDeleted` is false.
   const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
 
   // Always default to the local state for the name
-  const name = Entity.name(triples) ?? '';
+  const name = Entities.name(triples) ?? '';
 
   const send = useEditEvents({
     context: {
@@ -76,9 +86,9 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
       entityName: name,
     },
     api: {
-      create,
-      update,
+      upsert,
       remove,
+      upsertMany,
     },
   });
 
@@ -96,7 +106,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
         if (typeEntity) {
           send({
-            type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
+            type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
             payload: {
               attributeId: 'type',
               attributeName: 'Types',
@@ -144,7 +154,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
         if (!idEntity || !valueEntity) return;
 
         send({
-          type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
+          type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
           payload: {
             attributeId: idEntity.id,
             attributeName: idEntity.name ?? '',
@@ -209,6 +219,16 @@ function EntityAttributes({
   allowedTypes: RelationValueTypesByAttributeId;
   spaceId: string;
 }) {
+  /**
+   * All the things this component is doing
+   * 1. Aggregating all of the entity value ids for every entity triple
+   * 2. Filtering out NAME and DESCRIPTION triples from the list since we render those uniquely
+   *    from the other attributes.
+   * 3. Group all of the visible, sorted triples by their attribute id so we can render them all
+   *    together. We sort the triples based on how we want to order them in the list.
+   * 4. Aggregate all entity value triple ids so we can make sure we don't return those already-
+   *    selected values in the entity search results.
+   */
   const tripleAttributeIds = triples.map(triple => triple.attributeId);
 
   const visibleSchemaTriples = schemaTriples.filter(schemaTriple => {
@@ -219,7 +239,14 @@ function EntityAttributes({
 
   const visibleTriples = [...triples, ...visibleSchemaTriples];
 
-  const entityValueTriples = triples.filter(triple => triple.value.type === 'entity');
+  // @TODO: Should work with collections
+  // We use these later to check which entities have already been selected as one
+  // of the values of a triple/collection. We filter out any already selected
+  // entity ids in the search result list so you don't add the same value more
+  // than once.
+  const entityValueTriples = triples.filter(
+    (triple): triple is TripleWithEntityValue => triple.value.type === 'ENTITY'
+  );
 
   // Some triples are rendered outside of the normal attribute list to better control their styling.
   const filteredAttributeIds = [SYSTEM_IDS.NAME, SYSTEM_IDS.DESCRIPTION];
@@ -227,21 +254,27 @@ function EntityAttributes({
     triple => !filteredAttributeIds.includes(triple.attributeId)
   );
 
-  const groupedTriples = groupBy(sortedTriples, triple => triple.attributeId);
-  const attributeIds = Object.keys(groupedTriples);
+  // There's only one triple per attribute when viewing an entity within a single space.
+  const groupedTriplesByAttributeId = sortedTriples.reduce(
+    (map, triple) => {
+      map[triple.attributeId] = triple;
+      return map;
+    },
+    {} as Record<string, Triple>
+  );
 
-  const orderedGroupedTriples = Object.entries(groupedTriples);
+  const orderedGroupedTriples = Object.entries(groupedTriplesByAttributeId);
 
-  const nameTriple = Entity.nameTriple(triples);
-  const descriptionTriple = Entity.descriptionTriple(triples);
-  const description = Entity.description(triples);
+  const nameTriple = Entities.nameTriple(triples);
+  const descriptionTriple = Entities.descriptionTriple(triples);
+  const description = Entities.description(triples);
 
-  const onChangeTriple = (type: TripleValueType, triples: ITriple[]) => {
+  const onChangeTriple = (type: TripleValueType, triple: ITriple) => {
     send({
       type: 'CHANGE_TRIPLE_TYPE',
       payload: {
         type,
-        triples,
+        triple,
       },
     });
   };
@@ -249,29 +282,43 @@ function EntityAttributes({
   const removeOrResetEntityTriple = (triple: ITriple) => {
     hideSchema(triple.attributeId);
     send({
-      type: 'REMOVE_PAGE_ENTITY',
+      type: 'DELETE_ENTITY_TRIPLE',
       payload: {
         triple,
-        isLastEntity: groupedTriples[triple.attributeId].length === 1,
+        // @TODO: Check this based on the collection
+        isLastEntity: true,
       },
     });
   };
 
-  const linkAttribute = (
-    oldAttributeId: string,
-    attribute: {
-      id: string;
-      name: string | null;
-    }
-  ) => {
+  const createCollectionItem = (collectionId: string, entity: EntitySearchResult, collectionTriple: Triple) => {
     send({
-      type: 'LINK_ATTRIBUTE',
+      type: 'CREATE_COLLECTION_ITEM',
       payload: {
-        triplesByAttributeId: groupedTriples,
-        oldAttribute: {
-          id: oldAttributeId,
-        },
+        entity,
+        collectionId,
+        collectionTriple: collectionTriple as TripleWithCollectionValue,
+      },
+    });
+  };
+
+  const deleteCollectionItem = (collectionItemId: string, collectionTriple: Triple) => {
+    send({
+      type: 'DELETE_COLLECTION_ITEM',
+      payload: {
+        collectionItemId,
+        collectionTriple: collectionTriple as TripleWithCollectionValue,
+      },
+    });
+  };
+
+  const addAttribute = (attribute: { id: string; name: string | null }, oldTriple: Triple) => {
+    send({
+      type: 'ADD_ATTRIBUTE_TO_TRIPLE',
+      payload: {
+        existingTriple: groupedTriplesByAttributeId[attribute.id],
         newAttribute: attribute,
+        oldTriple,
       },
     });
   };
@@ -283,11 +330,16 @@ function EntityAttributes({
       name: string | null;
     }
   ) => {
+    const existingTriple = groupedTriplesByAttributeId[attributeId];
     // If it's an empty triple value
     send({
       type: 'ADD_PAGE_ENTITY_VALUE',
       payload: {
-        triplesByAttributeId: groupedTriples,
+        // If we have an existing triple for this attributeId and it's not
+        // a placeholder then we know that we're adding another entity value
+        // resulting in MANY cardinality as a collection.
+        shouldConvertToCollection: existingTriple.placeholder === false,
+        existingTriple: existingTriple,
         attribute: {
           id: attributeId,
         },
@@ -305,22 +357,22 @@ function EntityAttributes({
     }
   ) => {
     send({
-      type: 'CREATE_ENTITY_TRIPLE_WITH_VALUE',
+      type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
       payload: {
         attributeId: triple.attributeId,
-        attributeName: triple.attributeName || '',
+        attributeName: triple.attributeName ?? null,
         entityId: linkedEntity.id,
-        entityName: linkedEntity.name || '',
+        entityName: linkedEntity.name ?? null,
       },
     });
   };
 
   const createStringTripleFromPlaceholder = (triple: ITriple, value: string) => {
     send({
-      type: 'CREATE_STRING_TRIPLE_WITH_VALUE',
+      type: 'CREATE_TEXT_TRIPLE_FROM_PLACEHOLDER',
       payload: {
         attributeId: triple.attributeId,
-        attributeName: triple.attributeName || '',
+        attributeName: triple.attributeName ?? null,
         value,
       },
     });
@@ -328,10 +380,10 @@ function EntityAttributes({
 
   const createUrlTripleFromPlaceholder = (triple: ITriple, value: string) => {
     send({
-      type: 'CREATE_URL_TRIPLE_WITH_VALUE',
+      type: 'CREATE_URL_TRIPLE_FROM_PLACEHOLDER',
       payload: {
         attributeId: triple.attributeId,
-        attributeName: triple.attributeName || '',
+        attributeName: triple.attributeName ?? null,
         value,
       },
     });
@@ -339,41 +391,50 @@ function EntityAttributes({
 
   const createDateTripleFromPlaceholder = (triple: ITriple, value: string) => {
     send({
-      type: 'CREATE_DATE_TRIPLE_WITH_VALUE',
+      type: 'CREATE_TIME_TRIPLE_FROM_PLACEHOLDER',
       payload: {
         attributeId: triple.attributeId,
-        attributeName: triple.attributeName || '',
+        attributeName: triple.attributeName ?? null,
         value,
       },
     });
   };
 
-  const updateStringValue = (triple: ITriple, name: string) => {
+  const updateTextValue = (triple: ITriple, value: string) => {
     send({
-      type: 'UPDATE_STRING_VALUE',
+      type: 'UPSERT_TRIPLE_VALUE',
       payload: {
         triple,
-        value: name,
+        value: {
+          type: 'TEXT',
+          value,
+        },
       },
     });
   };
 
   const updateUrlValue = (triple: ITriple, value: string) => {
     send({
-      type: 'UPDATE_URL_VALUE',
+      type: 'UPSERT_TRIPLE_VALUE',
       payload: {
         triple,
-        value,
+        value: {
+          type: 'URL',
+          value,
+        },
       },
     });
   };
 
   const updateDateValue = (triple: ITriple, value: string) => {
     send({
-      type: 'UPDATE_DATE_VALUE',
+      type: 'UPSERT_TRIPLE_VALUE',
       payload: {
         triple,
-        value,
+        value: {
+          type: 'TIME',
+          value,
+        },
       },
     });
   };
@@ -388,9 +449,9 @@ function EntityAttributes({
     });
   };
 
-  const removeImage = (triple: ITriple) => {
+  const deleteImageTriple = (triple: ITriple) => {
     send({
-      type: 'REMOVE_IMAGE',
+      type: 'DELETE_IMAGE_TRIPLE',
       payload: {
         triple,
       },
@@ -402,7 +463,6 @@ function EntityAttributes({
       type: 'EDIT_ENTITY_NAME',
       payload: {
         name: e.target.value,
-        triple: nameTriple,
       },
     });
   };
@@ -413,14 +473,13 @@ function EntityAttributes({
       payload: {
         name,
         description: e.target.value,
-        triple: descriptionTriple,
       },
     });
   };
 
-  const tripleToEditableField = (attributeId: string, triple: ITriple, isEmptyEntity: boolean) => {
+  const tripleToEditableField = (attributeId: string, triple: Triple, isEmptyEntity: boolean) => {
     switch (triple.value.type) {
-      case 'string':
+      case 'TEXT':
         return (
           <PageStringField
             key={triple.attributeId}
@@ -431,27 +490,27 @@ function EntityAttributes({
             onChange={e => {
               triple.placeholder
                 ? createStringTripleFromPlaceholder(triple, e.target.value)
-                : updateStringValue(triple, e.target.value);
+                : updateTextValue(triple, e.target.value);
             }}
           />
         );
-      case 'image':
+      case 'IMAGE':
         return (
           <PageImageField
             key={triple.attributeId}
             variant="avatar"
-            imageSrc={triple.value.value}
+            imageSrc={triple.value.image}
             onImageChange={imageSrc => {
               uploadImage(triple, imageSrc);
             }}
             onImageRemove={() => {
-              removeImage(triple);
+              deleteImageTriple(triple);
             }}
           />
         );
-      case 'number':
+      case 'NUMBER':
         return null;
-      case 'date':
+      case 'TIME':
         return (
           <DateField
             isEditing
@@ -459,7 +518,7 @@ function EntityAttributes({
             onBlur={v => (triple.placeholder ? createDateTripleFromPlaceholder(triple, v) : updateDateValue(triple, v))}
           />
         );
-      case 'url':
+      case 'URL':
         return (
           <WebUrlField
             isEditing
@@ -472,7 +531,7 @@ function EntityAttributes({
             }}
           />
         );
-      case 'entity':
+      case 'ENTITY':
         if (isEmptyEntity) {
           const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
 
@@ -480,7 +539,7 @@ function EntityAttributes({
             <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
               <EntityTextAutocomplete
                 spaceId={spaceId}
-                key={`entity-${attributeId}-${triple.value.id}`}
+                key={`entity-${attributeId}-${triple.value.value}`}
                 placeholder="Add value..."
                 allowedTypes={relationTypes}
                 onDone={result =>
@@ -488,9 +547,9 @@ function EntityAttributes({
                     ? createEntityTripleFromPlaceholder(triple, result)
                     : addEntityValue(attributeId, result)
                 }
-                itemIds={entityValueTriples
+                alreadySelectedIds={entityValueTriples
                   .filter(triple => triple.attributeId === attributeId)
-                  .map(triple => triple.value.id)}
+                  .map(triple => triple.value.value)}
                 attributeId={attributeId}
               />
             </div>
@@ -498,15 +557,56 @@ function EntityAttributes({
         }
 
         return (
-          <div key={`entity-${triple.value.id}`}>
+          <div key={`entity-${triple.value.value}`}>
             <DeletableChipButton
-              href={NavUtils.toEntity(triple.space, triple.value.id)}
+              href={NavUtils.toEntity(triple.space, triple.value.value)}
               onClick={() => removeOrResetEntityTriple(triple)}
             >
-              {triple.value.name || triple.value.id}
+              {triple.value.name || triple.value.value}
             </DeletableChipButton>
           </div>
         );
+      case 'COLLECTION': {
+        const isEmptyCollection = triple.value.items.length === 0;
+
+        if (isEmptyCollection) {
+          const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
+
+          return (
+            <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
+              <EntityTextAutocomplete
+                spaceId={spaceId}
+                key={`entity-${attributeId}-${triple.value.value}`}
+                placeholder="Add value..."
+                allowedTypes={relationTypes}
+                onDone={result =>
+                  triple.placeholder
+                    ? createEntityTripleFromPlaceholder(triple, result)
+                    : addEntityValue(attributeId, result)
+                }
+                alreadySelectedIds={entityValueTriples
+                  .filter(triple => triple.attributeId === attributeId)
+                  .map(triple => triple.value.value)}
+                attributeId={attributeId}
+              />
+            </div>
+          );
+        }
+
+        // @TODO: Switch from an entity to a collection when adding another item
+        return triple.value.items.map(i => {
+          return (
+            <div key={`entity-${triple.attributeId}-${triple.value.value}-${i.value.value}}`} className="mt-1">
+              <DeletableChipButton
+                href={NavUtils.toEntity(triple.space, triple.value.value)}
+                onClick={() => deleteCollectionItem(i.id, triple)}
+              >
+                {i.value.type === 'ENTITY' ? i.value.value : i.value.value}
+              </DeletableChipButton>
+            </div>
+          );
+        });
+      }
     }
   };
 
@@ -545,19 +645,25 @@ function EntityAttributes({
           </div>
         )}
       </div>
-      {orderedGroupedTriples.map(([attributeId, triples], index) => {
+      {/* 
+        @TODO: We only ever render a single triple at a time for any (S,E,A) tuple.
+      */}
+      {orderedGroupedTriples.map(([attributeId, triple], index) => {
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
-        const isEntityGroup = triples.find(triple => triple.value.type === 'entity');
+        const isEntity = triple.value.type === 'ENTITY';
+        const isCollection = triple.value.type === 'COLLECTION';
+        const shouldShowEntityDialog = isEntity || isCollection;
 
-        const tripleType: TripleValueType = triples[0].value.type || 'string';
+        const tripleType: TripleValueType = triple.value.type || 'TEXT';
 
-        const isEmptyEntity = triples.length === 1 && triples[0].value.type === 'entity' && !triples[0].value.id;
-        const attributeName = triples[0].attributeName;
-        const isPlaceholder = triples[0].placeholder;
+        const isEmptyEntity = triple.value.type === 'ENTITY' && !triple.value.value;
+        const isEmptyCollection = triple.value.type === 'COLLECTION' && triple.value.items.length === 0;
+        const attributeName = triple.attributeName;
+        const isPlaceholder = triple.placeholder;
         const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
 
         // only show multiple editable fields for relations
-        const renderedTriples = tripleType === 'entity' ? triples : [triples[0]];
+        const renderedTriples = tripleType === 'ENTITY' ? triple : [triple];
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
@@ -565,8 +671,8 @@ function EntityAttributes({
               <EntityTextAutocomplete
                 spaceId={spaceId}
                 placeholder="Add attribute..."
-                onDone={result => linkAttribute(attributeId, result)}
-                itemIds={attributeIds}
+                onDone={result => addAttribute(result, triple)}
+                alreadySelectedIds={tripleAttributeIds}
                 allowedTypes={relationTypes}
                 attributeId={attributeId}
               />
@@ -575,23 +681,27 @@ function EntityAttributes({
                 {attributeName || attributeId}
               </Text>
             )}
-            {isEntityGroup && <Spacer height={4} />}
+            {shouldShowEntityDialog && <Spacer height={4} />}
             <div className="flex flex-wrap items-center gap-1">
-              {renderedTriples.map(triple => tripleToEditableField(attributeId, triple, isEmptyEntity))}
+              {tripleToEditableField(attributeId, triple, isEmptyEntity)}
               {/* This is the + button next to attribute ids with existing entity values */}
-              {isEntityGroup && !isEmptyEntity && (
+              {((isCollection && !isEmptyCollection) || (isEntity && !isEmptyEntity)) && (
                 <EntityAutocompleteDialog
                   spaceId={spaceId}
-                  onDone={entity => addEntityValue(attributeId, entity)}
+                  onDone={entity =>
+                    isCollection
+                      ? createCollectionItem(triple.value.value, entity, triple)
+                      : addEntityValue(attributeId, entity)
+                  }
                   allowedTypes={relationTypes}
                   entityValueIds={entityValueTriples
                     .filter(triple => triple.attributeId === attributeId)
-                    .map(triple => triple.value.id)}
+                    .map(triple => triple.value.value)}
                   attributeId={attributeId}
                 />
               )}
               <div className="absolute right-0 top-6 flex items-center gap-1">
-                {isEntityGroup ? (
+                {isEntity ? (
                   <AttributeConfigurationMenu
                     trigger={<SquareButton icon={<CogSmall />} />}
                     attributeId={attributeId}
@@ -611,8 +721,8 @@ function EntityAttributes({
                               Text
                             </div>
                           ),
-                          value: 'string',
-                          onClick: () => onChangeTriple('string', triples),
+                          value: 'TEXT',
+                          onClick: () => onChangeTriple('TEXT', triple),
                           disabled: false,
                         },
                         {
@@ -623,8 +733,8 @@ function EntityAttributes({
                               Relation
                             </div>
                           ),
-                          value: 'entity',
-                          onClick: () => onChangeTriple('entity', triples),
+                          value: 'ENTITY',
+                          onClick: () => onChangeTriple('ENTITY', triple),
                           disabled: false,
                         },
                         {
@@ -635,8 +745,8 @@ function EntityAttributes({
                               Image
                             </div>
                           ),
-                          value: 'image',
-                          onClick: () => onChangeTriple('image', triples),
+                          value: 'IMAGE',
+                          onClick: () => onChangeTriple('IMAGE', triple),
                           disabled: false,
                         },
                         {
@@ -647,8 +757,8 @@ function EntityAttributes({
                               Date
                             </div>
                           ),
-                          value: 'date',
-                          onClick: () => onChangeTriple('date', triples),
+                          value: 'TIME',
+                          onClick: () => onChangeTriple('TIME', triple),
                           disabled: false,
                         },
                         {
@@ -659,8 +769,8 @@ function EntityAttributes({
                               Web URL
                             </div>
                           ),
-                          value: 'url',
-                          onClick: () => onChangeTriple('url', triples),
+                          value: 'URL',
+                          onClick: () => onChangeTriple('URL', triple),
                           disabled: false,
                         },
                       ]}
@@ -674,9 +784,7 @@ function EntityAttributes({
                       ? () => hideSchema(attributeId)
                       : () => {
                           hideSchema(attributeId);
-                          triples
-                            .filter(triple => triple.attributeId === attributeId)
-                            .forEach(triple => send({ type: 'REMOVE_TRIPLE', payload: { triple } }));
+                          send({ type: 'REMOVE_TRIPLE', payload: { triple } });
                         }
                   }
                 />

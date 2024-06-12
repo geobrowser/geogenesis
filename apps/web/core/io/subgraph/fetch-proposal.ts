@@ -5,15 +5,17 @@ import { v4 as uuid } from 'uuid';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
+import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkActions, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, SubstreamProposal, fromNetworkOps, fromNetworkTriples } from './network-local-mapping';
 
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
     id
+    type
     onchainProposalId
     name
 
@@ -23,29 +25,9 @@ export const getFetchProposalQuery = (id: string) => `query {
         nodes {
           id
           name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+          triples(filter: {isStale: {equalTo: false}}) {
             nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
+              ${tripleFragment}
             }
           }
         }
@@ -55,7 +37,31 @@ export const getFetchProposalQuery = (id: string) => `query {
     createdAtBlock
     createdById
     createdAt
+    startTime
+    endTime
     status
+
+    proposalVotes {
+      totalCount
+      nodes {
+        vote
+        account {
+          id
+          
+          geoProfiles {
+            nodes {
+              id
+              name
+              triples(filter: {isStale: {equalTo: false}}) {
+                nodes {
+                  ${tripleFragment}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
 
     createdBy {
       id
@@ -69,29 +75,9 @@ export const getFetchProposalQuery = (id: string) => `query {
         nodes {
           id
           name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+          triples(filter: {isStale: {equalTo: false}}) {
             nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
+              ${tripleFragment}
             }
           }
         }
@@ -147,7 +133,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api,
+    endpoint: Environment.getConfig().api,
     query: getFetchProposalQuery(options.id),
     signal: options?.signal,
   });
@@ -167,7 +153,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchProposal. queryId: ${queryId} id: ${options.id}
-            
+
             queryString: ${getFetchProposalQuery(options.id)}
             `,
             error.message
@@ -197,14 +183,14 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   const maybeProfile = proposal.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
   const onchainProfile = proposal.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+  const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
 
   const profile: Profile = maybeProfile
     ? {
         id: proposal.createdBy.id,
         address: proposal.createdBy.id as `0x${string}`,
-        avatarUrl: Entity.avatar(profileTriples),
-        coverUrl: Entity.cover(profileTriples),
+        avatarUrl: Entities.avatar(profileTriples),
+        coverUrl: Entities.cover(profileTriples),
         name: maybeProfile.name,
         profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
       }
@@ -218,25 +204,80 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
       };
 
   const spaceConfig = proposal.space.metadata.nodes[0] as SubstreamEntity | undefined;
-  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 
   const spaceWithMetadata: SpaceWithMetadata = {
     id: proposal.space.id,
     name: spaceConfig?.name ?? null,
-    image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+    image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
   };
 
   return {
     ...proposal,
     space: spaceWithMetadata,
     createdBy: profile,
+    proposalVotes: {
+      totalCount: proposal.proposalVotes.totalCount,
+      nodes: proposal.proposalVotes.nodes.map(v => {
+        const maybeProfile = v.account.geoProfiles.nodes[0] as SubstreamEntity | undefined;
+        const onchainProfile = proposal.createdBy.onchainProfiles.nodes[0] as
+          | { homeSpaceId: string; id: string }
+          | undefined;
+        const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
+        const voter = maybeProfile
+          ? {
+              id: v.account.id,
+              address: v.account.id as `0x${string}`,
+              avatarUrl: Entities.avatar(profileTriples),
+              coverUrl: Entities.cover(profileTriples),
+              name: maybeProfile.name,
+              profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
+            }
+          : {
+              id: v.account.id,
+              address: v.account.id as `0x${string}`,
+              name: null,
+              avatarUrl: null,
+              coverUrl: null,
+              profileLink: null,
+            };
+
+        return {
+          ...v,
+          vote: v.vote,
+          voter,
+        };
+      }),
+    },
     proposedVersions: proposal.proposedVersions.nodes.map(v => {
       return {
         ...v,
         createdBy: profile,
         space: spaceWithMetadata,
-        actions: fromNetworkActions(v.actions.nodes, proposal.space.id),
+        actions: fromNetworkOps(v.actions.nodes),
       };
     }),
   };
 }
+
+/**
+ * 
+ *     
+ proposalVotes: {
+      totalCount: proposal.proposalVotes.totalCount,
+      nodes: proposal.proposalVotes.nodes.map(v => {
+        return {
+          ...v,
+          vote: v.vote,
+          voter: voterProfiles[v.accountId] ?? {
+            id: v.accountId,
+            name: null,
+            avatarUrl: null,
+            coverUrl: null,
+            address: v.accountId as `0x${string}`,
+            profileLink: null,
+          },
+        };
+      }),
+    },
+ */

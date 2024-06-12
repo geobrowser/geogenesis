@@ -1,16 +1,21 @@
 'use client';
 
-import { useInterimSpaceMembershipRequest } from './use-interim-space-membership-request';
+import * as React from 'react';
+
+import { useRequestToBeMember } from './use-request-to-be-member';
 
 interface Props {
   spaceId: string;
+  memberAccessPluginAddress: string | null;
 }
 
-export function SpaceMembersJoinButton({ spaceId }: Props) {
-  const { requestMembership } = useInterimSpaceMembershipRequest(spaceId);
+export function SpaceMembersJoinButton({ memberAccessPluginAddress }: Props) {
+  const [hasRequested, setHasRequested] = React.useState(false);
+  const { requestToBeMember } = useRequestToBeMember(memberAccessPluginAddress);
 
-  const onClick = () => {
-    requestMembership?.();
+  const onClick = async () => {
+    await requestToBeMember();
+    setHasRequested(true);
   };
 
   return (
@@ -18,7 +23,7 @@ export function SpaceMembersJoinButton({ spaceId }: Props) {
       onClick={onClick}
       className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text"
     >
-      Join
+      {hasRequested ? 'Requested' : 'Join'}
     </button>
   );
 }

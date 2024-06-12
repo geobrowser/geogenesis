@@ -1,78 +1,79 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
+import { useActionsStore } from '../hooks/use-actions-store';
 import { ID } from '../id';
 import { Triple as ITriple } from '../types';
-import { Triple } from '../utils/triple';
+import { Triples } from '../utils/triples';
 
 export function createForeignType(
   foreignType: ITriple,
   spaceId: string,
   spaceConfigId: string | null,
-  create: (triple: ITriple) => void
+  upsert: ReturnType<typeof useActionsStore>['upsert']
 ) {
   const newSpaceConfigId = spaceConfigId || ID.createEntityId();
 
   if (!spaceConfigId) {
-    const spaceConfigNameTriple = Triple.withId({
+    const spaceConfigNameTriple = Triples.withId({
       space: spaceId,
       entityId: newSpaceConfigId,
       entityName: 'Space Configuration',
       attributeId: SYSTEM_IDS.NAME,
       attributeName: 'Name',
-      value: { id: ID.createValueId(), type: 'string', value: 'Space Configuration' },
+      value: { type: 'TEXT', value: 'Space Configuration' },
     });
 
-    const spaceConfigTypeTriple = Triple.withId({
+    const spaceConfigTypeTriple = Triples.withId({
       space: spaceId,
       entityId: newSpaceConfigId,
       entityName: 'Space Configuration',
       attributeId: SYSTEM_IDS.TYPES,
       attributeName: 'Types',
-      value: { id: SYSTEM_IDS.SPACE_CONFIGURATION, type: 'entity', name: 'Space Configuration' },
+      value: { value: SYSTEM_IDS.SPACE_CONFIGURATION, type: 'ENTITY', name: 'Space Configuration' },
     });
 
-    create(spaceConfigNameTriple);
-    create(spaceConfigTypeTriple);
+    upsert({ ...spaceConfigNameTriple, type: 'SET_TRIPLE' }, spaceId);
+    upsert({ ...spaceConfigTypeTriple, type: 'SET_TRIPLE' }, spaceId);
   }
 
-  const spaceConfigForeignTypeTriple = Triple.withId({
+  const spaceConfigForeignTypeTriple = Triples.withId({
     space: spaceId,
     entityId: newSpaceConfigId,
     entityName: 'Space Configuration',
     attributeId: SYSTEM_IDS.FOREIGN_TYPES,
     attributeName: 'Foreign Types',
-    value: { id: foreignType.entityId, type: 'entity', name: foreignType.entityName },
+    value: { value: foreignType.entityId, type: 'ENTITY', name: foreignType.entityName },
   });
 
-  create(spaceConfigForeignTypeTriple);
+  upsert({ ...spaceConfigForeignTypeTriple, type: 'SET_TRIPLE' }, spaceId);
 }
 
-export function createType(entityName: string, spaceId: string, create: (triple: ITriple) => void) {
+export function createType(entityName: string, spaceId: string, upsert: ReturnType<typeof useActionsStore>['upsert']) {
   const entityId = ID.createEntityId();
 
-  const nameTriple = Triple.withId({
+  const nameTriple = Triples.withId({
     space: spaceId,
     entityId,
     entityName,
     attributeId: SYSTEM_IDS.NAME,
     attributeName: 'Name',
-    value: { id: ID.createValueId(), type: 'string', value: entityName },
+    value: { type: 'TEXT', value: entityName },
   });
-  const typeTriple = Triple.withId({
+  const typeTriple = Triples.withId({
     space: spaceId,
     entityId,
     entityName,
     attributeId: SYSTEM_IDS.TYPES,
     attributeName: 'Types',
     value: {
-      id: SYSTEM_IDS.SCHEMA_TYPE,
-      type: 'entity',
+      value: SYSTEM_IDS.SCHEMA_TYPE,
+      type: 'ENTITY',
       name: 'Type',
     },
   });
 
-  create(nameTriple);
-  create(typeTriple);
+  upsert({ ...nameTriple, type: 'SET_TRIPLE' }, spaceId);
+  upsert({ ...typeTriple, type: 'SET_TRIPLE' }, spaceId);
 
   // We return the triple to use at any callsites
   return typeTriple;

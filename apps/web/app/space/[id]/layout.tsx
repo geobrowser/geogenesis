@@ -1,15 +1,24 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { Effect, Either } from 'effect';
 import { redirect } from 'next/navigation';
+import { v4 as uuid } from 'uuid';
 
 import * as React from 'react';
 
+import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
+import { entityFragment } from '~/core/io/subgraph/fragments';
+import { graphql } from '~/core/io/subgraph/graphql';
+import {
+  SubstreamEntity,
+  getBlocksCollectionData,
+  getSpaceConfigFromMetadata,
+} from '~/core/io/subgraph/network-local-mapping';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
@@ -18,11 +27,15 @@ import { TabGroup } from '~/design-system/tab-group';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { AddSubspaceDialog } from '~/partials/space-page/add-subspace-dialog';
+import { RemoveSubspaceDialog } from '~/partials/space-page/remove-subspace-dialog';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
+import { SpaceToAdd } from '~/partials/space-page/types';
 
 import { cachedFetchSpace } from './cached-fetch-space';
+import { getSubspacesForSpace } from './fetch-subspaces-for-space';
 
 interface Props {
   params: { id: string };
@@ -55,13 +68,15 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     filter: [{ field: 'attribute-id', value: SYSTEM_IDS.PAGE_TYPE_TYPE }],
   });
 
-  const hasPostsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.POSTS_PAGE);
+  // We only fetch triples whose attribute is PAGE_TYPE_TYPE so we don't need to filter on
+  // the attribute id
+  const hasPostsPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.POSTS_PAGE);
   // const hasProductsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.PRODUCTS_PAGE);
   // const hasServicesPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.SERVICES_PAGE);
-  const hasEventsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.EVENTS_PAGE);
-  const hasProjectsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.PROJECTS_PAGE);
-  const hasJobsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.JOBS_PAGE);
-  const hasFinancesPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.FINANCES_PAGE);
+  const hasEventsPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.EVENTS_PAGE);
+  const hasProjectsPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.PROJECTS_PAGE);
+  const hasJobsPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.JOBS_PAGE);
+  const hasFinancesPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.FINANCES_PAGE);
 
   if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE) || typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
     const roleTriples = await Subgraph.fetchTriples({
@@ -225,12 +240,114 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   return [...seen.values()].sort((a, b) => a.priority - b.priority);
 }
 
-export default async function Layout({ children, params }: Props) {
-  const props = await getData(params.id);
-  const coverUrl = Entity.cover(props.triples);
+const getFetchSpacesQuery = () => `query {
+  spaces {
+    totalCount
+    nodes {
+      id
+      spaceMembers {
+        totalCount
+      }
+      metadata {
+        nodes {
+          ${entityFragment}
+        }
+      }
+    }
+  }
+}`;
 
-  const typeNames = props.space?.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
-  const tabs = await buildTabsForSpacePage(props.space?.spaceConfig?.types ?? [], params);
+interface NetworkResult {
+  spaces: {
+    totalCount: number;
+    nodes: {
+      id: string;
+      spaceMembers: { totalCount: number };
+      metadata: { nodes: SubstreamEntity[] };
+    }[];
+  };
+}
+
+async function getSpacesForSubspaceManagement(): Promise<{ totalCount: number; spaces: SpaceToAdd[] }> {
+  const queryId = uuid();
+  const endpoint = Environment.getConfig().api;
+
+  const graphqlFetchEffect = graphql<NetworkResult>({
+    endpoint,
+    query: getFetchSpacesQuery(),
+  });
+
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
+    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+
+    if (Either.isLeft(resultOrError)) {
+      const error = resultOrError.left;
+
+      switch (error._tag) {
+        case 'AbortError':
+          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+          // the caller to consume the error channel as an effect. We throw here the typical JS
+          // way so we don't infect more of the codebase with the effect runtime.
+          throw error;
+        case 'GraphqlRuntimeError':
+          console.error(
+            `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${endpoint}
+
+            queryString: ${getFetchSpacesQuery()}
+            `,
+            error.message
+          );
+
+          return {
+            spaces: {
+              totalCount: 0,
+              nodes: [],
+            },
+          };
+
+        default:
+          console.error(`${error._tag}: Unable to fetch spaces, queryId: ${queryId} endpoint: ${endpoint}`);
+
+          return {
+            spaces: {
+              totalCount: 0,
+              nodes: [],
+            },
+          };
+      }
+    }
+
+    return resultOrError.right;
+  });
+
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+
+  const spaces = result.spaces.nodes.map((space): SpaceToAdd => {
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.metadata.nodes[0]);
+
+    return {
+      id: space.id,
+      spaceConfig: spaceConfigWithImage,
+      totalMembers: space.spaceMembers.totalCount,
+    };
+  });
+
+  return {
+    totalCount: result.spaces.totalCount,
+    spaces,
+  };
+}
+
+export default async function Layout({ children, params }: Props) {
+  const [props, spaces, subspaces] = await Promise.all([
+    getData(params.id),
+    getSpacesForSubspaceManagement(),
+    getSubspacesForSpace(params.id),
+  ]);
+  const coverUrl = Entities.cover(props.triples);
+
+  const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
+  const tabs = await buildTabsForSpacePage(props.space.spaceConfig?.types ?? [], params);
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
@@ -240,6 +357,8 @@ export default async function Layout({ children, params }: Props) {
           spaceId={props.spaceId}
           initialBlockIdsTriple={props.blockIdsTriple}
           initialBlockTriples={props.blockTriples}
+          initialBlockCollectionItems={props.blockCollectionItems}
+          initialBlockCollectionItemTriples={props.blockCollectionItemTriples}
         >
           <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
           <EntityPageContentContainer>
@@ -248,6 +367,25 @@ export default async function Layout({ children, params }: Props) {
               typeNames={typeNames}
               spaceId={props.spaceId}
               entityId={props.id}
+              addSubspaceComponent={
+                <AddSubspaceDialog
+                  mainVotingPluginAddress={props.space.mainVotingPluginAddress}
+                  spacePluginAddress={props.space.spacePluginAddress}
+                  spaces={spaces.spaces}
+                  totalCount={spaces.totalCount}
+                />
+              }
+              // If a space does not have any subspaces then
+              removeSubspaceComponent={
+                subspaces ? (
+                  <RemoveSubspaceDialog
+                    mainVotingPluginAddress={props.space.mainVotingPluginAddress}
+                    spacePluginAddress={props.space.spacePluginAddress}
+                    spaces={subspaces?.subspaces}
+                    totalCount={subspaces.totalCount}
+                  />
+                ) : null
+              }
               membersComponent={
                 <React.Suspense fallback={<MembersSkeleton />}>
                   <SpaceEditors spaceId={params.id} />
@@ -287,27 +425,23 @@ const getData = async (spaceId: string) => {
 
   const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
 
-  const blockIdsTriple = entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS) || null;
-  const blockIds: string[] = blockIdsTriple ? JSON.parse(Value.stringValue(blockIdsTriple) || '[]') : [];
+  const blockIdsTriple =
+    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
 
-  const blockTriples = (
-    await Promise.all(
-      blockIds.map(blockId => {
-        return Subgraph.fetchEntity({ id: blockId });
-      })
-    )
-  ).flatMap(entity => entity?.triples ?? []);
+  const { blockTriples, collectionItemTriples, blockCollectionItems } = await getBlocksCollectionData(entity);
 
   return {
     triples: entity?.triples ?? [],
     id: entity.id,
     name: entity?.name ?? spaceName ?? '',
-    description: Entity.description(entity?.triples ?? []),
+    description: Entities.description(entity?.triples ?? []),
     spaceId,
 
     // For entity page editor
     blockIdsTriple,
-    blockTriples,
+    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
+    blockCollectionItems,
+    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
 
     space,
   };

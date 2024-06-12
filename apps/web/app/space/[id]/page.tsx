@@ -1,13 +1,11 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
-import { COMPANY_TYPE, NONPROFIT_TYPE, PERSON_TYPE } from '@geogenesis/ids/system-ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { fetchEntities } from '~/core/io/subgraph';
-import { Triple } from '~/core/types';
+import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -73,15 +71,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function SpacePage({ params }: Props) {
   const spaceId = params.id;
   const props = await getData(spaceId);
-  const spaceType = getSpaceType(props.triples);
+  const spaceType = getSpaceType(props.spaceTypes);
 
   return (
     <>
-      <React.Suspense fallback={<SubspacesSkeleton />}>
-        <SubspacesContainer entityId={props.id} />
-      </React.Suspense>
       {spaceType && <SpaceNotices spaceType={spaceType} spaceId={spaceId} />}
-      <Editor shouldHandleOwnSpacing spacePage />
+      <React.Suspense fallback={<SubspacesSkeleton />}>
+        <SubspacesContainer spaceId={params.id} />
+      </React.Suspense>
+      <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
       <React.Suspense fallback={<EntityReferencedByLoading />}>
@@ -106,23 +104,15 @@ const SubspacesSkeleton = () => {
 };
 
 type SubspacesContainerProps = {
-  entityId: string;
+  spaceId: string;
 };
 
-const SubspacesContainer = async ({ entityId }: SubspacesContainerProps) => {
-  const subspaces = await fetchEntities({
-    typeIds: [SYSTEM_IDS.SPACE_CONFIGURATION],
-    filter: [
-      {
-        field: 'attribute-id',
-        value: SYSTEM_IDS.BROADER_SPACES,
-      },
-      {
-        field: 'linked-to',
-        value: entityId,
-      },
-    ],
-  });
+const SubspacesContainer = async ({ spaceId }: SubspacesContainerProps) => {
+  const subspaces = await fetchSubspacesBySpaceId(spaceId);
+
+  if (subspaces.length === 0) {
+    return null;
+  }
 
   return <Subspaces subspaces={subspaces} />;
 };
@@ -141,19 +131,19 @@ const getData = async (spaceId: string) => {
     triples: entity?.triples ?? [],
     id: entity.id,
     spaceId,
+    spaceTypes: space?.spaceConfig?.types ?? [],
+    subspaces: [],
   };
 };
 
 export type SpacePageType = 'person' | 'company' | 'nonprofit';
 
-const getSpaceType = (triples: Array<Triple>): SpacePageType | null => {
-  const typeTriples = triples.filter(triple => triple.attributeId === 'type');
-
-  if (typeTriples.some(triple => triple.value.id === PERSON_TYPE)) {
+const getSpaceType = (types: { id: string; name: string | null }[]): SpacePageType | null => {
+  if (types.some(type => type.id === SYSTEM_IDS.PERSON_TYPE)) {
     return 'person';
-  } else if (typeTriples.some(triple => triple.value.id === COMPANY_TYPE)) {
+  } else if (types.some(type => type.id === SYSTEM_IDS.COMPANY_TYPE)) {
     return 'company';
-  } else if (typeTriples.some(triple => triple.value.id === NONPROFIT_TYPE)) {
+  } else if (types.some(type => type.id === SYSTEM_IDS.NONPROFIT_TYPE)) {
     return 'nonprofit';
   } else {
     return null;

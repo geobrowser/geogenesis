@@ -4,14 +4,14 @@ import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth'
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
 import { createPublicClient, http } from 'viem';
-import { polygon } from 'viem/chains';
 
 import * as React from 'react';
 
-import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
-
 import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
+
+import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
+
 import { Wallet } from '~/design-system/icons/wallet';
 
 import {
@@ -24,6 +24,7 @@ import {
 } from '~/partials/onboarding/dialog';
 
 import { Cookie } from '../cookie';
+import { CONDUIT_TESTNET } from './conduit-chain';
 
 // const LOCAL_CHAIN: Chain = {
 //   id: Number(Environment.options.development.chainId),
@@ -45,17 +46,17 @@ import { Cookie } from '../cookie';
 // };
 
 export const publicClient = createPublicClient({
-  chain: polygon,
+  chain: CONDUIT_TESTNET,
   transport: http(process.env.NEXT_PUBLIC_RPC_URL!, { batch: true }),
 });
 
 const realWalletConfig = createConfig({
-  chains: [polygon],
+  chains: [CONDUIT_TESTNET],
   // This enables us to use a single injected connector but handle multiple wallet
   // extensions within the browser.
   multiInjectedProviderDiscovery: true,
   transports: {
-    [polygon.id]: http(process.env.NEXT_PUBLIC_RPC_URL!),
+    [CONDUIT_TESTNET.id]: http(process.env.NEXT_PUBLIC_RPC_URL!),
   },
   ssr: true,
   connectors: [
@@ -89,9 +90,9 @@ const realWalletConfig = createConfig({
 });
 
 const mockConfig = createConfig({
-  chains: [polygon],
+  chains: [CONDUIT_TESTNET],
   transports: {
-    [polygon.id]: http(),
+    [CONDUIT_TESTNET.id]: http(),
   },
   connectors: [
     mock({

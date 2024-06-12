@@ -12,8 +12,10 @@ import { Execute } from './execute';
 import { Refetch } from './refetch';
 import { Vote } from './vote';
 
+export const revalidate = 0;
+
 export default async function Page() {
-  const proposals = await fetchProposals({ spaceId: TEST_DAO_ADDRESS, tag: 'proposals' });
+  const proposals = await fetchProposals({ spaceId: TEST_DAO_ADDRESS });
 
   return (
     <div className="space-y-4">
@@ -28,12 +30,16 @@ export default async function Page() {
             return (
               <div key={p.id} className="py-4">
                 <p className="text-button">{p.name}</p>
-                <p>{isAwaitingExecution ? 'Pending execution' : toTitleCase(p.status)}</p>
-                <p>{isAwaitingExecution ? 'Voting concluded' : `${secondsRemaining} seconds remaining`} </p>
+                <p>{isAwaitingExecution && p.status !== 'ACCEPTED' ? 'Pending execution' : toTitleCase(p.status)}</p>
+                <p>
+                  {isAwaitingExecution || p.status === 'ACCEPTED'
+                    ? 'Voting concluded'
+                    : `${secondsRemaining} seconds remaining`}{' '}
+                </p>
                 <div className="flex items-center gap-2">
                   <p>Total votes: {p.proposalVotes.totalCount}</p>
-                  <p>Yes: {p.proposalVotes.nodes.filter(p => p.vote === 'YES').length}</p>
-                  <p>No: {p.proposalVotes.nodes.filter(p => p.vote === 'NO').length}</p>
+                  <p>Yes: {p.proposalVotes.nodes.filter(p => p.vote === 'ACCEPT').length}</p>
+                  <p>No: {p.proposalVotes.nodes.filter(p => p.vote === 'REJECT').length}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Vote onchainProposalId={p.onchainProposalId} type={VoteOption.Yes}>
@@ -52,10 +58,10 @@ export default async function Page() {
 
       <div className="flex flex-row gap-4">
         <ClientOnly>
-          <CreateDao />
+          <CreateDao type="governance" />
         </ClientOnly>
         <ClientOnly>
-          <CreateProposal type="content" />
+          <CreateProposal />
         </ClientOnly>
       </div>
     </div>

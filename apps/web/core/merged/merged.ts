@@ -1,11 +1,12 @@
 import { A, G, pipe } from '@mobily/ts-belt';
+import { QueryClient } from '@tanstack/query-core';
 
 import { Subgraph } from '~/core/io';
 import { useLocalStore } from '~/core/state/local-store';
 import { Column, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { useActionsStore } from '../hooks/use-actions-store';
@@ -16,6 +17,7 @@ interface MergedDataSourceOptions {
   store: ReturnType<typeof useActionsStore>;
   localStore: ReturnType<typeof useLocalStore>;
   subgraph: Subgraph.ISubgraph;
+  cache: QueryClient;
 }
 
 interface IMergedDataSource
@@ -48,26 +50,31 @@ interface IMergedDataSource
  * on the Merged class should be the same as the Network class.
  */
 export class Merged implements IMergedDataSource {
+  private cache: QueryClient;
   private store: ReturnType<typeof useActionsStore>;
   private localStore: ReturnType<typeof useLocalStore>;
   private subgraph: Subgraph.ISubgraph;
 
-  constructor({ store, localStore, subgraph }: MergedDataSourceOptions) {
+  constructor({ store, localStore, subgraph, cache }: MergedDataSourceOptions) {
     this.store = store;
     this.localStore = localStore;
     this.subgraph = subgraph;
+    this.cache = cache;
   }
 
   // Right now we don't filter locally created triples in fetchTriples. This means that we may return extra
   // triples that do not match the passed in query + filter.
   fetchTriples = async (options: Parameters<Subgraph.ISubgraph['fetchTriples']>[0]): Promise<ITriple[]> => {
-    const networkTriples = await this.subgraph.fetchTriples(options);
+    const networkTriples = await this.cache.fetchQuery({
+      queryFn: () => this.subgraph.fetchTriples(options),
+      queryKey: ['merged-fetch-triples', options],
+    });
 
     const actions = options.space ? this.store.actions[options.space] : this.store.allActions;
 
     // Merge any local actions with the network triples
-    const updatedTriples = Triple.fromActions(actions, networkTriples);
-    const mergedTriplesWithName = Triple.withLocalNames(actions, updatedTriples);
+    const updatedTriples = Triples.merge(actions, networkTriples);
+    const mergedTriplesWithName = Triples.withLocalNames(actions, updatedTriples);
 
     // Apply any server filters to locally created data.
     let locallyFilteredTriples = mergedTriplesWithName;
@@ -91,11 +98,11 @@ export class Merged implements IMergedDataSource {
         }
 
         if (filter.field === 'linked-to') {
-          return t.value.type === 'entity' && t.value.id === filter.value;
+          return t.value.type === 'ENTITY' && t.value.value === filter.value;
         }
 
         if (filter.field === 'value') {
-          return t.value.type === 'entity' && t.value.name === filter.value;
+          return t.value.type === 'ENTITY' && t.value.name === filter.value;
         }
       });
     }
@@ -111,7 +118,7 @@ export class Merged implements IMergedDataSource {
     // don't map to the selected filter.
     const localEntities = pipe(
       this.store.actions,
-      actions => Entity.mergeActionsWithEntities(actions, networkEntities),
+      actions => Entities.mergeActionsWithEntities(actions, networkEntities),
       A.filter(e => {
         if (!G.isString(e.name)) {
           return false;
@@ -150,19 +157,22 @@ export class Merged implements IMergedDataSource {
    */
   fetchEntity = async (options: Parameters<Subgraph.ISubgraph['fetchEntity']>[0]) => {
     try {
-      const maybeNetworkEntity = await this.subgraph.fetchEntity({ id: options.id });
+      const maybeNetworkEntity = await this.cache.fetchQuery({
+        queryFn: () => this.subgraph.fetchEntity({ id: options.id }),
+        queryKey: ['merged-fetch-entity', options.id],
+      });
 
-      const actionsForEntityId = Entity.actionsForEntityId(this.store.allActions, options.id);
+      const localTriplesForEntityId = this.store.allActions.filter(a => a.entityId === options.id);
 
-      if (actionsForEntityId.length === 0) return maybeNetworkEntity;
+      if (localTriplesForEntityId.length === 0) return maybeNetworkEntity;
 
       // If not networkEntity we need to just return the local entity
       if (!maybeNetworkEntity) {
-        return Entity.fromActions(this.store.allActions, options.id);
+        return Entities.fromTriples(this.store.allActions, options.id);
       }
 
       // If the network entity exists, we need to merge the local actions with the network entity.
-      const entity = Entity.mergeActionsWithEntity(this.store.allActions, maybeNetworkEntity);
+      const entity = Entities.mergeActionsWithEntity(this.store.allActions, maybeNetworkEntity);
 
       if (!entity) {
         return null;
@@ -249,7 +259,7 @@ export class Merged implements IMergedDataSource {
     // to them.
     const entitiesCreatedOrChangedLocally = pipe(
       this.store.actions,
-      actions => Entity.mergeActionsWithEntities(actions, Entity.entitiesFromTriples(serverEntityTriples)),
+      actions => Entities.mergeActionsWithEntities(actions, Entities.entitiesFromTriples(serverEntityTriples)),
       A.filter(e => e.types.some(t => t.id === selectedTypeEntityId)),
       A.filter(entity => {
         for (const filter of filterState) {
@@ -277,7 +287,7 @@ export class Merged implements IMergedDataSource {
       sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
     );
 
-    const entities = Entity.entitiesFromTriples([
+    const entities = Entities.entitiesFromTriples([
       // These are entities that were created locally and have the selected type
       ...entitiesCreatedOrChangedLocally.flatMap(e => e.triples),
 
@@ -297,10 +307,10 @@ export class Merged implements IMergedDataSource {
 
 function filterValue(value: Value, valueToFilter: string) {
   switch (value.type) {
-    case 'string':
+    case 'TEXT':
       return value.value === valueToFilter;
-    case 'entity':
-      return value.id === valueToFilter;
+    case 'ENTITY':
+      return value.value === valueToFilter;
     default:
       return false;
   }

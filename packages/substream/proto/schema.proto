@@ -3,103 +3,6 @@ syntax = "proto3";
 package schema;
 
 /**
- * We currently index two sets of contracts representing spaces:
- * 1. The original Space contract with simple permissions rules and no proposals.
- * 2. The new (as of January 23rd, 2024) DAO-based contracts with Plugins representing
- *    the Space and any governance and permissions rules.
- *
- * Having multiple sets of contracts means that we support multiple methods for
- * indexing data from these contracts, including the data representing the contracts
- * themselves like the address of the contract and any plugins (if they exist).
- *
- * We will eventually deprecate the existing contracts and migrate data and permissions
- * in them to the new contract implementation. To do this we will likely only index the
- * old contracts up to a specific block number and then index the new contracts from that
- * block.
- *
- * Alternatively we might look to "snapshot" the state of Geo at a specific timepoint
- * and migrate fully to the new contracts. This would likely coincide with a migration
- * to a separate blockchain.
- *
- * The new, DAO-based contracts are based on Aragon's OSX architecture in which a DAO's
- * onchain functionality is defined by a set of plugin contracts. These plugins can be
- * used for things like governance, membership, or representing an append-only log of
- * IPFS content.
- */
-
-/**
- * Entries represent the content being added to a legacy space (See top level for more
- * info on the different space contracts). This content is stored on IPFS and represented
- * by a content URI.
- *
- * Additionally we map the author of the content and the space the content was added to.
- *
- * The new, DAO-based contracts have a different method and event for adding content to
- * a space which will get mapped in a separate event.
- */
-message EntryAdded {
-  string id = 1; //{block-number}-{tx-hash}-{log-index}
-  string index = 2;
-  string uri = 3;
-  string author = 4;
-  string space = 5;
-}
-
-message EntriesAdded {
-  repeated EntryAdded entries = 1;
-}
-
-/**
- * Roles represent the permissions for a legacy space (See top level comment for more info
- * on the different space contracts). Roles fall into "admin", "editor controller" (moderator),
- * and "editor" (member) roles, each granting different permissions within the space.
- *
- * The new, DAO-based contracts have a different, but similar permissions model that omits the
- * moderator role.
- */
-enum Role {
-  NULL_ROLE = 0;
-  MODERATOR = 1;
-  MEMBER = 2;
-  ADMIN = 3;
-}
-
-message RoleChange {
-  oneof change {
-    RoleGranted granted = 1;
-    RoleRevoked revoked = 2;
-  }
-}
-
-message RoleChanges {
-  repeated RoleChange changes = 1;
-}
-
-message RoleGranted {
-  string id = 1;
-  Role role = 2;
-  string account = 3;
-  string sender = 4;
-  string space = 5;
-}
-
-message RolesGranted {
-  repeated RoleGranted roles = 1;
-}
-
-message RoleRevoked {
-  string id = 1;
-  Role role = 2;
-  string account = 3;
-  string sender = 4;
-  string space = 5;
-}
-
-message RolesRevoked {
-  repeated RoleRevoked roles = 1;
-}
-
-/**
  * Profiles represent the users of Geo. Profiles are registered in the GeoProfileRegistry
  * contract and are associated with a user's EVM-based address and the space where metadata
  * representing their profile resides in.
@@ -169,6 +72,16 @@ message GeoGovernancePluginsCreated {
   repeated GeoGovernancePluginCreated plugins = 1;
 }
 
+message GeoPersonalSpaceAdminPluginCreated {
+  string daoAddress = 1;
+  string personalAdminAddress = 2;
+  string initialEditor = 3;
+}
+
+message GeoPersonalSpaceAdminPluginsCreated {
+  repeated GeoPersonalSpaceAdminPluginCreated plugins = 1;
+}
+
 /**
  * This event represents adding editors to a DAO-based space
  *
@@ -186,7 +99,7 @@ message GeoGovernancePluginsCreated {
  * 2. They are added as a set of initial editors when first creating the space. This allows
  *    space deployers to bootstrap a set of editors on space creation.
  */
-message EditorAdded {
+message InitialEditorAdded {
   // The event emits an array of addresses. We only emit multiple addresses
   // when first creating the governance plugin. After that we only emit one
   // address at a time via proposals.
@@ -194,8 +107,8 @@ message EditorAdded {
   string pluginAddress = 2;
 }
 
-message EditorsAdded {
-  repeated EditorAdded editors = 1;
+message InitialEditorsAdded {
+  repeated InitialEditorAdded editors = 1;
 }
 
 /**
@@ -230,13 +143,67 @@ message ProposalCreated {
   string start_time = 3;
   string end_time = 4;
   string metadata_uri = 5;
-  repeated DaoAction actions = 6;
-  string allow_failure_map = 7;
-  string plugin_address = 8;
+  string plugin_address = 6;
 }
 
 message ProposalsCreated {
   repeated ProposalCreated proposals = 1;
+}
+
+// Executed proposals have been approved and executed onchain in a DAO-based
+// space's main voting plugin. The DAO itself also emits the executed event,
+// but the ABI/interface is different. We really only care about the one
+// from our plugins.
+message ProposalExecuted {
+  string proposal_id = 1;
+  string plugin_address = 2;
+}
+
+message ProposalsExecuted {
+  repeated ProposalExecuted executed_proposals = 1;
+}
+
+/**
+ * Processed Proposals represent content that has been approved by a DAO
+ * and executed onchain.
+ *
+ * We use the content URI to represent the content that was approved. We
+ * only consume the `proposalId` in the content URI to map the processed
+ * data to an existing proposal onchain and in the sink.
+*/
+message ProposalProcessed {
+  string content_uri = 1;
+  string plugin_address = 2;
+}
+
+message ProposalsProcessed {
+  repeated ProposalProcessed proposals = 1;
+}
+
+/**
+ * Added or Removed Subspaces represent adding a space contracto to the hierarchy
+ * of the DAO-based space. This is useful to "link" Spaces together in a
+ * tree of spaces, allowing us to curate the graph of their knowledge and 
+ * permissions.
+*/
+message SubspaceAdded {
+  string subspace = 1;
+  string plugin_address = 2;
+  string change_type = 3;
+}
+
+message SubspacesAdded {
+  repeated SubspaceAdded subspaces = 1;
+}
+
+message SubspaceRemoved {
+  string subspace = 1;
+  string plugin_address = 2;
+  string change_type = 3;
+}
+
+message SubspacesRemoved {
+  repeated SubspaceRemoved subspaces = 1;
 }
 
 /**
@@ -257,14 +224,59 @@ message VotesCast {
   repeated VoteCast votes = 1;
 }
 
+message MemberAdded {
+  string member_address = 1;
+  string main_voting_plugin_address = 2;
+  string change_type = 3;
+}
+
+message MembersAdded {
+  repeated MemberAdded members = 1;
+}
+
+message MemberRemoved {
+  string member_address = 1;
+  string main_voting_plugin_address = 2;
+  string change_type = 3;
+}
+
+message MembersRemoved {
+  repeated MemberRemoved members = 1;
+}
+
+message EditorAdded {
+  string editor_address = 1;
+  string main_voting_plugin_address = 2;
+  string change_type = 3;
+}
+
+message EditorsAdded {
+  repeated EditorAdded editors = 1;
+}
+
+message EditorRemoved {
+  string editor_address = 1;
+  string main_voting_plugin_address = 2;
+  string change_type = 3;
+}
+
+message EditorsRemoved {
+  repeated EditorRemoved editors = 1;
+}
+
 message GeoOutput {
-  repeated EntryAdded entries = 1;
-  repeated RoleChange role_changes = 2;
-  repeated GeoProfileRegistered profiles_registered = 3;
-  // repeated GeoSpaceCreated spaces_created = 4;
-  // repeated GeoGovernancePluginCreated governance_plugins_created = 5;
-  // repeated EditorAdded editors_added = 6;
-  // repeated ProposalCreated proposals_created = 7;
-  // repeated VoteCast votes_cast = 8;
-  // repeated SuccessorSpaceCreated successor_spaces_created = 6;
+  repeated GeoProfileRegistered profiles_registered = 1;
+  repeated GeoSpaceCreated spaces_created = 2;
+  repeated GeoGovernancePluginCreated governance_plugins_created = 3;
+  repeated InitialEditorAdded initial_editors_added = 4;
+  repeated ProposalCreated proposals_created = 5;
+  repeated VoteCast votes_cast = 6;
+  repeated ProposalProcessed proposals_processed = 7;
+  repeated SuccessorSpaceCreated successor_spaces_created = 8;
+  repeated SubspaceAdded subspaces_added = 9;
+  repeated SubspaceRemoved subspaces_removed = 10;
+  repeated ProposalExecuted executed_proposals = 11;
+  repeated MemberAdded members_added = 12;
+  repeated EditorAdded editors_added = 13;
+  repeated GeoPersonalSpaceAdminPluginCreated personal_plugins_created = 14;
 }
