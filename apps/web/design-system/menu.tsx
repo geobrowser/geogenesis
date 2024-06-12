@@ -2,6 +2,7 @@
 
 import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
@@ -74,10 +75,13 @@ export function Menu({
   );
 }
 
-export function MenuItem({ children }: { children: React.ReactNode }) {
+type MenuItemProps = React.ComponentPropsWithoutRef<'div'>;
+
+export function MenuItem({ className = '', children, ...rest }: MenuItemProps) {
   return (
-    <div className="text-button text-grey-04 transition-colors duration-75 hover:bg-bg hover:text-text focus:bg-bg focus:text-text">
-      {children}
+    <div className={cx('group relative text-button text-text', className)} {...rest}>
+      <div className="absolute inset-1 z-0 rounded transition-colors duration-75 group-hover:bg-grey-01" />
+      <div className="relative z-10">{children}</div>
     </div>
   );
 }

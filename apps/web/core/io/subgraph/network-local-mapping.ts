@@ -38,26 +38,32 @@ export type SubstreamAction = OmitStrict<SubstreamTriple, 'space' | 'isProtected
   };
 
 export type SubstreamEntity = OmitStrict<Entity, 'triples'> & {
-  // versionsByEntityId: { nodes: { tripleVersions: { nodes: { triple: NetworkTriple }[] } }[] };
   triplesByEntityId: { nodes: SubstreamTriple[] };
 };
 
-export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy'> & {
+export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy' | 'space'> & {
   actions: { nodes: SubstreamAction[] };
 
-  // The NetworkVersion does not have a name or avatar associated
-  // with the createdBy field
-  createdById: string;
+  createdBy: {
+    id: string;
+    geoProfiles: { nodes: SubstreamEntity[] };
+    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
+  };
+  space: { id: string; metadata: { nodes: SubstreamEntity[] } };
 };
 
 export type SubstreamVersion = {
   id: string;
   name: string | null;
   description: string | null;
-  createdById: string; // wallet address
+  createdBy: {
+    id: string;
+    geoProfiles: { nodes: SubstreamEntity[] };
+    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
+  };
   createdAt: number;
   createdAtBlock: string;
-  spaceId: string;
+  space: { id: string; metadata: { nodes: SubstreamEntity[] } };
   tripleVersions: { nodes: { triple: SubstreamTriple }[] };
   entity: {
     id: string;
@@ -68,12 +74,16 @@ export type SubstreamVersion = {
 export type SubstreamProposal = {
   id: string;
   onchainProposalId: string;
-  createdById: string;
+  createdBy: {
+    id: string;
+    geoProfiles: { nodes: SubstreamEntity[] };
+    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
+  };
   createdAt: number;
   createdAtBlock: string;
   name: string | null;
   description: string | null;
-  spaceId: string;
+  space: { id: string; metadata: { nodes: SubstreamEntity[] } };
   startTime: number;
   endTime: number;
   status: 'APPROVED';

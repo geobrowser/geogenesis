@@ -11,7 +11,7 @@ import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
 import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
-import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
+import { generateActionsForNonprofit } from '~/core/utils/contracts/generate-actions-for-nonprofit';
 import { slog } from '~/core/utils/utils';
 
 import { makeProposalServer } from '../../make-proposal-server';
@@ -95,27 +95,9 @@ export async function makeNonprofitEffect(
     try: async () => {
       const actions: CreateTripleAction[] = [];
 
-      // Add triples for a Person entity
-      if (username) {
-        const nameTripleWithoutId: OmitStrict<Triple, 'id'> = {
-          entityId: profileId,
-          entityName: username ?? '',
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          space: spaceAddress,
-          value: {
-            type: 'string',
-            value: username,
-            id: ID.createValueId(),
-          },
-        };
+      const nonprofitActions = await generateActionsForNonprofit(profileId, username ?? '', spaceAddress);
 
-        actions.push({
-          type: 'createTriple',
-          id: ID.createTripleId(nameTripleWithoutId),
-          ...nameTripleWithoutId,
-        });
-      }
+      actions.push(...nonprofitActions);
 
       if (avatarUri) {
         const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
@@ -138,71 +120,9 @@ export async function makeNonprofitEffect(
         });
       }
 
-      // Add Types: Nonprofit Organization and Project to the profile entity
-      const nonprofitTypeTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        entityId: profileId,
-        entityName: username ?? '',
-        space: spaceAddress,
-        value: {
-          type: 'entity',
-          name: 'Nonprofit Organization',
-          id: SYSTEM_IDS.NONPROFIT_TYPE,
-        },
-      };
-
-      const projectTypeTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        entityId: profileId,
-        entityName: username ?? '',
-        space: spaceAddress,
-        value: {
-          type: 'entity',
-          name: 'Project',
-          id: SYSTEM_IDS.PROJECT_TYPE,
-        },
-      };
-
-      const spaceTypeTriple: OmitStrict<Triple, 'id'> = {
-        attributeId: SYSTEM_IDS.TYPES,
-        attributeName: 'Types',
-        entityId: profileId,
-        entityName: username ?? '',
-        space: spaceAddress,
-        value: {
-          type: 'entity',
-          name: 'Space',
-          id: SYSTEM_IDS.SPACE_CONFIGURATION,
-        },
-      };
-
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(nonprofitTypeTriple),
-        ...nonprofitTypeTriple,
-      });
-
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(projectTypeTriple),
-        ...projectTypeTriple,
-      });
-
-      actions.push({
-        type: 'createTriple',
-        id: ID.createTripleId(spaceTypeTriple),
-        ...spaceTypeTriple,
-      });
-
-      const nonprofitActions = generateTriplesForNonprofit(profileId, username ?? '', spaceAddress);
-
-      actions.push(...nonprofitActions);
-
       slog({
         requestId,
-        message: `Adding profile to space ${spaceAddress}`,
+        message: `Adding nonprofit entity to space ${spaceAddress}`,
         account: userAccount,
       });
 

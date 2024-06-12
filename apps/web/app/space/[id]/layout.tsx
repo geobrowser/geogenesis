@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
-import { ROLE_ATTRIBUTE } from '@geogenesis/ids/system-ids';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -39,6 +38,7 @@ interface TabProps {
   label: string;
   href: string;
   priority: 1 | 2 | 3;
+  hidden?: boolean;
 }
 
 async function buildTabsForSpacePage(types: EntityType[], params: Props['params']): Promise<TabProps[]> {
@@ -47,13 +47,29 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
 
   let teamCount = 0;
 
-  if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
+  const pageTriples = await Subgraph.fetchTriples({
+    space: params.id,
+    query: '',
+    skip: 0,
+    first: 1000,
+    filter: [{ field: 'attribute-id', value: SYSTEM_IDS.PAGE_TYPE_TYPE }],
+  });
+
+  const hasPostsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.POSTS_PAGE);
+  // const hasProductsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.PRODUCTS_PAGE);
+  // const hasServicesPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.SERVICES_PAGE);
+  const hasEventsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.EVENTS_PAGE);
+  const hasProjectsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.PROJECTS_PAGE);
+  const hasJobsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.JOBS_PAGE);
+  const hasFinancesPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.FINANCES_PAGE);
+
+  if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE) || typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
     const roleTriples = await Subgraph.fetchTriples({
       space: params.id,
       query: '',
       skip: 0,
       first: 1000,
-      filter: [{ field: 'attribute-id', value: ROLE_ATTRIBUTE }],
+      filter: [{ field: 'attribute-id', value: SYSTEM_IDS.ROLE_ATTRIBUTE }],
     });
 
     if (roleTriples.length > 0) {
@@ -68,6 +84,37 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       priority: 1 as const,
     },
     {
+      label: 'Posts',
+      href: `${NavUtils.toSpace(params.id)}/posts`,
+      priority: 1 as const,
+      hidden: !hasPostsPage,
+    },
+    // be sure to also restore actions in `generate-actions-for-company.ts`
+    // {
+    //   label: 'Products',
+    //   href: `${NavUtils.toSpace(params.id)}/products`,
+    //   priority: 1 as const,
+    //   hidden: !hasProductsPage,
+    // },
+    // {
+    //   label: 'Services',
+    //   href: `${NavUtils.toSpace(params.id)}/services`,
+    //   priority: 1 as const,
+    //   hidden: !hasServicesPage,
+    // },
+    {
+      label: 'Events',
+      href: `${NavUtils.toSpace(params.id)}/events`,
+      priority: 1 as const,
+      hidden: !hasEventsPage,
+    },
+    {
+      label: 'Jobs',
+      href: `${NavUtils.toSpace(params.id)}/jobs`,
+      priority: 1 as const,
+      hidden: !hasJobsPage,
+    },
+    {
       label: 'Team',
       href: `${NavUtils.toSpace(params.id)}/team`,
       priority: 1 as const,
@@ -80,10 +127,53 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     },
   ];
 
+  const NONPROFIT_TABS = [
+    {
+      label: 'Overview',
+      href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Posts',
+      href: `${NavUtils.toSpace(params.id)}/posts`,
+      priority: 1 as const,
+      hidden: !hasPostsPage,
+    },
+    {
+      label: 'Projects',
+      href: `${NavUtils.toSpace(params.id)}/projects`,
+      priority: 1 as const,
+      hidden: !hasProjectsPage,
+    },
+    {
+      label: 'Team',
+      href: `${NavUtils.toSpace(params.id)}/team`,
+      priority: 1 as const,
+      badge: <>{teamCount.toString()}</>,
+    },
+    {
+      label: 'Finances',
+      href: `${NavUtils.toSpace(params.id)}/finances`,
+      priority: 1 as const,
+      hidden: !hasFinancesPage,
+    },
+  ];
+
   const PERSON_TABS = [
     {
       label: 'Overview',
       href: `${NavUtils.toSpace(params.id)}`,
+      priority: 1 as const,
+    },
+    {
+      label: 'Posts',
+      href: `${NavUtils.toSpace(params.id)}/posts`,
+      priority: 1 as const,
+      hidden: !hasPostsPage,
+    },
+    {
+      label: 'Spaces',
+      href: `${NavUtils.toSpace(params.id)}/spaces`,
       priority: 1 as const,
     },
     {
@@ -110,6 +200,10 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   // show "content-based" tabs first, then "space-based" tabs.
   if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE)) {
     tabs.push(...COMPANY_TABS);
+  }
+
+  if (typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
+    tabs.push(...NONPROFIT_TABS);
   }
 
   if (typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {

@@ -20,6 +20,7 @@ import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { Create } from '~/design-system/icons/create';
+// import { CsvImport } from '~/design-system/icons/csv-import';
 import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
@@ -43,6 +44,7 @@ export function SpacePageMetadataHeader({
   const isEditing = useUserIsEditing(spaceId);
   const [open, onOpenChange] = React.useState(false);
 
+  // @TODO pathname might already include `/entities` or `/import`, resulting in a broken behavior in the context menu
   const pathname = usePathname();
 
   const { subgraph } = Services.useServices();
@@ -140,7 +142,6 @@ export function SpacePageMetadataHeader({
             </div>
           )}
         </HistoryPanel>
-
         <Menu
           open={open}
           onOpenChange={onOpenChange}
@@ -156,15 +157,24 @@ export function SpacePageMetadataHeader({
               Copy ID
             </Text>
           </button>
-
           <Link
             href={`${pathname}/entities`}
+            onClick={() => onOpenChange(false)}
             className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 hover:bg-bg"
           >
             <Text variant="button" className="hover:!text-text">
               View data
             </Text>
           </Link>
+          {/* <Link
+            href={`${pathname}/import`}
+            onClick={() => onOpenChange(false)}
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
+          >
+            <Text variant="button" className="hover:!text-text">
+              CSV import
+            </Text>
+          </Link> */}
         </Menu>
       </div>
     </div>

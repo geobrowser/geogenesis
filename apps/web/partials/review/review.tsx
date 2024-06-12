@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useWalletClient } from 'wagmi';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
-import { Environment } from '~/core/environment';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
@@ -65,10 +65,6 @@ type Proposal = {
 
 type EntityId = string;
 
-type GatewaySpaceWithEntityConfig = {
-  spaceConfigEntityId: string;
-} & Space;
-
 const ReviewChanges = () => {
   const { subgraph } = Services.useServices();
   const { state } = useStatusBar();
@@ -88,8 +84,7 @@ const ReviewChanges = () => {
       for (const space of spaces) {
         const id = space.id;
         const config = space.spaceConfig;
-        const maybeImageHash = Entity.cover(config.triples) ?? Entity.avatar(config.triples);
-        const image = maybeImageHash ? getImagePath(maybeImageHash) : null;
+        const image = config ? getImagePath(config.image) : PLACEHOLDER_SPACE_IMAGE;
 
         spacesMap.set(id, {
           id,
@@ -520,11 +515,13 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
                       ))}
                   </div>
                 </div>
-                <TableBlockPlaceholder
-                  columns={2}
-                  rows={2}
-                  className="mt-2 !overflow-hidden rounded-lg border border-grey-02 p-0 opacity-50 shadow-button"
-                />
+                <div className="mt-2">
+                  <TableBlockPlaceholder
+                    columns={2}
+                    rows={2}
+                    className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
+                  />
+                </div>
               </>
             )}
           </div>
@@ -551,11 +548,13 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
                       ))}
                   </div>
                 </div>
-                <TableBlockPlaceholder
-                  columns={2}
-                  rows={2}
-                  className="mt-2 !overflow-hidden rounded-lg border border-grey-02 p-0 opacity-50 shadow-button"
-                />
+                <div className="mt-2">
+                  <TableBlockPlaceholder
+                    columns={2}
+                    rows={2}
+                    className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
+                  />
+                </div>
               </>
             )}
           </div>
@@ -945,7 +944,7 @@ const labelClassNames = `text-footnote text-grey-04`;
 
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
-const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
+export const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
   const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: ['changes', spaceId, actions],

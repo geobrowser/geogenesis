@@ -11,10 +11,10 @@ import { Params } from '~/core/params';
 import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 import { Space } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 
 import { Component } from './component';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   params: { id: string };
@@ -29,7 +29,7 @@ export default async function EntitiesPage({ params, searchParams }: Props) {
   const spaceId = params.id;
   const initialParams = Params.parseEntityTableQueryFilterFromParams(searchParams);
 
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
   const props = await getData({ space, initialParams });
 
   return <Component {...props} />;
@@ -50,9 +50,7 @@ const getData = async ({
   const configEntity = space?.spaceConfig;
 
   const spaceName = configEntity ? configEntity.name : space.id;
-  const spaceImage = configEntity
-    ? Entity.cover(configEntity.triples) ?? Entity.avatar(configEntity.triples)
-    : PLACEHOLDER_SPACE_IMAGE;
+  const spaceImage = configEntity ? configEntity.image : PLACEHOLDER_SPACE_IMAGE;
 
   const [initialSpaceTypes, initialForeignTypes] = await Promise.all([
     fetchSpaceTypeTriples(spaceId),
@@ -111,7 +109,7 @@ const getData = async ({
   return {
     space,
     spaceName: spaceName ?? null,
-    spaceImage: spaceImage ?? null,
+    spaceImage,
     initialSelectedType,
     initialForeignTypes,
     initialColumns: serverColumns,

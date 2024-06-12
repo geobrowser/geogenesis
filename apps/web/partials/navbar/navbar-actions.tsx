@@ -1,9 +1,6 @@
 'use client';
 
-import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { useSetActiveWallet } from '@privy-io/wagmi';
 import * as Popover from '@radix-ui/react-popover';
-import { useQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
 import Link from 'next/link';
@@ -13,79 +10,34 @@ import * as React from 'react';
 
 import { useAccount } from 'wagmi';
 
-import { Cookie } from '~/core/cookie';
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useGeoProfile } from '~/core/hooks/use-geo-profile';
+import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
-import { usePerson } from '~/core/hooks/use-person';
-import { fetchProfile } from '~/core/io/subgraph';
 import { useEditable } from '~/core/state/editable-store';
-import { Profile } from '~/core/types';
-import { NavUtils, formatShortAddress } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
-import { Check } from '~/design-system/icons/check';
 import { EyeSmall } from '~/design-system/icons/eye-small';
-import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
-import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
+import { Home } from '~/design-system/icons/home';
 import { Menu } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { useCreateProfile } from '../onboarding/create-profile-dialog';
 
-interface MenuState {
-  isOpen: boolean;
-  // Profile switcher is a submenu within the menu
-  isProfileSwitcherOpen: boolean;
-}
-
-type MenuAction =
-  | {
-      type: 'SET_OPEN';
-      open: boolean;
-    }
-  | {
-      type: 'SET_PROFILE_SWITCHER_OPEN';
-      open: boolean;
-    };
-
-function menuReducer(state: MenuState, action: MenuAction): MenuState {
-  switch (action.type) {
-    case 'SET_OPEN':
-      return {
-        ...state,
-        isOpen: action.open,
-        // Close the profile switcher if we're closing the menu
-        isProfileSwitcherOpen: action.open ? state.isProfileSwitcherOpen : false,
-      };
-    case 'SET_PROFILE_SWITCHER_OPEN':
-      return {
-        ...state,
-        isProfileSwitcherOpen: action.open,
-      };
-  }
-}
-
 export function NavbarActions() {
-  const [menuState, dispatch] = React.useReducer(menuReducer, {
-    isOpen: false,
-    isProfileSwitcherOpen: false,
-  });
-
+  const [open, onOpenChange] = React.useState(false);
   const { showCreateProfile } = useCreateProfile();
 
-  const { user } = usePrivy();
   const { address } = useAccount();
-  const { profile, isLoading: isProfileLoading } = useGeoProfile(address as `0x${string}` | undefined);
-  const { person, isLoading: isPersonLoading } = usePerson(address);
+  const { isLoading, account } = useGeoAccount(address);
 
-  if (!user?.wallet?.address) {
+  if (!address) {
     return <GeoConnectButton />;
   }
 
-  if (isProfileLoading || isPersonLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center gap-4">
         <Skeleton className="h-7 w-[66px]" radius="rounded-full" />
@@ -97,114 +49,68 @@ export function NavbarActions() {
   return (
     <div className="flex items-center gap-4">
       <ModeToggle />
-
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={person?.avatarUrl} size={28} />
+            <Avatar value={address} avatarUrl={account?.profile?.avatarUrl} size={28} />
           </div>
         }
-        open={menuState.isOpen}
-        onOpenChange={open => dispatch({ type: 'SET_OPEN', open })}
-        className="max-w-[300px] bg-white"
+        open={open}
+        onOpenChange={onOpenChange}
+        className="max-w-[165px]"
       >
-        {!menuState.isProfileSwitcherOpen ? (
+        {!account?.profile && account?.onchainProfile ? (
+          <AvatarMenuItem>
+            <div className="flex items-center gap-2">
+              <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                <Avatar value={address} size={16} />
+              </div>
+              <button onClick={showCreateProfile}>Create profile</button>
+            </div>
+          </AvatarMenuItem>
+        ) : (
           <>
-            <AvatarMenuItemsContainer>
-              <AvatarMenuItem isCurrentlySelected>
-                <button
-                  onClick={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: true })}
-                  className="flex w-full items-center justify-between"
-                >
-                  <div className="flex w-full items-center gap-3">
-                    <div className="relative h-8 w-8 overflow-hidden rounded-full">
-                      <Avatar value={profile?.accountId ?? address} avatarUrl={person?.avatarUrl} size={32} />
-                    </div>
-                    <div>
-                      <p className="text-text">{person?.name ?? formatShortAddress(user.wallet.address)}</p>
-                      {user.email ? (
-                        <p className="text-sm text-grey-04">{user.email.address}</p>
-                      ) : (
-                        <p className="text-sm text-grey-04">{formatShortAddress(address ?? user.wallet.address)}</p>
-                      )}
-                    </div>
-                  </div>
-                  <RightArrowLong color="grey-04" />
-                </button>
-              </AvatarMenuItem>
-              {!person && profile ? (
+            {account?.onchainProfile?.homeSpaceId && (
+              <>
                 <AvatarMenuItem>
                   <div className="flex items-center gap-2">
                     <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                      <Avatar value={profile?.accountId} size={16} />
+                      <Avatar value={address} avatarUrl={account.profile?.avatarUrl} size={16} />
                     </div>
-                    <button onClick={showCreateProfile}>Create profile</button>
+                    <Link
+                      prefetch={false}
+                      href={NavUtils.toSpace(account.onchainProfile.homeSpaceId)}
+                      className="text-button"
+                    >
+                      Personal space
+                    </Link>
                   </div>
                 </AvatarMenuItem>
-              ) : (
-                <>
-                  {profile?.homeSpaceId && (
-                    <>
-                      <AvatarMenuItem>
-                        <Link
-                          prefetch={false}
-                          onClick={() => dispatch({ type: 'SET_OPEN', open: false })}
-                          href={NavUtils.toSpace(profile.homeSpaceId)}
-                          className="w-full text-button"
-                        >
-                          Personal space
-                        </Link>
-                      </AvatarMenuItem>
-                      <AvatarMenuItem>
-                        <Link
-                          href="/home"
-                          className="w-full text-button"
-                          onClick={() => dispatch({ type: 'SET_OPEN', open: false })}
-                        >
-                          Home
-                        </Link>
-                      </AvatarMenuItem>
-                    </>
-                  )}
-                </>
-              )}
-            </AvatarMenuItemsContainer>
-
-            <div className="flex w-full select-none items-center justify-between bg-white px-4 py-2 text-button text-text hover:bg-divider">
-              <GeoConnectButton />
-            </div>
-          </>
-        ) : (
-          <>
-            <button
-              className="flex w-full items-center gap-2 p-2 text-smallButton text-grey-04"
-              onClick={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: false })}
-            >
-              <LeftArrowLong color="grey-04" />
-              <p>Back</p>
-            </button>
-
-            <AvatarMenuItemsContainer>
-              <WalletsList onSelect={() => dispatch({ type: 'SET_PROFILE_SWITCHER_OPEN', open: false })} />
-            </AvatarMenuItemsContainer>
+                <AvatarMenuItem>
+                  <Link href="/home" className="flex items-center gap-2 grayscale">
+                    <Home />
+                    <p className="text-button">Personal home</p>
+                  </Link>
+                </AvatarMenuItem>
+              </>
+            )}
           </>
         )}
+        <AvatarMenuItem>
+          <GeoConnectButton />
+        </AvatarMenuItem>
       </Menu>
     </div>
   );
 }
 
 const avatarMenuItemStyles = cva(
-  'flex w-full select-none items-center justify-between rounded-md px-3 py-2 text-button text-text hover:bg-divider hover:outline-none',
+  'flex w-full select-none items-center justify-between bg-white px-3 py-2 text-button hover:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
   {
     variants: {
       disabled: {
         true: 'cursor-not-allowed text-grey-03',
         false: 'cursor-pointer text-grey-04 hover:bg-bg hover:text-text',
-      },
-      isCurrentlySelected: {
-        true: 'bg-grey-01',
-        false: 'bg-white',
       },
     },
     defaultVariants: {
@@ -213,81 +119,20 @@ const avatarMenuItemStyles = cva(
   }
 );
 
-function AvatarMenuItemsContainer({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-col gap-1 p-1">{children}</div>;
-}
-
 function AvatarMenuItem({
   children,
-  isCurrentlySelected,
+  onClick,
   disabled = false,
 }: {
   children: React.ReactNode;
-  isCurrentlySelected?: boolean;
+  onClick?: () => void;
   disabled?: boolean;
 }) {
-  return <div className={avatarMenuItemStyles({ disabled, isCurrentlySelected })}>{children}</div>;
-}
-
-function WalletsList({ onSelect }: { onSelect: () => void }) {
-  const { address } = useAccount();
-  const { user } = usePrivy();
-  const { wallets } = useWallets();
-  const { setActiveWallet } = useSetActiveWallet();
-
-  const addresses = wallets.map(w => w.address);
-  const { data: persons, isLoading } = useQuery({
-    queryKey: ['persons', addresses],
-    queryFn: async () => {
-      const maybePersons = await Promise.all(addresses.map(address => fetchProfile({ address })));
-
-      const personsByAddress = new Map<string, Profile | null>();
-
-      for (const [index, person] of maybePersons.entries()) {
-        if (person) personsByAddress.set(person[1].address, person[1]);
-        else personsByAddress.set(addresses[index], null);
-      }
-
-      return personsByAddress;
-    },
-  });
-
-  if (isLoading || !persons) {
-    return (
-      <AvatarMenuItem>
-        <Skeleton className="h-8 w-8" radius="rounded-full" />
-      </AvatarMenuItem>
-    );
-  }
-
-  return wallets.map(w => {
-    const maybePerson = persons.get(w.address);
-    const maybeUserEmail = user?.wallet?.address === w.address ? user?.email?.address : null;
-    const isCurrentWallet = address === w.address;
-    const displayName = maybePerson?.name ?? maybeUserEmail ?? formatShortAddress(w.address);
-
-    return (
-      <AvatarMenuItem key={`${w.address}-${w.connectorType}`} isCurrentlySelected={isCurrentWallet}>
-        <button
-          onClick={() => {
-            onSelect();
-
-            Cookie.onConnectionChange({ type: 'connect', address: w.address as `0x${string}` });
-            setActiveWallet(w);
-          }}
-          className="flex w-full items-center justify-between"
-        >
-          <div className="flex w-full items-center gap-3">
-            <div className="relative h-8 w-8 overflow-hidden rounded-full">
-              <Avatar value={w.address} avatarUrl={maybePerson?.avatarUrl} size={32} />
-            </div>
-            <p className="text-button">{displayName}</p>
-          </div>
-          {isCurrentWallet && <Check />}
-        </button>
-      </AvatarMenuItem>
-    );
-  });
+  return (
+    <button onClick={onClick} disabled={disabled} className={avatarMenuItemStyles({ disabled })}>
+      {children}
+    </button>
+  );
 }
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
@@ -305,30 +150,55 @@ const variants = {
 
 const MotionPopoverContent = motion(Popover.Content);
 
-function ModeToggle() {
+const useSpaceId = () => {
   const params = useParams();
   const spaceId = params?.['id'] as string | undefined;
 
-  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
-  const { setEditable, editable } = useEditable();
+  return spaceId;
+};
 
-  const controls = useAnimation();
+const useCanUserEdit = (spaceId: string | null | undefined) => {
+  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
   const canUserEdit = isEditor || isAdmin || isEditorController;
-  const isUserEditing = isEditor && editable;
+
+  return canUserEdit;
+};
+
+function ModeToggle() {
+  const controls = useAnimation();
+  const { editable, setEditable } = useEditable();
+
+  const spaceId = useSpaceId();
+  const canUserEdit = useCanUserEdit(spaceId);
+
+  React.useEffect(() => {
+    // If a user doesn't have edit access on the page, make sure we set the toggle
+    // state to false. This can happen if a user is in edit mode in a space they
+    // have edit access in, then they navigate to a space they don't have edit
+    // access in.
+    if (!canUserEdit) {
+      setEditable(false);
+    }
+  }, [canUserEdit, setEditable]);
 
   const [attemptCount, setAttemptCount] = React.useState(0);
   const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
 
-  // If a user doesn't have edit access on the page, make sure we set the toggle
-  // state to false. This can happen if a user is in edit mode in a space they
-  // have edit access in, then they navigate to a space they don't have edit
-  // access in.
-  if (!isEditor && !isAdmin && !isEditorController) setEditable(false);
-
   const onToggle = React.useCallback(() => {
+    if (!spaceId) {
+      setEditable(false);
+      return;
+    }
+
     // If they are signed in and not an editor, shake the toggle to indicate that they can't edit,
     // otherwise toggle the edit mode. Only handle shaking and attempt logic in the context of a space.
-    if (!canUserEdit && spaceId) {
+    if (!canUserEdit) {
+      if (editable) {
+        // Make sure they can always escape edit mode
+        setEditable(false);
+        return;
+      }
+
       controls.start('shake');
 
       // Allow the user two attempts to toggle edit mode before showing the tooltip.
@@ -359,28 +229,27 @@ function ModeToggle() {
       className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
     >
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {!isUserEditing && <AnimatedTogglePill controls={controls} />}
+        {!editable && <AnimatedTogglePill controls={controls} />}
         <motion.div
           animate={controls}
           variants={variants}
-          className={`z-10 transition-colors duration-300 ${!isUserEditing ? 'text-text' : 'text-grey-03'}`}
+          className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}
         >
           <EyeSmall />
         </motion.div>
       </div>
       <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {isUserEditing && <AnimatedTogglePill controls={controls} />}
+        {editable && <AnimatedTogglePill controls={controls} />}
         <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
           <Popover.Anchor asChild>
             <div
               className={`z-10 transition-colors duration-300 ${
-                showEditAccessTooltip ? 'text-red-01' : isUserEditing ? 'text-text' : 'text-grey-03'
+                showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
               }`}
             >
               <BulkEdit />
             </div>
           </Popover.Anchor>
-
           <Popover.Portal>
             <AnimatePresence mode="popLayout">
               {showEditAccessTooltip && (

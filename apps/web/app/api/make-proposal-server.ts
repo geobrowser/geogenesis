@@ -1,5 +1,6 @@
 import { Root } from '@geogenesis/action-schema';
 import { SpaceAbi } from '@geogenesis/contracts';
+import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
 import { PrivateKeyAccount, PublicClient, WalletClient } from 'viem';
 
@@ -26,11 +27,19 @@ export class WaitForTransactionBlockError extends Error {
 }
 
 export class TransactionPrepareFailedError extends Error {
-  _tag = 'TransactionPrepareFailedError';
+  readonly _tag = 'TransactionPrepareFailedError';
 }
 
 export class TransactionWriteFailedError extends Error {
-  _tag = 'TransactionWriteFailedError';
+  readonly _tag = 'TransactionWriteFailedError';
+}
+
+export class IpfsUploadFailedError extends Error {
+  readonly _tag = 'IpfsUploadFailedError';
+}
+
+export class InvalidIpfsQmHashError extends Error {
+  readonly _tag = 'InvalidIpfsQmHashError';
 }
 
 export type MakeProposalServerOptions = {
@@ -66,7 +75,22 @@ export async function makeProposalServer({
       name,
     };
 
-    const cidString = await storageClient.uploadObject(root);
+    const uploadEffect = Effect.retry(
+      Effect.tryPromise({
+        try: async () => {
+          const cidString = await storageClient.uploadObject(root);
+          if (!cidString.startsWith('Qm')) {
+            throw new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.');
+          }
+
+          return cidString;
+        },
+        catch: error => new IpfsUploadFailedError(`IPFS upload failed: ${error}`),
+      }),
+      Schedule.exponential('100 millis').pipe(Schedule.jittered)
+    );
+
+    const cidString = await Effect.runPromise(uploadEffect);
     cids.push(`ipfs://${cidString}`);
   }
 
@@ -83,18 +107,25 @@ export async function makeProposalServer({
   });
 
   const writeTxEffect = Effect.gen(function* (awaited) {
-    const contractConfig = yield* awaited(prepareTxEffect);
+    const contractConfig = yield* awaited(
+      Effect.retry(prepareTxEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered))
+    );
 
     return yield* awaited(
-      Effect.tryPromise({
-        try: () => wallet.writeContract(contractConfig.request),
-        catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
-      })
+      Effect.retry(
+        Effect.tryPromise({
+          try: () => wallet.writeContract(contractConfig.request),
+          catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
+        }),
+        Schedule.exponential('100 millis').pipe(Schedule.jittered)
+      )
     );
   });
 
   const publishProgram = Effect.gen(function* (awaited) {
-    const writeTxHash = yield* awaited(writeTxEffect);
+    const writeTxHash = yield* awaited(
+      Effect.retry(writeTxEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered))
+    );
 
     const waitForTransactionEffect = yield* awaited(
       Effect.tryPromise({

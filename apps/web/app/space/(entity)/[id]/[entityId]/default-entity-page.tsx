@@ -31,11 +31,22 @@ interface Props {
     typeId?: string;
     filters?: string;
   };
+  showCover?: boolean;
+  showHeading?: boolean;
+  showHeader?: boolean;
 }
 
 const EMPTY_ARRAY_AS_ENCODED_URI = '%5B%5D';
 
-export default async function DefaultEntityPage({ params, searchParams }: Props) {
+export default async function DefaultEntityPage({
+  params,
+  searchParams,
+  showCover = true,
+  showHeading = true,
+  showHeader = true,
+}: Props) {
+  const showSpacer = showCover || showHeading || showHeader;
+
   const decodedId = decodeURIComponent(params.entityId);
   const props = await getData(params.id, decodedId);
 
@@ -57,11 +68,13 @@ export default async function DefaultEntityPage({ params, searchParams }: Props)
         initialBlockTriples={props.blockTriples}
       >
         <MoveEntityProvider>
-          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
+          {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
           <EntityPageContentContainer>
-            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
-            <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />
-            <Spacer height={40} />
+            {showHeading && (
+              <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+            )}
+            {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />}
+            {showSpacer && <Spacer height={40} />}
             <Editor shouldHandleOwnSpacing />
             <ToggleEntityPage {...props} typeId={typeId} filters={filters} />
             <Spacer height={40} />
@@ -82,8 +95,11 @@ const getData = async (spaceId: string, entityId: string) => {
 
   // Redirect from space configuration page to space page
   if (entity?.types.some(type => type.id === SYSTEM_IDS.SPACE_CONFIGURATION) && nameTripleSpace) {
-    console.log(`Redirecting from space configuration entity ${entity.id} to space page ${nameTripleSpace}`);
-    return redirect(NavUtils.toSpace(nameTripleSpace));
+    // But don't redirect for space configuration templates in the root space
+    if (spaceId !== SYSTEM_IDS.ROOT_SPACE || entityId === SYSTEM_IDS.ROOT_SPACE_CONFIGURATION) {
+      console.log(`Redirecting from space configuration entity ${entity.id} to space page ${nameTripleSpace}`);
+      return redirect(NavUtils.toSpace(nameTripleSpace));
+    }
   }
 
   // @HACK: Entities we are rendering might be in a different space. Right now we aren't fetching

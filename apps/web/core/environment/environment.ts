@@ -1,6 +1,6 @@
 import { AppEnv } from '../types';
 
-type SupportedChainId = '137' | '1337' | '80001' | '31337';
+type SupportedChainId = '137' | '80002' | '31337'; // Polygon, Amoy, Local dev
 
 export type AppConfig = {
   chainId: SupportedChainId;
@@ -23,20 +23,21 @@ export const options: Record<AppEnv, AppConfig> = {
     api: 'http://localhost:5001/graphql',
   },
   testnet: {
-    chainId: '80001',
-    rpc: 'https://rpc-mumbai.maticvigil.com',
+    chainId: '80002',
+    rpc: 'https://amoy.rpc.pinax.network/v1/b8919f1097c55c9d52d12f46421d3a94bae7251c12d9b98a/',
     ipfs: 'https://api.thegraph.com/ipfs',
     membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-mumbai',
     profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry-mumbai',
-    api: 'http://localhost:5001/graphql',
+    api: 'https://geobrowser-amoy.up.railway.app/graphql',
   },
   production: {
     chainId: '137',
     rpc: 'https://polygon-rpc.com',
     ipfs: 'https://api.thegraph.com/ipfs',
-    membershipSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-membership-logs',
-    profileSubgraph: 'https://api.thegraph.com/subgraphs/name/baiirun/geo-profile-registry',
-    api: 'https://geobrowser.up.railway.app/graphql',
+    // @TODO: This will no longer be used once we merge in our new L3 infra
+    membershipSubgraph: `https://gateway-arbitrum.network.thegraph.com/api/${process.env.NEXT_PUBLIC_GRAPH_KEY}/subgraphs/id/2VDkVan8Pm9Lz6zTuoXyBnuFr9jUkaE3jG1LWJfNF2QU`,
+    profileSubgraph: `https://gateway-arbitrum.network.thegraph.com/api/${process.env.NEXT_PUBLIC_GRAPH_KEY}/subgraphs/id/4cYtdYa4czLwo28a1Ku41xosjofQNxbyDFeBZUdqmrVb`,
+    api: 'https://geo-protocol.up.railway.app/graphql',
   },
 };
 

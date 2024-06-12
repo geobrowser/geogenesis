@@ -14,6 +14,6 @@ export function usePerson(address?: string) {
 
   return {
     isLoading,
-    person: data ? data[1] : null,
+    person: data,
   };
 }

@@ -13,8 +13,9 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useTableBlock } from '~/core/state/table-block-store';
+import { Entity as EntityType } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -58,14 +59,18 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     type,
   } = useTableBlock();
 
-  const shownColumns = [
-    ...(blockEntity?.triples
-      .filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS)
-      .flatMap(item => item.value.id) ?? []),
-    'name',
+  const allColumns = columns.map(column => ({
+    id: column.id,
+    name: Entity.name(column.triples),
+  }));
+
+  const shownColumnTriples = [
+    ...(blockEntity?.triples ?? []).filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS),
   ];
 
-  const renderedColumns = columns.filter(item => shownColumns.includes(item.id));
+  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.id) ?? []), 'name'];
+
+  const { placeholderText, placeholderImage } = getPlaceholders(blockEntity);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -102,6 +107,12 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const typeId = type.entityId;
   const filters: Array<[string, string]> =
     filterState && filterState.length > 0 ? filterState.map(filter => [filter.columnId, filter.value]) : [];
+
+  const shownIndexes = columns
+    .map((item, index) => (shownColumnIds.includes(item.id) ? index : null))
+    .filter(item => typeof item === 'number') as Array<number>;
+
+  const hasPagination = hasPreviousPage || hasNextPage;
 
   return (
     <div>
@@ -158,7 +169,11 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
               </motion.div>
             )}
           </AnimatePresence>
-          <TableBlockContextMenu />
+          <TableBlockContextMenu
+            allColumns={allColumns}
+            shownColumnTriples={shownColumnTriples}
+            shownIndexes={shownIndexes}
+          />
 
           {isEditing && (
             <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters)}>
@@ -204,55 +219,89 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       )}
 
       <motion.div layout="position" transition={{ duration: 0.15 }}>
-        <div className="overflow-hidden rounded-lg border border-grey-02 p-0 shadow-button">
-          {isLoading ? (
-            <TableBlockPlaceholder />
-          ) : (
-            <TableBlockTable space={spaceId} columns={renderedColumns} rows={rows} />
-          )}
-        </div>
-
-        <Spacer height={12} />
-
-        <PageNumberContainer>
-          {pageNumber > 1 && (
-            <>
-              <PageNumber number={1} onClick={() => setPage(0)} />
-              {pageNumber > 2 ? (
+        {isLoading ? (
+          <TableBlockPlaceholder />
+        ) : (
+          <TableBlockTable
+            space={spaceId}
+            typeId={typeId}
+            columns={columns}
+            rows={rows}
+            shownIndexes={shownIndexes}
+            placeholderText={placeholderText}
+            placeholderImage={placeholderImage}
+          />
+        )}
+        {hasPagination && (
+          <>
+            <Spacer height={12} />
+            <PageNumberContainer>
+              {pageNumber > 1 && (
                 <>
-                  <Spacer width={16} />
-                  <Text color="grey-03" variant="metadataMedium">
-                    ...
-                  </Text>
-                  <Spacer width={16} />
+                  <PageNumber number={1} onClick={() => setPage(0)} />
+                  {pageNumber > 2 ? (
+                    <>
+                      <Spacer width={16} />
+                      <Text color="grey-03" variant="metadataMedium">
+                        ...
+                      </Text>
+                      <Spacer width={16} />
+                    </>
+                  ) : (
+                    <Spacer width={4} />
+                  )}
                 </>
-              ) : (
-                <Spacer width={4} />
               )}
-            </>
-          )}
-          {hasPreviousPage && (
-            <>
-              <PageNumber number={pageNumber} onClick={() => setPage('previous')} />
-              <Spacer width={4} />
-            </>
-          )}
-          <PageNumber isActive number={pageNumber + 1} />
-          {hasNextPage && (
-            <>
-              <Spacer width={4} />
-              <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />
-            </>
-          )}
-          <Spacer width={32} />
-          <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
-          <Spacer width={12} />
-          <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
-        </PageNumberContainer>
+              {hasPreviousPage && (
+                <>
+                  <PageNumber number={pageNumber} onClick={() => setPage('previous')} />
+                  <Spacer width={4} />
+                </>
+              )}
+              <PageNumber isActive number={pageNumber + 1} />
+              {hasNextPage && (
+                <>
+                  <Spacer width={4} />
+                  <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />
+                </>
+              )}
+              <Spacer width={32} />
+              <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
+              <Spacer width={12} />
+              <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
+            </PageNumberContainer>
+          </>
+        )}
       </motion.div>
     </div>
   );
 });
+
+const getPlaceholders = (blockEntity: EntityType | null | undefined) => {
+  // @TODO add defaults for list/gallery views
+  let placeholderText = 'Add your first entity row to get started';
+  let placeholderImage = getImagePath('ipfs://QmfC4DoT7uVNoFRbP6DBYn9T79gpLXw2Uv6qJ2G8wmqT1d');
+
+  if (blockEntity) {
+    const placeholderTextTriple = blockEntity.triples.find(
+      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
+    );
+
+    if (placeholderTextTriple && placeholderTextTriple.value.type === 'string') {
+      placeholderText = placeholderTextTriple.value.value;
+    }
+
+    const placeholderImageTriple = blockEntity.triples.find(
+      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
+    );
+
+    if (placeholderImageTriple && placeholderImageTriple.value.type === 'image') {
+      placeholderImage = getImagePath(placeholderImageTriple.value.value);
+    }
+  }
+
+  return { placeholderText, placeholderImage };
+};
 
 const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
 
@@ -267,33 +316,35 @@ export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }
   const PLACEHOLDER_ROWS = new Array(rows).fill(0);
 
   return (
-    <div className={cx('overflow-x-scroll rounded-lg', className)}>
-      <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
-        <thead>
-          <tr>
-            {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
-              <th
-                key={index}
-                className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
-                style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
-              >
-                <p className="h-5 w-16 animate-pulse rounded-sm bg-divider align-middle"></p>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {PLACEHOLDER_ROWS.map((_item: number, index: number) => (
-            <tr key={index}>
+    <div className="overflow-hidden rounded-lg border border-grey-02 p-0 shadow-button">
+      <div className={cx('overflow-x-scroll rounded-lg', className)}>
+        <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
+          <thead>
+            <tr>
               {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
-                <td key={index} className="animate-pulse border border-grey-02 bg-transparent p-[10px] align-top">
-                  <p className="h-5 rounded-sm bg-divider" />
-                </td>
+                <th
+                  key={index}
+                  className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
+                  style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
+                >
+                  <p className="h-5 w-16 animate-pulse rounded-sm bg-divider align-middle"></p>
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {PLACEHOLDER_ROWS.map((_item: number, index: number) => (
+              <tr key={index}>
+                {PLACEHOLDER_COLUMNS.map((_item: number, index: number) => (
+                  <td key={index} className="animate-pulse border border-grey-02 bg-transparent p-[10px] align-top">
+                    <p className="h-5 rounded-sm bg-divider" />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

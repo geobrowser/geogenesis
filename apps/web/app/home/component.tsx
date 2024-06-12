@@ -36,6 +36,8 @@ import { Text } from '~/design-system/text';
 
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
 
+import { dismissedNoticesAtom } from '~/atoms';
+
 const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
 
 type Props = {
@@ -457,17 +459,9 @@ const Notices = () => {
         id="findSpacesToJoin"
         color="orange"
         title="Find spaces to join"
-        description="Discover and join spaces where you can actively engagte with the topics and issues that captivate your interest."
+        description="Discover and join spaces where you can actively engage with the topics and issues that captivate your interest."
         element={<JoinSpaces />}
       />
-      {/* <Notice
-          id="learnMore"
-          color="purple"
-          title="Want to learn more?"
-          description="Watch videos and read our guides to help you get to grips with the fundamentals of using and contributing to Geo."
-          element={<LearnMore />}
-          media={<img src="/videos.png" alt="" />}
-        /> */}
     </div>
   );
 };
@@ -480,8 +474,6 @@ type NoticeProps = {
   element?: React.ReactNode;
   media?: React.ReactNode;
 };
-
-const dismissedNoticesAtom = atomWithStorage<Array<string>>('dismissedNotices', []);
 
 const Notice = ({ id, color, title, description, element, media }: NoticeProps) => {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);

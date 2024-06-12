@@ -59,7 +59,7 @@ export type Triple = {
 };
 
 export type SpaceConfigEntity = Entity & {
-  image: string | null;
+  image: string;
 };
 
 export type Space = {
@@ -70,6 +70,12 @@ export type Space = {
   admins: string[];
   spaceConfig: SpaceConfigEntity | null;
   createdAtBlock: string;
+};
+
+export type SpaceWithMetadata = {
+  id: string;
+  name: string | null;
+  image: string;
 };
 
 export type Account = {
@@ -175,7 +181,7 @@ export type Proposal = {
   createdAt: number;
   createdAtBlock: string;
   proposedVersions: ProposedVersion[];
-  space: string;
+  space: SpaceWithMetadata;
   startTime: number;
   endTime: number;
   status: ProposalStatus;
@@ -192,7 +198,7 @@ export type Version = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
-  spaceId: string;
+  space: SpaceWithMetadata;
   triples: Triple[];
   entity: {
     id: string;
@@ -207,7 +213,7 @@ export type ProposedVersion = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
-  spaceId: string;
+  space: SpaceWithMetadata;
   actions: Action[];
   entity: {
     id: string;

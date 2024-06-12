@@ -116,11 +116,11 @@ export async function fetchInterimMembershipRequests({
     ),
   ]);
 
-  const memberProfiles = maybeMemberProfiles.filter((profile): profile is [string, Profile] => !!profile);
+  const memberProfiles = maybeMemberProfiles.filter((profile): profile is Profile => !!profile);
   const spaces = maybeSpaces.filter((space): space is [string, Space] => !!space);
 
   // Write a function to map the requestor address to the profile
-  const memberAddressToProfilesMap = memberProfiles.reduce((acc, [, profile]) => {
+  const memberAddressToProfilesMap = memberProfiles.reduce((acc, profile) => {
     acc.set(profile.address, profile);
     return acc;
   }, new Map<string, Profile>());

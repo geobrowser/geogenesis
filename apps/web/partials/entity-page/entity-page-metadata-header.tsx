@@ -9,7 +9,6 @@ import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
 import { useDiff } from '~/core/state/diff-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { EntityType } from '~/core/types';
-import { Action } from '~/core/utils/action';
 import { Entity } from '~/core/utils/entity';
 
 import { SmallButton } from '~/design-system/button';
@@ -18,7 +17,6 @@ import { Dots } from '~/design-system/dots';
 import { HistoryEmpty } from '../history/history-empty';
 import { HistoryItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
-// import { CsvImport } from '~/design-system/icons/csv-import';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 import { EntityPageTypeChip } from './entity-page-type-chip';
 

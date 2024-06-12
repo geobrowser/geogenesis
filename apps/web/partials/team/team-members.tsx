@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEditable } from '~/core/state/editable-store';
 
+import { NoContent } from '../space-tabs/no-content';
 import { AddTeamMember } from './add-team-member';
 import {
   addedTeamMemberAtom,
@@ -40,40 +41,54 @@ export const TeamMembers = ({ spaceId, teamMembers = [] }: TeamMembersProps) => 
   }, [isEditMode, setDraftMembers]);
 
   return (
-    <div className="grid auto-rows-fr grid-cols-2 gap-6">
-      {isEditMode && (
-        <>
-          {draftMembers.map(key => {
-            return (
-              <ScopeProvider
-                key={key}
-                atoms={[
-                  teamMemberStepAtom,
-                  teamMemberAvatarAtom,
-                  teamMemberNameAtom,
-                  teamMemberRoleAtom,
-                  addedTeamMemberAtom,
-                ]}
-              >
-                <AddTeamMember spaceId={spaceId} />
-              </ScopeProvider>
-            );
-          })}
-        </>
-      )}
-      {isEditMode ? (
-        <>
-          {teamMembers.map(teamMember => (
-            <EditTeamMember key={teamMember.entityId} teamMember={teamMember} spaceId={spaceId} />
-          ))}
-        </>
-      ) : (
-        <>
-          {teamMembers.map(teamMember => (
-            <TeamMember key={teamMember.entityId} teamMember={teamMember} />
-          ))}
-        </>
-      )}
-    </div>
+    <>
+      {teamMembers.length === 0 ? (
+        <NoContent
+          options={{
+            image: '/team.png',
+            browse: {
+              title: 'There aren’t any team members here yet',
+              description: 'Switch to edit mode to start adding your team if you’re an editor of this space',
+            },
+          }}
+          isEditing={isEditMode}
+        />
+      ) : null}
+      <div className="grid auto-rows-fr grid-cols-2 gap-6">
+        {isEditMode && (
+          <>
+            {draftMembers.map(key => {
+              return (
+                <ScopeProvider
+                  key={key}
+                  atoms={[
+                    teamMemberStepAtom,
+                    teamMemberAvatarAtom,
+                    teamMemberNameAtom,
+                    teamMemberRoleAtom,
+                    addedTeamMemberAtom,
+                  ]}
+                >
+                  <AddTeamMember spaceId={spaceId} />
+                </ScopeProvider>
+              );
+            })}
+          </>
+        )}
+        {isEditMode ? (
+          <>
+            {teamMembers.map(teamMember => (
+              <EditTeamMember key={teamMember.entityId} teamMember={teamMember} spaceId={spaceId} />
+            ))}
+          </>
+        ) : (
+          <>
+            {teamMembers.map(teamMember => (
+              <TeamMember key={teamMember.entityId} teamMember={teamMember} />
+            ))}
+          </>
+        )}
+      </div>
+    </>
   );
 };

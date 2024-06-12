@@ -73,18 +73,62 @@ function getFetchIpfsContentEffect(
         },
       });
 
-      const response = yield* unwrap(
-        // Attempt to fetch with jittered exponential backoff for 60 seconds before failing
-        Effect.retry(
-          ipfsFetchEffect.pipe(Effect.timeout(Duration.seconds(60))),
-          Schedule.exponential(100).pipe(
-            Schedule.jittered,
-            Schedule.compose(Schedule.elapsed),
-            // Retry for 1 minute.
-            Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(60)))
+      const mainGatewayResponse = yield* unwrap(
+        Effect.either(
+          // Attempt to fetch with jittered exponential backoff for 30 seconds before failing
+          Effect.retry(
+            ipfsFetchEffect.pipe(Effect.timeout(Duration.seconds(30))),
+            Schedule.exponential(100).pipe(
+              Schedule.jittered,
+              Schedule.compose(Schedule.elapsed),
+              // Retry for 1 minute.
+              Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(30)))
+            )
           )
         )
       );
+
+      // @HACK: May 09, 2024: We're currently using Edge & Node's IPFS cluster. They are
+      // in the process of a migration where some data in not available on every node. Try
+      // two nodes until we are on our own IPFS infra.
+      if (Either.isLeft(mainGatewayResponse)) {
+        const secondaryIpfsFetchEffect = Effect.tryPromise({
+          try: async () => {
+            const parsedCid = uri.replace('ipfs://', '');
+            const url = `https://api.thegraph.com/ipfs/api/v0/cat?arg=${parsedCid}`;
+
+            return await fetch(url);
+          },
+          catch: error => {
+            return new FailedFetchingIpfsContentError(`Failed fetching IPFS content from uri ${uri}. ${String(error)}`);
+          },
+        });
+
+        const secondaryGatewayResponse = yield* unwrap(
+          // Attempt to fetch with jittered exponential backoff for 30 seconds before failing
+          Effect.retry(
+            secondaryIpfsFetchEffect.pipe(Effect.timeout(Duration.seconds(30))),
+            Schedule.exponential(100).pipe(
+              Schedule.jittered,
+              Schedule.compose(Schedule.elapsed),
+              // Retry for 1 minute.
+              Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(30)))
+            )
+          )
+        );
+
+        return yield* unwrap(
+          Effect.tryPromise({
+            try: async () => {
+              return (await secondaryGatewayResponse.json()) as UriData;
+            },
+            catch: error =>
+              new UnableToParseJsonError(`Unable to parse JSON when reading content from uri ${uri}. ${String(error)}`),
+          })
+        );
+      }
+
+      const response = mainGatewayResponse.right;
 
       return yield* unwrap(
         Effect.tryPromise({
@@ -105,7 +149,6 @@ function getFetchIpfsContentEffect(
 export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry | null> {
   return Effect.gen(function* (unwrap) {
     const fetchIpfsContentEffect = getFetchIpfsContentEffect(entry.uri);
-
     const maybeIpfsContent = yield* unwrap(Effect.either(fetchIpfsContentEffect));
 
     if (Either.isLeft(maybeIpfsContent)) {
@@ -138,6 +181,7 @@ export function getEntryWithIpfsContent(entry: Entry): Effect.Effect<FullEntry |
     return {
       ...entry,
       uriData: ipfsContent,
+      uri: entry.uri,
     };
   });
 }
@@ -234,6 +278,7 @@ export function getProposalFromMetadata(
           actions: parsedContent.data.actions.filter(isValidAction),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForPlugin),
+          uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -256,6 +301,7 @@ export function getProposalFromMetadata(
           subspace: getChecksumAddress(parsedSubspace.data.subspace),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForPlugin),
+          uri: proposal.metadataUri,
         };
 
         return mappedProposal;
@@ -280,6 +326,7 @@ export function getProposalFromMetadata(
           userAddress: getChecksumAddress(parsedMembership.data.userAddress),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(maybeSpaceIdForPlugin),
+          uri: proposal.metadataUri,
         };
 
         return mappedProposal;
