@@ -4,7 +4,7 @@ import { Storage } from '../storage';
 import { MakeProposalOptions } from './publish';
 
 export interface IPublish {
-  makeProposal: (options: MakeProposalOptions) => Promise<void>;
+  makeProposal: (options: MakeProposalOptions) => Promise<string[]>;
   uploadFile(storageClient: Storage.IStorageClient, file: File): Promise<string>;
   getRole(
     config: Config,

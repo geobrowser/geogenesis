@@ -3,7 +3,7 @@
 import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
-import { http } from 'viem';
+import { createPublicClient, http } from 'viem';
 import { polygon } from 'viem/chains';
 
 import * as React from 'react';
@@ -43,6 +43,11 @@ import { Cookie } from '../cookie';
 //     },
 //   },
 // };
+
+export const publicClient = createPublicClient({
+  chain: polygon,
+  transport: http(process.env.NEXT_PUBLIC_RPC_URL!, { batch: true }),
+});
 
 const realWalletConfig = createConfig({
   chains: [polygon],
@@ -96,14 +101,11 @@ const mockConfig = createConfig({
 });
 
 const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
+const config = isTestEnv ? mockConfig : realWalletConfig;
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const walletConfig = React.useMemo(() => {
-    return isTestEnv ? mockConfig : realWalletConfig;
-  }, [isTestEnv]);
-
   return (
-    <WagmiProvider reconnectOnMount config={walletConfig}>
+    <WagmiProvider reconnectOnMount config={config}>
       {children}
     </WagmiProvider>
   );

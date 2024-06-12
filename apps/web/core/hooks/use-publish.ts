@@ -1,3 +1,9 @@
+import { ENTRYPOINT_ADDRESS_V07, createSmartAccountClient, walletClientToSmartAccountSigner } from 'permissionless';
+import { signerToSafeSmartAccount } from 'permissionless/accounts';
+import { createPimlicoBundlerClient, createPimlicoPaymasterClient } from 'permissionless/clients/pimlico';
+import { createPublicClient, createWalletClient, encodeFunctionData, http } from 'viem';
+import { polygon } from 'viem/chains';
+
 import * as React from 'react';
 
 import { useConfig, useWalletClient } from 'wagmi';
@@ -33,7 +39,73 @@ export function usePublish() {
       if (!wallet) return;
       if (actionsToPublish.length < 1) return;
 
-      await publishService.makeProposal({
+      const transport = http(process.env.NEXT_PUBLIC_ALCHEMY_ENDPOINT!);
+      const v2Transport = http(process.env.NEXT_PUBLIC_PIMLICO_RPC_URL!);
+      const v1Transport = http(process.env.NEXT_PUBLIC_BUNDLER_RPC_URL!);
+
+      const walletClient = createWalletClient({
+        account: wallet.account,
+        chain: polygon,
+        transport,
+      });
+
+      const publicClient = createPublicClient({
+        chain: polygon,
+        transport,
+      });
+
+      const signer = walletClientToSmartAccountSigner(walletClient);
+
+      // const account = await privateKeyToSafeSmartAccount(publicClient, {
+      //   privateKey: '0xe78b3806662d8491f6a68bed650f20eba23e09f9759b4a80336ab63fa2df7aac',
+      //   entryPoint: ENTRYPOINT_ADDRESS_V07,
+      //   safeVersion: '1.4.1',
+      // });
+
+      const account = await signerToSafeSmartAccount(publicClient, {
+        signer,
+        entryPoint: ENTRYPOINT_ADDRESS_V07,
+        safeVersion: '1.4.1',
+      });
+
+      /**
+       * So for entrypoint v0.6 (we recommend using v0.7 for new projects now) you'd have to use the v1 api for the bundler endpoints (bundlerClient and smartAccountClient) and the v2 api for the paymaster endpoints
+       *
+       * Apologies for the confusion here, for v0.7 everything uses the v2 api.
+       * We do support polygon. Everything should ideally work with the standard Permissionless sdk
+       *
+       * Let me know if this helps!!
+       *
+       * Otherwise happy to help continue debugging
+       *
+       * JSON is not a valid request object.  URL: https://api.pimlico.io/v2/polygon/rpc?apikey=cbd9fab9-2874-4bc9-9dc1-578ee41335dc Request body: {"method":"pimlico_getUserOperationGasPrice","params":[]}  Details: API version v2 is not supported for chain: polygon Version: viem@2.7.12
+       */
+      const pimlicoPaymaster = createPimlicoPaymasterClient({
+        entryPoint: ENTRYPOINT_ADDRESS_V07,
+        transport: v2Transport,
+      });
+
+      const bundlerClient = createPimlicoBundlerClient({
+        entryPoint: ENTRYPOINT_ADDRESS_V07,
+        transport: v2Transport,
+      });
+
+      const smartAccountClient = createSmartAccountClient({
+        account,
+        entryPoint: ENTRYPOINT_ADDRESS_V07,
+        chain: polygon,
+        bundlerTransport: v2Transport,
+        middleware: {
+          gasPrice: async () => {
+            return (await bundlerClient.getUserOperationGasPrice()).fast; // if using pimlico bundlers
+          },
+          sponsorUserOperation: pimlicoPaymaster.sponsorUserOperation,
+        },
+      });
+
+      console.log('smart account address', smartAccountClient.account);
+
+      const cids = await publishService.makeProposal({
         storageClient,
         actions: Action.prepareActionsForPublishing(actionsToPublish),
         name,
@@ -41,6 +113,22 @@ export function usePublish() {
         space: spaceId,
         walletConfig: config,
       });
+
+      console.log('cids', cids);
+
+      const functionData = encodeFunctionData({
+        functionName: 'addEntries',
+        abi,
+        args: [cids],
+      });
+
+      const txHash = await smartAccountClient.sendTransaction({
+        to: spaceId as `0x${string}`,
+        data: functionData,
+        value: BigInt(0),
+      });
+
+      console.log('txHash', txHash);
 
       const actionsBeingPublished = new Set(
         actionsToPublish.map(a => {

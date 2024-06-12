@@ -62,7 +62,7 @@ export async function makeProposal({
   onChangePublishState,
   space,
   name,
-}: MakeProposalOptions): Promise<void> {
+}: MakeProposalOptions) {
   onChangePublishState('publishing-ipfs');
   const ipfsEffect = Effect.gen(function* (_) {
     const cids: string[] = [];
