@@ -52,9 +52,7 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '19411',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
-    // api: 'https://geo-conduit.up.railway.app/graphql',
-    // @TODO: pass this in via env
-    api: 'http://localhost:5001/graphql',
+    api: 'https://geo-conduit.up.railway.app/graphql',
   },
   testnet: {
     chainId: '19411',

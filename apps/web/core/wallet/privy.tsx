@@ -2,17 +2,17 @@
 
 import { PrivyProvider as Privy, PrivyClientConfig, User } from '@privy-io/react-auth';
 import { zeroAddress } from 'viem';
-import { polygon } from 'viem/chains';
 
 import * as React from 'react';
 
 import { useAccount, useConfig } from 'wagmi';
 
 import { registerGeoProfile } from '../io/publish';
+import { CONDUIT_TESTNET } from './conduit-chain';
 
 const config: PrivyClientConfig = {
-  defaultChain: polygon,
-  supportedChains: [polygon],
+  defaultChain: CONDUIT_TESTNET,
+  supportedChains: [CONDUIT_TESTNET],
   embeddedWallets: {
     noPromptOnSignature: true,
     createOnLogin: 'users-without-wallets',

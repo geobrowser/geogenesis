@@ -45,5 +45,5 @@ export function useOnboarding() {
     setIsOnboardingVisible(false);
   }, [setIsOnboardingVisible]);
 
-  return { isOnboardingVisible, hideOnboarding };
+  return { isOnboardingVisible: false, hideOnboarding };
 }

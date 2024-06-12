@@ -1,9 +1,7 @@
-import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { ENTRYPOINT_ADDRESS_V07, createSmartAccountClient, walletClientToSmartAccountSigner } from 'permissionless';
 import { signerToSafeSmartAccount } from 'permissionless/accounts';
 import { createPimlicoBundlerClient, createPimlicoPaymasterClient } from 'permissionless/clients/pimlico';
 import { createPublicClient, createWalletClient, encodeFunctionData, http } from 'viem';
-import { polygon } from 'viem/chains';
 
 import * as React from 'react';
 
@@ -11,8 +9,8 @@ import { useConfig, useWalletClient } from 'wagmi';
 
 import { Services } from '../services';
 import { Triple as ITriple, ReviewState } from '../types';
-import { Action } from '../utils/action';
 import { Triples } from '../utils/triples';
+import { CONDUIT_TESTNET } from '../wallet/conduit-chain';
 import { useActionsStore } from './use-actions-store';
 
 interface MakeProposalOptions {
@@ -47,12 +45,12 @@ export function usePublish() {
 
       const walletClient = createWalletClient({
         account: wallet.account,
-        chain: polygon,
+        chain: CONDUIT_TESTNET,
         transport,
       });
 
       const publicClient = createPublicClient({
-        chain: polygon,
+        chain: CONDUIT_TESTNET,
         transport,
       });
 
@@ -95,7 +93,7 @@ export function usePublish() {
       const smartAccountClient = createSmartAccountClient({
         account,
         entryPoint: ENTRYPOINT_ADDRESS_V07,
-        chain: polygon,
+        chain: CONDUIT_TESTNET,
         bundlerTransport: v2Transport,
         middleware: {
           gasPrice: async () => {
