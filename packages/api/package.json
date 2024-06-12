@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start": "pnpm run build && node ./dist/server.js"
+    "start": "node ./dist/server.js"
   },
   "author": "",
   "license": "ISC",
@@ -38,5 +38,6 @@
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-prettier": "^4.0.0",
     "prettier": "^3.0.3"
-  }
+  },
+  "packageManager": "pnpm@7.30.5"
 }
