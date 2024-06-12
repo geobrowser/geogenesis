@@ -1,3 +1,4 @@
+import { SpaceAbi } from '@geogenesis/contracts';
 import { ENTRYPOINT_ADDRESS_V07, createSmartAccountClient, walletClientToSmartAccountSigner } from 'permissionless';
 import { signerToSafeSmartAccount } from 'permissionless/accounts';
 import { createPimlicoBundlerClient, createPimlicoPaymasterClient } from 'permissionless/clients/pimlico';
@@ -118,7 +119,7 @@ export function usePublish() {
 
       const functionData = encodeFunctionData({
         functionName: 'addEntries',
-        abi,
+        abi: SpaceAbi,
         args: [cids],
       });
 
@@ -187,7 +188,7 @@ export function usePublish() {
 
 export function useBulkPublish() {
   const { storageClient, publish } = Services.useServices();
-  const { data: wallet } = useWalletClient();
+  const config = useConfig();
 
   /**
    * Take the bulk actions for a specific space the user wants to write to Geo and publish them
@@ -195,7 +196,6 @@ export function useBulkPublish() {
    */
   const makeBulkProposal = React.useCallback(
     async ({ actions, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
-      if (!wallet) return;
       if (actions.length < 1) return;
 
       await publish.makeProposal({
@@ -204,10 +204,10 @@ export function useBulkPublish() {
         name,
         onChangePublishState,
         space: spaceId,
-        wallet,
+        walletConfig: config,
       });
     },
-    [storageClient, wallet, publish]
+    [storageClient, config, publish]
   );
 
   return {
