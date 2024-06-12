@@ -50,6 +50,7 @@ export type MakeProposalOptions = {
   onChangePublishState: (newState: ReviewState) => void;
   name: string;
   storageClient: Storage.IStorageClient;
+  account: string;
 };
 
 export async function makeProposal({
@@ -59,6 +60,7 @@ export async function makeProposal({
   onChangePublishState,
   space,
   name,
+  account,
 }: MakeProposalOptions) {
   onChangePublishState('publishing-ipfs');
   const maybeSpace = await fetchSpace({ id: space });
@@ -70,7 +72,7 @@ export async function makeProposal({
   const uploadEffect = Effect.retry(
     Effect.tryPromise({
       try: async () => {
-        const proposal = createEditProposal({ name, ops, author: walletConfig.account.address });
+        const proposal = createEditProposal({ name, ops, author: account });
         return await storageClient.uploadBinary(proposal);
       },
       catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
@@ -92,8 +94,7 @@ export async function makeProposal({
     return yield* _(
       Effect.tryPromise({
         try: () =>
-          prepareWriteContract({
-            walletClient: wallet,
+          simulateContract(walletConfig, {
             address: maybeSpace.mainVotingPluginAddress as `0x${string}`,
             abi: MainVotingAbi,
             functionName: 'createProposal',
@@ -117,6 +118,7 @@ export async function makeProposal({
 
     onChangePublishState('signing-wallet');
 
+    // @TODO: Write transaction here should use the smart account shit we create in usePublish
     return yield* awaited(
       Effect.tryPromise({
         try: () => writeContract(walletConfig, contractConfig.request),
@@ -166,16 +168,16 @@ export async function makeProposal({
   await Effect.runPromise(publishProgram);
 }
 
-export async function registerGeoProfile(wallet: WalletClient, spaceId: `0x${string}`): Promise<string> {
-  const contractConfig = await prepareWriteContract({
+export async function registerGeoProfile(config: Config, spaceId: `0x${string}`): Promise<string> {
+  const contractConfig = await simulateContract(config, {
     abi: ProfileRegistryAbi,
     address: SYSTEM_IDS.PROFILE_REGISTRY_ADDRESS,
     functionName: 'registerGeoProfile',
     args: [spaceId],
   });
 
-  const txHash = await writeContract(walletConfig, request);
-  const waited = await waitForTransactionReceipt(walletConfig, {
+  const txHash = await writeContract(config, contractConfig.request);
+  const waited = await waitForTransactionReceipt(config, {
     hash: txHash,
   });
 
@@ -190,7 +192,7 @@ export async function uploadFile(storageClient: Storage.IStorageClient, file: Fi
 }
 
 interface ProposeAddSubspaceArgs {
-  wallet: GetWalletClientResult | undefined;
+  config: Config;
   storageClient: IStorageClient;
   // @TODO: Handle adding subspace for spaces with different governance types
   mainVotingPluginAddress: string | null;
@@ -200,14 +202,14 @@ interface ProposeAddSubspaceArgs {
 
 // @TODO: Effectify with error handling and UI states
 export async function proposeAddSubspace({
-  wallet,
+  config,
   storageClient,
   spacePluginAddress,
   mainVotingPluginAddress,
   subspaceAddress,
 }: ProposeAddSubspaceArgs) {
   // @TODO: Handle adding subspace for spaces with different governance types
-  if (!wallet || !mainVotingPluginAddress) {
+  if (!mainVotingPluginAddress) {
     return;
   }
 
@@ -223,7 +225,7 @@ export async function proposeAddSubspace({
   // @TODO: This will call different functions depending on the type of space we're
   // in. Additionally, we'll have wrappers for encoding the args that we can call
   // directly onchain.
-  const config = await simulateContract(wallet, {
+  const contractConfig = await simulateContract(config, {
     address: mainVotingPluginAddress as `0x${string}`,
     abi: MainVotingAbi,
     functionName: 'createProposal',
@@ -242,20 +244,20 @@ export async function proposeAddSubspace({
     }),
   });
 
-  const writeResult = await writeContract(config);
+  const writeResult = await writeContract(config, contractConfig.request);
   console.log('writeResult', writeResult);
 }
 
 // @TODO: Effectify with error handling and UI states
 export async function proposeRemoveSubspace({
-  wallet,
+  config,
   storageClient,
   spacePluginAddress,
   mainVotingPluginAddress,
   subspaceAddress,
 }: ProposeAddSubspaceArgs) {
   // @TODO: Handle adding subspace for spaces with different governance types
-  if (!wallet || !mainVotingPluginAddress) {
+  if (!mainVotingPluginAddress) {
     return;
   }
 
@@ -271,7 +273,7 @@ export async function proposeRemoveSubspace({
   // @TODO: This will call different functions depending on the type of space we're
   // in. Additionally, we'll have wrappers for encoding the args that we can call
   // directly onchain.
-  const config = await simulateContract(wallet, {
+  const contractConfig = await simulateContract(config, {
     address: mainVotingPluginAddress as `0x${string}`,
     abi: MainVotingAbi,
     functionName: 'createProposal',
@@ -290,6 +292,6 @@ export async function proposeRemoveSubspace({
     }),
   });
 
-  const writeResult = await writeContract(wallet, config);
+  const writeResult = await writeContract(config, contractConfig.request);
   console.log('writeResult', writeResult);
 }

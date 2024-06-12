@@ -1,4 +1,4 @@
-import { SpaceAbi } from '@geogenesis/contracts';
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { ENTRYPOINT_ADDRESS_V07, createSmartAccountClient, walletClientToSmartAccountSigner } from 'permissionless';
 import { signerToSafeSmartAccount } from 'permissionless/accounts';
 import { createPimlicoBundlerClient, createPimlicoPaymasterClient } from 'permissionless/clients/pimlico';
@@ -108,6 +108,7 @@ export function usePublish() {
       console.log('smart account address', smartAccountClient.account);
 
       const cids = await publishService.makeProposal({
+        account: wallet.account.address,
         storageClient,
         ops: Triples.prepareTriplesForPublishing(triplesToPublish, spaceId),
         name,
@@ -119,8 +120,8 @@ export function usePublish() {
       console.log('cids', cids);
 
       const functionData = encodeFunctionData({
-        functionName: 'addEntries',
-        abi: SpaceAbi,
+        functionName: 'createProposal',
+        abi: MainVotingAbi,
         args: [cids],
       });
 
@@ -132,7 +133,7 @@ export function usePublish() {
 
       console.log('txHash', txHash);
 
-      const actionsBeingPublished = new Set(
+      const triplesBeingPublished = new Set(
         triplesToPublish.map(a => {
           return a.id;
         })
@@ -144,7 +145,7 @@ export function usePublish() {
       // If the actionsBySpace[spaceId] is empty, then we return an empty array
       const nonPublishedActions = actionsBySpace[spaceId]
         ? actionsBySpace[spaceId].filter(a => {
-            return !actionsBeingPublished.has(a.id);
+            return !triplesBeingPublished.has(a.id);
           })
         : [];
 
@@ -176,6 +177,7 @@ export function usePublish() {
 export function useBulkPublish() {
   const { storageClient, publish } = Services.useServices();
   const config = useConfig();
+  const { data: wallet } = useWalletClient();
 
   /**
    * Take the bulk actions for a specific space the user wants to write to Geo and publish them
@@ -184,8 +186,10 @@ export function useBulkPublish() {
   const makeBulkProposal = React.useCallback(
     async ({ triples, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
       if (triples.length < 1) return;
+      if (!wallet?.account.address) return;
 
       await publish.makeProposal({
+        account: wallet?.account.address,
         storageClient,
         ops: Triples.prepareTriplesForPublishing(triples, spaceId),
         name,
