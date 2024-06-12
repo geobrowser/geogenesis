@@ -1,5 +1,5 @@
 import { A, G, pipe } from '@mobily/ts-belt';
-import { QueryClient } from '@tanstack/query-core';
+import { QueryClient } from '@tanstack/react-query';
 
 import { Subgraph } from '~/core/io';
 import { useLocalStore } from '~/core/state/local-store';

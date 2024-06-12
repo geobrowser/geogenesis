@@ -3,8 +3,8 @@
 import { VoteOption } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 
-import { useWalletClient } from 'wagmi';
-import { prepareWriteContract, writeContract } from 'wagmi/actions';
+import { useConfig } from 'wagmi';
+import { simulateContract, writeContract } from 'wagmi/actions';
 
 import { Vote } from '~/core/types';
 
@@ -16,20 +16,19 @@ interface Props {
 }
 
 export function AcceptOrRejectEditor(props: Props) {
-  const { data: wallet } = useWalletClient();
+  const walletConfig = useConfig();
 
   const onClick = async (option: Vote['vote']) => {
-    if (!wallet || !props.votingContractAddress) return;
+    if (!props.votingContractAddress) return;
 
-    const config = await prepareWriteContract({
-      walletClient: wallet,
+    const config = await simulateContract(walletConfig, {
       address: props.votingContractAddress as `0x${string}`,
       abi: MainVotingAbi,
       functionName: 'vote',
       args: [BigInt(props.onchainProposalId), option === 'ACCEPT' ? VoteOption.Yes : VoteOption.No, true],
     });
 
-    const writeResult = await writeContract(config);
+    const writeResult = await writeContract(walletConfig, config.request);
     console.log('writeResult', writeResult);
   };
 

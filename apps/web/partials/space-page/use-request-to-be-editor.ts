@@ -3,14 +3,15 @@
 import { createMembershipProposal, getAcceptEditorArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 
-import { useAccount } from 'wagmi';
-import { prepareWriteContract, writeContract } from 'wagmi/actions';
+import { useAccount, useConfig } from 'wagmi';
+import { simulateContract, writeContract } from 'wagmi/actions';
 
 import { Services } from '~/core/services';
 
 export function useRequestToBeEditor(votingPluginAddress: string | null) {
   const { storageClient } = Services.useServices();
   const { address: requestorAddress } = useAccount();
+  const walletConfig = useConfig();
 
   // @TODO(baiirun): What should this API look like in the SDK?
   const write = async () => {
@@ -24,10 +25,11 @@ export function useRequestToBeEditor(votingPluginAddress: string | null) {
       userAddress: requestorAddress,
     });
 
+    // @TODO(governance): upload binary
     const hash = await storageClient.uploadObject(proposal);
     const uri = `ipfs://${hash}` as const;
 
-    const config = await prepareWriteContract({
+    const config = await simulateContract(walletConfig, {
       address: votingPluginAddress as `0x${string}`,
       abi: MainVotingAbi,
       functionName: 'createProposal',
@@ -52,9 +54,9 @@ export function useRequestToBeEditor(votingPluginAddress: string | null) {
       }),
     });
 
-    const writer = await writeContract(config);
-    console.log('writeResult', writer);
-    return writer.hash;
+    const txHash = await writeContract(walletConfig, config.request);
+    console.log('writeResult', txHash);
+    return txHash;
   };
 
   return {

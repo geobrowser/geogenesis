@@ -2,8 +2,8 @@
 
 import { MemberAccessAbi } from '@geogenesis/sdk/abis';
 
-import { useWalletClient } from 'wagmi';
-import { prepareWriteContract, writeContract } from 'wagmi/actions';
+import { useConfig } from 'wagmi';
+import { simulateContract, writeContract } from 'wagmi/actions';
 
 import { SmallButton } from '~/design-system/button';
 
@@ -13,35 +13,33 @@ interface Props {
 }
 
 export function AcceptOrRejectMember(props: Props) {
-  const { data: wallet } = useWalletClient();
+  const walletConfig = useConfig();
 
   const onApprove = async () => {
-    if (!wallet || !props.membershipContractAddress) return;
+    if (!props.membershipContractAddress) return;
 
-    const config = await prepareWriteContract({
-      walletClient: wallet,
+    const config = await simulateContract(walletConfig, {
       address: props.membershipContractAddress as `0x${string}`,
       abi: MemberAccessAbi,
       functionName: 'approve',
       args: [BigInt(props.onchainProposalId)],
     });
 
-    const writeResult = await writeContract(config);
+    const writeResult = await writeContract(walletConfig, config.request);
     console.log('approval transaction', writeResult);
   };
 
   const onReject = async () => {
-    if (!wallet || !props.membershipContractAddress) return;
+    if (!props.membershipContractAddress) return;
 
-    const config = await prepareWriteContract({
-      walletClient: wallet,
+    const config = await simulateContract(walletConfig, {
       address: props.membershipContractAddress as `0x${string}`,
       abi: MemberAccessAbi,
       functionName: 'reject',
       args: [BigInt(props.onchainProposalId)],
     });
 
-    const writeResult = await writeContract(config);
+    const writeResult = await writeContract(walletConfig, config.request);
     console.log('rejection transaction', writeResult);
   };
 

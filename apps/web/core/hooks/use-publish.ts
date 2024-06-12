@@ -107,7 +107,7 @@ export function usePublish() {
 
       console.log('smart account address', smartAccountClient.account);
 
-      const cids = await publishService.makeProposal({
+      await publishService.makeProposal({
         account: wallet.account.address,
         storageClient,
         ops: Triples.prepareTriplesForPublishing(triplesToPublish, spaceId),
@@ -117,21 +117,17 @@ export function usePublish() {
         walletConfig: config,
       });
 
-      console.log('cids', cids);
+      // const functionData = encodeFunctionData({
+      //   functionName: 'createProposal',
+      //   abi: MainVotingAbi,
+      //   args: [cids],
+      // });
 
-      const functionData = encodeFunctionData({
-        functionName: 'createProposal',
-        abi: MainVotingAbi,
-        args: [cids],
-      });
-
-      const txHash = await smartAccountClient.sendTransaction({
-        to: spaceId as `0x${string}`,
-        data: functionData,
-        value: BigInt(0),
-      });
-
-      console.log('txHash', txHash);
+      // const txHash = await smartAccountClient.sendTransaction({
+      //   to: spaceId as `0x${string}`,
+      //   data: functionData,
+      //   value: BigInt(0),
+      // });
 
       const triplesBeingPublished = new Set(
         triplesToPublish.map(a => {

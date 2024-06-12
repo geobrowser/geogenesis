@@ -4,12 +4,14 @@ import { createMembershipProposal, getRemoveEditorArguments } from '@geogenesis/
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { getAddress } from 'viem';
 
-import { prepareWriteContract, writeContract } from 'wagmi/actions';
+import { useConfig } from 'wagmi';
+import { simulateContract, writeContract } from 'wagmi/actions';
 
 import { Services } from '~/core/services';
 
 export function useProposeToRemoveEditor(votingPluginAddress: string | null) {
   const { storageClient } = Services.useServices();
+  const walletConfig = useConfig();
 
   // @TODO(baiirun): What should this API look like in the SDK?
   const write = async (editorToRemove: string) => {
@@ -26,7 +28,7 @@ export function useProposeToRemoveEditor(votingPluginAddress: string | null) {
     const hash = await storageClient.uploadObject(membershipProposalMetadata);
     const uri = `ipfs://${hash}` as const;
 
-    const config = await prepareWriteContract({
+    const config = await simulateContract(walletConfig, {
       address: votingPluginAddress as `0x${string}`,
       abi: MainVotingAbi,
       functionName: 'createProposal',
@@ -51,8 +53,8 @@ export function useProposeToRemoveEditor(votingPluginAddress: string | null) {
       }),
     });
 
-    const writer = await writeContract(config);
-    return writer.hash;
+    const writer = await writeContract(walletConfig, config.request);
+    return writer;
   };
 
   return {
