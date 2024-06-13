@@ -53,7 +53,7 @@ services:
       SUBSTREAMS_ENDPOINT: https://polygon.substreams.pinax.network:443
       SUBSTREAMS_API_KEY: ${SUBSTREAMS_API_KEY:?SUBSTREAMS_API_KEY is not set}
       DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
-    command: node dist/index.js --start-block 40078393
+    command: node /app/packages/substream/dist/index.js --start-block 40078393
 
   api:
     container_name: geo-api
