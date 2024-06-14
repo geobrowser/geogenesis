@@ -65,7 +65,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
-      CHAIN_RPC: https://polygon.drpc.org
+      CHAIN_RPC: https://polygon.rpc.pinax.network/v1/${SUBSTREAMS_API_KEY}/
       PORT: 5001
     ports:
       - "5001:5001"
