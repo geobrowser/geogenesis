@@ -1,40 +1,34 @@
 syntax = "proto3";
 
 message IpfsMetadata {
-  IpfsContentType type = 1;
-  string name = 2;
   // We version the data structured used to represent proposal metadata. Each
   // proposal type has their own metadata and versioning that we can change
   // independently of other proposal types.
-  string version = 3;
-  string proposalId = 4;
+  string version = 1;
+  IpfsContentType type = 2;
+  string id = 3;
+  string name = 4;
 }
 
 enum IpfsContentType {
   UNKNOWN = 0;
   EDIT = 1;
-  ADD_SUBSPACE = 2;
-  REMOVE_SUBSPACE = 3;
-  ADD_EDITOR = 4;
-  REMOVE_EDITOR = 5;
-  ADD_MEMBER = 6;
-  REMOVE_MEMBER = 7;
-}
-
-message EditLegacy {
-  string name = 1;
-  string version = 2;
-  repeated Op ops = 3;
-  repeated bytes authors = 4;
+  CREATE_SPACE = 2;
+  ADD_SUBSPACE = 3;
+  REMOVE_SUBSPACE = 4;
+  ADD_EDITOR = 5;
+  REMOVE_EDITOR = 6;
+  ADD_MEMBER = 7;
+  REMOVE_MEMBER = 8;
 }
 
 message Edit {
-  IpfsContentType type = 1;
-  string name = 2;
-  string version = 3;
-  string proposalId = 4;
+  string version = 1;
+  IpfsContentType type = 2;
+  string id = 3;
+  string name = 4;
   repeated Op ops = 5;
-  repeated bytes authors = 6;
+  repeated string authors = 6;
 }
 
 message Op {
@@ -72,17 +66,23 @@ enum ValueType {
 }
 
 message Membership {
-  IpfsContentType type = 1;
-  string name = 2;
-  string version = 3;
-  string proposalId = 4;
+  string version = 1;
+  IpfsContentType type = 2;
+  string id = 3;
+  string name = 4;
   string userAddress = 5;
 }
 
 message Subspace {
-  IpfsContentType type = 1;
-  string name = 2;
-  string version = 3;
-  string proposalId = 4;
+  string version = 1;
+  IpfsContentType type = 2;
+  string id = 3;
+  string name = 4;
   string subspace = 5;
+}
+
+message Import {
+  string previousNetwork = 1;
+  string previousAddress = 2;
+  repeated string edits = 3;
 }
