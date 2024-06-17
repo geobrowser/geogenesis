@@ -300,7 +300,7 @@ export function useTableBlock() {
   );
 
   const view = getView(blockEntity);
-  const placeholder = getPlaceholders(blockEntity, view);
+  const placeholder = getPlaceholder(blockEntity, view);
 
   return {
     blockEntity,
@@ -357,7 +357,7 @@ const getView = (blockEntity: EntityType | null | undefined): DataBlockView => {
   return view;
 };
 
-const getPlaceholders = (blockEntity: EntityType | null | undefined, view: DataBlockView) => {
+const getPlaceholder = (blockEntity: EntityType | null | undefined, view: DataBlockView) => {
   let text = DEFAULT_PLACEHOLDERS[view].text;
   let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
 
