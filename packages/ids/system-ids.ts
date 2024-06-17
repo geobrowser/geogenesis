@@ -156,6 +156,12 @@ export const SHOWN_COLUMNS = '388ad59b-1cc7-413c-a0bb-34a4de48c758';
 export const PLACEHOLDER_TEXT = '0e5f84e4-c85a-4469-8a66-5a7d46fe2786';
 export const PLACEHOLDER_IMAGE = '3f208320-9070-4795-a046-206a6efb9557';
 
+// @TODO (migration)
+export const VIEW_ATTRIBUTE = 'f062fc5a-6f11-4859-ba70-e644be6caea5';
+export const TABLE_VIEW = 'a2a136e1-d1da-4853-bf3b-0960982f8162';
+export const LIST_VIEW = '70db7442-1c6e-4252-91c8-a807466d8668';
+export const GALLERY_VIEW = 'eb18a135-be25-4953-a959-999dfb3255c0';
+
 /* Example Usage: Block Entity -> TYPES -> TEXT_BLOCK */
 export const TEXT_BLOCK = '8426caa1-43d6-47d4-a6f1-00c7c1a9a320';
 
