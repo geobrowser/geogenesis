@@ -1,6 +1,6 @@
 import { Effect, Either } from 'effect';
 
-import { ZodEdit } from '../events/proposals-created/parser';
+import { type ParsedEdit, ZodEdit } from '../events/proposals-created/parser';
 import { Edit } from '../proto';
 // import { Telemetry } from '~/sink/telemetry';
 import { slog } from '~/sink/utils/slog';
@@ -46,9 +46,9 @@ export function decode<T>(fn: () => T) {
   });
 }
 
-function decodeEdit(data: Buffer) {
+function decodeEdit(data: Buffer): Effect.Effect<ParsedEdit | null> {
   return Effect.gen(function* (_) {
-    const decodeEffect = decode(() => {
+    const decodeEffect = decode((): ParsedEdit | null => {
       const edit = Edit.fromBinary(data);
       const parseResult = ZodEdit.safeParse(edit);
 

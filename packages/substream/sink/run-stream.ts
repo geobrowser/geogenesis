@@ -20,7 +20,7 @@ import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
-import { getEditProposalFromInitialSpaceProposalIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
+import { getProposalFromInitialSpaceProposalIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
 import { handleProposalsProcessed } from './events/proposal-processed/handler';
 import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
@@ -330,13 +330,16 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
            */
           if (proposalProcessedResponse.success) {
             /**
-             * Since there are potentially two handlers that we need to run, we abstract out the common
+             * Since there are potentially three handlers that we need to run, we abstract out the common
              * data fetching needed for both here, and pass the result to the two handlers. This breaks
              * from the normalized pattern where we have a single handler for every event. For this event
              * there might be two handlers.
+             *
+             * `getProposalFromInitialSpaceProposalIpfsUri` might be an Edit or it might be an Import which
+             * contains many edits
              */
             const proposals = yield* _(
-              getEditProposalFromInitialSpaceProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
+              getProposalFromInitialSpaceProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
                 blockNumber,
                 cursor,
                 timestamp,

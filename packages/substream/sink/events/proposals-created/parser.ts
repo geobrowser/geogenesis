@@ -180,6 +180,8 @@ export const ZodEdit = z.object({
   id: z.string(),
 });
 
+export type ParsedEdit = z.infer<typeof ZodEdit>;
+
 export type EditProposal = Proposal & {
   type: 'EDIT';
   name: string;
