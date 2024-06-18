@@ -7,23 +7,25 @@ import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialM
 import { Message, proto3 } from "@bufbuild/protobuf";
 
 /**
- * @generated from enum IpfsContentType
+ * @TODO: Should be called something else?
+ *
+ * @generated from enum ActionType
  */
-export enum IpfsContentType {
+export enum ActionType {
   /**
    * @generated from enum value: UNKNOWN = 0;
    */
   UNKNOWN = 0,
 
   /**
-   * @generated from enum value: EDIT = 1;
+   * @generated from enum value: ADD_EDIT = 1;
    */
-  EDIT = 1,
+  ADD_EDIT = 1,
 
   /**
-   * @generated from enum value: CREATE_SPACE = 2;
+   * @generated from enum value: IMPORT_SPACE = 2;
    */
-  CREATE_SPACE = 2,
+  IMPORT_SPACE = 2,
 
   /**
    * @generated from enum value: ADD_SUBSPACE = 3;
@@ -55,11 +57,11 @@ export enum IpfsContentType {
    */
   REMOVE_MEMBER = 8,
 }
-// Retrieve enum metadata with: proto3.getEnumType(IpfsContentType)
-proto3.util.setEnumType(IpfsContentType, "IpfsContentType", [
+// Retrieve enum metadata with: proto3.getEnumType(ActionType)
+proto3.util.setEnumType(ActionType, "ActionType", [
   { no: 0, name: "UNKNOWN" },
-  { no: 1, name: "EDIT" },
-  { no: 2, name: "CREATE_SPACE" },
+  { no: 1, name: "ADD_EDIT" },
+  { no: 2, name: "IMPORT_SPACE" },
   { no: 3, name: "ADD_SUBSPACE" },
   { no: 4, name: "REMOVE_SUBSPACE" },
   { no: 5, name: "ADD_EDITOR" },
@@ -170,9 +172,9 @@ export class IpfsMetadata extends Message<IpfsMetadata> {
   version = "";
 
   /**
-   * @generated from field: IpfsContentType type = 2;
+   * @generated from field: ActionType type = 2;
    */
-  type = IpfsContentType.UNKNOWN;
+  type = ActionType.UNKNOWN;
 
   /**
    * @generated from field: string id = 3;
@@ -193,7 +195,7 @@ export class IpfsMetadata extends Message<IpfsMetadata> {
   static readonly typeName = "IpfsMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(IpfsContentType) },
+    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
     { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
@@ -225,9 +227,9 @@ export class Edit extends Message<Edit> {
   version = "";
 
   /**
-   * @generated from field: IpfsContentType type = 2;
+   * @generated from field: ActionType type = 2;
    */
-  type = IpfsContentType.UNKNOWN;
+  type = ActionType.UNKNOWN;
 
   /**
    * @generated from field: string id = 3;
@@ -258,7 +260,7 @@ export class Edit extends Message<Edit> {
   static readonly typeName = "Edit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(IpfsContentType) },
+    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
     { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "ops", kind: "message", T: Op, repeated: true },
@@ -427,9 +429,9 @@ export class Membership extends Message<Membership> {
   version = "";
 
   /**
-   * @generated from field: IpfsContentType type = 2;
+   * @generated from field: ActionType type = 2;
    */
-  type = IpfsContentType.UNKNOWN;
+  type = ActionType.UNKNOWN;
 
   /**
    * @generated from field: string id = 3;
@@ -455,7 +457,7 @@ export class Membership extends Message<Membership> {
   static readonly typeName = "Membership";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(IpfsContentType) },
+    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
     { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "userAddress", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -488,9 +490,9 @@ export class Subspace extends Message<Subspace> {
   version = "";
 
   /**
-   * @generated from field: IpfsContentType type = 2;
+   * @generated from field: ActionType type = 2;
    */
-  type = IpfsContentType.UNKNOWN;
+  type = ActionType.UNKNOWN;
 
   /**
    * @generated from field: string id = 3;
@@ -516,7 +518,7 @@ export class Subspace extends Message<Subspace> {
   static readonly typeName = "Subspace";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(IpfsContentType) },
+    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
     { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "subspace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -549,9 +551,9 @@ export class Import extends Message<Import> {
   previousNetwork = "";
 
   /**
-   * @generated from field: string previousAddress = 2;
+   * @generated from field: string previousContractAddress = 2;
    */
-  previousAddress = "";
+  previousContractAddress = "";
 
   /**
    * @generated from field: repeated string edits = 3;
@@ -567,7 +569,7 @@ export class Import extends Message<Import> {
   static readonly typeName = "Import";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "previousNetwork", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "previousAddress", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "previousContractAddress", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "edits", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 

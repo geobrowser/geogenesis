@@ -49,10 +49,8 @@ export function decode<T>(fn: () => T) {
 function decodeEdit(data: Buffer) {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
-      // @TODO: Use protobufjs instead of bufbuild since it seems we can encode
-      // decode binary string a lot more easily
       const edit = Edit.fromBinary(data);
-      const parseResult = ZodEdit.safeParse(edit.toJson());
+      const parseResult = ZodEdit.safeParse(edit);
 
       if (parseResult.success) {
         return parseResult.data;

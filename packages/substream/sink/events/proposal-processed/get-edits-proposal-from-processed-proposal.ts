@@ -7,7 +7,7 @@ import type { BlockEvent, Op } from '../../types';
 import { getChecksumAddress } from '../../utils/get-checksum-address';
 import { slog } from '../../utils/slog';
 import { type EditProposal, type ProposalProcessed } from '../proposals-created/parser';
-import { Decoder, Edit, IpfsContentType, IpfsMetadata, decode } from '~/sink/proto';
+import { ActionType, Decoder, IpfsMetadata, decode } from '~/sink/proto';
 
 class InvalidProcessedProposalContentTypeError extends Error {
   _tag: 'InvalidProcessedProposalContentTypeError' = 'InvalidProcessedProposalContentTypeError';
@@ -83,19 +83,17 @@ function fetchEditProposalFromIpfs(
     }
 
     switch (validIpfsMetadata.type) {
-      case IpfsContentType.EDIT: {
+      case ActionType.ADD_EDIT: {
         const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
 
         if (!parsedContent) {
           return null;
         }
 
-        console.log('authors', parsedContent.authors);
-
         const contentProposal: EditProposal = {
           type: 'EDIT',
           name: validIpfsMetadata.name ?? null,
-          proposalId: parsedContent.proposalId,
+          proposalId: parsedContent.id,
           onchainProposalId: '-1',
           pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
           ops: parsedContent.ops as Op[],
