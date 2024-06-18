@@ -224,17 +224,18 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header, index: number) => {
                       const isShown = shownIndexes.includes(index);
+                      const headerClassNames = isShown
+                        ? null
+                        : !isEditingColumns || !isEditMode
+                        ? 'hidden'
+                        : '!bg-grey-01 !text-grey-03';
 
                       return (
                         <th
                           key={header.id}
                           className={cx(
-                            !isShown
-                              ? !isEditingColumns || !isEditMode
-                                ? 'hidden'
-                                : '!bg-grey-01 !text-grey-03'
-                              : null,
-                            'group relative min-w-[250px] border border-b-0 border-grey-02 p-[10px] text-left'
+                            'group relative min-w-[250px] border border-b-0 border-grey-02 p-[10px] text-left',
+                            headerClassNames
                           )}
                         >
                           <div className="flex h-full w-full items-center gap-[10px]">

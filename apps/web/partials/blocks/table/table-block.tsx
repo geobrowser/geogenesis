@@ -68,7 +68,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
   const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.id) ?? []), 'name'];
 
-  const viewTriples = (blockEntity?.triples ?? []).filter(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
+  const viewTriple = (blockEntity?.triples ?? []).find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -148,7 +148,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
               </motion.div>
             )}
           </AnimatePresence>
-          <DataBlockViewMenu activeView={view} viewTriples={viewTriples} isLoading={isLoading} />
+          <DataBlockViewMenu activeView={view} viewTriple={viewTriple} isLoading={isLoading} />
           <TableBlockContextMenu
             allColumns={allColumns}
             shownColumnTriples={shownColumnTriples}

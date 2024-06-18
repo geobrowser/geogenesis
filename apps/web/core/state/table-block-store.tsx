@@ -385,15 +385,15 @@ const getPlaceholder = (blockEntity: EntityType | null | undefined, view: DataBl
 const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string }> = {
   TABLE: {
     text: 'Add your first entity row to get started',
-    image: 'ipfs://QmfC4DoT7uVNoFRbP6DBYn9T79gpLXw2Uv6qJ2G8wmqT1d',
+    image: '/table.png',
   },
   LIST: {
     text: 'Add your first list item to get started',
-    image: 'ipfs://QmNSXLX29ApvjheARFTMsseKT93oy2rjKa8Rko8NY51mqS',
+    image: '/list.png',
   },
   GALLERY: {
     text: 'Add your first gallery card to get started',
-    image: 'ipfs://QmdGzL5ABVKy1AqNgdtox7EidCqLgTZQ36Z96t4d1gLT3u',
+    image: '/gallery.png',
   },
 };
 

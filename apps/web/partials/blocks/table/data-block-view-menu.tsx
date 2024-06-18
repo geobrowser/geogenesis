@@ -26,11 +26,11 @@ const MotionContent = motion(Dropdown.Content);
 
 type TableBlockViewMenuProps = {
   activeView: DataBlockView;
-  viewTriples: TripleType[];
+  viewTriple?: TripleType;
   isLoading: boolean;
 };
 
-export function DataBlockViewMenu({ activeView, viewTriples, isLoading }: TableBlockViewMenuProps) {
+export function DataBlockViewMenu({ activeView, viewTriple, isLoading }: TableBlockViewMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { spaceId, entityId, name } = useTableBlock();
 
@@ -69,7 +69,7 @@ export function DataBlockViewMenu({ activeView, viewTriples, isLoading }: TableB
                 entityName={name ?? null}
                 activeView={activeView}
                 view={view}
-                viewTriples={viewTriples}
+                viewTriple={viewTriple}
                 isLoading={isLoading}
               />
             );
@@ -105,11 +105,11 @@ type ToggleViewProps = {
   entityName: string | null;
   activeView: DataBlockView;
   view: DataBlockViewDetails;
-  viewTriples: TripleType[];
+  viewTriple?: TripleType;
   isLoading: boolean;
 };
 
-const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriples, isLoading }: ToggleViewProps) => {
+const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriple, isLoading }: ToggleViewProps) => {
   const { create, remove } = useActionsStore(space);
 
   const isActive = !isLoading && activeView === view.value;
@@ -119,11 +119,11 @@ const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriples
     const attributeName = 'View';
 
     if (!isActive) {
-      if (viewTriples.length > 0) {
-        viewTriples.forEach(triple => {
-          remove(triple);
-        });
+      // @TODO (migration)
+      if (viewTriple) {
+        remove(viewTriple);
       }
+
       create(
         Triple.withId({
           space,
@@ -139,7 +139,7 @@ const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriples
         })
       );
     }
-  }, [create, entityId, entityName, isActive, remove, space, view.id, view.name, viewTriples]);
+  }, [create, entityId, entityName, isActive, remove, space, view.id, view.name, viewTriple]);
 
   return (
     <MenuItem active={isActive}>
