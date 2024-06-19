@@ -146,7 +146,7 @@ function fetchEditProposalFromIpfs(
 
         const decodedEdits = maybeDecodedEdits.flatMap(e => (e ? [e] : []));
 
-        return decodedEdits.map(e => {
+        const proposals = decodedEdits.map(e => {
           const contentProposal: EditProposal = {
             type: 'EDIT',
             name: validIpfsMetadata.name ?? null,
@@ -165,6 +165,8 @@ function fetchEditProposalFromIpfs(
 
           return contentProposal;
         });
+
+        return proposals;
     }
 
     yield* _(
@@ -203,10 +205,8 @@ export function getProposalFromInitialSpaceProposalIpfsUri(proposalsProcessed: P
       )
     );
 
-    const proposalsFromIpfs = maybeProposalsFromIpfs.filter(
-      (maybeProposal): maybeProposal is EditProposal => maybeProposal !== null
-    );
-
+    // @TODO: Ensure ordering of proposals is correct
+    const proposalsFromIpfs = maybeProposalsFromIpfs.flatMap(e => (e ? [e] : [])).flat();
     return proposalsFromIpfs;
   });
 }
