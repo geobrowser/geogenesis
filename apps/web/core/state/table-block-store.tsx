@@ -384,15 +384,15 @@ const getPlaceholder = (blockEntity: EntityType | null | undefined, view: DataBl
 
 const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string }> = {
   TABLE: {
-    text: 'Add your first entity row to get started',
+    text: 'Add an entity',
     image: '/table.png',
   },
   LIST: {
-    text: 'Add your first list item to get started',
+    text: 'Add a list item',
     image: '/list.png',
   },
   GALLERY: {
-    text: 'Add your first gallery card to get started',
+    text: 'Add a gallery card',
     image: '/gallery.png',
   },
 };
