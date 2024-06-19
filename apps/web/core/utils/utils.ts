@@ -110,8 +110,16 @@ export class GeoDate {
     hour: string;
     minute: string;
   }): string {
-    const isoDate = new Date(`${month}-${day}-${year} ${hour}:${minute} UTC`);
-    return isoDate.toISOString();
+    hour = hour === '' ? '00' : hour;
+    minute = minute === '' ? '00' : minute;
+
+    try {
+      const isoDate = new Date(`${year}-${month}-${day}T${hour}:${minute}:00.000+00:00`); // UTC
+      return isoDate.toISOString();
+    } catch (e) {
+      console.error('failed parsing UTC', e);
+      throw e;
+    }
   }
 
   // Geo DateField parses ISO strings in UTC time into day, month, year, hour, minute.
