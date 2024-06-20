@@ -59,19 +59,15 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
   const handlePublish = async () => {
     if (!wallet) return;
 
-    try {
-      await makeBulkProposal({
-        triples: triples,
-        spaceId,
-        name: proposalName,
-        onChangePublishState: reviewState => console.log(reviewState),
-      });
-
-      setStep('done');
-      setIsPublishOpen(false);
-    } catch (error) {
-      console.error(error);
-    }
+    await makeBulkProposal({
+      triples: triples,
+      spaceId,
+      name: proposalName,
+      onSuccess: () => {
+        setStep('done');
+        setIsPublishOpen(false);
+      },
+    });
   };
 
   const [data, isLoading] = useChanges(triples.slice(0, 150), spaceId);
