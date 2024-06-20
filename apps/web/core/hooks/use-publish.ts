@@ -1,27 +1,44 @@
-import { getProcessGeoProposalArguments } from '@geogenesis/sdk';
+import { Op, getProcessGeoProposalArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
-import {
-  ENTRYPOINT_ADDRESS_V07,
-  bundlerActions,
-  createSmartAccountClient,
-  walletClientToSmartAccountSigner,
-} from 'permissionless';
-import { signerToSafeSmartAccount } from 'permissionless/accounts';
-import { pimlicoBundlerActions, pimlicoPaymasterActions } from 'permissionless/actions/pimlico';
-import { WalletClient, createClient, createPublicClient, createWalletClient, encodeFunctionData, http } from 'viem';
+import { Effect, Schedule } from 'effect';
+import { encodeFunctionData } from 'viem';
 
 import * as React from 'react';
 
-import { useConfig, useWalletClient } from 'wagmi';
+import { Config, useConfig, useWalletClient } from 'wagmi';
 
-import { Environment } from '../environment';
+import { IStorageClient } from '../io/storage/storage';
 import { fetchSpace } from '../io/subgraph';
 import { Services } from '../services';
 import { Triple as ITriple, ReviewState } from '../types';
 import { Triples } from '../utils/triples';
-import { CONDUIT_TESTNET } from '../wallet/conduit-chain';
 import { useActionsStore } from './use-actions-store';
+import { useSmartAccount } from './use-smart-account';
+
+export class TransactionRevertedError extends Error {
+  readonly _tag = 'TransactionRevertedError';
+}
+
+export class WaitForTransactionBlockError extends Error {
+  readonly _tag = 'WaitForTransactionBlockError';
+}
+
+export class TransactionPrepareFailedError extends Error {
+  readonly _tag = 'TransactionPrepareFailedError';
+}
+
+export class TransactionWriteFailedError extends Error {
+  readonly _tag = 'TransactionWriteFailedError';
+}
+
+export class InvalidIpfsQmHashError extends Error {
+  readonly _tag = 'InvalidIpfsQmHashError';
+}
+
+export class IpfsUploadError extends Error {
+  readonly _tag = 'IpfsUploadError';
+}
 
 interface MakeProposalOptions {
   triples: ITriple[];
@@ -34,18 +51,20 @@ export function usePublish() {
   const { storageClient } = Services.useServices();
   const { restore, actions: actionsBySpace } = useActionsStore();
   const { data: wallet } = useWalletClient();
+  const smartAccount = useSmartAccount();
+  const walletConfig = useConfig();
 
   /**
    * Take the actions for a specific space the user wants to write to Geo and publish them
-   * to IPFS + transact the IPFS hash onto Polygon.
+   * to IPFS + transact the IPFS hash onto the space's blockchain.
    *
    * After the publish flow finishes update the state of the user's actions for the given
    * space with the published actions being flagged as `hasBeenPublished` and run any additional
    * side effects.
    */
-  const makeProposal = React.useCallback(
+  const make = React.useCallback(
     async ({ triples: triplesToPublish, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
-      if (!wallet) return;
+      if (!smartAccount || !wallet) return;
       if (triplesToPublish.length < 1) return;
 
       // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
@@ -59,30 +78,18 @@ export function usePublish() {
 
       const ops = Triples.prepareTriplesForPublishing(triplesToPublish, spaceId);
 
-      const proposal = createEditProposal({
+      await makeProposal({
         name,
+        storage: storageClient,
+        onChangePublishState,
         ops,
-        author: wallet.account.address,
+        smartAccount,
+        space: {
+          id: space.id,
+          mainVotingPluginAddress: space.mainVotingPluginAddress,
+        },
+        walletConfig,
       });
-
-      onChangePublishState('publishing-ipfs');
-      const hash = await storageClient.uploadBinary(proposal);
-      const uri = `ipfs://${hash}` as const;
-      onChangePublishState('signing-wallet');
-
-      const encodedProposalArgs = getProcessGeoProposalArguments(spaceId as `0x${string}`, uri);
-
-      onChangePublishState('publishing-contract');
-
-      const callData = encodeFunctionData({
-        functionName: 'createProposal',
-        abi: MainVotingAbi,
-        args: encodedProposalArgs,
-      });
-
-      console.log('Generated callData:', callData);
-
-      await transactProposalWithAccountAbstraction(wallet, callData, space.mainVotingPluginAddress as `0x${string}`);
 
       const triplesBeingPublished = new Set(
         triplesToPublish.map(a => {
@@ -116,19 +123,19 @@ export function usePublish() {
         [spaceId]: [...publishedActions, ...nonPublishedActions],
       });
     },
-    [storageClient, wallet, restore, actionsBySpace]
+    [storageClient, wallet, restore, actionsBySpace, smartAccount, walletConfig]
   );
 
   return {
-    makeProposal,
-    // @TODO: This should also include APIs for granting and revoking roles
+    makeProposal: make,
   };
 }
 
 export function useBulkPublish() {
-  const { storageClient, publish } = Services.useServices();
+  const { storageClient } = Services.useServices();
   const config = useConfig();
   const { data: wallet } = useWalletClient();
+  const smartAccount = useSmartAccount();
 
   /**
    * Take the bulk actions for a specific space the user wants to write to Geo and publish them
@@ -139,17 +146,29 @@ export function useBulkPublish() {
       if (triples.length < 1) return;
       if (!wallet?.account.address) return;
 
-      await publish.makeProposal({
-        account: wallet?.account.address,
-        storageClient,
-        ops: Triples.prepareTriplesForPublishing(triples, spaceId),
+      // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
+      // All of our contract calls rely on knowing plugin metadata so this is probably
+      // something we need for all of them.
+      const space = await fetchSpace({ id: spaceId });
+
+      if (!space || !space.mainVotingPluginAddress || !smartAccount) {
+        return;
+      }
+
+      await makeProposal({
         name,
+        storage: storageClient,
         onChangePublishState,
-        space: spaceId,
+        ops: Triples.prepareTriplesForPublishing(triples, spaceId),
+        smartAccount,
+        space: {
+          id: space.id,
+          mainVotingPluginAddress: space.mainVotingPluginAddress,
+        },
         walletConfig: config,
       });
     },
-    [storageClient, config, publish, wallet?.account.address]
+    [storageClient, config, wallet?.account.address, smartAccount]
   );
 
   return {
@@ -157,58 +176,73 @@ export function useBulkPublish() {
   };
 }
 
-// @TODO: Abstract smart client stuff into a hook or something similar that we
-// can inject and use in all our of contract-writing code.
-async function transactProposalWithAccountAbstraction(
-  walletClient: WalletClient,
-  callData: `0x${string}`,
-  to: `0x${string}`
-) {
-  const transport = http(process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!);
-  const bundlerTransport = http(Environment.getConfig().bundler);
+interface MakeProposalArgs {
+  name: string;
+  ops: Op[];
+  storage: IStorageClient;
+  smartAccount: NonNullable<ReturnType<typeof useSmartAccount>>;
+  space: {
+    id: string;
+    mainVotingPluginAddress: string;
+  };
+  walletConfig: Config;
+  onChangePublishState: (newState: ReviewState) => void;
+}
 
-  const publicClient = createPublicClient({
-    transport,
-    chain: CONDUIT_TESTNET,
-  });
+async function makeProposal(args: MakeProposalArgs) {
+  const { name, ops, smartAccount, space, storage, walletConfig, onChangePublishState } = args;
+  const proposal = createEditProposal({ name, ops, author: smartAccount.account.address });
 
-  const signer = walletClientToSmartAccountSigner(walletClient);
-
-  const safeAccount = await signerToSafeSmartAccount(publicClient, {
-    signer: signer,
-    entryPoint: ENTRYPOINT_ADDRESS_V07,
-    safeVersion: '1.4.1',
-  });
-
-  const bundlerClient = createClient({
-    transport: bundlerTransport,
-    chain: CONDUIT_TESTNET,
-  })
-    .extend(bundlerActions(ENTRYPOINT_ADDRESS_V07))
-    .extend(pimlicoBundlerActions(ENTRYPOINT_ADDRESS_V07));
-
-  const paymasterClient = createClient({
-    transport: bundlerTransport,
-    chain: CONDUIT_TESTNET,
-  }).extend(pimlicoPaymasterActions(ENTRYPOINT_ADDRESS_V07));
-
-  const safeClient = createSmartAccountClient({
-    chain: CONDUIT_TESTNET,
-    account: safeAccount,
-    bundlerTransport,
-    middleware: {
-      gasPrice: async () => {
-        return (await bundlerClient.getUserOperationGasPrice()).fast;
+  const uploadEffect = Effect.retry(
+    Effect.tryPromise({
+      try: async () => {
+        const hash = await storage.uploadBinary(proposal);
+        return `ipfs://${hash}`;
       },
-      sponsorUserOperation: paymasterClient.sponsorUserOperation,
-    },
+      catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
+    }),
+    Schedule.exponential('100 millis').pipe(Schedule.jittered)
+  );
+
+  const writeTxEffect = Effect.gen(function* () {
+    onChangePublishState('publishing-ipfs');
+    const cid = yield* uploadEffect;
+
+    if (!cid.startsWith('ipfs://Qm')) {
+      return yield* Effect.fail(
+        new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.')
+      );
+    }
+
+    const encodedProposalArgs = getProcessGeoProposalArguments(space.id as `0x${string}`, cid as `ipfs://${string}`);
+
+    const callData = encodeFunctionData({
+      functionName: 'createProposal',
+      abi: MainVotingAbi,
+      args: encodedProposalArgs,
+    });
+
+    onChangePublishState('signing-wallet');
+
+    return yield* Effect.tryPromise({
+      try: () =>
+        smartAccount.sendTransaction({
+          to: space.mainVotingPluginAddress as `0x${string}`,
+          value: 0n,
+          data: callData,
+        }),
+      catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
+    });
   });
 
-  const txHash = await safeClient.sendTransaction({
-    to: to,
-    value: 0n,
-    data: callData,
+  const publishProgram = Effect.gen(function* () {
+    onChangePublishState('publishing-contract');
+    const writeTxHash = yield* writeTxEffect;
+    console.log('Transaction hash: ', writeTxHash);
+    return writeTxHash;
   });
 
-  return txHash;
+  // @TODO: Surface errors? Right now this will throw and be
+  // caught by the caller.
+  await Effect.runPromise(publishProgram);
 }
