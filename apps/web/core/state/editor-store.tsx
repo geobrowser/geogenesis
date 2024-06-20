@@ -3,6 +3,7 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { A, pipe } from '@mobily/ts-belt';
 import { Editor } from '@tiptap/core';
+import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateHTML, generateJSON } from '@tiptap/react';
 import pluralize from 'pluralize';
 import Showdown from 'showdown';
@@ -111,7 +112,7 @@ export function useEditorStore() {
         const html = markdownTriple ? markdownConverter.makeHtml(Value.stringValue(markdownTriple) || '') : '';
         /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
         const isSSR = typeof window === 'undefined';
-        const json = isSSR ? { content: '' } : generateJSON(html, tiptapExtensions);
+        const json = isSSR ? generateServerJSON(html, tiptapExtensions) : generateJSON(html, tiptapExtensions);
         const nodeData = json.content[0];
 
         return {
