@@ -27,6 +27,10 @@ export type AppEntityValue = {
   type: 'ENTITY';
   value: string;
   name: string | null;
+
+  // Time to link
+  // upsert: entity value type, in the value you just add the space the user selected
+  space?: string;
 };
 
 // Images are stored as an entity instead of the actual image resource url.

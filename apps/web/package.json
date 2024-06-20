@@ -73,7 +73,7 @@
     "lokijs": "^1.5.12",
     "next": "^14.2.3",
     "papaparse": "^5.3.2",
-    "permissionless": "^0.1.11",
+    "permissionless": "0.1.29",
     "pino-pretty": "^10.2.0",
     "pluralize": "^8.0.0",
     "raw-body": "^2.5.1",
@@ -139,5 +139,10 @@
     "path": false,
     "stream": false,
     "zlib": false
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "permissionless@0.1.29": "patches/permissionless@0.1.29.patch"
+    }
   }
 }

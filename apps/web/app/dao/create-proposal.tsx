@@ -1,13 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-import {
-  createContentProposal,
-  createGeoId,
-  createSubspaceProposal,
-  getAcceptSubspaceArguments,
-  getProcessGeoProposalArguments,
-} from '@geogenesis/sdk';
+import { SYSTEM_IDS, createContentProposal, createGeoId, getProcessGeoProposalArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 
 import { useConfig, useWalletClient } from 'wagmi';
@@ -98,12 +91,12 @@ export function CreateProposal() {
       // What can happen is that you create a "CONTENT" proposal but pass a callback
       // action that does some other action like "ADD_SUBSPACE" and it will fail since
       // the substream won't index a mismatched proposal type and action callback args.
-      // args: getProcessGeoProposalArguments(TEST_SPACE_PLUGIN_ADDRESS, uri),
-      args: getAcceptSubspaceArguments({
-        spacePluginAddress: TEST_SPACE_PLUGIN_ADDRESS,
-        ipfsUri: uri,
-        subspaceToAccept: '0x170b749413328ac9a94762031a7A05b00c1D2e34', // Root
-      }),
+      args: getProcessGeoProposalArguments(TEST_SPACE_PLUGIN_ADDRESS, uri),
+      // args: getAcceptSubspaceArguments({
+      //   spacePluginAddress: TEST_SPACE_PLUGIN_ADDRESS,
+      //   ipfsUri: uri,
+      //   subspaceToAccept: '0x170b749413328ac9a94762031a7A05b00c1D2e34', // Root
+      // }),
     });
 
     const writeResult = await writeContract(walletConfig, config.request);

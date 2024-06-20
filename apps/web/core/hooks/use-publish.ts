@@ -1,12 +1,21 @@
-import { ENTRYPOINT_ADDRESS_V07, createSmartAccountClient, walletClientToSmartAccountSigner } from 'permissionless';
+import { getProcessGeoProposalArguments } from '@geogenesis/sdk';
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { createEditProposal } from '@geogenesis/sdk/proto';
+import {
+  ENTRYPOINT_ADDRESS_V07,
+  bundlerActions,
+  createSmartAccountClient,
+  walletClientToSmartAccountSigner,
+} from 'permissionless';
 import { signerToSafeSmartAccount } from 'permissionless/accounts';
-import { createPimlicoBundlerClient, createPimlicoPaymasterClient } from 'permissionless/clients/pimlico';
-import { createPublicClient, createWalletClient, encodeFunctionData, http } from 'viem';
+import { pimlicoBundlerActions, pimlicoPaymasterActions } from 'permissionless/actions/pimlico';
+import { WalletClient, createClient, createPublicClient, createWalletClient, encodeFunctionData, http } from 'viem';
 
 import * as React from 'react';
 
 import { useConfig, useWalletClient } from 'wagmi';
 
+import { fetchSpace } from '../io/subgraph';
 import { Services } from '../services';
 import { Triple as ITriple, ReviewState } from '../types';
 import { Triples } from '../utils/triples';
@@ -21,8 +30,7 @@ interface MakeProposalOptions {
 }
 
 export function usePublish() {
-  const config = useConfig();
-  const { storageClient, publish: publishService } = Services.useServices();
+  const { storageClient } = Services.useServices();
   const { restore, actions: actionsBySpace } = useActionsStore();
   const { data: wallet } = useWalletClient();
 
@@ -39,93 +47,41 @@ export function usePublish() {
       if (!wallet) return;
       if (triplesToPublish.length < 1) return;
 
-      const transport = http(process.env.NEXT_PUBLIC_ALCHEMY_ENDPOINT!);
-      const v2Transport = http(process.env.NEXT_PUBLIC_PIMLICO_RPC_URL!);
-      const v1Transport = http(process.env.NEXT_PUBLIC_BUNDLER_RPC_URL!);
+      // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
+      // All of our contract calls rely on knowing plugin metadata so this is probably
+      // something we need for all of them.
+      const space = await fetchSpace({ id: spaceId });
 
-      const walletClient = createWalletClient({
-        account: wallet.account,
-        chain: CONDUIT_TESTNET,
-        transport,
-      });
+      if (!space || !space.mainVotingPluginAddress) {
+        return;
+      }
 
-      const publicClient = createPublicClient({
-        chain: CONDUIT_TESTNET,
-        transport,
-      });
+      const ops = Triples.prepareTriplesForPublishing(triplesToPublish, spaceId);
 
-      const signer = walletClientToSmartAccountSigner(walletClient);
-
-      // const account = await privateKeyToSafeSmartAccount(publicClient, {
-      //   privateKey: '0xe78b3806662d8491f6a68bed650f20eba23e09f9759b4a80336ab63fa2df7aac',
-      //   entryPoint: ENTRYPOINT_ADDRESS_V07,
-      //   safeVersion: '1.4.1',
-      // });
-
-      const account = await signerToSafeSmartAccount(publicClient, {
-        signer,
-        entryPoint: ENTRYPOINT_ADDRESS_V07,
-        safeVersion: '1.4.1',
-      });
-
-      /**
-       * So for entrypoint v0.6 (we recommend using v0.7 for new projects now) you'd have to use the v1 api for the bundler endpoints (bundlerClient and smartAccountClient) and the v2 api for the paymaster endpoints
-       *
-       * Apologies for the confusion here, for v0.7 everything uses the v2 api.
-       * We do support polygon. Everything should ideally work with the standard Permissionless sdk
-       *
-       * Let me know if this helps!!
-       *
-       * Otherwise happy to help continue debugging
-       *
-       * JSON is not a valid request object.  URL: https://api.pimlico.io/v2/polygon/rpc?apikey=cbd9fab9-2874-4bc9-9dc1-578ee41335dc Request body: {"method":"pimlico_getUserOperationGasPrice","params":[]}  Details: API version v2 is not supported for chain: polygon Version: viem@2.7.12
-       */
-      const pimlicoPaymaster = createPimlicoPaymasterClient({
-        entryPoint: ENTRYPOINT_ADDRESS_V07,
-        transport: v2Transport,
-      });
-
-      const bundlerClient = createPimlicoBundlerClient({
-        entryPoint: ENTRYPOINT_ADDRESS_V07,
-        transport: v2Transport,
-      });
-
-      const smartAccountClient = createSmartAccountClient({
-        account,
-        entryPoint: ENTRYPOINT_ADDRESS_V07,
-        chain: CONDUIT_TESTNET,
-        bundlerTransport: v2Transport,
-        middleware: {
-          gasPrice: async () => {
-            return (await bundlerClient.getUserOperationGasPrice()).fast; // if using pimlico bundlers
-          },
-          sponsorUserOperation: pimlicoPaymaster.sponsorUserOperation,
-        },
-      });
-
-      console.log('smart account address', smartAccountClient.account);
-
-      await publishService.makeProposal({
-        account: wallet.account.address,
-        storageClient,
-        ops: Triples.prepareTriplesForPublishing(triplesToPublish, spaceId),
+      const proposal = createEditProposal({
         name,
-        onChangePublishState,
-        space: spaceId,
-        walletConfig: config,
+        ops,
+        author: wallet.account.address,
       });
 
-      // const functionData = encodeFunctionData({
-      //   functionName: 'createProposal',
-      //   abi: MainVotingAbi,
-      //   args: [cids],
-      // });
+      onChangePublishState('publishing-ipfs');
+      const hash = await storageClient.uploadBinary(proposal);
+      const uri = `ipfs://${hash}` as const;
+      onChangePublishState('signing-wallet');
 
-      // const txHash = await smartAccountClient.sendTransaction({
-      //   to: spaceId as `0x${string}`,
-      //   data: functionData,
-      //   value: BigInt(0),
-      // });
+      const encodedProposalArgs = getProcessGeoProposalArguments(spaceId as `0x${string}`, uri);
+
+      onChangePublishState('publishing-contract');
+
+      const callData = encodeFunctionData({
+        functionName: 'createProposal',
+        abi: MainVotingAbi,
+        args: encodedProposalArgs,
+      });
+
+      console.log('Generated callData:', callData);
+
+      await transactProposalWithAccountAbstraction(wallet, callData, space.mainVotingPluginAddress as `0x${string}`);
 
       const triplesBeingPublished = new Set(
         triplesToPublish.map(a => {
@@ -159,7 +115,7 @@ export function usePublish() {
         [spaceId]: [...publishedActions, ...nonPublishedActions],
       });
     },
-    [storageClient, wallet, publishService, restore, actionsBySpace]
+    [storageClient, wallet, restore, actionsBySpace]
   );
 
   return {
@@ -192,10 +148,100 @@ export function useBulkPublish() {
         walletConfig: config,
       });
     },
-    [storageClient, config, publish]
+    [storageClient, config, publish, wallet?.account.address]
   );
 
   return {
     makeBulkProposal,
   };
+}
+
+// @TODO: Abstract smart client stuff into a hook or something similar that we
+// can inject and use in all our of contract-writing code.
+async function transactProposalWithAccountAbstraction(
+  walletClient: WalletClient,
+  callData: `0x${string}`,
+  to: `0x${string}`
+) {
+  const transport = http(process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!);
+
+  const publicClient = createPublicClient({
+    transport,
+    chain: CONDUIT_TESTNET,
+  });
+
+  // @TODO: environment
+  const pimlicoUrl = `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${process.env.NEXT_PUBLIC_PIMLICO_API_KEY}`;
+
+  const signer = walletClientToSmartAccountSigner(walletClient);
+
+  const safeAccount = await signerToSafeSmartAccount(publicClient, {
+    signer: signer,
+    entryPoint: ENTRYPOINT_ADDRESS_V07,
+    safeVersion: '1.4.1',
+  });
+
+  console.log('addresses', { safe: safeAccount.address, wallet: walletClient.account?.address });
+
+  const bundlerClient = createClient({
+    transport: http(pimlicoUrl),
+    chain: CONDUIT_TESTNET,
+  })
+    .extend(bundlerActions(ENTRYPOINT_ADDRESS_V07))
+    .extend(pimlicoBundlerActions(ENTRYPOINT_ADDRESS_V07));
+
+  const paymasterClient = createClient({
+    transport: http(pimlicoUrl),
+    chain: CONDUIT_TESTNET,
+  }).extend(pimlicoPaymasterActions(ENTRYPOINT_ADDRESS_V07));
+
+  const safeClient = createSmartAccountClient({
+    chain: CONDUIT_TESTNET,
+    account: safeAccount,
+    bundlerTransport: http(pimlicoUrl),
+    middleware: {
+      gasPrice: async () => {
+        return (await bundlerClient.getUserOperationGasPrice()).fast;
+      },
+      sponsorUserOperation: paymasterClient.sponsorUserOperation,
+    },
+  });
+
+  const txHash = await safeClient.sendTransaction({
+    to: to,
+    value: 0n,
+    data: callData,
+  });
+
+  console.log(`UserOperation included: https://explorerl2new-geo-test-zc16z3tcvf.t.conduit.xyz/tx/${txHash}`);
+}
+
+async function transactionProposalWithoutAccountAbstraction() {
+  // @TODO: We aren't using makeProposal atm
+  // await publishService.makeProposal({
+  //   account: wallet.account.address,
+  //   storageClient,
+  //   ops,
+  //   name,
+  //   onChangePublishState,
+  //   space: spaceId,
+  //   walletConfig: walletConfig,
+  // });
+  // const config = await simulateContract(walletConfig, {
+  //   // Main voting plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
+  //   address: space.mainVotingPluginAddress as `0x${string}`,
+  //   abi: MainVotingAbi,
+  //   functionName: 'createProposal',
+  //   // @TODO: We should abstract the proposal metadata creation and the proposal
+  //   // action callback args together somehow since right now you have to sync
+  //   // them both and ensure you're using the correct functions for each content
+  //   // proposal type.
+  //   //
+  //   // What can happen is that you create a "CONTENT" proposal but pass a callback
+  //   // action that does some other action like "ADD_SUBSPACE" and it will fail since
+  //   // the substream won't index a mismatched proposal type and action callback args.
+  //   args: encodedProposalArgs,
+  // });
+  // const writeResult = await writeContract(walletConfig, config.request);
+  // console.log('writeResult', writeResult);
 }

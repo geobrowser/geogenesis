@@ -180,7 +180,7 @@ export function CreateDao({ type }: Prtypes) {
 
     const initialContent = createEditProposal(
       {
-        name: '1.0.1: Prtypeosal for space with binary-based edits prtypeosal',
+        name: '1.0.2: Account abstraction test space',
         author: getAddress(wallet.account.address),
         ops: [
           {
@@ -190,7 +190,7 @@ export function CreateDao({ type }: Prtypes) {
               attributeId: SYSTEM_IDS.NAME,
               value: {
                 type: 'TEXT',
-                value: 'Binary encoding test space',
+                value: 'Account abstraction test space',
               },
             },
           },
@@ -288,11 +288,11 @@ export function CreateDao({ type }: Prtypes) {
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
         initialEditors: [
-          getAddress(wallet.account.address),
-          getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
-          getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
+          getAddress('0x35483105944CD199BD336D6CEf476ea20547a9b5'),
+          // getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
+          // getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
         ],
-        pluginUpgrader: getAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'),
+        pluginUpgrader: getAddress('0x35483105944CD199BD336D6CEf476ea20547a9b5'),
       };
 
       const governancePluginInstallItem = getGovernancePluginInstallItem(governancePluginConfig);

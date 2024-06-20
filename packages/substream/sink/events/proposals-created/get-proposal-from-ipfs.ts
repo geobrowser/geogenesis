@@ -10,7 +10,7 @@ import {
 import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
-import { Edit, IpfsContentType, IpfsMetadata, Membership, Subspace, decode } from '~/sink/proto';
+import { Decoder, Edit, IpfsContentType, IpfsMetadata, Membership, Subspace, decode } from '~/sink/proto';
 import type { BlockEvent, Op } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { slog } from '~/sink/utils/slog';
@@ -105,7 +105,7 @@ export function getProposalFromIpfs(
 
     switch (validIpfsMetadata.type) {
       case IpfsContentType.EDIT: {
-        const parsedContent = yield* _(decode(() => Edit.fromBinary(ipfsContent)));
+        const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
 
         // Subspace proposals are only emitted by the voting plugin
         if (!parsedContent || !maybeSpaceIdForVotingPlugin) {

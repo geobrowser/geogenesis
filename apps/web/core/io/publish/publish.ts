@@ -12,7 +12,7 @@ import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
 
 import { Config } from 'wagmi';
-import { readContract, simulateContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions';
+import { simulateContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions';
 
 import { ReviewState } from '../../types';
 import { Storage } from '../storage';
@@ -80,80 +80,70 @@ export async function makeProposal({
     Schedule.exponential('100 millis').pipe(Schedule.jittered)
   );
 
-  const prepareTxEffect = Effect.gen(function* (_) {
-    const cidString = yield* _(uploadEffect);
+  const prepareTxEffect = Effect.gen(function* () {
+    const cidString = yield* uploadEffect;
 
     if (!cidString.startsWith('ipfs://Qm')) {
-      return yield* _(
-        Effect.fail(
-          new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.')
-        )
+      return yield* Effect.fail(
+        new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.')
       );
     }
 
-    return yield* _(
-      Effect.tryPromise({
-        try: () =>
-          simulateContract(walletConfig, {
-            address: maybeSpace.mainVotingPluginAddress as `0x${string}`,
-            abi: MainVotingAbi,
-            functionName: 'createProposal',
-            // @TODO: We should abstract the proposal metadata creation and the proposal
-            // action callback args together somehow since right now you have to sync
-            // them both and ensure you're using the correct functions for each content
-            // proposal type.
-            //
-            // What can happen is that you create a "CONTENT" proposal but pass a callback
-            // action that does some other action like "ADD_SUBSPACE" and it will fail since
-            // the substream won't index a mismatched proposal type and action callback args.
-            args: getProcessGeoProposalArguments(space as `0x${string}`, `ipfs://${cidString}`),
-          }),
-        catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
-      })
-    );
+    return yield* Effect.tryPromise({
+      try: () =>
+        simulateContract(walletConfig, {
+          address: maybeSpace.mainVotingPluginAddress as `0x${string}`,
+          abi: MainVotingAbi,
+          functionName: 'createProposal',
+          // @TODO: We should abstract the proposal metadata creation and the proposal
+          // action callback args together somehow since right now you have to sync
+          // them both and ensure you're using the correct functions for each content
+          // proposal type.
+          //
+          // What can happen is that you create a "CONTENT" proposal but pass a callback
+          // action that does some other action like "ADD_SUBSPACE" and it will fail since
+          // the substream won't index a mismatched proposal type and action callback args.
+          args: getProcessGeoProposalArguments(space as `0x${string}`, `ipfs://${cidString}`),
+        }),
+      catch: error => new TransactionPrepareFailedError(`Transaction prepare failed: ${error}`),
+    });
   });
 
-  const writeTxEffect = Effect.gen(function* (awaited) {
-    const contractConfig = yield* awaited(prepareTxEffect);
+  const writeTxEffect = Effect.gen(function* () {
+    const contractConfig = yield* prepareTxEffect;
 
     onChangePublishState('signing-wallet');
 
     // @TODO: Write transaction here should use the smart account shit we create in usePublish
-    return yield* awaited(
-      Effect.tryPromise({
-        try: () => writeContract(walletConfig, contractConfig.request),
-        catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
-      })
-    );
+    return yield* Effect.tryPromise({
+      try: () => writeContract(walletConfig, contractConfig.request),
+      catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
+    });
   });
 
-  const publishProgram = Effect.gen(function* (awaited) {
-    const writeTxHash = yield* awaited(writeTxEffect);
+  const publishProgram = Effect.gen(function* () {
+    const writeTxHash = yield* writeTxEffect;
 
     console.log('Transaction hash: ', writeTxHash);
     onChangePublishState('publishing-contract');
 
-    const waitForTransactionEffect = yield* awaited(
-      Effect.tryPromise({
-        try: () =>
-          waitForTransactionReceipt(walletConfig, {
-            hash: writeTxHash,
-          }),
-        catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
-      })
-    );
+    const waitForTransactionEffect = yield* Effect.tryPromise({
+      try: () =>
+        waitForTransactionReceipt(walletConfig, {
+          hash: writeTxHash,
+        }),
+      catch: error => new WaitForTransactionBlockError(`Error while waiting for transaction block: ${error}`),
+    });
 
     if (waitForTransactionEffect.status !== 'success') {
-      return yield* awaited(
-        Effect.fail(
-          new TransactionRevertedError(`Transaction reverted:
+      return yield* Effect.fail(
+        new TransactionRevertedError(`Transaction reverted:
       hash: ${waitForTransactionEffect.transactionHash}
       status: ${waitForTransactionEffect.status}
       blockNumber: ${waitForTransactionEffect.blockNumber}
       blockHash: ${waitForTransactionEffect.blockHash}
       ${JSON.stringify(waitForTransactionEffect)}
       `)
-        )
       );
     }
 

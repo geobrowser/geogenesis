@@ -1,5 +1,10 @@
 lockfileVersion: 5.4
 
+patchedDependencies:
+  permissionless@0.1.29:
+    hash: mjf34erb2crt5rcp6gx2ztewnq
+    path: patches/permissionless@0.1.29.patch
+
 importers:
 
   .:
@@ -109,7 +114,7 @@ importers:
       lokijs: ^1.5.12
       next: ^14.2.3
       papaparse: ^5.3.2
-      permissionless: ^0.1.11
+      permissionless: 0.1.29
       pino-pretty: ^10.2.0
       pluralize: ^8.0.0
       postcss: ^8.4.21
@@ -192,7 +197,7 @@ importers:
       lokijs: 1.5.12
       next: 14.2.3_cnxlxqo7rotnclzc2lhjf3vjiq
       papaparse: 5.3.2
-      permissionless: 0.1.31_viem@2.13.8
+      permissionless: 0.1.29_mjf34erb2crt5rcp6gx2ztewnq_viem@2.13.8
       pino-pretty: 10.2.0
       pluralize: 8.0.0
       raw-body: 2.5.1
@@ -3007,6 +3012,7 @@ packages:
     dependencies:
       is-glob: 4.0.3
       micromatch: 4.0.5
+      napi-wasm: 1.1.0
     dev: false
     bundledDependencies:
       - napi-wasm
@@ -8918,7 +8924,7 @@ packages:
       eslint-import-resolver-webpack:
         optional: true
     dependencies:
-      '@typescript-eslint/parser': 6.13.1_va33b5whx4zk57iuk4osw2k7by
+      '@typescript-eslint/parser': 6.13.1_bekczya6st5f65shkeeehffngq
       debug: 3.2.7
       eslint-import-resolver-node: 0.3.6
       eslint-import-resolver-typescript: 3.5.2_jatgrcxl4x7ywe7ak6cnjca2ae
@@ -8964,7 +8970,7 @@ packages:
       '@typescript-eslint/parser':
         optional: true
     dependencies:
-      '@typescript-eslint/parser': 6.13.1_va33b5whx4zk57iuk4osw2k7by
+      '@typescript-eslint/parser': 6.13.1_bekczya6st5f65shkeeehffngq
       array-includes: 3.1.6
       array.prototype.flat: 1.3.0
       debug: 2.6.9
@@ -11320,6 +11326,10 @@ packages:
     resolution: {integrity: sha512-ONmRUqK7zj7DWX0D9ADe03wbwOBZxNAfF20PlGfCWQcD3+/MakShIHrMqx9YwPTfxDdF1zLeL+RGZiR9kGMLdg==}
     dev: false
 
+  /napi-wasm/1.1.0:
+    resolution: {integrity: sha512-lHwIAJbmLSjF9VDRm9GoVOy9AGp3aIvkjv+Kvz9h16QR3uSVYH78PNQUnT2U4X53mhlnV2M7wrhibQ3GHicDmg==}
+    dev: false
+
   /natural-compare/1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
     dev: true
@@ -11789,13 +11799,14 @@ packages:
       sha.js: 2.4.11
     dev: false
 
-  /permissionless/0.1.31_viem@2.13.8:
-    resolution: {integrity: sha512-mFRJPVNPSJLQ2FlaOjKL4M24wOoQE2OcWIGpFPAOGuEQkzU3yclO7p/8jHe4cDFSAFD2z4y91KvFuHji0x9sbw==}
+  /permissionless/0.1.29_mjf34erb2crt5rcp6gx2ztewnq_viem@2.13.8:
+    resolution: {integrity: sha512-jKkgl3G2b4hv5DvX2U8v0OI3JfX+nEzj9a6zsrcXuJaLZdS14td4tExnlmBY93nUN6lRC6NfPZjdLbi8Dkzz7w==}
     peerDependencies:
       viem: ^2.9.17
     dependencies:
       viem: 2.13.8_typescript@5.1.6
     dev: false
+    patched: true
 
   /pg-cloudflare/1.1.1:
     resolution: {integrity: sha512-xWPagP/4B6BgFO+EKz3JONXv3YDgvkbVrGw2mTo3D6tVDQRh1e7cqVGvyR3BE+eQgAvx1XhW/iEASj4/jCWl3Q==}

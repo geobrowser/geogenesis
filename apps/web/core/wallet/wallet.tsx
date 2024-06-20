@@ -7,11 +7,10 @@ import { createPublicClient, http } from 'viem';
 
 import * as React from 'react';
 
-import { Button } from '~/design-system/button';
-import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
-
 import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
 
+import { Button } from '~/design-system/button';
+import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { Wallet } from '~/design-system/icons/wallet';
 
 import {
@@ -135,7 +134,6 @@ export function GeoConnectButton() {
 
         if (wallet) {
           await Cookie.onConnectionChange({ type: 'connect', address: wallet.address as `0x${string}` });
-          console.log('setting active wallet');
           await setActiveWallet(wallet);
         }
 
