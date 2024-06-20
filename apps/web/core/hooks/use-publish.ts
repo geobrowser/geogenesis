@@ -15,6 +15,7 @@ import * as React from 'react';
 
 import { useConfig, useWalletClient } from 'wagmi';
 
+import { Environment } from '../environment';
 import { fetchSpace } from '../io/subgraph';
 import { Services } from '../services';
 import { Triple as ITriple, ReviewState } from '../types';
@@ -164,14 +165,12 @@ async function transactProposalWithAccountAbstraction(
   to: `0x${string}`
 ) {
   const transport = http(process.env.NEXT_PUBLIC_CONDUIT_TESTNET_RPC!);
+  const bundlerTransport = http(Environment.getConfig().bundler);
 
   const publicClient = createPublicClient({
     transport,
     chain: CONDUIT_TESTNET,
   });
-
-  // @TODO: environment
-  const pimlicoUrl = `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${process.env.NEXT_PUBLIC_PIMLICO_API_KEY}`;
 
   const signer = walletClientToSmartAccountSigner(walletClient);
 
@@ -181,24 +180,22 @@ async function transactProposalWithAccountAbstraction(
     safeVersion: '1.4.1',
   });
 
-  console.log('addresses', { safe: safeAccount.address, wallet: walletClient.account?.address });
-
   const bundlerClient = createClient({
-    transport: http(pimlicoUrl),
+    transport: bundlerTransport,
     chain: CONDUIT_TESTNET,
   })
     .extend(bundlerActions(ENTRYPOINT_ADDRESS_V07))
     .extend(pimlicoBundlerActions(ENTRYPOINT_ADDRESS_V07));
 
   const paymasterClient = createClient({
-    transport: http(pimlicoUrl),
+    transport: bundlerTransport,
     chain: CONDUIT_TESTNET,
   }).extend(pimlicoPaymasterActions(ENTRYPOINT_ADDRESS_V07));
 
   const safeClient = createSmartAccountClient({
     chain: CONDUIT_TESTNET,
     account: safeAccount,
-    bundlerTransport: http(pimlicoUrl),
+    bundlerTransport,
     middleware: {
       gasPrice: async () => {
         return (await bundlerClient.getUserOperationGasPrice()).fast;
@@ -213,35 +210,5 @@ async function transactProposalWithAccountAbstraction(
     data: callData,
   });
 
-  console.log(`UserOperation included: https://explorerl2new-geo-test-zc16z3tcvf.t.conduit.xyz/tx/${txHash}`);
-}
-
-async function transactionProposalWithoutAccountAbstraction() {
-  // @TODO: We aren't using makeProposal atm
-  // await publishService.makeProposal({
-  //   account: wallet.account.address,
-  //   storageClient,
-  //   ops,
-  //   name,
-  //   onChangePublishState,
-  //   space: spaceId,
-  //   walletConfig: walletConfig,
-  // });
-  // const config = await simulateContract(walletConfig, {
-  //   // Main voting plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
-  //   address: space.mainVotingPluginAddress as `0x${string}`,
-  //   abi: MainVotingAbi,
-  //   functionName: 'createProposal',
-  //   // @TODO: We should abstract the proposal metadata creation and the proposal
-  //   // action callback args together somehow since right now you have to sync
-  //   // them both and ensure you're using the correct functions for each content
-  //   // proposal type.
-  //   //
-  //   // What can happen is that you create a "CONTENT" proposal but pass a callback
-  //   // action that does some other action like "ADD_SUBSPACE" and it will fail since
-  //   // the substream won't index a mismatched proposal type and action callback args.
-  //   args: encodedProposalArgs,
-  // });
-  // const writeResult = await writeContract(walletConfig, config.request);
-  // console.log('writeResult', writeResult);
+  return txHash;
 }
