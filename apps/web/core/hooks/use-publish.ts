@@ -1,7 +1,7 @@
 import { Op, getProcessGeoProposalArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
-import { Effect, Schedule } from 'effect';
+import { Effect, Either, Schedule } from 'effect';
 import { encodeFunctionData } from 'viem';
 
 import * as React from 'react';
@@ -11,8 +11,10 @@ import { Config, useConfig, useWalletClient } from 'wagmi';
 import { IStorageClient } from '../io/storage/storage';
 import { fetchSpace } from '../io/subgraph';
 import { Services } from '../services';
-import { Triple as ITriple, ReviewState } from '../types';
+import { useStatusBar } from '../state/status-bar-store';
+import { Triple as ITriple, ReviewState, Space } from '../types';
 import { Triples } from '../utils/triples';
+import { sleepWithCallback } from '../utils/utils';
 import { useActionsStore } from './use-actions-store';
 import { useSmartAccount } from './use-smart-account';
 
@@ -42,9 +44,10 @@ export class IpfsUploadError extends Error {
 
 interface MakeProposalOptions {
   triples: ITriple[];
-  onChangePublishState: (newState: ReviewState) => void;
   spaceId: string;
   name: string;
+  onSuccess?: () => void;
+  onError?: () => void;
 }
 
 export function usePublish() {
@@ -53,6 +56,7 @@ export function usePublish() {
   const { data: wallet } = useWalletClient();
   const smartAccount = useSmartAccount();
   const walletConfig = useConfig();
+  const { dispatch } = useStatusBar();
 
   /**
    * Take the actions for a specific space the user wants to write to Geo and publish them
@@ -63,7 +67,7 @@ export function usePublish() {
    * side effects.
    */
   const make = React.useCallback(
-    async ({ triples: triplesToPublish, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
+    async ({ triples: triplesToPublish, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
       if (!smartAccount || !wallet) return;
       if (triplesToPublish.length < 1) return;
 
@@ -72,58 +76,90 @@ export function usePublish() {
       // something we need for all of them.
       const space = await fetchSpace({ id: spaceId });
 
-      if (!space || !space.mainVotingPluginAddress) {
+      const publish = Effect.gen(function* () {
+        if (space === null || space.mainVotingPluginAddress === null) {
+          return;
+        }
+
+        const ops = Triples.prepareTriplesForPublishing(triplesToPublish, spaceId);
+
+        yield* makeProposal({
+          name,
+          storage: storageClient,
+          onChangePublishState: (newState: ReviewState) =>
+            dispatch({
+              type: 'SET_REVIEW_STATE',
+              payload: newState,
+            }),
+          ops,
+          smartAccount,
+          space: {
+            id: space.id,
+            mainVotingPluginAddress: space.mainVotingPluginAddress,
+          },
+          walletConfig,
+        });
+
+        const triplesBeingPublished = new Set(
+          triplesToPublish.map(a => {
+            return a.id;
+          })
+        );
+
+        // We filter out the actions that are being published from the actionsBySpace. We do this
+        // since we need to update the entire state of the space with the published actions and the
+        // unpublished actions being merged together.
+        // If the actionsBySpace[spaceId] is empty, then we return an empty array
+        const nonPublishedActions = actionsBySpace[spaceId]
+          ? actionsBySpace[spaceId].filter(a => {
+              return !triplesBeingPublished.has(a.id);
+            })
+          : [];
+
+        const publishedActions = triplesToPublish.map(action => ({
+          ...action,
+          // We keep published actions in memory to keep the UI optimistic. This is mostly done
+          // because there is a period between publishing actions and the subgraph finishing indexing
+          // where the UI would be in a state where the published actions are not showing up in the UI.
+          // Instead we keep the actions in memory so the UI is up-to-date while the subgraph indexes.
+          hasBeenPublished: true,
+        }));
+
+        // Update the actionsBySpace for the current space to set the published actions
+        // as hasBeenPublished and merge with the existing actions in the space.
+        restore({
+          ...actionsBySpace,
+          [spaceId]: [...publishedActions, ...nonPublishedActions],
+        });
+      });
+
+      const result = await Effect.runPromise(Effect.either(publish));
+
+      if (Either.isLeft(result)) {
+        const error = result.left;
+
+        onError?.();
+
+        if (error instanceof Error) {
+          if (error.message.startsWith('Publish failed: UserRejectedRequestError: User rejected the request')) {
+            dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+            return;
+          }
+        }
+
+        dispatch({ type: 'ERROR', payload: error.message });
         return;
       }
 
-      const ops = Triples.prepareTriplesForPublishing(triplesToPublish, spaceId);
+      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
 
-      await makeProposal({
-        name,
-        storage: storageClient,
-        onChangePublishState,
-        ops,
-        smartAccount,
-        space: {
-          id: space.id,
-          mainVotingPluginAddress: space.mainVotingPluginAddress,
-        },
-        walletConfig,
-      });
-
-      const triplesBeingPublished = new Set(
-        triplesToPublish.map(a => {
-          return a.id;
-        })
-      );
-
-      // We filter out the actions that are being published from the actionsBySpace. We do this
-      // since we need to update the entire state of the space with the published actions and the
-      // unpublished actions being merged together.
-      // If the actionsBySpace[spaceId] is empty, then we return an empty array
-      const nonPublishedActions = actionsBySpace[spaceId]
-        ? actionsBySpace[spaceId].filter(a => {
-            return !triplesBeingPublished.has(a.id);
-          })
-        : [];
-
-      const publishedActions = triplesToPublish.map(action => ({
-        ...action,
-        // We keep published actions in memory to keep the UI optimistic. This is mostly done
-        // because there is a period between publishing actions and the subgraph finishing indexing
-        // where the UI would be in a state where the published actions are not showing up in the UI.
-        // Instead we keep the actions in memory so the UI is up-to-date while the subgraph indexes.
-        hasBeenPublished: true,
-      }));
-
-      // Update the actionsBySpace for the current space to set the published actions
-      // as hasBeenPublished and merge with the existing actions in the space.
-      restore({
-        ...actionsBySpace,
-        [spaceId]: [...publishedActions, ...nonPublishedActions],
-      });
+      // want to show the "complete" state for 3s if it succeeds
+      await sleepWithCallback(() => {
+        dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+        onSuccess?.();
+      }, 3000);
     },
-    [storageClient, wallet, restore, actionsBySpace, smartAccount, walletConfig]
+    [storageClient, wallet, restore, actionsBySpace, smartAccount, walletConfig, dispatch]
   );
 
   return {
@@ -136,13 +172,14 @@ export function useBulkPublish() {
   const config = useConfig();
   const { data: wallet } = useWalletClient();
   const smartAccount = useSmartAccount();
+  const { dispatch } = useStatusBar();
 
   /**
    * Take the bulk actions for a specific space the user wants to write to Geo and publish them
    * to IPFS + transact the IPFS hash onto Polygon.
    */
   const makeBulkProposal = React.useCallback(
-    async ({ triples, name, onChangePublishState, spaceId }: MakeProposalOptions) => {
+    async ({ triples, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
       if (triples.length < 1) return;
       if (!wallet?.account.address) return;
 
@@ -155,10 +192,14 @@ export function useBulkPublish() {
         return;
       }
 
-      await makeProposal({
+      const publish = await makeProposal({
         name,
         storage: storageClient,
-        onChangePublishState,
+        onChangePublishState: (newState: ReviewState) =>
+          dispatch({
+            type: 'SET_REVIEW_STATE',
+            payload: newState,
+          }),
         ops: Triples.prepareTriplesForPublishing(triples, spaceId),
         smartAccount,
         space: {
@@ -167,6 +208,29 @@ export function useBulkPublish() {
         },
         walletConfig: config,
       });
+
+      const result = await Effect.runPromise(Effect.either(publish));
+
+      if (Either.isLeft(result)) {
+        const error = result.left;
+        onError?.();
+
+        if (error instanceof Error) {
+          if (error.message.startsWith('Publish failed: UserRejectedRequestError: User rejected the request')) {
+            dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+            return;
+          }
+        }
+
+        dispatch({ type: 'ERROR', payload: error.message });
+        return;
+      }
+
+      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
+      onSuccess?.();
+
+      // want to show the "complete" state for 3s if it succeeds
+      await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
     },
     [storageClient, config, wallet?.account.address, smartAccount]
   );
@@ -189,7 +253,7 @@ interface MakeProposalArgs {
   onChangePublishState: (newState: ReviewState) => void;
 }
 
-async function makeProposal(args: MakeProposalArgs) {
+function makeProposal(args: MakeProposalArgs) {
   const { name, ops, smartAccount, space, storage, walletConfig, onChangePublishState } = args;
   const proposal = createEditProposal({ name, ops, author: smartAccount.account.address });
 
@@ -242,7 +306,5 @@ async function makeProposal(args: MakeProposalArgs) {
     return writeTxHash;
   });
 
-  // @TODO: Surface errors? Right now this will throw and be
-  // caught by the caller.
-  await Effect.runPromise(publishProgram);
+  return publishProgram;
 }

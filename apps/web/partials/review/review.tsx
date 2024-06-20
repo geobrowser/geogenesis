@@ -7,6 +7,7 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
+import { Effect, Either, pipe } from 'effect';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
@@ -151,32 +152,17 @@ const ReviewChanges = () => {
       setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
     };
 
-    try {
-      // @TODO: Selectable publishing
-      // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
+    // @TODO: Selectable publishing
+    // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
-      await makeProposal({
-        triples: actionsFromSpace,
-        spaceId: activeSpace,
-        name: proposalName,
-        onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
-      });
-
-      clearProposalName();
-      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
-
-      // want to show the "complete" state for 3s
-      await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-          return;
-        }
-
-        dispatch({ type: 'ERROR', payload: e.message });
-      }
-    }
+    await makeProposal({
+      triples: actionsFromSpace,
+      spaceId: activeSpace,
+      name: proposalName,
+      onSuccess: () => {
+        clearProposalName();
+      },
+    });
   }, [activeSpace, proposalName, proposals, makeProposal, wallet, unstagedChanges, dispatch, actionsFromSpace]);
 
   if (isLoading || !data || isSpacesLoading) {
