@@ -18,10 +18,7 @@ import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
-import {
-  EntityReferencedByLoading,
-  EntityReferencedByServerContainer,
-} from '~/partials/entity-page/entity-page-referenced-by-server-container';
+import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
 
@@ -78,7 +75,7 @@ export default async function DefaultEntityPage({
             <Editor shouldHandleOwnSpacing />
             <ToggleEntityPage {...props} typeId={typeId} filters={filters} />
             <Spacer height={40} />
-            <Suspense fallback={<EntityReferencedByLoading />}>
+            <Suspense fallback={null}>
               <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
             </Suspense>
           </EntityPageContentContainer>
