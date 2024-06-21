@@ -156,9 +156,7 @@ const TrailingBreak = () => {
     <div className="react-renderer node-paragraph">
       <div className="whitespace-normal">
         <p className="whitespace-pre">
-          <div>
-            <br className="ProseMirror-trailingBreak" />
-          </div>
+          <br className="ProseMirror-trailingBreak" />
         </p>
       </div>
     </div>
