@@ -171,7 +171,8 @@ export const Editor = React.memo(function Editor({
 
   return (
     <div className={cx(editable ? 'editable' : 'not-editable')}>
-      {!editor ? <ServerContent content={content} /> : <EditorContent editor={editor} />}
+      <EditorContent editor={editor} />
+      {/* {!hasUpdatedEditorJson ? <ServerContent content={content} /> : <EditorContent editor={editor} />} */}
       {/* <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">
           <SquareButton onClick={openCommandMenu} icon={<Plus />} />
