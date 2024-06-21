@@ -198,12 +198,15 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
     },
   ];
 
-  const SPACE_TABS = [
+  const ALL_SPACES_TABS = [
     {
       label: 'Overview',
       href: `${NavUtils.toSpace(params.id)}`,
       priority: 1 as const,
     },
+  ];
+
+  const SOME_SPACES_TABS = [
     {
       label: 'Governance',
       href: `${NavUtils.toSpace(params.id)}/governance`,
@@ -226,7 +229,10 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   }
 
   if (typeIds.includes(SYSTEM_IDS.SPACE_CONFIGURATION)) {
-    tabs.push(...SPACE_TABS);
+    tabs.push(...ALL_SPACES_TABS);
+    if (!typeIds.includes(SYSTEM_IDS.PERSON_TYPE)) {
+      tabs.push(...SOME_SPACES_TABS);
+    }
   }
 
   const seen = new Map<string, TabProps>();

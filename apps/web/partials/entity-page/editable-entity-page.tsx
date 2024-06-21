@@ -9,7 +9,6 @@ import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
 import type {
   EntitySearchResult,
   Entity as EntityType,
@@ -17,6 +16,8 @@ import type {
   TripleWithCollectionValue,
   TripleWithEntityValue,
 } from '~/core/types';
+import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
+import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
@@ -114,6 +115,27 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
               entityName: typeEntity.name || '',
             },
           });
+
+          const templateTriple = typeEntity.triples.find(
+            triple => triple.attributeId === SYSTEM_IDS.TEMPLATE_ATTRIBUTE
+          );
+
+          if (templateTriple) {
+            const templateEntity = await subgraph.fetchEntity({ id: templateTriple.value.id ?? '' });
+
+            if (templateEntity) {
+              const newActions = await cloneEntity({
+                oldEntityId: templateEntity.id,
+                entityName: name,
+                entityId: id,
+                spaceId,
+              });
+
+              newActions.forEach(action => {
+                create(action);
+              });
+            }
+          }
         }
       } else if (name === '') {
         send({
@@ -129,7 +151,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     setTypeTriple();
 
     setHasSetType(true);
-  }, [hasSetType, send, typeId, config, subgraph, name]);
+  }, [hasSetType, send, typeId, config, subgraph, name, create, spaceId, id]);
 
   useEffect(() => {
     if (!hasSetType) return;

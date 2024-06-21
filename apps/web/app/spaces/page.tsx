@@ -1,12 +1,13 @@
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE, PUBLIC_SPACES } from '~/core/constants';
-import { fetchSpaces } from '~/core/io/subgraph/fetch-spaces';
 import { Entity, Space } from '~/core/types';
 import { Entities as EntityModule } from '~/core/utils/entity';
 
 import { Card } from '~/design-system/card';
 import { Spacer } from '~/design-system/spacer';
+
+import { cachedFetchSpacesById } from '../cached-fetch-spaces-by-id';
 
 export const metadata: Metadata = {
   title: 'Geo Genesis',
@@ -41,15 +42,13 @@ export const metadata: Metadata = {
 const sortByCreatedAtBlock = (a: Space, b: Space) =>
   parseInt(a.createdAtBlock, 10) < parseInt(b.createdAtBlock, 10) ? -1 : 1;
 
-// @HACK: Right now we hide some spaces from the front page. There's no way to remove
-// Spaces from the Subgraph store yet.
-const filterHiddenSpaces = (space: Space) => PUBLIC_SPACES.includes(space.id);
-
 export const revalidate = 60; // 1 minute
 
 export default async function Spaces() {
-  const spaces = await fetchSpaces();
-  const filteredAndSortedSpaces = spaces.filter(filterHiddenSpaces).sort(sortByCreatedAtBlock);
+  // Only fetch the front page spaces.
+  const spaces = await cachedFetchSpacesById(PUBLIC_SPACES);
+
+  const filteredAndSortedSpaces = spaces.sort(sortByCreatedAtBlock);
 
   const spacesWithSpaceConfigs = filteredAndSortedSpaces.filter(
     (s): s is Space & { spaceConfig: Entity } => s.spaceConfig !== null
