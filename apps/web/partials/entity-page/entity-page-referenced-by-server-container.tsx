@@ -4,6 +4,7 @@ import { Entity } from '~/core/utils/entity';
 
 import { EntityPageReferencedBy } from './entity-page-referenced-by';
 import { ReferencedByEntity } from './types';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   entityId: string;
@@ -12,13 +13,22 @@ interface Props {
 }
 
 export async function EntityReferencedByServerContainer({ entityId, name }: Props) {
-  const [related, spaces] = await Promise.all([
-    Subgraph.fetchEntities({
-      query: '',
-      filter: [{ field: 'linked-to', value: entityId }],
-    }),
-    Subgraph.fetchSpaces(),
-  ]);
+  const related = await Subgraph.fetchEntities({
+    query: '',
+    filter: [{ field: 'linked-to', value: entityId }],
+  });
+
+  const spacesForEntities = new Set(
+    related
+      .map(r => {
+        return Entity.nameTriple(r.triples)?.space ?? null;
+      })
+      .flatMap(s => (s ? [s] : []))
+  );
+
+  // @TODO: single graphql call
+  const maybeSpaces = await Promise.all([...spacesForEntities.values()].map(s => cachedFetchSpace(s)));
+  const spaces = maybeSpaces.flatMap(s => (s ? [s] : []));
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
