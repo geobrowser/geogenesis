@@ -1,5 +1,5 @@
 type ServerContentProps = {
-  content: any[];
+  content: Content[];
 };
 
 export const ServerContent = ({ content }: ServerContentProps) => {
@@ -13,8 +13,48 @@ export const ServerContent = ({ content }: ServerContentProps) => {
   );
 };
 
+type Content =
+  | {
+      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem';
+      content: Content[];
+      attrs: {
+        id: string;
+      };
+    }
+  | {
+      type: 'heading';
+      content: Content[];
+      attrs: {
+        id: string;
+        level: 1 | 2 | 3 | 4 | 5 | 6;
+      };
+    }
+  | {
+      type: 'text';
+      text: string;
+      content: Content[];
+      marks: Mark[];
+      attrs: {
+        id: string;
+        level: 1 | 2 | 3 | 4 | 5 | 6;
+      };
+    }
+  | {
+      type: 'image';
+      content: Content[];
+      attrs: {
+        id: string;
+        src: string;
+      };
+    };
+
+type Mark = {
+  type: 'bold' | 'italic';
+  text: string;
+};
+
 type BlockProps = {
-  block: any;
+  block: Content;
 };
 
 const Block = ({ block }: BlockProps) => {
