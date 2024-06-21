@@ -5,10 +5,10 @@ import { v4 as uuid } from 'uuid';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { Space, SpaceConfigEntity } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 const getFetchSpacesQuery = (ids: string[]) => `query {
   spaces(filter: {id: {in: ${JSON.stringify(ids)}}}) {
@@ -72,18 +72,19 @@ interface NetworkResult {
     nodes: {
       id: string;
       isRootSpace: boolean;
-      spaceAdmins: { nodes: { accountId: string }[] };
+      mainVotingPluginAddress: string | null;
+      memberAccessPluginAddress: string;
+      spacePluginAddress: string;
       spaceEditors: { nodes: { accountId: string }[] };
-      spaceEditorControllers: { nodes: { accountId: string }[] };
+      spaceMembers: { nodes: { accountId: string }[] };
       createdAtBlock: string;
       metadata: { nodes: SubstreamEntity[] };
     }[];
   };
 }
-
 export async function fetchSpacesById(ids: string[]) {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
@@ -134,29 +135,19 @@ export async function fetchSpacesById(ids: string[]) {
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaces.nodes.map((space): Space => {
-    const spaceConfig = space.metadata.nodes[0] as SubstreamEntity | undefined;
-    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
-
-    const spaceConfigWithImage: SpaceConfigEntity | null = spaceConfig
-      ? {
-          id: spaceConfig.id,
-          name: spaceConfig.name,
-          description: null,
-          image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-          triples: spaceConfigTriples,
-          types: Entity.types(spaceConfigTriples),
-          nameTripleSpaces: Entity.nameTriples(spaceConfigTriples).map(t => t.space),
-        }
-      : null;
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.metadata.nodes[0]);
 
     return {
       id: space.id,
       isRootSpace: space.isRootSpace,
-      admins: space.spaceAdmins.nodes.map(account => account.accountId),
-      editorControllers: space.spaceEditorControllers.nodes.map(account => account.accountId),
       editors: space.spaceEditors.nodes.map(account => account.accountId),
+      members: space.spaceMembers.nodes.map(account => account.accountId),
       spaceConfig: spaceConfigWithImage,
       createdAtBlock: space.createdAtBlock,
+
+      mainVotingPluginAddress: space.mainVotingPluginAddress,
+      memberAccessPluginAddress: space.memberAccessPluginAddress,
+      spacePluginAddress: space.spacePluginAddress,
     };
   });
 

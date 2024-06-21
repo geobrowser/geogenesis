@@ -121,19 +121,24 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
           );
 
           if (templateTriple) {
-            const templateEntity = await subgraph.fetchEntity({ id: templateTriple.value.id ?? '' });
+            const templateEntity = await subgraph.fetchEntity({ id: templateTriple.value.value ?? '' });
 
             if (templateEntity) {
-              const newActions = await cloneEntity({
+              const newTriples = await cloneEntity({
                 oldEntityId: templateEntity.id,
                 entityName: name,
                 entityId: id,
                 spaceId,
               });
 
-              newActions.forEach(action => {
-                create(action);
-              });
+              upsertMany(
+                newTriples.map(t => {
+                  return {
+                    op: { ...t, type: 'SET_TRIPLE' },
+                    spaceId: spaceId,
+                  };
+                })
+              );
             }
           }
         }
@@ -151,7 +156,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     setTypeTriple();
 
     setHasSetType(true);
-  }, [hasSetType, send, typeId, config, subgraph, name, create, spaceId, id]);
+  }, [hasSetType, send, typeId, config, subgraph, name, upsertMany, spaceId, id]);
 
   useEffect(() => {
     if (!hasSetType) return;
