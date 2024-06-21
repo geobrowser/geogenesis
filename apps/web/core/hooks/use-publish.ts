@@ -6,8 +6,6 @@ import { encodeFunctionData } from 'viem';
 
 import * as React from 'react';
 
-import { useWalletClient } from 'wagmi';
-
 import { IStorageClient } from '../io/storage/storage';
 import { fetchSpace } from '../io/subgraph';
 import { Services } from '../services';
@@ -53,7 +51,6 @@ interface MakeProposalOptions {
 export function usePublish() {
   const { storageClient } = Services.useServices();
   const { restore, actions: actionsBySpace } = useActionsStore();
-  const { data: wallet } = useWalletClient();
   const smartAccount = useSmartAccount();
   const { dispatch } = useStatusBar();
 
@@ -67,7 +64,7 @@ export function usePublish() {
    */
   const make = React.useCallback(
     async ({ triples: triplesToPublish, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
-      if (!smartAccount || !wallet) return;
+      if (!smartAccount) return;
       if (triplesToPublish.length < 1) return;
 
       // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
@@ -157,7 +154,7 @@ export function usePublish() {
         onSuccess?.();
       }, 3000);
     },
-    [storageClient, wallet, restore, actionsBySpace, smartAccount, dispatch]
+    [storageClient, restore, actionsBySpace, smartAccount, dispatch]
   );
 
   return {
@@ -167,7 +164,6 @@ export function usePublish() {
 
 export function useBulkPublish() {
   const { storageClient } = Services.useServices();
-  const { data: wallet } = useWalletClient();
   const smartAccount = useSmartAccount();
   const { dispatch } = useStatusBar();
 
@@ -178,7 +174,7 @@ export function useBulkPublish() {
   const makeBulkProposal = React.useCallback(
     async ({ triples, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
       if (triples.length < 1) return;
-      if (!wallet?.account.address) return;
+      if (!smartAccount) return;
 
       // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
       // All of our contract calls rely on knowing plugin metadata so this is probably
@@ -186,7 +182,7 @@ export function useBulkPublish() {
       const space = await fetchSpace({ id: spaceId });
 
       const publish = Effect.gen(function* () {
-        if (!space || !space.mainVotingPluginAddress || !smartAccount) {
+        if (!space || !space.mainVotingPluginAddress) {
           return;
         }
 
@@ -230,7 +226,7 @@ export function useBulkPublish() {
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
     },
-    [storageClient, wallet?.account.address, smartAccount, dispatch]
+    [storageClient, smartAccount, dispatch]
   );
 
   return {
