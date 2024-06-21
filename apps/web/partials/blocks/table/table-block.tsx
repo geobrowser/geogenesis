@@ -103,8 +103,11 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   });
 
   const typeId = type.entityId;
-  const filters: Array<[string, string]> =
-    filterState && filterState.length > 0 ? filterState.map(filter => [filter.columnId, filter.value]) : [];
+  const attributes: Array<[string, string]> =
+    filterState && filterState.length > 0
+      ? // filters can include 'space', which is not an attribute
+        filterState.filter(filter => filter.columnId !== 'space').map(filter => [filter.columnId, filter.value])
+      : [];
 
   const shownIndexes = columns
     .map((item, index) => (shownColumnIds.includes(item.id) ? index : null))
@@ -156,7 +159,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           />
 
           {isEditing && (
-            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters)}>
+            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, attributes)}>
               <Create />
             </Link>
           )}

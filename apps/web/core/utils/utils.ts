@@ -20,11 +20,11 @@ export const NavUtils = {
     spaceId: string,
     newEntityId: string,
     typeId?: string | null,
-    filters?: Array<[string, string]> | null
+    attributes?: Array<[string, string]> | null
   ) => {
-    if (typeId && filters) {
+    if (typeId && attributes && attributes?.length > 0) {
       return decodeURIComponent(
-        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&filters=${encodeURI(JSON.stringify(filters))}`
+        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&attributes=${encodeURI(JSON.stringify(attributes))}`
       );
     }
 
@@ -32,8 +32,8 @@ export const NavUtils = {
       return decodeURIComponent(`/space/${spaceId}/${newEntityId}?typeId=${typeId}`);
     }
 
-    if (filters) {
-      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?filters=${encodeURI(JSON.stringify(filters))}`);
+    if (attributes && attributes.length > 0) {
+      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?attributes=${encodeURI(JSON.stringify(attributes))}`);
     }
 
     return decodeURIComponent(`/space/${spaceId}/${newEntityId}`);
