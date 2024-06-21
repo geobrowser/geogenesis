@@ -7,8 +7,7 @@ import { Subgraph } from '~/core/io';
 import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-by-entity-id';
 import { NavUtils } from '~/core/utils/utils';
 
-import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
-
+// import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ProfilePageComponent } from './profile-entity-page';
 
 interface Props {
@@ -58,9 +57,10 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       triples={person.triples}
       spaceId={params.id}
       referencedByComponent={
-        <React.Suspense fallback={null}>
-          <EntityReferencedByServerContainer entityId={person.id} name={person.name} spaceId={params.id} />
-        </React.Suspense>
+        <></>
+        // <React.Suspense fallback={null}>
+        //   <EntityReferencedByServerContainer entityId={person.id} name={person.name} spaceId={params.id} />
+        // </React.Suspense>
       }
     />
   );

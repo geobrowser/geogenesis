@@ -14,7 +14,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
 import { Editor } from '~/partials/editor/editor';
-import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
+// import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { SpaceNotices } from '~/partials/space-page/space-notices';
 import { Subspaces } from '~/partials/space-page/subspaces';
@@ -81,9 +81,9 @@ export default async function SpacePage({ params }: Props) {
       <Editor shouldHandleOwnSpacing spacePage />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
-      <React.Suspense fallback={null}>
+      {/* <React.Suspense fallback={null}>
         <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={spaceId} />
-      </React.Suspense>
+      </React.Suspense> */}
     </>
   );
 }
