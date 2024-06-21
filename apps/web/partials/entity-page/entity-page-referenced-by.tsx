@@ -24,9 +24,8 @@ type ReferencedByEntitiesProps = {
   name: string | null;
 };
 
-export function EntityPageReferencedBy({ referencedByEntities, name: serverName }: ReferencedByEntitiesProps) {
-  const { triples } = useEntityPageStore();
-  const name = triples.length === 0 ? serverName : Entity.name(triples) ?? '';
+export function EntityPageReferencedBy({ referencedByEntities }: ReferencedByEntitiesProps) {
+  if (referencedByEntities.length === 0) return null;
 
   return (
     <div>
@@ -34,14 +33,7 @@ export function EntityPageReferencedBy({ referencedByEntities, name: serverName 
         Referenced by
       </Text>
       <div className="flex flex-col flex-wrap">
-        {referencedByEntities.length === 0 ? (
-          <>
-            <Spacer height={12} />
-            <Text color="grey-04">There are no entities referencing {name}.</Text>
-          </>
-        ) : (
-          <ReferencedByEntities referencedByEntities={referencedByEntities} />
-        )}
+        <ReferencedByEntities referencedByEntities={referencedByEntities} />
       </div>
     </div>
   );
