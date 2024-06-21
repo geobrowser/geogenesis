@@ -6,13 +6,13 @@ import { encodeFunctionData } from 'viem';
 
 import * as React from 'react';
 
-import { Config, useConfig, useWalletClient } from 'wagmi';
+import { useWalletClient } from 'wagmi';
 
 import { IStorageClient } from '../io/storage/storage';
 import { fetchSpace } from '../io/subgraph';
 import { Services } from '../services';
 import { useStatusBar } from '../state/status-bar-store';
-import { Triple as ITriple, ReviewState, Space } from '../types';
+import { Triple as ITriple, ReviewState } from '../types';
 import { Triples } from '../utils/triples';
 import { sleepWithCallback } from '../utils/utils';
 import { useActionsStore } from './use-actions-store';
@@ -55,7 +55,6 @@ export function usePublish() {
   const { restore, actions: actionsBySpace } = useActionsStore();
   const { data: wallet } = useWalletClient();
   const smartAccount = useSmartAccount();
-  const walletConfig = useConfig();
   const { dispatch } = useStatusBar();
 
   /**
@@ -97,7 +96,6 @@ export function usePublish() {
             id: space.id,
             mainVotingPluginAddress: space.mainVotingPluginAddress,
           },
-          walletConfig,
         });
 
         const triplesBeingPublished = new Set(
@@ -159,7 +157,7 @@ export function usePublish() {
         onSuccess?.();
       }, 3000);
     },
-    [storageClient, wallet, restore, actionsBySpace, smartAccount, walletConfig, dispatch]
+    [storageClient, wallet, restore, actionsBySpace, smartAccount, dispatch]
   );
 
   return {
@@ -169,7 +167,6 @@ export function usePublish() {
 
 export function useBulkPublish() {
   const { storageClient } = Services.useServices();
-  const config = useConfig();
   const { data: wallet } = useWalletClient();
   const smartAccount = useSmartAccount();
   const { dispatch } = useStatusBar();
@@ -188,25 +185,26 @@ export function useBulkPublish() {
       // something we need for all of them.
       const space = await fetchSpace({ id: spaceId });
 
-      if (!space || !space.mainVotingPluginAddress || !smartAccount) {
-        return;
-      }
+      const publish = Effect.gen(function* () {
+        if (!space || !space.mainVotingPluginAddress || !smartAccount) {
+          return;
+        }
 
-      const publish = await makeProposal({
-        name,
-        storage: storageClient,
-        onChangePublishState: (newState: ReviewState) =>
-          dispatch({
-            type: 'SET_REVIEW_STATE',
-            payload: newState,
-          }),
-        ops: Triples.prepareTriplesForPublishing(triples, spaceId),
-        smartAccount,
-        space: {
-          id: space.id,
-          mainVotingPluginAddress: space.mainVotingPluginAddress,
-        },
-        walletConfig: config,
+        yield* makeProposal({
+          name,
+          storage: storageClient,
+          onChangePublishState: (newState: ReviewState) =>
+            dispatch({
+              type: 'SET_REVIEW_STATE',
+              payload: newState,
+            }),
+          ops: Triples.prepareTriplesForPublishing(triples, spaceId),
+          smartAccount,
+          space: {
+            id: space.id,
+            mainVotingPluginAddress: space.mainVotingPluginAddress,
+          },
+        });
       });
 
       const result = await Effect.runPromise(Effect.either(publish));
@@ -232,7 +230,7 @@ export function useBulkPublish() {
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
     },
-    [storageClient, config, wallet?.account.address, smartAccount]
+    [storageClient, wallet?.account.address, smartAccount, dispatch]
   );
 
   return {
@@ -249,12 +247,11 @@ interface MakeProposalArgs {
     id: string;
     mainVotingPluginAddress: string;
   };
-  walletConfig: Config;
   onChangePublishState: (newState: ReviewState) => void;
 }
 
 function makeProposal(args: MakeProposalArgs) {
-  const { name, ops, smartAccount, space, storage, walletConfig, onChangePublishState } = args;
+  const { name, ops, smartAccount, space, storage, onChangePublishState } = args;
   const proposal = createEditProposal({ name, ops, author: smartAccount.account.address });
 
   const uploadEffect = Effect.retry(
