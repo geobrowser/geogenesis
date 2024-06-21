@@ -45,5 +45,7 @@ export function useOnboarding() {
     setIsOnboardingVisible(false);
   }, [setIsOnboardingVisible]);
 
+  // Disabling onboarding until full launch as we are currently doing migrations
+  // and some other work affecting user onboarding.
   return { isOnboardingVisible: false, hideOnboarding };
 }

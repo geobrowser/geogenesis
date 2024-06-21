@@ -21,11 +21,11 @@ CREATE INDEX triple_entity_id
 CREATE INDEX versions_entity_id
     on versions (entity_id);
 
-CREATE INDEX triple_versions_triple_index
-    on triple_versions (triple_id);
+-- CREATE INDEX triple_versions_triple_index
+--     on triple_versions (triple_id);
 
-CREATE INDEX triple_versions_version_index
-    on triple_versions (version_id);
+-- CREATE INDEX triple_versions_version_index
+--     on triple_versions (version_id);
 
 CREATE INDEX proposal_proposed_versions
     on proposed_versions (proposal_id);
@@ -49,4 +49,4 @@ CREATE INDEX collection_item_collections
     on collection_items (collection_id);
 
 CREATE INDEX collection_item_entities
-    on collection_items (entity_reference_id);
+    on collection_items (entity_id);

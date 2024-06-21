@@ -237,11 +237,11 @@ CREATE TABLE public.proposed_editors (
 );
 
 
-CREATE TABLE public.triple_versions (
-    PRIMARY KEY (triple_id, version_id),
-    triple_id text NOT NULL REFERENCES public.triples(id),
-    version_id text NOT NULL REFERENCES public.versions(id)
-);
+-- CREATE TABLE public.triple_versions (
+--     PRIMARY KEY (triple_id, version_id),
+--     triple_id text NOT NULL REFERENCES public.triples(id),
+--     version_id text NOT NULL REFERENCES public.versions(id)
+-- );
 
 --
 -- Disable Foreign Key Constraints to allow for bulk loading + unordered inserts
@@ -279,6 +279,6 @@ ALTER TABLE
 ALTER TABLE
     public.space_editors DISABLE TRIGGER ALL;
 
-ALTER TABLE
-    public.triple_versions DISABLE TRIGGER ALL;
+-- ALTER TABLE
+--     public.triple_versions DISABLE TRIGGER ALL;
 
