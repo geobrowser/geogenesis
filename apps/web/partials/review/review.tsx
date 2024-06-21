@@ -7,7 +7,6 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
-import { Effect, Either, pipe } from 'effect';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
@@ -26,12 +25,11 @@ import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import type { Entity as EntityType, Space, Triple as TripleType } from '~/core/types';
-import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
-import { GeoDate, getImagePath, sleepWithCallback } from '~/core/utils/utils';
+import { GeoDate, getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -163,7 +161,7 @@ const ReviewChanges = () => {
         clearProposalName();
       },
     });
-  }, [activeSpace, proposalName, proposals, makeProposal, wallet, unstagedChanges, dispatch, actionsFromSpace]);
+  }, [activeSpace, proposalName, proposals, makeProposal, wallet, actionsFromSpace]);
 
   if (isLoading || !data || isSpacesLoading) {
     return null;

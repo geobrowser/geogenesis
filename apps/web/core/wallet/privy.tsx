@@ -1,6 +1,6 @@
 'use client';
 
-import { PrivyProvider as Privy, PrivyClientConfig, User } from '@privy-io/react-auth';
+import { PrivyProvider as Privy, PrivyClientConfig } from '@privy-io/react-auth';
 import { zeroAddress } from 'viem';
 
 import * as React from 'react';
@@ -13,10 +13,10 @@ import { CONDUIT_TESTNET } from './conduit-chain';
 const config: PrivyClientConfig = {
   defaultChain: CONDUIT_TESTNET,
   supportedChains: [CONDUIT_TESTNET],
-  embeddedWallets: {
-    noPromptOnSignature: true,
-    createOnLogin: 'users-without-wallets',
-  },
+  // embeddedWallets: {
+  // noPromptOnSignature: false,
+  // createOnLogin: 'users-without-wallets',
+  // },
   appearance: {
     showWalletLoginFirst: false,
     logo: '/static/favicon-320x180.png',
