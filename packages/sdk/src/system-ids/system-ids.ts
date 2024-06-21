@@ -264,3 +264,6 @@ export const NONPROFIT_FINANCES_PAGE_TEMPLATE =
 export const PERSON_SPACE_CONFIGURATION_TEMPLATE =
   '25d4b5bb2f3a4854a9fedf2f5f12b5e4'
 export const PERSON_POSTS_PAGE_TEMPLATE = '026362d45d414b8db6ef8ed10ecd0d89'
+
+// Entity templates
+export const TEMPLATE_ATTRIBUTE = 'babd29fb968147d08b58cdafc3890e12';
