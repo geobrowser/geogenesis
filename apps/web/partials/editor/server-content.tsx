@@ -36,7 +36,6 @@ type Content =
       marks: Mark[];
       attrs: {
         id: string;
-        level: 1 | 2 | 3 | 4 | 5 | 6;
       };
     }
   | {
