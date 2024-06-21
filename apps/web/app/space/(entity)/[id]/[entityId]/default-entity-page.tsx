@@ -1,7 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/ids';
 import { redirect } from 'next/navigation';
 
-// import { Suspense } from 'react';
+import * as React from 'react';
+
 import { Subgraph } from '~/core/io';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -17,7 +18,7 @@ import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
-// import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
+import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
 
@@ -74,9 +75,13 @@ export default async function DefaultEntityPage({
             <Editor shouldHandleOwnSpacing />
             <ToggleEntityPage {...props} typeId={typeId} filters={filters} />
             <Spacer height={40} />
-            {/* <Suspense fallback={<div />}>
+            {/* 
+              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
+              show any referenced by loading states but do want to stream it in
+            */}
+            <React.Suspense fallback={<div />}>
               <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
-            </Suspense> */}
+            </React.Suspense>
           </EntityPageContentContainer>
           <MoveEntityReview />
         </MoveEntityProvider>

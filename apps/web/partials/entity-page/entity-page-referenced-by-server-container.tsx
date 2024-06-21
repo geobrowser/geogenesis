@@ -1,5 +1,6 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
+import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { Entity } from '~/core/utils/entity';
 
 import { EntityPageReferencedBy } from './entity-page-referenced-by';
@@ -12,13 +13,20 @@ interface Props {
 }
 
 export async function EntityReferencedByServerContainer({ entityId, name }: Props) {
-  const [related, spaces] = await Promise.all([
-    Subgraph.fetchEntities({
-      query: '',
-      filter: [{ field: 'linked-to', value: entityId }],
-    }),
-    Subgraph.fetchSpaces(),
-  ]);
+  const related = await Subgraph.fetchEntities({
+    query: '',
+    filter: [{ field: 'linked-to', value: entityId }],
+  });
+
+  const spacesForEntities = new Set(
+    related
+      .map(r => {
+        return Entity.nameTriple(r.triples)?.space ?? null;
+      })
+      .flatMap(s => (s ? [s] : []))
+  );
+
+  const spaces = await fetchSpacesById([...spacesForEntities.values()]);
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
