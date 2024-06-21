@@ -75,12 +75,17 @@ export function Menu({
   );
 }
 
-type MenuItemProps = React.ComponentPropsWithoutRef<'div'>;
+type MenuItemProps = { active?: boolean } & React.ComponentPropsWithoutRef<'div'>;
 
-export function MenuItem({ className = '', children, ...rest }: MenuItemProps) {
+export function MenuItem({ className = '', active = false, children, ...rest }: MenuItemProps) {
   return (
     <div className={cx('group relative text-button text-text', className)} {...rest}>
-      <div className="absolute inset-1 z-0 rounded transition-colors duration-75 group-hover:bg-grey-01" />
+      <div
+        className={cx(
+          'absolute inset-1 z-0 rounded',
+          active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
+        )}
+      />
       <div className="relative z-10">{children}</div>
     </div>
   );

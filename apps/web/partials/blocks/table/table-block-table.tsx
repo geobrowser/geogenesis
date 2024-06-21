@@ -13,6 +13,7 @@ import {
 } from '@tanstack/react-table';
 import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
+import Image from 'next/image';
 import Link from 'next/link';
 
 import { useState } from 'react';
@@ -22,10 +23,12 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useTableBlock } from '~/core/state/table-block-store';
+import type { DataBlockView } from '~/core/state/table-block-store';
 import { Cell, Column, Row } from '~/core/types';
 import { Entity } from '~/core/utils/entity';
+import { EntityCell } from '~/core/utils/entity-table/entity-table';
 import { Triple } from '~/core/utils/triple';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
@@ -149,19 +152,11 @@ interface Props {
   columns: Column[];
   rows: Row[];
   shownIndexes: Array<number>;
-  placeholderText: string;
-  placeholderImage: string;
+  view: DataBlockView;
+  placeholder: { text: string; image: string };
 }
 
-export const TableBlockTable = ({
-  rows,
-  space,
-  typeId,
-  columns,
-  shownIndexes,
-  placeholderText,
-  placeholderImage,
-}: Props) => {
+export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, placeholder, view }: Props) => {
   const isEditingColumns = useAtomValue(editingColumnsAtom);
 
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
@@ -179,7 +174,7 @@ export const TableBlockTable = ({
     state: {
       pagination: {
         pageIndex: 0,
-        pageSize: 10,
+        pageSize: 9,
       },
     },
     meta: {
@@ -190,16 +185,16 @@ export const TableBlockTable = ({
     },
   });
 
-  const isEmpty = table.getRowModel().rows.length === 0;
+  const isEmpty = rows.length === 0;
 
   if (isEmpty) {
     if (isEditMode) {
       return (
         <Link href={NavUtils.toEntity(space, ID.createEntityId(), typeId)} className="block rounded-lg bg-grey-01">
           <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
-            <div>{placeholderText}</div>
+            <div>{placeholder.text}</div>
             <div>
-              <img src={placeholderImage} className="!h-[64px] w-auto object-contain" alt="" />
+              <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
             </div>
           </div>
         </Link>
@@ -209,83 +204,146 @@ export const TableBlockTable = ({
     return (
       <div className="block rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
-          <div>{placeholderText}</div>
+          <div>{placeholder.text}</div>
           <div>
-            <img src={placeholderImage} className="!h-[64px] w-auto object-contain" alt="" />
+            <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
           </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="overflow-hidden rounded-lg border border-grey-02 p-0 shadow-button">
-      <div className="overflow-x-scroll rounded-lg">
-        <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
-          <thead>
-            {table.getHeaderGroups().map(headerGroup => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header, index: number) => {
-                  const isShown = shownIndexes.includes(index);
+  switch (view) {
+    case 'TABLE':
+      return (
+        <div className="overflow-hidden rounded-lg border border-grey-02 p-0">
+          <div className="overflow-x-scroll rounded-lg">
+            <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
+              <thead>
+                {table.getHeaderGroups().map(headerGroup => (
+                  <tr key={headerGroup.id}>
+                    {headerGroup.headers.map((header, index: number) => {
+                      const isShown = shownIndexes.includes(index);
+                      const headerClassNames = isShown
+                        ? null
+                        : !isEditingColumns || !isEditMode
+                        ? 'hidden'
+                        : '!bg-grey-01 !text-grey-03';
+
+                      return (
+                        <th
+                          key={header.id}
+                          className={cx(
+                            'group relative min-w-[250px] border border-b-0 border-grey-02 p-[10px] text-left',
+                            headerClassNames
+                          )}
+                        >
+                          <div className="flex h-full w-full items-center gap-[10px]">
+                            {isEditMode && !isShown ? <EyeHide /> : null}
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </thead>
+              <tbody>
+                {table.getRowModel().rows.map((row, index: number) => {
+                  const cells = row.getVisibleCells();
+                  const entityId = cells?.[0]?.getValue<Cell>()?.entityId;
 
                   return (
-                    <th
-                      key={header.id}
-                      className={cx(
-                        !isShown ? (!isEditingColumns || !isEditMode ? 'hidden' : '!bg-grey-01 !text-grey-03') : null,
-                        'group relative min-w-[250px] border border-b-0 border-grey-02 p-[10px] text-left'
-                      )}
-                    >
-                      <div className="flex h-full w-full items-center gap-[10px]">
-                        {isEditMode && !isShown ? <EyeHide /> : null}
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </div>
-                    </th>
+                    <tr key={entityId ?? index} className="hover:bg-bg">
+                      {cells.map((cell, index: number) => {
+                        const cellId = `${row.original.id}-${cell.column.id}`;
+                        const firstTriple = cell.getValue<Cell>()?.triples[0];
+                        const isExpandable = firstTriple && firstTriple.value.type === 'string';
+                        const isShown = shownIndexes.includes(index);
+
+                        return (
+                          <TableCell
+                            key={cellId}
+                            isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
+                            href={NavUtils.toEntity(space, entityId)}
+                            isExpandable={isExpandable}
+                            isExpanded={expandedCells[cellId]}
+                            width={cell.column.getSize()}
+                            toggleExpanded={() =>
+                              setExpandedCells(prev => ({
+                                ...prev,
+                                [cellId]: !prev[cellId],
+                              }))
+                            }
+                            isShown={isShown}
+                            isEditMode={isEditMode}
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        );
+                      })}
+                    </tr>
                   );
                 })}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.map((row, index: number) => {
-              const cells = row.getVisibleCells();
-              const entityId = cells?.[0]?.getValue<Cell>()?.entityId;
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    case 'LIST':
+      return (
+        <div className="flex flex-col gap-4">
+          {rows.map((row, index: number) => {
+            const nameCell = row.name as EntityCell;
+            const { entityId, name, description, image } = nameCell;
 
-              return (
-                <tr key={entityId ?? index} className="hover:bg-bg">
-                  {cells.map((cell, index: number) => {
-                    const cellId = `${row.original.id}-${cell.column.id}`;
-                    const firstTriple = cell.getValue<Cell>()?.triples[0];
-                    const isExpandable = firstTriple && firstTriple.value.type === 'string';
-                    const isShown = shownIndexes.includes(index);
+            return (
+              <div key={index}>
+                <Link href={NavUtils.toEntity(space, entityId)} className="group inline-flex items-center gap-6 pr-6">
+                  <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
+                    {image && (
+                      <Image
+                        src={getImagePath(image)}
+                        className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+                        alt=""
+                        fill
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <div className="truncate text-tableCell font-medium text-text">{name}</div>
+                    {description && <div className="mt-0.5 text-metadata text-grey-04">{description}</div>}
+                  </div>
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+      );
+    case 'GALLERY':
+      return (
+        <div className="grid grid-cols-3 gap-x-4 gap-y-10">
+          {rows.map((row, index: number) => {
+            const nameCell = row.name as EntityCell;
+            const { entityId, name, image } = nameCell;
 
-                    return (
-                      <TableCell
-                        key={cellId}
-                        isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
-                        href={NavUtils.toEntity(space, entityId)}
-                        isExpandable={isExpandable}
-                        isExpanded={expandedCells[cellId]}
-                        width={cell.column.getSize()}
-                        toggleExpanded={() =>
-                          setExpandedCells(prev => ({
-                            ...prev,
-                            [cellId]: !prev[cellId],
-                          }))
-                        }
-                        isShown={isShown}
-                        isEditMode={isEditMode}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+            return (
+              <Link key={index} href={NavUtils.toEntity(space, entityId)} className="group flex flex-col gap-3">
+                <div className="relative aspect-[2/1] w-full overflow-clip rounded-lg bg-grey-01">
+                  {image && (
+                    <Image
+                      src={getImagePath(image)}
+                      className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+                      alt=""
+                      fill
+                    />
+                  )}
+                </div>
+                <div className={cx('truncate text-tableCell font-medium text-text')}>{name}</div>
+              </Link>
+            );
+          })}
+        </div>
+      );
+  }
 };
