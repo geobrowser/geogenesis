@@ -160,40 +160,23 @@ export const CreateProfileDialog = () => {
         },
       });
 
-      try {
-        setStatus('creating-profile');
+      setStatus('creating-profile');
 
-        await makeProposal({
-          triples: triples,
-          name: `Creating profile for ${address}`,
-          spaceId: onchainProfile.homeSpaceId,
-          onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
-        });
-
-        console.log('Profile created:', {
-          profileEntityId: onchainProfile.id,
-          spaceAddress: onchainProfile.homeSpaceId,
-        });
-
-        dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
-        setStatus('done');
-
-        // want to show the "complete" state for 3s
-        await sleepWithCallback(() => {
-          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-        }, 3000);
-      } catch (e: unknown) {
-        if (e instanceof Error) {
-          if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-            setStatus('idle');
-            dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-            return;
-          }
-
+      await makeProposal({
+        triples: triples,
+        name: `Creating profile for ${address}`,
+        spaceId: onchainProfile.homeSpaceId,
+        onSuccess: () => {
+          console.log('Profile created:', {
+            profileEntityId: onchainProfile.id,
+            spaceAddress: onchainProfile.homeSpaceId,
+          });
+          setStatus('done');
+        },
+        onError: () => {
           setStatus('error');
-          dispatch({ type: 'ERROR', payload: e.message });
-        }
-      }
+        },
+      });
     }
   }
 

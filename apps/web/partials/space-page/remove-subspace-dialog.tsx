@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useWalletClient } from 'wagmi';
+import { useConfig, useWalletClient } from 'wagmi';
 
 import { proposeRemoveSubspace } from '~/core/io/publish';
 import { Services } from '~/core/services';
@@ -46,7 +46,7 @@ interface ContentProps {
 
 function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: ContentProps) {
   const { storageClient } = Services.useServices();
-  const { data: wallet } = useWalletClient();
+  const config = useConfig();
   const [query, setQuery] = React.useState('');
 
   const filteredMembers = React.useMemo(() => {
@@ -55,7 +55,7 @@ function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: Conten
 
   const onRemoveSubspace = async (subspaceAddress: string) => {
     proposeRemoveSubspace({
-      wallet,
+      config,
       storageClient,
       spacePluginAddress,
       mainVotingPluginAddress,

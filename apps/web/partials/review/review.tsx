@@ -25,12 +25,11 @@ import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import type { Entity as EntityType, Space, Triple as TripleType } from '~/core/types';
-import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
-import { GeoDate, getImagePath, sleepWithCallback } from '~/core/utils/utils';
+import { GeoDate, getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -151,33 +150,18 @@ const ReviewChanges = () => {
       setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
     };
 
-    try {
-      // @TODO: Selectable publishing
-      // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
+    // @TODO: Selectable publishing
+    // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
-      await makeProposal({
-        triples: actionsFromSpace,
-        spaceId: activeSpace,
-        name: proposalName,
-        onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
-      });
-
-      clearProposalName();
-      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
-
-      // want to show the "complete" state for 3s
-      await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-          return;
-        }
-
-        dispatch({ type: 'ERROR', payload: e.message });
-      }
-    }
-  }, [activeSpace, proposalName, proposals, makeProposal, wallet, unstagedChanges, dispatch, actionsFromSpace]);
+    await makeProposal({
+      triples: actionsFromSpace,
+      spaceId: activeSpace,
+      name: proposalName,
+      onSuccess: () => {
+        clearProposalName();
+      },
+    });
+  }, [activeSpace, proposalName, proposals, makeProposal, wallet, actionsFromSpace]);
 
   if (isLoading || !data || isSpacesLoading) {
     return null;

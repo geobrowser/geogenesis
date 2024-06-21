@@ -15,8 +15,6 @@ import {
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { CloseSmall } from '~/design-system/icons/close-small';
-import { TickSmall } from '~/design-system/icons/tick-small';
 import { Skeleton } from '~/design-system/skeleton';
 import { TabGroup } from '~/design-system/tab-group';
 
@@ -31,6 +29,9 @@ import {
 } from './fetch-active-proposals-in-editor-spaces';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
 import { PersonalHomeDashboard } from './personal-home-dashboard';
+import { TickSmall } from '~/design-system/icons/tick-small';
+import { CloseSmall } from '~/design-system/icons/close-small';
+import { SmallButton } from '~/design-system/button';
 
 const TABS = ['For You', 'Unpublished', 'Published', 'Following', 'Activity'] as const;
 
@@ -277,6 +278,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
           </div>
           <p>{noVotesPercentage}%</p>
         </div>
+
       </div>
       <div className="flex w-full items-center justify-between">
         <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>

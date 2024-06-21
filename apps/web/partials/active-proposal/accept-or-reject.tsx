@@ -5,8 +5,8 @@ import { MainVotingAbi } from '@geogenesis/sdk/abis';
 
 import * as React from 'react';
 
-import { useWalletClient } from 'wagmi';
-import { prepareWriteContract, writeContract } from 'wagmi/actions';
+import { useConfig, useWalletClient } from 'wagmi';
+import { simulateContract, writeContract } from 'wagmi/actions';
 
 import { Vote } from '~/core/types';
 
@@ -26,17 +26,17 @@ export function AcceptOrReject({
   votingContractAddress: `0x${string}`;
 }) {
   const { data: wallet } = useWalletClient();
+  const walletConfig = useConfig();
 
   const onClick = async (option: Vote['vote']) => {
-    const config = await prepareWriteContract({
-      walletClient: wallet,
+    const config = await simulateContract(walletConfig, {
       address: votingContractAddress,
       abi: MainVotingAbi,
       functionName: 'vote',
       args: [BigInt(onchainProposalId), option === 'ACCEPT' ? VoteOption.Yes : VoteOption.No, true],
     });
 
-    const writeResult = await writeContract(config);
+    const writeResult = await writeContract(walletConfig, config.request);
     console.log('writeResult', writeResult);
   };
 
@@ -56,6 +56,7 @@ export function AcceptOrReject({
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
   }
 
+  // @TODO: Should be account?
   if (!isProposalDone && wallet) {
     return (
       <div className="inline-flex items-center gap-4">

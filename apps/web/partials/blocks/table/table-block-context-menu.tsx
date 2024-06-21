@@ -2,7 +2,7 @@
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
-import { useQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -195,8 +195,7 @@ function useOptimisticAttributes({
     }
   };
 
-  const { data } = useQuery({
-    suspense: true,
+  const { data } = useSuspenseQuery({
     queryKey: ['table-block-type-schema-configuration-attributes-list', entityId],
     queryFn: async () => {
       // Fetch the triples representing the Attributes for the type
@@ -425,7 +424,7 @@ const ToggleColumn = ({
   const { id, name } = column;
   const isShown = shownIndexes.includes(index);
 
-  const onToggleColumn = useCallback(async () => {
+  const onToggleColumn = React.useCallback(async () => {
     const attributeId = SYSTEM_IDS.SHOWN_COLUMNS;
     const attributeName = 'Shown Columns';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -18,7 +18,7 @@ export function NavbarSpaceMetadata() {
   const params = useParams();
   const spaceId: string | undefined = params?.['id'] as string | undefined;
 
-  const { data } = useQuery({
+  const { data } = useSuspenseQuery({
     queryKey: ['space', spaceId],
     queryFn: async ({ signal }) => {
       if (!spaceId) return null;
@@ -46,7 +46,6 @@ export function NavbarSpaceMetadata() {
         href: NavUtils.toSpace(space.id),
       };
     },
-    suspense: true,
   });
 
   if (!data) {

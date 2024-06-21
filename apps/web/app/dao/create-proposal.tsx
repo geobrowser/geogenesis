@@ -1,17 +1,10 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-import {
-  createContentProposal,
-  createGeoId,
-  createSubspaceProposal,
-  getAcceptSubspaceArguments,
-  getProcessGeoProposalArguments,
-} from '@geogenesis/sdk';
+import { SYSTEM_IDS, createContentProposal, createGeoId, getProcessGeoProposalArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 
-import { useWalletClient } from 'wagmi';
-import { prepareWriteContract, writeContract } from 'wagmi/actions';
+import { useConfig, useWalletClient } from 'wagmi';
+import { simulateContract, writeContract } from 'wagmi/actions';
 
 import { Services } from '~/core/services';
 
@@ -44,6 +37,7 @@ import { TEST_MAIN_VOTING_PLUGIN_ADDRESS, TEST_SPACE_PLUGIN_ADDRESS } from './co
 export function CreateProposal() {
   const { storageClient } = Services.useServices();
 
+  const walletConfig = useConfig();
   const { data: wallet } = useWalletClient();
 
   if (!wallet) {
@@ -84,8 +78,8 @@ export function CreateProposal() {
     const hash = await storageClient.uploadObject(proposal);
     const uri = `ipfs://${hash}` as const;
 
-    const config = await prepareWriteContract({
-      walletClient: wallet,
+    const config = await simulateContract(walletConfig, {
+      // Main voting plugin address for DAO at 0xd9abC01d1AEc200FC394C2717d7E14348dC23792
       address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
       abi: MainVotingAbi,
       functionName: 'createProposal',
@@ -97,15 +91,15 @@ export function CreateProposal() {
       // What can happen is that you create a "CONTENT" proposal but pass a callback
       // action that does some other action like "ADD_SUBSPACE" and it will fail since
       // the substream won't index a mismatched proposal type and action callback args.
-      // args: getProcessGeoProposalArguments(TEST_SPACE_PLUGIN_ADDRESS, uri),
-      args: getAcceptSubspaceArguments({
-        spacePluginAddress: TEST_SPACE_PLUGIN_ADDRESS,
-        ipfsUri: uri,
-        subspaceToAccept: '0x170b749413328ac9a94762031a7A05b00c1D2e34', // Root
-      }),
+      args: getProcessGeoProposalArguments(TEST_SPACE_PLUGIN_ADDRESS, uri),
+      // args: getAcceptSubspaceArguments({
+      //   spacePluginAddress: TEST_SPACE_PLUGIN_ADDRESS,
+      //   ipfsUri: uri,
+      //   subspaceToAccept: '0x170b749413328ac9a94762031a7A05b00c1D2e34', // Root
+      // }),
     });
 
-    const writeResult = await writeContract(config);
+    const writeResult = await writeContract(walletConfig, config.request);
     console.log('writeResult', writeResult);
   };
 

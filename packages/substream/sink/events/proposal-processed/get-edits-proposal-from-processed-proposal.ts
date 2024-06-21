@@ -90,8 +90,6 @@ function fetchEditProposalFromIpfs(
           return null;
         }
 
-        console.log('authors', parsedContent.authors);
-
         const contentProposal: EditProposal = {
           type: 'EDIT',
           name: validIpfsMetadata.name ?? null,

@@ -1,10 +1,10 @@
 import { Chain } from 'viem';
+
 import { Environment } from '../environment';
 
 export const CONDUIT_TESTNET: Chain = {
   id: Number(Environment.options.production.chainId),
   name: 'Geo Genesis Conduit Dev',
-  network: 'Arbitrum Orbit L3',
   nativeCurrency: {
     name: 'Ethereum',
     symbol: 'ETH',
@@ -18,4 +18,4 @@ export const CONDUIT_TESTNET: Chain = {
       http: [Environment.options.production.rpc],
     },
   },
-}
+};

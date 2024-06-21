@@ -1,0 +1,271 @@
+diff --git a/_cjs/accounts/safe/signerToSafeSmartAccount.js b/_cjs/accounts/safe/signerToSafeSmartAccount.js
+index 572f928e249a2b9f3722f36927988224cf94bdcf..e2fe508358dff9512bbe04e9c880256a261c8fa5 100644
+--- a/_cjs/accounts/safe/signerToSafeSmartAccount.js
++++ b/_cjs/accounts/safe/signerToSafeSmartAccount.js
+@@ -45,20 +45,20 @@ const EIP712_SAFE_OPERATION_TYPE_V07 = {
+ const SAFE_VERSION_TO_ADDRESSES_MAP = {
+     "1.4.1": {
+         "v0.6": {
+-            SAFE_MODULE_SETUP_ADDRESS: "0x8EcD4ec46D4D2a6B64fE960B3D64e8B94B2234eb",
+-            SAFE_4337_MODULE_ADDRESS: "0xa581c4A4DB7175302464fF3C06380BC3270b4037",
+-            SAFE_PROXY_FACTORY_ADDRESS: "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+-            SAFE_SINGLETON_ADDRESS: "0x41675C099F32341bf84BFc5382aF534df5C7461a",
+-            MULTI_SEND_ADDRESS: "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526",
+-            MULTI_SEND_CALL_ONLY_ADDRESS: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2"
++            SAFE_MODULE_SETUP_ADDRESS: "0x8D1e42A0d45951875fDc38B7a76E03745Ce35D3d",
++            SAFE_4337_MODULE_ADDRESS: "0x589C6DFEA37B1ceF62A81a8Cc55f7ef827cF6AF8",
++            SAFE_PROXY_FACTORY_ADDRESS: "0xcAF988CE2d86060da7d7Ad61077C298cC2aF3FA9",
++            SAFE_SINGLETON_ADDRESS: "0x90205Ab140b744973dAa754D028016812AD02eF7",
++            MULTI_SEND_ADDRESS: "0xC9E16Ca1413D76E3FBdc849028C711Af3F2c9f8A",
++            MULTI_SEND_CALL_ONLY_ADDRESS: "0xA430AEE546cfA321E1d1ED6BAD2ccD6857744F65"
+         },
+         "v0.7": {
+-            SAFE_MODULE_SETUP_ADDRESS: "0x2dd68b007B46fBe91B9A7c3EDa5A7a1063cB5b47",
+-            SAFE_4337_MODULE_ADDRESS: "0x75cf11467937ce3F2f357CE24ffc3DBF8fD5c226",
+-            SAFE_PROXY_FACTORY_ADDRESS: "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+-            SAFE_SINGLETON_ADDRESS: "0x41675C099F32341bf84BFc5382aF534df5C7461a",
+-            MULTI_SEND_ADDRESS: "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526",
+-            MULTI_SEND_CALL_ONLY_ADDRESS: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2"
++            SAFE_MODULE_SETUP_ADDRESS: "0x76Aa63a59f211122EDE2A1C692078803B9E42A10",
++            SAFE_4337_MODULE_ADDRESS: "0x8F911b3Ab1864Ccb96B57F7758543aEce200Ca72",
++            SAFE_PROXY_FACTORY_ADDRESS: "0xcAF988CE2d86060da7d7Ad61077C298cC2aF3FA9",
++            SAFE_SINGLETON_ADDRESS: "0x90205Ab140b744973dAa754D028016812AD02eF7",
++            MULTI_SEND_ADDRESS: "0xC9E16Ca1413D76E3FBdc849028C711Af3F2c9f8A",
++            MULTI_SEND_CALL_ONLY_ADDRESS: "0xA430AEE546cfA321E1d1ED6BAD2ccD6857744F65"
+         }
+     }
+ };
+diff --git a/_cjs/utils/getEntryPointVersion.js b/_cjs/utils/getEntryPointVersion.js
+index e7729c90730f6ef41c14c6711def3f915695af7a..1753e961cadb228425d566fff8ce1e7450a4dd22 100644
+--- a/_cjs/utils/getEntryPointVersion.js
++++ b/_cjs/utils/getEntryPointVersion.js
+@@ -1,8 +1,8 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.isUserOperationVersion07 = exports.isUserOperationVersion06 = exports.getEntryPointVersion = exports.ENTRYPOINT_ADDRESS_V07 = exports.ENTRYPOINT_ADDRESS_V06 = void 0;
+-exports.ENTRYPOINT_ADDRESS_V06 = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
+-exports.ENTRYPOINT_ADDRESS_V07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
++exports.ENTRYPOINT_ADDRESS_V06 = "0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a";
++exports.ENTRYPOINT_ADDRESS_V07 = "0xEB0a534440145D5A3aa512352FDDCf85453182b9";
+ const getEntryPointVersion = (entryPoint) => entryPoint === exports.ENTRYPOINT_ADDRESS_V06 ? "v0.6" : "v0.7";
+ exports.getEntryPointVersion = getEntryPointVersion;
+ function isUserOperationVersion06(entryPoint, _operation) {
+diff --git a/_esm/accounts/safe/signerToSafeSmartAccount.js b/_esm/accounts/safe/signerToSafeSmartAccount.js
+index 498e0c791a4dd3a8ee7cb400ed33a974e6576985..abcba389f82b4d241ffa216326b2bdb3fde3aeef 100644
+--- a/_esm/accounts/safe/signerToSafeSmartAccount.js
++++ b/_esm/accounts/safe/signerToSafeSmartAccount.js
+@@ -42,20 +42,20 @@ const EIP712_SAFE_OPERATION_TYPE_V07 = {
+ const SAFE_VERSION_TO_ADDRESSES_MAP = {
+     "1.4.1": {
+         "v0.6": {
+-            SAFE_MODULE_SETUP_ADDRESS: "0x8EcD4ec46D4D2a6B64fE960B3D64e8B94B2234eb",
+-            SAFE_4337_MODULE_ADDRESS: "0xa581c4A4DB7175302464fF3C06380BC3270b4037",
+-            SAFE_PROXY_FACTORY_ADDRESS: "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+-            SAFE_SINGLETON_ADDRESS: "0x41675C099F32341bf84BFc5382aF534df5C7461a",
+-            MULTI_SEND_ADDRESS: "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526",
+-            MULTI_SEND_CALL_ONLY_ADDRESS: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2"
++            SAFE_MODULE_SETUP_ADDRESS: "0x8D1e42A0d45951875fDc38B7a76E03745Ce35D3d",
++            SAFE_4337_MODULE_ADDRESS: "0x589C6DFEA37B1ceF62A81a8Cc55f7ef827cF6AF8",
++            SAFE_PROXY_FACTORY_ADDRESS: "0xcAF988CE2d86060da7d7Ad61077C298cC2aF3FA9",
++            SAFE_SINGLETON_ADDRESS: "0x90205Ab140b744973dAa754D028016812AD02eF7",
++            MULTI_SEND_ADDRESS: "0xC9E16Ca1413D76E3FBdc849028C711Af3F2c9f8A",
++            MULTI_SEND_CALL_ONLY_ADDRESS: "0xA430AEE546cfA321E1d1ED6BAD2ccD6857744F65"
+         },
+         "v0.7": {
+-            SAFE_MODULE_SETUP_ADDRESS: "0x2dd68b007B46fBe91B9A7c3EDa5A7a1063cB5b47",
+-            SAFE_4337_MODULE_ADDRESS: "0x75cf11467937ce3F2f357CE24ffc3DBF8fD5c226",
+-            SAFE_PROXY_FACTORY_ADDRESS: "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+-            SAFE_SINGLETON_ADDRESS: "0x41675C099F32341bf84BFc5382aF534df5C7461a",
+-            MULTI_SEND_ADDRESS: "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526",
+-            MULTI_SEND_CALL_ONLY_ADDRESS: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2"
++            SAFE_MODULE_SETUP_ADDRESS: "0x76Aa63a59f211122EDE2A1C692078803B9E42A10",
++            SAFE_4337_MODULE_ADDRESS: "0x8F911b3Ab1864Ccb96B57F7758543aEce200Ca72",
++            SAFE_PROXY_FACTORY_ADDRESS: "0xcAF988CE2d86060da7d7Ad61077C298cC2aF3FA9",
++            SAFE_SINGLETON_ADDRESS: "0x90205Ab140b744973dAa754D028016812AD02eF7",
++            MULTI_SEND_ADDRESS: "0xC9E16Ca1413D76E3FBdc849028C711Af3F2c9f8A",
++            MULTI_SEND_CALL_ONLY_ADDRESS: "0xA430AEE546cfA321E1d1ED6BAD2ccD6857744F65"
+         }
+     }
+ };
+diff --git a/_esm/actions/bundler/supportedEntryPoints.js b/_esm/actions/bundler/supportedEntryPoints.js
+index 911626d52a603595e0beefb501488a083a16234e..e60a81bf0e67bfec65e33a2fa30ea9e34f7f4557 100644
+--- a/_esm/actions/bundler/supportedEntryPoints.js
++++ b/_esm/actions/bundler/supportedEntryPoints.js
+@@ -17,7 +17,7 @@
+  * })
+  *
+  * const entryPointsSupported = supportedEntryPoints(bundlerClient)
+- * // Return ['0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789']
++ * // Return ['0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a']
+  *
+  */
+ export const supportedEntryPoints = async (client) => {
+diff --git a/_esm/utils/getEntryPointVersion.js b/_esm/utils/getEntryPointVersion.js
+index d473fecf59a894bdcde58288d6d20fb18a6eaa46..e21745acc84251252a4679a17a13fa3f40a4dcc3 100644
+--- a/_esm/utils/getEntryPointVersion.js
++++ b/_esm/utils/getEntryPointVersion.js
+@@ -1,5 +1,5 @@
+-export const ENTRYPOINT_ADDRESS_V06 = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
+-export const ENTRYPOINT_ADDRESS_V07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
++export const ENTRYPOINT_ADDRESS_V06 = "0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a";
++export const ENTRYPOINT_ADDRESS_V07 = "0xEB0a534440145D5A3aa512352FDDCf85453182b9";
+ export const getEntryPointVersion = (entryPoint) => entryPoint === ENTRYPOINT_ADDRESS_V06 ? "v0.6" : "v0.7";
+ export function isUserOperationVersion06(entryPoint, _operation) {
+     return getEntryPointVersion(entryPoint) === "v0.6";
+diff --git a/_types/actions/bundler/supportedEntryPoints.d.ts b/_types/actions/bundler/supportedEntryPoints.d.ts
+index 9a9353e89b60989e825c922f96f9651c182e0417..a2be198c8b82bf1835ddd553fac0f45cc45d73e7 100644
+--- a/_types/actions/bundler/supportedEntryPoints.d.ts
++++ b/_types/actions/bundler/supportedEntryPoints.d.ts
+@@ -20,7 +20,7 @@ import type { EntryPoint } from "../../types/entrypoint";
+  * })
+  *
+  * const entryPointsSupported = supportedEntryPoints(bundlerClient)
+- * // Return ['0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789']
++ * // Return ['0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a']
+  *
+  */
+ export declare const supportedEntryPoints: <entryPoint extends EntryPoint, TTransport extends Transport = Transport, TChain extends Chain | undefined = Chain | undefined, TAccount extends Account | undefined = Account | undefined>(client: Client<TTransport, TChain, TAccount, BundlerRpcSchema<entryPoint>>) => Promise<EntryPoint[]>;
+diff --git a/_types/actions/pimlico/sponsorUserOperation.d.ts b/_types/actions/pimlico/sponsorUserOperation.d.ts
+index 0c91e116b3631058f36ceac4e031b8dc503398e7..70178d319b863c6a549016cdf980802dc2f54730 100644
+--- a/_types/actions/pimlico/sponsorUserOperation.d.ts
++++ b/_types/actions/pimlico/sponsorUserOperation.d.ts
+@@ -49,7 +49,7 @@ export type SponsorUserOperationReturnType<entryPoint extends EntryPoint> = entr
+  *
+  */
+ export declare const sponsorUserOperation: <entryPoint extends EntryPoint, TTransport extends Transport = Transport, TChain extends Chain | undefined = Chain | undefined, TAccount extends Account | undefined = Account | undefined>(client: Client<TTransport, TChain, TAccount, PimlicoPaymasterRpcSchema<entryPoint>>, args: {
+-    userOperation: entryPoint extends "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789" ? PartialBy<{
++    userOperation: entryPoint extends "0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a" ? PartialBy<{
+         sender: `0x${string}`;
+         nonce: bigint;
+         initCode: `0x${string}`;
+diff --git a/_types/clients/decorators/bundler.d.ts b/_types/clients/decorators/bundler.d.ts
+index f0ac255d5534595746ca14b8f9b4b412777e07b4..1031850bf8a5fff7f82752823c120424984bbb67 100644
+--- a/_types/clients/decorators/bundler.d.ts
++++ b/_types/clients/decorators/bundler.d.ts
+@@ -79,7 +79,7 @@ export type BundlerActions<entryPoint extends EntryPoint> = {
+      *
+      * const supportedEntryPoints = await bundlerClient.supportedEntryPoints()
+      *
+-     * // Return ['0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789']
++     * // Return ['0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a']
+      */
+     supportedEntryPoints: () => Promise<EntryPoint[]>;
+     /**
+diff --git a/_types/types/entrypoint.d.ts b/_types/types/entrypoint.d.ts
+index 66a19666ad06a915e30796b4e2c6c4365629188a..67ad0095e5bf8de8f6078fbf766f905e5fc4dc24 100644
+--- a/_types/types/entrypoint.d.ts
++++ b/_types/types/entrypoint.d.ts
+@@ -1,6 +1,6 @@
+ export type EntryPointVersion = "v0.6" | "v0.7";
+-export type ENTRYPOINT_ADDRESS_V06_TYPE = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
+-export type ENTRYPOINT_ADDRESS_V07_TYPE = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
++export type ENTRYPOINT_ADDRESS_V06_TYPE = "0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a";
++export type ENTRYPOINT_ADDRESS_V07_TYPE = "0xEB0a534440145D5A3aa512352FDDCf85453182b9";
+ export type GetEntryPointVersion<entryPoint extends EntryPoint> = entryPoint extends ENTRYPOINT_ADDRESS_V06_TYPE ? "v0.6" : "v0.7";
+ export type EntryPoint = ENTRYPOINT_ADDRESS_V06_TYPE | ENTRYPOINT_ADDRESS_V07_TYPE;
+ //# sourceMappingURL=entrypoint.d.ts.map
+\ No newline at end of file
+diff --git a/accounts/safe/signerToSafeSmartAccount.ts b/accounts/safe/signerToSafeSmartAccount.ts
+index 7dc228fc99f18eebd73ab3e247430c57ca1c5489..d0da0171ef0339aea972fcb9183d9033367279bb 100644
+--- a/accounts/safe/signerToSafeSmartAccount.ts
++++ b/accounts/safe/signerToSafeSmartAccount.ts
+@@ -101,29 +101,29 @@ const SAFE_VERSION_TO_ADDRESSES_MAP: {
+     "1.4.1": {
+         "v0.6": {
+             SAFE_MODULE_SETUP_ADDRESS:
+-                "0x8EcD4ec46D4D2a6B64fE960B3D64e8B94B2234eb",
++                "0x8D1e42A0d45951875fDc38B7a76E03745Ce35D3d",
+             SAFE_4337_MODULE_ADDRESS:
+-                "0xa581c4A4DB7175302464fF3C06380BC3270b4037",
++                "0x589C6DFEA37B1ceF62A81a8Cc55f7ef827cF6AF8",
+             SAFE_PROXY_FACTORY_ADDRESS:
+-                "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
++                "0xcAF988CE2d86060da7d7Ad61077C298cC2aF3FA9",
+             SAFE_SINGLETON_ADDRESS:
+-                "0x41675C099F32341bf84BFc5382aF534df5C7461a",
+-            MULTI_SEND_ADDRESS: "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526",
++                "0x90205Ab140b744973dAa754D028016812AD02eF7",
++            MULTI_SEND_ADDRESS: "0xC9E16Ca1413D76E3FBdc849028C711Af3F2c9f8A",
+             MULTI_SEND_CALL_ONLY_ADDRESS:
+-                "0x9641d764fc13c8B624c04430C7356C1C7C8102e2"
++                "0xA430AEE546cfA321E1d1ED6BAD2ccD6857744F65"
+         },
+         "v0.7": {
+             SAFE_MODULE_SETUP_ADDRESS:
+-                "0x2dd68b007B46fBe91B9A7c3EDa5A7a1063cB5b47",
++                "0x76Aa63a59f211122EDE2A1C692078803B9E42A10",
+             SAFE_4337_MODULE_ADDRESS:
+-                "0x75cf11467937ce3F2f357CE24ffc3DBF8fD5c226",
++                "0x8F911b3Ab1864Ccb96B57F7758543aEce200Ca72",
+             SAFE_PROXY_FACTORY_ADDRESS:
+-                "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
++                "0xcAF988CE2d86060da7d7Ad61077C298cC2aF3FA9",
+             SAFE_SINGLETON_ADDRESS:
+-                "0x41675C099F32341bf84BFc5382aF534df5C7461a",
+-            MULTI_SEND_ADDRESS: "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526",
++                "0x90205Ab140b744973dAa754D028016812AD02eF7",
++            MULTI_SEND_ADDRESS: "0xC9E16Ca1413D76E3FBdc849028C711Af3F2c9f8A",
+             MULTI_SEND_CALL_ONLY_ADDRESS:
+-                "0x9641d764fc13c8B624c04430C7356C1C7C8102e2"
++                "0xA430AEE546cfA321E1d1ED6BAD2ccD6857744F65"
+         }
+     }
+ }
+diff --git a/actions/bundler/supportedEntryPoints.ts b/actions/bundler/supportedEntryPoints.ts
+index 208ade1f88d170790548152cc12adaa139fb91a4..8dc6b6c144a94f17f35c04cf7c6187b4179aa81d 100644
+--- a/actions/bundler/supportedEntryPoints.ts
++++ b/actions/bundler/supportedEntryPoints.ts
+@@ -22,7 +22,7 @@ import type { EntryPoint } from "../../types/entrypoint"
+  * })
+  *
+  * const entryPointsSupported = supportedEntryPoints(bundlerClient)
+- * // Return ['0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789']
++ * // Return ['0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a']
+  *
+  */
+ export const supportedEntryPoints = async <
+diff --git a/clients/decorators/bundler.ts b/clients/decorators/bundler.ts
+index bd91cef8b2999a479678177321fd3f91bc656027..7fb7a3cd69f0df7c1a2c620d7efa458f62af892b 100644
+--- a/clients/decorators/bundler.ts
++++ b/clients/decorators/bundler.ts
+@@ -110,7 +110,7 @@ export type BundlerActions<entryPoint extends EntryPoint> = {
+      *
+      * const supportedEntryPoints = await bundlerClient.supportedEntryPoints()
+      *
+-     * // Return ['0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789']
++     * // Return ['0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a']
+      */
+     supportedEntryPoints: () => Promise<EntryPoint[]>
+     /**
+diff --git a/types/entrypoint.ts b/types/entrypoint.ts
+index 32753e5e453e84b646121f8e23c6c3c5e8ae27cb..6a2a12162f73ea3fdb269fe3f37033761c8b21c9 100644
+--- a/types/entrypoint.ts
++++ b/types/entrypoint.ts
+@@ -1,9 +1,9 @@
+ export type EntryPointVersion = "v0.6" | "v0.7"
+
+ export type ENTRYPOINT_ADDRESS_V06_TYPE =
+-    "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
++    "0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a"
+ export type ENTRYPOINT_ADDRESS_V07_TYPE =
+-    "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
++    "0xEB0a534440145D5A3aa512352FDDCf85453182b9"
+
+ export type GetEntryPointVersion<entryPoint extends EntryPoint> =
+     entryPoint extends ENTRYPOINT_ADDRESS_V06_TYPE ? "v0.6" : "v0.7"
+diff --git a/utils/getEntryPointVersion.ts b/utils/getEntryPointVersion.ts
+index c6a1e3f019328de6e6e68e852efc1bb7f7f82a45..76f3530e3d861dccddf6ab2574f0d14c3c5ae95c 100644
+--- a/utils/getEntryPointVersion.ts
++++ b/utils/getEntryPointVersion.ts
+@@ -6,9 +6,9 @@ import type {
+ import type { EntryPoint, GetEntryPointVersion } from "../types/entrypoint"
+
+ export const ENTRYPOINT_ADDRESS_V06: ENTRYPOINT_ADDRESS_V06_TYPE =
+-    "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
++    "0x027b465F1Cfc3B2A70611587d3eE06362AA14E3a"
+ export const ENTRYPOINT_ADDRESS_V07: ENTRYPOINT_ADDRESS_V07_TYPE =
+-    "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
++    "0xEB0a534440145D5A3aa512352FDDCf85453182b9"
+
+ export const getEntryPointVersion = (
+     entryPoint: EntryPoint

@@ -9,7 +9,7 @@ const getFetchUserProposalCountQuery = (createdBy: string) => {
   const where = [`createdById: { equalTo: "${createdBy}" }`, `status: { equalTo: ACCEPTED }`].join(', ');
 
   return `query {
-    proposals(filter: {${where}}) {
+    proposals(filter: { createdById: { equalTo: "${createdBy}" } }) {
       totalCount
     }
   }`;

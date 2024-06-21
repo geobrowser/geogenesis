@@ -13,7 +13,7 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMoveEntity } from '~/core/state/move-entity-store';
 import { ReviewState, Triple } from '~/core/types';
-import { getImagePath, sleepWithCallback } from '~/core/utils/utils';
+import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
@@ -47,6 +47,7 @@ function MoveEntityReviewChanges() {
   const spaceTo = spaces.find(space => space.id === spaceIdTo);
   const { triples } = useEntityPageStore();
   const { makeProposal } = usePublish();
+
   const { state: createState, dispatch: createDispatch } = useMoveTriplesState();
   const { state: deleteState, dispatch: deleteDispatch } = useMoveTriplesState();
   const [firstPublishComplete, setFirstPublishComplete] = React.useState(false); // to allow the user to reenter only the second publish
@@ -81,58 +82,39 @@ function MoveEntityReviewChanges() {
     let createTriples: Triple[] = [];
     let deleteTriples: Triple[] = [];
 
-    try {
-      if (!firstPublishComplete) {
-        createTriples = onCreateNewTriples();
+    if (!firstPublishComplete) {
+      createTriples = onCreateNewTriples();
 
-        await makeProposal({
-          triples: createTriples,
-          name: createProposalName,
-          onChangePublishState: reviewState => createDispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
-          spaceId: spaceIdTo,
-        });
-        createDispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
-        setFirstPublishComplete(true); // so the user can re-enter the second publish only if this succeeds
-      }
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-          createTriples = []; // reset the create actions so there aren't duplicates
-          createDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-          return;
-        }
-        createDispatch({ type: 'ERROR', payload: e.message });
-      }
-      return; // Return because the first publish failed -- user will see error state in the UI
-    }
-
-    try {
-      deleteTriples = onDeleteTriples();
+      createDispatch({ type: 'SET_REVIEW_STATE', payload: 'publishing-contract' });
 
       await makeProposal({
-        triples: deleteTriples,
-        name: deleteProposalName,
-        onChangePublishState: reviewState => deleteDispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
-        spaceId: spaceIdFrom,
+        triples: createTriples,
+        name: createProposalName,
+        onSuccess: () => {
+          setFirstPublishComplete(true); // so the user can re-enter the second publish only if this succeeds
+          createDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+        },
+        spaceId: spaceIdTo,
       });
-      deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-          deleteTriples = []; // reset the delete actions so there aren't duplicates when user retries
-          deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-          return;
-        }
-        deleteDispatch({ type: 'ERROR', payload: e.message });
-      }
-      return; // Return because the second publish failed -- user will see error state in the UI
     }
-    // close the review UI after displaying the state messages for 2 seconds
-    await sleepWithCallback(() => {
-      setIsMoveReviewOpen(false);
-      router.push(`/space/${spaceIdTo}`);
-    }, 2000);
+
+    deleteTriples = onDeleteTriples();
+
+    deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'publishing-contract' });
+
+    await makeProposal({
+      triples: deleteTriples,
+      name: deleteProposalName,
+      spaceId: spaceIdFrom,
+      onSuccess: () => {
+        deleteDispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
+        setIsMoveReviewOpen(false);
+        router.push(`/space/${spaceIdTo}`);
+      },
+    });
   }, [
+    createDispatch,
+    deleteDispatch,
     wallet,
     spaceIdFrom,
     spaceIdTo,
@@ -142,8 +124,6 @@ function MoveEntityReviewChanges() {
     spaceFromName,
     firstPublishComplete,
     makeProposal,
-    createDispatch,
-    deleteDispatch,
     router,
     setIsMoveReviewOpen,
   ]);

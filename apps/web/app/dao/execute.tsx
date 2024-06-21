@@ -4,8 +4,8 @@ import { MainVotingAbi } from '@geogenesis/sdk/abis';
 
 import * as React from 'react';
 
-import { useWalletClient } from 'wagmi';
-import { prepareWriteContract, waitForTransaction, writeContract } from 'wagmi/actions';
+import { useConfig } from 'wagmi';
+import { simulateContract, writeContract } from 'wagmi/actions';
 
 import { TEST_MAIN_VOTING_PLUGIN_ADDRESS } from './constants';
 
@@ -15,38 +15,20 @@ interface Props {
 }
 
 export function Execute({ onchainProposalId, children }: Props) {
-  const { data: wallet } = useWalletClient();
+  const walletConfig = useConfig();
 
   const onClick = async () => {
-    try {
       console.log('data', { onchainProposalId });
 
-      // const value = decodeFunctionResult({
-      //   abi: DaoAbi,
-      //   functionName: 'execute',
-      //   data: '0xd4e57c2049f004fb297ef78591cd409503ceb6b2c722d7ffed032fc99e5f3b58',
-      // });
+    const config = await simulateContract(walletConfig, {
+      address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
+      abi: MainVotingAbi,
+      functionName: 'execute',
+      args: [BigInt(onchainProposalId)],
+    });
 
-      // console.log('decoded', value);
-
-      const config = await prepareWriteContract({
-        walletClient: wallet,
-        address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
-        abi: MainVotingAbi,
-        functionName: 'execute',
-        args: [BigInt(onchainProposalId)],
-      });
-
-      console.log('writeResult', config);
-
-      const writeResult = await writeContract(config);
-
-      console.log('writeResult', writeResult);
-      const idk = await waitForTransaction(writeResult);
-      console.log('idk', idk);
-    } catch (e) {
-      console.info(e);
-    }
+    const writeResult = await writeContract(walletConfig, config.request);
+    console.log('writeResult', writeResult);
   };
 
   return <button onClick={onClick}>{children}</button>;
