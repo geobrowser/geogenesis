@@ -42,14 +42,14 @@ interface Props {
   id: string;
   spaceId: string;
   typeId?: string | null;
-  filters?: Array<Filter> | null;
+  attributes?: Array<Attribute> | null;
 }
 
-type Filter = [FilterId, FilterValue];
-type FilterId = string;
-type FilterValue = string;
+type Attribute = [AttributeId, AttributeValue];
+type AttributeId = string;
+type AttributeValue = string;
 
-export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, filters }: Props) {
+export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, attributes }: Props) {
   const {
     triples: localTriples,
     schemaTriples,
@@ -86,7 +86,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 
   const [hasSetType, setHasSetType] = useState(false);
-  const [hasSetFilter, setHasSetFilter] = useState(false);
+  const [hasSetAttributes, setHasSetAttributes] = useState(false);
 
   useEffect(() => {
     if (hasSetType) return;
@@ -145,13 +145,13 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
   useEffect(() => {
     if (!hasSetType) return;
-    if (hasSetFilter) return;
+    if (hasSetAttributes) return;
 
-    const setFilterTriple = async () => {
-      if (!filters || filters.length === 0) return;
+    const setAttributesTriples = async () => {
+      if (!attributes || attributes.length === 0) return;
 
-      const filtersEntities = await Promise.all(
-        filters.map((filter: Filter) => {
+      const attributeEntities = await Promise.all(
+        attributes.map((filter: Attribute) => {
           return Promise.all([
             subgraph.fetchEntity({ id: filter[0] ?? '' }),
             subgraph.fetchEntity({ id: filter[1] ?? '' }),
@@ -159,9 +159,9 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
         })
       );
 
-      filtersEntities.forEach((filterEntities: [EntityType | null, EntityType | null]) => {
-        const idEntity = filterEntities[0];
-        const valueEntity = filterEntities[1];
+      attributeEntities.forEach((attributeEntities: [EntityType | null, EntityType | null]) => {
+        const idEntity = attributeEntities[0];
+        const valueEntity = attributeEntities[1];
 
         if (!idEntity || !valueEntity) return;
 
@@ -177,12 +177,12 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
       });
     };
 
-    if (filters && filters.length > 0) {
-      setFilterTriple();
+    if (attributes && attributes.length > 0) {
+      setAttributesTriples();
     }
 
-    setHasSetFilter(true);
-  }, [hasSetType, hasSetFilter, subgraph, config, send, filters]);
+    setHasSetAttributes(true);
+  }, [hasSetType, hasSetAttributes, subgraph, config, send, attributes]);
 
   return (
     <>
