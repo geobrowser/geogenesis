@@ -32,7 +32,7 @@ export const NavUtils = {
       return decodeURIComponent(`/space/${spaceId}/${newEntityId}?typeId=${typeId}`);
     }
 
-    if (attributes && attributes && attributes.length > 0) {
+    if (attributes && attributes.length > 0) {
       return decodeURIComponent(`/space/${spaceId}/${newEntityId}?attributes=${encodeURI(JSON.stringify(attributes))}`);
     }
 
