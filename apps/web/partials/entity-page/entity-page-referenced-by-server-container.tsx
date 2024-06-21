@@ -1,10 +1,10 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
+import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { Entity } from '~/core/utils/entity';
 
 import { EntityPageReferencedBy } from './entity-page-referenced-by';
 import { ReferencedByEntity } from './types';
-import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 interface Props {
   entityId: string;
@@ -26,9 +26,7 @@ export async function EntityReferencedByServerContainer({ entityId, name }: Prop
       .flatMap(s => (s ? [s] : []))
   );
 
-  // @TODO: single graphql call
-  const maybeSpaces = await Promise.all([...spacesForEntities.values()].map(s => cachedFetchSpace(s)));
-  const spaces = maybeSpaces.flatMap(s => (s ? [s] : []));
+  const spaces = await fetchSpacesById([...spacesForEntities.values()]);
 
   const referencedByEntities: ReferencedByEntity[] = related.map(e => {
     const spaceId = Entity.nameTriple(e.triples)?.space ?? '';
