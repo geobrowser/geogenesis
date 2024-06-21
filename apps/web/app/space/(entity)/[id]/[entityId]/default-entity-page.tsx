@@ -75,9 +75,9 @@ export default async function DefaultEntityPage({
             <Editor shouldHandleOwnSpacing />
             <ToggleEntityPage {...props} typeId={typeId} filters={filters} />
             <Spacer height={40} />
-            {/* <Suspense fallback={null}>
+            <Suspense fallback={<div />}>
               <EntityReferencedByServerContainer entityId={props.id} name={props.name} spaceId={params.id} />
-            </Suspense> */}
+            </Suspense>
           </EntityPageContentContainer>
           <MoveEntityReview />
         </MoveEntityProvider>
