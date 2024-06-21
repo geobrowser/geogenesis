@@ -1,103 +1,71 @@
-version: '3'
 services:
-  devnet:
-    build:
-      context: .
-      dockerfile: ./docker/Build.dockerfile
-    ports:
-      - '8545:8545'
-    volumes:
-      - shared-volume:/app
-    command: pnpm run --filter contracts devnet
-    healthcheck:
-      test: curl -sf -X POST --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    environment:
-      DEVNET_CHAIN_ID: '31337'
   postgres:
-    image: postgres
-    ports:
-      - '5432:5432'
-    command: ['postgres', '-cshared_preload_libraries=pg_stat_statements']
+    container_name: geo-postgres
+    image: postgres:14
     environment:
-      POSTGRES_USER: graph-node
+      POSTGRES_USER: geo
       POSTGRES_PASSWORD: let-me-in
-      POSTGRES_DB: graph-node
-      POSTGRES_INITDB_ARGS: '-E UTF8 --locale=C'
-
-  graph-node:
-    build:
-      context: .
-      dockerfile: ./docker/Graph.dockerfile
+      POSTGRES_DB: geo
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     ports:
-      - '8000:8000'
-      - '8001:8001'
-      - '8020:8020'
-      - '8030:8030'
-      - '8040:8040'
-    depends_on:
-      - devnet
-      - postgres
-    environment:
-      postgres_host: postgres
-      postgres_user: graph-node
-      postgres_pass: let-me-in
-      postgres_db: graph-node
-      ipfs: 'https://api.thegraph.com/ipfs/'
-      ethereum: 'mainnet:http://devnet:8545'
-      GRAPH_LOG: debug
-      GRAPH_IPFS_TIMEOUT: 10
-      GRAPH_LOG_QUERY_TIMING: gql
-      GRAPH_ETH_CALL_FULL_LOG: true
-      GRAPH_EXPERIMENTAL_SUBGRAPH_VERSION_SWITCHING_MODE: synced
-      GRAPH_ALLOW_NON_DETERMINISTIC_IPFS: true
-      GRAPH_ALLOW_NON_DETERMINISTIC_FULLTEXT_SEARCH: false
-      GRAPH_MAX_GAS_PER_HANDLER: 1_000_000_000_000_000
+      - "5432:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    stop_signal: SIGKILL
     healthcheck:
-      test: curl http://localhost:8030
-      interval: 5s
-      timeout: 5s
-      retries: 10
-  deploy-contracts:
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER}" ]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  pgweb:
+    container_name: geo-pgweb
+    image: sosedoff/pgweb:0.11.12
+    environment:
+      DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
+    restart: on-failure
+    stop_signal: SIGKILL
+    ports:
+      - "8081:8081"
+    command:
+      [
+        "pgweb",
+        "--bind=0.0.0.0",
+        "--listen=8081",
+        "--binary-codec=hex"
+      ]
+    links:
+      - postgres:postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  sink:
+    container_name: geo-sink
     build:
       context: .
-      dockerfile: ./docker/Build.dockerfile
-    environment:
-      DEVNET_URL: http://devnet:8545
-      DEVNET_CHAIN_ID: '31337'
-    command: pnpm --filter @geogenesis/contracts run deploy:local
-    volumes:
-      - shared-volume:/app
+      dockerfile: docker/Substream.Dockerfile
     depends_on:
-      devnet:
+      postgres:
         condition: service_healthy
-    deploy:
-      restart_policy:
-        condition: 'no'
-  build-subgraph:
+    environment:
+      AUTH_ISSUE_URL: https://auth.pinax.network/v1/auth/issue
+      SUBSTREAMS_ENDPOINT: https://polygon.substreams.pinax.network:443
+      SUBSTREAMS_API_KEY: ${SUBSTREAMS_API_KEY:?SUBSTREAMS_API_KEY is not set}
+      DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
+    command: node /app/packages/substream/dist/index.js --start-block 40078393
+
+  api:
+    container_name: geo-api
     build:
       context: .
-      dockerfile: ./docker/Build.dockerfile
-    environment:
-      GRAPH_NODE_URL: http://graph-node:8020
-      IPFS_URL: https://api.thegraph.com/ipfs/
-    command: >
-      sh -c "pnpm --filter subgraph run update-contract-address:local &&
-      pnpm --filter subgraph run cat &&
-      pnpm --filter subgraph run codegen &&
-      pnpm --filter subgraph run create &&
-      pnpm --filter subgraph run deploy --network mainnet"
-    volumes:
-      - shared-volume:/app
+      dockerfile: docker/Api.Dockerfile
     depends_on:
-      deploy-contracts:
-        condition: service_completed_successfully
-      graph-node:
+      postgres:
         condition: service_healthy
-    deploy:
-      restart_policy:
-        condition: 'no'
-volumes:
-  shared-volume:
+    environment:
+      DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
+      CHAIN_RPC: https://polygon.rpc.pinax.network/v1/${SUBSTREAMS_API_KEY}/
+      PORT: 5001
+    ports:
+      - "5001:5001"
