@@ -2,11 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
-
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';
@@ -16,21 +13,12 @@ type EmptyTabProps = {
   children: ReactNode;
 };
 
-export const EmptyTab = ({ spaceId, children }: EmptyTabProps) => {
-  const isEditing = useUserIsEditing(spaceId);
+export const EmptyTab = ({ children }: EmptyTabProps) => {
   const [hasCreatedEntity, setHasCreatedEntity] = useState<boolean>(false);
 
   const handleCreateEntity = () => {
     setHasCreatedEntity(true);
   };
-
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!isEditing) {
-      router.push(NavUtils.toSpace(spaceId));
-    }
-  }, [isEditing, router, spaceId]);
 
   if (!hasCreatedEntity) {
     return (

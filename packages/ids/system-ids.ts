@@ -290,5 +290,9 @@ export const NONPROFIT_FINANCES_PAGE_TEMPLATE = '3be01e21-8227-42e0-bd40-868957e
 export const PERSON_SPACE_CONFIGURATION_TEMPLATE = '25d4b5bb-2f3a-4854-a9fe-df2f5f12b5e4';
 export const PERSON_POSTS_PAGE_TEMPLATE = '026362d4-5d41-4b8d-b6ef-8ed10ecd0d89';
 
+// @TODO (migration)
+// Entity templates
+export const TEMPLATE_ATTRIBUTE = 'babd29fb-9681-47d0-8b58-cdafc3890e12';
+
 // Legacy attributes
 export const HIDDEN_COLUMNS = '1ed5b976-f8a4-451b-a2cc-531f85b59cab';

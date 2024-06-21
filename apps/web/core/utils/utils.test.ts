@@ -15,7 +15,7 @@ describe('GeoDate', () => {
   });
 
   it('converts ISO string at UTC time to day, month, year, hour, minute', () => {
-    expect(GeoDate.fromISOStringUTC('1990-12-16T00:00:00.000Z')).toEqual({
+    expect(GeoDate.fromISOStringUTC('1990-12-16T00:00:00.000+00:00')).toEqual({
       day: '16',
       month: '12',
       year: '1990',
@@ -23,7 +23,7 @@ describe('GeoDate', () => {
       minute: '0',
     });
 
-    expect(GeoDate.fromISOStringUTC('1990-12-16T12:30:00.000Z')).toEqual({
+    expect(GeoDate.fromISOStringUTC('1990-12-16T12:30:00.000+00:00')).toEqual({
       day: '16',
       month: '12',
       year: '1990',

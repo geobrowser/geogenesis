@@ -21,7 +21,7 @@ interface DateFieldProps {
 }
 
 const dateFieldStyles = cva(
-  'w-full placeholder:text-grey-02 focus:outline-none tabular-nums transition-colors duration-75 ease-in-out text-center bg-transparent',
+  'w-full bg-transparent text-center tabular-nums transition-colors duration-75 ease-in-out placeholder:text-grey-02 focus:outline-none',
   {
     variants: {
       variant: {
@@ -55,7 +55,7 @@ const labelStyles = cva('text-footnote transition-colors duration-75 ease-in-out
   },
 });
 
-const timeStyles = cva('w-[21px] placeholder:text-grey-02 focus:outline-none tabular-nums bg-transparent p-0 m-0', {
+const timeStyles = cva('m-0 w-[21px] bg-transparent p-0 tabular-nums placeholder:text-grey-02 focus:outline-none', {
   variants: {
     variant: {
       body: 'text-body',
@@ -255,65 +255,60 @@ export function DateField(props: DateFieldProps) {
   };
 
   const onBlur = (meridiem: 'am' | 'pm') => {
-    try {
-      let newMinute = minute.value;
-      let newHour = hour.value;
-      let newDay = day.value;
-      let newMonth = month.value;
-      let newYear = year.value;
+    let newMinute = minute.value;
+    let newHour = hour.value;
+    let newDay = day.value;
+    let newMonth = month.value;
+    let newYear = year.value;
 
-      if (Number(minute.value) < 10 && minute.value !== '') {
-        newMinute = minute.value.padStart(2, '0');
-        setMinute(newMinute);
-      }
+    if (Number(minute.value) < 10 && minute.value !== '') {
+      newMinute = minute.value.padStart(2, '0');
+      setMinute(newMinute);
+    }
 
-      if (Number(hour.value) < 10 && hour.value !== '') {
-        newHour = hour.value.padStart(2, '0');
-        setHour(newHour);
-      }
+    if (Number(hour.value) < 10 && hour.value !== '') {
+      newHour = hour.value.padStart(2, '0');
+      setHour(newHour);
+    }
 
-      if (Number(day.value) < 10 && day.value !== '') {
-        newDay = day.value.padStart(2, '0');
-        setDay(newDay);
-      }
+    if (Number(day.value) < 10 && day.value !== '') {
+      newDay = day.value.padStart(2, '0');
+      setDay(newDay);
+    }
 
-      if (Number(month.value) < 10 && month.value !== '') {
-        newMonth = month.value.padStart(2, '0');
-        setMonth(newMonth);
-      }
+    if (Number(month.value) < 10 && month.value !== '') {
+      newMonth = month.value.padStart(2, '0');
+      setMonth(newMonth);
+    }
 
-      if ((Number(year.value) < 1000 || Number(year.value) < 100 || Number(year.value) < 10) && year.value !== '') {
-        newYear = year.value.padStart(4, '0');
-        setYear(newYear);
-      }
+    if ((Number(year.value) < 1000 || Number(year.value) < 100 || Number(year.value) < 10) && year.value !== '') {
+      newYear = year.value.padStart(4, '0');
+      setYear(newYear);
+    }
 
-      if (Number(hour.value) === 12) {
-        newHour = '00';
-      }
+    if (Number(hour.value) === 12) {
+      newHour = '00';
+    }
 
-      const isValidDay = day.value !== '' || (!day.isValidating && day.isValid);
-      const isValidMonth = month.value !== '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
-      const isValidYear = year.value !== '' || (!year.isValidating && year.isValid);
-      const isValidHour = hour.value === '' || (!hour.isValidating && hour.isValid);
-      const isValidMinute = minute.value === '' || (!minute.isValidating && minute.isValid);
-      const isValid =
-        isValidDay && isValidMonth && isValidYear && dateFormState.isValid && isValidHour && isValidMinute;
+    const isValidDay = day.value !== '' || (!day.isValidating && day.isValid);
+    const isValidMonth = month.value !== '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
+    const isValidYear = year.value !== '' || (!year.isValidating && year.isValid);
+    const isValidHour = hour.value === '' || (!hour.isValidating && hour.isValid);
+    const isValidMinute = minute.value === '' || (!minute.isValidating && minute.isValid);
+    const isValid = isValidDay && isValidMonth && isValidYear && dateFormState.isValid && isValidHour && isValidMinute;
 
-      if (isValid) {
-        // GeoDate.toISOStringUTC will throw an error if the date is invalid
-        const isoString = GeoDate.toISOStringUTC({
-          day: newDay,
-          month: newMonth,
-          year: newYear,
-          minute: newMinute,
-          hour: meridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
-        });
+    if (isValid) {
+      // GeoDate.toISOStringUTC will throw an error if the date is invalid
+      const isoString = GeoDate.toISOStringUTC({
+        day: newDay,
+        month: newMonth,
+        year: newYear,
+        minute: newMinute,
+        hour: meridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
+      });
 
-        // Only create the triple if the form is valid
-        props.onBlur?.(isoString);
-      }
-    } catch (e) {
-      console.log(e);
+      // Only create the triple if the form is valid
+      props.onBlur?.(isoString);
     }
   };
 
