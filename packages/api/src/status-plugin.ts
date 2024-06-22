@@ -31,7 +31,7 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
         failed
       }
 
-      type ChainIndexingStatus {
+      type EthereumIndexingStatus {
         network: String!
         chainHeadBlock: Block
         earliestBlock: EarliestBlock
@@ -43,7 +43,11 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
         subgraph: String!
         synced: Boolean!
         health: Health!
-        chains: [ChainIndexingStatus!]!
+        chains: [EthereumIndexingStatus!]!
+        entityCount: BigInt!
+        node: String
+        paused: Boolean!
+        historyBlocks: Int!
       }
 
       extend type Query {
@@ -76,6 +80,10 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
               subgraph: GEO_SUBGRAPH_ID,
               synced: true,
               health: 'healthy',
+              entityCount: 0,
+              paused: false,
+              node: 'geo-node',
+              historyBlocks: 0,
               chains: [
                 {
                   network: GEO_NETWORK_ID,
