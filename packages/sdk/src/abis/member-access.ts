@@ -1,32 +1,5 @@
 export const abi = [
   {
-    "inputs": [],
-    "name": "AddresslistDisabled",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_member",
-        "type": "address"
-      }
-    ],
-    "name": "AlreadyMember",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_member",
-        "type": "address"
-      }
-    ],
-    "name": "AlreadyNotMember",
-    "type": "error"
-  },
-  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -70,18 +43,12 @@ export const abi = [
   },
   {
     "inputs": [],
-    "name": "InvalidContract",
+    "name": "InvalidInterface",
     "type": "error"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "sender",
-        "type": "address"
-      }
-    ],
-    "name": "ProposalCreationForbidden",
+    "inputs": [],
+    "name": "ProposalCreationForbiddenOnSameBlock",
     "type": "error"
   },
   {
@@ -167,12 +134,6 @@ export const abi = [
         "internalType": "uint64",
         "name": "proposalDuration",
         "type": "uint64"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "mainVotingPlugin",
-        "type": "address"
       }
     ],
     "name": "MultisigSettingsUpdated",
@@ -288,6 +249,19 @@ export const abi = [
     ],
     "name": "Upgraded",
     "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "PROPOSER_PERMISSION_ID",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [],
@@ -525,11 +499,6 @@ export const abi = [
             "internalType": "uint64",
             "name": "proposalDuration",
             "type": "uint64"
-          },
-          {
-            "internalType": "contract MainVotingPlugin",
-            "name": "mainVotingPlugin",
-            "type": "address"
           }
         ],
         "internalType": "struct MemberAccessPlugin.MultisigSettings",
@@ -540,44 +509,6 @@ export const abi = [
     "name": "initialize",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_account",
-        "type": "address"
-      }
-    ],
-    "name": "isEditor",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_account",
-        "type": "address"
-      }
-    ],
-    "name": "isMember",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -594,19 +525,6 @@ export const abi = [
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "bytes",
-        "name": "_metadata",
-        "type": "bytes"
-      }
-    ],
-    "name": "leaveSpace",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "multisigSettings",
     "outputs": [
@@ -614,11 +532,6 @@ export const abi = [
         "internalType": "uint64",
         "name": "proposalDuration",
         "type": "uint64"
-      },
-      {
-        "internalType": "contract MainVotingPlugin",
-        "name": "mainVotingPlugin",
-        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -661,33 +574,14 @@ export const abi = [
         "internalType": "address",
         "name": "_proposedMember",
         "type": "address"
-      }
-    ],
-    "name": "proposeNewMember",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "proposalId",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes",
-        "name": "_metadata",
-        "type": "bytes"
       },
       {
         "internalType": "address",
-        "name": "_proposedMember",
+        "name": "_proposer",
         "type": "address"
       }
     ],
-    "name": "proposeRemoveMember",
+    "name": "proposeAddMember",
     "outputs": [
       {
         "internalType": "uint256",
@@ -751,11 +645,6 @@ export const abi = [
             "internalType": "uint64",
             "name": "proposalDuration",
             "type": "uint64"
-          },
-          {
-            "internalType": "contract MainVotingPlugin",
-            "name": "mainVotingPlugin",
-            "type": "address"
           }
         ],
         "internalType": "struct MemberAccessPlugin.MultisigSettings",

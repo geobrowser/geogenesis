@@ -4,10 +4,10 @@ import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-c
 
 export async function SpaceMembersDialogServerContainer({
   spaceId,
-  memberAccessPluginAddress,
+  votingPluginAddress,
 }: {
   spaceId: string;
-  memberAccessPluginAddress: string;
+  votingPluginAddress: string | null;
 }) {
   const { allEditors: allMembers, totalEditors: totalMembers } = await getEditorsForSpace(spaceId);
 
@@ -15,9 +15,7 @@ export async function SpaceMembersDialogServerContainer({
     <SpaceMembersManageDialog
       header={<h1 className="text-smallTitle">{totalMembers} members</h1>}
       trigger={<p className="px-3 py-2">Manage members</p>}
-      content={
-        <SpaceMembersManageDialogContent members={allMembers} memberAccessPluginAddress={memberAccessPluginAddress} />
-      }
+      content={<SpaceMembersManageDialogContent members={allMembers} votingPluginAddress={votingPluginAddress} />}
     />
   );
 }

@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { createGeoId } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import { Command } from 'cmdk';
@@ -12,15 +11,13 @@ import Link from 'next/link';
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
-import { useAccount, useWalletClient } from 'wagmi';
-
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePublish } from '~/core/hooks/use-publish';
-import { ID } from '~/core/id';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { fetchProfile } from '~/core/io/subgraph';
 import { Services } from '~/core/services';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { OmitStrict, Triple } from '~/core/types';
+import { Triple } from '~/core/types';
 import { Images } from '~/core/utils/images';
 import { NavUtils, getImagePath, sleepWithCallback } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
@@ -57,11 +54,9 @@ export function useCreateProfile() {
  * this process. These are accounts with an onchain Geo profile _and_ a personal space.
  */
 export const CreateProfileDialog = () => {
-  const { dispatch } = useStatusBar();
   const { makeProposal } = usePublish();
-  const { address } = useAccount();
-  const { data: wallet } = useWalletClient();
-  const { profile: onchainProfile, isLoading } = useGeoProfile(address);
+  const smartAccount = useSmartAccount();
+  const { profile: onchainProfile, isLoading } = useGeoProfile(smartAccount?.account.address);
 
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
@@ -82,10 +77,10 @@ export const CreateProfileDialog = () => {
     },
   });
 
-  if (!address || isLoading || !isCreateProfileVisible) return null;
+  if (!smartAccount?.account.address || isLoading || !isCreateProfileVisible) return null;
 
   async function onRunOnboardingWorkflow() {
-    if (address && wallet && onchainProfile) {
+    if (smartAccount?.account.address && onchainProfile) {
       const onchainIdFromProfileId = onchainProfile.id.split('–')[1];
 
       if (!onchainIdFromProfileId) {
@@ -164,7 +159,7 @@ export const CreateProfileDialog = () => {
 
       await makeProposal({
         triples: triples,
-        name: `Creating profile for ${address}`,
+        name: `Creating profile for ${smartAccount.account.address}`,
         spaceId: onchainProfile.homeSpaceId,
         onSuccess: () => {
           console.log('Profile created:', {
@@ -197,7 +192,7 @@ export const CreateProfileDialog = () => {
               <StepHeader />
               <StepOnboarding
                 onNext={onRunOnboardingWorkflow}
-                address={address}
+                address={smartAccount.account.address}
                 name={name}
                 setName={setName}
                 avatar={avatar}

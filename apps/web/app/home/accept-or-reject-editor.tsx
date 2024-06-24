@@ -1,12 +1,10 @@
 'use client';
 
 import { VoteOption } from '@geogenesis/sdk';
-import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { MainVotingAbi, MemberAccessAbi } from '@geogenesis/sdk/abis';
+import { encodeFunctionData } from 'viem';
 
-import { useConfig } from 'wagmi';
-import { simulateContract, writeContract } from 'wagmi/actions';
-
-import { Vote } from '~/core/types';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
 import { SmallButton } from '~/design-system/button';
 
@@ -16,28 +14,42 @@ interface Props {
 }
 
 export function AcceptOrRejectEditor(props: Props) {
-  const walletConfig = useConfig();
+  const smartAccount = useSmartAccount();
 
-  const onClick = async (option: Vote['vote']) => {
-    if (!props.votingContractAddress) return;
+  const onApprove = async () => {
+    if (!props.votingContractAddress || !smartAccount) return;
 
-    const config = await simulateContract(walletConfig, {
-      address: props.votingContractAddress as `0x${string}`,
-      abi: MainVotingAbi,
-      functionName: 'vote',
-      args: [BigInt(props.onchainProposalId), option === 'ACCEPT' ? VoteOption.Yes : VoteOption.No, true],
+    await smartAccount.sendTransaction({
+      to: props.votingContractAddress as `0x${string}`,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: MainVotingAbi,
+        functionName: 'vote',
+        args: [BigInt(props.onchainProposalId), VoteOption.Yes, true],
+      }),
     });
+  };
 
-    const writeResult = await writeContract(walletConfig, config.request);
-    console.log('writeResult', writeResult);
+  const onReject = async () => {
+    if (!props.votingContractAddress || !smartAccount) return;
+
+    await smartAccount.sendTransaction({
+      to: props.votingContractAddress as `0x${string}`,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: MainVotingAbi,
+        functionName: 'vote',
+        args: [BigInt(props.onchainProposalId), VoteOption.Yes, false],
+      }),
+    });
   };
 
   return (
     <div className="flex items-center gap-2">
-      <SmallButton variant="secondary" onClick={() => onClick('REJECT')}>
+      <SmallButton variant="secondary" onClick={onReject}>
         Reject
       </SmallButton>
-      <SmallButton variant="secondary" onClick={() => onClick('ACCEPT')}>
+      <SmallButton variant="secondary" onClick={onApprove}>
         Approve
       </SmallButton>
     </div>

@@ -1,46 +1,45 @@
 'use client';
 
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
-import { createMembershipProposal } from '@geogenesis/sdk/proto';
+import { createSubspaceProposal } from '@geogenesis/sdk/proto';
 import { Effect } from 'effect';
-import { encodeFunctionData, getAddress, stringToHex } from 'viem';
+import { encodeFunctionData, stringToHex } from 'viem';
 
 import { TransactionWriteFailedError } from '~/core/errors';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { uploadBinary } from '~/core/io/storage/storage';
 import { Services } from '~/core/services';
 
-export function useRequestToBeMember(votingPluginAddress: string | null) {
+export function useProposeToAddSubspace(args: { votingPluginAddress: string | null; spacePluginAddress: string }) {
   const { storageClient } = Services.useServices();
   const smartAccount = useSmartAccount();
 
-  const write = async () => {
-    if (!votingPluginAddress || !smartAccount) {
+  // @TODO(baiirun): What should this API look like in the SDK?
+  const write = async (subspaceAddress: string) => {
+    if (!args.votingPluginAddress || !args.spacePluginAddress || !smartAccount) {
       return null;
     }
 
-    const requestorAddress = getAddress(smartAccount.account.address);
-
-    const proposal = createMembershipProposal({
-      name: 'Member request',
-      type: 'ADD_MEMBER',
-      userAddress: smartAccount.account.address,
+    const proposal = createSubspaceProposal({
+      name: 'Add subspace',
+      type: 'ADD_SUBSPACE',
+      spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
     });
 
     const writeTxEffect = Effect.gen(function* () {
       const cid = yield* uploadBinary(proposal, storageClient);
 
       const callData = encodeFunctionData({
-        functionName: 'proposeAddMember',
+        functionName: 'proposeAcceptSubspace',
         abi: MainVotingAbi,
         // @TODO: Function for encoding
-        args: [stringToHex(cid), requestorAddress],
+        args: [stringToHex(cid), subspaceAddress as `0x${string}`, args.spacePluginAddress as `0x${string}`],
       });
 
       return yield* Effect.tryPromise({
         try: () =>
           smartAccount.sendTransaction({
-            to: votingPluginAddress as `0x${string}`,
+            to: args.votingPluginAddress as `0x${string}`,
             value: 0n,
             data: callData,
           }),
@@ -58,6 +57,6 @@ export function useRequestToBeMember(votingPluginAddress: string | null) {
   };
 
   return {
-    requestToBeMember: write,
+    proposeAddSubspace: write,
   };
 }

@@ -12,14 +12,13 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useWalletClient } from 'wagmi';
-
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
+import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
@@ -66,7 +65,6 @@ type Proposal = {
 type EntityId = string;
 
 const ReviewChanges = () => {
-  const { subgraph } = Services.useServices();
   const { state } = useStatusBar();
   const { allSpacesWithActions } = useActionsStore();
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
@@ -74,7 +72,7 @@ const ReviewChanges = () => {
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', allSpacesWithActions],
     queryFn: async () => {
-      const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => subgraph.fetchSpace({ id: s })));
+      const maybeSpaces = await fetchSpacesById(allSpacesWithActions);
       const spaces = maybeSpaces.filter(
         (s): s is Space & { spaceConfig: EntityType } => s !== null && s.spaceConfig !== null
       );
@@ -130,7 +128,6 @@ const ReviewChanges = () => {
   }));
 
   // Proposal state
-  const { dispatch } = useStatusBar();
   const [proposals, setProposals] = useState<Proposals>({});
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
@@ -140,11 +137,8 @@ const ReviewChanges = () => {
   const triples = Triples.squash(actionsFromSpace);
   const [data, isLoading] = useChanges(triples, activeSpace);
 
-  // Publishing logic
-  const { data: wallet } = useWalletClient();
-
   const handlePublish = useCallback(async () => {
-    if (!activeSpace || !wallet) return;
+    if (!activeSpace) return;
 
     const clearProposalName = () => {
       setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
@@ -161,7 +155,7 @@ const ReviewChanges = () => {
         clearProposalName();
       },
     });
-  }, [activeSpace, proposalName, proposals, makeProposal, wallet, actionsFromSpace]);
+  }, [activeSpace, proposalName, proposals, makeProposal, actionsFromSpace]);
 
   if (isLoading || !data || isSpacesLoading) {
     return null;

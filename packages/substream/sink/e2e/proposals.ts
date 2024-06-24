@@ -41,9 +41,9 @@ function e2e() {
     if (!edit) return;
 
     const editProposal: EditProposal = {
-      type: 'EDIT',
+      type: 'ADD_EDIT',
       name: edit.name ?? null,
-      proposalId: edit.proposalId,
+      proposalId: edit.id,
       ops: edit.ops as Op[],
 
       // These would be derived from the onchain proposal and substream data

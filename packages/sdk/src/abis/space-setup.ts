@@ -11,17 +11,6 @@ export const abi = [
     "type": "constructor"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "actualLength",
-        "type": "uint256"
-      }
-    ],
-    "name": "InvalidHelpers",
-    "type": "error"
-  },
-  {
     "anonymous": false,
     "inputs": [
       {
@@ -33,17 +22,11 @@ export const abi = [
       {
         "indexed": false,
         "internalType": "address",
-        "name": "mainVotingPlugin",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "memberAccessPlugin",
+        "name": "plugin",
         "type": "address"
       }
     ],
-    "name": "GeoGovernancePluginsCreated",
+    "name": "GeoSpacePluginCreated",
     "type": "event"
   },
   {
@@ -57,36 +40,14 @@ export const abi = [
     "name": "decodeInstallationParams",
     "outputs": [
       {
-        "components": [
-          {
-            "internalType": "enum MajorityVotingBase.VotingMode",
-            "name": "votingMode",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint32",
-            "name": "supportThreshold",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint64",
-            "name": "duration",
-            "type": "uint64"
-          }
-        ],
-        "internalType": "struct MajorityVotingBase.VotingSettings",
-        "name": "votingSettings",
-        "type": "tuple"
+        "internalType": "string",
+        "name": "firstBlockContentUri",
+        "type": "string"
       },
       {
-        "internalType": "address[]",
-        "name": "initialEditors",
-        "type": "address[]"
-      },
-      {
-        "internalType": "uint64",
-        "name": "memberAccessProposalDuration",
-        "type": "uint64"
+        "internalType": "address",
+        "name": "predecessorAddress",
+        "type": "address"
       },
       {
         "internalType": "address",
@@ -119,36 +80,14 @@ export const abi = [
   {
     "inputs": [
       {
-        "components": [
-          {
-            "internalType": "enum MajorityVotingBase.VotingMode",
-            "name": "votingMode",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint32",
-            "name": "supportThreshold",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint64",
-            "name": "duration",
-            "type": "uint64"
-          }
-        ],
-        "internalType": "struct MajorityVotingBase.VotingSettings",
-        "name": "_votingSettings",
-        "type": "tuple"
+        "internalType": "string",
+        "name": "_firstBlockContentUri",
+        "type": "string"
       },
       {
-        "internalType": "address[]",
-        "name": "_initialEditors",
-        "type": "address[]"
-      },
-      {
-        "internalType": "uint64",
-        "name": "_memberAccessProposalDuration",
-        "type": "uint64"
+        "internalType": "address",
+        "name": "_predecessorAddress",
+        "type": "address"
       },
       {
         "internalType": "address",
@@ -200,19 +139,6 @@ export const abi = [
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "memberAccessPluginImplementation",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "address",
@@ -229,7 +155,7 @@ export const abi = [
     "outputs": [
       {
         "internalType": "address",
-        "name": "mainVotingPlugin",
+        "name": "plugin",
         "type": "address"
       },
       {

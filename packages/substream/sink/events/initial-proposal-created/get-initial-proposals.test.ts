@@ -23,7 +23,7 @@ describe('get-initial-proposals', () => {
       pluginAddress: '',
       space: '0x7eC3D9a27F89f52FAEa2C9cCC8dFBBA1A0c6a239',
       name: 'Test',
-      type: 'EDIT',
+      type: 'ADD_EDIT',
       creator: '',
       ops: [],
     };
@@ -51,7 +51,7 @@ describe('get-initial-proposals', () => {
       pluginAddress: '',
       space: '0x7eC3D9a27F89f52FAEa2C9cCC8dFBBA1A0c6a239',
       name: 'Test',
-      type: 'EDIT',
+      type: 'ADD_EDIT',
       creator: '',
       ops: [],
     };

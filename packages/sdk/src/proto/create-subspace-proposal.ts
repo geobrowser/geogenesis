@@ -1,5 +1,6 @@
 import type { SubspaceProposalMetadata } from '../..'
 import { createGeoId } from '../id'
+import { ActionType, Subspace } from '.'
 
 export function createSubspaceProposal({
   name,
@@ -9,12 +10,12 @@ export function createSubspaceProposal({
   name: string
   type: SubspaceProposalMetadata['type']
   spaceAddress: `0x${string}`
-}): SubspaceProposalMetadata {
-  return {
-    type,
+}): Uint8Array {
+  return new Subspace({
+    type: type === 'ADD_SUBSPACE' ? ActionType.ADD_SUBSPACE : ActionType.REMOVE_SUBSPACE,
     version: '1.0.0',
-    proposalId: createGeoId(),
+    id: createGeoId(),
     subspace: spaceAddress,
     name,
-  }
+  }).toBinary()
 }

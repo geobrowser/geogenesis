@@ -2,19 +2,19 @@
 
 import * as React from 'react';
 
-import { useRequestToBeMember } from './use-request-to-be-member';
+import { useRequestToBeEditor } from './use-request-to-be-editor';
 
 interface Props {
   spaceId: string;
   votingPluginAddress: string | null;
 }
 
-export function SpaceMembersJoinButton({ votingPluginAddress }: Props) {
+export function SpaceEditorsJoinButton({ votingPluginAddress }: Props) {
   const [hasRequested, setHasRequested] = React.useState(false);
-  const { requestToBeMember } = useRequestToBeMember(votingPluginAddress);
+  const { requestToBeEditor } = useRequestToBeEditor(votingPluginAddress);
 
   const onClick = async () => {
-    await requestToBeMember();
+    await requestToBeEditor();
     setHasRequested(true);
   };
 

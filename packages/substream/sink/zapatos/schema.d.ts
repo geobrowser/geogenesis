@@ -35,9 +35,9 @@ declare module 'zapatos/schema' {
   export namespace every {
     export type proposal_status = ['accepted', 'canceled', 'executed', 'proposed', 'rejected'];
   }
-  export type proposal_type = 'ADD_EDITOR' | 'ADD_MEMBER' | 'ADD_SUBSPACE' | 'CONTENT' | 'REMOVE_EDITOR' | 'REMOVE_MEMBER' | 'REMOVE_SUBSPACE';
+  export type proposal_type = 'ADD_EDIT' | 'ADD_EDITOR' | 'ADD_MEMBER' | 'ADD_SUBSPACE' | 'REMOVE_EDITOR' | 'REMOVE_MEMBER' | 'REMOVE_SUBSPACE';
   export namespace every {
-    export type proposal_type = ['ADD_EDITOR', 'ADD_MEMBER', 'ADD_SUBSPACE', 'CONTENT', 'REMOVE_EDITOR', 'REMOVE_MEMBER', 'REMOVE_SUBSPACE'];
+    export type proposal_type = ['ADD_EDIT', 'ADD_EDITOR', 'ADD_MEMBER', 'ADD_SUBSPACE', 'REMOVE_EDITOR', 'REMOVE_MEMBER', 'REMOVE_SUBSPACE'];
   }
   export type space_type = 'personal' | 'public';
   export namespace every {

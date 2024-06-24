@@ -8,8 +8,8 @@ import { Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
-const getProposedMemberInProposalQuery = (proposalId: string) => `query {
-  proposedMembers(
+const getProposedEditorInProposalQuery = (proposalId: string) => `query {
+  proposedEditors(
     first: 1
     filter: { proposalId: { equalTo: "${proposalId}" } }
   ) {
@@ -41,7 +41,7 @@ const getProposedMemberInProposalQuery = (proposalId: string) => `query {
 }`;
 
 interface NetworkResult {
-  proposedMembers: {
+  proposedEditors: {
     nodes: {
       account: {
         id: string;
@@ -63,12 +63,12 @@ interface NetworkResult {
   };
 }
 
-export async function fetchProposedMemberForProposal(proposalId: string): Promise<Profile | null> {
+export async function fetchProposedEditorForProposal(proposalId: string): Promise<Profile | null> {
   const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getProposedMemberInProposalQuery(proposalId),
+    query: getProposedEditorInProposalQuery(proposalId),
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -87,13 +87,13 @@ export async function fetchProposedMemberForProposal(proposalId: string): Promis
           console.error(
             `Encountered runtime graphql error in fetchProposedMember. proposalId: ${proposalId} endpoint: ${endpoint}
 
-            queryString: ${getProposedMemberInProposalQuery(proposalId)}
+            queryString: ${getProposedEditorInProposalQuery(proposalId)}
             `,
             error.message
           );
 
           return {
-            proposedMembers: {
+            proposedEditors: {
               nodes: [],
             },
           };
@@ -102,7 +102,7 @@ export async function fetchProposedMemberForProposal(proposalId: string): Promis
           console.error(`${error._tag}: Unable to fetch subspace, proposalId: ${proposalId} endpoint: ${endpoint}`);
 
           return {
-            proposedMembers: {
+            proposedEditors: {
               nodes: [],
             },
           };
@@ -113,29 +113,29 @@ export async function fetchProposedMemberForProposal(proposalId: string): Promis
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposedMembers = result.proposedMembers.nodes;
+  const proposedEditors = result.proposedEditors.nodes;
 
-  if (proposedMembers.length === 0) {
+  if (proposedEditors.length === 0) {
     return null;
   }
 
   // There should only be one proposed member in a single proposal
-  const proposedMemberAccount = proposedMembers[0].account;
-  const onchainProfiles = proposedMemberAccount.onchainProfiles.nodes;
-  const proposedMemberProfiles = proposedMemberAccount.geoProfiles.nodes;
+  const proposedEditorAccount = proposedEditors[0].account;
+  const onchainProfiles = proposedEditorAccount.onchainProfiles.nodes;
+  const proposedEditorProfiles = proposedEditorAccount.geoProfiles.nodes;
 
-  if (proposedMemberProfiles.length === 0 || onchainProfiles.length === 0) {
+  if (proposedEditorProfiles.length === 0 || onchainProfiles.length === 0) {
     return {
-      id: proposedMemberAccount.id,
+      id: proposedEditorAccount.id,
       name: null,
       avatarUrl: null,
       coverUrl: null,
-      address: proposedMemberAccount.id as `0x${string}`,
+      address: proposedEditorAccount.id as `0x${string}`,
       profileLink: null,
     };
   }
 
-  const profile = proposedMemberProfiles[0];
+  const profile = proposedEditorProfiles[0];
   const onchainProfile = onchainProfiles[0];
   const triples = fromNetworkTriples(profile.triples);
 
@@ -144,7 +144,7 @@ export async function fetchProposedMemberForProposal(proposalId: string): Promis
     name: profile.name,
     avatarUrl: Entities.avatar(triples) ?? null,
     coverUrl: Entities.cover(triples) ?? null,
-    address: proposedMemberAccount.id as `0x${string}`,
+    address: proposedEditorAccount.id as `0x${string}`,
     profileLink: NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id),
   };
 }

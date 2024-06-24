@@ -1,24 +1,18 @@
 export const abi = [
   {
-    "inputs": [
-      {
-        "internalType": "contract PluginSetupProcessor",
-        "name": "pluginSetupProcessorAddress",
-        "type": "address"
-      }
-    ],
+    "inputs": [],
     "stateMutability": "nonpayable",
     "type": "constructor"
   },
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "actualLength",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "editor",
+        "type": "address"
       }
     ],
-    "name": "InvalidHelpers",
+    "name": "EditorAddressInvalid",
     "type": "error"
   },
   {
@@ -33,17 +27,17 @@ export const abi = [
       {
         "indexed": false,
         "internalType": "address",
-        "name": "mainVotingPlugin",
+        "name": "personalAdminPlugin",
         "type": "address"
       },
       {
         "indexed": false,
         "internalType": "address",
-        "name": "memberAccessPlugin",
+        "name": "initialEditor",
         "type": "address"
       }
     ],
-    "name": "GeoGovernancePluginsCreated",
+    "name": "GeoPersonalAdminPluginCreated",
     "type": "event"
   },
   {
@@ -57,40 +51,8 @@ export const abi = [
     "name": "decodeInstallationParams",
     "outputs": [
       {
-        "components": [
-          {
-            "internalType": "enum MajorityVotingBase.VotingMode",
-            "name": "votingMode",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint32",
-            "name": "supportThreshold",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint64",
-            "name": "duration",
-            "type": "uint64"
-          }
-        ],
-        "internalType": "struct MajorityVotingBase.VotingSettings",
-        "name": "votingSettings",
-        "type": "tuple"
-      },
-      {
-        "internalType": "address[]",
-        "name": "initialEditors",
-        "type": "address[]"
-      },
-      {
-        "internalType": "uint64",
-        "name": "memberAccessProposalDuration",
-        "type": "uint64"
-      },
-      {
         "internalType": "address",
-        "name": "pluginUpgrader",
+        "name": "initialEditor",
         "type": "address"
       }
     ],
@@ -100,59 +62,8 @@ export const abi = [
   {
     "inputs": [
       {
-        "internalType": "bytes",
-        "name": "_data",
-        "type": "bytes"
-      }
-    ],
-    "name": "decodeUninstallationParams",
-    "outputs": [
-      {
         "internalType": "address",
-        "name": "pluginUpgrader",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "pure",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "components": [
-          {
-            "internalType": "enum MajorityVotingBase.VotingMode",
-            "name": "votingMode",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint32",
-            "name": "supportThreshold",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint64",
-            "name": "duration",
-            "type": "uint64"
-          }
-        ],
-        "internalType": "struct MajorityVotingBase.VotingSettings",
-        "name": "_votingSettings",
-        "type": "tuple"
-      },
-      {
-        "internalType": "address[]",
-        "name": "_initialEditors",
-        "type": "address[]"
-      },
-      {
-        "internalType": "uint64",
-        "name": "_memberAccessProposalDuration",
-        "type": "uint64"
-      },
-      {
-        "internalType": "address",
-        "name": "_pluginUpgrader",
+        "name": "_initialEditor",
         "type": "address"
       }
     ],
@@ -168,40 +79,8 @@ export const abi = [
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_pluginUpgrader",
-        "type": "address"
-      }
-    ],
-    "name": "encodeUninstallationParams",
-    "outputs": [
-      {
-        "internalType": "bytes",
-        "name": "",
-        "type": "bytes"
-      }
-    ],
-    "stateMutability": "pure",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "implementation",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "memberAccessPluginImplementation",
     "outputs": [
       {
         "internalType": "address",
@@ -229,7 +108,7 @@ export const abi = [
     "outputs": [
       {
         "internalType": "address",
-        "name": "mainVotingPlugin",
+        "name": "plugin",
         "type": "address"
       },
       {
@@ -341,7 +220,7 @@ export const abi = [
           }
         ],
         "internalType": "struct PermissionLib.MultiTargetPermission[]",
-        "name": "permissionChanges",
+        "name": "permissions",
         "type": "tuple[]"
       }
     ],

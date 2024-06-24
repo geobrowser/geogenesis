@@ -1,11 +1,12 @@
-import { Op, getProcessGeoProposalArguments } from '@geogenesis/sdk';
+import { Op } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Effect, Either, Schedule } from 'effect';
-import { encodeFunctionData } from 'viem';
+import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
+import { InvalidIpfsQmHashError, IpfsUploadError, TransactionWriteFailedError } from '../errors';
 import { IStorageClient } from '../io/storage/storage';
 import { fetchSpace } from '../io/subgraph';
 import { Services } from '../services';
@@ -15,30 +16,6 @@ import { Triples } from '../utils/triples';
 import { sleepWithCallback } from '../utils/utils';
 import { useActionsStore } from './use-actions-store';
 import { useSmartAccount } from './use-smart-account';
-
-export class TransactionRevertedError extends Error {
-  readonly _tag = 'TransactionRevertedError';
-}
-
-export class WaitForTransactionBlockError extends Error {
-  readonly _tag = 'WaitForTransactionBlockError';
-}
-
-export class TransactionPrepareFailedError extends Error {
-  readonly _tag = 'TransactionPrepareFailedError';
-}
-
-export class TransactionWriteFailedError extends Error {
-  readonly _tag = 'TransactionWriteFailedError';
-}
-
-export class InvalidIpfsQmHashError extends Error {
-  readonly _tag = 'InvalidIpfsQmHashError';
-}
-
-export class IpfsUploadError extends Error {
-  readonly _tag = 'IpfsUploadError';
-}
 
 interface MakeProposalOptions {
   triples: ITriple[];
@@ -91,6 +68,7 @@ export function usePublish() {
           smartAccount,
           space: {
             id: space.id,
+            spacePluginAddress: space.spacePluginAddress,
             mainVotingPluginAddress: space.mainVotingPluginAddress,
           },
         });
@@ -198,6 +176,7 @@ export function useBulkPublish() {
           smartAccount,
           space: {
             id: space.id,
+            spacePluginAddress: space.spacePluginAddress,
             mainVotingPluginAddress: space.mainVotingPluginAddress,
           },
         });
@@ -241,6 +220,7 @@ interface MakeProposalArgs {
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>>;
   space: {
     id: string;
+    spacePluginAddress: string;
     mainVotingPluginAddress: string;
   };
   onChangePublishState: (newState: ReviewState) => void;
@@ -271,12 +251,11 @@ function makeProposal(args: MakeProposalArgs) {
       );
     }
 
-    const encodedProposalArgs = getProcessGeoProposalArguments(space.id as `0x${string}`, cid as `ipfs://${string}`);
-
     const callData = encodeFunctionData({
-      functionName: 'createProposal',
+      functionName: 'proposeEdits',
       abi: MainVotingAbi,
-      args: encodedProposalArgs,
+      // @TODO: Function for encoding args
+      args: [stringToHex(cid), cid, space.spacePluginAddress as `0x${string}`],
     });
 
     onChangePublishState('signing-wallet');

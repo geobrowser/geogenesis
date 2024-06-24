@@ -2,16 +2,16 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { useAccount } from 'wagmi';
-
 import { Subgraph } from '../io';
 import { useHydrated } from './use-hydrated';
+import { useSmartAccount } from './use-smart-account';
 
 export function useAccessControl(spaceId?: string | null) {
   // We need to wait for the client to check the status of the client-side wallet
   // before setting state. Otherwise there will be client-server hydration mismatches.
   const hydrated = useHydrated();
-  const { address } = useAccount();
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
 
   const { data: space } = useQuery({
     queryKey: ['access-control', spaceId, address],
