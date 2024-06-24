@@ -9,6 +9,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { getIsEditorForSpace } from './get-is-editor-for-space';
 import { SpaceEditorsChip } from './space-editors-chip';
 import { SpaceEditorsDialogServerContainer } from './space-editors-dialog-server-container';
+import { SpaceEditorsJoinButton } from './space-editors-join-button';
 import { SpaceEditorsContent } from './space-editors-popover-content';
 import { SpaceMembersMenu } from './space-members-menu';
 import { SpaceMembersPopover } from './space-members-popover';
@@ -25,6 +26,8 @@ export async function SpaceEditors({ spaceId }: Props) {
     cachedFetchSpace(spaceId),
     // @TODO: Check if the user has already requested to be an editor
   ]);
+
+  console.log('is editor', isEditor);
 
   if (!space) {
     return null;
@@ -68,6 +71,9 @@ export async function SpaceEditors({ spaceId }: Props) {
           </React.Suspense>
         }
       />
+      <div className="h-4 w-px bg-divider" />
+
+      <SpaceEditorsJoinButton spaceId={spaceId} votingPluginAddress={space.mainVotingPluginAddress} />
     </div>
   );
 }

@@ -30,6 +30,7 @@ import {
   ActiveProposalsForSpacesWhereEditor,
   getActiveProposalsForSpacesWhereEditor,
 } from './fetch-active-proposals-in-editor-spaces';
+import { fetchProposedEditorForProposal } from './fetch-proposed-editor';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
 import { PersonalHomeDashboard } from './personal-home-dashboard';
 
@@ -135,6 +136,7 @@ async function PendingProposals({ proposalType, connectedAddress }: PendingPropo
           case 'REMOVE_MEMBER':
             return <PendingMembershipProposal key={proposal.id} proposal={proposal} user={user} />;
           default:
+            // We encapsulate editor, subspace, and content proposals in this pending content proposal
             return <PendingContentProposal key={proposal.id} proposal={proposal} user={user} />;
         }
       })}
@@ -215,7 +217,7 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
 }
 
 async function PendingContentProposal({ proposal, user }: PendingMembershipProposalProps) {
-  const space = await cachedFetchSpace(proposal.space.id);
+  const space = await cachedFetchSpace(proposal.space.spaceId);
 
   if (!space) {
     // @TODO: Should never happen but we should error handle

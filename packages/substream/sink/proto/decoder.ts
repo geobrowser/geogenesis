@@ -1,7 +1,12 @@
 import { Edit, Membership, Subspace } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
-import { ZodEdit, ZodMembershipProposal, ZodSubspaceProposal } from '../events/proposals-created/parser';
+import {
+  ZodEdit,
+  ZodEditorshipProposal,
+  ZodMembershipProposal,
+  ZodSubspaceProposal,
+} from '../events/proposals-created/parser';
 import { slog } from '~/sink/utils/slog';
 
 export class CouldNotDecodeProtobufError extends Error {
@@ -79,6 +84,23 @@ function decodeMembership(data: Buffer) {
   });
 }
 
+function decodeEditorship(data: Buffer) {
+  return Effect.gen(function* (_) {
+    const decodeEffect = decode(() => {
+      const memberRequest = Membership.fromBinary(data);
+      const parseResult = ZodEditorshipProposal.safeParse(memberRequest.toJson());
+
+      if (parseResult.success) {
+        return parseResult.data;
+      }
+
+      return null;
+    });
+
+    return yield* _(decodeEffect);
+  });
+}
+
 function decodeSubspace(data: Buffer) {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
@@ -99,5 +121,6 @@ function decodeSubspace(data: Buffer) {
 export const Decoder = {
   decodeEdit,
   decodeMembership,
+  decodeEditorship,
   decodeSubspace,
 };

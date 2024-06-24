@@ -104,6 +104,8 @@ export function getProposalFromIpfs(
       return null;
     }
 
+    console.log('validipfsMeta', validIpfsMetadata);
+
     switch (validIpfsMetadata.type) {
       case ActionType.ADD_EDIT: {
         const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
@@ -155,7 +157,7 @@ export function getProposalFromIpfs(
 
       case ActionType.ADD_EDITOR:
       case ActionType.REMOVE_EDITOR: {
-        const parsedMembership = yield* _(Decoder.decodeMembership(ipfsContent));
+        const parsedMembership = yield* _(Decoder.decodeEditorship(ipfsContent));
 
         if (!parsedMembership) {
           return null;
