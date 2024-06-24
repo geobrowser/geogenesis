@@ -1,8 +1,7 @@
+import { Edit, Membership } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
-import { ZodEdit } from '../events/proposals-created/parser';
-import { Edit } from '../proto';
-// import { Telemetry } from '~/sink/telemetry';
+import { ZodEdit, ZodMembershipProposal, ZodSubspaceProposal } from '../events/proposals-created/parser';
 import { slog } from '~/sink/utils/slog';
 
 export class CouldNotDecodeProtobufError extends Error {
@@ -49,8 +48,6 @@ export function decode<T>(fn: () => T) {
 function decodeEdit(data: Buffer) {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
-      // @TODO: Use protobufjs instead of bufbuild since it seems we can encode
-      // decode binary string a lot more easily
       const edit = Edit.fromBinary(data);
       const parseResult = ZodEdit.safeParse(edit.toJson());
 
@@ -65,6 +62,42 @@ function decodeEdit(data: Buffer) {
   });
 }
 
+function decodeMembership(data: Buffer) {
+  return Effect.gen(function* (_) {
+    const decodeEffect = decode(() => {
+      const memberRequest = Membership.fromBinary(data);
+      const parseResult = ZodMembershipProposal.safeParse(memberRequest.toJson());
+
+      if (parseResult.success) {
+        return parseResult.data;
+      }
+
+      return null;
+    });
+
+    return yield* _(decodeEffect);
+  });
+}
+
+function decodeSubspace(data: Buffer) {
+  return Effect.gen(function* (_) {
+    const decodeEffect = decode(() => {
+      const subspaceRequest = Membership.fromBinary(data);
+      const parseResult = ZodSubspaceProposal.safeParse(subspaceRequest.toJson());
+
+      if (parseResult.success) {
+        return parseResult.data;
+      }
+
+      return null;
+    });
+
+    return yield* _(decodeEffect);
+  });
+}
+
 export const Decoder = {
   decodeEdit,
+  decodeMembership,
+  decodeSubspace,
 };

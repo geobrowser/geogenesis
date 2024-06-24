@@ -1,6 +1,6 @@
 import type { Op } from '../..'
 import { createGeoId } from '../id'
-import { Edit, IpfsContentType, Op as OpBinary, OpType, Payload } from './ipfs_pb'
+import { ActionType, Edit, OpType, Payload, Op as OpBinary } from './gen/src/proto/ipfs_pb';
 
 function stringToBytes(text: string) {
   return Uint8Array.from(Array.from(text).map(letter => letter.charCodeAt(0)))
@@ -16,7 +16,7 @@ export function createEditProposal(
   { name, ops, author }: CreateEditProposalArgs
 ): Uint8Array {
   return new Edit({
-    type: IpfsContentType.EDIT,
+    type: ActionType.EDIT,
     // @TODO: Encode this correctly
     authors: [stringToBytes(author)],
     version: '0.0.1',
@@ -26,7 +26,7 @@ export function createEditProposal(
         payload: Payload.fromJson(o.payload) // janky but works
       })
     }),
-    proposalId: createGeoId(),
+    id: createGeoId(),
     name,
   }).toBinary()
 }

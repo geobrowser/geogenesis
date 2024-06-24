@@ -60,8 +60,9 @@ export type ProposalCreated = z.infer<typeof ZodSubstreamProposalCreated>;
 export type Proposal = z.infer<typeof ZodProposal>;
 
 export const ZodMembershipProposal = z.object({
-  proposalId: z.string(),
-  userAddress: z.string(),
+  // type union for add or remove?
+  id: z.string(),
+  user: z.string(),
 });
 
 export type MembershipProposal = Proposal & {
@@ -70,12 +71,13 @@ export type MembershipProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
-  userAddress: `0x${string}`;
+  user: `0x${string}`;
 };
 
 export const ZodEditorshipProposal = z.object({
-  proposalId: z.string(),
-  editorAddress: z.string(),
+  // type union for add or remove?
+  id: z.string(),
+  user: z.string(),
 });
 
 export type EditorshipProposal = Proposal & {
@@ -84,11 +86,11 @@ export type EditorshipProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
-  userAddress: `0x${string}`;
+  user: `0x${string}`;
 };
 
 export const ZodSubspaceProposal = z.object({
-  proposalId: z.string(),
+  id: z.string(),
   subspace: z.string(),
 });
 
@@ -152,7 +154,7 @@ export const ZodEdit = z.object({
   version: z.string(),
   ops: z.array(ZodOp),
   authors: z.array(z.string()),
-  proposalId: z.string(),
+  id: z.string(),
 });
 
 export type EditProposal = Proposal & {
