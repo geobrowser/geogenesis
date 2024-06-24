@@ -9,19 +9,21 @@ import {
 } from 'permissionless';
 import { signerToSafeSmartAccount } from 'permissionless/accounts';
 import { pimlicoBundlerActions, pimlicoPaymasterActions } from 'permissionless/actions/pimlico';
+import { useCookies } from 'react-cookie';
 import { createClient, createPublicClient, http } from 'viem';
 
 import { useWalletClient } from 'wagmi';
 
-import { Cookie } from '../cookie';
+import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { Environment } from '../environment';
 import { CONDUIT_TESTNET } from '../wallet/conduit-chain';
 
 export function useSmartAccount() {
   const { data: walletClient } = useWalletClient();
+  const [cookies] = useCookies([WALLET_ADDRESS]);
 
   const { data: smartAccount } = useQuery({
-    queryKey: ['smart-account', walletClient?.account.address],
+    queryKey: ['smart-account', walletClient?.account.address, cookies.walletAddress],
     queryFn: async () => {
       if (!walletClient) {
         return null;
@@ -67,7 +69,10 @@ export function useSmartAccount() {
         },
       });
 
-      await Cookie.onConnectionChange({ type: 'connect', address: smartAccount.account.address });
+      if (!cookies.walletAddress) {
+        await Cookie.onConnectionChange({ type: 'connect', address: smartAccount.account.address });
+      }
+
       return smartAccount;
     },
   });
