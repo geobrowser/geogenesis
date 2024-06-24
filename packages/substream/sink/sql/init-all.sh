@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 source .env
 
 echo "Running SQL scripts..."

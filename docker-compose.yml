@@ -3,14 +3,12 @@ services:
     container_name: geo-postgres
     image: postgres:14
     environment:
-      POSTGRES_USER: geo
-      POSTGRES_PASSWORD: let-me-in
-      POSTGRES_DB: geo
+      POSTGRES_USER: ${GEO_DB_USER:-geo}
+      POSTGRES_PASSWORD: ${GEO_DB_PASSWORD:-let-me-in}
+      POSTGRES_DB: ${GEO_DB_NAME:-geo}
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     ports:
       - "5432:5432"
-    volumes:
-      - ./pgdata:/var/lib/postgresql/data
     stop_signal: SIGKILL
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER}" ]
@@ -22,7 +20,7 @@ services:
     container_name: geo-pgweb
     image: sosedoff/pgweb:0.11.12
     environment:
-      DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
+      DATABASE_URL: postgres://${GEO_DB_USER}:${GEO_DB_PASSWORD}@postgres:5432/${GEO_DB_NAME}?sslmode=disable
     restart: on-failure
     stop_signal: SIGKILL
     ports:
@@ -50,9 +48,9 @@ services:
         condition: service_healthy
     environment:
       AUTH_ISSUE_URL: https://auth.pinax.network/v1/auth/issue
-      SUBSTREAMS_ENDPOINT: ${SUBSTREAMS_ENDPOINT:-http://geotest-sfsf69.mar.eosn.io:9000}
+      SUBSTREAMS_ENDPOINT: ${SUBSTREAMS_ENDPOINT}
       SUBSTREAMS_API_KEY: ${SUBSTREAMS_API_KEY:?SUBSTREAMS_API_KEY is not set}
-      DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
+      DATABASE_URL: postgres://${GEO_DB_USER}:${GEO_DB_PASSWORD}@postgres:5432/${GEO_DB_NAME}?sslmode=disable
     command: node /app/packages/substream/dist/index.js --start-block 620
 
   api:
@@ -64,8 +62,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
+      DATABASE_URL: postgres://${GEO_DB_USER}:${GEO_DB_PASSWORD}@postgres:5432/${GEO_DB_NAME}?sslmode=disable
       CHAIN_RPC: ${CHAIN_RPC:-http://geotest-arch45.mar.eosn.io:8449}
       PORT: 5001
     ports:
-      - "5001:5001"
+      - "${GEO_PORT:-5001}:5001"
