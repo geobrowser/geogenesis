@@ -240,12 +240,12 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
       </Link>
       <div className="flex w-full items-center gap-1.5 text-breadcrumb text-grey-04">
         <div className="inline-flex items-center gap-3 text-breadcrumb text-grey-04">
-          <p className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
-            <div className="relative h-3 w-3 overflow-hidden rounded-full">
+          <div className="inline-flex items-center gap-1.5 transition-colors duration-75 hover:text-text">
+            <span className="relative h-3 w-3 overflow-hidden rounded-full">
               <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.id} />
-            </div>
+            </span>
             <p>{proposal.createdBy.name ?? proposal.createdBy.id}</p>
-          </p>
+          </div>
         </div>
       </div>
       <div className="flex w-full flex-col gap-4">

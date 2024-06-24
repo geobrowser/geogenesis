@@ -27,8 +27,6 @@ export async function SpaceEditors({ spaceId }: Props) {
     // @TODO: Check if the user has already requested to be an editor
   ]);
 
-  console.log('is editor', isEditor);
-
   if (!space) {
     return null;
   }

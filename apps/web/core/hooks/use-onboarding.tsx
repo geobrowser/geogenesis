@@ -3,16 +3,19 @@ import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useAccount, useAccountEffect } from 'wagmi';
+import { useAccountEffect } from 'wagmi';
 
 import { useGeoProfile } from './use-geo-profile';
+import { useSmartAccount } from './use-smart-account';
 
 const isOnboardingVisibleAtom = atom(false);
 
 export function useOnboarding() {
-  const { address } = useAccount();
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
+
   const { isModalOpen } = usePrivy();
-  const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
+  const [, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const { profile, isFetched, isLoading } = useGeoProfile(address);
 
   // Set the onboarding to visible the first time we fetch the

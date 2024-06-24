@@ -7,6 +7,7 @@ import { Environment } from '~/core/environment';
 import { Space, SpaceConfigEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
+import { entityFragment, spacePluginsFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
 
@@ -15,52 +16,25 @@ const getFetchSpacesQuery = (ids: string[]) => `query {
     nodes {
       id
       isRootSpace
-      spaceAdmins {
-        nodes {
-          accountId
-        }
-      }
+      ${spacePluginsFragment}
+  
       spaceEditors {
         nodes {
           accountId
         }
       }
-      spaceEditorControllers {
+  
+      spaceMembers {
         nodes {
           accountId
         }
       }
+  
       createdAtBlock
-      
+  
       metadata {
         nodes {
-          id
-          name
-          triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              id
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-              isProtected
-              space {
-                id
-              }
-            }
-          }
+          ${entityFragment}
         }
       }
     }
@@ -83,6 +57,10 @@ interface NetworkResult {
   };
 }
 export async function fetchSpacesById(ids: string[]) {
+  if (ids.length === 0) {
+    return [];
+  }
+
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 

@@ -13,9 +13,10 @@ import { getAddress } from 'viem';
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
-import { useAccount, useConfig, useWalletClient } from 'wagmi';
+import { useConfig } from 'wagmi';
 
 import { useOnboarding } from '~/core/hooks/use-onboarding';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type AccountType, createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
 import { getGeoPersonIdFromOnchainId, getImagePath, sleep } from '~/core/utils/utils';
@@ -56,9 +57,8 @@ const workflowSteps: Array<Step> = [
 export const OnboardingDialog = () => {
   const { isOnboardingVisible } = useOnboarding();
 
-  const { address } = useAccount();
   const config = useConfig();
-  const { data: wallet } = useWalletClient();
+  const smartAccount = useSmartAccount();
   const { publish } = Services.useServices();
   const queryClient = useQueryClient();
 
@@ -72,6 +72,8 @@ export const OnboardingDialog = () => {
 
   // Show retry immediately if workflow already started before initial render
   const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
+
+  const address = smartAccount?.account.address;
 
   if (!address) return null;
 
@@ -101,7 +103,7 @@ export const OnboardingDialog = () => {
   }
 
   async function registerProfile(spaceAddress: `0x${string}`, accountType: AccountType) {
-    if (!address || !wallet || !accountType) return;
+    if (!address || !smartAccount || !accountType) return;
 
     try {
       const profileId = await publish.registerGeoProfile(config, spaceAddress);
@@ -160,7 +162,7 @@ export const OnboardingDialog = () => {
   }
 
   async function onRunOnboardingWorkflow() {
-    if (!address || !wallet || !accountType) return;
+    if (!address || !smartAccount || !accountType) return;
 
     setShowRetry(false);
 

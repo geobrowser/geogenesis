@@ -2,13 +2,10 @@
 
 import { createMembershipProposal, getAcceptEditorArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
-import { Effect, Schedule } from 'effect';
+import { Effect } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 
-import { useAccount, useConfig } from 'wagmi';
-import { simulateContract, writeContract } from 'wagmi/actions';
-
-import { InvalidIpfsQmHashError, IpfsUploadError, TransactionWriteFailedError } from '~/core/errors';
+import { TransactionWriteFailedError } from '~/core/errors';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { uploadBinary } from '~/core/io/storage/storage';
 import { Services } from '~/core/services';

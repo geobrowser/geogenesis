@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useConfig, useWalletClient } from 'wagmi';
+import { useConfig } from 'wagmi';
 
 import { proposeRemoveSubspace } from '~/core/io/publish';
 import { Services } from '~/core/services';
