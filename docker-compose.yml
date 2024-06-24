@@ -50,10 +50,10 @@ services:
         condition: service_healthy
     environment:
       AUTH_ISSUE_URL: https://auth.pinax.network/v1/auth/issue
-      SUBSTREAMS_ENDPOINT: https://polygon.substreams.pinax.network:443
+      SUBSTREAMS_ENDPOINT: ${SUBSTREAMS_ENDPOINT:-http://geotest-sfsf69.mar.eosn.io:9000}
       SUBSTREAMS_API_KEY: ${SUBSTREAMS_API_KEY:?SUBSTREAMS_API_KEY is not set}
       DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
-    command: node /app/packages/substream/dist/index.js --start-block 40078393
+    command: node /app/packages/substream/dist/index.js --start-block 620
 
   api:
     container_name: geo-api
@@ -65,7 +65,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
-      CHAIN_RPC: https://polygon.rpc.pinax.network/v1/${SUBSTREAMS_API_KEY}/
+      CHAIN_RPC: ${CHAIN_RPC:-http://geotest-arch45.mar.eosn.io:8449}
       PORT: 5001
     ports:
       - "5001:5001"
