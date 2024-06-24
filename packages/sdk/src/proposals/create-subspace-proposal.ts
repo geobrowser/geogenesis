@@ -13,7 +13,7 @@ export function createSubspaceProposal({
   return {
     type,
     version: '1.0.0',
-    proposalId: createGeoId(),
+    id: createGeoId(),
     subspace: spaceAddress,
     name,
   }

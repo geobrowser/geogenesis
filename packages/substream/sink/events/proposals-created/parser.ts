@@ -149,7 +149,7 @@ const ZodDeleteTripleOp = z.object({
 export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
 
 export const ZodEdit = z.object({
-  type: z.literal('EDIT'),
+  type: z.literal('ADD_EDIT'),
   name: z.string(),
   version: z.string(),
   ops: z.array(ZodOp),
@@ -158,7 +158,7 @@ export const ZodEdit = z.object({
 });
 
 export type EditProposal = Proposal & {
-  type: 'EDIT';
+  type: 'ADD_EDIT';
   name: string;
   proposalId: string;
   onchainProposalId: string;

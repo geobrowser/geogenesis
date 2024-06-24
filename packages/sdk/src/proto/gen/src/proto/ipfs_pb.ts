@@ -16,9 +16,9 @@ export enum ActionType {
   UNKNOWN = 0,
 
   /**
-   * @generated from enum value: EDIT = 1;
+   * @generated from enum value: ADD_EDIT = 1;
    */
-  EDIT = 1,
+  ADD_EDIT = 1,
 
   /**
    * @generated from enum value: ADD_SUBSPACE = 2;
@@ -53,7 +53,7 @@ export enum ActionType {
 // Retrieve enum metadata with: proto3.getEnumType(ActionType)
 proto3.util.setEnumType(ActionType, "ActionType", [
   { no: 0, name: "UNKNOWN" },
-  { no: 1, name: "EDIT" },
+  { no: 1, name: "ADD_EDIT" },
   { no: 2, name: "ADD_SUBSPACE" },
   { no: 3, name: "REMOVE_SUBSPACE" },
   { no: 4, name: "ADD_EDITOR" },

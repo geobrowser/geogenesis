@@ -12,7 +12,7 @@ message IpfsMetadata {
 
 enum ActionType {
   UNKNOWN = 0;
-  EDIT = 1;
+  ADD_EDIT = 1;
   ADD_SUBSPACE = 2;
   REMOVE_SUBSPACE = 3;
   ADD_EDITOR = 4;

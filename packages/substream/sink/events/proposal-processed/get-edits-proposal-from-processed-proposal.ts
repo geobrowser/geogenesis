@@ -84,7 +84,7 @@ function fetchEditProposalFromIpfs(
     }
 
     switch (validIpfsMetadata.type) {
-      case ActionType.EDIT: {
+      case ActionType.ADD_EDIT: {
         const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
 
         if (!parsedContent) {
@@ -92,7 +92,7 @@ function fetchEditProposalFromIpfs(
         }
 
         const contentProposal: EditProposal = {
-          type: 'EDIT',
+          type: 'ADD_EDIT',
           name: validIpfsMetadata.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: '-1',

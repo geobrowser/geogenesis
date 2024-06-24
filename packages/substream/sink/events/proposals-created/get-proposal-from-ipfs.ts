@@ -105,7 +105,7 @@ export function getProposalFromIpfs(
     }
 
     switch (validIpfsMetadata.type) {
-      case ActionType.EDIT: {
+      case ActionType.ADD_EDIT: {
         const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
 
         // Subspace proposals are only emitted by the voting plugin
@@ -115,7 +115,7 @@ export function getProposalFromIpfs(
 
         const mappedProposal: EditProposal = {
           ...proposal,
-          type: 'EDIT',
+          type: 'ADD_EDIT',
           name: validIpfsMetadata.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: proposal.proposalId,

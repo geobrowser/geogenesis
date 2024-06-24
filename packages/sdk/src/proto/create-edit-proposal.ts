@@ -16,7 +16,7 @@ export function createEditProposal(
   { name, ops, author }: CreateEditProposalArgs
 ): Uint8Array {
   return new Edit({
-    type: ActionType.EDIT,
+    type: ActionType.ADD_EDIT,
     // @TODO: Encode this correctly
     authors: [stringToBytes(author)],
     version: '0.0.1',

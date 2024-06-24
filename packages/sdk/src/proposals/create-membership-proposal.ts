@@ -13,8 +13,8 @@ export function createMembershipProposal({
   return {
     type,
     version: '1.0.0',
-    proposalId: createGeoId(),
-    userAddress: userAddress,
+    id: createGeoId(),
+    user: userAddress,
     name,
   }
 }
