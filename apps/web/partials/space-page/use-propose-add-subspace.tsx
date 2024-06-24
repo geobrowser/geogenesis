@@ -1,7 +1,7 @@
 'use client';
 
-import { createSubspaceProposal } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { createSubspaceProposal } from '@geogenesis/sdk/proto';
 import { Effect } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 

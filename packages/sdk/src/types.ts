@@ -39,7 +39,7 @@ export type Op = SetTripleOp | DeleteTripleOp;
 export type Action = CreateTripleAction | DeleteTripleAction;
 
 export type EditProposalMetadata = {
-  type: 'EDIT';
+  type: 'ADD_EDIT';
   version: '0.0.1';
   name?: string;
   ops: Op[];

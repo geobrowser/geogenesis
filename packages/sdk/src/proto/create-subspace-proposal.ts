@@ -1,6 +1,6 @@
 import type { SubspaceProposalMetadata } from '../..'
 import { createGeoId } from '../id'
-import { ActionType, Subspace } from '../proto'
+import { ActionType, Subspace } from '.'
 
 export function createSubspaceProposal({
   name,

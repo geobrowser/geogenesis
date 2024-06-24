@@ -48,7 +48,7 @@ export function EntityOthersToast() {
     .filter(e => e.presence.hasChangesToEntity)
     // Filter out myself if I am the only editor and I'm in the current tab being edited
     .filter((e, _, filteredEditors) => {
-      if (filteredEditors.length === 1 && e.connectionId === account.address) return false;
+      if (filteredEditors.length === 1 && e.connectionId === address) return false;
       return true;
     });
 
@@ -93,7 +93,7 @@ export function EntityOthersToast() {
                           {shortAddress(editor.presence.address ?? '')}
                         </Text>
                       </div>
-                      {editor.presence.address === account?.address && (
+                      {editor.presence.address === address && (
                         <Text className="rounded bg-grey-02 px-1" color="grey-04" variant="footnoteMedium">
                           You
                         </Text>

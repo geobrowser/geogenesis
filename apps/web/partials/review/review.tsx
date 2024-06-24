@@ -16,7 +16,6 @@ import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
@@ -73,7 +72,7 @@ const ReviewChanges = () => {
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', allSpacesWithActions],
     queryFn: async () => {
-      const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => subgraph.fetchSpace({ id: s })));
+      const maybeSpaces = await fetchSpacesById(allSpacesWithActions);
       const spaces = maybeSpaces.filter(
         (s): s is Space & { spaceConfig: EntityType } => s !== null && s.spaceConfig !== null
       );

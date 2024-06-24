@@ -212,7 +212,7 @@ function mapEditProposalToSchema(
       onchain_proposal_id: p.onchainProposalId,
       plugin_address: p.pluginAddress,
       name: p.name,
-      type: 'CONTENT',
+      type: 'ADD_EDIT',
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
       created_by_id: p.creator,

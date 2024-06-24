@@ -1,7 +1,7 @@
 'use client';
 
-import { createSubspaceProposal } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { createSubspaceProposal } from '@geogenesis/sdk/proto';
 import { Effect } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 
@@ -10,7 +10,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { uploadBinary } from '~/core/io/storage/storage';
 import { Services } from '~/core/services';
 
-export function useProposeToAddSubspace(args: { votingPluginAddress: string | null; spacePluginAddress: string }) {
+export function useProposeToRemoveSubspace(args: { votingPluginAddress: string | null; spacePluginAddress: string }) {
   const { storageClient } = Services.useServices();
   const smartAccount = useSmartAccount();
 
@@ -57,6 +57,6 @@ export function useProposeToAddSubspace(args: { votingPluginAddress: string | nu
   };
 
   return {
-    proposeAddSubspace: write,
+    proposeRemoveSubspace: write,
   };
 }

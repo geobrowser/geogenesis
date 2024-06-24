@@ -2,11 +2,6 @@
 
 import * as React from 'react';
 
-import { useConfig } from 'wagmi';
-
-import { proposeRemoveSubspace } from '~/core/io/publish';
-import { Services } from '~/core/services';
-
 import { SmallButton } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
 import { Input } from '~/design-system/input';
@@ -14,6 +9,7 @@ import { Input } from '~/design-system/input';
 import { RemoveSubspaceButton } from './metadata-header-remove-subspace-button';
 import { SubspaceRow } from './subspace-row';
 import { SpaceToAdd } from './types';
+import { useProposeToRemoveSubspace } from './use-propose-remove-subspace';
 
 interface Props {
   totalCount: number;
@@ -45,22 +41,18 @@ interface ContentProps {
 }
 
 function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: ContentProps) {
-  const { storageClient } = Services.useServices();
-  const config = useConfig();
   const [query, setQuery] = React.useState('');
+  const { proposeRemoveSubspace } = useProposeToRemoveSubspace({
+    votingPluginAddress: mainVotingPluginAddress,
+    spacePluginAddress,
+  });
 
   const filteredMembers = React.useMemo(() => {
     return spaces.filter(e => e.spaceConfig?.name?.toLowerCase().includes(query.toLowerCase()));
   }, [spaces, query]);
 
   const onRemoveSubspace = async (subspaceAddress: string) => {
-    proposeRemoveSubspace({
-      config,
-      storageClient,
-      spacePluginAddress,
-      mainVotingPluginAddress,
-      subspaceAddress,
-    });
+    proposeRemoveSubspace(subspaceAddress);
   };
 
   return (

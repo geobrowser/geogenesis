@@ -1,37 +1,58 @@
 'use client';
 
-import { createMembershipProposal } from '@geogenesis/sdk';
-import { MemberAccessAbi } from '@geogenesis/sdk/abis';
-import { getAddress, stringToHex } from 'viem';
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { createMembershipProposal } from '@geogenesis/sdk/proto';
+import { Effect } from 'effect';
+import { encodeFunctionData, getAddress, stringToHex } from 'viem';
 
-import { useConfig } from 'wagmi';
-import { simulateContract, writeContract } from 'wagmi/actions';
-
+import { TransactionWriteFailedError } from '~/core/errors';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { uploadBinary } from '~/core/io/storage/storage';
 import { Services } from '~/core/services';
 
-export function useProposeToRemoveMember(memberAccessPluginAddress: string) {
+export function useProposeToRemoveMember(votingPluginAddress: string | null) {
   const { storageClient } = Services.useServices();
-  const walletConfig = useConfig();
+  const smartAccount = useSmartAccount();
 
-  const write = async (memberToRemove: string) => {
+  const write = async (editorToRemove: string) => {
+    if (!votingPluginAddress || !smartAccount) {
+      return;
+    }
+
     const membershipProposalMetadata = createMembershipProposal({
       name: 'Remove member request',
       type: 'REMOVE_MEMBER',
-      userAddress: getAddress(memberToRemove) as `0x${string}`,
+      userAddress: getAddress(editorToRemove) as `0x${string}`,
     });
 
-    const hash = await storageClient.uploadObject(membershipProposalMetadata);
-    const uri = `ipfs://${hash}` as const;
+    const writeTxEffect = Effect.gen(function* () {
+      const cid = yield* uploadBinary(membershipProposalMetadata, storageClient);
 
-    const config = await simulateContract(walletConfig, {
-      address: memberAccessPluginAddress as `0x${string}`,
-      abi: MemberAccessAbi,
-      functionName: 'proposeRemoveMember',
-      args: [stringToHex(uri), getAddress(memberToRemove) as `0x${string}`],
+      const callData = encodeFunctionData({
+        functionName: 'proposeRemoveMember',
+        abi: MainVotingAbi,
+        // @TODO: Function for encoding
+        args: [stringToHex(cid), smartAccount.account.address],
+      });
+
+      return yield* Effect.tryPromise({
+        try: () =>
+          smartAccount.sendTransaction({
+            to: votingPluginAddress as `0x${string}`,
+            value: 0n,
+            data: callData,
+          }),
+        catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
+      });
     });
 
-    const writer = await writeContract(walletConfig, config.request);
-    return writer;
+    const publishProgram = Effect.gen(function* () {
+      const writeTxHash = yield* writeTxEffect;
+      console.log('Transaction hash: ', writeTxHash);
+      return writeTxHash;
+    });
+
+    await Effect.runPromise(publishProgram);
   };
 
   return {

@@ -58,8 +58,7 @@ export function AcceptOrReject({
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
   }
 
-  // @TODO: Should be account?
-  if (!isProposalDone && wallet) {
+  if (!isProposalDone && smartAccount) {
     return (
       <div className="inline-flex items-center gap-4">
         <Button onClick={() => onClick('REJECT')} variant="error">

@@ -1,7 +1,7 @@
 'use client';
 
-import { createMembershipProposal, getAcceptEditorArguments } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { createMembershipProposal } from '@geogenesis/sdk/proto';
 import { Effect } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 
@@ -17,7 +17,7 @@ export function useRequestToBeEditor(votingPluginAddress: string | null) {
   // @TODO(baiirun): What should this API look like in the SDK?
   const write = async () => {
     if (!votingPluginAddress || !smartAccount) {
-      return null;
+      return;
     }
 
     const proposal = createMembershipProposal({

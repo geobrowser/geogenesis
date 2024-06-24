@@ -7,7 +7,6 @@ import { ClientOnly } from '~/design-system/client-only';
 
 import { TEST_DAO_ADDRESS } from './constants';
 import { CreateDao } from './create-dao';
-import { CreateProposal } from './create-proposal';
 import { Execute } from './execute';
 import { Refetch } from './refetch';
 import { Vote } from './vote';
@@ -59,9 +58,6 @@ export default async function Page() {
       <div className="flex flex-row gap-4">
         <ClientOnly>
           <CreateDao type="governance" />
-        </ClientOnly>
-        <ClientOnly>
-          <CreateProposal />
         </ClientOnly>
       </div>
     </div>

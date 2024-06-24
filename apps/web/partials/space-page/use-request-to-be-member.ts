@@ -1,7 +1,7 @@
 'use client';
 
-import { createMembershipProposal } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { createMembershipProposal } from '@geogenesis/sdk/proto';
 import { Effect } from 'effect';
 import { encodeFunctionData, getAddress, stringToHex } from 'viem';
 
