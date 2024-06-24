@@ -19,6 +19,7 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
       }
 
       type EarliestBlock {
+        hash: Bytes!
         number: BigInt!
       }
 
@@ -43,11 +44,21 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
         subgraph: String!
         synced: Boolean!
         health: Health!
+        fatalError: SubgraphError
         chains: [EthereumIndexingStatus!]!
         entityCount: BigInt!
         node: String
         paused: Boolean!
         historyBlocks: Int!
+      }
+
+      type SubgraphError {
+        message: String!
+
+        block: Block
+        handler: String
+
+        deterministic: Boolean!
       }
 
       extend type Query {
@@ -84,15 +95,27 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
               paused: false,
               node: 'geo-node',
               historyBlocks: 0,
+              fatalError: {
+                message: 'N/A',
+                block: {
+                  number: 0,
+                  hash: '0x',
+                },
+                handler: 'N/A',
+                deterministic: false,
+              },
               chains: [
                 {
                   network: GEO_NETWORK_ID,
                   chainHeadBlock: {
                     number: head.number,
                     hash: head.hash,
+                    timestamp: 0,
                   },
                   earliestBlock: {
                     number: INITIAL_GEO_BLOCK,
+                    hash: '0x',
+                    timestamp: 0,
                   },
                   latestBlock: latestBlock,
                   latestHealthyBlock: latestBlock,
