@@ -104,8 +104,6 @@ export function getProposalFromIpfs(
       return null;
     }
 
-    console.log('validipfsMeta', validIpfsMetadata);
-
     switch (validIpfsMetadata.type) {
       case ActionType.ADD_EDIT: {
         const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
