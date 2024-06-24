@@ -3,8 +3,9 @@
 import { Client, Context, CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-client';
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Op, VotingMode, createGeoId } from '@geogenesis/sdk';
+import { GovernanceSetupAbi, MainVotingAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
-import { getAddress } from 'viem';
+import { decodeErrorResult, getAddress } from 'viem';
 
 import { useWalletClient } from 'wagmi';
 
@@ -181,7 +182,7 @@ export function CreateDao({ type }: Prtypes) {
 
     const initialContent = createEditProposal(
       {
-        name: '1.0.2: Account abstraction test space',
+        name: '1.0.3: Governance v3 test space',
         author: getAddress(smartAccount.account.address),
         ops: [
           {
@@ -191,7 +192,7 @@ export function CreateDao({ type }: Prtypes) {
               attributeId: SYSTEM_IDS.NAME,
               value: {
                 type: 'TEXT',
-                value: 'Account abstraction test space',
+                value: 'Governance v3 test space',
               },
             },
           },
@@ -284,7 +285,6 @@ export function CreateDao({ type }: Prtypes) {
         votingSettings: {
           votingMode: VotingMode.Standard,
           supportThreshold: 50_000,
-          minParticipation: 50_000,
           duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
