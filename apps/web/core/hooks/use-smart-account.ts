@@ -13,6 +13,7 @@ import { createClient, createPublicClient, http } from 'viem';
 
 import { useWalletClient } from 'wagmi';
 
+import { Cookie } from '../cookie';
 import { Environment } from '../environment';
 import { CONDUIT_TESTNET } from '../wallet/conduit-chain';
 
@@ -54,7 +55,7 @@ export function useSmartAccount() {
         chain: CONDUIT_TESTNET,
       }).extend(pimlicoPaymasterActions(ENTRYPOINT_ADDRESS_V07));
 
-      return createSmartAccountClient({
+      const smartAccount = createSmartAccountClient({
         chain: CONDUIT_TESTNET,
         account: safeAccount,
         bundlerTransport,
@@ -65,6 +66,9 @@ export function useSmartAccount() {
           sponsorUserOperation: paymasterClient.sponsorUserOperation,
         },
       });
+
+      await Cookie.onConnectionChange({ type: 'connect', address: smartAccount.account.address });
+      return smartAccount;
     },
   });
 
