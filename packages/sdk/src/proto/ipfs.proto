@@ -76,7 +76,7 @@ message Membership {
   string name = 2;
   string version = 3;
   string id = 4;
-  string userAddress = 5;
+  string user = 5;
 }
 
 message Subspace {

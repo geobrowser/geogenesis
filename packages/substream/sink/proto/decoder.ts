@@ -1,4 +1,4 @@
-import { Edit, Membership } from '@geogenesis/sdk/proto';
+import { Edit, Membership, Subspace } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
 import { ZodEdit, ZodMembershipProposal, ZodSubspaceProposal } from '../events/proposals-created/parser';
@@ -82,7 +82,7 @@ function decodeMembership(data: Buffer) {
 function decodeSubspace(data: Buffer) {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
-      const subspaceRequest = Membership.fromBinary(data);
+      const subspaceRequest = Subspace.fromBinary(data);
       const parseResult = ZodSubspaceProposal.safeParse(subspaceRequest.toJson());
 
       if (parseResult.success) {

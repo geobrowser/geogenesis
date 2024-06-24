@@ -1,8 +1,12 @@
+import { Effect, Schedule } from 'effect';
+
+import { IpfsUploadError } from '~/core/errors';
+
 export interface IStorageClient {
   /** Upload a JSON-safe object */
   uploadObject(object: unknown): Promise<string>;
   uploadFile(file: File): Promise<string>;
-  uploadBinary(binary: Uint8Array): Promise<string>
+  uploadBinary(binary: Uint8Array): Promise<string>;
 }
 
 export class StorageClient implements IStorageClient {
@@ -85,4 +89,25 @@ export class StorageClient implements IStorageClient {
 
     return `${this.ipfsUrl}/api/v0/cat?arg=${Hash}`;
   }
+}
+
+export function uploadBinary(
+  binary: Uint8Array,
+  storageClient: IStorageClient
+): Effect.Effect<string, IpfsUploadError> {
+  return Effect.retry(
+    Effect.tryPromise({
+      try: async () => {
+        const hash = await storageClient.uploadBinary(binary);
+
+        if (!hash.startsWith('Qm')) {
+          throw new Error();
+        }
+
+        return `ipfs://${hash}`;
+      },
+      catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
+    }),
+    Schedule.exponential('100 millis').pipe(Schedule.jittered)
+  );
 }

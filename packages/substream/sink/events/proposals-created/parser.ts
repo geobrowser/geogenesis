@@ -25,6 +25,7 @@ export const ZodSubstreamProposalCreated = z.object({
   endTime: z.string(),
 });
 
+// This comes from the onchain event mapping in our rust bindings
 export const ZodProposal = z.object({
   proposalId: z.string(),
   space: z.string(),
@@ -34,9 +35,8 @@ export const ZodProposal = z.object({
   endTime: z.string(),
 });
 
-// DAO-based spaces can have different proposal types. We need to be able
-// to parse the proposal type in order to validate the contents of the
-// proposal and write to the sink correctly.
+// This comes from the IPFS contents posted onchain and emitted bu our
+// onchain event mapping in our rust bindings.
 export const ZodProposalMetadata = z.object({
   type: z.enum([
     'EDIT',
@@ -60,7 +60,9 @@ export type ProposalCreated = z.infer<typeof ZodSubstreamProposalCreated>;
 export type Proposal = z.infer<typeof ZodProposal>;
 
 export const ZodMembershipProposal = z.object({
-  // type union for add or remove?
+  type: z.union([z.literal('ADD_MEMBER'), z.literal('REMOVE_MEMBER')]),
+  name: z.string(),
+  version: z.string(),
   id: z.string(),
   user: z.string(),
 });
@@ -75,7 +77,9 @@ export type MembershipProposal = Proposal & {
 };
 
 export const ZodEditorshipProposal = z.object({
-  // type union for add or remove?
+  type: z.union([z.literal('ADD_EDITOR'), z.literal('REMOVE_EDITOR')]),
+  name: z.string(),
+  version: z.string(),
   id: z.string(),
   user: z.string(),
 });
@@ -90,6 +94,9 @@ export type EditorshipProposal = Proposal & {
 };
 
 export const ZodSubspaceProposal = z.object({
+  type: z.union([z.literal('ADD_SUBSPACE'), z.literal('REMOVE_SUBSPACE')]),
+  name: z.string(),
+  version: z.string(),
   id: z.string(),
   subspace: z.string(),
 });
@@ -132,7 +139,7 @@ const ZodEditDeleteTriplePayload = z.object({
   attributeId: z.string(),
   // zod has issues with discriminated unions. We set the value
   // to any here and trust that it is constructed into the correct
-  // format once it's decoded.
+  // format by the binary decoder before it's parsed by zod.
   value: z.any(),
 });
 
@@ -152,9 +159,9 @@ export const ZodEdit = z.object({
   type: z.literal('ADD_EDIT'),
   name: z.string(),
   version: z.string(),
+  id: z.string(),
   ops: z.array(ZodOp),
   authors: z.array(z.string()),
-  id: z.string(),
 });
 
 export type EditProposal = Proposal & {

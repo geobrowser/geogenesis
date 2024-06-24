@@ -491,9 +491,9 @@ export class Membership extends Message<Membership> {
   id = "";
 
   /**
-   * @generated from field: string userAddress = 5;
+   * @generated from field: string user = 5;
    */
-  userAddress = "";
+  user = "";
 
   constructor(data?: PartialMessage<Membership>) {
     super();
@@ -507,7 +507,7 @@ export class Membership extends Message<Membership> {
     { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "userAddress", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Membership {

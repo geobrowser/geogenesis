@@ -155,9 +155,9 @@ export function getProposalFromIpfs(
 
       case ActionType.ADD_EDITOR:
       case ActionType.REMOVE_EDITOR: {
-        const parsedEditorship = yield* _(Decoder.decodeMembership(ipfsContent));
+        const parsedMembership = yield* _(Decoder.decodeMembership(ipfsContent));
 
-        if (!parsedEditorship) {
+        if (!parsedMembership) {
           return null;
         }
 
@@ -169,10 +169,10 @@ export function getProposalFromIpfs(
           ...proposal,
           type: validIpfsMetadata.type === ActionType.ADD_EDITOR ? 'ADD_EDITOR' : 'REMOVE_EDITOR',
           name: validIpfsMetadata.name ?? null,
-          proposalId: parsedEditorship.id,
+          proposalId: parsedMembership.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          user: getChecksumAddress(parsedEditorship.user),
+          user: getChecksumAddress(parsedMembership.user),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(spaceAddress),
         };

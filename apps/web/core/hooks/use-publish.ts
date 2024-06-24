@@ -6,6 +6,7 @@ import { encodeFunctionData } from 'viem';
 
 import * as React from 'react';
 
+import { InvalidIpfsQmHashError, IpfsUploadError, TransactionWriteFailedError } from '../errors';
 import { IStorageClient } from '../io/storage/storage';
 import { fetchSpace } from '../io/subgraph';
 import { Services } from '../services';
@@ -15,30 +16,6 @@ import { Triples } from '../utils/triples';
 import { sleepWithCallback } from '../utils/utils';
 import { useActionsStore } from './use-actions-store';
 import { useSmartAccount } from './use-smart-account';
-
-export class TransactionRevertedError extends Error {
-  readonly _tag = 'TransactionRevertedError';
-}
-
-export class WaitForTransactionBlockError extends Error {
-  readonly _tag = 'WaitForTransactionBlockError';
-}
-
-export class TransactionPrepareFailedError extends Error {
-  readonly _tag = 'TransactionPrepareFailedError';
-}
-
-export class TransactionWriteFailedError extends Error {
-  readonly _tag = 'TransactionWriteFailedError';
-}
-
-export class InvalidIpfsQmHashError extends Error {
-  readonly _tag = 'InvalidIpfsQmHashError';
-}
-
-export class IpfsUploadError extends Error {
-  readonly _tag = 'IpfsUploadError';
-}
 
 interface MakeProposalOptions {
   triples: ITriple[];

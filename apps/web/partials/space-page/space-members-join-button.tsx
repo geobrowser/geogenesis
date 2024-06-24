@@ -6,12 +6,12 @@ import { useRequestToBeMember } from './use-request-to-be-member';
 
 interface Props {
   spaceId: string;
-  memberAccessPluginAddress: string | null;
+  votingPluginAddress: string | null;
 }
 
-export function SpaceMembersJoinButton({ memberAccessPluginAddress }: Props) {
+export function SpaceMembersJoinButton({ votingPluginAddress }: Props) {
   const [hasRequested, setHasRequested] = React.useState(false);
-  const { requestToBeMember } = useRequestToBeMember(memberAccessPluginAddress);
+  const { requestToBeMember } = useRequestToBeMember(votingPluginAddress);
 
   const onClick = async () => {
     await requestToBeMember();

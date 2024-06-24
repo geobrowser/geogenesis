@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import fs from 'fs';
 import { describe, it } from 'vitest';
 
-import { decode } from './decoder';
+import { Decoder, decode } from './decoder';
 
 describe('decode IpfsContent', () => {
   it('decodes parsed IpfsMetadata protobuf correctly', () => {
@@ -30,45 +30,45 @@ describe('decode Edit', () => {
 describe('decode Membership', () => {
   it('decodes parsed ADD_EDITOR protobuf correctly', () => {
     const fileContents = fs.readFileSync('./sink/proto/test-add-editor-proposal.pb');
-    const result = Effect.runSync(decode(() => Membership.fromBinary(fileContents)));
+    const result = Effect.runSync(Decoder.decodeMembership(fileContents));
 
     expect(result).to.not.be.null;
     expect(result?.type).toBe(ActionType.ADD_EDITOR);
     expect(result?.name).toBe('Add editor');
-    expect(result?.userAddress).toBe('0x1234');
+    expect(result?.user).toBe('0x1234');
     expect(result).toMatchSnapshot();
   });
 
   it('decodes parsed REMOVE_EDITOR protobuf correctly', () => {
     const fileContents = fs.readFileSync('./sink/proto/test-remove-editor-proposal.pb');
-    const result = Effect.runSync(decode(() => Membership.fromBinary(fileContents)));
+    const result = Effect.runSync(Decoder.decodeMembership(fileContents));
 
     expect(result).to.not.be.null;
     expect(result?.type).toBe(ActionType.REMOVE_EDITOR);
     expect(result?.name).toBe('Remove editor');
-    expect(result?.userAddress).toBe('0x1234');
+    expect(result?.user).toBe('0x1234');
     expect(result).toMatchSnapshot();
   });
 
   it('decodes parsed ADD_MEMBER protobuf correctly', () => {
     const fileContents = fs.readFileSync('./sink/proto/test-add-member-proposal.pb');
-    const result = Effect.runSync(decode(() => Membership.fromBinary(fileContents)));
+    const result = Effect.runSync(Decoder.decodeMembership(fileContents));
 
     expect(result).to.not.be.null;
     expect(result?.type).toBe(ActionType.ADD_MEMBER);
     expect(result?.name).toBe('Add member');
-    expect(result?.userAddress).toBe('0x1234');
+    expect(result?.user).toBe('0x1234');
     expect(result).toMatchSnapshot();
   });
 
   it('decodes parsed REMOVE_MEMBER protobuf correctly', () => {
     const fileContents = fs.readFileSync('./sink/proto/test-remove-member-proposal.pb');
-    const result = Effect.runSync(decode(() => Membership.fromBinary(fileContents)));
+    const result = Effect.runSync(Decoder.decodeMembership(fileContents));
 
     expect(result).to.not.be.null;
     expect(result?.type).toBe(ActionType.REMOVE_MEMBER);
     expect(result?.name).toBe('Remove member');
-    expect(result?.userAddress).toBe('0x1234');
+    expect(result?.user).toBe('0x1234');
     expect(result).toMatchSnapshot();
   });
 });

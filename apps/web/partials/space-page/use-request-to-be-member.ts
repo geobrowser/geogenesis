@@ -1,43 +1,60 @@
 'use client';
 
 import { createMembershipProposal } from '@geogenesis/sdk';
-import { MemberAccessAbi } from '@geogenesis/sdk/abis';
-import { getAddress, stringToHex } from 'viem';
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { Effect } from 'effect';
+import { encodeFunctionData, getAddress, stringToHex } from 'viem';
 
-import { useAccount, useConfig } from 'wagmi';
-import { simulateContract, writeContract } from 'wagmi/actions';
-
+import { TransactionWriteFailedError } from '~/core/errors';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { uploadBinary } from '~/core/io/storage/storage';
 import { Services } from '~/core/services';
 
-export function useRequestToBeMember(memberAccessPluginAddress: string | null) {
+export function useRequestToBeMember(votingPluginAddress: string | null) {
   const { storageClient } = Services.useServices();
-  const { address: requestorAddress } = useAccount();
-  const walletConfig = useConfig();
+  const smartAccount = useSmartAccount();
 
   const write = async () => {
-    if (!memberAccessPluginAddress || !requestorAddress) {
+    if (!votingPluginAddress || !smartAccount) {
       return null;
     }
 
-    const membershipProposalMetadata = createMembershipProposal({
+    const requestorAddress = getAddress(smartAccount.account.address);
+
+    const proposal = createMembershipProposal({
       name: 'Member request',
       type: 'ADD_MEMBER',
-      userAddress: getAddress(requestorAddress),
+      userAddress: smartAccount.account.address,
     });
 
-    // @TODO(governance): upload binary
-    const hash = await storageClient.uploadObject(membershipProposalMetadata);
-    const uri = `ipfs://${hash}` as const;
+    const writeTxEffect = Effect.gen(function* () {
+      const cid = yield* uploadBinary(proposal, storageClient);
 
-    const config = await simulateContract(walletConfig, {
-      address: memberAccessPluginAddress as `0x${string}`,
-      abi: MemberAccessAbi,
-      functionName: 'proposeNewMember',
-      args: [stringToHex(uri), getAddress(requestorAddress) as `0x${string}`],
+      const callData = encodeFunctionData({
+        functionName: 'proposeAddMember',
+        abi: MainVotingAbi,
+        // @TODO: Function for encoding
+        args: [stringToHex(cid), requestorAddress],
+      });
+
+      return yield* Effect.tryPromise({
+        try: () =>
+          smartAccount.sendTransaction({
+            to: votingPluginAddress as `0x${string}`,
+            value: 0n,
+            data: callData,
+          }),
+        catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
+      });
     });
 
-    const txHash = await writeContract(walletConfig, config.request);
-    return txHash;
+    const publishProgram = Effect.gen(function* () {
+      const writeTxHash = yield* writeTxEffect;
+      console.log('Transaction hash: ', writeTxHash);
+      return writeTxHash;
+    });
+
+    await Effect.runPromise(publishProgram);
   };
 
   return {
