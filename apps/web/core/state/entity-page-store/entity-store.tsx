@@ -2,7 +2,6 @@
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
-import { atom, useAtomValue } from 'jotai';
 
 import * as React from 'react';
 
@@ -14,11 +13,7 @@ import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { Values } from '~/core/utils/value';
 
-import {
-  activeTriplesForEntityIdSelector,
-  createTriplesForEntityAtom,
-  localTriplesAtom,
-} from '../actions-store/actions-store';
+import { activeTriplesForEntityIdSelector } from '../actions-store/actions-store';
 import { useEntityStoreInstance } from './entity-store-provider';
 
 export const createInitialSchemaTriples = (spaceId: string, entityId: string): ITriple[] => {
@@ -196,6 +191,7 @@ export function useEntityPageStore() {
       // since useQuery doesn't do a _great_ job of persisting the previous query data for the
       // current UX that we have, even when using `keepPreviousData`.
       setSchemaTriples(schemaTriples);
+      return schemaTriples;
     },
   });
 
