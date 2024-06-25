@@ -34,7 +34,9 @@ export type Subspace = OmitStrict<
   | 'isRootSpace'
   | 'mainVotingPluginAddress'
   | 'memberAccessPluginAddress'
+  | 'personalSpaceAdminPluginAddress'
   | 'spacePluginAddress'
+  | 'type'
 >;
 
 interface NetworkResult {
@@ -106,7 +108,6 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
 
     return {
       id: space.subspace.id,
-      type: space.subspace.type,
       spaceConfig: spaceConfigWithImage,
     };
   });
