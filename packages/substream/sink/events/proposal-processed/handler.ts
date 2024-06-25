@@ -25,7 +25,8 @@ export function handleProposalsProcessed(proposalsFromIpfs: EditProposal[], bloc
       Effect.all(
         proposalsFromIpfs.map(p => {
           return Effect.tryPromise({
-            try: () => db.selectExactlyOne('proposals', { id: p.proposalId }).run(pool),
+            // @TODO: Exactly one
+            try: () => db.selectOne('proposals', { id: p.proposalId }).run(pool),
             catch: error => {
               slog({
                 requestId: block.requestId,
