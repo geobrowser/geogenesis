@@ -110,9 +110,11 @@ export type SpaceConfigEntity = Entity & {
 
 export type Space = {
   id: string;
+  type: GovernanceType;
   isRootSpace: boolean;
   mainVotingPluginAddress: string | null;
-  memberAccessPluginAddress: string;
+  memberAccessPluginAddress: string | null;
+  personalSpaceAdminPluginAddress: string | null;
   spacePluginAddress: string;
   editors: string[];
   members: string[];
@@ -254,7 +256,6 @@ export type Version = {
 
 export type ProposedVersion = {
   id: string;
-  name: string | null;
   description: string | null;
   createdBy: Profile;
   createdAt: number;
@@ -325,3 +326,5 @@ export type CollectionItem = {
   };
   index: string; // the order of the item in the list
 };
+
+export type GovernanceType = 'PUBLIC' | 'PERSONAL';

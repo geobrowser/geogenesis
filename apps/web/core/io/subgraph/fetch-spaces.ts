@@ -5,57 +5,26 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { Space } from '~/core/types';
 
-import { entityFragment, spacePluginsFragment } from './fragments';
+import { entityFragment, spaceFragment, spacePluginsFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, getSpaceConfigFromMetadata } from './network-local-mapping';
+import { NetworkSpaceResult } from './types';
 
 const getFetchSpacesQuery = () => `query {
   spaces {
     nodes {
-      id
-      isRootSpace
-      ${spacePluginsFragment}
-  
-      spaceEditors {
-        nodes {
-          accountId
-        }
-      }
-  
-      spaceMembers {
-        nodes {
-          accountId
-        }
-      }
-  
-      createdAtBlock
-  
-      metadata {
-        nodes {
-          ${entityFragment}
-        }
-      }
+      ${spaceFragment}
     }
   }
 }`;
 
 interface NetworkResult {
   spaces: {
-    nodes: {
-      id: string;
-      isRootSpace: boolean;
-      mainVotingPluginAddress: string | null;
-      memberAccessPluginAddress: string;
-      spacePluginAddress: string;
-      spaceEditors: { nodes: { accountId: string }[] };
-      spaceMembers: { nodes: { accountId: string }[] };
-      createdAtBlock: string;
-      metadata: { nodes: SubstreamEntity[] };
-    }[];
+    nodes: NetworkSpaceResult[];
   };
 }
 
-export async function fetchSpaces() {
+export async function fetchSpaces(): Promise<Space[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
@@ -112,6 +81,7 @@ export async function fetchSpaces() {
 
     return {
       id: space.id,
+      type: space.type,
       isRootSpace: space.isRootSpace,
       editors: space.spaceEditors.nodes.map(account => account.accountId),
       members: space.spaceMembers.nodes.map(account => account.accountId),
@@ -120,6 +90,7 @@ export async function fetchSpaces() {
 
       mainVotingPluginAddress: space.mainVotingPluginAddress,
       memberAccessPluginAddress: space.memberAccessPluginAddress,
+      personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
       spacePluginAddress: space.spacePluginAddress,
     };
   });

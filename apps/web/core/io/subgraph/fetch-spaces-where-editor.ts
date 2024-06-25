@@ -15,12 +15,12 @@ const getFetchSpacesWhereEditorQuery = (address: string) => `query {
   spaces(filter: { spaceEditors: { some: { accountId: { equalTo: "${address}" } } } }) {
     nodes {
       nodes {
-      id
-      metadata {
-        nodes {
-          ${entityFragment}
+        id
+        metadata {
+          nodes {
+            ${entityFragment}
+          }
         }
-      }
     }
   }
 }`;

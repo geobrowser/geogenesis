@@ -4,56 +4,25 @@ import { v4 as uuid } from 'uuid';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Space, SpaceConfigEntity } from '~/core/types';
+import { GovernanceType, Space, SpaceConfigEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import { entityFragment, spacePluginsFragment } from './fragments';
+import { entityFragment, spaceFragment, spacePluginsFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
+import { NetworkSpaceResult } from './types';
 
 const getFetchSpacesQuery = (ids: string[]) => `query {
   spaces(filter: {id: {in: ${JSON.stringify(ids)}}}) {
     nodes {
-      id
-      isRootSpace
-      ${spacePluginsFragment}
-  
-      spaceEditors {
-        nodes {
-          accountId
-        }
-      }
-  
-      spaceMembers {
-        nodes {
-          accountId
-        }
-      }
-  
-      createdAtBlock
-  
-      metadata {
-        nodes {
-          ${entityFragment}
-        }
-      }
+      ${spaceFragment}
     }
   }
 }`;
 
 interface NetworkResult {
   spaces: {
-    nodes: {
-      id: string;
-      isRootSpace: boolean;
-      mainVotingPluginAddress: string | null;
-      memberAccessPluginAddress: string;
-      spacePluginAddress: string;
-      spaceEditors: { nodes: { accountId: string }[] };
-      spaceMembers: { nodes: { accountId: string }[] };
-      createdAtBlock: string;
-      metadata: { nodes: SubstreamEntity[] };
-    }[];
+    nodes: NetworkSpaceResult[];
   };
 }
 export async function fetchSpacesById(ids: string[]) {
@@ -117,6 +86,7 @@ export async function fetchSpacesById(ids: string[]) {
 
     return {
       id: space.id,
+      type: space.type,
       isRootSpace: space.isRootSpace,
       editors: space.spaceEditors.nodes.map(account => account.accountId),
       members: space.spaceMembers.nodes.map(account => account.accountId),
@@ -125,6 +95,7 @@ export async function fetchSpacesById(ids: string[]) {
 
       mainVotingPluginAddress: space.mainVotingPluginAddress,
       memberAccessPluginAddress: space.memberAccessPluginAddress,
+      personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
       spacePluginAddress: space.spacePluginAddress,
     };
   });
