@@ -30,7 +30,6 @@ import {
   ActiveProposalsForSpacesWhereEditor,
   getActiveProposalsForSpacesWhereEditor,
 } from './fetch-active-proposals-in-editor-spaces';
-import { fetchProposedEditorForProposal } from './fetch-proposed-editor';
 import { fetchProposedMemberForProposal } from './fetch-proposed-member';
 import { PersonalHomeDashboard } from './personal-home-dashboard';
 

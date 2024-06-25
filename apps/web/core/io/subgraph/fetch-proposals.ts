@@ -18,9 +18,9 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
   )}}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
     nodes {
       id
+      name
       type
       onchainProposalId
-      name
 
       space {
         id
@@ -74,34 +74,12 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
       proposedVersions {
         nodes {
           id
-          name
           createdById
           entity {
             id
             name
           }
-          actions {
-            nodes {
-              id
-              actionType
-              attribute {
-                id
-                name
-              }
-              entity {
-                id
-                name
-              }
-              entityValue {
-                id
-                name
-              }
-              numberValue
-              stringValue
-              valueType
-              valueId
-            }
-          }
+
         }
       }
     }

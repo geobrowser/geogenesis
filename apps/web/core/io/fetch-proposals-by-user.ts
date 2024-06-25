@@ -29,8 +29,8 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
     proposals(first: 5, filter: {${filter}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
       nodes {
         id
-        type
         name
+        type
         space {
           id
           metadata {
@@ -68,33 +68,10 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
         proposedVersions {
           nodes {
             id
-            name
             createdById
             entity {
               id
               name
-            }
-            actions {
-              nodes {
-                id
-                actionType
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-              }
             }
           }
         }

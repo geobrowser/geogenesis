@@ -15,7 +15,6 @@ import { SubstreamEntity, SubstreamProposedVersion, fromNetworkOps, fromNetworkT
 export const getProposedVersionQuery = (id: string) => `query {
   proposedVersion(id: ${JSON.stringify(id)}) {
     id
-    name
     createdAt
     createdAtBlock
 

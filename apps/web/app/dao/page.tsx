@@ -5,6 +5,7 @@ import { toTitleCase } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
 
+import { AddMember } from './add-member';
 import { TEST_DAO_ADDRESS } from './constants';
 import { CreateDao } from './create-dao';
 import { Execute } from './execute';
@@ -57,7 +58,8 @@ export default async function Page() {
 
       <div className="flex flex-row gap-4">
         <ClientOnly>
-          <CreateDao type="governance" />
+          <CreateDao type="personal" />
+          <AddMember />
         </ClientOnly>
       </div>
     </div>

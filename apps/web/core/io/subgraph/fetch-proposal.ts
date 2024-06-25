@@ -87,34 +87,12 @@ export const getFetchProposalQuery = (id: string) => `query {
     proposedVersions {
       nodes {
         id
-        name
         createdById
         entity {
           id
           name
         }
-        actions {
-          nodes {
-            id
-            actionType
-            attribute {
-              id
-              name
-            }
-            entity {
-              id
-              name
-            }
-            entityValue {
-              id
-              name
-            }
-            numberValue
-            stringValue
-            valueType
-            valueId
-          }
-        }
+
       }
     }
   }
