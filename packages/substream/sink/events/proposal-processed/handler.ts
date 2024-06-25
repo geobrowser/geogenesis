@@ -39,8 +39,8 @@ export function handleProposalsProcessed(proposalsFromIpfs: EditProposal[], bloc
       )
     );
 
-    const proposals = maybeProposals.filter(
-      (maybeProposal): maybeProposal is S.proposals.Selectable => maybeProposal !== null
+    const proposals = maybeProposals.filter((maybeProposal): maybeProposal is S.proposals.Selectable =>
+      Boolean(maybeProposal)
     );
 
     yield* _(
