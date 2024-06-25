@@ -84,7 +84,7 @@ CREATE TABLE public.collection_items (
     entity_id text REFERENCES public.entities(id) NOT NULL
 );
 
-CREATE TYPE public.proposal_type as ENUM ('CONTENT', 'ADD_SUBSPACE', 'REMOVE_SUBSPACE', 'ADD_EDITOR', 'REMOVE_EDITOR', 'ADD_MEMBER', 'REMOVE_MEMBER');
+CREATE TYPE public.proposal_type as ENUM ('ADD_EDIT', 'ADD_SUBSPACE', 'REMOVE_SUBSPACE', 'ADD_EDITOR', 'REMOVE_EDITOR', 'ADD_MEMBER', 'REMOVE_MEMBER');
 CREATE TYPE public.proposal_status as ENUM ('proposed', 'accepted', 'rejected', 'canceled', 'executed');
 
 -- Maps to 2 or 3 onchain

@@ -1,6 +1,5 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -8,23 +7,13 @@ import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { Services } from '~/core/services';
-import { useDiff } from '~/core/state/diff-store';
-import { AppOp } from '~/core/types';
-import { Action } from '~/core/utils/action';
 import { NavUtils } from '~/core/utils/utils';
 
-import { SmallButton } from '~/design-system/button';
-import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
 // import { CsvImport } from '~/design-system/icons/csv-import';
 import { Menu } from '~/design-system/menu';
-
-import { HistoryEmpty } from '../history/history-empty';
-import { HistoryItem } from '../history/history-item';
-import { HistoryPanel } from '../history/history-panel';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;

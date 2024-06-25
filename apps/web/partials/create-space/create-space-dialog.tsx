@@ -11,8 +11,7 @@ import { getAddress } from 'viem';
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
-import { useAccount, useWalletClient } from 'wagmi';
-
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { createSpaceWithEntities } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
 import { SpaceType } from '~/core/types';
@@ -41,8 +40,8 @@ export const stepAtom = atom<Step>('start');
 const workflowSteps: Array<Step> = ['creating-spaces', 'completed'];
 
 export function CreateSpaceDialog() {
-  const { address } = useAccount();
-  const { data: wallet } = useWalletClient();
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
   const [open, onOpenChange] = useState(false);
 
   const spaceType = useAtomValue(spaceTypeAtom);
@@ -81,7 +80,7 @@ export function CreateSpaceDialog() {
   }
 
   async function onRunOnboardingWorkflow() {
-    if (!address || !wallet || !spaceType) return;
+    if (!address || !smartAccount || !spaceType) return;
 
     setShowRetry(false);
 

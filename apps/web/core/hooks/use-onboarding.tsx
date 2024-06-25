@@ -1,17 +1,22 @@
+import { usePrivy } from '@privy-io/react-auth';
 import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useAccount } from 'wagmi';
+import { useAccountEffect } from 'wagmi';
 
 import { useGeoProfile } from './use-geo-profile';
+import { useSmartAccount } from './use-smart-account';
 
 const isOnboardingVisibleAtom = atom(false);
 
 export function useOnboarding() {
-  const { address } = useAccount();
-  const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
-  const { profile, isFetched } = useGeoProfile(address);
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
+
+  const { isModalOpen } = usePrivy();
+  const [, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
+  const { profile, isFetched, isLoading } = useGeoProfile(address);
 
   // Set the onboarding to visible the first time we fetch the
   // profile for the user. Any subsequent changes to the visibility
@@ -21,12 +26,16 @@ export function useOnboarding() {
   // Whenever the user reloads Geo they will be prompted to go through
   // onboarding again if they don't have a profile.
   React.useEffect(() => {
-    if (address && isFetched && !profile) {
+    if (isModalOpen) {
+      setIsOnboardingVisible(false);
+    } else if (isFetched && !isLoading && !profile) {
       setIsOnboardingVisible(true);
+    } else {
+      setIsOnboardingVisible(false);
     }
-  }, [isFetched, profile, address, setIsOnboardingVisible]);
+  }, [isFetched, profile, isLoading, isModalOpen, setIsOnboardingVisible]);
 
-  useAccount({
+  useAccountEffect({
     onDisconnect: () => setIsOnboardingVisible(false),
     onConnect({ address }) {
       if (address && isFetched && !profile) {
@@ -39,5 +48,7 @@ export function useOnboarding() {
     setIsOnboardingVisible(false);
   }, [setIsOnboardingVisible]);
 
-  return { isOnboardingVisible, hideOnboarding };
+  // Disabling onboarding until full launch as we are currently doing migrations
+  // and some other work affecting user onboarding.
+  return { isOnboardingVisible: false, hideOnboarding };
 }

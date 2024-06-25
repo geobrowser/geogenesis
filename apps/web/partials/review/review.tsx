@@ -12,25 +12,23 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useWalletClient } from 'wagmi';
-
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
+import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import type { Entity as EntityType, Space, Triple as TripleType } from '~/core/types';
-import { Action } from '~/core/utils/action';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
-import { GeoDate, getImagePath, sleepWithCallback } from '~/core/utils/utils';
+import { GeoDate, getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -67,7 +65,6 @@ type Proposal = {
 type EntityId = string;
 
 const ReviewChanges = () => {
-  const { subgraph } = Services.useServices();
   const { state } = useStatusBar();
   const { allSpacesWithActions } = useActionsStore();
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
@@ -75,7 +72,7 @@ const ReviewChanges = () => {
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', allSpacesWithActions],
     queryFn: async () => {
-      const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => subgraph.fetchSpace({ id: s })));
+      const maybeSpaces = await fetchSpacesById(allSpacesWithActions);
       const spaces = maybeSpaces.filter(
         (s): s is Space & { spaceConfig: EntityType } => s !== null && s.spaceConfig !== null
       );
@@ -131,7 +128,6 @@ const ReviewChanges = () => {
   }));
 
   // Proposal state
-  const { dispatch } = useStatusBar();
   const [proposals, setProposals] = useState<Proposals>({});
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
@@ -141,43 +137,25 @@ const ReviewChanges = () => {
   const triples = Triples.squash(actionsFromSpace);
   const [data, isLoading] = useChanges(triples, activeSpace);
 
-  // Publishing logic
-  const { data: wallet } = useWalletClient();
-
   const handlePublish = useCallback(async () => {
-    if (!activeSpace || !wallet) return;
+    if (!activeSpace) return;
 
     const clearProposalName = () => {
       setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
     };
 
-    try {
-      // @TODO: Selectable publishing
-      // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
+    // @TODO: Selectable publishing
+    // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
-      await makeProposal({
-        triples: actionsFromSpace,
-        spaceId: activeSpace,
-        name: proposalName,
-        onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
-      });
-
-      clearProposalName();
-      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
-
-      // want to show the "complete" state for 3s
-      await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-          return;
-        }
-
-        dispatch({ type: 'ERROR', payload: e.message });
-      }
-    }
-  }, [activeSpace, proposalName, proposals, makeProposal, wallet, unstagedChanges, dispatch, actionsFromSpace]);
+    await makeProposal({
+      triples: actionsFromSpace,
+      spaceId: activeSpace,
+      name: proposalName,
+      onSuccess: () => {
+        clearProposalName();
+      },
+    });
+  }, [activeSpace, proposalName, proposals, makeProposal, actionsFromSpace]);
 
   if (isLoading || !data || isSpacesLoading) {
     return null;

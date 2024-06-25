@@ -60,7 +60,39 @@ export const abi = [
         "type": "address"
       }
     ],
+    "name": "EditorLeft",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "dao",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "editor",
+        "type": "address"
+      }
+    ],
     "name": "EditorRemoved",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address[]",
+        "name": "editors",
+        "type": "address[]"
+      }
+    ],
+    "name": "EditorsAdded",
     "type": "event"
   },
   {
@@ -93,6 +125,25 @@ export const abi = [
       }
     ],
     "name": "MemberAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "dao",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "MemberLeft",
     "type": "event"
   },
   {
@@ -251,6 +302,11 @@ export const abi = [
       {
         "internalType": "contract IDAO",
         "name": "_dao",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_initialEditor",
         "type": "address"
       }
     ],

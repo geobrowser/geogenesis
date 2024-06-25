@@ -2,11 +2,6 @@
 
 import * as React from 'react';
 
-import { useWalletClient } from 'wagmi';
-
-import { proposeAddSubspace } from '~/core/io/publish';
-import { Services } from '~/core/services';
-
 import { SmallButton } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
 import { Input } from '~/design-system/input';
@@ -14,6 +9,7 @@ import { Input } from '~/design-system/input';
 import { AddSubspaceButton } from './space-metadata-header-add-subspace-button';
 import { SubspaceRow } from './subspace-row';
 import { SpaceToAdd } from './types';
+import { useProposeToAddSubspace } from './use-propose-add-subspace';
 
 interface Props {
   totalCount: number;
@@ -47,22 +43,19 @@ interface ContentProps {
 }
 
 function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: ContentProps) {
-  const { storageClient } = Services.useServices();
-  const { data: wallet } = useWalletClient();
   const [query, setQuery] = React.useState('');
+
+  const { proposeAddSubspace } = useProposeToAddSubspace({
+    votingPluginAddress: mainVotingPluginAddress,
+    spacePluginAddress,
+  });
 
   const filteredSpaces = React.useMemo(() => {
     return spaces.filter(e => e.spaceConfig?.name?.toLowerCase().includes(query.toLowerCase()));
   }, [spaces, query]);
 
   const onAddSubspace = async (subspaceAddress: string) => {
-    proposeAddSubspace({
-      wallet,
-      storageClient,
-      spacePluginAddress,
-      mainVotingPluginAddress,
-      subspaceAddress,
-    });
+    proposeAddSubspace(subspaceAddress);
   };
 
   return (

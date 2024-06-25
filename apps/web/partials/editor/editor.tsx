@@ -26,6 +26,7 @@ import { removeIdAttributes } from './editor-utils';
 import { HeadingNode } from './heading-node';
 import { createIdExtension } from './id-extension';
 import { ParagraphNode } from './paragraph-node';
+import { ServerContent } from './server-content';
 import { TableNode } from './table-node';
 import { TrailingNode } from './trailing-node';
 
@@ -164,14 +165,13 @@ export const Editor = React.memo(function Editor({
       </>
     );
   }
-
-  if (!editor) return null;
+  const { content } = editorJson;
 
   // const openCommandMenu = () => editor?.chain().focus().insertContent('/').run();
 
   return (
     <div className={cx(editable ? 'editable' : 'not-editable')}>
-      <EditorContent editor={editor} />
+      {!editor ? <ServerContent content={content} /> : <EditorContent editor={editor} />}
       {/* <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">
           <SquareButton onClick={openCommandMenu} icon={<Plus />} />

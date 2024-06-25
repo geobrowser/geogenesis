@@ -25,6 +25,7 @@ export const ZodSubstreamProposalCreated = z.object({
   endTime: z.string(),
 });
 
+// This comes from the onchain event mapping in our rust bindings
 export const ZodProposal = z.object({
   proposalId: z.string(),
   space: z.string(),
@@ -34,9 +35,8 @@ export const ZodProposal = z.object({
   endTime: z.string(),
 });
 
-// DAO-based spaces can have different proposal types. We need to be able
-// to parse the proposal type in order to validate the contents of the
-// proposal and write to the sink correctly.
+// This comes from the IPFS contents posted onchain and emitted bu our
+// onchain event mapping in our rust bindings.
 export const ZodProposalMetadata = z.object({
   type: z.enum([
     'EDIT',
@@ -60,8 +60,11 @@ export type ProposalCreated = z.infer<typeof ZodSubstreamProposalCreated>;
 export type Proposal = z.infer<typeof ZodProposal>;
 
 export const ZodMembershipProposal = z.object({
-  proposalId: z.string(),
-  userAddress: z.string(),
+  type: z.union([z.literal('ADD_MEMBER'), z.literal('REMOVE_MEMBER')]),
+  name: z.string(),
+  version: z.string(),
+  id: z.string(),
+  user: z.string(),
 });
 
 export type MembershipProposal = Proposal & {
@@ -70,12 +73,15 @@ export type MembershipProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
-  userAddress: `0x${string}`;
+  user: `0x${string}`;
 };
 
 export const ZodEditorshipProposal = z.object({
-  proposalId: z.string(),
-  editorAddress: z.string(),
+  type: z.union([z.literal('ADD_EDITOR'), z.literal('REMOVE_EDITOR')]),
+  name: z.string(),
+  version: z.string(),
+  id: z.string(),
+  user: z.string(),
 });
 
 export type EditorshipProposal = Proposal & {
@@ -84,11 +90,14 @@ export type EditorshipProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
-  userAddress: `0x${string}`;
+  user: `0x${string}`;
 };
 
 export const ZodSubspaceProposal = z.object({
-  proposalId: z.string(),
+  type: z.union([z.literal('ADD_SUBSPACE'), z.literal('REMOVE_SUBSPACE')]),
+  name: z.string(),
+  version: z.string(),
+  id: z.string(),
   subspace: z.string(),
 });
 
@@ -154,8 +163,8 @@ const ZodEditDeleteTriplePayload = z.object({
   attributeId: z.instanceof(Uint8Array).transform(a => a.toString()),
   // zod has issues with discriminated unions. We set the value
   // to any here and trust that it is constructed into the correct
-  // format once it's decoded.
-  value: z.any().optional(),
+  // format by the binary decoder before it's parsed by zod.
+  value: z.any(),
 });
 
 const ZodSetTripleOp = z.object({
@@ -171,19 +180,18 @@ const ZodDeleteTripleOp = z.object({
 export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
 
 export const ZodEdit = z.object({
-  // @TODO: Add back type
-  // type: z.literal('ADD_EDIT'),
+  type: z.literal('ADD_EDIT'),
   name: z.string(),
   version: z.string(),
+  id: z.string(),
   ops: z.array(ZodOp),
   authors: z.array(z.string()),
-  id: z.string(),
 });
 
 export type ParsedEdit = z.infer<typeof ZodEdit>;
 
 export type EditProposal = Proposal & {
-  type: 'EDIT';
+  type: 'ADD_EDIT';
   name: string;
   proposalId: string;
   onchainProposalId: string;

@@ -3,6 +3,50 @@ export const abi = [
     "inputs": [
       {
         "internalType": "address",
+        "name": "_member",
+        "type": "address"
+      }
+    ],
+    "name": "AlreadyAMember",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_editor",
+        "type": "address"
+      }
+    ],
+    "name": "AlreadyAnEditor",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_member",
+        "type": "address"
+      }
+    ],
+    "name": "AlreadyNotAMember",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_editor",
+        "type": "address"
+      }
+    ],
+    "name": "AlreadyNotAnEditor",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
         "name": "dao",
         "type": "address"
       },
@@ -74,6 +118,17 @@ export const abi = [
     "type": "error"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "InvalidInterface",
+    "type": "error"
+  },
+  {
     "inputs": [],
     "name": "NoEditorsLeft",
     "type": "error"
@@ -87,6 +142,11 @@ export const abi = [
       }
     ],
     "name": "NotAMember",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotAnEditor",
     "type": "error"
   },
   {
@@ -146,6 +206,11 @@ export const abi = [
       }
     ],
     "name": "RatioOutOfBounds",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "Unauthorized",
     "type": "error"
   },
   {
@@ -236,6 +301,25 @@ export const abi = [
         "type": "address"
       }
     ],
+    "name": "EditorLeft",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "dao",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "editor",
+        "type": "address"
+      }
+    ],
     "name": "EditorRemoved",
     "type": "event"
   },
@@ -282,6 +366,25 @@ export const abi = [
       }
     ],
     "name": "MemberAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "dao",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "MemberLeft",
     "type": "event"
   },
   {
@@ -456,12 +559,6 @@ export const abi = [
       },
       {
         "indexed": false,
-        "internalType": "uint32",
-        "name": "minParticipation",
-        "type": "uint32"
-      },
-      {
-        "indexed": false,
         "internalType": "uint64",
         "name": "duration",
         "type": "uint64"
@@ -632,7 +729,7 @@ export const abi = [
     "inputs": [
       {
         "internalType": "bytes",
-        "name": "_metadata",
+        "name": "_metadataContentUri",
         "type": "bytes"
       },
       {
@@ -769,11 +866,6 @@ export const abi = [
             "internalType": "uint64",
             "name": "snapshotBlock",
             "type": "uint64"
-          },
-          {
-            "internalType": "uint256",
-            "name": "minVotingPower",
-            "type": "uint256"
           }
         ],
         "internalType": "struct MajorityVotingBase.ProposalParameters",
@@ -890,11 +982,6 @@ export const abi = [
             "type": "uint32"
           },
           {
-            "internalType": "uint32",
-            "name": "minParticipation",
-            "type": "uint32"
-          },
-          {
             "internalType": "uint64",
             "name": "duration",
             "type": "uint64"
@@ -908,6 +995,11 @@ export const abi = [
         "internalType": "address[]",
         "name": "_initialEditors",
         "type": "address[]"
+      },
+      {
+        "internalType": "contract MemberAccessPlugin",
+        "name": "_memberAccessPlugin",
+        "type": "address"
       }
     ],
     "name": "initialize",
@@ -1055,12 +1147,26 @@ export const abi = [
   },
   {
     "inputs": [],
-    "name": "minParticipation",
+    "name": "leaveSpace",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "leaveSpaceAsEditor",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "memberAccessPlugin",
     "outputs": [
       {
-        "internalType": "uint32",
+        "internalType": "contract MemberAccessPlugin",
         "name": "",
-        "type": "uint32"
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -1095,6 +1201,11 @@ export const abi = [
   {
     "inputs": [
       {
+        "internalType": "bytes",
+        "name": "_metadataContentUri",
+        "type": "bytes"
+      },
+      {
         "internalType": "contract IDAO",
         "name": "_subspaceDao",
         "type": "address"
@@ -1106,15 +1217,74 @@ export const abi = [
       }
     ],
     "name": "proposeAcceptSubspace",
-    "outputs": [],
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
       {
+        "internalType": "bytes",
+        "name": "_metadataContentUri",
+        "type": "bytes"
+      },
+      {
+        "internalType": "address",
+        "name": "_proposedEditor",
+        "type": "address"
+      }
+    ],
+    "name": "proposeAddEditor",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "_metadataContentUri",
+        "type": "bytes"
+      },
+      {
+        "internalType": "address",
+        "name": "_proposedMember",
+        "type": "address"
+      }
+    ],
+    "name": "proposeAddMember",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "_metadataContentUri",
+        "type": "bytes"
+      },
+      {
         "internalType": "string",
-        "name": "_contentUri",
+        "name": "_editsContentUri",
         "type": "string"
       },
       {
@@ -1124,12 +1294,71 @@ export const abi = [
       }
     ],
     "name": "proposeEdits",
-    "outputs": [],
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "_metadataContentUri",
+        "type": "bytes"
+      },
+      {
+        "internalType": "address",
+        "name": "_editor",
+        "type": "address"
+      }
+    ],
+    "name": "proposeRemoveEditor",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "_metadataContentUri",
+        "type": "bytes"
+      },
+      {
+        "internalType": "address",
+        "name": "_member",
+        "type": "address"
+      }
+    ],
+    "name": "proposeRemoveMember",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "_metadataContentUri",
+        "type": "bytes"
+      },
       {
         "internalType": "contract IDAO",
         "name": "_subspaceDao",
@@ -1142,7 +1371,13 @@ export const abi = [
       }
     ],
     "name": "proposeRemoveSubspace",
-    "outputs": [],
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable",
     "type": "function"
   },
@@ -1248,11 +1483,6 @@ export const abi = [
           {
             "internalType": "uint32",
             "name": "supportThreshold",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint32",
-            "name": "minParticipation",
             "type": "uint32"
           },
           {

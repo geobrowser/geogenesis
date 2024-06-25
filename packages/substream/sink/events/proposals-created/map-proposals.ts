@@ -12,7 +12,7 @@ function groupProposalsByType(
   subspaceProposals: SubspaceProposal[];
   editProposals: EditProposal[];
 } {
-  const editProposals = proposals.flatMap(p => (p.type === 'EDIT' ? p : []));
+  const editProposals = proposals.flatMap(p => (p.type === 'ADD_EDIT' ? p : []));
   const memberProposals = proposals.flatMap(p => (p.type === 'ADD_MEMBER' || p.type === 'REMOVE_MEMBER' ? p : []));
   const editorProposals = proposals.flatMap(p => (p.type === 'ADD_EDITOR' || p.type === 'REMOVE_EDITOR' ? p : []));
   const subspaceProposals = proposals.flatMap(p =>
@@ -62,7 +62,7 @@ function mapEditorshipProposalsToSchema(
     const proposedEditor: S.proposed_editors.Insertable = {
       id: p.proposalId,
       type: p.type,
-      account_id: p.userAddress,
+      account_id: p.user,
       space_id: spaceId,
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
@@ -72,7 +72,7 @@ function mapEditorshipProposalsToSchema(
     proposedEditorsToWrite.push(proposedEditor);
 
     const newAccount: S.accounts.Insertable = {
-      id: p.userAddress,
+      id: p.user,
     };
 
     accountsToWrite.push(newAccount);
@@ -120,7 +120,7 @@ function mapMembershipProposalsToSchema(
     const proposedMember: S.proposed_members.Insertable = {
       id: p.proposalId,
       type: p.type,
-      account_id: p.userAddress,
+      account_id: p.user,
       space_id: spaceId,
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
@@ -130,7 +130,7 @@ function mapMembershipProposalsToSchema(
     proposedMembersToWrite.push(proposedMember);
 
     const newAccount: S.accounts.Insertable = {
-      id: p.userAddress,
+      id: p.user,
     };
 
     accountsToWrite.push(newAccount);
@@ -212,7 +212,7 @@ function mapEditProposalToSchema(
       onchain_proposal_id: p.onchainProposalId,
       plugin_address: p.pluginAddress,
       name: p.name,
-      type: 'CONTENT',
+      type: 'ADD_EDIT',
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
       created_by_id: p.creator,

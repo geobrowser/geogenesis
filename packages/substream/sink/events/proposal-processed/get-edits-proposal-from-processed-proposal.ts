@@ -1,13 +1,13 @@
+import { ActionType, IpfsMetadata } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
-import type { SpaceWithPluginAddressNotFoundError } from '../../errors';
 import { getFetchIpfsContentEffect } from '../../ipfs';
 import type { BlockEvent, Op } from '../../types';
 import { getChecksumAddress } from '../../utils/get-checksum-address';
 import { slog } from '../../utils/slog';
-import { type EditProposal, type ParsedEdit, type ProposalProcessed } from '../proposals-created/parser';
-import { ActionType, Decoder, Import, IpfsMetadata, decode } from '~/sink/proto';
+import { type EditProposal, type ProposalProcessed } from '../proposals-created/parser';
+import { Decoder, decode } from '~/sink/proto';
 
 class InvalidProcessedProposalContentTypeError extends Error {
   _tag: 'InvalidProcessedProposalContentTypeError' = 'InvalidProcessedProposalContentTypeError';
@@ -91,7 +91,7 @@ function fetchEditProposalFromIpfs(
         }
 
         const contentProposal: EditProposal = {
-          type: 'EDIT',
+          type: 'ADD_EDIT',
           name: validIpfsMetadata.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: '-1',

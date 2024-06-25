@@ -4,9 +4,8 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { useState } from 'react';
 
-import { useWalletClient } from 'wagmi';
-
 import { useBulkPublish } from '~/core/hooks/use-publish';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import type { Space } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
@@ -52,26 +51,24 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
 
   const [proposalName, setProposalName] = useState('');
   const isReadyToPublish = proposalName.length > 3;
+  const smartAccount = useSmartAccount();
 
-  const { data: wallet } = useWalletClient();
   const { makeBulkProposal } = useBulkPublish();
 
   const handlePublish = async () => {
-    if (!wallet) return;
-
-    try {
-      await makeBulkProposal({
-        triples: triples,
-        spaceId,
-        name: proposalName,
-        onChangePublishState: reviewState => console.log(reviewState),
-      });
-
-      setStep('done');
-      setIsPublishOpen(false);
-    } catch (error) {
-      console.error(error);
+    if (!smartAccount) {
+      return;
     }
+
+    await makeBulkProposal({
+      triples: triples,
+      spaceId,
+      name: proposalName,
+      onSuccess: () => {
+        setStep('done');
+        setIsPublishOpen(false);
+      },
+    });
   };
 
   const [data, isLoading] = useChanges(triples.slice(0, 150), spaceId);

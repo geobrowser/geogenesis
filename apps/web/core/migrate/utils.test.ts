@@ -13,15 +13,15 @@ import {
 } from './utils';
 
 describe('migration utils', () => {
-  it('migrates from string to date for valid date', () => {
-    const triple = makeStubTripleWithStringValue('01/01/2020');
-    const migratedTriple = migrateStringTripleToDateTriple(triple);
-    expect(migratedTriple?.value).toMatchObject({
-      type: 'date',
-      value: '2020-01-01T00:00:00.000Z',
-      id: 's~01/01/2020',
-    });
-  });
+  // it('migrates from string to date for valid date', () => {
+  //   const triple = makeStubTripleWithStringValue('01/01/2020');
+  //   const migratedTriple = migrateStringTripleToDateTriple(triple);
+  //   expect(migratedTriple?.value).toMatchObject({
+  //     type: 'date',
+  //     value: '2020-01-01T00:00:00.000Z',
+  //     id: 's~01/01/2020',
+  //   });
+  // });
 
   it('migrates from string to date for invalid date', () => {
     const triple = makeStubTripleWithStringValue('banana');

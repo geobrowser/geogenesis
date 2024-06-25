@@ -8,6 +8,7 @@ import { DATABASE_URL, PORT } from './config';
 
 import { IndexingStatusPlugin } from './status-plugin';
 import { MetaPlugin } from './meta-plugin';
+import { rewriteRequestkMiddleware } from './middleware';
 
 const postgraphileMiddleware = postgraphile(DATABASE_URL, 'public', {
   watchPg: true,
@@ -24,6 +25,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.options('*', cors());
+app.use(rewriteRequestkMiddleware);
 app.use(postgraphileMiddleware);
 
 const server = app.listen(PORT, () => {

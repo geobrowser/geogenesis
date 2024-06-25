@@ -1,6 +1,4 @@
-import { DeleteTripleOp } from '@geogenesis/sdk';
-import { QueryClient } from '@tanstack/query-core';
-import { useQueryClient } from '@tanstack/react-query';
+import { QueryClient, useQueryClient } from '@tanstack/react-query';
 
 import React, { useTransition } from 'react';
 

@@ -165,13 +165,13 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
   //
   // We retry each step with an exponential backoff in case of failure, especially as the
   // RPC nodes we use have rate-limiting that is hard to predict.
-  const deploymentEffect = Effect.gen(function* (unwrap) {
+  const deploymentEffect = Effect.gen(function* () {
     // Deploy proxy contract
     const deployProxyEffect = Effect.retry(deployEffect, Schedule.exponential('100 millis').pipe(Schedule.jittered));
-    const deployProxyResult = yield* unwrap(deployProxyEffect);
+    const deployProxyResult = yield* deployProxyEffect;
 
-    if (deployProxyResult.contractAddress === null) {
-      return yield* unwrap(Effect.fail(new SpaceProxyContractAddressNullError()));
+    if (deployProxyResult.contractAddress === null || deployProxyResult.contractAddress === undefined) {
+      return yield* Effect.fail(new SpaceProxyContractAddressNullError());
     }
 
     // Initialize proxy contract
@@ -179,14 +179,14 @@ export function makeDeployEffect(requestId: string, { account: userAccount }: Us
       createInitializeEffect(deployProxyResult.contractAddress),
       Schedule.exponential('100 millis').pipe(Schedule.jittered)
     );
-    yield* unwrap(initializeEffect);
+    yield* initializeEffect;
 
     // Configure roles in proxy contract. We need to configure the roles after adding to the registry.
     const configureRolesEffect = Effect.retry(
       createConfigureRolesEffect(deployProxyResult.contractAddress),
       Schedule.exponential('100 millis').pipe(Schedule.jittered)
     );
-    yield* unwrap(configureRolesEffect);
+    yield* configureRolesEffect;
 
     return deployProxyResult;
   });

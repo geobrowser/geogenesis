@@ -1,5 +1,6 @@
 import { PluginInstallItem } from '@aragon/sdk-client-common';
 import { VotingMode } from '@geogenesis/sdk';
+import { SpaceAbi, SpaceSetupAbi } from '@geogenesis/sdk/abis';
 import {
   GOVERNANCE_PLUGIN_REPO_ADDRESS,
   PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
@@ -18,28 +19,27 @@ export function getSpacePluginInstallItem({
   pluginUpgrader: string;
   precedessorSpace?: string;
 }): PluginInstallItem {
-  // Define the ABI for the prepareInstallation function's inputs. This comes from the
-  // `space-build-metadata.json` in our contracts repo, not from the setup plugin's ABIs.
+  // from `encodeInstallationParams`
   const prepareInstallationInputs = [
     {
-      name: 'firstBlockContentUri',
-      type: 'string',
       internalType: 'string',
-      description: 'The inital contents of the first block item.',
+      name: '_firstBlockContentUri',
+      type: 'string',
     },
     {
       internalType: 'address',
-      name: 'predecessorAddress',
+      name: '_predecessorAddress',
       type: 'address',
     },
     {
       internalType: 'address',
-      name: 'pluginUpgrader',
+      name: '_pluginUpgrader',
       type: 'address',
     },
   ];
 
-  // This works but only if it's the only plugin being published. If we try multiple plugins we get an unpredictable gas limit
+  // This works but only if it's the only plugin being published. If we try multiple plugins with the same
+  // upgrader we get an unpredictable gas limit
   const encodedParams = encodeAbiParameters(prepareInstallationInputs, [
     firstBlockContentUri,
     precedessorSpace,
@@ -80,13 +80,13 @@ export function getGovernancePluginInstallItem(params: {
   votingSettings: {
     votingMode: VotingMode;
     supportThreshold: number;
-    minParticipation: number;
     duration: bigint;
   };
   initialEditors: `0x${string}`[];
-  pluginUpgrader: `0x${string}`;
   memberAccessProposalDuration: bigint;
+  pluginUpgrader: `0x${string}`;
 }): PluginInstallItem {
+  // From `encodeInstallationParams`
   const prepareInstallationInputs = [
     {
       components: [
@@ -101,33 +101,28 @@ export function getGovernancePluginInstallItem(params: {
           type: 'uint32',
         },
         {
-          internalType: 'uint32',
-          name: 'minParticipation',
-          type: 'uint32',
-        },
-        {
           internalType: 'uint64',
           name: 'duration',
           type: 'uint64',
         },
       ],
       internalType: 'struct MajorityVotingBase.VotingSettings',
-      name: 'votingSettings',
+      name: '_votingSettings',
       type: 'tuple',
     },
     {
       internalType: 'address[]',
-      name: 'initialEditors',
+      name: '_initialEditors',
       type: 'address[]',
     },
     {
       internalType: 'uint64',
-      name: 'memberAccessProposalDuration',
+      name: '_memberAccessProposalDuration',
       type: 'uint64',
     },
     {
       internalType: 'address',
-      name: 'pluginUpgrader',
+      name: '_pluginUpgrader',
       type: 'address',
     },
   ];

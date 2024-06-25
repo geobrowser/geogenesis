@@ -1,3 +1,4 @@
+import { ActionType, IpfsMetadata } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
 import {
@@ -10,7 +11,7 @@ import {
 import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
-import { ActionType, Edit, IpfsMetadata, Membership, Subspace, decode } from '~/sink/proto';
+import { Decoder, decode } from '~/sink/proto';
 import type { BlockEvent, Op } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { slog } from '~/sink/utils/slog';
@@ -105,7 +106,7 @@ export function getProposalFromIpfs(
 
     switch (validIpfsMetadata.type) {
       case ActionType.ADD_EDIT: {
-        const parsedContent = yield* _(decode(() => Edit.fromBinary(ipfsContent)));
+        const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
 
         // Subspace proposals are only emitted by the voting plugin
         if (!parsedContent || !maybeSpaceIdForVotingPlugin) {
@@ -114,7 +115,7 @@ export function getProposalFromIpfs(
 
         const mappedProposal: EditProposal = {
           ...proposal,
-          type: 'EDIT',
+          type: 'ADD_EDIT',
           name: validIpfsMetadata.name ?? null,
           proposalId: parsedContent.id,
           onchainProposalId: proposal.proposalId,
@@ -130,7 +131,7 @@ export function getProposalFromIpfs(
 
       case ActionType.ADD_SUBSPACE:
       case ActionType.REMOVE_SUBSPACE: {
-        const parsedSubspace = yield* _(decode(() => Subspace.fromBinary(ipfsContent)));
+        const parsedSubspace = yield* _(Decoder.decodeSubspace(ipfsContent));
 
         // Subspace proposals are only emitted by the voting plugin
         if (!parsedSubspace || !maybeSpaceIdForVotingPlugin) {
@@ -154,9 +155,9 @@ export function getProposalFromIpfs(
 
       case ActionType.ADD_EDITOR:
       case ActionType.REMOVE_EDITOR: {
-        const parsedEditorship = yield* _(decode(() => Membership.fromBinary(ipfsContent)));
+        const parsedMembership = yield* _(Decoder.decodeEditorship(ipfsContent));
 
-        if (!parsedEditorship) {
+        if (!parsedMembership) {
           return null;
         }
 
@@ -168,10 +169,10 @@ export function getProposalFromIpfs(
           ...proposal,
           type: validIpfsMetadata.type === ActionType.ADD_EDITOR ? 'ADD_EDITOR' : 'REMOVE_EDITOR',
           name: validIpfsMetadata.name ?? null,
-          proposalId: parsedEditorship.id,
+          proposalId: parsedMembership.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          userAddress: getChecksumAddress(parsedEditorship.userAddress),
+          user: getChecksumAddress(parsedMembership.user),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(spaceAddress),
         };
@@ -181,7 +182,7 @@ export function getProposalFromIpfs(
 
       case ActionType.ADD_MEMBER:
       case ActionType.REMOVE_MEMBER: {
-        const parsedMembership = yield* _(decode(() => Membership.fromBinary(ipfsContent)));
+        const parsedMembership = yield* _(Decoder.decodeMembership(ipfsContent));
 
         if (!parsedMembership) {
           return null;
@@ -198,7 +199,7 @@ export function getProposalFromIpfs(
           proposalId: parsedMembership.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          userAddress: getChecksumAddress(parsedMembership.userAddress),
+          user: getChecksumAddress(parsedMembership.user),
           creator: getChecksumAddress(proposal.creator),
           space: getChecksumAddress(spaceAddress),
         };

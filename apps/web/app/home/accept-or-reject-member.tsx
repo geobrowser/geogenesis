@@ -1,9 +1,9 @@
 'use client';
 
 import { MemberAccessAbi } from '@geogenesis/sdk/abis';
+import { encodeFunctionData } from 'viem';
 
-import { useWalletClient } from 'wagmi';
-import { prepareWriteContract, writeContract } from 'wagmi/actions';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
 import { SmallButton } from '~/design-system/button';
 
@@ -13,36 +13,34 @@ interface Props {
 }
 
 export function AcceptOrRejectMember(props: Props) {
-  const { data: wallet } = useWalletClient();
+  const smartAccount = useSmartAccount();
 
   const onApprove = async () => {
-    if (!wallet || !props.membershipContractAddress) return;
+    if (!props.membershipContractAddress || !smartAccount) return;
 
-    const config = await prepareWriteContract({
-      walletClient: wallet,
-      address: props.membershipContractAddress as `0x${string}`,
-      abi: MemberAccessAbi,
-      functionName: 'approve',
-      args: [BigInt(props.onchainProposalId)],
+    await smartAccount.sendTransaction({
+      to: props.membershipContractAddress as `0x${string}`,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: MemberAccessAbi,
+        functionName: 'approve',
+        args: [BigInt(props.onchainProposalId)],
+      }),
     });
-
-    const writeResult = await writeContract(config);
-    console.log('approval transaction', writeResult);
   };
 
   const onReject = async () => {
-    if (!wallet || !props.membershipContractAddress) return;
+    if (!props.membershipContractAddress || !smartAccount) return;
 
-    const config = await prepareWriteContract({
-      walletClient: wallet,
-      address: props.membershipContractAddress as `0x${string}`,
-      abi: MemberAccessAbi,
-      functionName: 'reject',
-      args: [BigInt(props.onchainProposalId)],
+    await smartAccount.sendTransaction({
+      to: props.membershipContractAddress as `0x${string}`,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: MemberAccessAbi,
+        functionName: 'reject',
+        args: [BigInt(props.onchainProposalId)],
+      }),
     });
-
-    const writeResult = await writeContract(config);
-    console.log('rejection transaction', writeResult);
   };
 
   return (
