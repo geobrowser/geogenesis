@@ -3,7 +3,7 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { OmitStrict, Space } from '~/core/types';
+import { GovernanceType, OmitStrict, Space } from '~/core/types';
 
 import { entityFragment } from './fragments';
 import { graphql } from './graphql';
@@ -14,6 +14,7 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
     nodes {
       subspace {
         id
+        type
 
         metadata {
           nodes {
@@ -33,7 +34,9 @@ export type Subspace = OmitStrict<
   | 'isRootSpace'
   | 'mainVotingPluginAddress'
   | 'memberAccessPluginAddress'
+  | 'personalSpaceAdminPluginAddress'
   | 'spacePluginAddress'
+  | 'type'
 >;
 
 interface NetworkResult {
@@ -41,6 +44,7 @@ interface NetworkResult {
     nodes: {
       subspace: {
         id: string;
+        type: GovernanceType;
         metadata: { nodes: SubstreamEntity[] };
       };
     }[];
@@ -99,7 +103,6 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  // @TODO: Should use space metadata from space object
   const spaces = result.spaceSubspaces.nodes.map((space): Subspace => {
     const spaceConfigWithImage = getSpaceConfigFromMetadata(space.subspace.id, space.subspace.metadata.nodes[0]);
 

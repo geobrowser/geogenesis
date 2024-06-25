@@ -4,38 +4,17 @@ import { v4 as uuid } from 'uuid';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Space, SpaceConfigEntity } from '~/core/types';
+import { GovernanceType, Space, SpaceConfigEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import { spaceMetadataFragment, spacePluginsFragment, tripleFragment } from './fragments';
+import { spaceFragment, spaceMetadataFragment, spacePluginsFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
+import { NetworkSpaceResult } from './types';
 
 const getFetchSpaceQuery = (id: string) => `query {
   space(id: "${id}") {
-    id
-    isRootSpace
-    ${spacePluginsFragment}
-
-    spaceEditors {
-      nodes {
-        accountId
-      }
-    }
-
-    spaceMembers {
-      nodes {
-        accountId
-      }
-    }
-
-    createdAtBlock
-
-    metadata {
-      nodes {
-        ${spaceMetadataFragment}
-      }
-    }
+    ${spaceFragment}
   }
 }`;
 
@@ -44,17 +23,7 @@ export interface FetchSpaceOptions {
 }
 
 type NetworkResult = {
-  space: {
-    id: string;
-    isRootSpace: boolean;
-    mainVotingPluginAddress: string | null;
-    memberAccessPluginAddress: string;
-    spacePluginAddress: string;
-    spaceEditors: { nodes: { accountId: string }[] };
-    spaceMembers: { nodes: { accountId: string }[] };
-    createdAtBlock: string;
-    metadata: { nodes: SubstreamEntity[] };
-  } | null;
+  space: NetworkSpaceResult | null;
 };
 
 export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | null> {
@@ -118,6 +87,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
 
   return {
     id: networkSpace.id,
+    type: networkSpace.type,
     isRootSpace: networkSpace.isRootSpace,
     editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
     members: networkSpace.spaceMembers.nodes.map(account => account.accountId),
@@ -126,6 +96,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
 
     mainVotingPluginAddress: networkSpace.mainVotingPluginAddress,
     memberAccessPluginAddress: networkSpace.memberAccessPluginAddress,
+    personalSpaceAdminPluginAddress: networkSpace.personalSpaceAdminPluginAddress,
     spacePluginAddress: networkSpace.spacePluginAddress,
   };
 }

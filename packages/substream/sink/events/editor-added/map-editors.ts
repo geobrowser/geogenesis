@@ -12,11 +12,16 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
     const editors: S.space_editors.Insertable[] = [];
 
     for (const editor of editorAdded) {
-      const maybeSpaceIdForPlugin = yield* unwrap(
+      // @TODO: effect.all
+      const maybeSpaceIdForVotingPlugin = yield* unwrap(
         Effect.promise(() => Spaces.findForVotingPlugin(editor.mainVotingPluginAddress))
       );
 
-      if (!maybeSpaceIdForPlugin) {
+      const maybeSpaceIdForPersonalPlugin = yield* unwrap(
+        Effect.promise(() => Spaces.findForPersonalPlugin(editor.mainVotingPluginAddress))
+      );
+
+      if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForPersonalPlugin) {
         slog({
           level: 'error',
           message: `Matching space for approved editor not found for plugin address ${editor.mainVotingPluginAddress}`,
@@ -26,14 +31,27 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
         continue;
       }
 
-      const newMember: S.space_editors.Insertable = {
-        account_id: getChecksumAddress(editor.editorAddress),
-        space_id: getChecksumAddress(maybeSpaceIdForPlugin),
-        created_at: block.timestamp,
-        created_at_block: block.blockNumber,
-      };
+      if (maybeSpaceIdForVotingPlugin) {
+        const newMember: S.space_editors.Insertable = {
+          account_id: getChecksumAddress(editor.editorAddress),
+          space_id: getChecksumAddress(maybeSpaceIdForVotingPlugin),
+          created_at: block.timestamp,
+          created_at_block: block.blockNumber,
+        };
 
-      editors.push(newMember);
+        editors.push(newMember);
+      }
+
+      if (maybeSpaceIdForPersonalPlugin) {
+        const newMember: S.space_editors.Insertable = {
+          account_id: getChecksumAddress(editor.editorAddress),
+          space_id: getChecksumAddress(maybeSpaceIdForPersonalPlugin.id),
+          created_at: block.timestamp,
+          created_at_block: block.blockNumber,
+        };
+
+        editors.push(newMember);
+      }
     }
 
     return editors;

@@ -5,6 +5,7 @@ import {
   AppOp,
   CollectionItem,
   Entity,
+  GovernanceType,
   OmitStrict,
   ProposedVersion,
   Space,
@@ -146,12 +147,12 @@ export type SubstreamVersion = {
 
 export type SubstreamProposal = {
   id: string;
+  name: string | null;
   type: ProposalType;
   onchainProposalId: string;
   createdBy: CreatedBy;
   createdAt: number;
   createdAtBlock: string;
-  name: string | null;
   description: string | null;
   space: SubstreamSpace;
   startTime: number;

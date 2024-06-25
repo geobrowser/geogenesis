@@ -12,11 +12,16 @@ export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
     const members: S.space_members.Insertable[] = [];
 
     for (const member of membersApproved) {
-      const maybeSpaceIdForPlugin = yield* unwrap(
+      // @TODO: effect.all
+      const maybeSpaceIdForVotingPlugin = yield* unwrap(
         Effect.promise(() => Spaces.findForVotingPlugin(member.mainVotingPluginAddress))
       );
 
-      if (!maybeSpaceIdForPlugin) {
+      const maybeSpaceIdForPersonalPlugin = yield* unwrap(
+        Effect.promise(() => Spaces.findForPersonalPlugin(member.mainVotingPluginAddress))
+      );
+
+      if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForPersonalPlugin) {
         slog({
           level: 'error',
           message: `Matching space for approved member not found for plugin address ${member.mainVotingPluginAddress}`,
@@ -26,14 +31,27 @@ export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
         continue;
       }
 
-      const newMember: S.space_members.Insertable = {
-        account_id: getChecksumAddress(member.memberAddress),
-        space_id: getChecksumAddress(maybeSpaceIdForPlugin),
-        created_at: block.timestamp,
-        created_at_block: block.blockNumber,
-      };
+      if (maybeSpaceIdForVotingPlugin) {
+        const newMember: S.space_members.Insertable = {
+          account_id: getChecksumAddress(member.memberAddress),
+          space_id: getChecksumAddress(maybeSpaceIdForVotingPlugin),
+          created_at: block.timestamp,
+          created_at_block: block.blockNumber,
+        };
 
-      members.push(newMember);
+        members.push(newMember);
+      }
+
+      if (maybeSpaceIdForPersonalPlugin) {
+        const newMember: S.space_members.Insertable = {
+          account_id: getChecksumAddress(member.memberAddress),
+          space_id: getChecksumAddress(maybeSpaceIdForPersonalPlugin.id),
+          created_at: block.timestamp,
+          created_at_block: block.blockNumber,
+        };
+
+        members.push(newMember);
+      }
     }
 
     return members;
