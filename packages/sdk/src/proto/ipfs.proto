@@ -13,19 +13,14 @@ message IpfsMetadata {
 enum ActionType {
   UNKNOWN = 0;
   ADD_EDIT = 1;
-  ADD_SUBSPACE = 2;
-  REMOVE_SUBSPACE = 3;
-  ADD_EDITOR = 4;
-  REMOVE_EDITOR = 5;
-  ADD_MEMBER = 6;
-  REMOVE_MEMBER = 7;
-}
-
-message EditLegacy {
-  string name = 1;
-  string version = 2;
-  repeated Op ops = 3;
-  repeated bytes authors = 4;
+  IMPORT_SPACE = 2;
+  ADD_SUBSPACE = 3;
+  REMOVE_SUBSPACE = 4;
+  ADD_EDITOR = 5;
+  REMOVE_EDITOR = 6;
+  ADD_MEMBER = 7;
+  REMOVE_MEMBER = 8;
+  IMPORT_EDIT = 9;
 }
 
 message Edit {
@@ -34,7 +29,7 @@ message Edit {
   string version = 3;
   string id = 4;
   repeated Op ops = 5;
-  repeated bytes authors = 6;
+  repeated string authors = 6;
 }
 
 message Op {
@@ -85,4 +80,23 @@ message Subspace {
   string version = 3;
   string id = 4;
   string subspace = 5;
+}
+
+message ImportEdit {
+  string version = 1;
+  ActionType type = 2;
+  string id = 3;
+  string name = 4;
+  repeated Op ops = 5;
+  repeated string authors = 6;
+  string createdBy = 7;
+  string createdAt = 8;
+}
+
+// https://gateway.lighthouse.storage/ipfs/bafkreic5vxtnkgpkf54zo3jubf7fadegfwuui6nmonf6rze235ddxgl6we
+message Import {
+  // ActionType type = 1;
+  string previousNetwork = 1;
+  string previousContractAddress = 2;
+  repeated string edits = 3; // points to an array of IPFS hashes containing ImportEdit action types
 }

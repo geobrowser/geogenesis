@@ -198,3 +198,15 @@ export type EditProposal = Proposal & {
   pluginAddress: string;
   ops: Op[];
 };
+
+export const ZodImportEdit = z.object({
+  name: z.string(),
+  version: z.string(),
+  id: z.string(),
+  ops: z.array(ZodOp),
+  authors: z.array(z.string()),
+  createdBy: z.string(),
+  createdAt: z.string(),
+});
+
+export type ParsedImportEdit = z.infer<typeof ZodImportEdit>;

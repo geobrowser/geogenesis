@@ -1,4 +1,4 @@
-import { ActionType, IpfsMetadata } from '@geogenesis/sdk/proto';
+import { ActionType, Import, IpfsMetadata } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
@@ -124,8 +124,9 @@ function fetchEditProposalFromIpfs(
         // @TODO
         // 1. Previous contract address
         // 2. type on import
-        // 3. type on edit
-        const decodeEditEffect = (hash: string) => {
+        // 3. initial editors
+        // 4. block metadata
+        const decodeImportEditEffect = (hash: string) => {
           return Effect.gen(function* (_) {
             const ipfsContent = yield* _(getFetchIpfsContentEffect(hash));
             if (!ipfsContent) return null;
@@ -133,12 +134,12 @@ function fetchEditProposalFromIpfs(
             const validIpfsMetadata = yield* _(decode(() => IpfsMetadata.fromBinary(ipfsContent)));
             if (!validIpfsMetadata) return null;
 
-            return yield* _(Decoder.decodeEdit(ipfsContent));
+            return yield* _(Decoder.decodeImportEdit(ipfsContent));
           });
         };
 
         const maybeDecodedEdits = yield* _(
-          Effect.all(importResult.edits.map(decodeEditEffect), {
+          Effect.all(importResult.edits.map(decodeImportEditEffect), {
             concurrency: 50,
             // @TODO: Batching, filtering errors?
           })
@@ -148,7 +149,7 @@ function fetchEditProposalFromIpfs(
 
         const proposals = decodedEdits.map(e => {
           const contentProposal: EditProposal = {
-            type: 'EDIT',
+            type: 'ADD_EDIT',
             name: validIpfsMetadata.name ?? null,
             proposalId: e.id,
             onchainProposalId: '-1',

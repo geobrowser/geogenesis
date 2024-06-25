@@ -1,3 +1,4 @@
+import { Import, IpfsMetadata } from '@geogenesis/sdk/proto';
 import { Effect } from 'effect';
 import fs from 'fs';
 import * as db from 'zapatos/db';
@@ -9,7 +10,7 @@ import { populateApprovedContentProposal } from '../entries/populate-approved-co
 import { mapIpfsProposalToSchemaProposalByType } from '../events/proposals-created/map-proposals';
 import { type EditProposal } from '../events/proposals-created/parser';
 import { getFetchIpfsContentEffect } from '../ipfs';
-import { Decoder, Edit, Import, IpfsMetadata, decode } from '../proto';
+import { Decoder, decode } from '../proto';
 import type { BlockEvent, Op } from '../types';
 import { retryEffect } from '../utils/retry-effect';
 import { pool } from '~/sink/utils/pool';
@@ -31,14 +32,22 @@ const mockProposal = {
   space: '',
 };
 
-class CouldNotWriteInitialSpaceProposalsError extends Error {
-  _tag: 'CouldNotWriteInitialSpaceProposalsError' = 'CouldNotWriteInitialSpaceProposalsError';
-}
-
 function e2e() {
   return Effect.gen(function* (_) {
-    const importResult = yield* _(decode(() => Import.fromBinary(fs.readFileSync('./sink/e2e/import.pb'))));
-    if (!importResult) return;
+    const originalIpfsContent = yield* _(
+      getFetchIpfsContentEffect('ipfs://bafkreic5vxtnkgpkf54zo3jubf7fadegfwuui6nmonf6rze235ddxgl6we')
+    );
+    if (!originalIpfsContent) {
+      return;
+    }
+
+    // https://gateway.lighthouse.storage/ipfs/bafkreic5vxtnkgpkf54zo3jubf7fadegfwuui6nmonf6rze235ddxgl6we
+    const importResult = yield* _(decode(() => Import.fromBinary(originalIpfsContent)));
+    if (!importResult) {
+      return;
+    }
+
+    console.log('importResult', importResult.edits.length);
 
     // @TODO
     // 1. Previous contract address
@@ -49,10 +58,10 @@ function e2e() {
         const ipfsContent = yield* _(getFetchIpfsContentEffect(hash));
         if (!ipfsContent) return;
 
-        const validIpfsMetadata = yield* _(decode(() => IpfsMetadata.fromBinary(ipfsContent)));
-        if (!validIpfsMetadata) return;
+        // const validIpfsMetadata = yield* _(decode(() => IpfsMetadata.fromBinary(ipfsContent)));
+        // if (!validIpfsMetadata) return;
 
-        return yield* _(Decoder.decodeEdit(ipfsContent));
+        return yield* _(Decoder.decodeImportEdit(ipfsContent));
       });
     };
 
