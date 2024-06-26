@@ -1,4 +1,4 @@
-import { Edit, ImportEdit, Membership, Subspace } from '@geogenesis/sdk/proto';
+import { Edit, ImportEdit, Membership, Op, Subspace } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
 import {
@@ -81,9 +81,17 @@ function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> 
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = ImportEdit.fromBinary(data);
+
       const parseResult = ZodImportEdit.safeParse(edit);
 
       if (parseResult.success) {
+        // @TODO(migration): For now we have some invalid ops while we still work on the data migration
+        const validOps = parseResult.data.ops.filter(
+          o => o.opType === 'SET_TRIPLE' && (o.payload as unknown as any).value.type !== 'FILTER_ME_OUT'
+        );
+
+        parseResult.data.ops = validOps;
+
         return parseResult.data;
       }
 

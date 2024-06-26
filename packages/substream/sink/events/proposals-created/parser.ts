@@ -153,6 +153,10 @@ const ZodEditSetTriplePayload = z.object({
           return 'TIME';
         case 8:
           return 'GEO_LOCATION';
+        // We haven't migrated images yet, so some triples might have
+        // the IMAGE value type still
+        case 9:
+          return 'FILTER_ME_OUT';
       }
     }),
   }),
@@ -164,7 +168,7 @@ const ZodEditDeleteTriplePayload = z.object({
   // zod has issues with discriminated unions. We set the value
   // to any here and trust that it is constructed into the correct
   // format by the binary decoder before it's parsed by zod.
-  value: z.any(),
+  // value: z.any(),
 });
 
 const ZodSetTripleOp = z.object({

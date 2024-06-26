@@ -2,12 +2,12 @@ syntax = "proto3";
 
 message IpfsMetadata {
   ActionType type = 1;
-  string name = 2;
   // We version the data structured used to represent proposal metadata. Each
   // proposal type has their own metadata and versioning that we can change
   // independently of other proposal types.
-  string version = 3;
-  string id = 4;
+  string version = 2;
+  string id = 3;
+  string name = 4;
 }
 
 enum ActionType {
@@ -25,9 +25,9 @@ enum ActionType {
 
 message Edit {
   ActionType type = 1;
-  string name = 2;
-  string version = 3;
-  string id = 4;
+  string version = 2;
+  string id = 3;
+  string name = 4;
   repeated Op ops = 5;
   repeated string authors = 6;
 }
@@ -83,20 +83,24 @@ message Subspace {
 }
 
 message ImportEdit {
-  string version = 1;
-  ActionType type = 2;
+  ActionType type = 1;
+  string version = 2;
   string id = 3;
   string name = 4;
   repeated Op ops = 5;
   repeated string authors = 6;
   string createdBy = 7;
   string createdAt = 8;
+  string blockHash = 9;
+  string blockNumber = 10;
+  string transactionHash = 11;
 }
 
 // https://gateway.lighthouse.storage/ipfs/bafkreic5vxtnkgpkf54zo3jubf7fadegfwuui6nmonf6rze235ddxgl6we
 message Import {
-  // ActionType type = 1;
-  string previousNetwork = 1;
-  string previousContractAddress = 2;
-  repeated string edits = 3; // points to an array of IPFS hashes containing ImportEdit action types
+  ActionType type = 1;
+  string version = 2;
+  string previousNetwork = 3;
+  string previousContractAddress = 4;
+  repeated string edits = 5;
 }

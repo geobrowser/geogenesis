@@ -111,8 +111,6 @@ function fetchEditProposalFromIpfs(
       // The initial content set might not be an Edit and instead be an import. If it's an import
       // we need to turn every Edit in the import into an individual EditProposal.
       case ActionType.IMPORT_SPACE:
-        console.log('Received an import');
-
         // @TODO: Map every edit in the import into many EditProposals. We then need to flatten
         // these later
         const importResult = yield* _(decode(() => Import.fromBinary(ipfsContent)));
@@ -121,11 +119,6 @@ function fetchEditProposalFromIpfs(
           return null;
         }
 
-        // @TODO
-        // 1. Previous contract address
-        // 2. type on import
-        // 3. initial editors
-        // 4. block metadata
         const decodeImportEditEffect = (hash: string) => {
           return Effect.gen(function* (_) {
             const ipfsContent = yield* _(getFetchIpfsContentEffect(hash));
@@ -141,7 +134,7 @@ function fetchEditProposalFromIpfs(
         const maybeDecodedEdits = yield* _(
           Effect.all(importResult.edits.map(decodeImportEditEffect), {
             concurrency: 50,
-            // @TODO: Batching, filtering errors?
+            // @TODO: Batching, filtering errors? retrying errors?
           })
         );
 
@@ -150,14 +143,12 @@ function fetchEditProposalFromIpfs(
         const proposals = decodedEdits.map(e => {
           const contentProposal: EditProposal = {
             type: 'ADD_EDIT',
-            name: validIpfsMetadata.name ?? null,
+            name: e.name ?? null,
             proposalId: e.id,
             onchainProposalId: '-1',
             pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
             ops: e.ops as Op[],
-            // @TODO: We can use the createdBy on the ImportEdit type instead of
-            // hard-coding Geo as the creator.
-            creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'),
+            creator: getChecksumAddress(e.createdBy),
             space: getChecksumAddress(maybeSpaceIdForVotingPlugin.id),
             endTime: block.timestamp.toString(),
             startTime: block.timestamp.toString(),

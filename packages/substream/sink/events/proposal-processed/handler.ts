@@ -12,7 +12,7 @@ export function handleProposalsProcessed(proposalsFromIpfs: EditProposal[], bloc
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
-      message: `Processing ${proposalsFromIpfs.length} processed proposals`,
+      message: `Mapping ${proposalsFromIpfs.length} processed proposals`,
     });
 
     /**
@@ -56,7 +56,10 @@ export function handleProposalsProcessed(proposalsFromIpfs: EditProposal[], bloc
               });
             },
           });
-        })
+        }),
+        {
+          concurrency: 75,
+        }
       )
     );
 
@@ -67,11 +70,6 @@ export function handleProposalsProcessed(proposalsFromIpfs: EditProposal[], bloc
         block
       )
     );
-
-    slog({
-      requestId: block.requestId,
-      message: `Processing ${proposalsFromIpfs.length} processed proposals`,
-    });
 
     slog({
       requestId: block.requestId,

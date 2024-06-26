@@ -35,43 +35,43 @@ const mockProposal = {
 function e2e() {
   return Effect.gen(function* (_) {
     const originalIpfsContent = yield* _(
-      getFetchIpfsContentEffect('ipfs://bafkreic5vxtnkgpkf54zo3jubf7fadegfwuui6nmonf6rze235ddxgl6we')
+      getFetchIpfsContentEffect('ipfs://bafkreiapeymqtpp5d5c6sjynvmak7qom4b26zqugjza34a26fosok4lll4')
     );
     if (!originalIpfsContent) {
       return;
     }
 
-    // https://gateway.lighthouse.storage/ipfs/bafkreic5vxtnkgpkf54zo3jubf7fadegfwuui6nmonf6rze235ddxgl6we
+    // https://gateway.lighthouse.storage/ipfs/bafkreiapeymqtpp5d5c6sjynvmak7qom4b26zqugjza34a26fosok4lll4
     const importResult = yield* _(decode(() => Import.fromBinary(originalIpfsContent)));
     if (!importResult) {
       return;
     }
 
-    console.log('importResult', importResult.edits.length);
+    console.log('importResult', importResult.edits);
 
     // @TODO
     // 1. Previous contract address
     // 2. type on import
     // 3. type on edit
-    const decodeEditEffect = (hash: string) => {
-      return Effect.gen(function* (_) {
-        const ipfsContent = yield* _(getFetchIpfsContentEffect(hash));
-        if (!ipfsContent) return;
+    // const decodeEditEffect = (hash: string) => {
+    //   return Effect.gen(function* (_) {
+    //     const ipfsContent = yield* _(getFetchIpfsContentEffect(hash));
+    //     if (!ipfsContent) return;
 
-        // const validIpfsMetadata = yield* _(decode(() => IpfsMetadata.fromBinary(ipfsContent)));
-        // if (!validIpfsMetadata) return;
+    //     // const validIpfsMetadata = yield* _(decode(() => IpfsMetadata.fromBinary(ipfsContent)));
+    //     // if (!validIpfsMetadata) return;
 
-        return yield* _(Decoder.decodeImportEdit(ipfsContent));
-      });
-    };
+    //     return yield* _(Decoder.decodeImportEdit(ipfsContent));
+    //   });
+    // };
 
-    const decodedEdits = yield* _(
-      Effect.all(importResult.edits.map(decodeEditEffect), {
-        concurrency: 50,
-      })
-    );
+    // const decodedEdits = yield* _(
+    //   Effect.all(importResult.edits.map(decodeEditEffect), {
+    //     concurrency: 50,
+    //   })
+    // );
 
-    console.log('decoded edits', decodedEdits);
+    // console.log('decoded edits', decodedEdits);
   });
 }
 

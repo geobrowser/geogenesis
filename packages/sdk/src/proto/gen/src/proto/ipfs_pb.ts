@@ -172,23 +172,23 @@ export class IpfsMetadata extends Message<IpfsMetadata> {
   type = ActionType.UNKNOWN;
 
   /**
-   * @generated from field: string name = 2;
-   */
-  name = "";
-
-  /**
    * We version the data structured used to represent proposal metadata. Each
    * proposal type has their own metadata and versioning that we can change
    * independently of other proposal types.
    *
-   * @generated from field: string version = 3;
+   * @generated from field: string version = 2;
    */
   version = "";
 
   /**
-   * @generated from field: string id = 4;
+   * @generated from field: string id = 3;
    */
   id = "";
+
+  /**
+   * @generated from field: string name = 4;
+   */
+  name = "";
 
   constructor(data?: PartialMessage<IpfsMetadata>) {
     super();
@@ -199,9 +199,9 @@ export class IpfsMetadata extends Message<IpfsMetadata> {
   static readonly typeName = "IpfsMetadata";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IpfsMetadata {
@@ -231,19 +231,19 @@ export class Edit extends Message<Edit> {
   type = ActionType.UNKNOWN;
 
   /**
-   * @generated from field: string name = 2;
-   */
-  name = "";
-
-  /**
-   * @generated from field: string version = 3;
+   * @generated from field: string version = 2;
    */
   version = "";
 
   /**
-   * @generated from field: string id = 4;
+   * @generated from field: string id = 3;
    */
   id = "";
+
+  /**
+   * @generated from field: string name = 4;
+   */
+  name = "";
 
   /**
    * @generated from field: repeated Op ops = 5;
@@ -264,9 +264,9 @@ export class Edit extends Message<Edit> {
   static readonly typeName = "Edit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "ops", kind: "message", T: Op, repeated: true },
     { no: 6, name: "authors", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
@@ -550,14 +550,14 @@ export class Subspace extends Message<Subspace> {
  */
 export class ImportEdit extends Message<ImportEdit> {
   /**
-   * @generated from field: string version = 1;
-   */
-  version = "";
-
-  /**
-   * @generated from field: ActionType type = 2;
+   * @generated from field: ActionType type = 1;
    */
   type = ActionType.UNKNOWN;
+
+  /**
+   * @generated from field: string version = 2;
+   */
+  version = "";
 
   /**
    * @generated from field: string id = 3;
@@ -589,6 +589,21 @@ export class ImportEdit extends Message<ImportEdit> {
    */
   createdAt = "";
 
+  /**
+   * @generated from field: string blockHash = 9;
+   */
+  blockHash = "";
+
+  /**
+   * @generated from field: string blockNumber = 10;
+   */
+  blockNumber = "";
+
+  /**
+   * @generated from field: string transactionHash = 11;
+   */
+  transactionHash = "";
+
   constructor(data?: PartialMessage<ImportEdit>) {
     super();
     proto3.util.initPartial(data, this);
@@ -597,14 +612,17 @@ export class ImportEdit extends Message<ImportEdit> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "ImportEdit";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
+    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
+    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "ops", kind: "message", T: Op, repeated: true },
     { no: 6, name: "authors", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 7, name: "createdBy", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 8, name: "createdAt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "blockHash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "blockNumber", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 11, name: "transactionHash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ImportEdit {
@@ -631,21 +649,27 @@ export class ImportEdit extends Message<ImportEdit> {
  */
 export class Import extends Message<Import> {
   /**
-   * ActionType type = 1;
-   *
-   * @generated from field: string previousNetwork = 1;
+   * @generated from field: ActionType type = 1;
+   */
+  type = ActionType.UNKNOWN;
+
+  /**
+   * @generated from field: string version = 2;
+   */
+  version = "";
+
+  /**
+   * @generated from field: string previousNetwork = 3;
    */
   previousNetwork = "";
 
   /**
-   * @generated from field: string previousContractAddress = 2;
+   * @generated from field: string previousContractAddress = 4;
    */
   previousContractAddress = "";
 
   /**
-   * points to an array of IPFS hashes containing ImportEdit action types
-   *
-   * @generated from field: repeated string edits = 3;
+   * @generated from field: repeated string edits = 5;
    */
   edits: string[] = [];
 
@@ -657,9 +681,11 @@ export class Import extends Message<Import> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "Import";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "previousNetwork", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "previousContractAddress", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "edits", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
+    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
+    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "previousNetwork", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "previousContractAddress", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "edits", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Import {
