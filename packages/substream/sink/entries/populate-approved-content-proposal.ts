@@ -1,5 +1,4 @@
 import { Effect, Either } from 'effect';
-import { groupBy } from 'effect/ReadonlyArray';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
@@ -86,23 +85,11 @@ export function populateApprovedContentProposal(
       yield* awaited(
         Effect.all([
           Effect.tryPromise({
-            try: () =>
-              // We update the name and description for an entity when mapping
-              // through triples.
-              Entities.upsert(entities),
-            // upsertChunked('entities', entities, 'id', {
-            //   updateColumns: ['updated_at', 'updated_at_block', 'created_by_id'],
-            //   noNullUpdateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
-            // }),
+            // We update the name and description for an entity when mapping
+            // through triples.
+            try: () => Entities.upsert(entities),
             catch: error => new Error(`Failed to insert bulk entities. ${(error as Error).message}`),
           }),
-          // Effect.tryPromise({
-          //   try: () =>
-          //     upsertChunked('proposals', proposals, 'id', {
-          //       updateColumns: db.doNothing,
-          //     }),
-          //   catch: error => new Error(`Failed to insert bulk proposals. ${(error as Error).message}`),
-          // }),
           Effect.tryPromise({
             try: () =>
               upsertChunked('versions', versions, 'id', {
@@ -126,19 +113,14 @@ export function populateApprovedContentProposal(
        * for a given entity, so we could write the same ops multiple times if there are multiple
        * proposedVersions that change the same entity.
        */
-
       const opsWithCreatedById = proposedVersions.map((pv): SchemaTripleEdit => {
+        // Safe to cast with ! since we know that we set this in the mapping earlier in this function
         const ops = opsByProposalId.get(pv.proposal_id)!.filter(o => o.payload.entityId === pv.entity_id);
-
-        if (pv.entity_id === 'f1b9fd886388436e95b551aafaea77e5') {
-          console.log('ops for types block', { ops: JSON.stringify(ops, null, 2), proposalId: pv.proposal_id });
-        }
 
         return {
           proposalId: pv.proposal_id,
           createdById: pv.created_by_id,
           spaceId: pv.space_id,
-          // Safe to cast with ! since we know that we set this in the mapping previously
           ops,
         };
       });
