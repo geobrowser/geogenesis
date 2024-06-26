@@ -42,7 +42,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
 
   if (proposalType === 'content') {
     proposalTypeFilter = `or: [{
-      type: { equalTo: CONTENT }
+      type: { equalTo: ADD_EDIT }
     }, {
       type: { equalTo: ADD_SUBSPACE }
     }, {
@@ -69,7 +69,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
       filter: {
         ${proposalTypeFilter ?? ''}
         status: { equalTo: PROPOSED }
-        endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
+        # endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
         space: {
           spaceEditors: {
             some: {

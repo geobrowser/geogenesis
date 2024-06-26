@@ -3,13 +3,15 @@
 import { Client, Context, CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-client';
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Op, VotingMode, createGeoId } from '@geogenesis/sdk';
+import { GovernanceSetupAbi, MainVotingAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
-import { getAddress } from 'viem';
+import { decodeErrorResult, getAddress } from 'viem';
 
 import { useWalletClient } from 'wagmi';
 
 import { Environment } from '~/core/environment';
 import { useAragon } from '~/core/hooks/use-aragon';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { StorageClient } from '~/core/io/storage/storage';
 
 import { Button } from '~/design-system/button';
@@ -165,13 +167,13 @@ const types: Op[] = [
 // this route is only for testing creating a DAO on the frontend
 export function CreateDao({ type }: Prtypes) {
   const sdkContextParams = useAragon();
-  const { data: wallet } = useWalletClient();
+  const smartAccount = useSmartAccount();
 
   if (!sdkContextParams) throw new Error('getypeluginContext is undefined');
   const client: Client = new Client(new Context(sdkContextParams));
 
   const handleCreateDao = async () => {
-    if (!wallet) return;
+    if (!smartAccount) return;
 
     const entityId = createGeoId();
     const collectionId = createGeoId();
@@ -180,8 +182,8 @@ export function CreateDao({ type }: Prtypes) {
 
     const initialContent = createEditProposal(
       {
-        name: '1.0.2: Account abstraction test space',
-        author: getAddress(wallet.account.address),
+        name: '1.0.3: Governance v3 test space',
+        author: getAddress(smartAccount.account.address),
         ops: [
           {
             type: 'SET_TRIPLE',
@@ -190,7 +192,7 @@ export function CreateDao({ type }: Prtypes) {
               attributeId: SYSTEM_IDS.NAME,
               value: {
                 type: 'TEXT',
-                value: 'Account abstraction test space',
+                value: 'Governance v3 test space',
               },
             },
           },
@@ -283,16 +285,16 @@ export function CreateDao({ type }: Prtypes) {
         votingSettings: {
           votingMode: VotingMode.Standard,
           supportThreshold: 50_000,
-          minParticipation: 50_000,
           duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
         initialEditors: [
-          getAddress('0x35483105944CD199BD336D6CEf476ea20547a9b5'),
+          getAddress(smartAccount.account.address),
+          // getAddress('0x35483105944CD199BD336D6CEf476ea20547a9b5'),
           // getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
           // getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
         ],
-        pluginUpgrader: getAddress('0x35483105944CD199BD336D6CEf476ea20547a9b5'),
+        pluginUpgrader: getAddress(smartAccount.account.address),
       };
 
       const governancePluginInstallItem = getGovernancePluginInstallItem(governancePluginConfig);
@@ -326,7 +328,7 @@ export function CreateDao({ type }: Prtypes) {
 
     if (type === 'personal') {
       const personalSpacePluginItem = getPersonalSpaceGovernancePluginInstallItem({
-        initialEditor: getAddress(wallet.account.address),
+        initialEditor: getAddress(smartAccount.account.address),
       });
 
       const createParams: CreateDaoParams = {

@@ -62,6 +62,7 @@ export const tripleFragment = `
 export const spacePluginsFragment = `
   mainVotingPluginAddress
   memberAccessPluginAddress
+  personalSpaceAdminPluginAddress
   spacePluginAddress
 `;
 
@@ -87,6 +88,33 @@ export const spaceMetadataFragment = `
   triples(filter: {isStale: {equalTo: false}}) {
     nodes {
       ${tripleFragment}
+    }
+  }
+`;
+
+export const spaceFragment = `
+  id
+  type
+  isRootSpace
+  ${spacePluginsFragment}
+
+  spaceEditors {
+    nodes {
+      accountId
+    }
+  }
+
+  spaceMembers {
+    nodes {
+      accountId
+    }
+  }
+
+  createdAtBlock
+
+  metadata {
+    nodes {
+      ${entityFragment}
     }
   }
 `;

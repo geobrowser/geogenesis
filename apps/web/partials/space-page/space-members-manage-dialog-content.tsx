@@ -12,11 +12,11 @@ import { useProposeToRemoveMember } from './use-propose-to-remove-member';
 
 interface Props {
   members: OmitStrict<Profile, 'coverUrl'>[];
-  memberAccessPluginAddress: string;
+  votingPluginAddress: string | null;
 }
 
-export function SpaceMembersManageDialogContent({ members, memberAccessPluginAddress }: Props) {
-  const { proposeToRemoveMember } = useProposeToRemoveMember(memberAccessPluginAddress);
+export function SpaceMembersManageDialogContent({ members, votingPluginAddress }: Props) {
+  const { proposeToRemoveMember } = useProposeToRemoveMember(votingPluginAddress);
 
   const [query, setQuery] = React.useState('');
 

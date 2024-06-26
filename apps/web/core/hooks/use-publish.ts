@@ -1,44 +1,21 @@
-import { Op, getProcessGeoProposalArguments } from '@geogenesis/sdk';
-import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { Op } from '@geogenesis/sdk';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
-import { Effect, Either, Schedule } from 'effect';
-import { encodeFunctionData } from 'viem';
+import { Effect, Either } from 'effect';
+import { decodeErrorResult, encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
-import { IStorageClient } from '../io/storage/storage';
+import { TransactionWriteFailedError } from '../errors';
+import { IStorageClient, uploadBinary } from '../io/storage/storage';
 import { fetchSpace } from '../io/subgraph';
 import { Services } from '../services';
 import { useStatusBar } from '../state/status-bar-store';
-import { Triple as ITriple, ReviewState } from '../types';
+import { GovernanceType, Triple as ITriple, ReviewState } from '../types';
 import { Triples } from '../utils/triples';
 import { sleepWithCallback } from '../utils/utils';
 import { useActionsStore } from './use-actions-store';
 import { useSmartAccount } from './use-smart-account';
-
-export class TransactionRevertedError extends Error {
-  readonly _tag = 'TransactionRevertedError';
-}
-
-export class WaitForTransactionBlockError extends Error {
-  readonly _tag = 'WaitForTransactionBlockError';
-}
-
-export class TransactionPrepareFailedError extends Error {
-  readonly _tag = 'TransactionPrepareFailedError';
-}
-
-export class TransactionWriteFailedError extends Error {
-  readonly _tag = 'TransactionWriteFailedError';
-}
-
-export class InvalidIpfsQmHashError extends Error {
-  readonly _tag = 'InvalidIpfsQmHashError';
-}
-
-export class IpfsUploadError extends Error {
-  readonly _tag = 'IpfsUploadError';
-}
 
 interface MakeProposalOptions {
   triples: ITriple[];
@@ -73,7 +50,15 @@ export function usePublish() {
       const space = await fetchSpace({ id: spaceId });
 
       const publish = Effect.gen(function* () {
-        if (space === null || space.mainVotingPluginAddress === null) {
+        // const error = decodeErrorResult({
+        //   abi: PersonalSpaceAdminAbi,
+        //   data: '0x32dbe3b4000000000000000000000000b64a4b5813df2518f326f512872e0711380de940000000000000000000000000d0e078ca9674ed3e6e0b4a6a21ecfa9e9217769f00000000000000000000000035483105944cd199bd336d6cef476ea20547a9b56fd388bae34ebf69f2f68ae03174c1b3616db3ac7aecc5ce2f85785867365324',
+        // });
+
+        // console.log('error', error);
+        // return;
+
+        if (!space) {
           return;
         }
 
@@ -91,7 +76,10 @@ export function usePublish() {
           smartAccount,
           space: {
             id: space.id,
+            spacePluginAddress: space.spacePluginAddress,
             mainVotingPluginAddress: space.mainVotingPluginAddress,
+            personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
+            type: space.type,
           },
         });
 
@@ -132,7 +120,6 @@ export function usePublish() {
 
       if (Either.isLeft(result)) {
         const error = result.left;
-
         onError?.();
 
         if (error instanceof Error) {
@@ -198,7 +185,10 @@ export function useBulkPublish() {
           smartAccount,
           space: {
             id: space.id,
+            spacePluginAddress: space.spacePluginAddress,
             mainVotingPluginAddress: space.mainVotingPluginAddress,
+            personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
+            type: space.type,
           },
         });
       });
@@ -241,50 +231,50 @@ interface MakeProposalArgs {
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>>;
   space: {
     id: string;
-    mainVotingPluginAddress: string;
+    spacePluginAddress: string;
+    mainVotingPluginAddress: string | null;
+    personalSpaceAdminPluginAddress: string | null;
+    type: GovernanceType;
   };
   onChangePublishState: (newState: ReviewState) => void;
 }
 
+// @TODO: depending on the type of space we need to call different functions
+// If it's a public space we call proposeEdits, if it's a personal space we
+// call submitEdits
 function makeProposal(args: MakeProposalArgs) {
   const { name, ops, smartAccount, space, storage, onChangePublishState } = args;
-  const proposal = createEditProposal({ name, ops, author: smartAccount.account.address });
 
-  const uploadEffect = Effect.retry(
-    Effect.tryPromise({
-      try: async () => {
-        const hash = await storage.uploadBinary(proposal);
-        return `ipfs://${hash}`;
-      },
-      catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
-    }),
-    Schedule.exponential('100 millis').pipe(Schedule.jittered)
-  );
+  const proposal = createEditProposal({ name, ops, author: smartAccount.account.address });
+  console.log('space type', space.type);
 
   const writeTxEffect = Effect.gen(function* () {
-    onChangePublishState('publishing-ipfs');
-    const cid = yield* uploadEffect;
-
-    if (!cid.startsWith('ipfs://Qm')) {
-      return yield* Effect.fail(
-        new InvalidIpfsQmHashError('Failure when uploading content to IPFS. Did not recieve valid Qm hash.')
-      );
+    if (space.type === 'PUBLIC' && !space.mainVotingPluginAddress) {
+      console.error('public space does not have main voting plugin address');
+      return;
     }
 
-    const encodedProposalArgs = getProcessGeoProposalArguments(space.id as `0x${string}`, cid as `ipfs://${string}`);
+    if (space.type === 'PERSONAL' && !space.personalSpaceAdminPluginAddress) {
+      console.error('personal space does not have member access plugin address');
+      return;
+    }
 
-    const callData = encodeFunctionData({
-      functionName: 'createProposal',
-      abi: MainVotingAbi,
-      args: encodedProposalArgs,
+    onChangePublishState('publishing-ipfs');
+    const cid = yield* uploadBinary(proposal, storage);
+
+    const callData = getCalldataForSpaceGovernanceType({
+      type: space.type,
+      cid,
+      spacePluginAddress: space.spacePluginAddress,
     });
-
-    onChangePublishState('signing-wallet');
 
     return yield* Effect.tryPromise({
       try: () =>
         smartAccount.sendTransaction({
-          to: space.mainVotingPluginAddress as `0x${string}`,
+          to:
+            space.type === 'PUBLIC'
+              ? (space.mainVotingPluginAddress as `0x${string}`)
+              : (space.personalSpaceAdminPluginAddress as `0x${string}`),
           value: 0n,
           data: callData,
         }),
@@ -300,4 +290,29 @@ function makeProposal(args: MakeProposalArgs) {
   });
 
   return publishProgram;
+}
+
+type GovernanceTypeCalldataArgs = {
+  type: GovernanceType;
+  cid: string;
+  spacePluginAddress: string;
+};
+
+export function getCalldataForSpaceGovernanceType(args: GovernanceTypeCalldataArgs) {
+  switch (args.type) {
+    case 'PUBLIC':
+      return encodeFunctionData({
+        functionName: 'proposeEdits',
+        abi: MainVotingAbi,
+        // @TODO: Function for encoding args
+        args: [stringToHex(args.cid), args.cid, args.spacePluginAddress as `0x${string}`],
+      });
+    case 'PERSONAL':
+      return encodeFunctionData({
+        functionName: 'submitEdits',
+        abi: PersonalSpaceAdminAbi,
+        // @TODO: Function for encoding args
+        args: [args.cid, args.spacePluginAddress as `0x${string}`],
+      });
+  }
 }

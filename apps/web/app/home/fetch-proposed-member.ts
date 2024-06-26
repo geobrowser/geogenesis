@@ -1,6 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { tripleFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamTriple, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
 import { Profile } from '~/core/types';
@@ -29,26 +30,7 @@ const getProposedMemberInProposalQuery = (proposalId: string) => `query {
             name
             triples {
               nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                space {
-                  id
-                }
+                ${tripleFragment}
               }
             }
           }
@@ -103,7 +85,7 @@ export async function fetchProposedMemberForProposal(proposalId: string): Promis
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposedSubspace. proposalId: ${proposalId} endpoint: ${endpoint}
+            `Encountered runtime graphql error in fetchProposedMember. proposalId: ${proposalId} endpoint: ${endpoint}
 
             queryString: ${getProposedMemberInProposalQuery(proposalId)}
             `,

@@ -6,11 +6,9 @@ import { ErrorBoundary } from 'react-error-boundary';
 import * as React from 'react';
 import { useEffect } from 'react';
 
-import { useAccount } from 'wagmi';
-
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { Action } from '~/core/utils/action';
 
+import { useSmartAccount } from '../hooks/use-smart-account';
 import { client } from './entity-presence-client';
 
 export const EntityPresenceContext = createRoomContext<{
@@ -33,9 +31,10 @@ interface Props {
 // One workaround is to track which entities a user has made changes to, but
 // for now we can just show all editors currently in the space.
 export function SpacePresenceProvider({ children, entityId, spaceId }: Props) {
-  const account = useAccount();
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
 
-  if (!account.address) {
+  if (!address) {
     return null;
   }
 
@@ -46,7 +45,7 @@ export function SpacePresenceProvider({ children, entityId, spaceId }: Props) {
     >
       <EntityPresenceContext.RoomProvider
         id={entityId}
-        initialPresence={{ address: account.address, hasChangesToEntity: true }}
+        initialPresence={{ address: address, hasChangesToEntity: true }}
       >
         {children}
       </EntityPresenceContext.RoomProvider>
@@ -55,9 +54,10 @@ export function SpacePresenceProvider({ children, entityId, spaceId }: Props) {
 }
 
 export function EntityPresenceProvider({ children, entityId, spaceId }: Props) {
-  const account = useAccount();
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
 
-  if (!account.address) {
+  if (!address) {
     return null;
   }
 
@@ -68,9 +68,9 @@ export function EntityPresenceProvider({ children, entityId, spaceId }: Props) {
     >
       <EntityPresenceContext.RoomProvider
         id={entityId}
-        initialPresence={{ address: account.address, hasChangesToEntity: false }}
+        initialPresence={{ address: address, hasChangesToEntity: false }}
       >
-        <HasEntityChanges entityId={entityId} spaceId={spaceId} address={account.address}>
+        <HasEntityChanges entityId={entityId} spaceId={spaceId} address={address}>
           {children}
         </HasEntityChanges>
       </EntityPresenceContext.RoomProvider>

@@ -114,7 +114,7 @@ const getFetchSpaceProposalsQuery = (
     filter: {
       spaceId: { equalTo: "${spaceId}" }
       or: [
-        { type: { equalTo: CONTENT } }
+        { type: { equalTo: ADD_EDIT } }
         { type: { equalTo: ADD_SUBSPACE } }
         { type: { equalTo: REMOVE_SUBSPACE } }
       ]
@@ -123,7 +123,6 @@ const getFetchSpaceProposalsQuery = (
     nodes {
       id
       onchainProposalId
-      name
 
       createdAtBlock
 
@@ -207,7 +206,7 @@ async function fetchActiveProposals({
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchProposals. spaceId: ${spaceId} page: ${page}
+            `Encountered runtime graphql error in governance proposals list. spaceId: ${spaceId} page: ${page}
             
             queryString: ${getFetchSpaceProposalsQuery(spaceId, first, offset, connectedAddress)}
             `,

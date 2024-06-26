@@ -1,9 +1,9 @@
 'use client';
 
 import { MemberAccessAbi } from '@geogenesis/sdk/abis';
+import { encodeFunctionData } from 'viem';
 
-import { useConfig } from 'wagmi';
-import { simulateContract, writeContract } from 'wagmi/actions';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
 import { SmallButton } from '~/design-system/button';
 
@@ -13,34 +13,34 @@ interface Props {
 }
 
 export function AcceptOrRejectMember(props: Props) {
-  const walletConfig = useConfig();
+  const smartAccount = useSmartAccount();
 
   const onApprove = async () => {
-    if (!props.membershipContractAddress) return;
+    if (!props.membershipContractAddress || !smartAccount) return;
 
-    const config = await simulateContract(walletConfig, {
-      address: props.membershipContractAddress as `0x${string}`,
-      abi: MemberAccessAbi,
-      functionName: 'approve',
-      args: [BigInt(props.onchainProposalId)],
+    await smartAccount.sendTransaction({
+      to: props.membershipContractAddress as `0x${string}`,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: MemberAccessAbi,
+        functionName: 'approve',
+        args: [BigInt(props.onchainProposalId)],
+      }),
     });
-
-    const writeResult = await writeContract(walletConfig, config.request);
-    console.log('approval transaction', writeResult);
   };
 
   const onReject = async () => {
-    if (!props.membershipContractAddress) return;
+    if (!props.membershipContractAddress || !smartAccount) return;
 
-    const config = await simulateContract(walletConfig, {
-      address: props.membershipContractAddress as `0x${string}`,
-      abi: MemberAccessAbi,
-      functionName: 'reject',
-      args: [BigInt(props.onchainProposalId)],
+    await smartAccount.sendTransaction({
+      to: props.membershipContractAddress as `0x${string}`,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: MemberAccessAbi,
+        functionName: 'reject',
+        args: [BigInt(props.onchainProposalId)],
+      }),
     });
-
-    const writeResult = await writeContract(walletConfig, config.request);
-    console.log('rejection transaction', writeResult);
   };
 
   return (

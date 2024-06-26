@@ -9,18 +9,21 @@ import {
 } from 'permissionless';
 import { signerToSafeSmartAccount } from 'permissionless/accounts';
 import { pimlicoBundlerActions, pimlicoPaymasterActions } from 'permissionless/actions/pimlico';
+import { useCookies } from 'react-cookie';
 import { createClient, createPublicClient, http } from 'viem';
 
 import { useWalletClient } from 'wagmi';
 
+import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { Environment } from '../environment';
 import { CONDUIT_TESTNET } from '../wallet/conduit-chain';
 
 export function useSmartAccount() {
   const { data: walletClient } = useWalletClient();
+  const [cookies] = useCookies([WALLET_ADDRESS]);
 
   const { data: smartAccount } = useQuery({
-    queryKey: ['smart-account', walletClient?.account.address],
+    queryKey: ['smart-account', walletClient?.account.address, cookies.walletAddress],
     queryFn: async () => {
       if (!walletClient) {
         return null;
@@ -54,7 +57,7 @@ export function useSmartAccount() {
         chain: CONDUIT_TESTNET,
       }).extend(pimlicoPaymasterActions(ENTRYPOINT_ADDRESS_V07));
 
-      return createSmartAccountClient({
+      const smartAccount = createSmartAccountClient({
         chain: CONDUIT_TESTNET,
         account: safeAccount,
         bundlerTransport,
@@ -65,6 +68,14 @@ export function useSmartAccount() {
           sponsorUserOperation: paymasterClient.sponsorUserOperation,
         },
       });
+
+      // @TODO: Not sure what the performance implications of this are. I'm guessing this would
+      // the app to re-render again when a user first logs in
+      if (!cookies.walletAddress) {
+        await Cookie.onConnectionChange({ type: 'connect', address: smartAccount.account.address });
+      }
+
+      return smartAccount;
     },
   });
 

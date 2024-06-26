@@ -40,7 +40,7 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
                 Proposals.getOne({
                   onchainProposalId: proposal.proposalId,
                   pluginAddress: getChecksumAddress(proposal.pluginAddress),
-                  type: 'CONTENT',
+                  type: 'ADD_EDIT',
                 }),
                 Proposals.getOne({
                   onchainProposalId: proposal.proposalId,
@@ -58,7 +58,7 @@ export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], b
                 return await Proposals.setAccepted({
                   onchainProposalId: proposal.proposalId,
                   pluginAddress: getChecksumAddress(proposal.pluginAddress),
-                  type: 'CONTENT',
+                  type: 'ADD_EDIT',
                 });
               }
 

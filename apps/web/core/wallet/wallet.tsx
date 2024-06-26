@@ -3,7 +3,10 @@
 import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
+import { ENTRYPOINT_ADDRESS_V07 } from 'permissionless';
+import { signerToSafeSmartAccount } from 'permissionless/accounts';
 import { createPublicClient, http } from 'viem';
+import { toAccount } from 'viem/accounts';
 
 import * as React from 'react';
 
@@ -133,7 +136,7 @@ export function GeoConnectButton() {
         const wallet = wallets.find(wallet => wallet.address === userWallet.address);
 
         if (wallet) {
-          await Cookie.onConnectionChange({ type: 'connect', address: wallet.address as `0x${string}` });
+          // @TODO: Make wallet from smart account...? Right now we set it in `useSmartAccount`
           await setActiveWallet(wallet);
         }
 

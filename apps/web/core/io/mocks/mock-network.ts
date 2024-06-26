@@ -130,6 +130,7 @@ export const makeStubTripleWithUrlValue = (value: string): TripleWithUrlValue =>
 export const makeStubSpace = (spaceId: string): Space => {
   return {
     id: spaceId,
+    type: 'PUBLIC',
     isRootSpace: false,
     editors: [],
     members: [],
@@ -138,5 +139,6 @@ export const makeStubSpace = (spaceId: string): Space => {
     mainVotingPluginAddress: null,
     memberAccessPluginAddress: '',
     spacePluginAddress: '',
+    personalSpaceAdminPluginAddress: '',
   };
 };
