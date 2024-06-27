@@ -10,6 +10,7 @@ import { readCursor, writeCursor } from './cursor';
 import { Environment } from './environment';
 import { handleEditorsAdded } from './events/editor-added/handler';
 import { ZodEditorAddedStreamResponse } from './events/editor-added/parser';
+import { getDerivedSpaceIdsFromImportedSpaces } from './events/get-derived-space-ids-from-imported-spaces';
 import { handleNewGeoBlock } from './events/handle-new-geo-block';
 import {
   handleInitialGovernanceSpaceEditorsAdded,
@@ -204,10 +205,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             membersAdded.success ||
             editorsAdded.success;
 
-          console.log('jsonOutput', jsonOutput);
-
           if (hasValidEvent) {
             console.info(`==================== @BLOCK ${blockNumber} ====================`);
+
             const block = yield* _(
               handleNewGeoBlock({
                 blockNumber,
@@ -232,28 +232,65 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (spacePluginCreatedResponse.success) {
-            // @TODO: Check to see if we have proposals processed that match the existing space plugin. If
-            // so we can parse the import metadata to see what the id for the space should be. If not then
-            // we can use the normal creation flow.
-            //
-            // We kinda do this already in the proposalsProcessed segment as well.
+            /**
+             * A space's id is derived from the contract address of the DAO and the network the DAO is deployed to.
+             * Users can import or fork a space from any network and import the contents of the original space into
+             * the new one that they're creating.
+             *
+             * If they are importing a space, for example from another chain, we want to keep the ids for the
+             * space consistent. This means that when creating a space we need to check if it is has a firstContentUri
+             * that contains an `IMPORT_SPACE` ActionType. If it does, then we know we're importing a space that
+             * should use the contents of the import to derive the id. If not, it's a brand new space that has never
+             * existed in the knowledge graph, so we can create the id based on the new space's address and network.
+             *
+             * 1. Check to see which proposals map to spaces created
+             * 2. See if any of the proposals are an import
+             * 3. If they are an import then return the imported space id
+             * 4. If there is no import for this space with imported space id then use the normal id creation
+             *    flow. If we are forking a space then this flow applies, but there will be no previous space
+             *    metadata most likely. It will also have a different IPFS ActionType type.
+             *
+             * @TODO(optimization):
+             * We do something similar when processing a proposal as well to see if the proposal is part of initial
+             * space creation. This is somewhat the inverse, where we check to see if a proposal is part of space
+             * creation because we need data from the proposal to create the space.
+             *
+             * It might make sense to do the proposal creation here instead of in proposalProcessed. That way all
+             * of this logic for checking proposals happens in the same place.
+             */
             if (proposalProcessedResponse.success) {
-              // 1. Check to see which proposals map to spaces created
-              // 2. See if any of the proposals are an import
-              // 3. If they are an import then return the imported space id
-              // 4. If there is no import for this space with imported space id
-              //    then use the normal id creation flow. If we are forking a
-              //    space then this flow applies, but there will be no previous
-              //    space metadata most likely. It will also have a different
-              //    IPFS ActionType type.
-              // @TODO: Does this still work if the plugin addresses change but the DAO
-              // address doesn't? We should probably map based on the DAO address huh?
               const spacesWithInitialProposal = getSpacesWithInitialProposalsProcessed(
                 spacePluginCreatedResponse.data.spacesCreated,
                 proposalProcessedResponse.data.proposalsProcessed
               );
 
-              console.log('spaces with initial proposal', spacesWithInitialProposal);
+              const spacePluginAddressesWithInitialProposal = new Set(
+                spacesWithInitialProposal.map(s => s.spaceAddress)
+              );
+
+              // @TODO: This is basically the same as the check we have in proposalsProcessed. Should refactor
+              // to use that.
+              const initialProposalsForSpaces = proposalProcessedResponse.data.proposalsProcessed.filter(p =>
+                spacePluginAddressesWithInitialProposal.has(p.pluginAddress)
+              );
+
+              console.log('jsonoutput', jsonOutput);
+
+              // @TODO: proposals for spaces
+
+              const spaceIds = yield* _(
+                getDerivedSpaceIdsFromImportedSpaces(
+                  initialProposalsForSpaces.map(p => p.contentUri),
+                  {
+                    blockNumber,
+                    cursor,
+                    requestId,
+                    timestamp,
+                  }
+                )
+              );
+
+              console.log('spaceIds', { spaceIds });
             }
 
             yield* _(
