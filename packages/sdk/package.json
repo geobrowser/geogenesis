@@ -12,7 +12,8 @@
     "dist"
   ],
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "generate:protobuf": "npx buf generate"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^1.9.0",

@@ -1,9 +1,12 @@
-import { Edit, Membership, Subspace } from '@geogenesis/sdk/proto';
+import { Edit, ImportEdit, Membership, Op, Subspace } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
 import {
+  type ParsedEdit,
+  type ParsedImportEdit,
   ZodEdit,
   ZodEditorshipProposal,
+  ZodImportEdit,
   ZodMembershipProposal,
   ZodSubspaceProposal,
 } from '../events/proposals-created/parser';
@@ -50,13 +53,45 @@ export function decode<T>(fn: () => T) {
   });
 }
 
-function decodeEdit(data: Buffer) {
+function decodeEdit(data: Buffer): Effect.Effect<ParsedEdit | null> {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = Edit.fromBinary(data);
-      const parseResult = ZodEdit.safeParse(edit.toJson());
+      const parseResult = ZodEdit.safeParse(edit);
 
       if (parseResult.success) {
+        return parseResult.data;
+      }
+
+      return null;
+    });
+
+    return yield* _(decodeEffect);
+  });
+}
+
+/**
+ * Import edits differ from regular edits in that they are processed
+ * when importing a space into another space. The import edit includes
+ * extra metadata that would normally be derived onchain, like the message
+ * sender, when it was posted onchain, etc., in order to correctly preserve
+ * history at the time the data in the original space was created.
+ */
+function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> {
+  return Effect.gen(function* (_) {
+    const decodeEffect = decode(() => {
+      const edit = ImportEdit.fromBinary(data);
+
+      const parseResult = ZodImportEdit.safeParse(edit);
+
+      if (parseResult.success) {
+        // @TODO(migration): For now we have some invalid ops while we still work on the data migration
+        const validOps = parseResult.data.ops.filter(
+          o => o.opType === 'SET_TRIPLE' && (o.payload as unknown as any).value.type !== 'FILTER_ME_OUT'
+        );
+
+        parseResult.data.ops = validOps;
+
         return parseResult.data;
       }
 
@@ -120,6 +155,7 @@ function decodeSubspace(data: Buffer) {
 
 export const Decoder = {
   decodeEdit,
+  decodeImportEdit,
   decodeMembership,
   decodeEditorship,
   decodeSubspace,

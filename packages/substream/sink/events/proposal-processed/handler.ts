@@ -8,11 +8,11 @@ import type { BlockEvent } from '~/sink/types';
 import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
 
-export function handleProposalsProcessed(proposalsFromIpfs: EditProposal[], block: BlockEvent) {
+export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
-      message: `Processing ${proposalsFromIpfs.length} processed proposals`,
+      message: `Mapping ${ipfsProposals.length} processed proposals`,
     });
 
     /**
@@ -23,7 +23,7 @@ export function handleProposalsProcessed(proposalsFromIpfs: EditProposal[], bloc
      */
     const maybeProposals = yield* _(
       Effect.all(
-        proposalsFromIpfs.map(p => {
+        ipfsProposals.map(p => {
           return Effect.tryPromise({
             // @TODO: Exactly one
             try: () => db.selectOne('proposals', { id: p.proposalId }).run(pool),
@@ -39,13 +39,13 @@ export function handleProposalsProcessed(proposalsFromIpfs: EditProposal[], bloc
       )
     );
 
-    const proposals = maybeProposals.filter((maybeProposal): maybeProposal is S.proposals.Selectable =>
+    const dbProposals = maybeProposals.filter((maybeProposal): maybeProposal is S.proposals.Selectable =>
       Boolean(maybeProposal)
     );
 
     yield* _(
       Effect.all(
-        proposals.map(proposal => {
+        dbProposals.map(proposal => {
           return Effect.tryPromise({
             try: () => db.update('proposals', { status: 'accepted' }, { id: proposal.id }).run(pool),
             catch: () => {
@@ -56,26 +56,23 @@ export function handleProposalsProcessed(proposalsFromIpfs: EditProposal[], bloc
               });
             },
           });
-        })
+        }),
+        {
+          concurrency: 75,
+        }
       )
     );
 
-    yield* _(
-      populateApprovedContentProposal(
-        proposals,
-        proposalsFromIpfs.flatMap(p => p.ops),
-        block
-      )
-    );
+    // @TODO(performance):
+    // We store the proposal data and ops in the DB already, so we can read the
+    // content of the ipfs proposals directly from the db using some kind of
+    // ORM/Query builder that lets us fetch the ops relationships as part of
+    // the query.
+    yield* _(populateApprovedContentProposal(ipfsProposals, block));
 
     slog({
       requestId: block.requestId,
-      message: `Processing ${proposalsFromIpfs.length} processed proposals`,
-    });
-
-    slog({
-      requestId: block.requestId,
-      message: `Writing ${proposals.length} processed proposals to DB`,
+      message: `Writing ${dbProposals.length} processed proposals to DB`,
     });
   });
 }
