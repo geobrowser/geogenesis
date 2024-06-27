@@ -486,7 +486,7 @@ export function useEditorStore() {
         const [typeOp, collectionOp, entityOp, indexOp] = createCollectionItem({
           collectionId,
           entityId: addedBlock,
-          // @TODO: index
+          // @TODO: index (what does this TODO mean???)
           spaceId,
         });
 

@@ -8,6 +8,7 @@ export class Entities {
     return await db
       .upsert('entities', entities, db.constraint('entities_pkey'), {
         updateColumns: ['description', 'name', 'updated_at', 'updated_at_block'],
+        noNullUpdateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
       })
       .run(pool);
   }

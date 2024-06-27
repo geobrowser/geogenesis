@@ -107,13 +107,7 @@ function e2e() {
       )
     );
 
-    yield* _(
-      populateApprovedContentProposal(
-        proposals,
-        [editProposal].flatMap(p => p.ops),
-        mockBlock
-      )
-    );
+    yield* _(populateApprovedContentProposal([editProposal], mockBlock));
   });
 }
 

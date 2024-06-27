@@ -9,18 +9,25 @@ export interface OpWithCreatedBy {
   triple: S.triples.Insertable;
 }
 
-export type SchemaTripleEdit = Parameters<typeof mapSchemaTriples>[0];
+export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string; proposalId: string };
 
 // @TODO: Do we squash actions in the new data model?
-export function mapSchemaTriples(
-  edit: { ops: Op[]; spaceId: string; createdById: string },
-  block: BlockEvent
-): OpWithCreatedBy[] {
+export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
   return edit.ops.map((op): OpWithCreatedBy => {
+    const triple = getTripleFromOp(op, edit.spaceId, block);
+
+    if (!triple.value_type) {
+      console.log('invalid triple', {
+        triple,
+        op: JSON.stringify(op),
+        proposalId: edit.proposalId,
+      });
+    }
+
     return {
       createdById: edit.createdById,
       op: op.opType,
-      triple: getTripleFromOp(op, edit.spaceId, block),
+      triple,
     };
   });
 }
