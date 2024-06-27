@@ -69,7 +69,6 @@ export function CreateDao({ type }: Prtypes) {
               },
             },
           },
-          ...types,
         ],
       }
 
