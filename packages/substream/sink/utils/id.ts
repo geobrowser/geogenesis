@@ -10,6 +10,11 @@ export function createVersionId({ proposalId, entityId }: { proposalId: string; 
   return `${proposalId}:${entityId}`;
 }
 
+/**
+ * A space's id is derived from the contract address of the DAO and the network the DAO is deployed to.
+ * Users can import or fork a space from any network and import the contents of the original space into
+ * the new one that they're creating.
+ */
 export function createSpaceId({ network, address }: { network: string; address: string }) {
   return createIdFromUniqueString(`${network}:${address}`);
 }
@@ -18,14 +23,16 @@ function createIdFromUniqueString(text: string) {
   const hashed = createHash('md5').update(text).digest('hex');
   const bytes = hexToBytesArray(hashed);
   const uuid = v4({ random: bytes });
-  const id = stripDashes(uuid);
-
-  return id;
+  return stripDashes(uuid);
 }
 
 function hexToBytesArray(hex: string) {
-  let bytes = [];
-  for (let c = 0; c < hex.length; c += 2) bytes.push(parseInt(hex.substr(c, 2), 16));
+  let bytes: number[] = [];
+
+  for (let character = 0; character < hex.length; character += 2) {
+    bytes.push(parseInt(hex.slice(character, character + 2), 16));
+  }
+
   return bytes;
 }
 
