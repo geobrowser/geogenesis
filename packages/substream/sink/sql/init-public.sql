@@ -236,6 +236,13 @@ CREATE TABLE public.proposed_editors (
     type editor_proposal_type NOT NULL
 );
 
+CREATE TABLE public.geo_blocks (
+    PRIMARY KEY (network, hash),
+    network text NOT NULL,
+    hash text NOT NULL,
+    number text NOT NULL,
+    timestamp text NOT NULL
+);
 
 -- CREATE TABLE public.triple_versions (
 --     PRIMARY KEY (triple_id, version_id),

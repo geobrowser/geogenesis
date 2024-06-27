@@ -1,5 +1,6 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { createGeoId } from '@geogenesis/sdk';
+import { GEO_NETWORK } from '@geogenesis/sdk/src/system-ids/system-ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { Effect, Secret, Stream } from 'effect';
@@ -9,6 +10,7 @@ import { readCursor, writeCursor } from './cursor';
 import { Environment } from './environment';
 import { handleEditorsAdded } from './events/editor-added/handler';
 import { ZodEditorAddedStreamResponse } from './events/editor-added/parser';
+import { handleNewGeoBlock } from './events/handle-new-geo-block';
 import {
   handleInitialGovernanceSpaceEditorsAdded,
   handleInitialPersonalSpaceEditorsAdded,
@@ -203,6 +205,16 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (hasValidEvent) {
             console.info(`==================== @BLOCK ${blockNumber} ====================`);
+            const block = yield* _(
+              handleNewGeoBlock({
+                blockNumber,
+                cursor,
+                requestId,
+                timestamp,
+                hash: message.clock?.id ?? '',
+                network: GEO_NETWORK,
+              })
+            );
           }
 
           if (profilesRegistered.success) {

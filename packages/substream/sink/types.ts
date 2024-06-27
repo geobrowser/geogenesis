@@ -9,6 +9,11 @@ export interface BlockEvent {
   requestId: string; // uuid
 }
 
+export interface GeoBlock extends BlockEvent {
+  hash: string;
+  network: string;
+}
+
 export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';
 
 // We hardcode our Op type instead of deriving it from the Zod types.
