@@ -4037,6 +4037,12 @@ declare module 'zapatos/schema' {
       */
       type: space_type;
       /**
+      * **spaces.dao_address**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      dao_address: string;
+      /**
       * **spaces.space_plugin_address**
       * - `text` in database
       * - Nullable, no default
@@ -4092,6 +4098,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       type: space_type;
+      /**
+      * **spaces.dao_address**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      dao_address: string;
       /**
       * **spaces.space_plugin_address**
       * - `text` in database
@@ -4149,6 +4161,12 @@ declare module 'zapatos/schema' {
       */
       type?: space_type | db.Parameter<space_type> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, space_type | db.Parameter<space_type> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **spaces.dao_address**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      dao_address?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **spaces.space_plugin_address**
       * - `text` in database
       * - Nullable, no default
@@ -4205,6 +4223,12 @@ declare module 'zapatos/schema' {
       */
       type: space_type | db.Parameter<space_type> | db.SQLFragment;
       /**
+      * **spaces.dao_address**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      dao_address: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **spaces.space_plugin_address**
       * - `text` in database
       * - Nullable, no default
@@ -4260,6 +4284,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       type?: space_type | db.Parameter<space_type> | db.SQLFragment | db.SQLFragment<any, space_type | db.Parameter<space_type> | db.SQLFragment>;
+      /**
+      * **spaces.dao_address**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      dao_address?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **spaces.space_plugin_address**
       * - `text` in database

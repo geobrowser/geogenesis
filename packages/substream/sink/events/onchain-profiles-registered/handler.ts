@@ -30,6 +30,7 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
     const spaces = profiles.map(p => {
       const newSpace: S.spaces.Insertable = {
         id: getChecksumAddress(p.space),
+        dao_address: getChecksumAddress(p.space),
         type: 'personal',
         created_at_block: block.blockNumber,
         is_root_space: false,

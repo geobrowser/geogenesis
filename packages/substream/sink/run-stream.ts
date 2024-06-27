@@ -31,6 +31,7 @@ import {
 } from './events/proposals-created/parser';
 import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { ZodProposalExecutedStreamResponse } from './events/proposals-executed/parser';
+import { getSpacesWithInitialProposalsProcessed } from './events/spaces-created/get-spaces-with-initial-proposals-processed';
 import {
   handleGovernancePluginCreated,
   handlePersonalSpacesCreated,
@@ -203,6 +204,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             membersAdded.success ||
             editorsAdded.success;
 
+          console.log('jsonOutput', jsonOutput);
+
           if (hasValidEvent) {
             console.info(`==================== @BLOCK ${blockNumber} ====================`);
             const block = yield* _(
@@ -229,6 +232,30 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           }
 
           if (spacePluginCreatedResponse.success) {
+            // @TODO: Check to see if we have proposals processed that match the existing space plugin. If
+            // so we can parse the import metadata to see what the id for the space should be. If not then
+            // we can use the normal creation flow.
+            //
+            // We kinda do this already in the proposalsProcessed segment as well.
+            if (proposalProcessedResponse.success) {
+              // 1. Check to see which proposals map to spaces created
+              // 2. See if any of the proposals are an import
+              // 3. If they are an import then return the imported space id
+              // 4. If there is no import for this space with imported space id
+              //    then use the normal id creation flow. If we are forking a
+              //    space then this flow applies, but there will be no previous
+              //    space metadata most likely. It will also have a different
+              //    IPFS ActionType type.
+              // @TODO: Does this still work if the plugin addresses change but the DAO
+              // address doesn't? We should probably map based on the DAO address huh?
+              const spacesWithInitialProposal = getSpacesWithInitialProposalsProcessed(
+                spacePluginCreatedResponse.data.spacesCreated,
+                proposalProcessedResponse.data.proposalsProcessed
+              );
+
+              console.log('spaces with initial proposal', spacesWithInitialProposal);
+            }
+
             yield* _(
               handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
                 blockNumber,
