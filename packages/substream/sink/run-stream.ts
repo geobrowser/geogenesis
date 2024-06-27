@@ -1,6 +1,6 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { createGeoId } from '@geogenesis/sdk';
-import { GEO_NETWORK } from '@geogenesis/sdk/src/system-ids/system-ids';
+import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { Effect, Secret, Stream } from 'effect';
@@ -212,7 +212,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 requestId,
                 timestamp,
                 hash: message.clock?.id ?? '',
-                network: GEO_NETWORK,
+                network: NETWORK_IDS.GEO,
               })
             );
           }

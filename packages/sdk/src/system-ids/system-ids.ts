@@ -267,6 +267,3 @@ export const PERSON_POSTS_PAGE_TEMPLATE = '026362d45d414b8db6ef8ed10ecd0d89'
 
 // Entity templates
 export const TEMPLATE_ATTRIBUTE = 'babd29fb968147d08b58cdafc3890e12';
-
-export const POLYGON_NETWORK = '0370cdbd57a946e9a5119c0c1ffc69d7'
-export const GEO_NETWORK = 'GEO_NETWORK_ENTITY_ID'
