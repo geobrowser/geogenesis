@@ -64,12 +64,12 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     name: Entities.name(column.triples),
   }));
 
+  // @TODO: Collections
   const shownColumnTriples = [
     ...(blockEntity?.triples ?? []).filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS),
   ];
 
-  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.value) ?? []), 'name'];
-
+  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.value) ?? []), SYSTEM_IDS.NAME];
   const { placeholderText, placeholderImage } = getPlaceholders(blockEntity);
 
   /**
@@ -107,10 +107,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const typeId = type.entityId;
   const filters: Array<[string, string]> =
     filterState && filterState.length > 0 ? filterState.map(filter => [filter.columnId, filter.value]) : [];
-
-  const shownIndexes = columns
-    .map((item, index) => (shownColumnIds.includes(item.id) ? index : null))
-    .filter(item => typeof item === 'number') as Array<number>;
 
   const hasPagination = hasPreviousPage || hasNextPage;
 
@@ -169,11 +165,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
               </motion.div>
             )}
           </AnimatePresence>
-          <TableBlockContextMenu
-            allColumns={allColumns}
-            shownColumnTriples={shownColumnTriples}
-            shownIndexes={shownIndexes}
-          />
+          <TableBlockContextMenu allColumns={allColumns} shownColumnTriples={shownColumnTriples} shownIndexes={[]} />
 
           {isEditing && (
             <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters)}>
@@ -227,7 +219,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             typeId={typeId}
             columns={columns}
             rows={rows}
-            shownIndexes={shownIndexes}
+            shownColumnIds={shownColumnIds}
             placeholderText={placeholderText}
             placeholderImage={placeholderImage}
           />

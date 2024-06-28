@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { getAddress } from 'viem';
 
 import { Entity as IEntity, Triple as ITriple, ValueType as TripleValueType } from '~/core/types';
 
@@ -9,11 +8,9 @@ export function upsertName({
   newName,
   entityId,
   spaceId,
-  nameTriple,
   api,
 }: {
   newName: string;
-  nameTriple: ITriple | null;
   entityId: string;
   spaceId: string;
   api: {
@@ -87,15 +84,7 @@ export function createGraphQLStringFromFilters(
       }
 
       if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
-        // @HACK: We map to the checksum address when filtering by space. Old filters
-        // might be using the incorrectly formatted address so we need to check for that
-        // here. In the future we'll migrate to the new API's query string format which will
-        // update all existing filters to use the correct space address as well.
-        //
-        // Previous versions of the subgraph did not correctly checksum the space address
-        // so any queries that relied on the incorrect space address checksum will not work
-        // against newer versions of the protocol.
-        return `entityOf_: {space: "${getAddress(filter.value)}"}`;
+        return `entityOf_: {space: "${filter.value}"}`;
       }
 
       if (filter.valueType === 'ENTITY') {
@@ -211,15 +200,7 @@ export async function createFiltersFromGraphQLString(
     filters.push({
       columnId: SYSTEM_IDS.SPACE,
       valueType: 'TEXT',
-      // @HACK: We map to the checksum address when filtering by space. Old filters
-      // might be using the incorrectly formatted address so we need to check for that
-      // here. In the future we'll migrate to the new API's query string format which will
-      // update all existing filters to use the correct space address as well.
-      //
-      // Previous versions of the subgraph did not correctly checksum the space address
-      // so any queries that relied on the incorrect space address checksum will not work
-      // against newer versions of the protocol.
-      value: getAddress(spaceValue),
+      value: spaceValue,
       valueName: null,
     });
   }
@@ -288,17 +269,9 @@ export function createGraphQLStringFromFiltersV2(
       }
 
       if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
-        // @HACK: We map to the checksum address when filtering by space. Old filters
-        // might be using the incorrectly formatted address so we need to check for that
-        // here. In the future we'll migrate to the new API's query string format which will
-        // update all existing filters to use the correct space address as well.
-        //
-        // Previous versions of the subgraph did not correctly checksum the space address
-        // so any queries that relied on the incorrect space address checksum will not work
-        // against newer versions of the protocol.
         return `triples: {
           some: {
-            spaceId: { equalTo: "${getAddress(filter.value)}" },
+            spaceId: { equalTo: "${filter.value}" },
             isStale: { equalTo: false }
           }
         }`;

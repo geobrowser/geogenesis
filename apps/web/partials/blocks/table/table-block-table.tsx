@@ -96,8 +96,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const valueType = columnValueType(cellData.columnId, columns);
 
     const cellTriples = pipe(
-      actions[space],
-      // @TODO(migration): Each cell only has one triple
+      actions[space] ?? [],
+      // @TODO(migration): Each cell only has one triple for a given (S,E,A)
       actions => Triples.merge(actions, cellData.triples),
       A.filter(triple => {
         const isRowCell = triple.entityId === cellData.entityId;
@@ -128,19 +128,17 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           columnRelationTypes={columnRelationTypes[cellData.columnId]}
         />
       );
-    } else if (cellData && !isPlaceholderCell) {
-      return (
-        <EntityTableCell
-          key={Entities.name(cellTriples)}
-          cell={cellData}
-          triples={cellTriples}
-          space={space}
-          isExpanded={isExpanded}
-        />
-      );
-    } else {
-      return null;
     }
+
+    return (
+      <EntityTableCell
+        key={Entities.name(cellTriples)}
+        cell={cellData}
+        triples={cellTriples}
+        space={space}
+        isExpanded={isExpanded}
+      />
+    );
   },
 };
 
@@ -149,7 +147,7 @@ interface Props {
   typeId: string;
   columns: Column[];
   rows: Row[];
-  shownIndexes: Array<number>;
+  shownColumnIds: string[];
   placeholderText: string;
   placeholderImage: string;
 }
@@ -159,7 +157,7 @@ export const TableBlockTable = ({
   space,
   typeId,
   columns,
-  shownIndexes,
+  shownColumnIds,
   placeholderText,
   placeholderImage,
 }: Props) => {
@@ -226,8 +224,8 @@ export const TableBlockTable = ({
           <thead>
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header, index: number) => {
-                  const isShown = shownIndexes.includes(index);
+                {headerGroup.headers.map(header => {
+                  const isShown = shownColumnIds.includes(header.id);
 
                   return (
                     <th
@@ -258,7 +256,7 @@ export const TableBlockTable = ({
                     const cellId = `${row.original.id}-${cell.column.id}`;
                     const firstTriple = cell.getValue<Cell>()?.triples[0];
                     const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
-                    const isShown = shownIndexes.includes(index);
+                    const isShown = shownColumnIds.includes(cell.column.id);
 
                     return (
                       <TableCell

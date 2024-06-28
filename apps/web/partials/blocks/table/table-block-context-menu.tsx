@@ -246,10 +246,10 @@ type Column = {
 type TableBlockContextMenuProps = {
   allColumns: Array<Column>;
   shownColumnTriples: Array<ITriple>;
-  shownIndexes: Array<number>;
+  shownColumnIds: Array<string>;
 };
 
-export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownIndexes }: TableBlockContextMenuProps) {
+export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownColumnIds }: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { type, spaceId, entityId, name } = useTableBlock();
   const [isEditingColumns, setIsEditingColumns] = useAtom(editingColumnsAtom);
@@ -383,8 +383,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownInd
                   <ToggleColumn
                     key={column.id}
                     column={column}
-                    index={index}
-                    shownIndexes={shownIndexes}
+                    shownColumnIds={shownColumnIds}
                     shownColumnTriple={shownColumnTriple}
                     space={spaceId}
                     entityId={entityId}
@@ -402,8 +401,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownInd
 
 type ToggleColumnProps = {
   column: Column;
-  index: number;
-  shownIndexes: Array<number>;
+  shownColumnIds: Array<string>;
   shownColumnTriple: ITriple | null;
   space: string;
   entityId: string;
@@ -412,8 +410,7 @@ type ToggleColumnProps = {
 
 const ToggleColumn = ({
   column,
-  index,
-  shownIndexes,
+  shownColumnIds,
   shownColumnTriple,
   space,
   entityId,
@@ -422,7 +419,7 @@ const ToggleColumn = ({
   const { upsert, remove } = useActionsStore(space);
 
   const { id, name } = column;
-  const isShown = shownIndexes.includes(index);
+  const isShown = shownColumnIds.includes(column.id);
 
   const onToggleColumn = React.useCallback(async () => {
     const attributeId = SYSTEM_IDS.SHOWN_COLUMNS;
