@@ -204,7 +204,7 @@ export const MEMBERSHIP_CONTRACT_ADDRESS = '0x34a94160f4B0f86d932927DFfb326354dB
 
 // This is the address for the Root Space.
 export const ROOT_SPACE_ADDRESS = '0xEcC4016C71fF38B32f01538207B6F0FdcbCF99f5';
-export const ROOT_SPACE_ID = '97de8daeaf614ff5a6474df7f0573ae8'
+export const ROOT_SPACE_ID = 'ab7d4b9e02f840dab9746d352acb0ac6'
 
 // This represents the beacon for the first set of deployed permissioned spaces.
 // We should use this beacon for all new permissioned spaces. We need to track the beacon
