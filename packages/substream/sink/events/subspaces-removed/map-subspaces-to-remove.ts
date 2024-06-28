@@ -39,7 +39,7 @@ export function mapSubspacesToRemove(
           const checksumPluginAddress = getChecksumAddress(s.space_plugin_address!);
 
           if (!acc.has(checksumPluginAddress)) {
-            acc.set(checksumPluginAddress, getChecksumAddress(s.id));
+            acc.set(checksumPluginAddress, s.id);
           }
 
           return acc;

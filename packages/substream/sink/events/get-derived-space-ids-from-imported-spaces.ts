@@ -5,7 +5,8 @@ import { getFetchIpfsContentEffect } from '../ipfs';
 import type { BlockEvent } from '../types';
 import { createSpaceId } from '../utils/id';
 import { slog } from '../utils/slog';
-import { Decoder, decode } from '~/sink/proto';
+import type { ProposalProcessed } from './proposals-created/parser';
+import { decode } from '~/sink/proto';
 
 function fetchSpaceImportFromIpfs(ipfsUri: string, block: BlockEvent) {
   return Effect.gen(function* (_) {
@@ -48,45 +49,38 @@ function fetchSpaceImportFromIpfs(ipfsUri: string, block: BlockEvent) {
       return null;
     }
 
-    const validIpfsMetadata = yield* _(decode(() => IpfsMetadata.fromBinary(ipfsContent)));
+    const importResult = yield* _(decode(() => Import.fromBinary(ipfsContent)));
 
-    if (!validIpfsMetadata) {
-      // @TODO: Effectify error handling
-      console.error('Failed to parse IPFS metadata', validIpfsMetadata);
+    if (!importResult) {
       return null;
     }
 
-    switch (validIpfsMetadata.type) {
-      // The initial content set might not be an Edit and instead be an import. If it's an import
-      // we need to turn every Edit in the import into an individual EditProposal.
-      case ActionType.IMPORT_SPACE:
-        // @TODO: Map every edit in the import into many EditProposals. We then need to flatten
-        // these later
-        const importResult = yield* _(decode(() => Import.fromBinary(ipfsContent)));
-
-        if (!importResult) {
-          return null;
-        }
-
-        return createSpaceId({ network: importResult.previousNetwork, address: importResult.previousContractAddress });
-    }
-
-    return null;
+    return createSpaceId({ network: importResult.previousNetwork, address: importResult.previousContractAddress });
   });
 }
 
-export function getDerivedSpaceIdsFromImportedSpaces(ipfsUris: string[], block: BlockEvent) {
+export function getDerivedSpaceIdsFromImportedSpaces(processedProposals: ProposalProcessed[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
-      message: `Gathering IPFS import content for ${ipfsUris.length} initial space proposals`,
+      message: `Gathering IPFS import content for ${processedProposals.length} initial space proposals`,
     });
 
     const maybeImportsFromIpfs = yield* _(
       Effect.all(
-        ipfsUris.map(uri => fetchSpaceImportFromIpfs(uri, block)),
+        processedProposals.map(p => {
+          return Effect.gen(function* (_) {
+            const maybeSpaceId = yield* _(fetchSpaceImportFromIpfs(p.contentUri, block));
+
+            return {
+              pluginAddress: p.pluginAddress,
+              contentUri: p.contentUri,
+              spaceId: maybeSpaceId,
+            };
+          });
+        }),
         {
-          concurrency: 20,
+          concurrency: 50,
         }
       )
     );

@@ -100,7 +100,7 @@ function fetchEditProposalFromIpfs(
           // @TODO: We can use the createdBy on the ImportEdit type instead of
           // hard-coding Geo as the creator.
           creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'),
-          space: getChecksumAddress(maybeSpaceIdForVotingPlugin.id),
+          space: maybeSpaceIdForVotingPlugin.id,
           endTime: block.timestamp.toString(),
           startTime: block.timestamp.toString(),
           metadataUri: processedProposal.ipfsUri,
@@ -111,8 +111,6 @@ function fetchEditProposalFromIpfs(
       // The initial content set might not be an Edit and instead be an import. If it's an import
       // we need to turn every Edit in the import into an individual EditProposal.
       case ActionType.IMPORT_SPACE:
-        // @TODO: Map every edit in the import into many EditProposals. We then need to flatten
-        // these later
         const importResult = yield* _(decode(() => Import.fromBinary(ipfsContent)));
 
         if (!importResult) {
@@ -149,7 +147,7 @@ function fetchEditProposalFromIpfs(
             pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
             ops: e.ops as Op[],
             creator: getChecksumAddress(e.createdBy),
-            space: getChecksumAddress(maybeSpaceIdForVotingPlugin.id),
+            space: maybeSpaceIdForVotingPlugin.id,
             endTime: block.timestamp.toString(),
             startTime: block.timestamp.toString(),
             metadataUri: processedProposal.ipfsUri,
@@ -197,7 +195,6 @@ export function getProposalFromInitialSpaceProposalIpfsUri(proposalsProcessed: P
       )
     );
 
-    // @TODO: Ensure ordering of proposals is correct
     const proposalsFromIpfs = maybeProposalsFromIpfs.flatMap(e => (e ? [e] : [])).flat();
     return proposalsFromIpfs;
   });

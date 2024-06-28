@@ -1,4 +1,5 @@
 import { SYSTEM_IDS, createCollectionItem, createGeoId } from '@geogenesis/sdk';
+import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { Effect } from 'effect';
 import type * as s from 'zapatos/schema';
 
@@ -11,6 +12,7 @@ import {
 import { Accounts, Collections, Entities, Proposals, Spaces, Triples } from './db';
 import { CollectionItems } from './db/collection-items';
 import { getTripleFromOp } from './events/get-triple-from-op';
+import { createSpaceId } from './utils/id';
 
 const entities: string[] = [
   SYSTEM_IDS.TYPES,
@@ -308,7 +310,7 @@ const getTypeTriples = () => {
 };
 
 const space: s.spaces.Insertable = {
-  id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+  id: createSpaceId({ address: SYSTEM_IDS.ROOT_SPACE_ADDRESS, network: NETWORK_IDS.POLYGON }),
   dao_address: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
   is_root_space: true,
   type: 'public',

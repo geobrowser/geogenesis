@@ -231,6 +231,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
+          let createdSpaceIds: string[] | null = null;
+
           if (spacePluginCreatedResponse.success) {
             /**
              * A space's id is derived from the contract address of the DAO and the network the DAO is deployed to.
@@ -268,39 +270,50 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 spacesWithInitialProposal.map(s => s.spaceAddress)
               );
 
-              // @TODO: This is basically the same as the check we have in proposalsProcessed. Should refactor
-              // to use that.
               const initialProposalsForSpaces = proposalProcessedResponse.data.proposalsProcessed.filter(p =>
                 spacePluginAddressesWithInitialProposal.has(p.pluginAddress)
               );
 
-              console.log('jsonoutput', jsonOutput);
-
-              // @TODO: proposals for spaces
-
-              const spaceIds = yield* _(
-                getDerivedSpaceIdsFromImportedSpaces(
-                  initialProposalsForSpaces.map(p => p.contentUri),
-                  {
-                    blockNumber,
-                    cursor,
-                    requestId,
-                    timestamp,
-                  }
-                )
+              const proposalsWithInitialSpaceIds = yield* _(
+                getDerivedSpaceIdsFromImportedSpaces(initialProposalsForSpaces, {
+                  blockNumber,
+                  cursor,
+                  requestId,
+                  timestamp,
+                })
               );
 
-              console.log('spaceIds', { spaceIds });
-            }
+              const initialSpaceIdsByPluginAddress = proposalsWithInitialSpaceIds.reduce((acc, p) => {
+                acc.set(p.pluginAddress, p.spaceId);
+                return acc;
+              }, new Map<string, string | null>());
 
-            yield* _(
-              handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+              const spacesCreated = spacePluginCreatedResponse.data.spacesCreated.map(s => {
+                return {
+                  id: initialSpaceIdsByPluginAddress.get(s.spaceAddress) ?? null,
+                  daoAddress: s.daoAddress,
+                  spaceAddress: s.spaceAddress,
+                };
+              });
+
+              createdSpaceIds = yield* _(
+                handleSpacesCreated(spacesCreated, {
+                  blockNumber,
+                  cursor,
+                  timestamp,
+                  requestId,
+                })
+              );
+            } else {
+              createdSpaceIds = yield* _(
+                handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
+                  blockNumber,
+                  cursor,
+                  timestamp,
+                  requestId,
+                })
+              );
+            }
           }
 
           if (personalPluginsCreated.success) {
@@ -423,11 +436,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               })
             );
 
-            if (spacePluginCreatedResponse.success) {
-              const initialProposalsToWrite = getInitialProposalsForSpaces(
-                spacePluginCreatedResponse.data.spacesCreated,
-                proposals
-              );
+            /**
+             * We track the spaces that were created in this block and check if any of the proposals executed
+             * are from a created space. If they _are_ we need to create proposals for them before we can
+             * actually execute the proposal.
+             */
+            if (createdSpaceIds) {
+              const initialProposalsToWrite = getInitialProposalsForSpaces(createdSpaceIds, proposals);
 
               yield* _(
                 handleInitialProposalsCreated(initialProposalsToWrite, {
