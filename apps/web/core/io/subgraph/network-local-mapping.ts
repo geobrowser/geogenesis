@@ -417,9 +417,7 @@ export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamE
 
 function getImageUrlFromImageEntity(triples: SubstreamImageValueTriple[]): string | null {
   const triple = triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE);
-
-  // @TODO: Should be URL value type
-  return triple?.valueType === 'TEXT' ? triple.textValue : null;
+  return triple?.valueType === 'URL' ? triple.textValue : null;
 }
 
 function isImageEntity(types: SubstreamType[]): boolean {
