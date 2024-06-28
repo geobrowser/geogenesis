@@ -165,7 +165,11 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
               </motion.div>
             )}
           </AnimatePresence>
-          <TableBlockContextMenu allColumns={allColumns} shownColumnTriples={shownColumnTriples} shownIndexes={[]} />
+          <TableBlockContextMenu
+            allColumns={allColumns}
+            shownColumnTriples={shownColumnTriples}
+            shownColumnIds={shownColumnIds}
+          />
 
           {isEditing && (
             <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters)}>

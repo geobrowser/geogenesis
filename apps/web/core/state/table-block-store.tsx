@@ -265,7 +265,6 @@ export function useTableBlock() {
     (newName: string) => {
       TableBlockSdk.upsertName({
         newName: newName,
-        nameTriple,
         spaceId,
         entityId,
         api: { upsert },
