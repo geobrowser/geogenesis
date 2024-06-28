@@ -57,7 +57,7 @@ function decodeEdit(data: Buffer): Effect.Effect<ParsedEdit | null> {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = Edit.fromBinary(data);
-      const parseResult = ZodEdit.safeParse(edit);
+      const parseResult = ZodEdit.safeParse(edit.toJson());
 
       if (parseResult.success) {
         return parseResult.data;
@@ -82,7 +82,7 @@ function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> 
     const decodeEffect = decode(() => {
       const edit = ImportEdit.fromBinary(data);
 
-      const parseResult = ZodImportEdit.safeParse(edit);
+      const parseResult = ZodImportEdit.safeParse(edit.toJson());
 
       if (parseResult.success) {
         // @TODO(migration): For now we have some invalid ops while we still work on the data migration
