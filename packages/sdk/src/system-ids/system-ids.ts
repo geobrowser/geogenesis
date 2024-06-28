@@ -72,7 +72,10 @@ export const VALUE_TYPE = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 
 /* Example Usage: Thumbnail > VALUE_TYPE > IMAGE */
 export const IMAGE = 'ba4e41460010499da0a3caaa7f579d0e';
-export const IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE = '334b8ac01be14079b1707e11d0f9eb8d'
+export const IMAGE_WIDTH_ATTRIBUTE = '18a7f15ea93b4e15bacf4d57052741e9';
+export const IMAGE_HEIGHT_ATTRIBUTE = '58747e352a1c4c76ae64bfe08d28d0a4';
+export const IMAGE_FILE_TYPE_ATTRIBUTE = '03d3a32b258f492e8d81c9ee2bc01461';
+export const IMAGE_URL_ATTRIBUTE = '334b8ac01be14079b1707e11d0f9eb8d';
 
 /* Example Usage: City > VALUE_TYPE > RELATION */
 export const RELATION = '14611456b4664cab920d2245f59ce828';
