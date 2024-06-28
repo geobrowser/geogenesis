@@ -69,7 +69,7 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
           const checksumPluginAddress = getChecksumAddress(s.main_voting_plugin_address!);
 
           if (!acc.has(checksumPluginAddress)) {
-            acc.set(checksumPluginAddress, getChecksumAddress(s.id));
+            acc.set(checksumPluginAddress, s.id);
           }
 
           return acc;
@@ -258,7 +258,7 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
           const checksumPluginAddress = getChecksumAddress(s.personal_space_admin_plugin_address!);
 
           if (!acc.has(checksumPluginAddress)) {
-            acc.set(checksumPluginAddress, getChecksumAddress(s.id));
+            acc.set(checksumPluginAddress, s.id);
           }
 
           return acc;

@@ -7,6 +7,9 @@ export const ZodSpacePluginCreated = z.object({
 });
 
 export type SpacePluginCreated = z.infer<typeof ZodSpacePluginCreated>;
+export type SpacePluginCreatedWithSpaceId = SpacePluginCreated & {
+  id?: string | null;
+};
 
 export const ZodSpacePluginCreatedStreamResponse = z.object({
   spacesCreated: z.array(ZodSpacePluginCreated).min(1),

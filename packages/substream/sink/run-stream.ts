@@ -10,6 +10,7 @@ import { readCursor, writeCursor } from './cursor';
 import { Environment } from './environment';
 import { handleEditorsAdded } from './events/editor-added/handler';
 import { ZodEditorAddedStreamResponse } from './events/editor-added/parser';
+import { getDerivedSpaceIdsFromImportedSpaces } from './events/get-derived-space-ids-from-imported-spaces';
 import { handleNewGeoBlock } from './events/handle-new-geo-block';
 import {
   handleInitialGovernanceSpaceEditorsAdded,
@@ -31,6 +32,7 @@ import {
 } from './events/proposals-created/parser';
 import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { ZodProposalExecutedStreamResponse } from './events/proposals-executed/parser';
+import { getSpacesWithInitialProposalsProcessed } from './events/spaces-created/get-spaces-with-initial-proposals-processed';
 import {
   handleGovernancePluginCreated,
   handlePersonalSpacesCreated,
@@ -205,6 +207,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           if (hasValidEvent) {
             console.info(`==================== @BLOCK ${blockNumber} ====================`);
+
             const block = yield* _(
               handleNewGeoBlock({
                 blockNumber,
@@ -228,15 +231,89 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
+          let createdSpaceIds: string[] | null = null;
+
           if (spacePluginCreatedResponse.success) {
-            yield* _(
-              handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            /**
+             * A space's id is derived from the contract address of the DAO and the network the DAO is deployed to.
+             * Users can import or fork a space from any network and import the contents of the original space into
+             * the new one that they're creating.
+             *
+             * If they are importing a space, for example from another chain, we want to keep the ids for the
+             * space consistent. This means that when creating a space we need to check if it is has a firstContentUri
+             * that contains an `IMPORT_SPACE` ActionType. If it does, then we know we're importing a space that
+             * should use the contents of the import to derive the id. If not, it's a brand new space that has never
+             * existed in the knowledge graph, so we can create the id based on the new space's address and network.
+             *
+             * 1. Check to see which proposals map to spaces created
+             * 2. See if any of the proposals are an import
+             * 3. If they are an import then return the imported space id
+             * 4. If there is no import for this space with imported space id then use the normal id creation
+             *    flow. If we are forking a space then this flow applies, but there will be no previous space
+             *    metadata most likely. It will also have a different IPFS ActionType type.
+             *
+             * @TODO(optimization):
+             * We do something similar when processing a proposal as well to see if the proposal is part of initial
+             * space creation. This is somewhat the inverse, where we check to see if a proposal is part of space
+             * creation because we need data from the proposal to create the space.
+             *
+             * It might make sense to do the proposal creation here instead of in proposalProcessed. That way all
+             * of this logic for checking proposals happens in the same place.
+             */
+            if (proposalProcessedResponse.success) {
+              const spacesWithInitialProposal = getSpacesWithInitialProposalsProcessed(
+                spacePluginCreatedResponse.data.spacesCreated,
+                proposalProcessedResponse.data.proposalsProcessed
+              );
+
+              const spacePluginAddressesWithInitialProposal = new Set(
+                spacesWithInitialProposal.map(s => s.spaceAddress)
+              );
+
+              const initialProposalsForSpaces = proposalProcessedResponse.data.proposalsProcessed.filter(p =>
+                spacePluginAddressesWithInitialProposal.has(p.pluginAddress)
+              );
+
+              const proposalsWithInitialSpaceIds = yield* _(
+                getDerivedSpaceIdsFromImportedSpaces(initialProposalsForSpaces, {
+                  blockNumber,
+                  cursor,
+                  requestId,
+                  timestamp,
+                })
+              );
+
+              const initialSpaceIdsByPluginAddress = proposalsWithInitialSpaceIds.reduce((acc, p) => {
+                acc.set(p.pluginAddress, p.spaceId);
+                return acc;
+              }, new Map<string, string | null>());
+
+              const spacesCreated = spacePluginCreatedResponse.data.spacesCreated.map(s => {
+                return {
+                  id: initialSpaceIdsByPluginAddress.get(s.spaceAddress) ?? null,
+                  daoAddress: s.daoAddress,
+                  spaceAddress: s.spaceAddress,
+                };
+              });
+
+              createdSpaceIds = yield* _(
+                handleSpacesCreated(spacesCreated, {
+                  blockNumber,
+                  cursor,
+                  timestamp,
+                  requestId,
+                })
+              );
+            } else {
+              createdSpaceIds = yield* _(
+                handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
+                  blockNumber,
+                  cursor,
+                  timestamp,
+                  requestId,
+                })
+              );
+            }
           }
 
           if (personalPluginsCreated.success) {
@@ -359,11 +436,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               })
             );
 
-            if (spacePluginCreatedResponse.success) {
-              const initialProposalsToWrite = getInitialProposalsForSpaces(
-                spacePluginCreatedResponse.data.spacesCreated,
-                proposals
-              );
+            /**
+             * We track the spaces that were created in this block and check if any of the proposals executed
+             * are from a created space. If they _are_ we need to create proposals for them before we can
+             * actually execute the proposal.
+             */
+            if (createdSpaceIds) {
+              const initialProposalsToWrite = getInitialProposalsForSpaces(createdSpaceIds, proposals);
 
               yield* _(
                 handleInitialProposalsCreated(initialProposalsToWrite, {

@@ -13,15 +13,15 @@ export function createEditProposal(
 ): Uint8Array {
   return new Edit({
     type: ActionType.ADD_EDIT,
-    authors: [author],
-    version: '0.0.1',
+    version: '1.0.0',
+    id: createGeoId(),
+    name,
     ops: ops.map(o => {
       return new OpBinary({
         opType: o.type === 'SET_TRIPLE' ? OpType.SET_TRIPLE : OpType.DELETE_TRIPLE,
         payload: Payload.fromJson(o.payload) // janky but works
       })
     }),
-    id: createGeoId(),
-    name,
+    authors: [author],
   }).toBinary()
 }
