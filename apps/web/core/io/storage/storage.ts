@@ -24,6 +24,9 @@ export class StorageClient implements IStorageClient {
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
+      headers: {
+        Authorization: `Bearer ${process.env.NEXT_PUBLIC_IPFS_KEY}`,
+      },
     });
 
     if (response.status >= 300) {

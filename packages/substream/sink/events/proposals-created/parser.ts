@@ -126,68 +126,45 @@ export const ZodProposalProcessedStreamResponse = z.object({
 });
 
 const ZodEditSetTriplePayload = z.object({
-  entityId: z.instanceof(Uint8Array).transform(a => a.toString()),
-  attributeId: z.instanceof(Uint8Array).transform(a => a.toString()),
-  // entityId: z.string().transform(a => Buffer.from(a).toString()),
-  // attributeId: z.string().transform(a => a.toString()),
-  // zod has issues with discriminated unions. We set the value
-  // to any here and trust that it is constructed into the correct
-  // format once it's decoded.
+  entityId: z.string(),
+  attributeId: z.string(),
   value: z.object({
     value: z.string(),
-    type: z.number().transform(t => {
-      switch (t) {
-        case 1:
-          return 'TEXT';
-        case 2:
-          return 'NUMBER';
-        case 3:
-          return 'ENTITY';
-        case 4:
-          return 'COLLECTION';
-        case 5:
-          return 'CHECKBOX';
-        case 6:
-          return 'URL';
-        case 7:
-          return 'TIME';
-        case 8:
-          return 'GEO_LOCATION';
-        // We haven't migrated images yet, so some triples might have
-        // the IMAGE value type still
-        case 9:
-          return 'FILTER_ME_OUT';
-      }
-    }),
+    type: z.union([
+      z.literal('TEXT'),
+      z.literal('NUMBER'),
+      z.literal('ENTITY'),
+      z.literal('COLLECTION'),
+      z.literal('CHECKBOX'),
+      z.literal('URL'),
+      z.literal('TIME'),
+      z.literal('GEO_LOCATION'),
+    ]),
   }),
 });
 
 const ZodEditDeleteTriplePayload = z.object({
-  entityId: z.instanceof(Uint8Array).transform(a => a.toString()),
-  attributeId: z.instanceof(Uint8Array).transform(a => a.toString()),
-  // zod has issues with discriminated unions. We set the value
-  // to any here and trust that it is constructed into the correct
-  // format by the binary decoder before it's parsed by zod.
-  // value: z.any(),
+  entityId: z.string(),
+  attributeId: z.string(),
 });
 
 const ZodSetTripleOp = z.object({
-  opType: z.literal(1).transform(() => 'SET_TRIPLE'),
+  opType: z.literal('SET_TRIPLE'),
   payload: ZodEditSetTriplePayload,
 });
 
 const ZodDeleteTripleOp = z.object({
-  opType: z.literal(2).transform(() => 'DELETE_TRIPLE'),
+  opType: z.literal('DELETE_TRIPLE'),
   payload: ZodEditDeleteTriplePayload,
 });
 
 export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
 
 export const ZodEdit = z.object({
-  type: z.literal('ADD_EDIT'),
-  name: z.string(),
   version: z.string(),
+  type: z.literal('ADD_EDIT'),
   id: z.string(),
+  name: z.string(),
   ops: z.array(ZodOp),
   authors: z.array(z.string()),
 });
