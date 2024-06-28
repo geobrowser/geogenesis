@@ -1,5 +1,4 @@
 import { SYSTEM_IDS, createCollectionItem, createGeoId } from '@geogenesis/sdk';
-import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { Effect } from 'effect';
 import type * as s from 'zapatos/schema';
 
@@ -12,7 +11,6 @@ import {
 import { Accounts, Collections, Entities, Proposals, Spaces, Triples } from './db';
 import { CollectionItems } from './db/collection-items';
 import { getTripleFromOp } from './events/get-triple-from-op';
-import { createSpaceId } from './utils/id';
 
 const entities: string[] = [
   SYSTEM_IDS.TYPES,
@@ -179,7 +177,7 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
     attribute_id: SYSTEM_IDS.NAME,
     value_type: 'TEXT',
     text_value: name,
-    space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+    space_id: SYSTEM_IDS.ROOT_SPACE_ID,
     created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
     created_at: ROOT_SPACE_CREATED_AT,
     is_stale: false,
@@ -194,7 +192,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       attribute_id: SYSTEM_IDS.TYPES,
       value_type: 'TEXT',
       entity_value_id: SYSTEM_IDS.ATTRIBUTE,
-      space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+      space_id: SYSTEM_IDS.ROOT_SPACE_ID,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
       is_stale: false,
@@ -205,7 +203,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       attribute_id: SYSTEM_IDS.VALUE_TYPE,
       value_type: 'ENTITY',
       entity_value_id,
-      space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+      space_id: SYSTEM_IDS.ROOT_SPACE_ID,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
       is_stale: false,
@@ -243,11 +241,11 @@ const getTypeTriples = () => {
           const collectionItemTriples = createCollectionItem({
             collectionId: collectionEntityId,
             entityId: attributeId,
-            spaceId: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+            spaceId: SYSTEM_IDS.ROOT_SPACE_ID,
           });
 
           return collectionItemTriples.map(op =>
-            getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ADDRESS, {
+            getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, {
               blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
               cursor: '',
               requestId: '',
@@ -264,7 +262,7 @@ const getTypeTriples = () => {
           attribute_id: SYSTEM_IDS.TYPES,
           value_type: 'ENTITY',
           entity_value_id: SYSTEM_IDS.SCHEMA_TYPE,
-          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+          space_id: SYSTEM_IDS.ROOT_SPACE_ID,
           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
           created_at: ROOT_SPACE_CREATED_AT,
           is_stale: false,
@@ -278,7 +276,7 @@ const getTypeTriples = () => {
           attribute_id: SYSTEM_IDS.TYPES,
           value_type: 'ENTITY',
           entity_value_id: SYSTEM_IDS.COLLECTION_TYPE,
-          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+          space_id: SYSTEM_IDS.ROOT_SPACE_ID,
           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
           created_at: ROOT_SPACE_CREATED_AT,
           is_stale: false,
@@ -289,7 +287,7 @@ const getTypeTriples = () => {
           attribute_id: SYSTEM_IDS.ATTRIBUTES,
           value_type: 'COLLECTION',
           collection_value_id: collectionEntityId,
-          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+          space_id: SYSTEM_IDS.ROOT_SPACE_ID,
           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
           created_at: ROOT_SPACE_CREATED_AT,
           is_stale: false,
@@ -310,7 +308,7 @@ const getTypeTriples = () => {
 };
 
 const space: s.spaces.Insertable = {
-  id: createSpaceId({ address: SYSTEM_IDS.ROOT_SPACE_ADDRESS, network: NETWORK_IDS.POLYGON }),
+  id: SYSTEM_IDS.ROOT_SPACE_ID,
   dao_address: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
   is_root_space: true,
   type: 'public',
@@ -327,7 +325,7 @@ const proposal: s.proposals.Insertable = {
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
   created_at: ROOT_SPACE_CREATED_AT,
   plugin_address: '',
-  space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+  space_id: SYSTEM_IDS.ROOT_SPACE_ID,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
   type: 'ADD_EDIT',
@@ -350,9 +348,10 @@ export function bootstrapRoot() {
     yield _(
       Effect.tryPromise({
         try: async () => {
+          await Spaces.upsert([space]);
+
           // @TODO: Create versions for the entities
           await Promise.all([
-            Spaces.upsert([space]),
             Accounts.upsert([account]),
             Entities.upsert(geoEntities),
 
