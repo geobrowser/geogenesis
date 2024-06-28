@@ -42,9 +42,19 @@ export function mapGovernanceToSpaces(
   }));
 }
 
-export function mapPersonalToSpaces(spaces: PersonalPluginsCreated[], createdAtBlock: number): S.spaces.Insertable[] {
+type PersonalPluginsCreatedWithSpaceId = PersonalPluginsCreated & {
+  // The id here is required as we can't derive it from the dao address + the network.
+  // We don't know which network this space was originally created on, so we need to
+  // know the id ahead of time before updating the space with the governance data.
+  id: string;
+};
+
+export function mapPersonalToSpaces(
+  spaces: PersonalPluginsCreatedWithSpaceId[],
+  createdAtBlock: number
+): S.spaces.Insertable[] {
   return spaces.map(s => ({
-    id: s.daoAddress,
+    id: s.id,
     type: 'personal',
     is_root_space: false,
     created_at_block: createdAtBlock,

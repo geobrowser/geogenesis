@@ -69,41 +69,64 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
-    // const spaces = mapPersonalToSpaces(personalPluginsCreated, block.blockNumber);
+    const personalPluginsWithSpaceId = (yield* _(
+      Effect.all(
+        personalPluginsCreated.map(p => {
+          return Effect.gen(function* (_) {
+            const maybeSpace = yield* _(Effect.promise(() => Spaces.findForDaoAddress(p.daoAddress)));
 
-    // slog({
-    //   requestId: block.requestId,
-    //   message: `Writing ${spaces.length} spaces without governance to DB`,
-    // });
+            if (maybeSpace === null) {
+              yield* _(Effect.fail(new Error()));
+              return null;
+            }
 
-    // const writtenGovernancePlugins = yield* _(
-    //   Effect.tryPromise({
-    //     try: async () => {
-    //       await Spaces.upsert(spaces);
-    //     },
-    //     catch: error => {
-    //       return new CouldNotWritePersonalPlugins(String(error));
-    //     },
-    //   }),
-    //   retryEffect,
-    //   Effect.either
-    // );
+            return {
+              ...p,
+              id: maybeSpace,
+            };
+          });
+        }),
+        {
+          concurrency: 25,
+        }
+      )
+    )).flatMap(g => (g ? [g] : []));
 
-    // if (Either.isLeft(writtenGovernancePlugins)) {
-    //   const error = writtenGovernancePlugins.left;
-    //   telemetry.captureException(error);
+    const spaces = mapPersonalToSpaces(personalPluginsWithSpaceId, block.blockNumber);
 
-    //   slog({
-    //     level: 'error',
-    //     requestId: block.requestId,
-    //     message: `Could not write personal plugins for spaces
-    //       Cause: ${error.cause}
-    //       Message: ${error.message}
-    //     `,
-    //   });
+    slog({
+      requestId: block.requestId,
+      message: `Writing ${spaces.length} spaces without governance to DB`,
+    });
 
-    //   return;
-    // }
+    const writtenGovernancePlugins = yield* _(
+      Effect.tryPromise({
+        try: async () => {
+          await Spaces.upsert(spaces);
+        },
+        catch: error => {
+          return new CouldNotWritePersonalPlugins(String(error));
+        },
+      }),
+      retryEffect,
+      Effect.either
+    );
+
+    if (Either.isLeft(writtenGovernancePlugins)) {
+      const error = writtenGovernancePlugins.left;
+      telemetry.captureException(error);
+
+      slog({
+        level: 'error',
+        requestId: block.requestId,
+        message: `Could not write personal plugins for spaces
+          Cause: ${error.cause}
+          Message: ${error.message}
+        `,
+      });
+
+      return;
+    }
 
     slog({
       requestId: block.requestId,
@@ -116,7 +139,6 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
-    // @TODO: Get the spaces with the dao addresses
     const governancePluginsWithSpaceId = (yield* _(
       Effect.all(
         governancePluginsCreated.map(g => {
