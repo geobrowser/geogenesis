@@ -17,7 +17,7 @@ type CreateImageEntityOpsReturnType = [
     type: 'SET_TRIPLE',
     payload: {
       entityId: string;
-      attributeId: typeof SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE;
+      attributeId: typeof SYSTEM_IDS.IMAGE_URL_ATTRIBUTE;
       value: {
         type: 'URL';
         value: string;
