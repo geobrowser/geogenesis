@@ -36,7 +36,7 @@ CREATE TABLE public.spaces (
     space_plugin_address text,
     main_voting_plugin_address text,
     member_access_plugin_address text,
-    personal_space_admin_plugin_address text,
+    personal_space_admin_plugin_address text
 );
 
 CREATE TABLE public.entity_types (
