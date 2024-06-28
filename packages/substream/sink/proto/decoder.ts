@@ -110,18 +110,23 @@ function decodeEdit(data: Buffer): Effect.Effect<ParsedEdit | null> {
  * extra metadata that would normally be derived onchain, like the message
  * sender, when it was posted onchain, etc., in order to correctly preserve
  * history at the time the data in the original space was created.
+ *
+ * @TODO: For some reason right now we need to decode the import edits op
+ * in a different way than the normal ADD_EDIT ops. For import edits we
+ * don't convert to JSON before parsing, we parse the edit directly. There
+ * are zod errors with the imports that we don't get with normal edits if
+ * we parse the JSON.
  */
 function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = ImportEdit.fromBinary(data);
-
-      const parseResult = ZodImportEdit.safeParse(edit.toJson());
+      const parseResult = ZodImportEdit.safeParse(edit);
 
       if (parseResult.success) {
         // @TODO(migration): For now we have some invalid ops while we still work on the data migration
         const validOps = parseResult.data.ops.filter(
-          o => o.opType === 'SET_TRIPLE' && (o.payload as unknown as any).value.type !== 'FILTER_ME_OUT'
+          o => o.opType === 'SET_TRIPLE' && (o.payload as unknown as any)?.value?.type !== 'FILTER_ME_OUT'
         );
 
         parseResult.data.ops = validOps;

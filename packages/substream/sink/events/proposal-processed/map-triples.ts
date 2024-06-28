@@ -16,14 +16,6 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
   return edit.ops.map((op): OpWithCreatedBy => {
     const triple = getTripleFromOp(op, edit.spaceId, block);
 
-    if (!triple.value_type) {
-      console.log('invalid triple', {
-        triple,
-        op: JSON.stringify(op),
-        proposalId: edit.proposalId,
-      });
-    }
-
     return {
       createdById: edit.createdById,
       op: op.opType,

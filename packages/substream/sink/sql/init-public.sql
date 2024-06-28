@@ -37,7 +37,6 @@ CREATE TABLE public.spaces (
     main_voting_plugin_address text,
     member_access_plugin_address text,
     personal_space_admin_plugin_address text,
-    configuration_id text REFERENCES public.entities(id)
 );
 
 CREATE TABLE public.entity_types (

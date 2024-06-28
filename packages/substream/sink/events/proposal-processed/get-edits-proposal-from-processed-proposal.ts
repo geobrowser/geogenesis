@@ -146,7 +146,7 @@ function fetchEditProposalFromIpfs(
             onchainProposalId: '-1',
             pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
             ops: e.ops as Op[],
-            creator: getChecksumAddress(e.createdBy),
+            creator: e.createdBy,
             space: maybeSpaceIdForVotingPlugin.id,
             endTime: block.timestamp.toString(),
             startTime: block.timestamp.toString(),
