@@ -50,7 +50,7 @@ export function createImageEntityOps(src: string): CreateImageEntityOpsReturnTyp
       type: 'SET_TRIPLE',
       payload: {
         entityId,
-        attributeId: SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE,
+        attributeId: SYSTEM_IDS.IMAGE_URL_ATTRIBUTE,
         value: {
           type: 'URL',
           value: src
