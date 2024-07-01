@@ -146,6 +146,7 @@ export function useTableBlock() {
       if (!columns) return [];
 
       const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
+      console.log('filter string', filterString);
 
       const params: FetchRowsOptions['params'] = {
         filter: filterString,
@@ -300,15 +301,17 @@ export function useTableBlock() {
   };
 }
 
-const TableBlockContext = React.createContext<{ entityId: string; selectedType: GeoType; spaceId: string } | undefined>(
-  undefined
-);
+const TableBlockContext = React.createContext<
+  { entityId: string; selectedType: { entityId: string }; spaceId: string } | undefined
+>(undefined);
 
 interface Props {
   spaceId: string;
   children: React.ReactNode;
 
-  selectedType?: GeoType;
+  selectedType?: {
+    entityId: string;
+  };
   entityId: string;
 }
 

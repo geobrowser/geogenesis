@@ -165,13 +165,12 @@ export const Editor = React.memo(function Editor({
       </>
     );
   }
-  const { content } = editorJson;
 
   // const openCommandMenu = () => editor?.chain().focus().insertContent('/').run();
 
   return (
     <div className={cx(editable ? 'editable' : 'not-editable')}>
-      {!editor ? <ServerContent content={content} /> : <EditorContent editor={editor} />}
+      {!editor ? <ServerContent content={editorJson.content} /> : <EditorContent editor={editor} />}
       {/* <FloatingMenu editor={editor}>
         <div className="absolute -left-12 -top-3">
           <SquareButton onClick={openCommandMenu} icon={<Plus />} />

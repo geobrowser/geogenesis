@@ -5,8 +5,6 @@ import * as React from 'react';
 import { useMemo } from 'react';
 
 import { TableBlockProvider } from '~/core/state/table-block-store';
-import { useTypesStore } from '~/core/state/types-store/types-store';
-import { GeoType } from '~/core/types';
 
 import { TableBlock, TableBlockError } from '../blocks/table/table-block';
 
@@ -63,11 +61,11 @@ function TableNodeComponent({ node }: NodeViewRendererProps) {
 }
 
 function TableNodeChildren({ spaceId, entityId, typeId }: { spaceId: string; entityId: string; typeId: string }) {
-  const { types } = useTypesStore();
-
   const selectedType = useMemo(() => {
-    return types.find(type => type.entityId === typeId);
-  }, [JSON.stringify(types), typeId]);
+    return {
+      entityId: typeId,
+    };
+  }, [typeId]);
 
   return (
     <ErrorBoundary
