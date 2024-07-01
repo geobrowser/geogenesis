@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
@@ -66,7 +67,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
   //  triples from subgraph for second entity -  @TODO merge with local data since there could be changes
   const entityTwoTriples = useEntityById(entityIdTwo);
 
-  const entityOneNameTriple = entityOneTriples.find(triple => triple.attributeId === 'name');
+  const entityOneNameTriple = entityOneTriples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
 
   const { spaces } = useSpaces();
   const spaceEntityOne = spaces.find(space => space.id === entityOneTriples[0]?.space);
