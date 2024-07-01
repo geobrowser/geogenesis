@@ -21,13 +21,12 @@ import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
-import { Search } from '~/design-system/icons/search';
 import { Spacer } from '~/design-system/spacer';
 import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
-import { colors } from '~/design-system/theme/colors';
 
+import { DataBlockViewMenu } from './data-block-view-menu';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
@@ -40,8 +39,6 @@ interface Props {
 
 // eslint-disable-next-line react/display-name
 export const TableBlock = React.memo(({ spaceId }: Props) => {
-  const { setFilterState } = useTableBlock();
-
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const isEditing = useUserIsEditing(spaceId);
   const { spaces } = useSpaces();
@@ -51,12 +48,15 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     rows,
     setPage,
     filterState,
+    setFilterState,
     isLoading,
     hasNextPage,
     blockEntity,
     hasPreviousPage,
     pageNumber,
     type,
+    view,
+    placeholder,
   } = useTableBlock();
 
   const allColumns = columns.map(column => ({
@@ -71,6 +71,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
   const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.value) ?? []), SYSTEM_IDS.NAME];
   const { placeholderText, placeholderImage } = getPlaceholders(blockEntity);
+  const viewTriple = (blockEntity?.triples ?? []).find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
   /**
    * There are several types of columns we might be filtering on, some of which aren't actually columns, so have
@@ -105,8 +106,11 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   });
 
   const typeId = type.entityId;
-  const filters: Array<[string, string]> =
-    filterState && filterState.length > 0 ? filterState.map(filter => [filter.columnId, filter.value]) : [];
+  const attributes: Array<[string, string]> =
+    filterState && filterState.length > 0
+      ? // filters can include 'space', which is not an attribute
+        filterState.filter(filter => filter.columnId !== 'space').map(filter => [filter.columnId, filter.value])
+      : [];
 
   const hasPagination = hasPreviousPage || hasNextPage;
 
@@ -114,28 +118,9 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     <div>
       <div className="mb-2 flex h-8 items-center justify-between">
         <div className="flex grow items-center gap-2">
-          <span className="shrink-0 overflow-hidden rounded">
-            <BoringAvatar
-              size={16}
-              square={true}
-              variant="bauhaus"
-              name={blockEntity?.name ?? 'Untitled'}
-              colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
-            />
-          </span>
-
           <TableBlockEditableTitle spaceId={spaceId} />
         </div>
         <div className="flex items-center gap-5">
-          <span
-            title="Table block searching coming soon"
-            className="hover:cursor-not-allowed"
-            onClick={() => {
-              //
-            }}
-          >
-            <Search color="grey-02" />
-          </span>
           <AnimatePresence initial={false} mode="wait">
             {filterState.length > 0 ? (
               <motion.div
@@ -165,6 +150,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
               </motion.div>
             )}
           </AnimatePresence>
+          <DataBlockViewMenu activeView={view} viewTriple={viewTriple} isLoading={isLoading} />
           <TableBlockContextMenu
             allColumns={allColumns}
             shownColumnTriples={shownColumnTriples}
@@ -172,7 +158,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           />
 
           {isEditing && (
-            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, filters)}>
+            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, attributes)}>
               <Create />
             </Link>
           )}
@@ -226,6 +212,8 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             shownColumnIds={shownColumnIds}
             placeholderText={placeholderText}
             placeholderImage={placeholderImage}
+            placeholder={placeholder}
+            view={view}
           />
         )}
         {hasPagination && (
@@ -313,7 +301,7 @@ export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }
 
   return (
     <div className="overflow-hidden rounded-lg border border-grey-02 p-0 shadow-button">
-      <div className={cx('overflow-x-scroll rounded-lg', className)}>
+      <div className={cx('overflow-x-clip rounded-lg', className)}>
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>
             <tr>

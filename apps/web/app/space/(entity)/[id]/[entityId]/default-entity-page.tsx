@@ -27,7 +27,7 @@ interface Props {
   params: { id: string; entityId: string };
   searchParams: {
     typeId?: string;
-    filters?: string;
+    attributes?: string;
   };
   showCover?: boolean;
   showHeading?: boolean;
@@ -54,8 +54,8 @@ export default async function DefaultEntityPage({
 
   const typeId = searchParams.typeId ?? null;
 
-  const encodedFilters = searchParams.filters ?? EMPTY_ARRAY_AS_ENCODED_URI;
-  const filters = JSON.parse(decodeURI(encodedFilters));
+  const encodedAttributes = searchParams.attributes ?? EMPTY_ARRAY_AS_ENCODED_URI;
+  const attributes = JSON.parse(decodeURI(encodedAttributes));
 
   return (
     <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
@@ -78,7 +78,7 @@ export default async function DefaultEntityPage({
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
             <ToggleEntityPage {...props} typeId={typeId} filters={filters} />
             <Spacer height={40} />
-            {/* 
+            {/*
               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
               show any referenced by loading states but do want to stream it in
             */}

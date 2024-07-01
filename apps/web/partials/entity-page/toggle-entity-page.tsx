@@ -11,12 +11,12 @@ type EntityPageProps = {
   id: string;
   spaceId: string;
   typeId?: string | null;
-  filters?: Array<Filter> | null;
+  attributes?: Array<Attribute> | null;
 };
 
-type Filter = [FilterId, FilterValue];
-type FilterId = string;
-type FilterValue = string;
+type Attribute = [AttributeId, AttributeValue];
+type AttributeId = string;
+type AttributeValue = string;
 
 export function ToggleEntityPage(props: EntityPageProps) {
   const renderEditablePage = useUserIsEditing(props.spaceId);
