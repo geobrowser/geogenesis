@@ -55,6 +55,8 @@ export function populateApprovedContentProposal(
           created_at: block.timestamp,
           updated_at: block.timestamp,
           updated_at_block: block.blockNumber,
+          updated_at_block_hash: block.hash,
+          updated_at_block_network: block.network,
           created_at_block: block.blockNumber,
           created_at_block_hash: block.hash,
           created_at_block_network: block.network,

@@ -556,9 +556,21 @@ declare module 'zapatos/schema' {
       /**
       * **entities.updated_at_block**
       * - `int4` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      updated_at_block: number | null;
+      updated_at_block: number;
+      /**
+      * **entities.updated_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block_hash: string;
+      /**
+      * **entities.updated_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block_network: string;
     }
     export interface JSONSelectable {
       /**
@@ -630,9 +642,21 @@ declare module 'zapatos/schema' {
       /**
       * **entities.updated_at_block**
       * - `int4` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      updated_at_block: number | null;
+      updated_at_block: number;
+      /**
+      * **entities.updated_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block_hash: string;
+      /**
+      * **entities.updated_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block_network: string;
     }
     export interface Whereable {
       /**
@@ -704,9 +728,21 @@ declare module 'zapatos/schema' {
       /**
       * **entities.updated_at_block**
       * - `int4` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
       updated_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **entities.updated_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **entities.updated_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -778,9 +814,21 @@ declare module 'zapatos/schema' {
       /**
       * **entities.updated_at_block**
       * - `int4` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      updated_at_block?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment;
+      updated_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **entities.updated_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **entities.updated_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block_network: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -852,9 +900,21 @@ declare module 'zapatos/schema' {
       /**
       * **entities.updated_at_block**
       * - `int4` in database
-      * - Nullable, no default
+      * - `NOT NULL`, no default
       */
-      updated_at_block?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment>;
+      updated_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **entities.updated_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **entities.updated_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'entities_pkey';
     export type Column = keyof Selectable;

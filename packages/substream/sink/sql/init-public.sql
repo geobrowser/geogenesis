@@ -33,7 +33,11 @@ CREATE TABLE public.entities (
     created_at_block_network text NOT NULL,
     FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     updated_at integer,
-    updated_at_block integer
+    updated_at_block integer NOT NULL,
+    updated_at_block_hash text NOT NULL,
+    updated_at_block_network text NOT NULL,
+    FOREIGN KEY (updated_at_block_network, updated_at_block_hash) REFERENCES public.geo_blocks (network, hash)
+
 );
 
 CREATE TYPE public.space_type as ENUM ('personal', 'public');

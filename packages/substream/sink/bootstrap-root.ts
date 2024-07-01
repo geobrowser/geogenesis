@@ -201,6 +201,8 @@ const geoEntities: s.entities.Insertable[] = entities.map(entity => ({
   created_at: ROOT_SPACE_CREATED_AT,
   updated_at: ROOT_SPACE_CREATED_AT,
   updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+  updated_at_block_hash: '',
+  updated_at_block_network: NETWORK_IDS.GEO,
 }));
 
 const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
