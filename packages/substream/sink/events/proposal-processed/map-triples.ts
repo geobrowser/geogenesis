@@ -1,7 +1,7 @@
 import type * as S from 'zapatos/schema';
 
 import { getTripleFromOp } from '../get-triple-from-op';
-import { type BlockEvent, type Op, type TripleOp } from '~/sink/types';
+import { type GeoBlock, type Op, type TripleOp } from '~/sink/types';
 
 export interface OpWithCreatedBy {
   createdById: string;
@@ -12,7 +12,7 @@ export interface OpWithCreatedBy {
 export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string; proposalId: string };
 
 // @TODO: Do we squash actions in the new data model?
-export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
+export function mapSchemaTriples(edit: SchemaTripleEdit, block: GeoBlock): OpWithCreatedBy[] {
   return edit.ops.map((op): OpWithCreatedBy => {
     const triple = getTripleFromOp(op, edit.spaceId, block);
 

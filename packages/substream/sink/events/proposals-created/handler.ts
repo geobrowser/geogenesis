@@ -20,7 +20,7 @@ import type {
   SubspaceProposal,
 } from '~/sink/events/proposals-created/parser';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
 
@@ -28,7 +28,7 @@ class CouldNotWriteCreatedProposalsError extends Error {
   _tag: 'CouldNotWriteCreatedProposalsError' = 'CouldNotWriteCreatedProposalsError';
 }
 
-export function handleProposalsCreated(proposalsCreated: ProposalCreated[], block: BlockEvent) {
+export function handleProposalsCreated(proposalsCreated: ProposalCreated[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 

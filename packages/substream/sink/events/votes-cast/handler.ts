@@ -4,7 +4,7 @@ import { mapVotes } from './map-votes';
 import type { VoteCast } from './parser';
 import { ProposalVotes } from '~/sink/db/proposal-votes';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
 
@@ -12,7 +12,7 @@ class CouldNotWriteVotesError extends Error {
   _tag: 'CouldNotWriteVotesError' = 'CouldNotWriteVotesError';
 }
 
-export function handleVotesCast(votesCast: VoteCast[], block: BlockEvent) {
+export function handleVotesCast(votesCast: VoteCast[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 

@@ -3,7 +3,7 @@ import { Effect, Either } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
-import { type BlockEvent } from '../../types';
+import { type GeoBlock } from '../../types';
 import { pool } from '../../utils/pool';
 import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
@@ -12,7 +12,7 @@ import { CollectionItems } from '~/sink/db/collection-items';
 
 interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
-  block: BlockEvent;
+  block: GeoBlock;
   versions: Schema.versions.Insertable[];
 }
 

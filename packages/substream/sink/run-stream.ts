@@ -50,6 +50,7 @@ import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/pa
 import { handleVotesCast } from './events/votes-cast/handler';
 import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
 import { Telemetry } from './telemetry';
+import type { GeoBlock } from './types';
 import { slog } from './utils/slog';
 import { createSink, createStream } from './vendor/sink/src';
 
@@ -205,30 +206,23 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             membersAdded.success ||
             editorsAdded.success;
 
+          const geoBlock: GeoBlock = {
+            blockNumber,
+            cursor,
+            requestId,
+            timestamp,
+            hash: message.clock?.id ?? '',
+            network: NETWORK_IDS.GEO,
+          };
+
           if (hasValidEvent) {
             console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
-            const block = yield* _(
-              handleNewGeoBlock({
-                blockNumber,
-                cursor,
-                requestId,
-                timestamp,
-                hash: message.clock?.id ?? '',
-                network: NETWORK_IDS.GEO,
-              })
-            );
+            const block = yield* _(handleNewGeoBlock(geoBlock));
           }
 
           if (profilesRegistered.success) {
-            yield* _(
-              handleOnchainProfilesRegistered(profilesRegistered.data.profilesRegistered, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handleOnchainProfilesRegistered(profilesRegistered.data.profilesRegistered, geoBlock));
           }
 
           let createdSpaceIds: string[] | null = null;
@@ -275,12 +269,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               );
 
               const proposalsWithInitialSpaceIds = yield* _(
-                getDerivedSpaceIdsFromImportedSpaces(initialProposalsForSpaces, {
-                  blockNumber,
-                  cursor,
-                  requestId,
-                  timestamp,
-                })
+                getDerivedSpaceIdsFromImportedSpaces(initialProposalsForSpaces, geoBlock)
               );
 
               const initialSpaceIdsByPluginAddress = proposalsWithInitialSpaceIds.reduce((acc, p) => {
@@ -296,35 +285,14 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 };
               });
 
-              createdSpaceIds = yield* _(
-                handleSpacesCreated(spacesCreated, {
-                  blockNumber,
-                  cursor,
-                  timestamp,
-                  requestId,
-                })
-              );
+              createdSpaceIds = yield* _(handleSpacesCreated(spacesCreated, geoBlock));
             } else {
-              createdSpaceIds = yield* _(
-                handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
-                  blockNumber,
-                  cursor,
-                  timestamp,
-                  requestId,
-                })
-              );
+              createdSpaceIds = yield* _(handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, geoBlock));
             }
           }
 
           if (personalPluginsCreated.success) {
-            yield* _(
-              handlePersonalSpacesCreated(personalPluginsCreated.data.personalPluginsCreated, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handlePersonalSpacesCreated(personalPluginsCreated.data.personalPluginsCreated, geoBlock));
 
             // We want to map the initial editors across spaces fairly similarly. Unfortunately
             // the contracts are distinct enough where they don't match 1:1 with how they
@@ -344,69 +312,31 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               };
             });
 
-            yield* _(
-              handleInitialPersonalSpaceEditorsAdded(initialEditors, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handleInitialPersonalSpaceEditorsAdded(initialEditors, geoBlock));
           }
 
           if (governancePluginsCreatedResponse.success) {
             yield* _(
-              handleGovernancePluginCreated(governancePluginsCreatedResponse.data.governancePluginsCreated, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
+              handleGovernancePluginCreated(governancePluginsCreatedResponse.data.governancePluginsCreated, geoBlock)
             );
           }
 
           if (subspacesAdded.success) {
-            yield* _(
-              handleSubspacesAdded(subspacesAdded.data.subspacesAdded, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handleSubspacesAdded(subspacesAdded.data.subspacesAdded, geoBlock));
           }
 
           if (subspacesRemoved.success) {
-            yield* _(
-              handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved, geoBlock));
           }
 
           if (initialEditorsAddedResponse.success) {
             yield* _(
-              handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
+              handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, geoBlock)
             );
           }
 
           if (proposalCreatedResponse.success) {
-            yield* _(
-              handleProposalsCreated(proposalCreatedResponse.data.proposalsCreated, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handleProposalsCreated(proposalCreatedResponse.data.proposalsCreated, geoBlock));
           }
 
           /**
@@ -428,12 +358,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
              * contains many edits
              */
             const proposals = yield* _(
-              getProposalFromInitialSpaceProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
+              getProposalFromInitialSpaceProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, geoBlock)
             );
 
             /**
@@ -444,68 +369,26 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             if (createdSpaceIds) {
               const initialProposalsToWrite = getInitialProposalsForSpaces(createdSpaceIds, proposals);
 
-              yield* _(
-                handleInitialProposalsCreated(initialProposalsToWrite, {
-                  blockNumber,
-                  cursor,
-                  timestamp,
-                  requestId,
-                })
-              );
+              yield* _(handleInitialProposalsCreated(initialProposalsToWrite, geoBlock));
             }
 
-            yield* _(
-              handleProposalsProcessed(proposals, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handleProposalsProcessed(proposals, geoBlock));
           }
 
           if (membersAdded.success) {
-            yield* _(
-              handleMemberAdded(membersAdded.data.membersAdded, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handleMemberAdded(membersAdded.data.membersAdded, geoBlock));
           }
 
           if (editorsAdded.success) {
-            yield* _(
-              handleEditorsAdded(editorsAdded.data.editorsAdded, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handleEditorsAdded(editorsAdded.data.editorsAdded, geoBlock));
           }
 
           if (votesCast.success) {
-            yield* _(
-              handleVotesCast(votesCast.data.votesCast, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handleVotesCast(votesCast.data.votesCast, geoBlock));
           }
 
           if (executedProposals.success) {
-            yield* _(
-              handleProposalsExecuted(executedProposals.data.executedProposals, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
-              })
-            );
+            yield* _(handleProposalsExecuted(executedProposals.data.executedProposals, geoBlock));
           }
         });
       },

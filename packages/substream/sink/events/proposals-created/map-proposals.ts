@@ -2,7 +2,7 @@ import type * as S from 'zapatos/schema';
 
 import { createVersionId } from '../../utils/id';
 import type { EditProposal, EditorshipProposal, MembershipProposal, SubspaceProposal } from './parser';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 
 function groupProposalsByType(
   proposals: (MembershipProposal | SubspaceProposal | EditorshipProposal | EditProposal)[]
@@ -29,7 +29,7 @@ function groupProposalsByType(
 
 function mapEditorshipProposalsToSchema(
   proposals: EditorshipProposal[],
-  block: BlockEvent
+  block: GeoBlock
 ): {
   proposals: S.proposals.Insertable[];
   proposedEditors: S.proposed_editors.Insertable[];
@@ -87,7 +87,7 @@ function mapEditorshipProposalsToSchema(
 
 function mapMembershipProposalsToSchema(
   proposals: MembershipProposal[],
-  block: BlockEvent
+  block: GeoBlock
 ): {
   proposals: S.proposals.Insertable[];
   proposedMembers: S.proposed_members.Insertable[];
@@ -145,7 +145,7 @@ function mapMembershipProposalsToSchema(
 
 function mapSubspaceProposalsToSchema(
   proposals: SubspaceProposal[],
-  block: BlockEvent
+  block: GeoBlock
 ): {
   proposals: S.proposals.Insertable[];
   proposedSubspaces: S.proposed_subspaces.Insertable[];
@@ -194,7 +194,7 @@ function mapSubspaceProposalsToSchema(
 
 function mapEditProposalToSchema(
   proposals: EditProposal[],
-  block: BlockEvent
+  block: GeoBlock
 ): {
   proposals: S.proposals.Insertable[];
   proposedVersions: S.proposed_versions.Insertable[];
@@ -292,7 +292,7 @@ function mapEditProposalToSchema(
 
 export function mapIpfsProposalToSchemaProposalByType(
   proposals: (MembershipProposal | SubspaceProposal | EditorshipProposal | EditProposal)[],
-  block: BlockEvent
+  block: GeoBlock
 ) {
   const { subspaceProposals, memberProposals, editorProposals, editProposals } = groupProposalsByType(proposals);
 

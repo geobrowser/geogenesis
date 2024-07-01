@@ -1,4 +1,5 @@
 import { SYSTEM_IDS, createCollectionItem, createGeoId } from '@geogenesis/sdk';
+import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { Effect } from 'effect';
 import type * as s from 'zapatos/schema';
 
@@ -282,6 +283,8 @@ const getTypeTriples = () => {
               cursor: '',
               requestId: '',
               timestamp: ROOT_SPACE_CREATED_AT,
+              hash: '',
+              network: NETWORK_IDS.GEO,
             })
           );
         })

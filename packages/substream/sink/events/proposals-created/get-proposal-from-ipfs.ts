@@ -12,7 +12,7 @@ import { Spaces } from '~/sink/db';
 import type { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { getFetchIpfsContentEffect } from '~/sink/ipfs';
 import { Decoder, decode } from '~/sink/proto';
-import type { BlockEvent, Op } from '~/sink/types';
+import type { GeoBlock, Op } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { slog } from '~/sink/utils/slog';
 
@@ -28,7 +28,7 @@ import { slog } from '~/sink/utils/slog';
  */
 export function getProposalFromIpfs(
   proposal: ProposalCreated,
-  block: BlockEvent
+  block: GeoBlock
 ): Effect.Effect<
   EditProposal | SubspaceProposal | MembershipProposal | EditorshipProposal | null,
   SpaceWithPluginAddressNotFoundError

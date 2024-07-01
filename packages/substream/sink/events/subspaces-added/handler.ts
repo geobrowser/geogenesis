@@ -4,7 +4,7 @@ import { mapSubspaces } from './map-subspaces';
 import type { SubspaceAdded } from './parser';
 import { Subspaces } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
 
@@ -12,7 +12,7 @@ export class CouldNotWriteSubspacesError extends Error {
   _tag: 'CouldNotWriteSubspacesError' = 'CouldNotWriteSubspacesError';
 }
 
-export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: BlockEvent) {
+export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 

@@ -2,13 +2,13 @@ import { ActionType, Import, IpfsMetadata } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
 import { getFetchIpfsContentEffect } from '../ipfs';
-import type { BlockEvent } from '../types';
+import type { GeoBlock } from '../types';
 import { createSpaceId } from '../utils/id';
 import { slog } from '../utils/slog';
 import type { ProposalProcessed } from './proposals-created/parser';
 import { decode } from '~/sink/proto';
 
-function fetchSpaceImportFromIpfs(ipfsUri: string, block: BlockEvent) {
+function fetchSpaceImportFromIpfs(ipfsUri: string, block: GeoBlock) {
   return Effect.gen(function* (_) {
     slog({
       message: `Fetching IPFS content for space import
@@ -59,7 +59,7 @@ function fetchSpaceImportFromIpfs(ipfsUri: string, block: BlockEvent) {
   });
 }
 
-export function getDerivedSpaceIdsFromImportedSpaces(processedProposals: ProposalProcessed[], block: BlockEvent) {
+export function getDerivedSpaceIdsFromImportedSpaces(processedProposals: ProposalProcessed[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,

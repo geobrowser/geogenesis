@@ -4,7 +4,7 @@ import * as db from 'zapatos/db';
 import type { ProposalExecuted } from './parser';
 import { Proposals } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
@@ -13,7 +13,7 @@ class CouldNotWriteExecutedProposalError extends Error {
   _tag: 'CouldNotWriteExecutedProposalError' = 'CouldNotWriteExecutedProposalError';
 }
 
-export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], block: BlockEvent) {
+export function handleProposalsExecuted(proposalsExecuted: ProposalExecuted[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
     const proposals = proposalsExecuted;

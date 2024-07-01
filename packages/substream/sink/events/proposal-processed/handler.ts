@@ -4,11 +4,11 @@ import type * as S from 'zapatos/schema';
 
 import type { EditProposal } from '../proposals-created/parser';
 import { populateApprovedContentProposal } from '~/sink/entries/populate-approved-content-proposal';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
 
-export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: BlockEvent) {
+export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,

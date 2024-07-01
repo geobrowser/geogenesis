@@ -6,7 +6,7 @@ import { Entities } from '../db';
 import { type SchemaTripleEdit, mapSchemaTriples } from '../events/proposal-processed/map-triples';
 import { populateTriples } from '../events/proposal-processed/populate-triples';
 import type { EditProposal } from '../events/proposals-created/parser';
-import type { BlockEvent, Op } from '../types';
+import type { GeoBlock, Op } from '../types';
 import { upsertChunked } from '../utils/db';
 import { createVersionId } from '../utils/id';
 import { pool } from '../utils/pool';
@@ -18,7 +18,7 @@ export function populateApprovedContentProposal(
   // so we don't have to query the DB. Also so we know we get the correct order
   // of the actions from IPFS.
   // ops: Op[],
-  block: BlockEvent
+  block: GeoBlock
 ) {
   return Effect.gen(function* (awaited) {
     const proposedVersionsByProposal = yield* awaited(

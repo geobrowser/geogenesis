@@ -1,8 +1,8 @@
 import type * as S from 'zapatos/schema';
 
-import type { BlockEvent, Op } from '../types';
+import type { GeoBlock, Op } from '../types';
 
-export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.triples.Insertable {
+export function getTripleFromOp(op: Op, spaceId: string, block: GeoBlock): S.triples.Insertable {
   const { entityId, attributeId } = op.payload;
   const entity_id = entityId;
   const attribute_id = attributeId;

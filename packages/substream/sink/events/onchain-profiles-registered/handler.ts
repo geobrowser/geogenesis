@@ -6,7 +6,7 @@ import { Accounts, Spaces } from '~/sink/db';
 import { OnchainProfiles } from '~/sink/db/onchain-profiles';
 import { CouldNotWriteAccountsError, CouldNotWriteSpacesError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
@@ -15,7 +15,7 @@ export class CouldNotWriteOnchainProfilesError extends Error {
   _tag: 'CouldNotWriteOnchainProfilesError' = 'CouldNotWriteOnchainProfilesError';
 }
 
-export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegistered[], block: BlockEvent) {
+export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegistered[], block: GeoBlock) {
   return Effect.gen(function* (unwrap) {
     const telemetry = yield* unwrap(Telemetry);
 

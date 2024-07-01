@@ -5,7 +5,7 @@ import type { GovernancePluginsCreated, PersonalPluginsCreated, SpacePluginCreat
 import { Spaces } from '~/sink/db';
 import { CouldNotWriteSpacesError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
 
@@ -17,7 +17,7 @@ export class CouldNotWritePersonalPlugins extends Error {
   _tag: 'CouldNotWritePersonalPlugins' = 'CouldNotWritePersonalPlugins';
 }
 
-export function handleSpacesCreated(spacesCreated: SpacePluginCreatedWithSpaceId[], block: BlockEvent) {
+export function handleSpacesCreated(spacesCreated: SpacePluginCreatedWithSpaceId[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
     const spaces = mapSpaces(spacesCreated, block.blockNumber);
@@ -65,7 +65,7 @@ export function handleSpacesCreated(spacesCreated: SpacePluginCreatedWithSpaceId
   });
 }
 
-export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPluginsCreated[], block: BlockEvent) {
+export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPluginsCreated[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
@@ -135,7 +135,7 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
   });
 }
 
-export function handleGovernancePluginCreated(governancePluginsCreated: GovernancePluginsCreated[], block: BlockEvent) {
+export function handleGovernancePluginCreated(governancePluginsCreated: GovernancePluginsCreated[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
