@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { motion } from 'framer-motion';
 
@@ -12,7 +12,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useTableBlock } from '~/core/state/table-block-store';
 import type { DataBlockView } from '~/core/state/table-block-store';
 import { Triple as TripleType } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 
 import { Check } from '~/design-system/icons/check';
 import { Close } from '~/design-system/icons/close';
@@ -110,7 +110,7 @@ type ToggleViewProps = {
 };
 
 const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriple, isLoading }: ToggleViewProps) => {
-  const { create, remove } = useActionsStore(space);
+  const { upsert, remove } = useActionsStore(space);
 
   const isActive = !isLoading && activeView === view.value;
 
@@ -119,27 +119,27 @@ const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriple,
     const attributeName = 'View';
 
     if (!isActive) {
-      // @TODO (migration)
       if (viewTriple) {
-        remove(viewTriple);
+        remove(viewTriple, space);
       }
 
-      create(
-        Triple.withId({
-          space,
-          entityId,
-          entityName,
+      upsert(
+        {
+          type: 'SET_TRIPLE',
           attributeId,
           attributeName,
+          entityId,
+          entityName,
           value: {
-            type: 'entity',
-            id: view.id,
+            type: 'ENTITY',
+            value: view.id,
             name: view.name,
           },
-        })
+        },
+        space
       );
     }
-  }, [create, entityId, entityName, isActive, remove, space, view.id, view.name, viewTriple]);
+  }, [upsert, entityId, entityName, isActive, remove, space, view.id, view.name, viewTriple]);
 
   return (
     <MenuItem active={isActive}>

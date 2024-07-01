@@ -162,6 +162,11 @@ export const SHOWN_COLUMNS = '388ad59b1cc7413ca0bb34a4de48c758';
 export const PLACEHOLDER_TEXT = '0e5f84e4c85a44698a665a7d46fe2786';
 export const PLACEHOLDER_IMAGE = '3f20832090704795a046206a6efb9557';
 
+export const VIEW_ATTRIBUTE = 'f062fc5a6f114859ba70e644be6caea5';
+export const TABLE_VIEW = 'a2a136e1d1da4853bf3b0960982f8162';
+export const LIST_VIEW = '70db74421c6e425291c8a807466d8668';
+export const GALLERY_VIEW = 'eb18a135be254953a959999dfb3255c0';
+
 /* Example Usage: Block Entity > TYPES > TEXT_BLOCK */
 export const TEXT_BLOCK = '8426caa143d647d4a6f100c7c1a9a320';
 
