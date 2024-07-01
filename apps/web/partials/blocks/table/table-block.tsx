@@ -210,8 +210,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             columns={columns}
             rows={rows}
             shownColumnIds={shownColumnIds}
-            placeholderText={placeholderText}
-            placeholderImage={placeholderImage}
             placeholder={placeholder}
             view={view}
           />

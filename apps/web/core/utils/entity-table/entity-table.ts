@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Column, Entity as IEntity, Triple as ITriple, Row } from '~/core/types';
 
-import { Entity } from '../entity';
+import { Entities } from '../entity';
 
 export type EntityCell = {
   name: string | null;
@@ -22,15 +22,15 @@ export function fromColumnsAndRows(entities: IEntity[], columns: Column[]) {
       const cellTriples = triplesForAttribute.length ? triplesForAttribute : [];
 
       const cell: EntityCell = {
-        name: Entity.name(triples),
+        name: Entities.name(triples),
         columnId: column.id,
         entityId: id,
         triples: cellTriples,
       };
 
       if (column.id === 'name') {
-        cell.description = Entity.description(triples) || null;
-        cell.image = Entity.cover(triples) || Entity.avatar(triples) || null;
+        cell.description = Entities.description(triples) || null;
+        cell.image = Entities.cover(triples) || Entities.avatar(triples) || null;
       }
 
       return {
