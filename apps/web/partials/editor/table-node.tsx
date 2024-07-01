@@ -61,9 +61,12 @@ function TableNodeComponent({ node }: NodeViewRendererProps) {
 }
 
 function TableNodeChildren({ spaceId, entityId, typeId }: { spaceId: string; entityId: string; typeId: string }) {
+  // @TODO: Fetch the type with the space and name
   const selectedType = useMemo(() => {
     return {
       entityId: typeId,
+      entityName: '',
+      space: '',
     };
   }, [typeId]);
 

@@ -8,7 +8,7 @@ import { useActionsStore } from '../hooks/use-actions-store';
 import { useMergedData } from '../hooks/use-merged-data';
 import { FetchRowsOptions } from '../io/fetch-rows';
 import { Services } from '../services';
-import { AppEntityValue, Column, Entity, ValueType as TripleValueType } from '../types';
+import { AppEntityValue, Column, Entity, GeoType, ValueType as TripleValueType } from '../types';
 import { Entities } from '../utils/entity';
 import { Triples } from '../utils/triples';
 import { getImagePath } from '../utils/utils';
@@ -333,7 +333,7 @@ const getView = (blockEntity: Entity | null | undefined): DataBlockView => {
   return view;
 };
 
-const getPlaceholder = (blockEntity: EntityType | null | undefined, view: DataBlockView) => {
+const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockView) => {
   let text = DEFAULT_PLACEHOLDERS[view].text;
   let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
 
@@ -342,7 +342,7 @@ const getPlaceholder = (blockEntity: EntityType | null | undefined, view: DataBl
       triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
     );
 
-    if (placeholderTextTriple && placeholderTextTriple.value.type === 'string') {
+    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
       text = placeholderTextTriple.value.value;
     }
 
@@ -350,7 +350,7 @@ const getPlaceholder = (blockEntity: EntityType | null | undefined, view: DataBl
       triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
     );
 
-    if (placeholderImageTriple && placeholderImageTriple.value.type === 'image') {
+    if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
       image = getImagePath(placeholderImageTriple.value.value);
     }
   }
@@ -373,17 +373,15 @@ const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string 
   },
 };
 
-const TableBlockContext = React.createContext<
-  { entityId: string; selectedType: { entityId: string }; spaceId: string } | undefined
->(undefined);
+const TableBlockContext = React.createContext<{ entityId: string; selectedType: GeoType; spaceId: string } | undefined>(
+  undefined
+);
 
 interface Props {
   spaceId: string;
   children: React.ReactNode;
 
-  selectedType?: {
-    entityId: string;
-  };
+  selectedType?: GeoType;
   entityId: string;
 }
 
