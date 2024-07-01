@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
 import {
   ColumnDef,
@@ -22,12 +22,11 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
-import { useTableBlock } from '~/core/state/table-block-store';
-import type { DataBlockView } from '~/core/state/table-block-store';
-import { Cell, Column, Row } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
+import { Cell, Column, Row, ValueTypeId } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 import { EntityCell } from '~/core/utils/entity-table/entity-table';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -62,11 +61,11 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedC
               unpublishedColumns={unpublishedColumns}
               column={column}
               entityId={column.id}
-              spaceId={Entity.nameTriple(column.triples)?.space}
+              spaceId={Entities.nameTriple(column.triples)?.space}
             />
           </div>
         ) : (
-          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entity.name(column.triples)}</Text>
+          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entities.name(column.triples)}</Text>
         );
       },
       size: columnSize ? (columnSize < 150 ? 150 : columnSize) : 150,
@@ -84,7 +83,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { create, update, remove, actions } = useActionsStore();
+    const { upsert, remove, actions, upsertMany } = useActionsStore();
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -99,8 +98,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const valueType = columnValueType(cellData.columnId, columns);
 
     const cellTriples = pipe(
-      actions[space],
-      actions => Triple.fromActions(actions, cellData.triples),
+      actions[space] ?? [],
+      // @TODO(migration): Each cell only has one triple for a given (S,E,A)
+      actions => Triples.merge(actions, cellData.triples),
       A.filter(triple => {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;
@@ -118,11 +118,11 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           // cell has the correct data, but the value of the name is the value of the last
           // cell in the previous selectedType. For now we can use a key to force the
           // cell to re-mount when the selectedType and name changes.
-          key={Entity.name(cellTriples)}
+          key={Entities.name(cellTriples)}
           triples={cellTriples}
           cell={cellData}
-          create={create}
-          update={update}
+          upsert={upsert}
+          upsertMany={upsertMany}
           remove={remove}
           space={space}
           valueType={valueType}
@@ -130,19 +130,17 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           columnRelationTypes={columnRelationTypes[cellData.columnId]}
         />
       );
-    } else if (cellData && !isPlaceholderCell) {
-      return (
-        <EntityTableCell
-          key={Entity.name(cellTriples)}
-          cell={cellData}
-          triples={cellTriples}
-          space={space}
-          isExpanded={isExpanded}
-        />
-      );
-    } else {
-      return null;
     }
+
+    return (
+      <EntityTableCell
+        key={Entities.name(cellTriples)}
+        cell={cellData}
+        triples={cellTriples}
+        space={space}
+        isExpanded={isExpanded}
+      />
+    );
   },
 };
 
@@ -151,12 +149,12 @@ interface Props {
   typeId: string;
   columns: Column[];
   rows: Row[];
-  shownIndexes: Array<number>;
+  shownColumnIds: string[];
   view: DataBlockView;
   placeholder: { text: string; image: string };
 }
 
-export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, placeholder, view }: Props) => {
+export const TableBlockTable = ({ rows, space, typeId, columns, shownColumnIds, placeholder, view }: Props) => {
   const isEditingColumns = useAtomValue(editingColumnsAtom);
 
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
@@ -223,7 +221,7 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
                 {table.getHeaderGroups().map(headerGroup => (
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header, index: number) => {
-                      const isShown = shownIndexes.includes(index);
+                      const isShown = shownColumnIds.includes(header.id);
                       const headerClassNames = isShown
                         ? null
                         : !isEditingColumns || !isEditMode
@@ -258,8 +256,8 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
                       {cells.map((cell, index: number) => {
                         const cellId = `${row.original.id}-${cell.column.id}`;
                         const firstTriple = cell.getValue<Cell>()?.triples[0];
-                        const isExpandable = firstTriple && firstTriple.value.type === 'string';
-                        const isShown = shownIndexes.includes(index);
+                        const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
+                        const isShown = shownColumnIds.includes(cell.column.id);
 
                         return (
                           <TableCell
@@ -294,7 +292,7 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
       return (
         <div className="flex flex-col gap-4">
           {rows.map((row, index: number) => {
-            const nameCell = row.name as EntityCell;
+            const nameCell = row[SYSTEM_IDS.NAME] as EntityCell;
             const { entityId, name, description, image } = nameCell;
 
             return (
@@ -324,7 +322,7 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
       return (
         <div className="grid grid-cols-3 gap-x-4 gap-y-10">
           {rows.map((row, index: number) => {
-            const nameCell = row.name as EntityCell;
+            const nameCell = row[SYSTEM_IDS.NAME] as EntityCell;
             const { entityId, name, image } = nameCell;
 
             return (

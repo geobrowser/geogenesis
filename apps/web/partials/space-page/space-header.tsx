@@ -11,8 +11,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
-import { Action as IAction } from '~/core/types';
-import { Action } from '~/core/utils/action';
+import { AppOp } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -43,6 +42,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
     queryKey: [`space-proposals-for-space-${spaceId}`],
     queryFn: ({ pageParam = 0 }) => subgraph.fetchProposals({ spaceId, page: pageParam }),
     getNextPageParam: (_lastPage, pages) => pages.length,
+    initialPageParam: 0,
   });
 
   const { setCompareMode, setSelectedProposal, setPreviousProposal, setIsCompareOpen } = useDiff();
@@ -95,9 +95,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
                     setSelectedProposal(p.id);
                     setIsCompareOpen(true);
                   }}
-                  changeCount={Action.getChangeCount(
-                    p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
-                  )}
+                  changeCount={p.proposedVersions.reduce<AppOp[]>((acc, version) => acc.concat(version.ops), []).length}
                   createdAt={p.createdAt}
                   createdBy={p.createdBy}
                   name={p.name}

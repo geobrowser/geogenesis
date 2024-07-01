@@ -40,8 +40,8 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
   };
 
   const onDelete = () => {
-    triples.forEach(t => remove(t));
-    schemaTriples.forEach(t => remove(t));
+    triples.forEach(t => remove(t, t.space));
+    schemaTriples.forEach(t => remove(t, t.space));
 
     onMenuOpenChange(false);
   };

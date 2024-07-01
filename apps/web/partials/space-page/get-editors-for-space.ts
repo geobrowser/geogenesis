@@ -3,20 +3,23 @@ import { cache } from 'react';
 import { Subgraph } from '~/core/io';
 import { OmitStrict, Profile } from '~/core/types';
 
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
+
 type EditorsForSpace = {
   allEditors: OmitStrict<Profile, 'coverUrl'>[];
   totalEditors: number;
+  votingPluginAddress: string | null;
+  spacePluginAddress: string | null;
+  memberPluginAddress: string | null;
 };
 
 export const getEditorsForSpace = cache(async (spaceId: string): Promise<EditorsForSpace> => {
-  const space = await Subgraph.fetchSpace({ id: spaceId });
+  const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
     throw new Error("Space doesn't exist");
   }
 
-  // For now we use editors for both editors and members until we have the new membership
-  // model in place.
   const maybeEditorsProfiles = await Promise.all(
     space.editors.map(editor => Subgraph.fetchProfile({ address: editor }))
   );
@@ -40,5 +43,8 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
   return {
     allEditors: allEditorsWithProfiles,
     totalEditors: space.editors.length,
+    votingPluginAddress: space.mainVotingPluginAddress,
+    spacePluginAddress: space.spacePluginAddress,
+    memberPluginAddress: space.memberAccessPluginAddress,
   };
 });

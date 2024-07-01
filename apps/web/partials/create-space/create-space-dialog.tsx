@@ -11,13 +11,12 @@ import { getAddress } from 'viem';
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
-import { useAccount, useWalletClient } from 'wagmi';
-
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { createSpaceWithEntities } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
 import { SpaceType } from '~/core/types';
 import { getImagePath, sleep } from '~/core/utils/utils';
-import { Value } from '~/core/utils/value';
+import { Values } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -41,8 +40,8 @@ export const stepAtom = atom<Step>('start');
 const workflowSteps: Array<Step> = ['creating-spaces', 'completed'];
 
 export function CreateSpaceDialog() {
-  const { address } = useAccount();
-  const { data: wallet } = useWalletClient();
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
   const [open, onOpenChange] = useState(false);
 
   const spaceType = useAtomValue(spaceTypeAtom);
@@ -81,7 +80,7 @@ export function CreateSpaceDialog() {
   }
 
   async function onRunOnboardingWorkflow() {
-    if (!address || !wallet || !spaceType) return;
+    if (!address || !smartAccount || !spaceType) return;
 
     setShowRetry(false);
 
@@ -314,7 +313,7 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
     if (e.target.files) {
       const file = e.target.files[0];
       const ipfsUri = await storageClient.uploadFile(file);
-      const imageValue = Value.toImageValue(ipfsUri);
+      const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
     }
   };

@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { pool } from './pool.js';
+import { pool } from './pool';
 
 // We don't handle errors here since we allow the callers to handle the errors
 // specific to the context of their use case.

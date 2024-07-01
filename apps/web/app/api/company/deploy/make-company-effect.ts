@@ -1,19 +1,18 @@
-import { SpaceArtifact } from '@geogenesis/contracts';
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS, createImageEntityOps } from '@geogenesis/sdk';
+import { Op as IOp } from '@geogenesis/sdk';
+import { LegacySpaceAbi } from '@geogenesis/sdk/legacy';
 import * as Effect from 'effect/Effect';
 import * as Schedule from 'effect/Schedule';
-import { createPublicClient, createWalletClient, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { polygon } from 'viem/chains';
 
 import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
-import { CreateTripleAction, OmitStrict, Triple } from '~/core/types';
-import { generateActionsForCompany } from '~/core/utils/contracts/generate-actions-for-company';
+import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
+import { Ops } from '~/core/utils/ops';
+import { Triples } from '~/core/utils/triples';
 import { slog } from '~/core/utils/utils';
 
+import { geoAccount, publicClient, walletClient } from '../../client';
 import { makeProposalServer } from '../../make-proposal-server';
 
 type Role = {
@@ -72,52 +71,35 @@ export async function makeCompanyEffect(
   requestId: string,
   { account: userAccount, username, avatarUri, spaceAddress, profileId }: UserConfig
 ) {
-  const account = privateKeyToAccount(process.env.GEO_PK as `0x${string}`);
-
-  const client = createWalletClient({
-    account,
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
-  const publicClient = createPublicClient({
-    chain: polygon,
-    transport: http(process.env.NEXT_PUBLIC_RPC_URL, { batch: true }),
-    // transport: http(Environment.options.testnet.rpc, { batch: true }),
-  });
-
   // Create the profile entity representing the new user and space configuration for this space
   // in the Geo knowledge graph.
   //
   // The id for this entity is the same as the on-chain profile id.
   const profileEffect = Effect.tryPromise({
     try: async () => {
-      const actions: CreateTripleAction[] = [];
+      const ops: IOp[] = [];
 
-      const companyActions = await generateActionsForCompany(profileId, username ?? '', spaceAddress);
-
-      actions.push(...companyActions);
+      const companyTriples = await generateTriplesForCompany(profileId, username ?? '', spaceAddress);
+      ops.push(...Triples.prepareTriplesForPublishing(companyTriples, spaceAddress));
 
       if (avatarUri) {
-        const avatarTripleWithoutId: OmitStrict<Triple, 'id'> = {
-          entityId: profileId,
-          entityName: username ?? '',
-          attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-          attributeName: 'Avatar',
-          space: spaceAddress,
-          value: {
-            type: 'image',
-            value: avatarUri,
-            id: ID.createValueId(),
-          },
-        };
+        const [typeOp, srcOp] = createImageEntityOps(avatarUri);
 
-        actions.push({
-          type: 'createTriple',
-          id: ID.createTripleId(avatarTripleWithoutId),
-          ...avatarTripleWithoutId,
-        });
+        // Creates the image entity
+        ops.push(typeOp);
+        ops.push(srcOp);
+
+        // Creates the triple pointing to the image entity
+        ops.push(
+          Ops.create({
+            entityId: profileId,
+            attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+            value: {
+              type: 'ENTITY',
+              value: typeOp.payload.entityId,
+            },
+          })
+        );
       }
 
       slog({
@@ -127,13 +109,13 @@ export async function makeCompanyEffect(
       });
 
       const proposalEffect = await makeProposalServer({
-        actions,
+        ops,
         name: `Creating profile for ${userAccount}`,
         space: spaceAddress,
-        storageClient: new StorageClient(Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).ipfs),
-        account,
-        wallet: client,
-        publicClient,
+        storageClient: new StorageClient(Environment.getConfig().ipfs),
+        account: geoAccount,
+        wallet: walletClient,
+        publicClient: publicClient,
       });
 
       await Effect.runPromise(proposalEffect);
@@ -160,14 +142,14 @@ export async function makeCompanyEffect(
     return Effect.tryPromise({
       try: async () => {
         const simulateGrantRoleResult = await publicClient.simulateContract({
-          abi: SpaceArtifact.abi,
+          abi: LegacySpaceAbi,
           address: spaceAddress as `0x${string}`,
           functionName: 'grantRole',
-          account,
-          args: [role.binary, userAccount],
+          account: geoAccount,
+          args: [role.binary as `0x${string}`, userAccount],
         });
 
-        const grantRoleSimulateHash = await client.writeContract(simulateGrantRoleResult.request);
+        const grantRoleSimulateHash = await walletClient.writeContract(simulateGrantRoleResult.request);
         slog({
           requestId,
           message: `Grant ${role.role} role hash: ${grantRoleSimulateHash}`,
@@ -202,14 +184,14 @@ export async function makeCompanyEffect(
     return Effect.tryPromise({
       try: async () => {
         const simulateRenounceRoleResult = await publicClient.simulateContract({
-          abi: SpaceArtifact.abi,
+          abi: LegacySpaceAbi,
           address: spaceAddress as `0x${string}`,
           functionName: 'renounceRole',
-          account,
-          args: [role.binary, account.address],
+          account: geoAccount,
+          args: [role.binary as `0x${string}`, geoAccount.address],
         });
 
-        const grantRoleSimulateHash = await client.writeContract(simulateRenounceRoleResult.request);
+        const grantRoleSimulateHash = await walletClient.writeContract(simulateRenounceRoleResult.request);
         slog({
           requestId,
           message: `Renounce ${role.role} role hash: ${grantRoleSimulateHash}`,

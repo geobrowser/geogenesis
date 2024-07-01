@@ -1,6 +1,7 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
@@ -12,8 +13,9 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Entity } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
+import { Entity as EntityType } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -59,15 +61,16 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
   const allColumns = columns.map(column => ({
     id: column.id,
-    name: Entity.name(column.triples),
+    name: Entities.name(column.triples),
   }));
 
-  const shownColumnTriples = (blockEntity?.triples ?? []).filter(
-    triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS
-  );
+  // @TODO: Collections
+  const shownColumnTriples = [
+    ...(blockEntity?.triples ?? []).filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS),
+  ];
 
-  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.id) ?? []), 'name'];
-
+  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.value) ?? []), SYSTEM_IDS.NAME];
+  const { placeholderText, placeholderImage } = getPlaceholders(blockEntity);
   const viewTriple = (blockEntity?.triples ?? []).find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
   /**
@@ -98,7 +101,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
     return {
       ...f,
-      columnName: Entity.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: Entities.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
 
@@ -108,10 +111,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       ? // filters can include 'space', which is not an attribute
         filterState.filter(filter => filter.columnId !== 'space').map(filter => [filter.columnId, filter.value])
       : [];
-
-  const shownIndexes = columns
-    .map((item, index) => (shownColumnIds.includes(item.id) ? index : null))
-    .filter(item => typeof item === 'number') as Array<number>;
 
   const hasPagination = hasPreviousPage || hasNextPage;
 
@@ -155,7 +154,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           <TableBlockContextMenu
             allColumns={allColumns}
             shownColumnTriples={shownColumnTriples}
-            shownIndexes={shownIndexes}
+            shownColumnIds={shownColumnIds}
           />
 
           {isEditing && (
@@ -210,7 +209,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             typeId={typeId}
             columns={columns}
             rows={rows}
-            shownIndexes={shownIndexes}
+            shownColumnIds={shownColumnIds}
             placeholder={placeholder}
             view={view}
           />
@@ -259,6 +258,32 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     </div>
   );
 });
+
+const getPlaceholders = (blockEntity: EntityType | null | undefined) => {
+  // @TODO add defaults for list/gallery views
+  let placeholderText = 'Add an entity';
+  let placeholderImage = getImagePath('ipfs://QmfC4DoT7uVNoFRbP6DBYn9T79gpLXw2Uv6qJ2G8wmqT1d');
+
+  if (blockEntity) {
+    const placeholderTextTriple = blockEntity.triples.find(
+      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
+    );
+
+    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
+      placeholderText = placeholderTextTriple.value.value;
+    }
+
+    const placeholderImageTriple = blockEntity.triples.find(
+      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
+    );
+
+    if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
+      placeholderImage = getImagePath(placeholderImageTriple.value.value);
+    }
+  }
+
+  return { placeholderText, placeholderImage };
+};
 
 const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
 

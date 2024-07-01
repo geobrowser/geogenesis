@@ -6,4 +6,6 @@ build
 .turbo
 dist
 .env
+pgdata
+replay.log
 

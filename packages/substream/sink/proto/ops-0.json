@@ -1,0 +1,1981 @@
+[
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "0390a8a6b48d4d66a3f1e515ea8fe71e",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "e6eb4528cb4d45838efb1791f698b8f8",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "82ae5e2be07d4461a88b1158931e69b8",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "306598522df542f69ad72921c33ad84b" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "aeebbd5e4d794d24ae99239e9142d9ed",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Default Type" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "aeebbd5e4d794d24ae99239e9142d9ed",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "The default type that should be selected on a space Entity Table" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "721ef6981ae043fb8ad5456de47c950a",
+      "attributeId": "aeebbd5e4d794d24ae99239e9142d9ed",
+      "value": { "type": "ENTITY", "value": "d73a9e43923e410287da5d3176ac9df2" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "a49d054e11a6494cbbe1ee6d3507663c",
+      "attributeId": "aeebbd5e4d794d24ae99239e9142d9ed",
+      "value": { "type": "ENTITY", "value": "f3874797027b45499f372e6a98f067b7" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "61c7b5e5dc094146a662a2a034ad5f35",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "People" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "61c7b5e5dc094146a662a2a034ad5f35",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "306598522df542f69ad72921c33ad84b" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "61c7b5e5dc094146a662a2a034ad5f35",
+      "attributeId": "362c1dbddc6444bba3c4652f38a642d7",
+      "value": { "type": "TEXT", "value": "0xb4476A42A66eC1356A58D300555169E17db6756c" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7816be62a9cf4684a40174d23a43ae49",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Abundant Housing in San Francisco" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7816be62a9cf4684a40174d23a43ae49",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "306598522df542f69ad72921c33ad84b" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7816be62a9cf4684a40174d23a43ae49",
+      "attributeId": "362c1dbddc6444bba3c4652f38a642d7",
+      "value": { "type": "TEXT", "value": "0x276187Ac0D3a61EAAf3D5Af443dA932EFba7A661" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7b91dc2269ac4c938b10290927cd7ef5",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "End Homelessness in San Francisco" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7b91dc2269ac4c938b10290927cd7ef5",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "306598522df542f69ad72921c33ad84b" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7b91dc2269ac4c938b10290927cd7ef5",
+      "attributeId": "362c1dbddc6444bba3c4652f38a642d7",
+      "value": { "type": "TEXT", "value": "0xEC07c19743179f1AC904Fee97a1A99310e500aB6" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "cb36140946954676b62fc2290613a430",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Phone number" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "cb36140946954676b62fc2290613a430",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "cb36140946954676b62fc2290613a430",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "9edb6fcce4544aa5861139d7f024c010" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "edd686eff11d4855bd49d22822a3f434",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Projects" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "edd686eff11d4855bd49d22822a3f434",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "The projects a person is working on" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "edd686eff11d4855bd49d22822a3f434",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "721ef6981ae043fb8ad5456de47c950a",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": {
+        "type": "TEXT",
+        "value": "https://cdn.discordapp.com/attachments/882371689244143687/1070100677516333146/crypto.png"
+      }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "170f12d63b864c74bd74dca8199fb99d",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "fad5fe12d36b4f9591bc9adc21e42dd2",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "The time a place opens" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "22c5fa356f814ba0a4df61e49f19f6cd",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "The time a place closes" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "22c5fa356f814ba0a4df61e49f19f6cd",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "9c1922f1d7a247d1841d234cb2f56991",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Role" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "9c1922f1d7a247d1841d234cb2f56991",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A job function at an organization" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "9c1922f1d7a247d1841d234cb2f56991",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "b6009f6600b04baab86f97db7bcbb14a",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Start date" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "b6009f6600b04baab86f97db7bcbb14a",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "b6009f6600b04baab86f97db7bcbb14a",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "When something started" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "c63271bfe4f34d74b4797dca335c280a",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "a36de44dff584511b73405f5b3911001",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A role that somebody held or currently holds at an organization" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "0b36882dee8448999d33a592217272d2",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "Chief executive officer" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "0b36882dee8448999d33a592217272d2",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "9c1922f1d7a247d1841d234cb2f56991" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "1dd7c5dce9cb47638f2bb715e257551f",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "9c1922f1d7a247d1841d234cb2f56991" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "6ef811d51f3143079fc90ca139d99b6a",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "9c1922f1d7a247d1841d234cb2f56991" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "780a62cfa2db4b7cb7dbe33dddfa1eca",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "9c1922f1d7a247d1841d234cb2f56991" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "91b6e87f46e14668afbf48ab319ce2b1",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "9c1922f1d7a247d1841d234cb2f56991" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "b6798099627c440c9b744311a3cd74ed",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Project" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "b6798099627c440c9b744311a3cd74ed",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A reference to a project" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "b6798099627c440c9b744311a3cd74ed",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "6904c3bbed784ee9aa6075028dbdc2cd",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Role" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "6904c3bbed784ee9aa6075028dbdc2cd",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A reference to a role" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "6904c3bbed784ee9aa6075028dbdc2cd",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "6904c3bbed784ee9aa6075028dbdc2cd",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "530f696c94a84c5fa881649e456e5e34",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Current role" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "530f696c94a84c5fa881649e456e5e34",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "The job position a person currently holds" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "530f696c94a84c5fa881649e456e5e34",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "089bd77efeb848f0a2f84e8d1a4576be",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Founder" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "089bd77efeb848f0a2f84e8d1a4576be",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "6904c3bbed784ee9aa6075028dbdc2cd" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7902dbef1eaf47cfb7e41e300050bd03",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Cofounder" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7902dbef1eaf47cfb7e41e300050bd03",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "6904c3bbed784ee9aa6075028dbdc2cd" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "a36de44dff584511b73405f5b3911001",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Job history" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "1d5d0c2adb23466ca0b09abe879df457",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Space Configuration" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "1d5d0c2adb23466ca0b09abe879df457",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "be74597305a94cd0a46d1c5538270faf",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Foreign Types" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "be74597305a94cd0a46d1c5538270faf",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "ba4e41460010499da0a3caaa7f579d0e",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Image" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "ba4e41460010499da0a3caaa7f579d0e",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f88047cebd8d4fbf83f658e84ee533e4",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Content" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "577bd9fbb29e4e2bb5f8f48aedbd26ac",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Row Type" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "577bd9fbb29e4e2bb5f8f48aedbd26ac",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "beaba5cba67741a8b35377030613fc70",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "88d5925217ae4d9aa36724710129eb47",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "dd4999b977f04c2ba02b5a26b233854e",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "cb9d261d456b4eaf87e51e9faa441867",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7314c5546f274bfe9b650a0193f664e0",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Logo" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7314c5546f274bfe9b650a0193f664e0",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "9cc8a65ddf924c0c8d9024980e822dc0",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "bc2a4e5b115e44e99758c639a13f32a4",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "An available job at a company" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "bc2a4e5b115e44e99758c639a13f32a4",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "dd10f854888f453bb789622d8e1df861",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Skill" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "dd10f854888f453bb789622d8e1df861",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "df7d108c6c3c4cbbb93ee318d12de1fa",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "63352fac43ee4dbca4cb3c3827d15208",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "38fea29845a648d6bf253c608dcca3fb",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Event" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "38fea29845a648d6bf253c608dcca3fb",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f6e3fc58555f4ca793407d3d282b1841",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "d7225a51aa8c42d59bb056f8a16a78f0",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "306598522df542f69ad72921c33ad84b" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "d7225a51aa8c42d59bb056f8a16a78f0",
+      "attributeId": "362c1dbddc6444bba3c4652f38a642d7",
+      "value": { "type": "TEXT", "value": "0xdb1c4a316933cd481860cfCa078eE07ea7Ad4EdD" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f71912463dca4e778a79d9cdc9804127",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Goal" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f71912463dca4e778a79d9cdc9804127",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A future result worth striving to attain" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f71912463dca4e778a79d9cdc9804127",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "34f535072e6b42c5a84443981a77cfa2",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Cover" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "34f535072e6b42c5a84443981a77cfa2",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "235ba0e8dc7e4bdda1e16d0d4497f133",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Avatar" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "235ba0e8dc7e4bdda1e16d0d4497f133",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "2faf55152ec84d6eac9d11f6d06a57da",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Categories" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "2faf55152ec84d6eac9d11f6d06a57da",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "2faf55152ec84d6eac9d11f6d06a57da",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "2faf55152ec84d6eac9d11f6d06a57da",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "The categories that a project or thing belongs to" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "71a5569e688e4e0f8eb0d8c361211e7c",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Twitter" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "71a5569e688e4e0f8eb0d8c361211e7c",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A web URL to a twitter account" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "71a5569e688e4e0f8eb0d8c361211e7c",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f724b80589e1424bb149acff9ecfd0f7",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Website" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f724b80589e1424bb149acff9ecfd0f7",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A web URL to a website" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f724b80589e1424bb149acff9ecfd0f7",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "d7ab40920ab5441e88c35c27952de773",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "9edb6fcce4544aa5861139d7f024c010",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "14611456b4664cab920d2245f59ce828",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "e8010874d3304a4d990762e89a19371a",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Web URL" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "e8010874d3304a4d990762e89a19371a",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A website URL with https://" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "e8010874d3304a4d990762e89a19371a",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "c9935cc57e2e4be68c3cd7acc6ed7b12",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Location" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "c9935cc57e2e4be68c3cd7acc6ed7b12",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "c9935cc57e2e4be68c3cd7acc6ed7b12",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A city, state, or country" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "58d9bb94f15747308a4478e6fe8f8a22",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Company" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "58d9bb94f15747308a4478e6fe8f8a22",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A reference to a company" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "58d9bb94f15747308a4478e6fe8f8a22",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "82ae5e2be07d4461a88b1158931e69b8",
+      "attributeId": "aeebbd5e4d794d24ae99239e9142d9ed",
+      "value": { "type": "ENTITY", "value": "bbeb8aeab07044089ed69eaa2fa02547" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "808a04ceb21c4d888ad12e240613e5ca",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "9edb6fcce4544aa5861139d7f024c010",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "d7ab40920ab5441e88c35c27952de773",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "a49d054e11a6494cbbe1ee6d3507663c",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "https://images.unsplash.com/photo-1617791160536-598cf32026fb" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "e6eb4528cb4d45838efb1791f698b8f8",
+      "attributeId": "e6eb4528cb4d45838efb1791f698b8f8",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "170f12d63b864c74bd74dca8199fb99d",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "aeebbd5e4d794d24ae99239e9142d9ed",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "e6eb4528cb4d45838efb1791f698b8f8",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "808a04ceb21c4d888ad12e240613e5ca" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "721ef6981ae043fb8ad5456de47c950a",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": {
+        "type": "TEXT",
+        "value": "https://cdn.discordapp.com/attachments/882371689244143687/1065076416640720966/crypto.png"
+      }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "721ef6981ae043fb8ad5456de47c950a",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": {
+        "type": "TEXT",
+        "value": "https://cdn.discordapp.com/attachments/882371689244143687/1065720430746415144/crypto.png"
+      }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "61c7b5e5dc094146a662a2a034ad5f35",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": {
+        "type": "TEXT",
+        "value": "https://cdn.discordapp.com/attachments/882371689244143687/1068582532611833936/people.png"
+      }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7816be62a9cf4684a40174d23a43ae49",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": {
+        "type": "TEXT",
+        "value": "https://cdn.discordapp.com/attachments/882371689244143687/1068584818910167101/abundance.png"
+      }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7b91dc2269ac4c938b10290927cd7ef5",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": {
+        "type": "TEXT",
+        "value": "https://cdn.discordapp.com/attachments/882371689244143687/1068584843316830249/end-homelessness.png"
+      }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "14611456b4664cab920d2245f59ce828",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "457a27af7b0b485cac07aa37756adafa",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "457a27af7b0b485cac07aa37756adafa",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Image" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "0390a8a6b48d4d66a3f1e515ea8fe71e",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "0390a8a6b48d4d66a3f1e515ea8fe71e",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "a49d054e11a6494cbbe1ee6d3507663c",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Philosophy" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "14611456b4664cab920d2245f59ce828",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Relation" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "306598522df542f69ad72921c33ad84b",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Space" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "721ef6981ae043fb8ad5456de47c950a",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Crypto" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f88047cebd8d4fbf83f658e84ee533e4",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "9edb6fcce4544aa5861139d7f024c010" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "8426caa143d647d4a6f100c7c1a9a320",
+      "attributeId": "01412f8381894ab1836565c7fd358cc1",
+      "value": { "type": "ENTITY", "value": "f88047cebd8d4fbf83f658e84ee533e4" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "577bd9fbb29e4e2bb5f8f48aedbd26ac",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "beaba5cba67741a8b35377030613fc70",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f0553d4d4838425ebcd7613bd8f475a5",
+      "attributeId": "01412f8381894ab1836565c7fd358cc1",
+      "value": { "type": "ENTITY", "value": "457a27af7b0b485cac07aa37756adafa" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "dd4999b977f04c2ba02b5a26b233854e",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "aeebbd5e4d794d24ae99239e9142d9ed",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "edd686eff11d4855bd49d22822a3f434",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "b6798099627c440c9b744311a3cd74ed",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "0390a8a6b48d4d66a3f1e515ea8fe71e",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "fad5fe12d36b4f9591bc9adc21e42dd2",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Opens" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "22c5fa356f814ba0a4df61e49f19f6cd",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Closes" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "721ef6981ae043fb8ad5456de47c950a",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "306598522df542f69ad72921c33ad84b" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "808a04ceb21c4d888ad12e240613e5ca",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "a36de44dff584511b73405f5b3911001",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "8426caa143d647d4a6f100c7c1a9a320",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "d7ab40920ab5441e88c35c27952de773" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7314c5546f274bfe9b650a0193f664e0",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "ba4e41460010499da0a3caaa7f579d0e" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "3ad4df27132f4ef687f8070f063b074c",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "3ad4df27132f4ef687f8070f063b074c",
+      "attributeId": "aeebbd5e4d794d24ae99239e9142d9ed",
+      "value": { "type": "ENTITY", "value": "11ffed68a58b42c6903ad245e7a46149" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "22c5fa356f814ba0a4df61e49f19f6cd",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "9edb6fcce4544aa5861139d7f024c010" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "fad5fe12d36b4f9591bc9adc21e42dd2",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "9edb6fcce4544aa5861139d7f024c010" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "530f696c94a84c5fa881649e456e5e34",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "be74597305a94cd0a46d1c5538270faf",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7b91dc2269ac4c938b10290927cd7ef5",
+      "attributeId": "aeebbd5e4d794d24ae99239e9142d9ed",
+      "value": { "type": "ENTITY", "value": "7b1ef68bc2364f56accdc4022abcb35e" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "c9935cc57e2e4be68c3cd7acc6ed7b12",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "9edb6fcce4544aa5861139d7f024c010" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "58d9bb94f15747308a4478e6fe8f8a22",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "df7d108c6c3c4cbbb93ee318d12de1fa",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "3ad4df27132f4ef687f8070f063b074c",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "c63271bfe4f34d74b4797dca335c280a",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "End date" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "a36de44dff584511b73405f5b3911001",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Job function" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "0b36882dee8448999d33a592217272d2",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "CEO" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f6e3fc58555f4ca793407d3d282b1841",
+      "attributeId": "ee26ef23f7f14eb6b7423b0fa38c1fd8",
+      "value": { "type": "ENTITY", "value": "14611456b4664cab920d2245f59ce828" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "1dd7c5dce9cb47638f2bb715e257551f",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Head of Design" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "6ef811d51f3143079fc90ca139d99b6a",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Community lead" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "780a62cfa2db4b7cb7dbe33dddfa1eca",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Software engineer" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "d7225a51aa8c42d59bb056f8a16a78f0",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": {
+        "type": "TEXT",
+        "value": "https://cdn.discordapp.com/attachments/1070516168827346944/1088205475130118204/CF5E6AF1-154B-435D-9C0B-9FA9D674F4BC.jpg"
+      }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "91b6e87f46e14668afbf48ab319ce2b1",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Designer" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "a36de44dff584511b73405f5b3911001",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Job position" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f0553d4d4838425ebcd7613bd8f475a5",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Block Type" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f88047cebd8d4fbf83f658e84ee533e4",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Editor Content" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f88047cebd8d4fbf83f658e84ee533e4",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Markdown Content" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "8426caa143d647d4a6f100c7c1a9a320",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Text Block" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "beaba5cba67741a8b35377030613fc70",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Blocks" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "88d5925217ae4d9aa36724710129eb47",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Table Block" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f0553d4d4838425ebcd7613bd8f475a5",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "U" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f0553d4d4838425ebcd7613bd8f475a5",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f0553d4d4838425ebcd7613bd8f475a5",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Image Block" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "dd4999b977f04c2ba02b5a26b233854e",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Entity Page" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "dd4999b977f04c2ba02b5a26b233854e",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Entity" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "dd4999b977f04c2ba02b5a26b233854e",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Parent Entity" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "cb9d261d456b4eaf87e51e9faa441867",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Project" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "9cc8a65ddf924c0c8d9024980e822dc0",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Company" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "3ad4df27132f4ef687f8070f063b074c",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "3ad4df27132f4ef687f8070f063b074c",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "82ae5e2be07d4461a88b1158931e69b8",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "e6eb4528cb4d45838efb1791f698b8f8",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "e6eb4528cb4d45838efb1791f698b8f8",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "0390a8a6b48d4d66a3f1e515ea8fe71e",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Text" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Relation" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "e6eb4528cb4d45838efb1791f698b8f8",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Value type" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "457a27af7b0b485cac07aa37756adafa",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Image" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "bc2a4e5b115e44e99758c639a13f32a4",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Open Job" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "bc2a4e5b115e44e99758c639a13f32a4",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Job opening" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "df7d108c6c3c4cbbb93ee318d12de1fa",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Skill" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "df7d108c6c3c4cbbb93ee318d12de1fa",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Skills" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "63352fac43ee4dbca4cb3c3827d15208",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "A place where an event is taking place" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "63352fac43ee4dbca4cb3c3827d15208",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "63352fac43ee4dbca4cb3c3827d15208",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Venue" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f6e3fc58555f4ca793407d3d282b1841",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Organizer" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f6e3fc58555f4ca793407d3d282b1841",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Organizers" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "d7225a51aa8c42d59bb056f8a16a78f0",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Transitional Housing in San Francisco Bay Area" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "d7225a51aa8c42d59bb056f8a16a78f0",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Transitional Housing in San Francisco" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "e6eb4528cb4d45838efb1791f698b8f8",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "Enforces the type of relationship values between entities." }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "Value type for relationships" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "0390a8a6b48d4d66a3f1e515ea8fe71e",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "Value type for text values" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f88047cebd8d4fbf83f658e84ee533e4",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "Content of a text block" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f88047cebd8d4fbf83f658e84ee533e4",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "Editor content for a text block" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f88047cebd8d4fbf83f658e84ee533e4",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "cb9d261d456b4eaf87e51e9faa441867",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A company, protocol, or non profit." }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "7314c5546f274bfe9b650a0193f664e0",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A defining symbol for a brand used as an avatar." }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "9cc8a65ddf924c0c8d9024980e822dc0",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": {
+        "type": "TEXT",
+        "value": "A legal entity representing an association of people, whether natural, legal or a mixture of both, with a specific objective. "
+      }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "9edb6fcce4544aa5861139d7f024c010",
+      "attributeId": "a126ca530c8e48d5b88882c734c38935",
+      "value": { "type": "TEXT", "value": "Text" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "9cc8a65ddf924c0c8d9024980e822dc0",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A legal entity with a specific mission. " }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "dd10f854888f453bb789622d8e1df861",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "An ability that's learned through training and practice" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "63352fac43ee4dbca4cb3c3827d15208",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "A place where an event is taking place" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f6e3fc58555f4ca793407d3d282b1841",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "The project that's organizing an event" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "f6e3fc58555f4ca793407d3d282b1841",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "TEXT", "value": "The projects that are organizing an event" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "3ad4df27132f4ef687f8070f063b074c",
+      "attributeId": "362c1dbddc6444bba3c4652f38a642d7",
+      "value": { "type": "TEXT", "value": "0xc46618C200f02EF1EEA28923FC3828301e63C4Bd" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "82ae5e2be07d4461a88b1158931e69b8",
+      "attributeId": "362c1dbddc6444bba3c4652f38a642d7",
+      "value": { "type": "TEXT", "value": "0xe3d08763498e3247EC00A481F199B018f2148723" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "82ae5e2be07d4461a88b1158931e69b8",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "3ad4df27132f4ef687f8070f063b074c",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "82ae5e2be07d4461a88b1158931e69b8",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "https://images.unsplash.com/photo-1535914254981-b5012eebbd15" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "3ad4df27132f4ef687f8070f063b074c",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": { "type": "TEXT", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "3ad4df27132f4ef687f8070f063b074c",
+      "attributeId": "457a27af7b0b485cac07aa37756adafa",
+      "value": {
+        "type": "TEXT",
+        "value": "https://cdn.discordapp.com/attachments/1010259815395754147/1047945562336534588/SF-image.png"
+      }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "e6eb4528cb4d45838efb1791f698b8f8",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "1fe3b5003f7844058a5728c36b06bd99",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "DELETE_TRIPLE",
+    "payload": {
+      "entityId": "0390a8a6b48d4d66a3f1e515ea8fe71e",
+      "attributeId": "9b1f76ff9711404c861e59dc3fa7d037",
+      "value": { "type": "NULL", "value": "" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "a49d054e11a6494cbbe1ee6d3507663c",
+      "attributeId": "362c1dbddc6444bba3c4652f38a642d7",
+      "value": { "type": "TEXT", "value": "0xB4B3d95e9c82cb26A5bd4BC73ffBa46F1e979f16" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "721ef6981ae043fb8ad5456de47c950a",
+      "attributeId": "362c1dbddc6444bba3c4652f38a642d7",
+      "value": { "type": "TEXT", "value": "0x1A39E2Fe299Ef8f855ce43abF7AC85D6e69E05F5" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "3ad4df27132f4ef687f8070f063b074c",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "306598522df542f69ad72921c33ad84b" }
+    }
+  },
+  {
+    "opType": "SET_TRIPLE",
+    "payload": {
+      "entityId": "a49d054e11a6494cbbe1ee6d3507663c",
+      "attributeId": "8f151ba4de204e3c9cb499ddf96f48f1",
+      "value": { "type": "ENTITY", "value": "306598522df542f69ad72921c33ad84b" }
+    }
+  }
+]

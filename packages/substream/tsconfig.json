@@ -39,7 +39,11 @@
     // "composite": true,
     // "declarationMap": true,
 
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals"],
+    "paths": {
+      "~/*": ["./*"],
+      "@geogenesis/*": ["../packages/*"]
+    }
   },
   "include": [
     "index.ts",

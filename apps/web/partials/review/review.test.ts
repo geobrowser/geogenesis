@@ -1,40 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
-import { options } from '~/core/environment/environment';
 import { MockNetworkData } from '~/core/io';
-import type { Action } from '~/core/types';
+import { Triple } from '~/core/types';
 import { Change } from '~/core/utils/change';
 import type { Changeset } from '~/core/utils/change/change';
 
-const STRING_ACTIONS: Array<Action> = [
+const TEXT_ACTIONS: Array<Triple> = [
+  MockNetworkData.makeStubTriple('Devin'),
   {
-    type: 'createTriple',
-    ...MockNetworkData.makeStubTriple('Devin'),
+    ...MockNetworkData.makeStubTriple('Alice'),
+    value: { type: 'TEXT', value: 'Alice-2' },
   },
-  {
-    type: 'editTriple',
-    before: {
-      type: 'deleteTriple',
-      ...MockNetworkData.makeStubTriple('Alice'),
-    },
-    after: {
-      type: 'createTriple',
-      ...MockNetworkData.makeStubTriple('Alice'),
-      value: { type: 'string', id: 'string:2', value: 'Alice-2' },
-    },
-  },
-  {
-    type: 'deleteTriple',
-    ...MockNetworkData.makeStubTriple('Bob'),
-  },
+  MockNetworkData.makeStubTriple('Bob'),
 ];
 
-const STRING_CHANGES: Record<string, Changeset> = {
+const TEXT_CHANGES: Record<string, Changeset> = {
   Devin: {
     name: '',
     attributes: {
       name: {
-        type: 'string',
+        type: 'TEXT',
         name: 'Name',
         before: null,
         after: 'Devin',
@@ -47,7 +32,7 @@ const STRING_CHANGES: Record<string, Changeset> = {
     name: '',
     attributes: {
       name: {
-        type: 'string',
+        type: 'TEXT',
         name: 'Name',
         before: 'Alice',
         after: 'Alice-2',
@@ -60,7 +45,7 @@ const STRING_CHANGES: Record<string, Changeset> = {
     name: '',
     attributes: {
       name: {
-        type: 'string',
+        type: 'TEXT',
         name: 'Name',
         before: 'Bob',
         after: null,
@@ -71,15 +56,9 @@ const STRING_CHANGES: Record<string, Changeset> = {
   },
 };
 
-const ENTITY_ACTIONS: Array<Action> = [
-  {
-    type: 'createTriple',
-    ...MockNetworkData.makeStubRelationAttribute('Devin'),
-  },
-  {
-    type: 'deleteTriple',
-    ...MockNetworkData.makeStubRelationAttribute('Bob'),
-  },
+const ENTITY_ACTIONS: Array<Triple> = [
+  MockNetworkData.makeStubRelationAttribute('Devin'),
+  MockNetworkData.makeStubRelationAttribute('Bob'),
 ];
 
 const ENTITY_CHANGES: Record<string, Changeset> = {
@@ -87,7 +66,7 @@ const ENTITY_CHANGES: Record<string, Changeset> = {
     name: '',
     attributes: {
       attribute: {
-        type: 'entity',
+        type: 'ENTITY',
         name: 'Types',
         before: [],
         after: ['Text'],
@@ -100,7 +79,7 @@ const ENTITY_CHANGES: Record<string, Changeset> = {
     name: '',
     attributes: {
       attribute: {
-        type: 'entity',
+        type: 'ENTITY',
         name: 'Types',
         before: ['Text'],
         after: [],
@@ -111,18 +90,18 @@ const ENTITY_CHANGES: Record<string, Changeset> = {
   },
 };
 
-describe('Actions to changes transformer (string values)', () => {
-  it('Generates changes from actions', async () => {
+describe('Triples to changes transformer (TEXT values)', () => {
+  it('Generates changes from Triples', async () => {
     const network = new MockNetworkData.MockNetwork();
-    const { changes } = await Change.fromActions(STRING_ACTIONS, network, options.development);
-    expect(changes).toEqual(STRING_CHANGES);
+    const { changes } = await Change.fromTriples(TEXT_ACTIONS, network);
+    expect(changes).toEqual(TEXT_CHANGES);
   });
 });
 
-describe('Actions to changes transformer (entity values)', () => {
-  it('Generates changes from actions', async () => {
+describe('Triples to changes transformer (ENTITY values)', () => {
+  it('Generates changes from Triples', async () => {
     const network = new MockNetworkData.MockNetwork();
-    const { changes } = await Change.fromActions(ENTITY_ACTIONS, network, options.development);
+    const { changes } = await Change.fromTriples(ENTITY_ACTIONS, network);
     expect(changes).toEqual(ENTITY_CHANGES);
   });
 });

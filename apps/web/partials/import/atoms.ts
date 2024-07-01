@@ -1,4 +1,7 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { atom } from 'jotai';
+
+import { Triple } from '~/core/types';
 
 export const loadingAtom = atom<boolean>(false);
 
@@ -22,14 +25,14 @@ export const entityCountAtom = atom(get => {
 });
 
 export const entityCountByTypeAtom = atom(get => {
-  const actions = get(actionsAtom);
+  const actions = get(triplesAtom);
 
-  const typeActions = actions.filter(action => action.attributeId === 'type');
+  const typeActions = actions.filter(action => action.attributeId === SYSTEM_IDS.TYPES);
 
   const entitySetByType: Record<string, Set<string>> = {};
 
   typeActions.forEach(action => {
-    if (action.value.type !== 'entity' || !action.value.name) return;
+    if (action.value.type !== 'ENTITY' || !action.value.name) return;
 
     if (!Object.hasOwn(entitySetByType, action.value.name)) {
       entitySetByType[action.value.name] = new Set();
@@ -47,10 +50,10 @@ export const entityCountByTypeAtom = atom(get => {
   return entityCountByType;
 });
 
-export const actionsAtom = atom<Array<any>>([]);
+export const triplesAtom = atom<Array<Triple>>([]);
 
 export const actionsCountAtom = atom(get => {
-  const actions = get(actionsAtom);
+  const actions = get(triplesAtom);
   return actions.length.toLocaleString('en-US', { style: 'decimal' });
 });
 

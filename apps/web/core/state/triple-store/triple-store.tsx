@@ -8,7 +8,7 @@ import * as React from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { FilterState, Triple as TripleType } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 
 import { DEFAULT_PAGE_SIZE } from './constants';
 import { useTripleStoreInstance } from './triple-store-provider';
@@ -78,8 +78,8 @@ export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number
     const localActions = actions[space] ?? [];
 
     // We want to merge any local actions with the network triples
-    const updatedTriples = Triple.fromActions(localActions, networkTriples);
-    return Triple.withLocalNames(localActions, updatedTriples);
+    const updatedTriples = Triples.merge(localActions, networkTriples);
+    return Triples.withLocalNames(localActions, updatedTriples);
   }, [actions, networkData, space]);
 
   const setNextPage = React.useCallback(() => {

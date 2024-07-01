@@ -7,8 +7,6 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { useAccount } from 'wagmi';
-
 import { AvatarGroup } from '~/design-system/avatar-group';
 import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -16,6 +14,7 @@ import { ResizableContainer } from '~/design-system/resizable-container';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
+import { useSmartAccount } from '../hooks/use-smart-account';
 import { EntityPresenceContext } from './presence-provider';
 
 // Formatting for this truncated address differs from the one in utils
@@ -24,7 +23,9 @@ function shortAddress(address: string) {
 }
 
 export function EntityOthersToast() {
-  const account = useAccount();
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
+
   const [isExpanded, setIsExpanded] = useState(false);
   const others = EntityPresenceContext.useOthers();
   const [me] = EntityPresenceContext.useMyPresence();
@@ -47,7 +48,7 @@ export function EntityOthersToast() {
     .filter(e => e.presence.hasChangesToEntity)
     // Filter out myself if I am the only editor and I'm in the current tab being edited
     .filter((e, _, filteredEditors) => {
-      if (filteredEditors.length === 1 && e.connectionId === account.address) return false;
+      if (filteredEditors.length === 1 && e.connectionId === address) return false;
       return true;
     });
 
@@ -64,7 +65,7 @@ export function EntityOthersToast() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 15 }}
           transition={{ duration: 0.15 }}
-          className="fixed right-8 bottom-8 w-60 rounded border border-grey-02 bg-white p-3 shadow-lg"
+          className="fixed bottom-8 right-8 w-60 rounded border border-grey-02 bg-white p-3 shadow-lg"
         >
           <div className="flex items-center gap-2">
             <AvatarGroup>
@@ -92,7 +93,7 @@ export function EntityOthersToast() {
                           {shortAddress(editor.presence.address ?? '')}
                         </Text>
                       </div>
-                      {editor.presence.address === account?.address && (
+                      {editor.presence.address === address && (
                         <Text className="rounded bg-grey-02 px-1" color="grey-04" variant="footnoteMedium">
                           You
                         </Text>

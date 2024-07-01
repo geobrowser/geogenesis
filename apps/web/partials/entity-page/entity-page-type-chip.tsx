@@ -1,7 +1,7 @@
-import { EntityType } from '~/core/types';
+import { EntitySearchResult } from '~/core/types';
 
 interface Props {
-  type: EntityType;
+  type: EntitySearchResult;
 }
 
 export function EntityPageTypeChip({ type }: Props) {

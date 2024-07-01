@@ -1,8 +1,8 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Column, Entity as IEntity, Triple as ITriple, Row } from '~/core/types';
 
-import { Entity } from '../entity';
+import { Entities } from '../entity';
 
 export type EntityCell = {
   name: string | null;
@@ -22,15 +22,15 @@ export function fromColumnsAndRows(entities: IEntity[], columns: Column[]) {
       const cellTriples = triplesForAttribute.length ? triplesForAttribute : [];
 
       const cell: EntityCell = {
-        name: Entity.name(triples),
+        name: Entities.name(triples),
         columnId: column.id,
         entityId: id,
         triples: cellTriples,
       };
 
-      if (column.id === 'name') {
-        cell.description = Entity.description(triples) || null;
-        cell.image = Entity.cover(triples) || Entity.avatar(triples) || null;
+      if (column.id === SYSTEM_IDS.NAME) {
+        cell.description = Entities.description(triples) || null;
+        cell.image = Entities.cover(triples) || Entities.avatar(triples) || null;
       }
 
       return {
@@ -58,9 +58,9 @@ export function columnsFromLocalChanges(
   );
 
   const newColumns: Column[] = triplesThatAreAttributes.map(triple => ({
-    id: triple.value.id,
+    id: triple.value.value,
     triples: localTriples.filter(t => {
-      return t.entityId === triple.value.id;
+      return t.entityId === triple.value.value;
     }),
   }));
 

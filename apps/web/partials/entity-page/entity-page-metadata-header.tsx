@@ -8,8 +8,8 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
 import { useDiff } from '~/core/state/diff-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { EntityType } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { EntitySearchResult } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -23,7 +23,7 @@ import { EntityPageTypeChip } from './entity-page-type-chip';
 interface EntityPageMetadataHeaderProps {
   id: string;
   spaceId: string;
-  types: Array<EntityType>;
+  types: Array<EntitySearchResult>;
 }
 
 export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: EntityPageMetadataHeaderProps) {
@@ -36,6 +36,7 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
     queryKey: [`entity-versions-for-entityId-${id}`],
     queryFn: ({ signal, pageParam = 0 }) => fetchVersions({ entityId: id, page: pageParam, signal }),
     getNextPageParam: (_lastPage, pages) => pages.length,
+    initialPageParam: 0,
   });
 
   const { actionsFromSpace } = useActionsStore();
@@ -52,7 +53,8 @@ export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: En
   const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
 
   const showMore = !isOnePage && !isLastPage;
-  const types = triples.length === 0 && actionsFromSpace.length === 0 ? serverTypes : Entity.types(triples);
+  // const types = triples.length === 0 && actionsFromSpace.length === 0 ? serverTypes : Entity.types(triples);
+  const types = serverTypes;
 
   return (
     <div className="flex items-center justify-between text-text">

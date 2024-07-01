@@ -1,7 +1,11 @@
 **/.git
+**/.env
 **/.github
 **/build
 **/dist
 **/generated
 **/node_modules
 apps
+pgdata
+docs
+docker

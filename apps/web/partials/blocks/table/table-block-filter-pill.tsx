@@ -24,7 +24,7 @@ export function TableBlockFilterPill({
   onDelete: () => void;
 }) {
   const { editable } = useEditable();
-  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
+  const value = filter.valueType === 'ENTITY' ? filter.valueName : filter.value;
 
   return (
     <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">

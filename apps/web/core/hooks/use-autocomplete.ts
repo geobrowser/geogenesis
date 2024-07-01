@@ -37,7 +37,9 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
               typeIds: allowedTypes,
               first: 10,
             }),
-          catch: () => new Subgraph.Errors.AbortError(),
+          catch: () => {
+            return new Subgraph.Errors.AbortError();
+          },
         })
       );
 
@@ -50,6 +52,7 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
           case 'AbortError':
             return [];
           default:
+            console.error('useAutocomplete error:', String(error));
             throw error;
         }
       }

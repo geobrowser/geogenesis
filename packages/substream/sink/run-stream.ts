@@ -1,39 +1,57 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
+import { createGeoId } from '@geogenesis/sdk';
+import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { createSink, createStream } from '@substreams/sink';
-import { Effect, Stream } from 'effect';
-import * as db from 'zapatos/db';
+import { Effect, Secret, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
-import { populateWithFullEntries } from './entries/populate-entries';
-import { parseValidActionsForFullEntries } from './parse-valid-full-entries';
-import { upsertCachedEntries, upsertCachedRoles } from './populate-from-cache';
-import { getEditorsGrantedV2Effect, handleRoleGranted, handleRoleRevoked } from './populate-roles';
-import { populateOnchainProfiles } from './profiles/populate-onchain-profiles';
-import { groupProposalsByType, mapContentProposalsToSchema } from './proposals/map-proposals';
-import { mapGovernanceToSpaces, mapSpaces } from './spaces/map-spaces';
-import { slog } from './utils';
-import { getChecksumAddress } from './utils/get-checksum-address';
-import { invariant } from './utils/invariant';
-import { getEntryWithIpfsContent, getProposalFromMetadata } from './utils/ipfs';
-import { pool } from './utils/pool';
-import { mapVotes } from './votes/map-votes';
+import { Environment } from './environment';
+import { handleEditorsAdded } from './events/editor-added/handler';
+import { ZodEditorAddedStreamResponse } from './events/editor-added/parser';
+import { getDerivedSpaceIdsFromImportedSpaces } from './events/get-derived-space-ids-from-imported-spaces';
+import { handleNewGeoBlock } from './events/handle-new-geo-block';
 import {
-  type ContentProposal,
-  type FullEntry,
-  type MembershipProposal,
-  type SubspaceProposal,
-  ZodEditorsAddedStreamResponse,
-  ZodEntryStreamResponse,
+  handleInitialGovernanceSpaceEditorsAdded,
+  handleInitialPersonalSpaceEditorsAdded,
+} from './events/initial-editors-added/handler';
+import { type InitialEditorsAdded, ZodInitialEditorsAddedStreamResponse } from './events/initial-editors-added/parser';
+import { getInitialProposalsForSpaces } from './events/initial-proposal-created/get-initial-proposals';
+import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
+import { handleMemberAdded } from './events/member-added/handler';
+import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
+import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
+import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
+import { getProposalFromInitialSpaceProposalIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
+import { handleProposalsProcessed } from './events/proposal-processed/handler';
+import { handleProposalsCreated } from './events/proposals-created/handler';
+import {
+  ZodProposalCreatedStreamResponse,
+  ZodProposalProcessedStreamResponse,
+} from './events/proposals-created/parser';
+import { handleProposalsExecuted } from './events/proposals-executed/handler';
+import { ZodProposalExecutedStreamResponse } from './events/proposals-executed/parser';
+import { getSpacesWithInitialProposalsProcessed } from './events/spaces-created/get-spaces-with-initial-proposals-processed';
+import {
+  handleGovernancePluginCreated,
+  handlePersonalSpacesCreated,
+  handleSpacesCreated,
+} from './events/spaces-created/handler';
+import {
   ZodGovernancePluginsCreatedStreamResponse,
-  ZodOnchainProfilesRegisteredStreamResponse,
-  ZodProposalStreamResponse,
-  ZodRoleChangeStreamResponse,
+  ZodPersonalPluginsCreatedStreamResponse,
   ZodSpacePluginCreatedStreamResponse,
-  ZodVotesCastStreamResponse,
-} from './zod';
+} from './events/spaces-created/parser';
+import { handleSubspacesAdded } from './events/subspaces-added/handler';
+import { ZodSubspacesAddedStreamResponse } from './events/subspaces-added/parser';
+import { handleSubspacesRemoved } from './events/subspaces-removed/handler';
+import { ZodSubspacesRemovedStreamResponse } from './events/subspaces-removed/parser';
+import { handleVotesCast } from './events/votes-cast/handler';
+import { ZodVotesCastStreamResponse } from './events/votes-cast/parser';
+import { Telemetry } from './telemetry';
+import { slog } from './utils/slog';
+import { createSink, createStream } from './vendor/sink/src';
 
 export class InvalidPackageError extends Error {
   _tag: 'InvalidPackageError' = 'InvalidPackageError';
@@ -43,32 +61,12 @@ export class CouldNotWriteCursorError extends Error {
   _tag: 'CouldNotWriteCursorError' = 'CouldNotWriteCursorError';
 }
 
-export class CouldNotWriteCachedEntryError extends Error {
-  _tag: 'CouldNotWriteCachedEntryError' = 'CouldNotWriteCachedEntryError';
-}
-
-export class CouldNotWriteCachedRoleError extends Error {
-  _tag: 'CouldNotWriteCachedRoleError' = 'CouldNotWriteCachedRoleError';
-}
-
-export class CouldNotRevokeRoleError extends Error {
-  _tag: 'CouldNotRevokeRoleError' = 'CouldNotRevokeRoleError';
-}
-
-export class CouldNotGrantRoleError extends Error {
-  _tag: 'CouldNotGrantRoleError' = 'CouldNotGrantRoleError';
-}
-
 export class InvalidStreamConfigurationError extends Error {
   _tag: 'InvalidStreamConfigurationError' = 'InvalidStreamConfigurationError';
 }
 
 export class CouldNotReadCursorError extends Error {
   _tag: 'CouldNotReadCursorError' = 'CouldNotReadCursorError';
-}
-
-export class CouldNotWriteSpacesError extends Error {
-  _tag: 'CouldNotWriteSpacesError' = 'CouldNotWriteSpacesError';
 }
 
 export class CouldNotWriteProposalsError extends Error {
@@ -88,6 +86,8 @@ interface StreamConfig {
 
 export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
   return Effect.gen(function* (_) {
+    const environment = yield* _(Environment);
+
     const startCursor = yield* _(
       Effect.tryPromise({
         try: () => readCursor(),
@@ -99,19 +99,12 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       yield* _(Effect.fail(new InvalidStreamConfigurationError('Either startBlockNumber or startCursor is required')));
     }
 
-    const substreamsEndpoint = process.env.SUBSTREAMS_ENDPOINT;
-    invariant(substreamsEndpoint, 'SUBSTREAMS_ENDPOINT is required');
-    const substreamsApiKey = process.env.SUBSTREAMS_API_KEY;
-    invariant(substreamsApiKey, 'SUBSTREAMS_API_KEY is required');
-    const authIssueUrl = process.env.AUTH_ISSUE_URL;
-    invariant(authIssueUrl, 'AUTH_ISSUE_URL is required');
-
     const substreamPackage = readPackageFromFile(MANIFEST);
     console.info(`Using substream package ${MANIFEST}`);
 
     const { token } = yield* _(
       Effect.tryPromise({
-        try: () => authIssue(substreamsApiKey, authIssueUrl),
+        try: () => authIssue(Secret.value(environment.apiKey), environment.authIssueUrl),
         catch: error => new InvalidPackageError(`Could not read package at path ${MANIFEST} ${String(error)}`),
       })
     );
@@ -119,7 +112,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
     const registry = createRegistry(substreamPackage);
 
     const transport = createGrpcTransport({
-      baseUrl: substreamsEndpoint,
+      baseUrl: environment.endpoint,
       httpVersion: '2',
       interceptors: [createAuthInterceptor(token)],
     });
@@ -128,7 +121,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       connectTransport: transport,
       substreamPackage,
       outputModule: 'geo_out',
-      productionMode: true,
+      productionMode: false,
       // The caller determines which block or cursor to start from based on
       // error handling, CLI flags, cache state, etc. We default to cursor
       // if it exists or start from the passed in block if not.
@@ -139,25 +132,11 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       maxRetrySeconds: 600, // 10 minutes.
     });
 
-    /**
-     * @HACK: Ticks in the stream might process out-of-order if any of the ticks take
-     * longer than subsequent ticks to execute. This is problematic as Geo relies on
-     * data being processed linearly to correctly build the knowledge graph state over
-     * time.
-     *
-     * We create a "Queue" using promise chaining to ensure that ticks are processed
-     * in the order that they come in. This is a giant hack and can destroy performance
-     * in JS.
-     *
-     * Soon (as of January 23, 2024) we'll migrate to a Queue implementation using Effect's
-     * Queue. This will allow us to queue up the DB writes necessary for a given tick and
-     * execute them in a more reasonable manner.
-     */
-    let entriesQueue = Promise.resolve();
-
     const sink = createSink({
       handleBlockScopedData: message => {
         return Effect.gen(function* (_) {
+          const requestId = createGeoId();
+          const telemetry = yield* _(Telemetry);
           const cursor = message.cursor;
           const blockNumber = Number(message.clock?.number.toString());
           const timestamp = Number(message.clock?.timestamp?.seconds.toString());
@@ -170,7 +149,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           );
 
           if (blockNumber % 1000 === 0) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
           }
 
           const mapOutput = message.output?.mapOutput;
@@ -181,449 +160,352 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
           const unpackedOutput = mapOutput.unpack(registry);
 
-          // @TODO: Error handling with effect
           if (!unpackedOutput) {
-            console.error('Failed to unpack substream message', mapOutput);
+            slog({
+              requestId,
+              level: 'error',
+              message: `Failed to unpack substream message: ${mapOutput}`,
+            });
+
+            telemetry.captureMessage(`Failed to unpack substream message: ${mapOutput}`);
+
             return;
           }
 
           const jsonOutput = unpackedOutput.toJson({ typeRegistry: registry });
 
-          const entryResponse = ZodEntryStreamResponse.safeParse(jsonOutput);
-          const roleChangeResponse = ZodRoleChangeStreamResponse.safeParse(jsonOutput);
           const spacePluginCreatedResponse = ZodSpacePluginCreatedStreamResponse.safeParse(jsonOutput);
           const governancePluginsCreatedResponse = ZodGovernancePluginsCreatedStreamResponse.safeParse(jsonOutput);
-          const editorsAddedResponse = ZodEditorsAddedStreamResponse.safeParse(jsonOutput);
-          const proposalResponse = ZodProposalStreamResponse.safeParse(jsonOutput);
+          const personalPluginsCreated = ZodPersonalPluginsCreatedStreamResponse.safeParse(jsonOutput);
+          const subspacesAdded = ZodSubspacesAddedStreamResponse.safeParse(jsonOutput);
+          const subspacesRemoved = ZodSubspacesRemovedStreamResponse.safeParse(jsonOutput);
+          const initialEditorsAddedResponse = ZodInitialEditorsAddedStreamResponse.safeParse(jsonOutput);
+          const proposalCreatedResponse = ZodProposalCreatedStreamResponse.safeParse(jsonOutput);
+          const proposalProcessedResponse = ZodProposalProcessedStreamResponse.safeParse(jsonOutput);
           const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
           const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
+          const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
+          const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
+          // members removed
+          const editorsAdded = ZodEditorAddedStreamResponse.safeParse(jsonOutput);
+          // editors removed
 
-          if (profilesRegistered.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
+          const hasValidEvent =
+            spacePluginCreatedResponse.success ||
+            governancePluginsCreatedResponse.success ||
+            personalPluginsCreated ||
+            subspacesAdded.success ||
+            subspacesRemoved.success ||
+            initialEditorsAddedResponse.success ||
+            proposalCreatedResponse.success ||
+            proposalProcessedResponse.success ||
+            votesCast.success ||
+            profilesRegistered.success ||
+            executedProposals.success ||
+            membersAdded.success ||
+            editorsAdded.success;
 
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${profilesRegistered.data.profilesRegistered.length} profiles to DB`,
-            });
+          if (hasValidEvent) {
+            console.info(`==================== @BLOCK ${blockNumber} ====================`);
 
-            yield* _(populateOnchainProfiles(profilesRegistered.data.profilesRegistered, timestamp, blockNumber));
-
-            slog({
-              requestId: message.cursor,
-              message: `Profiles written successfully`,
-            });
+            const block = yield* _(
+              handleNewGeoBlock({
+                blockNumber,
+                cursor,
+                requestId,
+                timestamp,
+                hash: message.clock?.id ?? '',
+                network: NETWORK_IDS.GEO,
+              })
+            );
           }
 
-          /**
-           * @TODO: De-duplicate any spaces being added with both the space plugin governance
-           * plugins. This can likely happen when we refactor to a real queue implementation
-           * which has better aggregation->write separation and performance.
-           *
-           * Right now we have a lot of blocking writes to the DB, as we separate writing to the
-           * DB based on the type of event that we're reacting to. `populateEntries` also has
-           * quite a few serially blocking calls.
-           *
-           * We want to move to a Queue implementation instead of the hacky Promise queue that
-           * we currently have. This switch will give us a better opportunity to aggregate _all_
-           * the changes happening as part of a single block and then write them more efficiently.
-           *
-           * With the new governance contracts (as of January 23, 2024) we will be indexing _many_
-           * more events, so we'll need a more scalable way to handle async writes to the DB so
-           * indexing time doesn't balloon.
-           */
-          if (spacePluginCreatedResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-
-            const spaces = mapSpaces(spacePluginCreatedResponse.data.spacesCreated, blockNumber);
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${spaces.length} spaces to DB`,
-            });
-
+          if (profilesRegistered.success) {
             yield* _(
-              Effect.tryPromise({
-                try: async () => {
-                  await db.upsert('spaces', spaces, ['id']).run(pool);
-                },
-                catch: error => new CouldNotWriteSpacesError(String(error)),
+              handleOnchainProfilesRegistered(profilesRegistered.data.profilesRegistered, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          let createdSpaceIds: string[] | null = null;
+
+          if (spacePluginCreatedResponse.success) {
+            /**
+             * A space's id is derived from the contract address of the DAO and the network the DAO is deployed to.
+             * Users can import or fork a space from any network and import the contents of the original space into
+             * the new one that they're creating.
+             *
+             * If they are importing a space, for example from another chain, we want to keep the ids for the
+             * space consistent. This means that when creating a space we need to check if it is has a firstContentUri
+             * that contains an `IMPORT_SPACE` ActionType. If it does, then we know we're importing a space that
+             * should use the contents of the import to derive the id. If not, it's a brand new space that has never
+             * existed in the knowledge graph, so we can create the id based on the new space's address and network.
+             *
+             * 1. Check to see which proposals map to spaces created
+             * 2. See if any of the proposals are an import
+             * 3. If they are an import then return the imported space id
+             * 4. If there is no import for this space with imported space id then use the normal id creation
+             *    flow. If we are forking a space then this flow applies, but there will be no previous space
+             *    metadata most likely. It will also have a different IPFS ActionType type.
+             *
+             * @TODO(optimization):
+             * We do something similar when processing a proposal as well to see if the proposal is part of initial
+             * space creation. This is somewhat the inverse, where we check to see if a proposal is part of space
+             * creation because we need data from the proposal to create the space.
+             *
+             * It might make sense to do the proposal creation here instead of in proposalProcessed. That way all
+             * of this logic for checking proposals happens in the same place.
+             */
+            if (proposalProcessedResponse.success) {
+              const spacesWithInitialProposal = getSpacesWithInitialProposalsProcessed(
+                spacePluginCreatedResponse.data.spacesCreated,
+                proposalProcessedResponse.data.proposalsProcessed
+              );
+
+              const spacePluginAddressesWithInitialProposal = new Set(
+                spacesWithInitialProposal.map(s => s.spaceAddress)
+              );
+
+              const initialProposalsForSpaces = proposalProcessedResponse.data.proposalsProcessed.filter(p =>
+                spacePluginAddressesWithInitialProposal.has(p.pluginAddress)
+              );
+
+              const proposalsWithInitialSpaceIds = yield* _(
+                getDerivedSpaceIdsFromImportedSpaces(initialProposalsForSpaces, {
+                  blockNumber,
+                  cursor,
+                  requestId,
+                  timestamp,
+                })
+              );
+
+              const initialSpaceIdsByPluginAddress = proposalsWithInitialSpaceIds.reduce((acc, p) => {
+                acc.set(p.pluginAddress, p.spaceId);
+                return acc;
+              }, new Map<string, string | null>());
+
+              const spacesCreated = spacePluginCreatedResponse.data.spacesCreated.map(s => {
+                return {
+                  id: initialSpaceIdsByPluginAddress.get(s.spaceAddress) ?? null,
+                  daoAddress: s.daoAddress,
+                  spaceAddress: s.spaceAddress,
+                };
+              });
+
+              createdSpaceIds = yield* _(
+                handleSpacesCreated(spacesCreated, {
+                  blockNumber,
+                  cursor,
+                  timestamp,
+                  requestId,
+                })
+              );
+            } else {
+              createdSpaceIds = yield* _(
+                handleSpacesCreated(spacePluginCreatedResponse.data.spacesCreated, {
+                  blockNumber,
+                  cursor,
+                  timestamp,
+                  requestId,
+                })
+              );
+            }
+          }
+
+          if (personalPluginsCreated.success) {
+            yield* _(
+              handlePersonalSpacesCreated(personalPluginsCreated.data.personalPluginsCreated, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
               })
             );
 
-            slog({
-              requestId: message.cursor,
-              message: `Spaces written successfully`,
+            // We want to map the initial editors across spaces fairly similarly. Unfortunately
+            // the contracts are distinct enough where they don't match 1:1 with how they
+            // emit the initial editor information. We do our best here to map them to use
+            // mostly the same event handler for both.
+            //
+            // The main difference is that we handle writing the editors for personal spaces
+            // at the same time as we write the space itself rather than doing it in its
+            // own unique event like we do for governance spaces.
+            //
+            // Order matters here so we need to make sure we cwrite the plugin before we write
+            // the editors.
+            const initialEditors: InitialEditorsAdded[] = personalPluginsCreated.data.personalPluginsCreated.map(p => {
+              return {
+                pluginAddress: p.personalAdminAddress,
+                addresses: [p.initialEditor],
+              };
             });
+
+            yield* _(
+              handleInitialPersonalSpaceEditorsAdded(initialEditors, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
           }
 
           if (governancePluginsCreatedResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-
-            const spaces = mapGovernanceToSpaces(
-              governancePluginsCreatedResponse.data.governancePluginsCreated,
-              blockNumber
-            );
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${spaces.length} spaces with governance to DB`,
-            });
-
             yield* _(
-              Effect.tryPromise({
-                try: async () => {
-                  await db.upsert('spaces', spaces, ['id']).run(pool);
-                },
-                catch: error => new CouldNotWriteSpacesError(String(error)),
-              })
-            );
-
-            slog({
-              requestId: message.cursor,
-              message: `Spaces with governance written successfully`,
-            });
-          }
-
-          /**
-           * The data model for DAO-based spaces works slightly differently than in legacy spaces.
-           * This means there will be a period where we need to support both data models depending
-           * on which space/contract we are working with. Eventually these data models will be merged
-           * and usage of the legacy space contracts will be migrated to the DAO-based contracts, but
-           * for now we are appending "V2" to permissions data models to denote it's used for the
-           * DAO-based spaces.
-           */
-          if (editorsAddedResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing editor role for accounts ${editorsAddedResponse.data.editorsAdded
-                .map(e => e.addresses)
-                .join(', ')} to space with plugin ${editorsAddedResponse.data.editorsAdded.map(
-                e => e.pluginAddress
-              )} to DB`,
-            });
-
-            yield* _(
-              getEditorsGrantedV2Effect({
-                editorsAdded: editorsAddedResponse.data.editorsAdded,
+              handleGovernancePluginCreated(governancePluginsCreatedResponse.data.governancePluginsCreated, {
                 blockNumber,
+                cursor,
                 timestamp,
+                requestId,
               })
             );
+          }
 
-            slog({
-              requestId: message.cursor,
-              message: `Editor roles written successfully`,
-            });
+          if (subspacesAdded.success) {
+            yield* _(
+              handleSubspacesAdded(subspacesAdded.data.subspacesAdded, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          if (subspacesRemoved.success) {
+            yield* _(
+              handleSubspacesRemoved(subspacesRemoved.data.subspacesRemoved, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          if (initialEditorsAddedResponse.success) {
+            yield* _(
+              handleInitialGovernanceSpaceEditorsAdded(initialEditorsAddedResponse.data.initialEditorsAdded, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          if (proposalCreatedResponse.success) {
+            yield* _(
+              handleProposalsCreated(proposalCreatedResponse.data.proposalsCreated, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
           }
 
           /**
-           * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
-           * represent changes to content, membership (editor or member), governance changes, subspace
-           * membership, or anything else that can be executed by a DAO.
+           * If we have a set of "SpacePluginCreated" events in the same block as a set of "ProposalProcessed" events
+           * we need to check if any of the processed proposals are because an initial content IPFS URI was passed
+           * during space creation.
            *
-           * Currently we use a simple majority voting model, where a proposal requires 51% of the
-           * available votes in order to pass. Only editors are allowed to vote on proposals, but editors
-           * _and_ members can create them.
+           * If there are processed proposals as a result of an initial content uri, we need to create the appropriate
+           * proposals, proposed versions, actions, etc. before we actually set the proposal as "ACCEPTED"
            */
-          if (proposalResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-
-            slog({
-              requestId: message.cursor,
-              message: `Processing ${proposalResponse.data.proposalsCreated.length} proposals`,
-            });
-
-            slog({
-              requestId: message.cursor,
-              message: `Gathering IPFS content for ${proposalResponse.data.proposalsCreated.length} proposals`,
-            });
-
-            const maybeProposals = yield* _(
-              Effect.all(
-                proposalResponse.data.proposalsCreated.map(proposal => getProposalFromMetadata(proposal)),
-                {
-                  concurrency: 20,
-                }
-              )
+          if (proposalProcessedResponse.success) {
+            /**
+             * Since there are potentially three handlers that we need to run, we abstract out the common
+             * data fetching needed for both here, and pass the result to the two handlers. This breaks
+             * from the normalized pattern where we have a single handler for every event. For this event
+             * there might be two handlers.
+             *
+             * `getProposalFromInitialSpaceProposalIpfsUri` might be an Edit or it might be an Import which
+             * contains many edits
+             */
+            const proposals = yield* _(
+              getProposalFromInitialSpaceProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
             );
 
-            const proposals = maybeProposals.filter(
-              (maybeProposal): maybeProposal is ContentProposal | SubspaceProposal | MembershipProposal =>
-                maybeProposal !== null
-            );
+            /**
+             * We track the spaces that were created in this block and check if any of the proposals executed
+             * are from a created space. If they _are_ we need to create proposals for them before we can
+             * actually execute the proposal.
+             */
+            if (createdSpaceIds) {
+              const initialProposalsToWrite = getInitialProposalsForSpaces(createdSpaceIds, proposals);
 
-            const { contentProposals } = groupProposalsByType(proposals);
-            const schemaContentProposals = yield* _(mapContentProposalsToSchema(contentProposals, blockNumber, cursor));
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${contentProposals.length} proposals to DB`,
-            });
-
-            // @TODO: Put this in a transaction since all these writes are related
-            yield* _(
-              Effect.either(
-                Effect.tryPromise({
-                  try: async () => {
-                    // @TODO: Batch since there might be postgres byte limits. See upsertChunked
-                    await Promise.all([
-                      db.insert('proposals', schemaContentProposals.proposals).run(pool),
-                      db.insert('proposed_versions', schemaContentProposals.proposedVersions).run(pool),
-                      db.insert('actions', schemaContentProposals.actions).run(pool),
-                    ]);
-                  },
-                  catch: error => {
-                    slog({
-                      requestId: message.cursor,
-                      message: `Failed to write proposals to DB ${error}`,
-                      level: 'error',
-                    });
-
-                    return error;
-                  },
+              yield* _(
+                handleInitialProposalsCreated(initialProposalsToWrite, {
+                  blockNumber,
+                  cursor,
+                  timestamp,
+                  requestId,
                 })
-              )
+              );
+            }
+
+            yield* _(
+              handleProposalsProcessed(proposals, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          if (membersAdded.success) {
+            yield* _(
+              handleMemberAdded(membersAdded.data.membersAdded, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          if (editorsAdded.success) {
+            yield* _(
+              handleEditorsAdded(editorsAdded.data.editorsAdded, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
             );
           }
 
           if (votesCast.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${votesCast.data.votesCast.length} votes to DB in block`,
-            });
-
-            const schemaVotes = yield* _(mapVotes(votesCast.data.votesCast, blockNumber, timestamp));
-
             yield* _(
-              Effect.either(
-                Effect.tryPromise({
-                  try: () => db.insert('proposal_votes', schemaVotes).run(pool),
-                  catch: error => {
-                    slog({
-                      requestId: message.cursor,
-                      message: `Failed to write votes to DB ${error}`,
-                      level: 'error',
-                    });
-                  },
-                })
-              )
-            );
-          }
-
-          if (entryResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-
-            slog({
-              requestId: message.cursor,
-              message: `Processing ${entryResponse.data.entries.length} entries`,
-            });
-
-            const entries = entryResponse.data.entries;
-
-            slog({
-              requestId: message.cursor,
-              message: `Gathering IPFS content for ${entries.length} entries`,
-            });
-
-            const maybeEntriesWithIpfsContent: (FullEntry | null)[] = yield* _(
-              Effect.all(
-                entries.map(entry => getEntryWithIpfsContent(entry)),
-                {
-                  concurrency: 20,
-                }
-              )
-            );
-
-            const nonValidatedFullEntries = maybeEntriesWithIpfsContent.filter(
-              (maybeFullEntry): maybeFullEntry is FullEntry => maybeFullEntry !== null
-            );
-
-            const validFullEntries = parseValidActionsForFullEntries(nonValidatedFullEntries);
-
-            slog({
-              requestId: message.cursor,
-              message: `Caching ${entries.length} entries`,
-            });
-            yield* _(
-              Effect.tryPromise({
-                try: () =>
-                  upsertCachedEntries({
-                    fullEntries: validFullEntries,
-                    blockNumber,
-                    cursor,
-                    timestamp,
-                  }),
-                catch: error =>
-                  new CouldNotWriteCachedEntryError(
-                    `Could not upsert cached entries in block ${blockNumber} ${String(error)}}`
-                  ),
-              })
-            );
-
-            slog({
-              requestId: message.cursor,
-              message: `Writing ${entries.length} entries to DB`,
-            });
-
-            /**
-             * @HACK: Ticks in the stream might process out-of-order if any of the ticks take
-             * longer than subsequent ticks to execute. This is problematic as Geo relies on
-             * data being processed linearly to correctly build the knowledge graph state over
-             * time.
-             *
-             * We create a "Queue" using promise chaining to ensure that ticks are processed
-             * in the order that they come in. This is a giant hack and can destroy performance
-             * in JS.
-             *
-             * Soon (as of January 23, 2024) we'll migrate to a Queue implementation using Effect's
-             * Queue. This will allow us to queue up the DB writes necessary for a given tick and
-             * execute them in a more reasonable manner.
-             */
-            entriesQueue = entriesQueue.then(() => {
-              /**
-               * @TODO: This should write all of the actions we need to take to an Effect.Queue
-               * The Effect.Queue will process each action in a separate process. This also lets
-               * us do all the DB writes for _all_ events at once instead of separating them out
-               * based on the event type.
-               */
-              return populateWithFullEntries({
-                fullEntries: validFullEntries,
+              handleVotesCast(votesCast.data.votesCast, {
                 blockNumber,
                 cursor,
                 timestamp,
-              });
-            });
+                requestId,
+              })
+            );
           }
 
-          if (roleChangeResponse.success) {
-            console.info(`----------------- @BLOCK ${blockNumber} -----------------`);
-
-            for (const roleChange of roleChangeResponse.data.roleChanges) {
-              const { granted, revoked } = roleChange;
-
-              if (granted) {
-                const roleChangeWithChecksum: (typeof roleChange)['granted'] = {
-                  ...granted,
-                  account: getChecksumAddress(granted.account),
-                  sender: getChecksumAddress(granted.sender),
-                  space: getChecksumAddress(granted.space),
-                };
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Caching granted role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
-                    roleChangeWithChecksum.account
-                  } in space ${roleChangeWithChecksum.space}`,
-                });
-
-                yield* _(
-                  Effect.tryPromise({
-                    try: () =>
-                      upsertCachedRoles({
-                        roleChange: roleChangeWithChecksum,
-                        blockNumber,
-                        cursor,
-                        type: 'GRANTED',
-                        timestamp,
-                      }),
-                    catch: error =>
-                      new CouldNotWriteCachedRoleError(
-                        `Could not upsert cached granted role in block ${blockNumber} ${String(error)}}`
-                      ),
-                  })
-                );
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Writing granted role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
-                    roleChangeWithChecksum.account
-                  } in space ${roleChangeWithChecksum.space} to DB`,
-                });
-
-                yield* _(
-                  Effect.tryPromise({
-                    try: () =>
-                      handleRoleGranted({
-                        roleGranted: roleChangeWithChecksum,
-                        blockNumber,
-                        timestamp,
-                      }),
-                    catch: error =>
-                      new CouldNotGrantRoleError(
-                        `Could not handle granted role in block ${blockNumber} ${String(error)}}`
-                      ),
-                  })
-                );
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Granted role written successfully`,
-                });
-              }
-
-              if (revoked) {
-                const roleChangeWithChecksum: (typeof roleChange)['revoked'] = {
-                  ...revoked,
-                  account: getChecksumAddress(revoked.account),
-                  sender: getChecksumAddress(revoked.sender),
-                  space: getChecksumAddress(revoked.space),
-                };
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Caching revoked role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
-                    roleChangeWithChecksum.account
-                  } in space ${roleChangeWithChecksum.space}`,
-                });
-
-                yield* _(
-                  Effect.tryPromise({
-                    try: () =>
-                      upsertCachedRoles({
-                        roleChange: roleChangeWithChecksum,
-                        blockNumber,
-                        cursor,
-                        type: 'REVOKED',
-                        timestamp,
-                      }),
-                    catch: error =>
-                      new CouldNotWriteCachedRoleError(
-                        `Could not upsert cached revoked role in block ${blockNumber} ${String(error)}}`
-                      ),
-                  })
-                );
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Writing revoked role ${JSON.stringify(roleChangeWithChecksum.role)} for account ${
-                    roleChangeWithChecksum.account
-                  } in space ${roleChangeWithChecksum.space} to DB`,
-                });
-
-                yield* _(
-                  Effect.tryPromise({
-                    try: () =>
-                      handleRoleRevoked({
-                        roleRevoked: roleChangeWithChecksum,
-                        blockNumber,
-                      }),
-                    catch: error =>
-                      new CouldNotRevokeRoleError(
-                        `Could not handle revoked role in block ${blockNumber} ${String(error)}}`
-                      ),
-                  })
-                );
-
-                slog({
-                  requestId: message.cursor,
-                  message: `Revoked role written successfully`,
-                });
-              }
-            }
+          if (executedProposals.success) {
+            yield* _(
+              handleProposalsExecuted(executedProposals.data.executedProposals, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
           }
         });
       },

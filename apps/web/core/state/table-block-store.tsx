@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -6,14 +6,13 @@ import * as React from 'react';
 import { TableBlockSdk } from '../blocks-sdk';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { useMergedData } from '../hooks/use-merged-data';
-import { ID } from '../id';
 import { FetchRowsOptions } from '../io/fetch-rows';
 import { Services } from '../services';
-import { Column, Entity as EntityType, EntityValue, GeoType, TripleValueType } from '../types';
-import { Entity } from '../utils/entity';
-import { Triple } from '../utils/triple';
+import { AppEntityValue, Column, Entity, GeoType, ValueType as TripleValueType } from '../types';
+import { Entities } from '../utils/entity';
+import { Triples } from '../utils/triples';
 import { getImagePath } from '../utils/utils';
-import { Value } from '../utils/value';
+import { Values } from '../utils/value';
 
 export const PAGE_SIZE = 9;
 
@@ -30,7 +29,7 @@ export function useTableBlock() {
   const { subgraph } = Services.useServices();
 
   const merged = useMergedData();
-  const { allActions, create, update } = useActionsStore();
+  const { allActions, upsert } = useActionsStore();
 
   // We need to track local changes to the entity and re-fetch it when
   // any changes occur. We re-fetch instead of deriving the new entity
@@ -45,19 +44,11 @@ export function useTableBlock() {
   // the entire block entity again when the name changes as changes to
   // the name triple should not affect any of the data fetching.
   const actionsForEntityId = React.useMemo(() => {
-    return Entity.actionsForEntityId(allActions, entityId);
+    return allActions.filter(t => t.entityId === entityId);
   }, [allActions, entityId]);
 
   const actionsForEntityIdWithoutName = React.useMemo(() => {
-    return actionsForEntityId.filter(a => {
-      switch (a.type) {
-        case 'createTriple':
-        case 'deleteTriple':
-          return a.attributeId !== SYSTEM_IDS.NAME;
-        case 'editTriple':
-          return a.after.attributeId !== SYSTEM_IDS.NAME;
-      }
-    });
+    return actionsForEntityId.filter(a => a.attributeId !== SYSTEM_IDS.NAME);
   }, [actionsForEntityId]);
 
   // We only re-fetch the block entity when actions besides changes
@@ -83,7 +74,7 @@ export function useTableBlock() {
   //    current implementation fewer data structures.
   const nameTriple = React.useMemo(() => {
     const maybeNameTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
-    const mergedTriples = Triple.fromActions(actionsForEntityId, maybeNameTriple ? [maybeNameTriple] : []);
+    const mergedTriples = Triples.merge(actionsForEntityId, maybeNameTriple ? [maybeNameTriple] : []);
     return mergedTriples.find(t => t.attributeId === SYSTEM_IDS.NAME) ?? null;
   }, [blockEntity?.triples, actionsForEntityId]);
 
@@ -95,7 +86,7 @@ export function useTableBlock() {
   // on the graphql representation of the filter. Memoizing it means we avoid
   // unnecessary re-renders.
   const filterString = React.useMemo(() => {
-    const stringValue = Value.stringValue(filterTriple ?? undefined);
+    const stringValue = Values.stringValue(filterTriple ?? undefined);
 
     if (stringValue && stringValue !== '') {
       return stringValue;
@@ -198,10 +189,10 @@ export function useTableBlock() {
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
       // Merge all local and server triples
-      const mergedTriples = Triple.fromActions(allActions, relationTypeEntities);
+      const mergedTriples = Triples.merge(allActions, relationTypeEntities);
 
       const relationTypes = mergedTriples.filter(
-        t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'entity'
+        t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'ENTITY'
       );
 
       return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
@@ -209,10 +200,10 @@ export function useTableBlock() {
           if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
 
           acc[relationType.entityId].push({
-            typeId: relationType.value.id,
+            typeId: relationType.value.value,
 
             // We can safely cast here because we filter for entity type values above.
-            typeName: (relationType.value as EntityValue).name,
+            typeName: (relationType.value as AppEntityValue).name,
             spaceId: relationType.space,
           });
 
@@ -251,52 +242,36 @@ export function useTableBlock() {
       const newFiltersString =
         newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, selectedType.entityId);
 
-      const entityName = Entity.name(nameTriple ? [nameTriple] : []) ?? '';
+      const entityName = Entities.name(nameTriple ? [nameTriple] : []) ?? '';
 
-      if (!filterTriple) {
-        return create(
-          Triple.withId({
-            attributeId: SYSTEM_IDS.FILTER,
-            attributeName: 'Filter',
-            entityId,
-            space: spaceId,
-            entityName,
-            value: {
-              type: 'string',
-              value: newFiltersString,
-              id: ID.createValueId(),
-            },
-          })
-        );
-      }
-
-      return update(
-        Triple.ensureStableId({
-          ...filterTriple,
+      return upsert(
+        {
+          type: 'SET_TRIPLE',
+          attributeId: SYSTEM_IDS.FILTER,
+          attributeName: 'Filter',
+          entityId,
           entityName,
           value: {
-            ...filterTriple.value,
-            type: 'string',
+            type: 'TEXT',
             value: newFiltersString,
           },
-        }),
-        filterTriple
+        },
+        spaceId
       );
     },
-    [create, update, entityId, filterTriple, nameTriple, selectedType.entityId, spaceId]
+    [upsert, entityId, filterTriple, nameTriple, selectedType.entityId, spaceId]
   );
 
   const setName = React.useCallback(
     (newName: string) => {
       TableBlockSdk.upsertName({
         newName: newName,
-        nameTriple,
         spaceId,
         entityId,
-        api: { update, create },
+        api: { upsert },
       });
     },
-    [create, entityId, nameTriple, spaceId, update]
+    [upsert, entityId, nameTriple, spaceId]
   );
 
   const view = getView(blockEntity);
@@ -324,7 +299,7 @@ export function useTableBlock() {
     isLoading: isLoadingColumns || isLoadingRows || isLoadingFilterState || isLoading,
 
     nameTriple,
-    name: Value.stringValue(nameTriple ?? undefined),
+    name: Values.stringValue(nameTriple ?? undefined),
     setName,
     view,
     placeholder,
@@ -333,13 +308,13 @@ export function useTableBlock() {
 
 export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY';
 
-const getView = (blockEntity: EntityType | null | undefined): DataBlockView => {
+const getView = (blockEntity: Entity | null | undefined): DataBlockView => {
   let view: DataBlockView = 'TABLE';
 
   if (blockEntity) {
     const viewTriple = blockEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
-    switch (viewTriple?.value.id) {
+    switch (viewTriple?.value.value) {
       case SYSTEM_IDS.TABLE_VIEW:
         view = 'TABLE';
         break;
@@ -350,6 +325,7 @@ const getView = (blockEntity: EntityType | null | undefined): DataBlockView => {
         view = 'GALLERY';
         break;
       default:
+        // We default to TABLE above
         break;
     }
   }
@@ -357,7 +333,7 @@ const getView = (blockEntity: EntityType | null | undefined): DataBlockView => {
   return view;
 };
 
-const getPlaceholder = (blockEntity: EntityType | null | undefined, view: DataBlockView) => {
+const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockView) => {
   let text = DEFAULT_PLACEHOLDERS[view].text;
   let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
 
@@ -366,7 +342,7 @@ const getPlaceholder = (blockEntity: EntityType | null | undefined, view: DataBl
       triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
     );
 
-    if (placeholderTextTriple && placeholderTextTriple.value.type === 'string') {
+    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
       text = placeholderTextTriple.value.value;
     }
 
@@ -374,7 +350,7 @@ const getPlaceholder = (blockEntity: EntityType | null | undefined, view: DataBl
       triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
     );
 
-    if (placeholderImageTriple && placeholderImageTriple.value.type === 'image') {
+    if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
       image = getImagePath(placeholderImageTriple.value.value);
     }
   }

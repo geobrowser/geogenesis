@@ -7,7 +7,7 @@ import { useActionsStore } from '../hooks/use-actions-store';
 import { ID } from '../id';
 import { MockNetwork, makeStubTriple } from '../io/mocks/mock-network';
 import { useLocalStore } from '../state/local-store';
-import { Entity } from '../utils/entity';
+import { Entities } from '../utils/entity';
 import { Merged as MergeDataSource } from './merged';
 
 const createMockActionsStore = (actions?: Action[]): ReturnType<typeof useActionsStore> => {
@@ -172,7 +172,7 @@ describe('MergeDataSource merges local entities with network entities', () => {
       filter: [],
     });
 
-    expect(entities).toEqual(Entity.entitiesFromTriples([changedLocalTriple.after]));
+    expect(entities).toEqual(Entities.entitiesFromTriples([changedLocalTriple.after]));
   });
 
   it('with a query', async () => {
@@ -213,7 +213,7 @@ describe('MergeDataSource merges local entities with network entities', () => {
       filter: [],
     });
 
-    expect(entities).toEqual(Entity.entitiesFromTriples([changedLocalTriple.after]));
+    expect(entities).toEqual(Entities.entitiesFromTriples([changedLocalTriple.after]));
   });
 });
 
@@ -254,7 +254,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
 
     const entity = await mergedNetwork.fetchEntity({ id: stubTriple.id });
 
-    expect(entity).toEqual(Entity.entitiesFromTriples([changedLocalTriple.after])[0]);
+    expect(entity).toEqual(Entities.entitiesFromTriples([changedLocalTriple.after])[0]);
   });
 
   // This should take the local entity
@@ -285,7 +285,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
       id: changedLocalTriple.id,
     });
 
-    expect(entity).toEqual(Entity.entitiesFromTriples([changedLocalTriple])[0]);
+    expect(entity).toEqual(Entities.entitiesFromTriples([changedLocalTriple])[0]);
   });
 
   // // This should take the network entity
@@ -302,7 +302,7 @@ describe('MergeDataSource merges local entity with network entity', () => {
 
     const entity = await mergedNetwork.fetchEntity({ id: stubTriple.id });
 
-    expect(entity).toEqual(Entity.entitiesFromTriples([stubTriple])[0]);
+    expect(entity).toEqual(Entities.entitiesFromTriples([stubTriple])[0]);
   });
 
   // This should return null

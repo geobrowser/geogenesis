@@ -1,11 +1,11 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Services } from '~/core/services';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -18,7 +18,7 @@ export function NavbarSpaceMetadata() {
   const params = useParams();
   const spaceId: string | undefined = params?.['id'] as string | undefined;
 
-  const { data } = useQuery({
+  const { data } = useSuspenseQuery({
     queryKey: ['space', spaceId],
     queryFn: async ({ signal }) => {
       if (!spaceId) return null;
@@ -42,11 +42,10 @@ export function NavbarSpaceMetadata() {
         // the images explicitly from the triples, and render null if it doesn't exist.
         //
         // spaceConfig.image will have a placeholder if the images don't exist.
-        img: Entity.avatar(spaceConfig.triples) ?? Entity.cover(spaceConfig.triples),
+        img: Entities.avatar(spaceConfig.triples) ?? Entities.cover(spaceConfig.triples),
         href: NavUtils.toSpace(space.id),
       };
     },
-    suspense: true,
   });
 
   if (!data) {

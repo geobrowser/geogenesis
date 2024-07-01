@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import { cva } from 'class-variance-authority';
@@ -12,24 +12,23 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useWalletClient } from 'wagmi';
-
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
+import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Action as ActionType, Entity as EntityType, Space } from '~/core/types';
-import { Action } from '~/core/utils/action';
+import type { Entity as EntityType, Space, Triple as TripleType } from '~/core/types';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
-import { Entity } from '~/core/utils/entity';
-import { GeoDate, getImagePath, sleepWithCallback } from '~/core/utils/utils';
+import { Entities } from '~/core/utils/entity';
+import { Triples } from '~/core/utils/triples';
+import { GeoDate, getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -66,7 +65,6 @@ type Proposal = {
 type EntityId = string;
 
 const ReviewChanges = () => {
-  const { subgraph } = Services.useServices();
   const { state } = useStatusBar();
   const { allSpacesWithActions } = useActionsStore();
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
@@ -74,7 +72,7 @@ const ReviewChanges = () => {
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', allSpacesWithActions],
     queryFn: async () => {
-      const maybeSpaces = await Promise.all(allSpacesWithActions.map(s => subgraph.fetchSpace({ id: s })));
+      const maybeSpaces = await fetchSpacesById(allSpacesWithActions);
       const spaces = maybeSpaces.filter(
         (s): s is Space & { spaceConfig: EntityType } => s !== null && s.spaceConfig !== null
       );
@@ -130,52 +128,34 @@ const ReviewChanges = () => {
   }));
 
   // Proposal state
-  const { dispatch } = useStatusBar();
   const [proposals, setProposals] = useState<Proposals>({});
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
   const { actionsFromSpace, clear } = useActionsStore(activeSpace);
   const { makeProposal } = usePublish();
-  const actions = Action.unpublishedChanges(actionsFromSpace);
-  const [data, isLoading] = useChanges(actions, activeSpace);
-
-  // Publishing logic
-  const { data: wallet } = useWalletClient();
+  const triples = Triples.squash(actionsFromSpace);
+  const [data, isLoading] = useChanges(triples, activeSpace);
 
   const handlePublish = useCallback(async () => {
-    if (!activeSpace || !wallet) return;
+    if (!activeSpace) return;
 
     const clearProposalName = () => {
       setProposals({ ...proposals, [activeSpace]: { name: '', description: '' } });
     };
 
-    try {
-      const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
+    // @TODO: Selectable publishing
+    // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
-      await makeProposal({
-        actions: actionsToPublish,
-        spaceId: activeSpace,
-        name: proposalName,
-        onChangePublishState: reviewState => dispatch({ type: 'SET_REVIEW_STATE', payload: reviewState }),
-      });
-
-      clearProposalName();
-      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
-
-      // want to show the "complete" state for 3s
-      await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        if (e.message.startsWith('Publish failed: TransactionExecutionError: User rejected the request.')) {
-          dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' });
-          return;
-        }
-
-        dispatch({ type: 'ERROR', payload: e.message });
-      }
-    }
-  }, [activeSpace, proposalName, proposals, makeProposal, wallet, unstagedChanges, dispatch, actionsFromSpace]);
+    await makeProposal({
+      triples: actionsFromSpace,
+      spaceId: activeSpace,
+      name: proposalName,
+      onSuccess: () => {
+        clearProposalName();
+      },
+    });
+  }, [activeSpace, proposalName, proposals, makeProposal, actionsFromSpace]);
 
   if (isLoading || !data || isSpacesLoading) {
     return null;
@@ -398,7 +378,7 @@ const ChangedEntity = ({
         <div className="mt-2">
           {attributeIds.map((attributeId: AttributeId) => (
             <ChangedAttribute
-              key={attributeId}
+              key={`${entityId}-${attributeId}`}
               spaceId={spaceId}
               attributeId={attributeId}
               attribute={attributes[attributeId]}
@@ -646,14 +626,14 @@ const ChangedAttribute = ({
   if (!before && !after) return null;
 
   switch (attribute.type) {
-    case 'string': {
+    case 'TEXT': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {differences
@@ -665,7 +645,7 @@ const ChangedAttribute = ({
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}
@@ -688,10 +668,10 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'entity': {
+    case 'ENTITY': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {entity?.triples
@@ -712,7 +692,7 @@ const ChangedAttribute = ({
               )}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}
@@ -749,10 +729,10 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'image': {
+    case 'IMAGE': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div>
               {typeof before !== 'object' && (
@@ -762,7 +742,7 @@ const ChangedAttribute = ({
               )}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}
@@ -783,16 +763,16 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'date': {
+    case 'TIME': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
               {before && <DateTimeDiff mode="before" before={before as string | null} after={after as string | null} />}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}
@@ -809,14 +789,14 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'url': {
+    case 'URL': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
 
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4">
+          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="truncate text-ctaPrimary no-underline">
               {differences
@@ -828,7 +808,7 @@ const ChangedAttribute = ({
                 ))}
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4">
+          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
               <SquareButton
                 onClick={handleDeleteActions}
@@ -944,11 +924,11 @@ const labelClassNames = `text-footnote text-grey-04`;
 
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
-export const useChanges = (actions: Array<ActionType> = [], spaceId: string) => {
+export const useChanges = (triples: Array<TripleType> = [], spaceId: string) => {
   const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
-    queryKey: ['changes', spaceId, actions],
-    queryFn: async () => Change.fromActions(Action.prepareActionsForPublishing(actions), subgraph),
+    queryKey: ['changes', spaceId, triples],
+    queryFn: async () => Change.fromTriples(Triples.squash(triples), subgraph),
   });
 
   return [data, isLoading] as const;
@@ -1029,7 +1009,7 @@ type TableFilterProps = {
 };
 
 const TableFilter = ({ filter }: TableFilterProps) => {
-  const value = filter.valueType === 'entity' ? filter.valueName : filter.value;
+  const value = filter.valueType === 'ENTITY' ? filter.valueName : filter.value;
 
   return (
     <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
@@ -1083,7 +1063,7 @@ const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph) => {
     }
     return {
       ...f,
-      columnName: Entity.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: Entities.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
     };
   });
 

@@ -5,7 +5,7 @@ import { Suspense } from 'react';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
-import { Action as IAction } from '~/core/types';
+import { AppOp } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 
@@ -64,9 +64,10 @@ async function ActivityList({ searchParams, entityId }: Props) {
           const spaceImage = space.image ?? PLACEHOLDER_SPACE_IMAGE;
 
           const lastEditedDate = GeoDate.fromGeoTime(p.createdAt);
-          const proposalChangeCount = Action.getChangeCount(
-            p.proposedVersions.reduce<IAction[]>((acc, version) => acc.concat(version.actions), [])
-          );
+          const proposalChangeCount = p.proposedVersions.reduce<AppOp[]>(
+            (acc, version) => acc.concat(version.ops),
+            []
+          ).length;
 
           const proposedEntitiesCount = p.proposedVersions.length;
 

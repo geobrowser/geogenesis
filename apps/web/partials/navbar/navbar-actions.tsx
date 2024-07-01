@@ -8,11 +8,10 @@ import { useParams } from 'next/navigation';
 
 import * as React from 'react';
 
-import { useAccount } from 'wagmi';
-
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useEditable } from '~/core/state/editable-store';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -30,7 +29,8 @@ export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
   const { showCreateProfile } = useCreateProfile();
 
-  const { address } = useAccount();
+  const smartAccount = useSmartAccount();
+  const address = smartAccount?.account.address;
   const { isLoading, account } = useGeoAccount(address);
 
   if (!address) {
@@ -153,15 +153,12 @@ const MotionPopoverContent = motion(Popover.Content);
 const useSpaceId = () => {
   const params = useParams();
   const spaceId = params?.['id'] as string | undefined;
-
   return spaceId;
 };
 
 const useCanUserEdit = (spaceId: string | null | undefined) => {
-  const { isEditor, isAdmin, isEditorController } = useAccessControl(spaceId);
-  const canUserEdit = isEditor || isAdmin || isEditorController;
-
-  return canUserEdit;
+  const { isEditor, isMember } = useAccessControl(spaceId);
+  return isEditor || isMember;
 };
 
 function ModeToggle() {

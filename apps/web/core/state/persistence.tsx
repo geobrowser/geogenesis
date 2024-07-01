@@ -3,9 +3,9 @@
 import * as React from 'react';
 
 import { Action } from '../utils/action';
-import { actionsAtom } from './actions-store/actions-store';
+import { localTriplesAtom } from './actions-store/actions-store';
 import { db } from './actions-store/indexeddb';
-import { store } from './jotai-provider';
+import { store } from './jotai-store';
 
 export const Persistence = () => {
   React.useEffect(() => {
@@ -14,17 +14,17 @@ export const Persistence = () => {
     //
     // We only store unpublished, squashed actions in indexeddb to avoid the
     // database growing indefinitely.
-    const unsub = store.sub(actionsAtom, async () => {
-      const newActions = store.get(actionsAtom);
+    const unsub = store.sub(localTriplesAtom, async () => {
+      const newTriples = store.get(localTriplesAtom);
 
       // Dexie docs recommend putting all batched operations in a transaction scope
       // https://dexie.org/docs/Tutorial/Best-Practices#5-use-transaction-scopes-whenever-you-plan-to-make-more-than-one-operation
-      db.transaction('rw', db.actions, () => {
-        db.actions.clear();
-        // Dexie docs recommend returning the last promise used in a transaction.
-        // We don't need to await the promises in a transaction, either.
-        return db.actions.bulkPut(Action.prepareActionsForPublishing(newActions));
-      });
+      // db.transaction('rw', db.triples, () => {
+      //   db.triples.clear();
+      //   // Dexie docs recommend returning the last promise used in a transaction.
+      //   // We don't need to await the promises in a transaction, either.
+      //   return db.triples.bulkPut(Action.prepareActionsForPublishing(newTriples));
+      // });
     });
 
     return () => {

@@ -1,50 +1,42 @@
-export function generateTripleId({
-  space_id,
-  entity_id,
-  attribute_id,
-  value_id,
-}: {
-  space_id: string;
-  entity_id: string;
-  attribute_id: string;
-  value_id: string;
-}): string {
-  return `${space_id}:${entity_id}:${attribute_id}:${value_id}`;
+import { createGeoId } from '@geogenesis/sdk';
+import { createHash } from 'crypto';
+import { v4 } from 'uuid';
+
+export function createActionId(): string {
+  return createGeoId();
 }
 
-export function generateActionId({
-  space_id,
-  entity_id,
-  attribute_id,
-  value_id,
-  cursor,
-}: {
-  space_id: string;
-  entity_id: string;
-  attribute_id: string;
-  value_id: string;
-  cursor: string;
-}): string {
-  return `${space_id}:${entity_id}:${attribute_id}:${value_id}:${cursor}}`;
+export function createVersionId({ proposalId, entityId }: { proposalId: string; entityId: string }): string {
+  return `${proposalId}:${entityId}`;
 }
 
-// Proposal id should be generated on the client or at least deterministically derived
-// from the proposal metadata.
-//
-// This is so we can correctly map the proposal id on the server with the DAO.Action
-// callback we pass to the proposal.
-export function generateProposalId({ entryIndex, cursor }: { entryIndex: number; cursor: string }): string {
-  return `${entryIndex}:${cursor}`;
+/**
+ * A space's id is derived from the contract address of the DAO and the network the DAO is deployed to.
+ * Users can import or fork a space from any network and import the contents of the original space into
+ * the new one that they're creating.
+ */
+export function createSpaceId({ network, address }: { network: string; address: string }) {
+  return createIdFromUniqueString(`${network}:${address}`);
 }
 
-export function generateVersionId({
-  entryIndex,
-  entityId,
-  cursor,
-}: {
-  entryIndex: number;
-  entityId: string;
-  cursor: string;
-}): string {
-  return `${entryIndex}:${entityId}:${cursor}`;
+function createIdFromUniqueString(text: string) {
+  const hashed = createHash('md5').update(text).digest('hex');
+  const bytes = hexToBytesArray(hashed);
+  const uuid = v4({ random: bytes });
+  return stripDashes(uuid);
+}
+
+function hexToBytesArray(hex: string) {
+  let bytes: number[] = [];
+
+  for (let character = 0; character < hex.length; character += 2) {
+    bytes.push(parseInt(hex.slice(character, character + 2), 16));
+  }
+
+  return bytes;
+}
+
+// Helper function for createIdFromUniqueString
+function stripDashes(uuid: string) {
+  return uuid.split('-').join('');
 }

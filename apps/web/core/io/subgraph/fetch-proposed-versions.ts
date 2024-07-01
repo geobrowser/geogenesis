@@ -5,16 +5,12 @@ import { v4 as uuid } from 'uuid';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { Profile, ProposedVersion, SpaceWithMetadata } from '~/core/types';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
+import { entityFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import {
-  SubstreamEntity,
-  SubstreamProposedVersion,
-  fromNetworkActions,
-  fromNetworkTriples,
-} from './network-local-mapping';
+import { SubstreamEntity, SubstreamProposedVersion, fromNetworkOps, fromNetworkTriples } from './network-local-mapping';
 
 const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
   proposedVersions(filter: {entityId: {equalTo: ${JSON.stringify(
@@ -38,29 +34,9 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
           nodes {
             id
             name
-            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
+            triples(filter: {isStale: {equalTo: false}}) {
               nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
+                ${tripleFragment}
               }
             }
           }
@@ -71,34 +47,8 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
         id
         metadata {
           nodes {
-            id
-            name
-            triplesByEntityId(filter: {isStale: {equalTo: false}}) {
-              nodes {
-                id
-                attribute {
-                  id
-                  name
-                }
-                entity {
-                  id
-                  name
-                }
-                entityValue {
-                  id
-                  name
-                }
-                numberValue
-                stringValue
-                valueType
-                valueId
-                isProtected
-                space {
-                  id
-                }
-              }
-            }
-          }
+            ${entityFragment}
+          }           
         }
       }
 
@@ -143,7 +93,7 @@ export async function fetchProposedVersions({
   page = 0,
 }: FetchProposedVersionsOptions): Promise<ProposedVersion[]> {
   const queryId = uuid();
-  const endpoint = Environment.getConfig(process.env.NEXT_PUBLIC_APP_ENV).api;
+  const endpoint = Environment.getConfig().api;
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
@@ -196,14 +146,14 @@ export async function fetchProposedVersions({
   return proposedVersions.map(v => {
     const maybeProfile = v.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
     const onchainProfile = v.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-    const profileTriples = fromNetworkTriples(maybeProfile?.triplesByEntityId.nodes ?? []);
+    const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
 
     const profile: Profile = maybeProfile
       ? {
           id: v.createdBy.id,
           address: v.createdBy.id as `0x${string}`,
-          avatarUrl: Entity.avatar(profileTriples),
-          coverUrl: Entity.cover(profileTriples),
+          avatarUrl: Entities.avatar(profileTriples),
+          coverUrl: Entities.cover(profileTriples),
           name: maybeProfile.name,
           profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
         }
@@ -217,19 +167,19 @@ export async function fetchProposedVersions({
         };
 
     const spaceConfig = v.space.metadata.nodes[0] as SubstreamEntity | undefined;
-    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triplesByEntityId.nodes ?? []);
+    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 
     const spaceWithMetadata: SpaceWithMetadata = {
       id: v.space.id,
       name: spaceConfig?.name ?? null,
-      image: Entity.avatar(spaceConfigTriples) ?? Entity.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+      image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
     };
 
     return {
       ...v,
       createdBy: profile,
       space: spaceWithMetadata,
-      actions: fromNetworkActions(v.actions.nodes, spaceId),
+      actions: fromNetworkOps(v.actions.nodes),
     };
   });
 }

@@ -1,12 +1,13 @@
 'use client';
 
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
+
 import * as React from 'react';
 
-import { useWalletClient } from 'wagmi';
-import { prepareWriteContract, writeContract } from 'wagmi/actions';
+import { useConfig } from 'wagmi';
+import { simulateContract, writeContract } from 'wagmi/actions';
 
 import { TEST_MAIN_VOTING_PLUGIN_ADDRESS } from './constants';
-import { abi } from './main-voting-abi';
 
 interface Props {
   onchainProposalId: string;
@@ -14,20 +15,19 @@ interface Props {
 }
 
 export function Execute({ onchainProposalId, children }: Props) {
-  const { data: wallet } = useWalletClient();
+  const walletConfig = useConfig();
 
   const onClick = async () => {
-    console.log('data', { onchainProposalId });
+      console.log('data', { onchainProposalId });
 
-    const config = await prepareWriteContract({
-      walletClient: wallet,
+    const config = await simulateContract(walletConfig, {
       address: TEST_MAIN_VOTING_PLUGIN_ADDRESS,
-      abi,
+      abi: MainVotingAbi,
       functionName: 'execute',
       args: [BigInt(onchainProposalId)],
     });
 
-    const writeResult = await writeContract(config);
+    const writeResult = await writeContract(walletConfig, config.request);
     console.log('writeResult', writeResult);
   };
 

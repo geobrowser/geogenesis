@@ -6,7 +6,7 @@ import Image from 'next/legacy/image';
 import * as React from 'react';
 
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Entity } from '~/core/utils/entity';
+import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
 
 type EntityPageCoverProps = {
@@ -17,8 +17,8 @@ type EntityPageCoverProps = {
 export const EntityPageCover = ({ avatarUrl: serverAvatarUrl, coverUrl: serverCoverUrl }: EntityPageCoverProps) => {
   const { triples } = useEntityPageStore();
 
-  const avatarUrl = Entity.avatar(triples) ?? serverAvatarUrl;
-  const coverUrl = Entity.cover(triples) ?? serverCoverUrl;
+  const avatarUrl = Entities.avatar(triples) ?? serverAvatarUrl;
+  const coverUrl = Entities.cover(triples) ?? serverCoverUrl;
 
   if (!coverUrl && !avatarUrl) return null;
 

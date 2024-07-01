@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
@@ -14,7 +14,6 @@ import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
 import { Triple as TripleType } from '~/core/types';
-import { Triple } from '~/core/utils/triple';
 import { getImagePath, partition } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
@@ -63,12 +62,12 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
   }
 
   const { triples: entityOneTriples } = useEntityPageStore(); // triples from entity page
-  const { create, remove } = useActionsStore();
+  const { upsert, remove } = useActionsStore();
 
   //  triples from subgraph for second entity -  @TODO merge with local data since there could be changes
   const entityTwoTriples = useEntityById(entityIdTwo);
 
-  const entityOneNameTriple = entityOneTriples.find(triple => triple.attributeId === 'name');
+  const entityOneNameTriple = entityOneTriples.find(triple => triple.attributeId === SYSTEM_IDS.NAME);
 
   const { spaces } = useSpaces();
   const spaceEntityOne = spaces.find(space => space.id === entityOneTriples[0]?.space);
@@ -95,14 +94,15 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
 
       if (!mergedEntitySpaceId) throw new Error('SpaceID not found for merging entities.');
 
-      unmergedTriples.forEach(t => remove(t)); // delete the triples that aren't merged
+      unmergedTriples.forEach(t => remove(t, t.space)); // delete the triples that aren't merged
       mergedTriples.forEach(t => {
-        create(
-          Triple.withId({
+        upsert(
+          {
             ...t,
+            type: 'SET_TRIPLE',
             entityId: mergedEntityId,
-            space: mergedEntitySpaceId,
-          })
+          },
+          t.space
         );
       }); // create the triples that are merged
 
@@ -129,7 +129,7 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
     unmergedTriples,
     mergedTriples,
     remove,
-    create,
+    upsert,
   ]);
 
   function handleCheckboxSelect({

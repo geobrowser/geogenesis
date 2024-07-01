@@ -38,9 +38,9 @@ export function graphql<T>({ endpoint, query, signal, tag }: GraphqlConfig) {
     },
   });
 
-  return Effect.retryN(
+  return Effect.retry(
     Effect.gen(function* (awaited) {
-      const response = yield* awaited(Effect.retryN(graphqlFetchEffect, 3));
+      const response = yield* awaited(Effect.retry(graphqlFetchEffect, { times: 3 }));
       const json = yield* awaited(
         Effect.tryPromise({
           try: () => response.json() as Promise<GraphqlResponse<T>>,
@@ -56,6 +56,8 @@ export function graphql<T>({ endpoint, query, signal, tag }: GraphqlConfig) {
 
       return json.data;
     }),
-    3
+    {
+      times: 3,
+    }
   );
 }

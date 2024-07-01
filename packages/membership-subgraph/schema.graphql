@@ -1,7 +1,0 @@
-type MembershipRequest @entity {
-  id: ID!
-
-  requestor: String!
-  space: String!
-  createdAt: BigInt!
-}

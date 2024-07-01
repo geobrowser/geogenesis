@@ -14,7 +14,7 @@ export type StatusBarActions =
     }
   | { type: 'ERROR'; payload: string | null };
 
-export const statusBarReducer = (state: StatusBarState, action: StatusBarActions): StatusBarState => {
+export const statusBarReducer = (_: StatusBarState, action: StatusBarActions): StatusBarState => {
   switch (action.type) {
     case 'SET_REVIEW_STATE':
       return { reviewState: action.payload, error: null };

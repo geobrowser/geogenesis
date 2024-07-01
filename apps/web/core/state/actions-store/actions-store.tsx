@@ -2,190 +2,204 @@ import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { ID } from '~/core/id';
+import { getAppTripleId } from '~/core/id/create-id';
 import {
-  Action as ActionType,
-  CreateTripleAction,
-  DeleteTripleAction,
-  EditTripleAction,
+  DeleteTripleAppOp,
   EntityActions,
   Triple as ITriple,
-  SpaceActions,
+  OmitStrict,
+  SetTripleAppOp,
+  SpaceTriples,
 } from '~/core/types';
-import { Action } from '~/core/utils/action';
-import { Triple } from '~/core/utils/triple';
+import { Triples } from '~/core/utils/triples';
 
-import { store } from '../jotai-provider';
+import { store } from '../jotai-store';
 import { db } from './indexeddb';
 
-const atomWithAsyncStorage = (initialValue: ActionType[] = []) => {
-  const baseAtom = atom<ActionType[]>(initialValue);
+export interface StoredTriple extends ITriple {
+  id: string;
+}
 
-  baseAtom.onMount = setValue => {
-    (async () => {
-      const storedActions = await db.actions.toArray();
+const atomWithAsyncStorage = (initialValue: StoredTriple[] = []) => {
+  const baseAtom = atom<StoredTriple[]>(initialValue);
 
-      setValue(storedActions);
-    })();
-  };
+  // baseAtom.onMount = setValue => {
+  //   (async () => {
+  //     const storedActions = await db.triples.toArray();
+
+  //     setValue(storedActions);
+  //   })();
+  // };
 
   return baseAtom;
 };
 
-export const actionsAtom = atomWithAsyncStorage();
+export const localTriplesAtom = atomWithAsyncStorage();
 
-function getSpaceActions(allActions: ActionType[]) {
-  const actions: SpaceActions = {};
+export const activeTriplesForEntityIdSelector = (entityId: string) => (triple: StoredTriple) => {
+  return triple.entityId === entityId && triple.isDeleted === false;
+};
 
-  for (const action of allActions) {
-    let spaceId: string | null = null;
+export const createTriplesForEntityAtom = (initialTriples: ITriple[], entityId: string) => {
+  return atom(get => {
+    const triplesForEntityId = get(localTriplesAtom).filter(activeTriplesForEntityIdSelector(entityId));
+    return Triples.merge(triplesForEntityId, initialTriples);
+  });
+};
 
-    switch (action.type) {
-      case 'createTriple':
-      case 'deleteTriple':
-        spaceId = action.space;
-        break;
-      case 'editTriple':
-        spaceId = action.after.space;
-        break;
+export const isDeletedSelector = (triple: StoredTriple) => {
+  return triple.isDeleted === false;
+};
+
+export const remove = (op: OmitStrict<StoreOp, 'type'>, spaceId: string) => {
+  // We don't delete from our local store, but instead just set a tombstone
+  // on the row. This is so we can still publish the changes as an op
+  upsert(
+    {
+      ...op,
+      type: 'DELETE_TRIPLE',
+    },
+    spaceId
+  );
+};
+
+// @TODO: Write about why we have FOUR representations for an op (store op, app op, substream op, ipfs op)
+export type StoreOp =
+  | OmitStrict<SetTripleAppOp, 'id'>
+  | OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
+
+export const upsert = (op: StoreOp, spaceId: string) => {
+  upsertMany([{ op, spaceId }]);
+};
+
+export const upsertMany = (ops: { op: StoreOp; spaceId: string }[]) => {
+  const triplesToWrite: StoredTriple[] = [];
+
+  for (const { op, spaceId } of ops) {
+    const triple: StoredTriple = {
+      id: getAppTripleId(op, spaceId),
+      entityId: op.entityId,
+      attributeId: op.attributeId,
+      // How do we make this work well with local image triples? We want
+      // to store just the image itself to make rendering images easy,
+      // but that's not actually how we publish the images. Maybe we
+      // need to update it on Triple.prepareForPublishing...?
+      value:
+        op.type === 'SET_TRIPLE'
+          ? op.value
+          : // We don't set value as null so just use placeholder value
+            {
+              type: 'TEXT',
+              value: '',
+            },
+
+      entityName: op.type === 'SET_TRIPLE' ? op.entityName : null,
+      attributeName: op.type === 'SET_TRIPLE' ? op.attributeName : null,
+      space: spaceId,
+      hasBeenPublished: false,
+      isDeleted: false,
+      timestamp: Triples.timestamp(),
+      placeholder: false,
+    };
+
+    if (op.type === 'DELETE_TRIPLE') {
+      triple.isDeleted = true;
     }
 
-    if (!spaceId) continue;
-
-    if (!actions[spaceId]) {
-      actions[spaceId] = [];
-    }
-
-    actions[spaceId] = [...actions[spaceId], action];
+    triplesToWrite.push(triple);
   }
 
-  return actions;
-}
+  // Can safely cast to string since we set the id above
+  const tripleIdsToWrite = new Set(triplesToWrite.map(t => t.id as string));
 
-const create = (triple: ITriple) => {
-  const action: CreateTripleAction = {
-    ...triple,
-    type: 'createTriple',
-  };
+  // Unchanged triples aren't included in the existing set of triples
+  // being upserted
+  const unchangedTriples = store.get(localTriplesAtom).filter(t => {
+    return !tripleIdsToWrite.has(t.id);
+  });
 
-  const allActions = store.get(actionsAtom);
-  store.set(actionsAtom, [...allActions, action]);
+  store.set(localTriplesAtom, [...unchangedTriples, ...triplesToWrite]);
 };
 
-const remove = (triple: ITriple) => {
-  const action: DeleteTripleAction = {
-    ...triple,
-    type: 'deleteTriple',
-  };
-
-  const allActions = store.get(actionsAtom);
-  store.set(actionsAtom, [...allActions, action]);
-};
-
-const update = (triple: ITriple, oldTriple: ITriple) => {
-  const action: EditTripleAction = {
-    id: ID.createEntityId(),
-    type: 'editTriple',
-    before: {
-      ...oldTriple,
-      type: 'deleteTriple',
-    },
-    after: {
-      ...triple,
-      type: 'createTriple',
-    },
-  };
-
-  const allActions = store.get(actionsAtom);
-  store.set(actionsAtom, [...allActions, action]);
-};
-
-const restore = (spaceActions: SpaceActions) => {
-  const newActionsAsArray = Object.values(spaceActions).flatMap(actions => actions);
-  store.set(actionsAtom, newActionsAsArray);
+const restore = (spaceActions: SpaceTriples) => {
+  const newActionsAsArray = Object.values(spaceActions)
+    .flatMap(actions => actions)
+    .map(t => ({
+      ...t,
+      id: getAppTripleId(t, t.space),
+    }));
+  store.set(localTriplesAtom, newActionsAsArray);
 };
 
 const clear = (spaceId?: string) => {
   if (!spaceId) {
-    store.set(actionsAtom, []);
+    store.set(localTriplesAtom, []);
     return;
   }
 
-  const allActions = store.get(actionsAtom);
-
-  const nonDeletedActions = allActions.filter(action => {
-    switch (action.type) {
-      case 'createTriple':
-      case 'deleteTriple':
-        return action.space !== spaceId;
-      case 'editTriple':
-        return action.after.space !== spaceId;
-    }
-  });
-
-  store.set(actionsAtom, nonDeletedActions);
+  const allActions = store.get(localTriplesAtom);
+  store.set(localTriplesAtom, []);
 };
 
 // @TODO: This is the same as restore
-const addActionsToSpaces = (spaceActions: SpaceActions) => {
-  const newActionsAsArray = Object.values(spaceActions).flatMap(actions => actions);
-  store.set(actionsAtom, newActionsAsArray);
+const addActionsToSpaces = (spaceActions: SpaceTriples) => {
+  const newActionsAsArray = Object.values(spaceActions)
+    .flatMap(actions => actions)
+    .map(t => ({
+      ...t,
+      id: getAppTripleId(t, t.space),
+    }));
+  store.set(localTriplesAtom, newActionsAsArray);
 };
 
 const deleteActionsFromSpace = (spaceId: string, actionIdsToDelete: Array<string>) => {
-  const allActions = store.get(actionsAtom);
-
-  const nonDeletedActions = allActions.filter(action => {
-    switch (action.type) {
-      case 'createTriple':
-      case 'deleteTriple':
-        return action.space !== spaceId && !actionIdsToDelete.includes(Action.getId(action));
-      case 'editTriple':
-        return action.after.space !== spaceId && !actionIdsToDelete.includes(Action.getId(action));
-    }
-  });
-
-  store.set(actionsAtom, nonDeletedActions);
+  const allActions = store.get(localTriplesAtom);
+  store.set(localTriplesAtom, []);
 };
 
+function getSpaceTriples(triples: ITriple[]) {
+  const triplesBySpace: SpaceTriples = {};
+
+  for (const triple of triples) {
+    const spaceId = triple.space;
+    if (!spaceId) continue;
+
+    if (!triplesBySpace[spaceId]) {
+      triplesBySpace[spaceId] = [];
+    }
+
+    triplesBySpace[spaceId] = [...triplesBySpace[spaceId], triple];
+  }
+
+  return triplesBySpace;
+}
+
 export function useActions(spaceId?: string) {
-  const [allActions, setActions] = useAtom(actionsAtom);
+  const [allActions, setActions] = useAtom(localTriplesAtom);
 
   const actions = React.useMemo(() => {
-    return getSpaceActions(allActions);
+    return getSpaceTriples(allActions);
+  }, [allActions]);
+
+  const actionsByEntityId = React.useMemo(() => {
+    return allActions.reduce<EntityActions>((acc, action) => {
+      const tripleFromAction = Triples.merge([action], [])[0];
+
+      if (!tripleFromAction) return acc;
+
+      acc[action.entityId] = {
+        ...acc[action.entityId],
+        [action.attributeId]: tripleFromAction,
+      };
+
+      return acc;
+    }, {});
   }, [allActions]);
 
   const allSpacesWithActions = React.useMemo(() => {
     // Only return spaces where at least one action has not been published
-    return Object.keys(actions).filter(spaceId => !actions[spaceId].every(action => action?.hasBeenPublished === true));
+    return Object.keys(actions).filter(spaceId => actions[spaceId].every(triple => triple?.hasBeenPublished !== true));
   }, [actions]);
-
-  const actionsByEntityId = React.useMemo(() => {
-    return allActions.reduce<EntityActions>((acc, action) => {
-      const tripleFromAction = Triple.fromActions([action], [])[0];
-
-      if (!tripleFromAction) return acc;
-
-      switch (action.type) {
-        case 'createTriple':
-        case 'deleteTriple':
-          acc[action.entityId] = {
-            ...acc[action.entityId],
-            [action.attributeId]: tripleFromAction,
-          };
-
-          return acc;
-
-        case 'editTriple':
-          acc[action.after.entityId] = {
-            ...acc[action.after.entityId],
-            [action.after.attributeId]: tripleFromAction,
-          };
-
-          return acc;
-      }
-    }, {});
-  }, [allActions]);
 
   if (!spaceId) {
     return {
@@ -196,8 +210,8 @@ export function useActions(spaceId?: string) {
       actions,
 
       addActions: setActions,
-      create,
-      update,
+      upsert,
+      upsertMany,
       remove,
       clear,
 
@@ -215,8 +229,8 @@ export function useActions(spaceId?: string) {
     actions,
 
     addActions: setActions,
-    create,
-    update,
+    upsert,
+    upsertMany,
     remove,
     clear,
 

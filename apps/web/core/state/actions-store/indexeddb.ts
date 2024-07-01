@@ -1,19 +1,18 @@
 import Dexie, { Table } from 'dexie';
 
-import { Action } from '~/core/types';
+import { Triple } from '~/core/types';
 
 const DB_NAME = 'geogenesis';
-const TABLE_NAME = 'actionsStore';
 const VERSION = 1;
 
 export class Geo extends Dexie {
-  actions!: Table<Action>;
+  triples!: Table<Triple>;
 
   constructor() {
     super(DB_NAME);
 
     this.version(VERSION).stores({
-      actions: '++id', // Primary key and indexed props
+      triples: '++id', // Primary key and indexed props
     });
   }
 }

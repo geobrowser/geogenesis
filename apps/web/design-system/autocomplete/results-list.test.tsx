@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 

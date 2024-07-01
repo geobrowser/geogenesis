@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/ids';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { cachedFetchEntityType } from './cached-entity-type';
 import DefaultEntityPage from './default-entity-page';

@@ -1,5 +1,28 @@
 @tailwind base;
 
+@layer base {
+  :root {
+    /* These override the privy modal color defaults */
+    --privy-border-radius-sm: 12px !important;
+    --privy-border-radius-md: 12px !important;
+    --privy-border-radius-mdlg: 12px !important;
+    --privy-border-radius-lg: 12px !important;
+    --privy-border-radius-full: 12px !important;
+    --privy-color-background: #ffffff !important;
+    --privy-color-background-2: #f6f6f6 !important;
+    --privy-color-foreground: #000000 !important;
+    --privy-color-foreground-2: #202020 !important;
+    --privy-color-foreground-3: #b6b6b6 !important;
+    --privy-color-foreground-4: #dbdbdb !important;
+    --privy-color-foreground-accent: 'your-custom-value';
+    --privy-color-accent: #3963fe !important;
+    --privy-color-accent-light: #3963fe !important;
+    --privy-color-accent-dark: 'your-custom-value';
+    --privy-color-success: #2ace9d !important;
+    --privy-color-error: #ff523a !important;
+  }
+}
+
 /* Global styles */
 html {
   @apply overflow-y-auto overflow-x-hidden;

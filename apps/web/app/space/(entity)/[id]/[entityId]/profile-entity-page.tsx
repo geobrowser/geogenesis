@@ -23,6 +23,7 @@ export function ProfilePageComponent(props: Props) {
     <>
       <motion.div key="entity-page-entity-editor" layout="position">
         <Editor
+          spaceId={props.spaceId}
           placeholder={
             <motion.p layout="position" className="text-body text-grey-04">
               There is no overview here yet.

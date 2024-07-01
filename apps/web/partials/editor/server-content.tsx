@@ -1,3 +1,5 @@
+import { TableBlockPlaceholder } from '../blocks/table/table-block';
+
 type ServerContentProps = {
   content: Content[];
 };
@@ -15,7 +17,7 @@ export const ServerContent = ({ content }: ServerContentProps) => {
 
 type Content =
   | {
-      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem';
+      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem' | 'tableNode';
       content: Content[];
       attrs: {
         id: string;
@@ -63,7 +65,7 @@ const Block = ({ block }: BlockProps) => {
         <div className="react-renderer node-paragraph">
           <div className="whitespace-normal">
             <p>
-              {block.content.map((block: any, index: number) => (
+              {block.content.map((block, index) => (
                 <Block key={index} block={block} />
               ))}
             </p>
@@ -75,7 +77,7 @@ const Block = ({ block }: BlockProps) => {
     case 'bulletList': {
       return (
         <ul>
-          {block.content.map((block: any, index: number) => (
+          {block.content.map((block, index) => (
             <Block key={index} block={block} />
           ))}
         </ul>
@@ -85,7 +87,7 @@ const Block = ({ block }: BlockProps) => {
     case 'orderedList': {
       return (
         <ol>
-          {block.content.map((block: any, index: number) => (
+          {block.content.map((block, index) => (
             <Block key={index} block={block} />
           ))}
         </ol>
@@ -95,7 +97,7 @@ const Block = ({ block }: BlockProps) => {
     case 'listItem': {
       return (
         <li>
-          {block.content.map((block: any, index: number) => (
+          {block.content.map((block, index) => (
             <Block key={index} block={block} />
           ))}
         </li>
@@ -108,7 +110,7 @@ const Block = ({ block }: BlockProps) => {
       return (
         <div className="react-renderer node-heading">
           <Component>
-            {block.content.map((block: any, index: number) => (
+            {block.content.map((block, index) => (
               <Block key={index} block={block} />
             ))}
           </Component>
@@ -130,6 +132,11 @@ const Block = ({ block }: BlockProps) => {
 
     case 'image': {
       return <img src={block.attrs.src} alt="" />;
+    }
+
+    case 'tableNode': {
+      // @TODO(migration): Add table block header placeholder
+      return <TableBlockPlaceholder />;
     }
   }
 };
