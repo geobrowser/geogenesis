@@ -185,8 +185,6 @@ export type EditProposal = Proposal & {
 const ZodImportEditSetTriplePayload = z.object({
   entityId: z.instanceof(Uint8Array).transform(a => a.toString()),
   attributeId: z.instanceof(Uint8Array).transform(a => a.toString()),
-  // entityId: z.string().transform(a => Buffer.from(a).toString()),
-  // attributeId: z.string().transform(a => a.toString()),
   // zod has issues with discriminated unions. We set the value
   // to any here and trust that it is constructed into the correct
   // format once it's decoded.
@@ -212,6 +210,7 @@ const ZodImportEditSetTriplePayload = z.object({
           return 'GEO_LOCATION';
         // We haven't migrated images yet, so some triples might have
         // the IMAGE value type still
+        case 0:
         case 9:
           return 'FILTER_ME_OUT';
       }
