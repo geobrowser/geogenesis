@@ -20,7 +20,7 @@ export class CouldNotWritePersonalPlugins extends Error {
 export function handleSpacesCreated(spacesCreated: SpacePluginCreatedWithSpaceId[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
-    const spaces = mapSpaces(spacesCreated, block.blockNumber);
+    const spaces = mapSpaces(spacesCreated, block);
 
     slog({
       requestId: block.requestId,
@@ -92,7 +92,7 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
       )
     )).flatMap(g => (g ? [g] : []));
 
-    const spaces = mapPersonalToSpaces(personalPluginsWithSpaceId, block.blockNumber);
+    const spaces = mapPersonalToSpaces(personalPluginsWithSpaceId, block);
 
     slog({
       requestId: block.requestId,
@@ -162,7 +162,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
       )
     )).flatMap(g => (g ? [g] : []));
 
-    const spaces = mapGovernanceToSpaces(governancePluginsWithSpaceId, block.blockNumber);
+    const spaces = mapGovernanceToSpaces(governancePluginsWithSpaceId, block);
 
     slog({
       requestId: block.requestId,

@@ -50,6 +50,8 @@ function mapEditorshipProposalsToSchema(
       type: p.type,
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
+      created_at_block_hash: block.hash,
+      created_at_block_network: block.network,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -66,6 +68,8 @@ function mapEditorshipProposalsToSchema(
       space_id: spaceId,
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
+      created_at_block_hash: block.hash,
+      created_at_block_network: block.network,
       proposal_id: p.proposalId,
     };
 
@@ -108,6 +112,8 @@ function mapMembershipProposalsToSchema(
       type: p.type,
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
+      created_at_block_hash: block.hash,
+      created_at_block_network: block.network,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -124,6 +130,8 @@ function mapMembershipProposalsToSchema(
       space_id: spaceId,
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
+      created_at_block_hash: block.hash,
+      created_at_block_network: block.network,
       proposal_id: p.proposalId,
     };
 
@@ -164,6 +172,8 @@ function mapSubspaceProposalsToSchema(
       type: p.type,
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
+      created_at_block_hash: block.hash,
+      created_at_block_network: block.network,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -180,6 +190,8 @@ function mapSubspaceProposalsToSchema(
       subspace: p.subspace,
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
+      created_at_block_hash: block.hash,
+      created_at_block_network: block.network,
       proposal_id: p.proposalId,
     };
 
@@ -215,6 +227,8 @@ function mapEditProposalToSchema(
       type: 'ADD_EDIT',
       created_at: Number(p.startTime),
       created_at_block: block.blockNumber,
+      created_at_block_hash: block.hash,
+      created_at_block_network: block.network,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -273,6 +287,8 @@ function mapEditProposalToSchema(
         }),
         entity_id: entityId,
         created_at_block: block.blockNumber,
+        created_at_block_hash: block.hash,
+        created_at_block_network: block.network,
         created_at: Number(p.startTime),
         created_by_id: p.creator,
         proposal_id: p.proposalId,

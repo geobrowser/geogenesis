@@ -33,6 +33,8 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
         dao_address: getChecksumAddress(p.space),
         type: 'personal',
         created_at_block: block.blockNumber,
+        created_at_block_network: block.hash,
+        created_at_block_hash: block.network,
         is_root_space: false,
       };
 
@@ -46,6 +48,8 @@ export function handleOnchainProfilesRegistered(profiles: OnchainProfileRegister
         home_space_id: getChecksumAddress(p.space),
         created_at: block.timestamp,
         created_at_block: block.blockNumber,
+        created_at_block_network: block.hash,
+        created_at_block_hash: block.network,
       };
 
       return newOnchainProfile;

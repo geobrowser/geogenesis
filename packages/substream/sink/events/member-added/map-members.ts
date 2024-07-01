@@ -37,6 +37,8 @@ export function mapMembers(membersApproved: MemberAdded[], block: GeoBlock) {
           space_id: getChecksumAddress(maybeSpaceIdForVotingPlugin),
           created_at: block.timestamp,
           created_at_block: block.blockNumber,
+          created_at_block_network: block.hash,
+          created_at_block_hash: block.network,
         };
 
         members.push(newMember);
@@ -48,6 +50,8 @@ export function mapMembers(membersApproved: MemberAdded[], block: GeoBlock) {
           space_id: maybeSpaceIdForPersonalPlugin.id,
           created_at: block.timestamp,
           created_at_block: block.blockNumber,
+          created_at_block_network: block.hash,
+          created_at_block_hash: block.network,
         };
 
         members.push(newMember);

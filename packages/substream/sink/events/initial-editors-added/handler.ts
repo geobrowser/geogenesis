@@ -122,6 +122,8 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
+            created_at_block_network: block.hash,
+            created_at_block_hash: block.network,
           };
 
           return editor;
@@ -155,6 +157,8 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
+            created_at_block_network: block.hash,
+            created_at_block_hash: block.network,
           };
 
           return member;
@@ -311,6 +315,8 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
+            created_at_block_network: block.hash,
+            created_at_block_hash: block.network,
           };
 
           return editor;
@@ -344,6 +350,8 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
+            created_at_block_network: block.hash,
+            created_at_block_hash: block.network,
           };
 
           return member;

@@ -530,6 +530,12 @@ declare module 'zapatos/schema' {
       */
       created_at: number;
       /**
+      * **entities.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
+      /**
       * **entities.created_at_block_hash**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -597,6 +603,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at: number;
+      /**
+      * **entities.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number;
       /**
       * **entities.created_at_block_hash**
       * - `text` in database
@@ -666,6 +678,12 @@ declare module 'zapatos/schema' {
       */
       created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **entities.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **entities.created_at_block_hash**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -733,6 +751,12 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **entities.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
       * **entities.created_at_block_hash**
       * - `text` in database
@@ -802,6 +826,12 @@ declare module 'zapatos/schema' {
       */
       created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
+      * **entities.created_at_block**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
       * **entities.created_at_block_hash**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -870,6 +900,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **entity_types.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **entity_types.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
     }
     export interface JSONSelectable {
       /**
@@ -902,6 +944,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **entity_types.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **entity_types.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
     }
     export interface Whereable {
       /**
@@ -934,6 +988,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **entity_types.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **entity_types.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -966,6 +1032,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **entity_types.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **entity_types.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -998,6 +1076,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **entity_types.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **entity_types.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'entity_types_pkey' | 'geo_entity_types_unique_entity_type_pair';
     export type Column = keyof Selectable;
@@ -1449,6 +1539,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **onchain_profiles.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **onchain_profiles.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
     }
     export interface JSONSelectable {
       /**
@@ -1481,6 +1583,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **onchain_profiles.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **onchain_profiles.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
     }
     export interface Whereable {
       /**
@@ -1513,6 +1627,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **onchain_profiles.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **onchain_profiles.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -1545,6 +1671,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **onchain_profiles.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **onchain_profiles.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -1577,6 +1715,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **onchain_profiles.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **onchain_profiles.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'onchain_profiles_pkey';
     export type Column = keyof Selectable;
@@ -2305,6 +2455,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number;
       /**
+      * **proposals.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **proposals.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
+      /**
       * **proposals.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2390,6 +2552,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **proposals.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **proposals.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **proposals.created_by_id**
       * - `text` in database
@@ -2477,6 +2651,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposals.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposals.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposals.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2562,6 +2748,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **proposals.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposals.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposals.created_by_id**
       * - `text` in database
@@ -2649,6 +2847,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
+      * **proposals.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposals.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
       * **proposals.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2712,6 +2922,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number;
       /**
+      * **proposed_editors.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **proposed_editors.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
+      /**
       * **proposed_editors.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2755,6 +2977,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **proposed_editors.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **proposed_editors.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **proposed_editors.proposal_id**
       * - `text` in database
@@ -2800,6 +3034,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposed_editors.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposed_editors.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposed_editors.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2844,6 +3090,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
+      * **proposed_editors.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposed_editors.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **proposed_editors.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2887,6 +3145,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **proposed_editors.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposed_editors.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_editors.proposal_id**
       * - `text` in database
@@ -2945,6 +3215,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number;
       /**
+      * **proposed_members.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **proposed_members.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
+      /**
       * **proposed_members.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -2988,6 +3270,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **proposed_members.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **proposed_members.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **proposed_members.proposal_id**
       * - `text` in database
@@ -3033,6 +3327,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposed_members.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposed_members.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposed_members.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -3077,6 +3383,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
+      * **proposed_members.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposed_members.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **proposed_members.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -3120,6 +3438,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **proposed_members.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposed_members.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_members.proposal_id**
       * - `text` in database
@@ -3178,6 +3508,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number;
       /**
+      * **proposed_subspaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **proposed_subspaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
+      /**
       * **proposed_subspaces.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -3221,6 +3563,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **proposed_subspaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **proposed_subspaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **proposed_subspaces.proposal_id**
       * - `text` in database
@@ -3266,6 +3620,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposed_subspaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposed_subspaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposed_subspaces.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -3310,6 +3676,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
+      * **proposed_subspaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposed_subspaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **proposed_subspaces.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -3353,6 +3731,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **proposed_subspaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposed_subspaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_subspaces.proposal_id**
       * - `text` in database
@@ -3399,6 +3789,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number;
       /**
+      * **proposed_versions.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **proposed_versions.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
+      /**
       * **proposed_versions.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -3442,6 +3844,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **proposed_versions.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **proposed_versions.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **proposed_versions.created_by_id**
       * - `text` in database
@@ -3487,6 +3901,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **proposed_versions.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **proposed_versions.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **proposed_versions.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -3531,6 +3957,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
+      * **proposed_versions.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **proposed_versions.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **proposed_versions.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -3574,6 +4012,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **proposed_versions.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **proposed_versions.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_versions.created_by_id**
       * - `text` in database
@@ -3637,6 +4087,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **space_editors.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **space_editors.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
     }
     export interface JSONSelectable {
       /**
@@ -3663,6 +4125,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **space_editors.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **space_editors.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
     }
     export interface Whereable {
       /**
@@ -3689,6 +4163,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_editors.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_editors.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -3715,6 +4201,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **space_editors.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **space_editors.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -3741,6 +4239,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **space_editors.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **space_editors.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'space_editors_unique_account_space_pair';
     export type Column = keyof Selectable;
@@ -3780,6 +4290,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **space_members.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **space_members.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
     }
     export interface JSONSelectable {
       /**
@@ -3806,6 +4328,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **space_members.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **space_members.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
     }
     export interface Whereable {
       /**
@@ -3832,6 +4366,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_members.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_members.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -3858,6 +4404,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **space_members.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **space_members.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -3884,6 +4442,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **space_members.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **space_members.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'space_members_unique_account_space_pair';
     export type Column = keyof Selectable;
@@ -3918,6 +4488,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number;
       /**
+      * **space_subspaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **space_subspaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
+      /**
       * **space_subspaces.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -3943,6 +4525,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **space_subspaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **space_subspaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **space_subspaces.created_at**
       * - `int4` in database
@@ -3970,6 +4564,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **space_subspaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **space_subspaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **space_subspaces.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -3996,6 +4602,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
+      * **space_subspaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **space_subspaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **space_subspaces.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -4021,6 +4639,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **space_subspaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **space_subspaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_subspaces.created_at**
       * - `int4` in database
@@ -4054,6 +4684,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **spaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **spaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **spaces.is_root_space**
       * - `bool` in database
@@ -4110,6 +4752,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **spaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **spaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **spaces.is_root_space**
       * - `bool` in database
@@ -4167,6 +4821,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **spaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **spaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **spaces.is_root_space**
       * - `bool` in database
       * - `NOT NULL`, no default
@@ -4223,6 +4889,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
+      * **spaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **spaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **spaces.is_root_space**
       * - `bool` in database
       * - `NOT NULL`, no default
@@ -4278,6 +4956,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **spaces.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **spaces.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **spaces.is_root_space**
       * - `bool` in database
@@ -4396,6 +5086,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number;
       /**
+      * **triples.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **triples.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
+      /**
       * **triples.is_stale**
       * - `bool` in database
       * - `NOT NULL`, no default
@@ -4463,6 +5165,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **triples.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **triples.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **triples.is_stale**
       * - `bool` in database
@@ -4532,6 +5246,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **triples.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **triples.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **triples.is_stale**
       * - `bool` in database
       * - `NOT NULL`, no default
@@ -4599,6 +5325,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **triples.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **triples.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **triples.is_stale**
       * - `bool` in database
@@ -4668,6 +5406,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
+      * **triples.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **triples.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
       * **triples.is_stale**
       * - `bool` in database
       * - `NOT NULL`, no default
@@ -4706,6 +5456,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
+      /**
+      * **versions.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **versions.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **versions.created_by_id**
       * - `text` in database
@@ -4751,6 +5513,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number;
       /**
+      * **versions.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string;
+      /**
+      * **versions.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
+      /**
       * **versions.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -4794,6 +5568,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **versions.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **versions.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **versions.created_by_id**
       * - `text` in database
@@ -4839,6 +5625,18 @@ declare module 'zapatos/schema' {
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
       /**
+      * **versions.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **versions.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
+      /**
       * **versions.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -4882,6 +5680,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **versions.created_at_block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **versions.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **versions.created_by_id**
       * - `text` in database

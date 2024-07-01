@@ -19,8 +19,7 @@ export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: Geo
     const subspaces = yield* _(
       mapSubspaces({
         subspacesAdded: subspacesAdded,
-        timestamp: block.timestamp,
-        blockNumber: block.blockNumber,
+        block,
       })
     );
 

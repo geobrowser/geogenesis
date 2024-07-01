@@ -49,12 +49,13 @@ export function populateApprovedContentProposal(
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
     for (const proposedVersions of proposedVersionsByProposal) {
       const entities = proposedVersions.map(pv => {
-        const newEntity: Schema.Insertable = {
+        const newEntity: Schema.entities.Insertable = {
           id: pv.entity_id,
           created_by_id: pv.created_by_id,
           created_at: block.timestamp,
           updated_at: block.timestamp,
           updated_at_block: block.blockNumber,
+          created_at_block: block.blockNumber,
           created_at_block_hash: block.hash,
           created_at_block_network: block.network,
         };
@@ -70,6 +71,8 @@ export function populateApprovedContentProposal(
           }),
           entity_id: pv.entity_id,
           created_at_block: block.blockNumber,
+          created_at_block_network: block.hash,
+          created_at_block_hash: block.network,
           created_at: block.timestamp,
           created_by_id: pv.created_by_id,
           proposed_version_id: pv.id,

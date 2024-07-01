@@ -4,18 +4,10 @@ import type * as S from 'zapatos/schema';
 import type { SubspaceAdded } from './parser';
 import { Spaces } from '~/sink/db';
 import { SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
+import type { GeoBlock } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
-import { pool } from '~/sink/utils/pool';
 
-export function mapSubspaces({
-  subspacesAdded,
-  timestamp,
-  blockNumber,
-}: {
-  subspacesAdded: SubspaceAdded[];
-  timestamp: number;
-  blockNumber: number;
-}) {
+export function mapSubspaces({ subspacesAdded, block }: { subspacesAdded: SubspaceAdded[]; block: GeoBlock }) {
   return Effect.gen(function* (_) {
     // Need to get the DAO/space address for the space plugin that emits the
     // SubspaceAdded event.
@@ -64,8 +56,10 @@ export function mapSubspaces({
         // space was created.
         parent_space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress))!,
         subspace_id: getChecksumAddress(subspace),
-        created_at: timestamp,
-        created_at_block: blockNumber,
+        created_at: block.timestamp,
+        created_at_block: block.blockNumber,
+        created_at_block_hash: block.hash,
+        created_at_block_network: block.network,
       };
 
       return newSubspace;
