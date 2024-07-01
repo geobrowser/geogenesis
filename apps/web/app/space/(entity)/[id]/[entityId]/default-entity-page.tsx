@@ -76,7 +76,7 @@ export default async function DefaultEntityPage({
             {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />}
             {showSpacer && <Spacer height={40} />}
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-            <ToggleEntityPage {...props} typeId={typeId} filters={filters} />
+            <ToggleEntityPage {...props} typeId={typeId} attributes={attributes} />
             <Spacer height={40} />
             {/*
               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
