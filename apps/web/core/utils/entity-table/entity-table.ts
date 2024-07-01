@@ -28,7 +28,7 @@ export function fromColumnsAndRows(entities: IEntity[], columns: Column[]) {
         triples: cellTriples,
       };
 
-      if (column.id === 'name') {
+      if (column.id === SYSTEM_IDS.NAME) {
         cell.description = Entities.description(triples) || null;
         cell.image = Entities.cover(triples) || Entities.avatar(triples) || null;
       }

@@ -292,7 +292,7 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownColumnIds, 
       return (
         <div className="flex flex-col gap-4">
           {rows.map((row, index: number) => {
-            const nameCell = row.name as EntityCell;
+            const nameCell = row[SYSTEM_IDS.NAME] as EntityCell;
             const { entityId, name, description, image } = nameCell;
 
             return (
@@ -322,7 +322,7 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownColumnIds, 
       return (
         <div className="grid grid-cols-3 gap-x-4 gap-y-10">
           {rows.map((row, index: number) => {
-            const nameCell = row.name as EntityCell;
+            const nameCell = row[SYSTEM_IDS.NAME] as EntityCell;
             const { entityId, name, image } = nameCell;
 
             return (
