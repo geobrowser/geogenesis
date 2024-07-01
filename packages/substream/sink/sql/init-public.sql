@@ -4,6 +4,14 @@ CREATE SCHEMA IF NOT EXISTS public;
 
 CREATE TABLE public.accounts (id text PRIMARY KEY);
 
+CREATE TABLE public.geo_blocks (
+    PRIMARY KEY (network, hash),
+    network text NOT NULL,
+    hash text NOT NULL,
+    number text NOT NULL,
+    timestamp text NOT NULL
+);
+
 CREATE TABLE public.cursors (
     id integer PRIMARY KEY,
     cursor text NOT NULL,
@@ -20,9 +28,12 @@ CREATE TABLE public.entities (
     avatar text,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
     updated_at integer,
-    updated_at_block integer
+    updated_at_block integer,
+
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash)
 );
 
 CREATE TYPE public.space_type as ENUM ('personal', 'public');
@@ -234,14 +245,6 @@ CREATE TABLE public.proposed_editors (
     created_at_block integer NOT NULL,
     proposal_id text NOT NULL REFERENCES public.proposals(id),
     type editor_proposal_type NOT NULL
-);
-
-CREATE TABLE public.geo_blocks (
-    PRIMARY KEY (network, hash),
-    network text NOT NULL,
-    hash text NOT NULL,
-    number text NOT NULL,
-    timestamp text NOT NULL
 );
 
 -- CREATE TABLE public.triple_versions (

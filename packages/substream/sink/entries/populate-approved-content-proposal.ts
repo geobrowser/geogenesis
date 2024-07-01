@@ -53,9 +53,10 @@ export function populateApprovedContentProposal(
           id: pv.entity_id,
           created_by_id: pv.created_by_id,
           created_at: block.timestamp,
-          created_at_block: block.blockNumber,
           updated_at: block.timestamp,
           updated_at_block: block.blockNumber,
+          created_at_block_hash: block.hash,
+          created_at_block_network: block.network,
         };
 
         return newEntity;

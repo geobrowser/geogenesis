@@ -530,11 +530,17 @@ declare module 'zapatos/schema' {
       */
       created_at: number;
       /**
-      * **entities.created_at_block**
-      * - `int4` in database
+      * **entities.created_at_block_hash**
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block_hash: string;
+      /**
+      * **entities.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **entities.updated_at**
       * - `int4` in database
@@ -592,11 +598,17 @@ declare module 'zapatos/schema' {
       */
       created_at: number;
       /**
-      * **entities.created_at_block**
-      * - `int4` in database
+      * **entities.created_at_block_hash**
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block_hash: string;
+      /**
+      * **entities.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string;
       /**
       * **entities.updated_at**
       * - `int4` in database
@@ -654,11 +666,17 @@ declare module 'zapatos/schema' {
       */
       created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **entities.created_at_block**
-      * - `int4` in database
+      * **entities.created_at_block_hash**
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **entities.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **entities.updated_at**
       * - `int4` in database
@@ -716,11 +734,17 @@ declare module 'zapatos/schema' {
       */
       created_at: number | db.Parameter<number> | db.SQLFragment;
       /**
-      * **entities.created_at_block**
-      * - `int4` in database
+      * **entities.created_at_block_hash**
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **entities.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **entities.updated_at**
       * - `int4` in database
@@ -778,11 +802,17 @@ declare module 'zapatos/schema' {
       */
       created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
       /**
-      * **entities.created_at_block**
-      * - `int4` in database
+      * **entities.created_at_block_hash**
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **entities.created_at_block_network**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **entities.updated_at**
       * - `int4` in database

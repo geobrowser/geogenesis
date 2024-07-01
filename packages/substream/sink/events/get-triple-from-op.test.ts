@@ -1,3 +1,4 @@
+import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { describe, expect, it } from 'vitest';
 
 import { getTripleFromOp } from './get-triple-from-op';
@@ -22,6 +23,8 @@ describe('tripleFromOp', () => {
         cursor: '',
         requestId: '',
         timestamp: 0,
+        hash: '',
+        network: NETWORK_IDS.GEO,
       }
     );
 
@@ -55,6 +58,8 @@ describe('tripleFromOp', () => {
         cursor: '',
         requestId: '',
         timestamp: 0,
+        hash: '',
+        network: NETWORK_IDS.GEO,
       }
     );
 

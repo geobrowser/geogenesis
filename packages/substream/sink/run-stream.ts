@@ -211,7 +211,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             cursor,
             requestId,
             timestamp,
-            hash: message.clock?.id ?? '',
+            hash: message.clock?.id ? `0x${message.clock?.id}` : '',
             network: NETWORK_IDS.GEO,
           };
 
