@@ -147,7 +147,6 @@ export function useTableBlock() {
       if (!columns) return [];
 
       const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
-      console.log('filter string', filterString);
 
       const params: FetchRowsOptions['params'] = {
         filter: filterString,
@@ -326,6 +325,7 @@ const getView = (blockEntity: Entity | null | undefined): DataBlockView => {
         view = 'GALLERY';
         break;
       default:
+        // We default to TABLE above
         break;
     }
   }

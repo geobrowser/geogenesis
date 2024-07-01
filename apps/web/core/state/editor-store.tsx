@@ -172,6 +172,7 @@ export function useEditorStore() {
         const rowTypeTriple = blockTriples.find(
           triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.ROW_TYPE
         );
+
         const imageTriple = blockTriples.find(
           triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.IMAGE_ATTRIBUTE
         );
@@ -182,7 +183,7 @@ export function useEditorStore() {
             attrs: {
               spaceId,
               id: blockId,
-              src: getImagePath(Triples.getValue(imageTriple) ?? ''),
+              src: imageTriple.value.type === 'IMAGE' ? getImagePath(imageTriple.value.image) ?? '' : '',
               alt: '',
               title: '',
             },
