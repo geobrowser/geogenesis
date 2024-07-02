@@ -1,8 +1,11 @@
 import { Effect, Either } from 'effect';
+import type * as S from 'zapatos/schema';
 
+import { handleNewGeoBlock } from '../handle-new-geo-block';
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
 import {
   Accounts,
+  Blocks,
   Ops,
   Proposals,
   ProposedEditors,
@@ -55,6 +58,24 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       (maybeProposal): maybeProposal is EditProposal | SubspaceProposal | MembershipProposal | EditorshipProposal =>
         maybeProposal !== null
     );
+
+    const importedBlocks = proposals.flatMap(p => {
+      if (p.type === 'ADD_EDIT' && p.createdAtBlock) {
+        return [
+          {
+            hash: p.createdAtBlock.hash,
+            network: p.createdAtBlock.network,
+            number: p.createdAtBlock.blockNumber,
+            timestamp: p.createdAtBlock.timestamp,
+          },
+        ];
+      }
+
+      return [];
+    });
+
+    console.log('writing imported blocks');
+    yield* _(Effect.promise(() => Blocks.upsert(importedBlocks)));
 
     const { schemaEditProposals, schemaSubspaceProposals, schemaMembershipProposals, schemaEditorshipProposals } =
       mapIpfsProposalToSchemaProposalByType(proposals, block);

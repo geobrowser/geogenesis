@@ -17,7 +17,6 @@ const getVersionsQuery = (versionId: string) => `query {
     id
     name
     createdAt
-    createdAtBlock
 
     createdBy {
       id

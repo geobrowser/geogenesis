@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { graphql } from '~/core/io/subgraph/graphql';
 
-const getFetchSpaceProposalsQuery = (spaceId: string, createdAt: number) => `query {
+const getFetchSpaceProposalsQuery = (spaceId: string, createdAt: string) => `query {
   proposals(first: 1, filter: {spaceId: { equalTo: ${JSON.stringify(
     spaceId
   )} }, createdAt: { lessThan: ${createdAt} } status: { equalTo: ACCEPTED} }) {
@@ -17,7 +17,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, createdAt: number) => `que
 
 export interface FetchProposalsOptions {
   spaceId: string;
-  createdAt: number;
+  createdAt: string;
 }
 
 interface NetworkResult {

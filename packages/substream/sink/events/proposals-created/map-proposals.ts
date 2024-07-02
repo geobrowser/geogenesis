@@ -219,16 +219,22 @@ function mapEditProposalToSchema(
   for (const p of proposals) {
     const spaceId = p.space;
 
+    // An EditProposal is either created by a user publishing new edits, or by importing a set
+    // of edits from a space on another blockchain. We want to keep the original edits' time
+    // and block metadata as part of the import. For edits we read the original created metadata
+    // if it exists, and if not, read from the current block of the active chain.
+    const blockMetadata = getBlockMetadataForProposal(proposals, p.proposalId, block);
+
     const proposalToWrite: S.proposals.Insertable = {
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
       plugin_address: p.pluginAddress,
       name: p.name,
       type: 'ADD_EDIT',
-      created_at: p.startTime,
-      created_at_block: block.blockNumber,
-      created_at_block_hash: block.hash,
-      created_at_block_network: block.network,
+      created_at: blockMetadata.timestamp ?? p.startTime,
+      created_at_block: blockMetadata.blockNumber,
+      created_at_block_hash: blockMetadata.hash,
+      created_at_block_network: blockMetadata.network,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -279,6 +285,7 @@ function mapEditProposalToSchema(
 
     const uniqueEntityIds = new Set(p.ops.map(action => action.payload.entityId));
 
+    // @TODO: These should read from the proposal metadata as well
     [...uniqueEntityIds.values()].forEach(entityId => {
       const mappedProposedVersion: S.proposed_versions.Insertable = {
         id: createVersionId({
@@ -322,5 +329,26 @@ export function mapIpfsProposalToSchemaProposalByType(
     schemaMembershipProposals,
     schemaEditorshipProposals,
     schemaEditProposals,
+  };
+}
+
+// An EditProposal is either created by a user publishing new edits, or by importing a set
+// of edits from a space on another blockchain. We want to keep the original edits' time
+// and block metadata as part of the import. For edits we read the original created metadata
+// if it exists, and if not, read from the current block of the active chain.
+function getBlockMetadataForProposal(proposals: EditProposal[], proposalId: string, block: GeoBlock) {
+  const proposalForProposedVersion = proposals.find(p => p.proposalId === proposalId);
+  const maybeImportedCreatedAtBlock = proposalForProposedVersion?.createdAtBlock;
+
+  const timestamp = maybeImportedCreatedAtBlock?.timestamp ?? block.timestamp;
+  const blockNumber = maybeImportedCreatedAtBlock?.blockNumber ?? block.blockNumber;
+  const hash = maybeImportedCreatedAtBlock?.hash ?? block.hash;
+  const network = maybeImportedCreatedAtBlock?.network ?? block.network;
+
+  return {
+    timestamp,
+    blockNumber,
+    hash,
+    network,
   };
 }

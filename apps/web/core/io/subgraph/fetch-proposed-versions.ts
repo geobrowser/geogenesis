@@ -20,7 +20,6 @@ const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
       id
       name
       createdAt
-      createdAtBlock
 
       createdBy {
         id

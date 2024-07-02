@@ -12,7 +12,7 @@ interface Props {
   // the same triple, we want to make sure that only renders as a single change.
   onClick?: () => void;
   changeCount: number;
-  createdAt: number;
+  createdAt: string;
   createdBy: Profile;
   name: string | null;
 }
@@ -21,14 +21,14 @@ export function HistoryItem({ onClick, changeCount, createdAt, createdBy, name }
   const lastEditedDate = GeoDate.fromGeoTime(createdAt);
 
   // e.g. Mar 12, 2023
-  const formattedLastEditedDate = new Date(lastEditedDate).toLocaleDateString(undefined, {
+  const formattedLastEditedDate = lastEditedDate.toLocaleDateString(undefined, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
 
   // e.g. 13:41
-  const lastEditedTime = new Date(lastEditedDate).toLocaleTimeString(undefined, {
+  const lastEditedTime = lastEditedDate.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,

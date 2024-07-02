@@ -9,7 +9,7 @@ import {
   ROOT_SPACE_CREATED_AT_BLOCK,
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
-import { Accounts, Collections, Entities, Proposals, Spaces, Triples } from './db';
+import { Accounts, Blocks, Collections, Entities, Proposals, Spaces, Triples } from './db';
 import { CollectionItems } from './db/collection-items';
 import { getTripleFromOp } from './events/get-triple-from-op';
 
@@ -401,6 +401,14 @@ export function bootstrapRoot() {
     yield _(
       Effect.tryPromise({
         try: async () => {
+          await Blocks.upsert([
+            {
+              hash: '',
+              network: NETWORK_IDS.GEO,
+              number: ROOT_SPACE_CREATED_AT_BLOCK,
+              timestamp: ROOT_SPACE_CREATED_AT,
+            },
+          ]);
           await Spaces.upsert([space]);
 
           // @TODO: Create versions for the entities

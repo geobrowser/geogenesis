@@ -139,6 +139,10 @@ function fetchEditProposalFromIpfs(
         const decodedEdits = maybeDecodedEdits.flatMap(e => (e ? [e] : []));
 
         const proposals = decodedEdits.map(e => {
+          if (e.blockNumber === '') {
+            console.log('invalid block number for edit', { number: e.blockNumber, editId: e.id });
+          }
+
           const contentProposal: EditProposal = {
             type: 'ADD_EDIT',
             name: e.name ?? null,

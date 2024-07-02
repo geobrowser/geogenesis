@@ -110,7 +110,7 @@ export const spaceFragment = `
     }
   }
 
-  createdAtBlock
+  createdAt
 
   metadata {
     nodes {

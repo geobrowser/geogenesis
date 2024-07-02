@@ -52,14 +52,17 @@ export function populateApprovedContentProposal(
         const newEntity: Schema.entities.Insertable = {
           id: pv.entity_id,
           created_by_id: pv.created_by_id,
-          created_at: block.timestamp,
+
+          // The created metadata is derived from the proposed version. The updated metadata is the current
+          // block metadata.
+          created_at: pv.created_at,
+          created_at_block: pv.created_at_block,
+          created_at_block_hash: pv.created_at_block_hash,
+          created_at_block_network: pv.created_at_block_network,
           updated_at: block.timestamp,
           updated_at_block: block.blockNumber,
           updated_at_block_hash: block.hash,
           updated_at_block_network: block.network,
-          created_at_block: block.blockNumber,
-          created_at_block_hash: block.hash,
-          created_at_block_network: block.network,
         };
 
         return newEntity;
@@ -72,10 +75,10 @@ export function populateApprovedContentProposal(
             proposalId: pv.proposal_id,
           }),
           entity_id: pv.entity_id,
-          created_at_block: block.blockNumber,
-          created_at_block_network: block.hash,
-          created_at_block_hash: block.network,
-          created_at: block.timestamp,
+          created_at: pv.created_at,
+          created_at_block: pv.created_at_block,
+          created_at_block_hash: pv.created_at_block_hash,
+          created_at_block_network: pv.created_at_block_network,
           created_by_id: pv.created_by_id,
           proposed_version_id: pv.id,
           space_id: pv.space_id,

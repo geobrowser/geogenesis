@@ -85,11 +85,10 @@ export function formatShortAddress(address: string): string {
 
 export class GeoDate {
   /**
-   * We return blocktime from the subgraph for createdAt and updatedAt fields.
-   * JavaScript date expects milliseconds, so we need to convert from seconds.
+   * We return ISO-8601 from the subgraph for createdAt and updatedAt fields.
    */
-  static fromGeoTime(value: number) {
-    return new Date(value * 1000);
+  static fromGeoTime(value: string) {
+    return new Date(value);
   }
 
   static toGeoTime(value: number) {

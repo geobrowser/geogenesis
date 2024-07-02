@@ -122,8 +122,8 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
-            created_at_block_network: block.hash,
-            created_at_block_hash: block.network,
+            created_at_block_hash: block.hash,
+            created_at_block_network: block.network,
           };
 
           return editor;
@@ -157,8 +157,8 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
-            created_at_block_network: block.hash,
-            created_at_block_hash: block.network,
+            created_at_block_hash: block.hash,
+            created_at_block_network: block.network,
           };
 
           return member;

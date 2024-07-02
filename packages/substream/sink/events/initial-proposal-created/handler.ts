@@ -57,7 +57,9 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
 
       slog({
         requestId: block.requestId,
-        message: 'Could not write initial proposals for new spaces',
+        message: `Could not write initial proposals for new spaces
+message: ${error.message}
+        `,
         level: 'error',
       });
 

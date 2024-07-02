@@ -11,11 +11,16 @@ const space: Space = {
   id: 'space-1',
   isRootSpace: false,
   editors: [],
-  editorControllers: [],
-  admins: [],
+  members: [],
+  mainVotingPluginAddress: '',
+  memberAccessPluginAddress: '',
+  personalSpaceAdminPluginAddress: '',
+  spacePluginAddress: '',
+  type: 'PUBLIC',
   spaceConfig: {
     id: 'space-config-1',
-    image: null,
+    spaceId: '',
+    image: '',
     name: 'Space-1',
     triples: [],
     description: 'Description-1',
@@ -26,7 +31,7 @@ const space: Space = {
       },
     ],
   },
-  createdAtBlock: 'block-1',
+  createdAt: '1',
 };
 
 describe('Entity autocomplete results list', () => {
