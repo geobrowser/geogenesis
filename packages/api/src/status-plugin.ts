@@ -95,15 +95,7 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
               paused: false,
               node: 'geo-node',
               historyBlocks: 0,
-              fatalError: {
-                message: 'N/A',
-                block: {
-                  number: 0,
-                  hash: '0x',
-                },
-                handler: 'N/A',
-                deterministic: false,
-              },
+              fatalError: null,
               chains: [
                 {
                   network: GEO_NETWORK_ID,
@@ -114,7 +106,7 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
                   },
                   earliestBlock: {
                     number: INITIAL_GEO_BLOCK,
-                    hash: '0x',
+                    hash: '0x0',
                     timestamp: 0,
                   },
                   latestBlock: latestBlock,
