@@ -1,5 +1,6 @@
-import { Edit, ImportEdit, Membership, Op, Subspace } from '@geogenesis/sdk/proto';
+import { Edit, ImportEdit, IpfsMetadata, Membership, Op, Subspace } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
+import { z } from 'zod';
 
 import {
   type ParsedEdit,
@@ -23,7 +24,7 @@ export function decode<T>(fn: () => T) {
   return Effect.gen(function* (_) {
     // const telemetry = yield* _(Telemetry);
 
-    const edit = yield* _(
+    const result = yield* _(
       Effect.try({
         try: () => fn(),
         catch: error => new CouldNotDecodeProtobufError(String(error)),
@@ -31,7 +32,7 @@ export function decode<T>(fn: () => T) {
       Effect.either
     );
 
-    return Either.match(edit, {
+    return Either.match(result, {
       onLeft: error => {
         // telemetry.captureException(error);
 
@@ -53,11 +54,44 @@ export function decode<T>(fn: () => T) {
   });
 }
 
+const ZodIpfsMetadata = z.object({
+  version: z.string(),
+  type: z.union([
+    z.literal('ADD_EDIT'),
+    z.literal('ADD_MEMBER'),
+    z.literal('REMOVE_MEMBER'),
+    z.literal('ADD_EDITOR'),
+    z.literal('REMOVE_EDITOR'),
+    z.literal('ADD_SUBSPACE'),
+    z.literal('REMOVE_SUBSPACE'),
+    z.literal('IMPORT_SPACE'),
+  ]),
+  id: z.string(),
+  name: z.string(),
+});
+
+function decodeIpfsMetadata(data: Buffer): Effect.Effect<z.infer<typeof ZodIpfsMetadata> | null> {
+  return Effect.gen(function* (_) {
+    const decodeEffect = decode(() => {
+      const metadata = IpfsMetadata.fromBinary(data);
+      const parseResult = ZodIpfsMetadata.safeParse(metadata.toJson());
+
+      if (parseResult.success) {
+        return parseResult.data;
+      }
+
+      return null;
+    });
+
+    return yield* _(decodeEffect);
+  });
+}
+
 function decodeEdit(data: Buffer): Effect.Effect<ParsedEdit | null> {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = Edit.fromBinary(data);
-      const parseResult = ZodEdit.safeParse(edit);
+      const parseResult = ZodEdit.safeParse(edit.toJson());
 
       if (parseResult.success) {
         return parseResult.data;
@@ -76,18 +110,23 @@ function decodeEdit(data: Buffer): Effect.Effect<ParsedEdit | null> {
  * extra metadata that would normally be derived onchain, like the message
  * sender, when it was posted onchain, etc., in order to correctly preserve
  * history at the time the data in the original space was created.
+ *
+ * @TODO: For some reason right now we need to decode the import edits op
+ * in a different way than the normal ADD_EDIT ops. For import edits we
+ * don't convert to JSON before parsing, we parse the edit directly. There
+ * are zod errors with the imports that we don't get with normal edits if
+ * we parse the JSON.
  */
 function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> {
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = ImportEdit.fromBinary(data);
-
       const parseResult = ZodImportEdit.safeParse(edit);
 
       if (parseResult.success) {
         // @TODO(migration): For now we have some invalid ops while we still work on the data migration
         const validOps = parseResult.data.ops.filter(
-          o => o.opType === 'SET_TRIPLE' && (o.payload as unknown as any).value.type !== 'FILTER_ME_OUT'
+          o => o.opType === 'SET_TRIPLE' && (o.payload as unknown as any)?.value?.type !== 'FILTER_ME_OUT'
         );
 
         parseResult.data.ops = validOps;
@@ -154,6 +193,7 @@ function decodeSubspace(data: Buffer) {
 }
 
 export const Decoder = {
+  decodeIpfsMetadata,
   decodeEdit,
   decodeImportEdit,
   decodeMembership,

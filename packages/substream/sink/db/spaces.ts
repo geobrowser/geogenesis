@@ -9,12 +9,20 @@ export class Spaces {
     return await db.upsert('spaces', spaces, ['id']).run(pool);
   }
 
+  static async findForDaoAddress(daoAddress: string) {
+    const result = await db
+      .selectOne('spaces', { dao_address: getChecksumAddress(daoAddress) }, { columns: ['id'] })
+      .run(pool);
+
+    return result ? result.id : null;
+  }
+
   static async findForVotingPlugin(votingPluginAddress: string) {
     const result = await db
       .selectOne('spaces', { main_voting_plugin_address: getChecksumAddress(votingPluginAddress) }, { columns: ['id'] })
       .run(pool);
 
-    return result ? getChecksumAddress(result.id) : null;
+    return result ? result.id : null;
   }
 
   static async findForPersonalPlugin(personalPluginAddress: string) {
@@ -28,7 +36,7 @@ export class Spaces {
 
     return result
       ? {
-          id: getChecksumAddress(result.id),
+          id: result.id,
           personal_space_admin_plugin_address: result.personal_space_admin_plugin_address,
         }
       : null;
@@ -43,7 +51,7 @@ export class Spaces {
       )
       .run(pool);
 
-    return result ? getChecksumAddress(result.id) : null;
+    return result ? result.id : null;
   }
 
   static async findForSpacePlugin(spacePluginAddress: string) {
@@ -57,7 +65,7 @@ export class Spaces {
 
     return result
       ? {
-          id: getChecksumAddress(result.id),
+          id: result.id,
           space_plugin_address: result.space_plugin_address,
         }
       : null;

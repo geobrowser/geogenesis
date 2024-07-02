@@ -5,7 +5,6 @@ import {
   AppOp,
   CollectionItem,
   Entity,
-  GovernanceType,
   OmitStrict,
   ProposedVersion,
   Space,
@@ -417,7 +416,7 @@ export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamE
 }
 
 function getImageUrlFromImageEntity(triples: SubstreamImageValueTriple[]): string | null {
-  const triple = triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE);
+  const triple = triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE);
   return triple?.valueType === 'URL' ? triple.textValue : null;
 }
 

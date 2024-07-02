@@ -235,7 +235,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   return (
     <div className="flex w-full flex-wrap gap-2">
-      {/* @TODO: Collections */}
       {isPopulatedCollection && triples[0].value.type === 'COLLECTION' && (
         <>
           {triples[0].value.items.map(item => (

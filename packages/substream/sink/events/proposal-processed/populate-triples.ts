@@ -69,7 +69,10 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
         const insertTripleEffect = Effect.tryPromise({
           try: () => Triples.upsert([triple]),
           // @TODO: More specifically typed error
-          catch: error => new Error(`Failed to insert triple: ${String(error)}`),
+          catch: error =>
+            new Error(`Failed to insert triple
+            triple: ${JSON.stringify(triple, null, 2)}
+            error:  ${String(error)}`),
         });
 
         // const insertTripleVersionEffect = Effect.tryPromise({

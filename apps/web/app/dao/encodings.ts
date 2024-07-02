@@ -1,6 +1,5 @@
 import { PluginInstallItem } from '@aragon/sdk-client-common';
 import { VotingMode } from '@geogenesis/sdk';
-import { SpaceAbi, SpaceSetupAbi } from '@geogenesis/sdk/abis';
 import {
   GOVERNANCE_PLUGIN_REPO_ADDRESS,
   PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,

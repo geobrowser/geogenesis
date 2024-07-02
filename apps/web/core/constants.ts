@@ -18,9 +18,8 @@ export const PLACEHOLDER_SPACE_IMAGE = '/placeholder.png';
 export const DEFAULT_OPENGRAPH_DESCRIPTION =
   "Browse and organize the world's public knowledge and information in a decentralized way.";
 
-export const IPFS_GATEWAY_PATH = 'https://ipfs.network.thegraph.com';
-export const IPFS_GATEWAY_READ_PATH = `${IPFS_GATEWAY_PATH}/ipfs/api/v0/cat?arg=`;
-// export const IPFS_GATEWAY_READ_PATH = 'https://api.thegraph.com/ipfs/api/v0/cat?arg=';
+export const IPFS_GATEWAY_PATH = 'https://node.lighthouse.storage';
+export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`;
 
 export const ADMIN_ROLE_BINARY = '0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775';
 export const EDITOR_CONTROLLER_ROLE_BINARY = '0xbc2c04b16435c5f4eaa37fec9ad808fec563d665b1febf40775380f3f1b592b4';

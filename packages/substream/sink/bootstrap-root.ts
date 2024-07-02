@@ -54,7 +54,7 @@ const entities: string[] = [
   // e.g., you can select a Text value type, or a Number, or an Image. The
   // image is stored as an entity while the others are stored as a primitive
   // type in the database.
-  SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE,
+  SYSTEM_IDS.IMAGE_URL_ATTRIBUTE,
 
   // Collections
   SYSTEM_IDS.COLLECTION_TYPE,
@@ -62,6 +62,18 @@ const entities: string[] = [
   SYSTEM_IDS.COLLECTION_ITEM_INDEX,
   SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
   SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
+
+  // Templates
+  SYSTEM_IDS.TEMPLATE_ATTRIBUTE,
+
+  // Data block views
+  SYSTEM_IDS.VIEW_TYPE,
+  SYSTEM_IDS.VIEW_ATTRIBUTE,
+  SYSTEM_IDS.GALLERY_VIEW,
+  SYSTEM_IDS.TABLE_VIEW,
+  SYSTEM_IDS.LIST_VIEW,
+  SYSTEM_IDS.PLACEHOLDER_TEXT,
+  SYSTEM_IDS.PLACEHOLDER_IMAGE,
 ];
 
 const names: Record<string, string> = {
@@ -71,13 +83,14 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.SPACE]: 'Indexed Space',
   [SYSTEM_IDS.ATTRIBUTES]: 'Attributes',
   [SYSTEM_IDS.SCHEMA_TYPE]: 'Type',
+  [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: 'Template',
   [SYSTEM_IDS.VALUE_TYPE]: 'Value type',
   [SYSTEM_IDS.RELATION]: 'Relation',
   [SYSTEM_IDS.COLLECTION_VALUE_TYPE]: 'Collection',
   [SYSTEM_IDS.TEXT]: 'Text',
 
   [SYSTEM_IDS.IMAGE]: 'Image',
-  [SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE]: 'Image URL',
+  [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: 'Image URL',
 
   [SYSTEM_IDS.DATE]: 'Date',
   [SYSTEM_IDS.WEB_URL]: 'Web URL',
@@ -85,18 +98,28 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.DESCRIPTION]: 'Description',
   [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
   [SYSTEM_IDS.FOREIGN_TYPES]: 'Foreign Types',
+
+  // Data blocks
+  [SYSTEM_IDS.VIEW_TYPE]: 'View',
   [SYSTEM_IDS.TABLE_BLOCK]: 'Table Block',
+  [SYSTEM_IDS.VIEW_ATTRIBUTE]: 'View',
+  [SYSTEM_IDS.GALLERY_VIEW]: 'Gallery View',
+  [SYSTEM_IDS.TABLE_VIEW]: 'Table View',
+  [SYSTEM_IDS.LIST_VIEW]: 'List View',
   [SYSTEM_IDS.SHOWN_COLUMNS]: 'Shown Columns',
   [SYSTEM_IDS.TEXT_BLOCK]: 'Text Block',
   [SYSTEM_IDS.IMAGE_BLOCK]: 'Image Block',
   [SYSTEM_IDS.BLOCKS]: 'Blocks',
   [SYSTEM_IDS.PARENT_ENTITY]: 'Parent Entity',
-  [SYSTEM_IDS.PERSON_TYPE]: 'Person',
+  [SYSTEM_IDS.FILTER]: 'Filter',
   [SYSTEM_IDS.MARKDOWN_CONTENT]: 'Markdown Content',
   [SYSTEM_IDS.ROW_TYPE]: 'Row Type',
+  [SYSTEM_IDS.PLACEHOLDER_IMAGE]: 'Placeholder Image',
+  [SYSTEM_IDS.PLACEHOLDER_TEXT]: 'Placeholder Text',
+
+  [SYSTEM_IDS.PERSON_TYPE]: 'Person',
   [SYSTEM_IDS.AVATAR_ATTRIBUTE]: 'Avatar',
   [SYSTEM_IDS.COVER_ATTRIBUTE]: 'Cover',
-  [SYSTEM_IDS.FILTER]: 'Filter',
   [SYSTEM_IDS.WALLETS_ATTRIBUTE]: 'Wallets',
   [SYSTEM_IDS.BROADER_SPACES]: 'Broader Spaces',
   [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: 'Relation Value Types',
@@ -110,18 +133,25 @@ const names: Record<string, string> = {
 
 const attributes: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.ATTRIBUTES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.VALUE_TYPE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.IMAGE_ATTRIBUTE]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.DESCRIPTION]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.NAME]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.SPACE]: SYSTEM_IDS.TEXT,
+
+  // Data blocks
+  [SYSTEM_IDS.VIEW_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.FOREIGN_TYPES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.MARKDOWN_CONTENT]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.ROW_TYPE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.BLOCKS]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.PARENT_ENTITY]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.FILTER]: SYSTEM_IDS.TEXT,
+  [SYSTEM_IDS.PLACEHOLDER_IMAGE]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.PLACEHOLDER_TEXT]: SYSTEM_IDS.TEXT,
+
   [SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.AVATAR_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
   [SYSTEM_IDS.COVER_ATTRIBUTE]: SYSTEM_IDS.IMAGE,
@@ -129,14 +159,16 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.COLLECTION_ITEM_INDEX]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.WEB_URL,
+  [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.WEB_URL,
   [SYSTEM_IDS.BROADER_SPACES]: SYSTEM_IDS.RELATION,
 };
 
 const types: Record<string, string[]> = {
+  [SYSTEM_IDS.TYPES]: [SYSTEM_IDS.TEMPLATE_ATTRIBUTE, SYSTEM_IDS.ATTRIBUTES],
+  [SYSTEM_IDS.VIEW_TYPE]: [],
   [SYSTEM_IDS.TEXT]: [],
   [SYSTEM_IDS.RELATION]: [],
-  [SYSTEM_IDS.IMAGE]: [SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE],
+  [SYSTEM_IDS.IMAGE]: [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE],
   [SYSTEM_IDS.DATE]: [],
   [SYSTEM_IDS.WEB_URL]: [],
   [SYSTEM_IDS.ATTRIBUTE]: [SYSTEM_IDS.VALUE_TYPE],
@@ -177,7 +209,7 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
     attribute_id: SYSTEM_IDS.NAME,
     value_type: 'TEXT',
     text_value: name,
-    space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+    space_id: SYSTEM_IDS.ROOT_SPACE_ID,
     created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
     created_at: ROOT_SPACE_CREATED_AT,
     is_stale: false,
@@ -192,7 +224,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       attribute_id: SYSTEM_IDS.TYPES,
       value_type: 'TEXT',
       entity_value_id: SYSTEM_IDS.ATTRIBUTE,
-      space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+      space_id: SYSTEM_IDS.ROOT_SPACE_ID,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
       is_stale: false,
@@ -203,7 +235,7 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       attribute_id: SYSTEM_IDS.VALUE_TYPE,
       value_type: 'ENTITY',
       entity_value_id,
-      space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+      space_id: SYSTEM_IDS.ROOT_SPACE_ID,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
       created_at: ROOT_SPACE_CREATED_AT,
       is_stale: false,
@@ -241,11 +273,11 @@ const getTypeTriples = () => {
           const collectionItemTriples = createCollectionItem({
             collectionId: collectionEntityId,
             entityId: attributeId,
-            spaceId: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+            spaceId: SYSTEM_IDS.ROOT_SPACE_ID,
           });
 
           return collectionItemTriples.map(op =>
-            getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ADDRESS, {
+            getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, {
               blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
               cursor: '',
               requestId: '',
@@ -262,7 +294,7 @@ const getTypeTriples = () => {
           attribute_id: SYSTEM_IDS.TYPES,
           value_type: 'ENTITY',
           entity_value_id: SYSTEM_IDS.SCHEMA_TYPE,
-          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+          space_id: SYSTEM_IDS.ROOT_SPACE_ID,
           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
           created_at: ROOT_SPACE_CREATED_AT,
           is_stale: false,
@@ -276,7 +308,7 @@ const getTypeTriples = () => {
           attribute_id: SYSTEM_IDS.TYPES,
           value_type: 'ENTITY',
           entity_value_id: SYSTEM_IDS.COLLECTION_TYPE,
-          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+          space_id: SYSTEM_IDS.ROOT_SPACE_ID,
           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
           created_at: ROOT_SPACE_CREATED_AT,
           is_stale: false,
@@ -287,7 +319,7 @@ const getTypeTriples = () => {
           attribute_id: SYSTEM_IDS.ATTRIBUTES,
           value_type: 'COLLECTION',
           collection_value_id: collectionEntityId,
-          space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+          space_id: SYSTEM_IDS.ROOT_SPACE_ID,
           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
           created_at: ROOT_SPACE_CREATED_AT,
           is_stale: false,
@@ -308,7 +340,8 @@ const getTypeTriples = () => {
 };
 
 const space: s.spaces.Insertable = {
-  id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+  id: SYSTEM_IDS.ROOT_SPACE_ID,
+  dao_address: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
   is_root_space: true,
   type: 'public',
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
@@ -324,7 +357,7 @@ const proposal: s.proposals.Insertable = {
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
   created_at: ROOT_SPACE_CREATED_AT,
   plugin_address: '',
-  space_id: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
+  space_id: SYSTEM_IDS.ROOT_SPACE_ID,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
   type: 'ADD_EDIT',
@@ -347,9 +380,10 @@ export function bootstrapRoot() {
     yield _(
       Effect.tryPromise({
         try: async () => {
+          await Spaces.upsert([space]);
+
           // @TODO: Create versions for the entities
           await Promise.all([
-            Spaces.upsert([space]),
             Accounts.upsert([account]),
             Entities.upsert(geoEntities),
 

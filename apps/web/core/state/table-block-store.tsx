@@ -8,12 +8,13 @@ import { useActionsStore } from '../hooks/use-actions-store';
 import { useMergedData } from '../hooks/use-merged-data';
 import { FetchRowsOptions } from '../io/fetch-rows';
 import { Services } from '../services';
-import { AppEntityValue, Column, GeoType, ValueType as TripleValueType } from '../types';
+import { AppEntityValue, Column, Entity, GeoType, ValueType as TripleValueType } from '../types';
 import { Entities } from '../utils/entity';
 import { Triples } from '../utils/triples';
+import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
 
-export const PAGE_SIZE = 10;
+export const PAGE_SIZE = 9;
 
 export interface TableBlockFilter {
   columnId: string;
@@ -265,7 +266,6 @@ export function useTableBlock() {
     (newName: string) => {
       TableBlockSdk.upsertName({
         newName: newName,
-        nameTriple,
         spaceId,
         entityId,
         api: { upsert },
@@ -273,6 +273,9 @@ export function useTableBlock() {
     },
     [upsert, entityId, nameTriple, spaceId]
   );
+
+  const view = getView(blockEntity);
+  const placeholder = getPlaceholder(blockEntity, view);
 
   return {
     blockEntity,
@@ -298,8 +301,77 @@ export function useTableBlock() {
     nameTriple,
     name: Values.stringValue(nameTriple ?? undefined),
     setName,
+    view,
+    placeholder,
   };
 }
+
+export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY';
+
+const getView = (blockEntity: Entity | null | undefined): DataBlockView => {
+  let view: DataBlockView = 'TABLE';
+
+  if (blockEntity) {
+    const viewTriple = blockEntity.triples.find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
+
+    switch (viewTriple?.value.value) {
+      case SYSTEM_IDS.TABLE_VIEW:
+        view = 'TABLE';
+        break;
+      case SYSTEM_IDS.LIST_VIEW:
+        view = 'LIST';
+        break;
+      case SYSTEM_IDS.GALLERY_VIEW:
+        view = 'GALLERY';
+        break;
+      default:
+        // We default to TABLE above
+        break;
+    }
+  }
+
+  return view;
+};
+
+const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockView) => {
+  let text = DEFAULT_PLACEHOLDERS[view].text;
+  let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
+
+  if (blockEntity) {
+    const placeholderTextTriple = blockEntity.triples.find(
+      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
+    );
+
+    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
+      text = placeholderTextTriple.value.value;
+    }
+
+    const placeholderImageTriple = blockEntity.triples.find(
+      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
+    );
+
+    if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
+      image = getImagePath(placeholderImageTriple.value.value);
+    }
+  }
+
+  return { text, image };
+};
+
+const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string }> = {
+  TABLE: {
+    text: 'Add an entity',
+    image: '/table.png',
+  },
+  LIST: {
+    text: 'Add a list item',
+    image: '/list.png',
+  },
+  GALLERY: {
+    text: 'Add a gallery card',
+    image: '/gallery.png',
+  },
+};
 
 const TableBlockContext = React.createContext<{ entityId: string; selectedType: GeoType; spaceId: string } | undefined>(
   undefined

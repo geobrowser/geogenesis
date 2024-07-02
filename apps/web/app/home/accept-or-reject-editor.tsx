@@ -1,7 +1,7 @@
 'use client';
 
 import { VoteOption } from '@geogenesis/sdk';
-import { MainVotingAbi, MemberAccessAbi } from '@geogenesis/sdk/abis';
+import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { encodeFunctionData } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';

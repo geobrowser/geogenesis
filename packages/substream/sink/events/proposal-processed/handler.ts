@@ -72,7 +72,7 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
 
     slog({
       requestId: block.requestId,
-      message: `Writing ${dbProposals.length} processed proposals to DB`,
+      message: 'Processed proposals written successfully!',
     });
   });
 }

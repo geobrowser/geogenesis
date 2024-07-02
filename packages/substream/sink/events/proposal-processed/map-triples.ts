@@ -19,7 +19,7 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
     if (!triple.value_type) {
       console.log('invalid triple', {
         triple,
-        op: JSON.stringify(op),
+        op: JSON.stringify(op, null, 2),
         proposalId: edit.proposalId,
       });
     }

@@ -1,7 +1,5 @@
 import { SYSTEM_IDS, createImageEntityOps } from '@geogenesis/sdk';
 
-import { Triple } from '~/core/types';
-
 import { Values } from '../value';
 
 type CreateImageTriplesArgs = {
@@ -26,7 +24,7 @@ type CreateImageTriplesReturnType = [
     space: string;
     entityId: string;
     entityName: null;
-    attributeId: typeof SYSTEM_IDS.IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE;
+    attributeId: typeof SYSTEM_IDS.IMAGE_URL_ATTRIBUTE;
     attributeName: 'Image URL';
     value: {
       type: 'URL';

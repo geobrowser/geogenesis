@@ -32,11 +32,11 @@ CREATE TABLE public.spaces (
     created_at_block integer NOT NULL,
     is_root_space boolean NOT NULL,
     type space_type NOT NULL,   
+    dao_address text NOT NULL,
     space_plugin_address text,
     main_voting_plugin_address text,
     member_access_plugin_address text,
-    personal_space_admin_plugin_address text,
-    configuration_id text REFERENCES public.entities(id)
+    personal_space_admin_plugin_address text
 );
 
 CREATE TABLE public.entity_types (

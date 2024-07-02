@@ -21,7 +21,7 @@ export interface CommandSuggestionItem {
 
 export const tableCommandItem: CommandSuggestionItem = {
   icon: <EditorTable />,
-  title: 'Table',
+  title: 'Data',
   command: ({ editor, range, props }) => {
     editor
       .chain()

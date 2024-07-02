@@ -72,7 +72,10 @@ export const VALUE_TYPE = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 
 /* Example Usage: Thumbnail > VALUE_TYPE > IMAGE */
 export const IMAGE = 'ba4e41460010499da0a3caaa7f579d0e';
-export const IMAGE_COMPOUND_TYPE_IMAGE_URL_ATTRIBUTE = '334b8ac01be14079b1707e11d0f9eb8d'
+export const IMAGE_WIDTH_ATTRIBUTE = '18a7f15ea93b4e15bacf4d57052741e9';
+export const IMAGE_HEIGHT_ATTRIBUTE = '58747e352a1c4c76ae64bfe08d28d0a4';
+export const IMAGE_FILE_TYPE_ATTRIBUTE = '03d3a32b258f492e8d81c9ee2bc01461';
+export const IMAGE_URL_ATTRIBUTE = '334b8ac01be14079b1707e11d0f9eb8d';
 
 /* Example Usage: City > VALUE_TYPE > RELATION */
 export const RELATION = '14611456b4664cab920d2245f59ce828';
@@ -159,6 +162,12 @@ export const SHOWN_COLUMNS = '388ad59b1cc7413ca0bb34a4de48c758';
 export const PLACEHOLDER_TEXT = '0e5f84e4c85a44698a665a7d46fe2786';
 export const PLACEHOLDER_IMAGE = '3f20832090704795a046206a6efb9557';
 
+export const VIEW_TYPE = '2a734759874246efaac4c16b53f3a542'
+export const VIEW_ATTRIBUTE = 'f062fc5a6f114859ba70e644be6caea5';
+export const TABLE_VIEW = 'a2a136e1d1da4853bf3b0960982f8162';
+export const LIST_VIEW = '70db74421c6e425291c8a807466d8668';
+export const GALLERY_VIEW = 'eb18a135be254953a959999dfb3255c0';
+
 /* Example Usage: Block Entity > TYPES > TEXT_BLOCK */
 export const TEXT_BLOCK = '8426caa143d647d4a6f100c7c1a9a320';
 
@@ -201,6 +210,7 @@ export const MEMBERSHIP_CONTRACT_ADDRESS = '0x34a94160f4B0f86d932927DFfb326354dB
 
 // This is the address for the Root Space.
 export const ROOT_SPACE_ADDRESS = '0xEcC4016C71fF38B32f01538207B6F0FdcbCF99f5';
+export const ROOT_SPACE_ID = 'ab7d4b9e02f840dab9746d352acb0ac6'
 
 // This represents the beacon for the first set of deployed permissioned spaces.
 // We should use this beacon for all new permissioned spaces. We need to track the beacon

@@ -17,14 +17,19 @@ export class StorageClient implements IStorageClient {
     const formData = new FormData();
     formData.append('file', blob);
 
-    const url = `${this.ipfsUrl}/api/v0/add`;
+    // const url = `${this.ipfsUrl}/api/v0/add`;
 
-    console.log(`Posting to url`, url);
+    console.log(`Posting to url`, 'https://node.lighthouse.storage/api/v0/add');
 
-    const response = await fetch(url, {
+    const response = await fetch('https://node.lighthouse.storage/api/v0/add', {
       method: 'POST',
       body: formData,
+      headers: {
+        Authorization: `Bearer ${process.env.NEXT_PUBLIC_IPFS_KEY}`,
+      },
     });
+
+    // const output = await lighthouse.upload(formData, process.env.NEXT_PUBLIC_IPFS_KEY!, false, null, progressCallback);
 
     if (response.status >= 300) {
       const text = await response.text();

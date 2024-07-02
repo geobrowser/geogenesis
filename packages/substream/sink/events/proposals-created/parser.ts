@@ -126,10 +126,65 @@ export const ZodProposalProcessedStreamResponse = z.object({
 });
 
 const ZodEditSetTriplePayload = z.object({
+  entityId: z.string(),
+  attributeId: z.string(),
+  value: z.object({
+    value: z.string(),
+    type: z.union([
+      z.literal('TEXT'),
+      z.literal('NUMBER'),
+      z.literal('ENTITY'),
+      z.literal('COLLECTION'),
+      z.literal('CHECKBOX'),
+      z.literal('URL'),
+      z.literal('TIME'),
+      z.literal('GEO_LOCATION'),
+      z.literal('IMAGE'),
+    ]),
+  }),
+});
+
+const ZodEditDeleteTriplePayload = z.object({
+  entityId: z.string(),
+  attributeId: z.string(),
+  value: z.any(),
+});
+
+const ZodSetTripleOp = z.object({
+  opType: z.literal('SET_TRIPLE'),
+  payload: ZodEditSetTriplePayload,
+});
+
+const ZodDeleteTripleOp = z.object({
+  opType: z.literal('DELETE_TRIPLE'),
+  payload: ZodEditDeleteTriplePayload,
+});
+
+export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
+
+export const ZodEdit = z.object({
+  version: z.string(),
+  type: z.literal('ADD_EDIT'),
+  id: z.string(),
+  name: z.string(),
+  ops: z.array(ZodOp),
+  authors: z.array(z.string()),
+});
+
+export type ParsedEdit = z.infer<typeof ZodEdit>;
+
+export type EditProposal = Proposal & {
+  type: 'ADD_EDIT';
+  name: string;
+  proposalId: string;
+  onchainProposalId: string;
+  pluginAddress: string;
+  ops: Op[];
+};
+
+const ZodImportEditSetTriplePayload = z.object({
   entityId: z.instanceof(Uint8Array).transform(a => a.toString()),
   attributeId: z.instanceof(Uint8Array).transform(a => a.toString()),
-  // entityId: z.string().transform(a => Buffer.from(a).toString()),
-  // attributeId: z.string().transform(a => a.toString()),
   // zod has issues with discriminated unions. We set the value
   // to any here and trust that it is constructed into the correct
   // format once it's decoded.
@@ -155,6 +210,7 @@ const ZodEditSetTriplePayload = z.object({
           return 'GEO_LOCATION';
         // We haven't migrated images yet, so some triples might have
         // the IMAGE value type still
+        case 0:
         case 9:
           return 'FILTER_ME_OUT';
       }
@@ -162,52 +218,28 @@ const ZodEditSetTriplePayload = z.object({
   }),
 });
 
-const ZodEditDeleteTriplePayload = z.object({
+const ZodImportEditDeleteTriplePayload = z.object({
   entityId: z.instanceof(Uint8Array).transform(a => a.toString()),
   attributeId: z.instanceof(Uint8Array).transform(a => a.toString()),
-  // zod has issues with discriminated unions. We set the value
-  // to any here and trust that it is constructed into the correct
-  // format by the binary decoder before it's parsed by zod.
-  // value: z.any(),
 });
 
-const ZodSetTripleOp = z.object({
+const ZodImportEditSetTripleOp = z.object({
   opType: z.literal(1).transform(() => 'SET_TRIPLE'),
-  payload: ZodEditSetTriplePayload,
+  payload: ZodImportEditSetTriplePayload,
 });
 
-const ZodDeleteTripleOp = z.object({
+const ZodImportEditDeleteTripleOp = z.object({
   opType: z.literal(2).transform(() => 'DELETE_TRIPLE'),
-  payload: ZodEditDeleteTriplePayload,
+  payload: ZodImportEditDeleteTriplePayload,
 });
 
-export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
-
-export const ZodEdit = z.object({
-  type: z.literal('ADD_EDIT'),
-  name: z.string(),
-  version: z.string(),
-  id: z.string(),
-  ops: z.array(ZodOp),
-  authors: z.array(z.string()),
-});
-
-export type ParsedEdit = z.infer<typeof ZodEdit>;
-
-export type EditProposal = Proposal & {
-  type: 'ADD_EDIT';
-  name: string;
-  proposalId: string;
-  onchainProposalId: string;
-  pluginAddress: string;
-  ops: Op[];
-};
+const ZodImportEditOp = z.union([ZodImportEditSetTripleOp, ZodImportEditDeleteTripleOp]);
 
 export const ZodImportEdit = z.object({
   name: z.string(),
   version: z.string(),
   id: z.string(),
-  ops: z.array(ZodOp),
+  ops: z.array(ZodImportEditOp),
   authors: z.array(z.string()),
   createdBy: z.string(),
   createdAt: z.string(),
