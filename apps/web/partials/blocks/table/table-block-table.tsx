@@ -313,9 +313,7 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
                   <div className="flex-shrink">
                     <div className="line-clamp-2 text-tableCell font-medium text-text">{name}</div>
                     {description && (
-                      <div className="mt-1 line-clamp-2 text-[1.1rem] text-metadata leading-[1.35] text-grey-04">
-                        {description}
-                      </div>
+                      <div className="mt-1 line-clamp-2 text-[1.1rem] leading-[1.35] text-grey-04">{description}</div>
                     )}
                   </div>
                 </Link>
@@ -345,9 +343,7 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
                 </div>
                 <div className={cx('mt-3 line-clamp-2 text-tableCell font-medium text-text')}>{name}</div>
                 {description && (
-                  <div className="mt-1 line-clamp-2 text-[1.1rem] text-metadata leading-[1.35] text-grey-04">
-                    {description}
-                  </div>
+                  <div className="mt-1 line-clamp-2 text-[1.1rem] leading-[1.35] text-grey-04">{description}</div>
                 )}
               </Link>
             );
