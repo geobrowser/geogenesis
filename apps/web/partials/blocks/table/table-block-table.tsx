@@ -327,7 +327,12 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
         <div className="grid grid-cols-3 gap-x-4 gap-y-10 md:grid-cols-1">
           {rows.map((row, index: number) => {
             const nameCell = row.name as EntityCell;
-            const { entityId, name, description, image } = nameCell;
+            const {
+              entityId,
+              name,
+              // description,
+              image,
+            } = nameCell;
 
             return (
               <Link key={index} href={NavUtils.toEntity(space, entityId)} className="group flex flex-col">
@@ -342,9 +347,9 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
                   )}
                 </div>
                 <div className={cx('mt-3 line-clamp-2 text-tableCell font-medium text-text')}>{name}</div>
-                {description && (
+                {/* {description && (
                   <div className="mt-1 line-clamp-2 text-[1.1rem] leading-[1.35] text-grey-04">{description}</div>
-                )}
+                )} */}
               </Link>
             );
           })}
