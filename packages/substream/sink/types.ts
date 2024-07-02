@@ -5,10 +5,9 @@ export type TripleOp = 'SET_TRIPLE' | 'DELETE_TRIPLE';
 export interface GeoBlock {
   hash: string;
   network: string;
-
   cursor: string;
-  blockNumber: number;
-  timestamp: number;
+  blockNumber: string;
+  timestamp: string;
   requestId: string; // uuid
 }
 

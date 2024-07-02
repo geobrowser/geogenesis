@@ -382,8 +382,9 @@ const proposal: s.proposals.Insertable = {
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
   type: 'ADD_EDIT',
   status: 'accepted',
-  start_time: ROOT_SPACE_CREATED_AT,
-  end_time: ROOT_SPACE_CREATED_AT,
+  // @TODO: This ain't right
+  start_time: new Date(ROOT_SPACE_CREATED_AT).getMilliseconds(),
+  end_time: new Date(ROOT_SPACE_CREATED_AT).getMilliseconds(),
 };
 
 export class BootstrapRootError extends Error {

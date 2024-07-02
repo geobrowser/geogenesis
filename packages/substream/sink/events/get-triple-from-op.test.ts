@@ -19,10 +19,10 @@ describe('tripleFromOp', () => {
       },
       '0x1234',
       {
-        blockNumber: 0,
+        blockNumber: '0',
         cursor: '',
         requestId: '',
-        timestamp: 0,
+        timestamp: '0',
         hash: '',
         network: NETWORK_IDS.GEO,
       }
@@ -54,10 +54,10 @@ describe('tripleFromOp', () => {
       },
       '0x1234',
       {
-        blockNumber: 0,
+        blockNumber: '0',
         cursor: '',
         requestId: '',
-        timestamp: 0,
+        timestamp: '0',
         hash: '',
         network: NETWORK_IDS.GEO,
       }

@@ -525,16 +525,16 @@ declare module 'zapatos/schema' {
       created_by_id: string;
       /**
       * **entities.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **entities.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **entities.created_at_block_hash**
       * - `text` in database
@@ -549,16 +549,16 @@ declare module 'zapatos/schema' {
       created_at_block_network: string;
       /**
       * **entities.updated_at**
-      * - `int4` in database
-      * - Nullable, no default
-      */
-      updated_at: number | null;
-      /**
-      * **entities.updated_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      updated_at_block: number;
+      updated_at: string;
+      /**
+      * **entities.updated_at_block**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block: string;
       /**
       * **entities.updated_at_block_hash**
       * - `text` in database
@@ -611,16 +611,16 @@ declare module 'zapatos/schema' {
       created_by_id: string;
       /**
       * **entities.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **entities.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **entities.created_at_block_hash**
       * - `text` in database
@@ -635,16 +635,16 @@ declare module 'zapatos/schema' {
       created_at_block_network: string;
       /**
       * **entities.updated_at**
-      * - `int4` in database
-      * - Nullable, no default
-      */
-      updated_at: number | null;
-      /**
-      * **entities.updated_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      updated_at_block: number;
+      updated_at: string;
+      /**
+      * **entities.updated_at_block**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block: string;
       /**
       * **entities.updated_at_block_hash**
       * - `text` in database
@@ -697,16 +697,16 @@ declare module 'zapatos/schema' {
       created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **entities.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **entities.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **entities.created_at_block_hash**
       * - `text` in database
@@ -721,16 +721,16 @@ declare module 'zapatos/schema' {
       created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **entities.updated_at**
-      * - `int4` in database
-      * - Nullable, no default
-      */
-      updated_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **entities.updated_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      updated_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      updated_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **entities.updated_at_block**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **entities.updated_at_block_hash**
       * - `text` in database
@@ -783,16 +783,16 @@ declare module 'zapatos/schema' {
       created_by_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **entities.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **entities.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **entities.created_at_block_hash**
       * - `text` in database
@@ -807,16 +807,16 @@ declare module 'zapatos/schema' {
       created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **entities.updated_at**
-      * - `int4` in database
-      * - Nullable, no default
-      */
-      updated_at?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment;
-      /**
-      * **entities.updated_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      updated_at_block: number | db.Parameter<number> | db.SQLFragment;
+      updated_at: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **entities.updated_at_block**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **entities.updated_at_block_hash**
       * - `text` in database
@@ -869,16 +869,16 @@ declare module 'zapatos/schema' {
       created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **entities.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **entities.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **entities.created_at_block_hash**
       * - `text` in database
@@ -893,16 +893,16 @@ declare module 'zapatos/schema' {
       created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **entities.updated_at**
-      * - `int4` in database
-      * - Nullable, no default
-      */
-      updated_at?: number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | null | db.DefaultType | db.SQLFragment>;
-      /**
-      * **entities.updated_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      updated_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      updated_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **entities.updated_at_block**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      updated_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **entities.updated_at_block_hash**
       * - `text` in database
@@ -950,16 +950,16 @@ declare module 'zapatos/schema' {
       type_id: string;
       /**
       * **entity_types.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **entity_types.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **entity_types.created_at_block_hash**
       * - `text` in database
@@ -994,16 +994,16 @@ declare module 'zapatos/schema' {
       type_id: string;
       /**
       * **entity_types.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **entity_types.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **entity_types.created_at_block_hash**
       * - `text` in database
@@ -1038,16 +1038,16 @@ declare module 'zapatos/schema' {
       type_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **entity_types.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **entity_types.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **entity_types.created_at_block_hash**
       * - `text` in database
@@ -1082,16 +1082,16 @@ declare module 'zapatos/schema' {
       type_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **entity_types.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **entity_types.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **entity_types.created_at_block_hash**
       * - `text` in database
@@ -1126,16 +1126,16 @@ declare module 'zapatos/schema' {
       type_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **entity_types.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **entity_types.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **entity_types.created_at_block_hash**
       * - `text` in database
@@ -1589,16 +1589,16 @@ declare module 'zapatos/schema' {
       home_space_id: string;
       /**
       * **onchain_profiles.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **onchain_profiles.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **onchain_profiles.created_at_block_hash**
       * - `text` in database
@@ -1633,16 +1633,16 @@ declare module 'zapatos/schema' {
       home_space_id: string;
       /**
       * **onchain_profiles.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **onchain_profiles.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **onchain_profiles.created_at_block_hash**
       * - `text` in database
@@ -1677,16 +1677,16 @@ declare module 'zapatos/schema' {
       home_space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **onchain_profiles.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **onchain_profiles.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **onchain_profiles.created_at_block_hash**
       * - `text` in database
@@ -1721,16 +1721,16 @@ declare module 'zapatos/schema' {
       home_space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **onchain_profiles.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **onchain_profiles.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **onchain_profiles.created_at_block_hash**
       * - `text` in database
@@ -1765,16 +1765,16 @@ declare module 'zapatos/schema' {
       home_space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **onchain_profiles.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **onchain_profiles.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **onchain_profiles.created_at_block_hash**
       * - `text` in database
@@ -1870,16 +1870,16 @@ declare module 'zapatos/schema' {
       proposed_version_id: string;
       /**
       * **ops.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **ops.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
     }
     export interface JSONSelectable {
       /**
@@ -1950,16 +1950,16 @@ declare module 'zapatos/schema' {
       proposed_version_id: string;
       /**
       * **ops.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **ops.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
     }
     export interface Whereable {
       /**
@@ -2030,16 +2030,16 @@ declare module 'zapatos/schema' {
       proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **ops.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **ops.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -2110,16 +2110,16 @@ declare module 'zapatos/schema' {
       proposed_version_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **ops.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **ops.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -2190,16 +2190,16 @@ declare module 'zapatos/schema' {
       proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **ops.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **ops.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'ops_pkey';
     export type Column = keyof Selectable;
@@ -2247,16 +2247,16 @@ declare module 'zapatos/schema' {
       vote: vote_type;
       /**
       * **proposal_votes.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposal_votes.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
     }
     export interface JSONSelectable {
       /**
@@ -2291,16 +2291,16 @@ declare module 'zapatos/schema' {
       vote: vote_type;
       /**
       * **proposal_votes.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposal_votes.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
     }
     export interface Whereable {
       /**
@@ -2335,16 +2335,16 @@ declare module 'zapatos/schema' {
       vote?: vote_type | db.Parameter<vote_type> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, vote_type | db.Parameter<vote_type> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposal_votes.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposal_votes.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -2379,16 +2379,16 @@ declare module 'zapatos/schema' {
       vote: vote_type | db.Parameter<vote_type> | db.SQLFragment;
       /**
       * **proposal_votes.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposal_votes.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -2423,16 +2423,16 @@ declare module 'zapatos/schema' {
       vote?: vote_type | db.Parameter<vote_type> | db.SQLFragment | db.SQLFragment<any, vote_type | db.Parameter<vote_type> | db.SQLFragment>;
       /**
       * **proposal_votes.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposal_votes.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'proposal_votes_pkey';
     export type Column = keyof Selectable;
@@ -2504,16 +2504,16 @@ declare module 'zapatos/schema' {
       status: proposal_status;
       /**
       * **proposals.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposals.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **proposals.created_at_block_hash**
       * - `text` in database
@@ -2602,16 +2602,16 @@ declare module 'zapatos/schema' {
       status: proposal_status;
       /**
       * **proposals.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposals.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **proposals.created_at_block_hash**
       * - `text` in database
@@ -2700,16 +2700,16 @@ declare module 'zapatos/schema' {
       status?: proposal_status | db.Parameter<proposal_status> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, proposal_status | db.Parameter<proposal_status> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposals.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposals.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposals.created_at_block_hash**
       * - `text` in database
@@ -2798,16 +2798,16 @@ declare module 'zapatos/schema' {
       status: proposal_status | db.Parameter<proposal_status> | db.SQLFragment;
       /**
       * **proposals.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposals.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposals.created_at_block_hash**
       * - `text` in database
@@ -2896,16 +2896,16 @@ declare module 'zapatos/schema' {
       status?: proposal_status | db.Parameter<proposal_status> | db.SQLFragment | db.SQLFragment<any, proposal_status | db.Parameter<proposal_status> | db.SQLFragment>;
       /**
       * **proposals.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposals.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposals.created_at_block_hash**
       * - `text` in database
@@ -2971,16 +2971,16 @@ declare module 'zapatos/schema' {
       space_id: string;
       /**
       * **proposed_editors.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposed_editors.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **proposed_editors.created_at_block_hash**
       * - `text` in database
@@ -3027,16 +3027,16 @@ declare module 'zapatos/schema' {
       space_id: string;
       /**
       * **proposed_editors.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposed_editors.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **proposed_editors.created_at_block_hash**
       * - `text` in database
@@ -3083,16 +3083,16 @@ declare module 'zapatos/schema' {
       space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_editors.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_editors.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_editors.created_at_block_hash**
       * - `text` in database
@@ -3139,16 +3139,16 @@ declare module 'zapatos/schema' {
       space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_editors.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_editors.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_editors.created_at_block_hash**
       * - `text` in database
@@ -3195,16 +3195,16 @@ declare module 'zapatos/schema' {
       space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_editors.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_editors.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_editors.created_at_block_hash**
       * - `text` in database
@@ -3264,16 +3264,16 @@ declare module 'zapatos/schema' {
       space_id: string;
       /**
       * **proposed_members.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposed_members.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **proposed_members.created_at_block_hash**
       * - `text` in database
@@ -3320,16 +3320,16 @@ declare module 'zapatos/schema' {
       space_id: string;
       /**
       * **proposed_members.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposed_members.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **proposed_members.created_at_block_hash**
       * - `text` in database
@@ -3376,16 +3376,16 @@ declare module 'zapatos/schema' {
       space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_members.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_members.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_members.created_at_block_hash**
       * - `text` in database
@@ -3432,16 +3432,16 @@ declare module 'zapatos/schema' {
       space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_members.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_members.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_members.created_at_block_hash**
       * - `text` in database
@@ -3488,16 +3488,16 @@ declare module 'zapatos/schema' {
       space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_members.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_members.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_members.created_at_block_hash**
       * - `text` in database
@@ -3557,16 +3557,16 @@ declare module 'zapatos/schema' {
       parent_space: string;
       /**
       * **proposed_subspaces.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposed_subspaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **proposed_subspaces.created_at_block_hash**
       * - `text` in database
@@ -3613,16 +3613,16 @@ declare module 'zapatos/schema' {
       parent_space: string;
       /**
       * **proposed_subspaces.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposed_subspaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **proposed_subspaces.created_at_block_hash**
       * - `text` in database
@@ -3669,16 +3669,16 @@ declare module 'zapatos/schema' {
       parent_space?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_subspaces.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_subspaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_subspaces.created_at_block_hash**
       * - `text` in database
@@ -3725,16 +3725,16 @@ declare module 'zapatos/schema' {
       parent_space: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_subspaces.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_subspaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_subspaces.created_at_block_hash**
       * - `text` in database
@@ -3781,16 +3781,16 @@ declare module 'zapatos/schema' {
       parent_space?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_subspaces.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_subspaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_subspaces.created_at_block_hash**
       * - `text` in database
@@ -3838,16 +3838,16 @@ declare module 'zapatos/schema' {
       id: string;
       /**
       * **proposed_versions.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposed_versions.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **proposed_versions.created_at_block_hash**
       * - `text` in database
@@ -3894,16 +3894,16 @@ declare module 'zapatos/schema' {
       id: string;
       /**
       * **proposed_versions.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **proposed_versions.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **proposed_versions.created_at_block_hash**
       * - `text` in database
@@ -3950,16 +3950,16 @@ declare module 'zapatos/schema' {
       id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_versions.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_versions.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **proposed_versions.created_at_block_hash**
       * - `text` in database
@@ -4006,16 +4006,16 @@ declare module 'zapatos/schema' {
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_versions.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_versions.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **proposed_versions.created_at_block_hash**
       * - `text` in database
@@ -4062,16 +4062,16 @@ declare module 'zapatos/schema' {
       id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_versions.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_versions.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **proposed_versions.created_at_block_hash**
       * - `text` in database
@@ -4137,16 +4137,16 @@ declare module 'zapatos/schema' {
       account_id: string;
       /**
       * **space_editors.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **space_editors.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **space_editors.created_at_block_hash**
       * - `text` in database
@@ -4175,16 +4175,16 @@ declare module 'zapatos/schema' {
       account_id: string;
       /**
       * **space_editors.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **space_editors.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **space_editors.created_at_block_hash**
       * - `text` in database
@@ -4213,16 +4213,16 @@ declare module 'zapatos/schema' {
       account_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **space_editors.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **space_editors.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **space_editors.created_at_block_hash**
       * - `text` in database
@@ -4251,16 +4251,16 @@ declare module 'zapatos/schema' {
       account_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_editors.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_editors.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_editors.created_at_block_hash**
       * - `text` in database
@@ -4289,16 +4289,16 @@ declare module 'zapatos/schema' {
       account_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_editors.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_editors.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_editors.created_at_block_hash**
       * - `text` in database
@@ -4340,16 +4340,16 @@ declare module 'zapatos/schema' {
       account_id: string;
       /**
       * **space_members.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **space_members.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **space_members.created_at_block_hash**
       * - `text` in database
@@ -4378,16 +4378,16 @@ declare module 'zapatos/schema' {
       account_id: string;
       /**
       * **space_members.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **space_members.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **space_members.created_at_block_hash**
       * - `text` in database
@@ -4416,16 +4416,16 @@ declare module 'zapatos/schema' {
       account_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **space_members.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **space_members.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **space_members.created_at_block_hash**
       * - `text` in database
@@ -4454,16 +4454,16 @@ declare module 'zapatos/schema' {
       account_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_members.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_members.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_members.created_at_block_hash**
       * - `text` in database
@@ -4492,16 +4492,16 @@ declare module 'zapatos/schema' {
       account_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_members.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_members.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_members.created_at_block_hash**
       * - `text` in database
@@ -4543,10 +4543,10 @@ declare module 'zapatos/schema' {
       parent_space_id: string;
       /**
       * **space_subspaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **space_subspaces.created_at_block_hash**
       * - `text` in database
@@ -4561,10 +4561,10 @@ declare module 'zapatos/schema' {
       created_at_block_network: string;
       /**
       * **space_subspaces.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
     }
     export interface JSONSelectable {
       /**
@@ -4581,10 +4581,10 @@ declare module 'zapatos/schema' {
       parent_space_id: string;
       /**
       * **space_subspaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **space_subspaces.created_at_block_hash**
       * - `text` in database
@@ -4599,10 +4599,10 @@ declare module 'zapatos/schema' {
       created_at_block_network: string;
       /**
       * **space_subspaces.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
     }
     export interface Whereable {
       /**
@@ -4619,10 +4619,10 @@ declare module 'zapatos/schema' {
       parent_space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **space_subspaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **space_subspaces.created_at_block_hash**
       * - `text` in database
@@ -4637,10 +4637,10 @@ declare module 'zapatos/schema' {
       created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **space_subspaces.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -4657,10 +4657,10 @@ declare module 'zapatos/schema' {
       parent_space_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_subspaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_subspaces.created_at_block_hash**
       * - `text` in database
@@ -4675,10 +4675,10 @@ declare module 'zapatos/schema' {
       created_at_block_network: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **space_subspaces.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -4695,10 +4695,10 @@ declare module 'zapatos/schema' {
       parent_space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_subspaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_subspaces.created_at_block_hash**
       * - `text` in database
@@ -4713,10 +4713,10 @@ declare module 'zapatos/schema' {
       created_at_block_network?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **space_subspaces.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
     }
     export type UniqueIndex = 'space_subspaces_unique_space_subspace_pair';
     export type Column = keyof Selectable;
@@ -4740,10 +4740,10 @@ declare module 'zapatos/schema' {
       id: string;
       /**
       * **spaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **spaces.created_at_block_hash**
       * - `text` in database
@@ -4808,10 +4808,10 @@ declare module 'zapatos/schema' {
       id: string;
       /**
       * **spaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **spaces.created_at_block_hash**
       * - `text` in database
@@ -4876,10 +4876,10 @@ declare module 'zapatos/schema' {
       id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **spaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **spaces.created_at_block_hash**
       * - `text` in database
@@ -4944,10 +4944,10 @@ declare module 'zapatos/schema' {
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **spaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **spaces.created_at_block_hash**
       * - `text` in database
@@ -5012,10 +5012,10 @@ declare module 'zapatos/schema' {
       id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **spaces.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **spaces.created_at_block_hash**
       * - `text` in database
@@ -5135,16 +5135,16 @@ declare module 'zapatos/schema' {
       collection_value_id: string | null;
       /**
       * **triples.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **triples.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **triples.created_at_block_hash**
       * - `text` in database
@@ -5215,16 +5215,16 @@ declare module 'zapatos/schema' {
       collection_value_id: string | null;
       /**
       * **triples.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **triples.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **triples.created_at_block_hash**
       * - `text` in database
@@ -5295,16 +5295,16 @@ declare module 'zapatos/schema' {
       collection_value_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **triples.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **triples.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **triples.created_at_block_hash**
       * - `text` in database
@@ -5375,16 +5375,16 @@ declare module 'zapatos/schema' {
       collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
       * **triples.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **triples.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **triples.created_at_block_hash**
       * - `text` in database
@@ -5455,16 +5455,16 @@ declare module 'zapatos/schema' {
       collection_value_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **triples.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **triples.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **triples.created_at_block_hash**
       * - `text` in database
@@ -5506,16 +5506,16 @@ declare module 'zapatos/schema' {
       id: string;
       /**
       * **versions.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **versions.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **versions.created_at_block_hash**
       * - `text` in database
@@ -5562,16 +5562,16 @@ declare module 'zapatos/schema' {
       id: string;
       /**
       * **versions.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number;
+      created_at: string;
       /**
       * **versions.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number;
+      created_at_block: string;
       /**
       * **versions.created_at_block_hash**
       * - `text` in database
@@ -5618,16 +5618,16 @@ declare module 'zapatos/schema' {
       id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **versions.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **versions.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **versions.created_at_block_hash**
       * - `text` in database
@@ -5674,16 +5674,16 @@ declare module 'zapatos/schema' {
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **versions.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
+      created_at: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **versions.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
+      created_at_block: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **versions.created_at_block_hash**
       * - `text` in database
@@ -5730,16 +5730,16 @@ declare module 'zapatos/schema' {
       id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **versions.created_at**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **versions.created_at_block**
-      * - `int4` in database
+      * - `text` in database
       * - `NOT NULL`, no default
       */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **versions.created_at_block_hash**
       * - `text` in database

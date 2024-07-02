@@ -11,7 +11,7 @@ export function handleNewGeoBlock(block: GeoBlock) {
       hash: block.hash,
       network: block.network,
       number: String(block.blockNumber),
-      timestamp: new Date(block.timestamp * 1000).toISOString(),
+      timestamp: block.timestamp,
     };
 
     yield* _(Effect.promise(() => Blocks.upsert([newBlock])));

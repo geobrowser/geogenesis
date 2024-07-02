@@ -151,6 +151,14 @@ function fetchEditProposalFromIpfs(
             endTime: block.timestamp.toString(),
             startTime: block.timestamp.toString(),
             metadataUri: processedProposal.ipfsUri,
+            createdAtBlock: {
+              blockNumber: e.blockNumber,
+              cursor: '',
+              hash: e.blockHash,
+              network: importResult.previousNetwork,
+              requestId: '-1',
+              timestamp: e.createdAt,
+            },
           };
 
           return contentProposal;

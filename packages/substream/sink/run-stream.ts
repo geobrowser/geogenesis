@@ -140,7 +140,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const telemetry = yield* _(Telemetry);
           const cursor = message.cursor;
           const blockNumber = Number(message.clock?.number.toString());
-          const timestamp = Number(message.clock?.timestamp?.seconds.toString());
 
           yield* _(
             Effect.tryPromise({
@@ -207,18 +206,19 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             editorsAdded.success;
 
           const geoBlock: GeoBlock = {
-            blockNumber,
+            blockNumber: blockNumber.toString(),
             cursor,
             requestId,
-            timestamp,
+            timestamp: message.clock?.timestamp?.seconds
+              ? new Date(Number(message.clock.timestamp.seconds) * 1000).toISOString()
+              : '',
             hash: message.clock?.id ? `0x${message.clock?.id}` : '',
             network: NETWORK_IDS.GEO,
           };
 
           if (hasValidEvent) {
             console.info(`==================== @BLOCK ${blockNumber} ====================`);
-
-            const block = yield* _(handleNewGeoBlock(geoBlock));
+            yield* _(handleNewGeoBlock(geoBlock));
           }
 
           if (profilesRegistered.success) {

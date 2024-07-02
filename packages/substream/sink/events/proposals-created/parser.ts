@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { Op } from '~/sink/types';
+import type { GeoBlock, Op } from '~/sink/types';
 
 /**
  * Proposals represent a proposal to change the state of a DAO-based space. Proposals can
@@ -180,6 +180,7 @@ export type EditProposal = Proposal & {
   onchainProposalId: string;
   pluginAddress: string;
   ops: Op[];
+  createdAtBlock?: GeoBlock;
 };
 
 const ZodImportEditSetTriplePayload = z.object({
@@ -243,6 +244,9 @@ export const ZodImportEdit = z.object({
   authors: z.array(z.string()),
   createdBy: z.string(),
   createdAt: z.string(),
+  blockHash: z.string(),
+  blockNumber: z.string(),
+  transactionHash: z.string(),
 });
 
 export type ParsedImportEdit = z.infer<typeof ZodImportEdit>;
