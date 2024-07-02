@@ -292,14 +292,14 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
       );
     case 'LIST':
       return (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-6">
           {rows.map((row, index: number) => {
             const nameCell = row.name as EntityCell;
             const { entityId, name, description, image } = nameCell;
 
             return (
               <div key={index} className="w-full">
-                <Link href={NavUtils.toEntity(space, entityId)} className="group flex w-full items-center gap-6 pr-6">
+                <Link href={NavUtils.toEntity(space, entityId)} className="group flex w-full items-center gap-3">
                   <div className="relative h-20 w-20 flex-shrink-0 overflow-clip rounded-lg bg-grey-01">
                     {image && (
                       <Image
@@ -312,7 +312,11 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
                   </div>
                   <div className="flex-shrink">
                     <div className="line-clamp-2 text-tableCell font-medium text-text">{name}</div>
-                    {description && <div className="mt-0.5 line-clamp-3 text-metadata text-grey-04">{description}</div>}
+                    {description && (
+                      <div className="mt-1 line-clamp-2 text-[1.1rem] text-metadata leading-[1.35] text-grey-04">
+                        {description}
+                      </div>
+                    )}
                   </div>
                 </Link>
               </div>
@@ -340,7 +344,11 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownIndexes, pl
                   )}
                 </div>
                 <div className={cx('mt-3 line-clamp-2 text-tableCell font-medium text-text')}>{name}</div>
-                {description && <div className="mt-0.5 line-clamp-2 text-metadata text-grey-04">{description}</div>}
+                {description && (
+                  <div className="mt-1 line-clamp-2 text-[1.1rem] text-metadata leading-[1.35] text-grey-04">
+                    {description}
+                  </div>
+                )}
               </Link>
             );
           })}
