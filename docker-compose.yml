@@ -28,10 +28,10 @@ services:
         condition: service_healthy
     environment:
       AUTH_ISSUE_URL: https://auth.pinax.network/v1/auth/issue
-      SUBSTREAMS_ENDPOINT: ${SUBSTREAMS_ENDPOINT}
+      SUBSTREAMS_ENDPOINT: ${SUBSTREAMS_ENDPOINT:?SUBSTREAMS_ENDPOINT is not set}
       SUBSTREAMS_API_KEY: ${SUBSTREAMS_API_KEY:?SUBSTREAMS_API_KEY is not set}
       DATABASE_URL: postgres://${GEO_DB_USER}:${GEO_DB_PASSWORD}@postgres:5432/${GEO_DB_NAME}?sslmode=disable
-    command: node /app/packages/substream/dist/index.js --start-block 620
+    command: node /app/packages/substream/dist/index.js --start-block 9000
 
   api:
     container_name: geo-api
