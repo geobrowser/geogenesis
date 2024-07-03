@@ -37,9 +37,11 @@ export function useDeploySpace() {
   const deploy = async (args: DeployArgs) => {
     if (!smartAccount) return;
 
-    const governanceType = getGovernanceTypeForSpaceType(args.type);
+    // const governanceType = getGovernanceTypeForSpaceType(args.type);
+    // @TODO(migration): Defaulting to default space with governance for now since our templates
+    // have not yet been migrated over
+    const governanceType = 'governance';
     const ops = await publishOpsForSpaceType(args);
-    console.log('ops', ops);
 
     const initialContent = createEditProposal({
       name: args.spaceName,
@@ -101,37 +103,40 @@ export function useDeploySpace() {
       }
     }
 
-    if (governanceType === 'personal') {
-      const personalSpacePluginItem = getPersonalSpaceGovernancePluginInstallItem({
-        initialEditor: getAddress(smartAccount.account.address),
-      });
+    // @TODO(migration): commenting out for now until we have migrated templates and can deploy
+    // other space types
+    //   if (governanceType === 'personal') {
+    //     const personalSpacePluginItem = getPersonalSpaceGovernancePluginInstallItem({
+    //       initialEditor: getAddress(smartAccount.account.address),
+    //     });
 
-      const createParams: CreateDaoParams = {
-        metadataUri: `ipfs://${firstBlockContentUri}`,
-        plugins: [personalSpacePluginItem, spacePluginInstallItem],
-      };
+    //     const createParams: CreateDaoParams = {
+    //       metadataUri: `ipfs://${firstBlockContentUri}`,
+    //       plugins: [personalSpacePluginItem, spacePluginInstallItem],
+    //     };
 
-      const steps = client.methods.createDao(createParams);
+    //     const steps = client.methods.createDao(createParams);
 
-      for await (const step of steps) {
-        try {
-          switch (step.key) {
-            case DaoCreationSteps.CREATING:
-              console.log({ txHash: step.txHash });
-              break;
-            case DaoCreationSteps.DONE:
-              console.log({
-                daoAddress: step.address,
-                pluginAddresses: step.pluginAddresses,
-              });
+    //     for await (const step of steps) {
+    //       try {
+    //         switch (step.key) {
+    //           case DaoCreationSteps.CREATING:
+    //             console.log({ txHash: step.txHash });
+    //             break;
+    //           case DaoCreationSteps.DONE:
+    //             console.log({
+    //               daoAddress: step.address,
+    //               pluginAddresses: step.pluginAddresses,
+    //             });
 
-              return await waitForSpaceToBeIndexed(step.address);
-          }
-        } catch (err) {
-          console.error('Failed creating DAO', err);
-        }
-      }
-    }
+    //             return await waitForSpaceToBeIndexed(step.address);
+    //         }
+    //       } catch (err) {
+    //         console.error('Failed creating DAO', err);
+    //       }
+    //     }
+    //   }
+    // };
   };
 
   return {
@@ -173,13 +178,13 @@ async function publishOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Deplo
   if (type === 'company') {
     // Space address doesn't matter here since we're immediately writing the ops and not persisting
     // in the local db.
-    const companyTriples = await generateTriplesForCompany(newEntityId, spaceName, '');
-    ops.push(...Triples.prepareTriplesForPublishing(companyTriples, ''));
+    const companyTriples = await generateTriplesForCompany(newEntityId, spaceName, 'bogus space');
+    ops.push(...Triples.prepareTriplesForPublishing(companyTriples, 'bogus space'));
   }
 
   if (type === 'nonprofit') {
-    const nonprofitTriples = await generateTriplesForNonprofit(newEntityId, spaceName, '');
-    ops.push(...Triples.prepareTriplesForPublishing(nonprofitTriples, ''));
+    const nonprofitTriples = await generateTriplesForNonprofit(newEntityId, spaceName, 'bogus space');
+    ops.push(...Triples.prepareTriplesForPublishing(nonprofitTriples, 'bogus space'));
   }
 
   if (spaceAvatarUri) {
@@ -255,20 +260,12 @@ async function waitForSpaceToBeIndexed(daoAddress: string) {
             error.message
           );
 
-          return {
-            spaces: {
-              nodes: [],
-            },
-          };
+          return null;
 
         default:
           console.error(`${error._tag}: Unable to wait for space to be indexed, endpoint: ${endpoint}`);
 
-          return {
-            spaces: {
-              nodes: [],
-            },
-          };
+          return null;
       }
     }
 

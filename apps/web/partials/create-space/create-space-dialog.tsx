@@ -251,9 +251,11 @@ function StepSelectType() {
   const setStep = useSetAtom(stepAtom);
 
   const options = [
+    // @TODO(migration): Defaulting to default space with governance for now since our templates
+    // have not yet been migrated over
     { image: '/images/onboarding/person.png', label: 'Default', value: 'default' },
-    { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
-    { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
+    // { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
+    // { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
   ];
 
   return (
