@@ -17,6 +17,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { Button } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
 import { Input } from '~/design-system/input';
+import { Spacer } from '~/design-system/spacer';
 
 import {
   getGovernancePluginInstallItem,
@@ -131,12 +132,52 @@ export default function ImportSpace() {
     }
   };
 
+  if (!smartAccount) {
+    return <h1>Connect an EOA wallet</h1>;
+  }
+
   return (
     // @TODO:
     // Some instructions as to what to expect will happen
     // waitForSpaceDeployment to get id for space
     // selector for space type
     <div className="flex flex-col gap-2">
+      <h1 className="text-bodySemibold">Use this page to import a space using an IPFS hash from Lighthouse.</h1>
+      <ol className="flex flex-col gap-1.5 text-body">
+        <li>
+          1. Select the type of space you want to deploy from the dropdown. Governance spaces have governance and
+          personal spaces do not. Right now personal spaces are deployable but may have substream errors when publishing
+          edits, so be aware.
+        </li>
+        <li>
+          2. Paste the hash from Lighthouse without the "ipfs://" prefix. Should look something like
+          "bafkreiciryzjzov2py2gys3httqxxxoin2dhqfsy2s4ui3cc3mbvgo3mwe" without the quotes.
+        </li>
+        <li>
+          3. Press "Import Space". This will require a transaction with the connected wallet. Right now Privy embedded
+          wallets are not able to deploy a space. Not sure why.
+        </li>
+        <li>
+          Once the deployment has finished the "Go to imported space" button should become available. If it does not, it
+          either means that the deployment failed (check the browser console), or you're importing a space that's
+          already been imported. You can go to the existing space id to see the up-to-date data. Note that we don't
+          clear the existing space data when doing an import, so you might see data that's stale or incorrect when
+          viewing a space that has been imported multiple times.
+          <br />
+          <br />
+          Try searching for the space name or looking at the staging graphiql for the space id if this happens.
+          <br />
+          <br />
+          Better/more secure ergonomics on space imports will come in the future.
+          <br />
+          <br />
+          If you want to start over with imported spaces then you'll need to update the staging deployment script to
+          start at a block block that does not contain the previously deployed spaces. e.g., if an old space was
+          deployed at block 6000 you'll need to start at at least block 6001 to not include that space in the substream
+          dataset.
+        </li>
+      </ol>
+      <Spacer height={20} />
       <div className="flex items-center gap-2">
         <Dropdown
           trigger={<p>{type}</p>}
