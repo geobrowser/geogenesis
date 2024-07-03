@@ -19,26 +19,32 @@ interface PopulateTriplesArgs {
 export function populateTriples({ schemaTriples, block, versions }: PopulateTriplesArgs) {
   return Effect.gen(function* (_) {
     /**
-     * Changes to data in Geo are modeled as "actions." You can create a triple or delete a triple.
-     * A client might publish _many_ actions, some of which are operations on the same triple. e.g.,
-     * Create, Delete, Create, Delete, Create.
+     * Changes to data in Geo are modeled as "operations (ops)." You can create a triple or delete a triple.
+     * A client might publish _many_ ops, some of which are operations on the same triple. e.g., Set, Delete,
+     * Set, Delete, Set.
      *
      * Therefore, we need to process all actions serially to ensure that the final result of the data
      * is correct.
      *
-     * @TODO: This is obviously fairly slow as may perform many async operations for each Create or
-     * Delete action. One way to speed this up is to "squash" all of the actions corresponding to each
-     * triple ahead of time to generate the minimum number of actions for each triple. Additionally
-     * there's a lot of optimizations we can do with _how_ we're processing the data serially.
+     * Set operations applied to a given triple are considered "upserts." Additionally, a triple is unique for
+     * a given database by its (Space, Entity, Attribute) id tuple.
      *
-     * Right now (January 23, 2024) the Geo Genesis client _does_ squash actions before publishing, but
-     * this wasn't always the case and other clients might not implement the squashing mechanism.
+     * Right now (January 23, 2024) the Geo Genesis client _does_ squash actions before publishing, but this
+     * wasn't always the case and other clients might not implement the squashing mechanism.
+     *
+     * @TODO(performance): This is obviously fairly slow as we may perform many async operations for each Set
+     * or Delete action. One way to speed this up is to "squash" all of the actions corresponding to each triple
+     * ahead of time to generate the minimum number of actions for each triple. Additionally there's a lot of
+     * optimizations we can do with _how_ we're processing the data serially.
      */
     for (const { op, triple, createdById } of schemaTriples) {
       const isUpsertTriple = op === 'SET_TRIPLE';
       const isDeleteTriple = op === 'DELETE_TRIPLE';
+
+      // @TODO(migration): These could be a collection
       const isAddType = triple.attribute_id === SYSTEM_IDS.TYPES && isUpsertTriple && triple.entity_value_id;
       const isDeleteType = triple.attribute_id === SYSTEM_IDS.TYPES && isDeleteTriple;
+
       const isNameAttribute = triple.attribute_id === SYSTEM_IDS.NAME;
       const isDescriptionAttribute = triple.attribute_id === SYSTEM_IDS.DESCRIPTION;
       const isStringValueType = triple.value_type === 'TEXT';
@@ -56,12 +62,12 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
        * all triples that were deleted as part of this proposal to ensure they aren't included in
        * the new version.
        *
-       * @TODO: This is insanely slow for large data sets (some of which we have)
+       * @TODO(performance): This is insanely slow for large data sets (some of which we have)
        */
       const version = versions.find(v => v.entity_id === triple.entity_id);
 
       /**
-       * @TODO: There's a bug here where we might create a triple_version for a triple that gets
+       * @TODO(bug): There's a bug here where we might create a triple_version for a triple that gets
        * deleted later on in the same actions processing loop. If we squash ahead of time this
        * shouldn't be an issue.
        */
@@ -90,7 +96,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
         //   catch: error => new Error(`Failed to insert ${triple.id}. ${(error as Error).message}`),
         // });
 
-        // @TODO: Parallelize with Effect.all
+        // @TODO(performance): Parallelize with Effect.all
         yield* _(insertTripleEffect, retryEffect);
         // yield* awaited(insertTripleVersionEffect, retryEffect);
       }
