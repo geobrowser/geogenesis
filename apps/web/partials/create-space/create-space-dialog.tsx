@@ -293,6 +293,7 @@ const placeholderMessage: Record<SpaceType, string> = {
   default: 'Space name',
   company: 'Company name',
   nonprofit: 'Nonprofit name',
+  personal: 'Personal name',
 };
 
 function StepOnboarding({ onNext, address }: StepOnboardingProps) {
