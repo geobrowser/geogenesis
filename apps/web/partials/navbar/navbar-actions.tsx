@@ -86,16 +86,16 @@ export function NavbarActions() {
                     </Link>
                   </div>
                 </AvatarMenuItem>
-                <AvatarMenuItem>
-                  <Link href="/home" className="flex items-center gap-2 grayscale">
-                    <Home />
-                    <p className="text-button">Personal home</p>
-                  </Link>
-                </AvatarMenuItem>
               </>
             )}
           </>
         )}
+        <AvatarMenuItem>
+          <Link href="/home" className="flex items-center gap-2 grayscale">
+            <Home />
+            <p className="text-button">Personal home</p>
+          </Link>
+        </AvatarMenuItem>
         <AvatarMenuItem>
           <GeoConnectButton />
         </AvatarMenuItem>

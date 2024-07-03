@@ -62,7 +62,7 @@ function PersonalHomeHeader({ onchainProfile, person, address }: HeaderProps) {
         <div className="relative h-14 w-14 overflow-hidden rounded-lg bg-grey-01">
           <Avatar value={address ?? undefined} avatarUrl={person?.avatarUrl} size={56} square={true} />
         </div>
-        <h2 className="text-largeTitle">{person?.name ?? 'Anonymous'}</h2>
+        <h2 className="text-largeTitle">{person?.name ?? person?.id ?? address ?? 'Anonymous'}</h2>
       </div>
       {onchainProfile?.homeSpaceId && (
         <Link prefetch={false} href={NavUtils.toSpace(onchainProfile.homeSpaceId)}>
