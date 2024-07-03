@@ -45,7 +45,7 @@ type SubstreamCollectionItem = {
     triples: {
       nodes: SubstreamImageValueTriple[];
     };
-  };
+  } | null;
 };
 
 type SubstreamNumberValue = { valueType: 'NUMBER'; numberValue: string };
@@ -198,9 +198,34 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
       return {
         type: 'COLLECTION',
         value: networkTriple.collectionValue.id,
-        items: networkTriple.collectionValue.collectionItems.nodes.map((c): CollectionItem => {
+        items: networkTriple.collectionValue.collectionItems.nodes.flatMap((c): CollectionItem[] => {
+          // @TODO(migration) We can have a null entity if the value doesn't exist in the db at the
+          // time of indexing the collection item
+          if (!c.entity) {
+            return [];
+          }
+
           if (isImageEntity(c.entity.types.nodes)) {
-            return {
+            return [
+              {
+                id: c.collectionItemEntityId,
+                collectionId: networkTriple.collectionValue.id,
+                index: c.index,
+                entity: {
+                  id: c.entity.id,
+                  name: c.entity.name,
+                  types: flattenTypeIds(c.entity.types.nodes),
+                },
+                value: {
+                  type: 'IMAGE',
+                  value: getImageUrlFromImageEntity(c.entity.triples.nodes),
+                },
+              },
+            ];
+          }
+
+          return [
+            {
               id: c.collectionItemEntityId,
               collectionId: networkTriple.collectionValue.id,
               index: c.index,
@@ -210,26 +235,11 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
                 types: flattenTypeIds(c.entity.types.nodes),
               },
               value: {
-                type: 'IMAGE',
-                value: getImageUrlFromImageEntity(c.entity.triples.nodes),
+                type: 'ENTITY',
+                value: c.entity.name,
               },
-            };
-          }
-
-          return {
-            id: c.collectionItemEntityId,
-            collectionId: networkTriple.collectionValue.id,
-            index: c.index,
-            entity: {
-              id: c.entity.id,
-              name: c.entity.name,
-              types: flattenTypeIds(c.entity.types.nodes),
             },
-            value: {
-              type: 'ENTITY',
-              value: c.entity.name,
-            },
-          };
+          ];
         }),
       };
   }
