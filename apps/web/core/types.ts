@@ -307,7 +307,7 @@ export type EntityId = string;
 export type AttributeId = string;
 export type EntityActions = Record<EntityId, Record<AttributeId, Triple>>;
 
-export type SpaceType = 'default' | 'company' | 'nonprofit';
+export type SpaceType = 'default' | 'company' | 'nonprofit' | 'personal';
 
 export type CollectionItem = {
   id: string; // id of the collection item entity itself

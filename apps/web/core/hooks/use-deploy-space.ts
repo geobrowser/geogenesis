@@ -37,10 +37,7 @@ export function useDeploySpace() {
   const deploy = async (args: DeployArgs) => {
     if (!smartAccount) return;
 
-    // const governanceType = getGovernanceTypeForSpaceType(args.type);
-    // @TODO(migration): Defaulting to default space with governance for now since our templates
-    // have not yet been migrated over
-    const governanceType = 'governance';
+    const governanceType = getGovernanceTypeForSpaceType(args.type);
     const ops = await publishOpsForSpaceType(args);
 
     const initialContent = createEditProposal({
@@ -103,40 +100,37 @@ export function useDeploySpace() {
       }
     }
 
-    // @TODO(migration): commenting out for now until we have migrated templates and can deploy
-    // other space types
-    //   if (governanceType === 'personal') {
-    //     const personalSpacePluginItem = getPersonalSpaceGovernancePluginInstallItem({
-    //       initialEditor: getAddress(smartAccount.account.address),
-    //     });
+    if (governanceType === 'personal') {
+      const personalSpacePluginItem = getPersonalSpaceGovernancePluginInstallItem({
+        initialEditor: getAddress(smartAccount.account.address),
+      });
 
-    //     const createParams: CreateDaoParams = {
-    //       metadataUri: `ipfs://${firstBlockContentUri}`,
-    //       plugins: [personalSpacePluginItem, spacePluginInstallItem],
-    //     };
+      const createParams: CreateDaoParams = {
+        metadataUri: `ipfs://${firstBlockContentUri}`,
+        plugins: [personalSpacePluginItem, spacePluginInstallItem],
+      };
 
-    //     const steps = client.methods.createDao(createParams);
+      const steps = client.methods.createDao(createParams);
 
-    //     for await (const step of steps) {
-    //       try {
-    //         switch (step.key) {
-    //           case DaoCreationSteps.CREATING:
-    //             console.log({ txHash: step.txHash });
-    //             break;
-    //           case DaoCreationSteps.DONE:
-    //             console.log({
-    //               daoAddress: step.address,
-    //               pluginAddresses: step.pluginAddresses,
-    //             });
+      for await (const step of steps) {
+        try {
+          switch (step.key) {
+            case DaoCreationSteps.CREATING:
+              console.log({ txHash: step.txHash });
+              break;
+            case DaoCreationSteps.DONE:
+              console.log({
+                daoAddress: step.address,
+                pluginAddresses: step.pluginAddresses,
+              });
 
-    //             return await waitForSpaceToBeIndexed(step.address);
-    //         }
-    //       } catch (err) {
-    //         console.error('Failed creating DAO', err);
-    //       }
-    //     }
-    //   }
-    // };
+              return await waitForSpaceToBeIndexed(step.address);
+          }
+        } catch (err) {
+          console.error('Failed creating DAO', err);
+        }
+      }
+    }
   };
 
   return {
@@ -149,7 +143,7 @@ async function publishOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Deplo
   const newEntityId = ID.createEntityId();
 
   // Add triples for a Person entity
-  if (type === 'default') {
+  if (type === 'default' || type === 'personal') {
     ops.push(
       Ops.create({
         entityId: newEntityId,
@@ -212,10 +206,11 @@ async function publishOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Deplo
 
 function getGovernanceTypeForSpaceType(type: SpaceType): 'governance' | 'personal' {
   switch (type) {
-    case 'company':
-      return 'personal';
-    case 'nonprofit':
+    case 'default':
       return 'governance';
+    case 'personal':
+    case 'company':
+    case 'nonprofit':
     default:
       return 'personal';
   }

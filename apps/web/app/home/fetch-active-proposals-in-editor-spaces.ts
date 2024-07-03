@@ -69,6 +69,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
       filter: {
         ${proposalTypeFilter ?? ''}
         status: { equalTo: PROPOSED }
+        # Show all the proposals for now so users can execute them manually
         # endTime: { greaterThanOrEqualTo: ${Math.floor(Date.now() / 1000)} }
         space: {
           spaceEditors: {
