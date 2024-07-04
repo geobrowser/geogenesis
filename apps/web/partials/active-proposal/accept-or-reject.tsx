@@ -7,7 +7,7 @@ import { encodeFunctionData } from 'viem';
 import * as React from 'react';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { Vote } from '~/core/types';
+import { Proposal, Vote } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 
@@ -18,6 +18,7 @@ interface Props {
   // If the proposal is executable that means it's done and the
   // acceptance threshold has passed.
   isProposalExecutable: boolean;
+  status: Proposal['status'];
 
   userVote: Vote | undefined;
   onchainProposalId: string;
@@ -27,6 +28,7 @@ interface Props {
 export function AcceptOrReject({
   isProposalEnded,
   isProposalExecutable,
+  status,
   userVote,
   onchainProposalId,
   votingContractAddress,
@@ -38,7 +40,7 @@ export function AcceptOrReject({
       return;
     }
 
-    await smartAccount.sendTransaction({
+    const hash = await smartAccount.sendTransaction({
       to: votingContractAddress,
       value: 0n,
       data: encodeFunctionData({
@@ -47,6 +49,8 @@ export function AcceptOrReject({
         args: [BigInt(onchainProposalId), option === 'ACCEPT' ? VoteOption.Yes : VoteOption.No, true],
       }),
     });
+
+    console.log('voting transaction successful', hash);
   };
 
   if (isProposalExecutable) {
@@ -63,6 +67,14 @@ export function AcceptOrReject({
     }
 
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
+  }
+
+  if (isProposalEnded) {
+    if (status === 'ACCEPTED') {
+      return <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Accepted</div>;
+    }
+
+    return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
   }
 
   if (!isProposalEnded && smartAccount) {

@@ -1,16 +1,20 @@
+import { cookies } from 'next/headers';
 import Image from 'next/legacy/image';
 import Link from 'next/link';
 
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { WALLET_ADDRESS } from '~/core/cookie';
 import { fetchProfile } from '~/core/io/subgraph';
 import {
   NavUtils,
   getImagePath,
   getIsProposalEnded,
+  getIsProposalExecutable,
   getNoVotePercentage,
   getProposalTimeRemaining,
+  getUserVote,
   getYesVotePercentage,
 } from '~/core/utils/utils';
 
@@ -223,14 +227,18 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
     return null;
   }
 
-  const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
-  const votes = proposal.proposalVotes;
+  const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
-  const yesVotesPercentage = getYesVotePercentage(votes.nodes, votes.totalCount);
-  const noVotesPercentage = getNoVotePercentage(votes.nodes, votes.totalCount);
+  const votes = proposal.proposalVotes.nodes;
+  const votesCount = proposal.proposalVotes.totalCount;
 
-  const userVote = proposal.userVotes.nodes.length !== 0 ? proposal.userVotes.nodes[0].vote : null;
   const isProposalDone = getIsProposalEnded(proposal.status, proposal.endTime);
+  const yesVotesPercentage = getYesVotePercentage(votes, votesCount);
+  const noVotesPercentage = getNoVotePercentage(votes, votesCount);
+  const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
+  const isProposalExecutable = getIsProposalExecutable(proposal, yesVotesPercentage);
+  const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
+  const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">
@@ -249,7 +257,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
       </div>
       <div className="flex w-full flex-col gap-4">
         <div className="flex items-center gap-2 text-metadataMedium">
-          {userVote === 'ACCEPT' ? (
+          {userVote?.vote === 'ACCEPT' ? (
             <div className="relative h-3 w-3 overflow-hidden rounded-full">
               <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
             </div>
@@ -264,7 +272,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
           <p>{yesVotesPercentage}%</p>
         </div>
         <div className="flex items-center gap-2 text-metadataMedium">
-          {userVote === 'REJECT' ? (
+          {userVote?.vote === 'REJECT' ? (
             <div className="relative h-3 w-3 overflow-hidden rounded-full">
               <Avatar avatarUrl={user?.avatarUrl} value={user?.address} />
             </div>
@@ -294,7 +302,15 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
         {(proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') && !userVote && (
           <AcceptOrRejectEditor
             onchainProposalId={proposal.onchainProposalId}
-            votingContractAddress={space?.mainVotingPluginAddress}
+            isProposalEnded={isProposalEnded}
+            isProposalExecutable={isProposalExecutable}
+            status={proposal.status}
+            userVote={userVote}
+            // We know that the space isn't null here, so casting is safe. If the space
+            // doesn't exist we redirect the user. Eventually every space with governance
+            // will have a main voting plugin address
+            // @TODO(migration): This address will be different for the personal space plugin
+            votingContractAddress={space?.mainVotingPluginAddress as `0x${string}`}
           />
         )}
       </div>

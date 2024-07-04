@@ -2,7 +2,7 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
-import { Entity as IEntity, Proposal, Vote } from '~/core/types';
+import { Entity as IEntity, OmitStrict, Proposal, Vote } from '~/core/types';
 
 import { Entities } from './entity';
 
@@ -292,7 +292,10 @@ export function getIsProposalEnded(status: Proposal['status'], endTime: number) 
   return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
 }
 
-export function getIsProposalExecutable(proposal: Proposal, yesVotesPercentage: number) {
+export function getIsProposalExecutable(
+  proposal: OmitStrict<Proposal, 'proposedVersions'>,
+  yesVotesPercentage: number
+) {
   return (
     getIsProposalEnded(proposal.status, proposal.endTime) && yesVotesPercentage > 50 && proposal.status !== 'ACCEPTED'
   );

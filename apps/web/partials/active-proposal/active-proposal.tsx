@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getAddress } from 'viem';
 
 import * as React from 'react';
 
@@ -80,10 +79,12 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
           onchainProposalId={proposal.onchainProposalId}
           isProposalEnded={isProposalEnded}
           isProposalExecutable={isProposalExecutable}
+          status={proposal.status}
           userVote={userVote}
           // We know that the space isn't null here, so casting is safe. If the space
           // doesn't exist we redirect the user. Eventually every space with governance
           // will have a main voting plugin address
+          // @TODO(migration): This address will be different for the personal space plugin
           votingContractAddress={space?.mainVotingPluginAddress as `0x${string}`}
         />
       </div>

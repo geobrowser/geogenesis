@@ -125,7 +125,9 @@ export async function getActiveProposalsForSpacesWhereEditor(
           totalCount
           nodes {
             vote
-            accountId
+            account {
+              id
+            }
           }
         }
   
