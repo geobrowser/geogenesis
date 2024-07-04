@@ -19,7 +19,7 @@ export function AcceptOrRejectEditor(props: Props) {
   const onApprove = async () => {
     if (!props.votingContractAddress || !smartAccount) return;
 
-    await smartAccount.sendTransaction({
+    const hash = await smartAccount.sendTransaction({
       to: props.votingContractAddress as `0x${string}`,
       value: 0n,
       data: encodeFunctionData({
@@ -28,12 +28,14 @@ export function AcceptOrRejectEditor(props: Props) {
         args: [BigInt(props.onchainProposalId), VoteOption.Yes, true],
       }),
     });
+
+    console.log('transaction successful', hash);
   };
 
   const onReject = async () => {
     if (!props.votingContractAddress || !smartAccount) return;
 
-    await smartAccount.sendTransaction({
+    const hash = await smartAccount.sendTransaction({
       to: props.votingContractAddress as `0x${string}`,
       value: 0n,
       data: encodeFunctionData({
@@ -42,6 +44,8 @@ export function AcceptOrRejectEditor(props: Props) {
         args: [BigInt(props.onchainProposalId), VoteOption.Yes, false],
       }),
     });
+
+    console.log('transaction successful', hash);
   };
 
   return (

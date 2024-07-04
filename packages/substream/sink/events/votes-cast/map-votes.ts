@@ -46,9 +46,26 @@ export function mapVotes(
         continue;
       }
 
-      const maybeSpaceIdForPlugin = yield* unwrap(Effect.promise(() => Spaces.findForVotingPlugin(vote.pluginAddress)));
+      // We have multiple plugins on a governance space that keep their own proposal id state onchain.
+      // Each plugin's ids are incrementing integers. This means we can have proposals across each plugin
+      // with the same onchain id. We need to query all the proposals with the same onchain id in the
+      // space and disambiguate which proposal we are actually referring to by the action being proposed
+      // and the plugin itself. e.g., if we know the proposal is an ADD_EDIT then we know that we're
+      // looking for the proposal where the plugin address is the voting one.
+      //
+      // At most we have X proposals with the same onchain where X is the number of plugins in the DAO
+      // that track proposal state onchain.
+      //
+      // If maybeSpaceIdForVotingPlugin returns data we know that the vote corresponds to a voting action.
+      // Same for maybeSpaceIdForMemberPlugin.
+      const [maybeSpaceIdForVotingPlugin, maybeSpaceIdForMemberPlugin] = yield* unwrap(
+        Effect.all([
+          Effect.promise(() => Spaces.findForVotingPlugin(vote.pluginAddress)),
+          Effect.promise(() => Spaces.findForMembershipPlugin(vote.pluginAddress)),
+        ])
+      );
 
-      if (!maybeSpaceIdForPlugin) {
+      if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForMemberPlugin) {
         slog({
           message: `Matching space in Proposal not found for plugin address ${vote.pluginAddress}`,
           requestId: block.requestId,
@@ -57,39 +74,96 @@ export function mapVotes(
         continue;
       }
 
-      const maybeProposal = yield* unwrap(
-        Effect.tryPromise({
-          try: () =>
-            db
-              .selectOne(
-                'proposals',
-                { onchain_proposal_id: vote.onchainProposalId, space_id: maybeSpaceIdForPlugin },
-                { columns: ['id'] }
-              )
-              .run(pool),
-          catch: error => new ProposalWithOnchainProposalIdAndSpaceIdNotFoundError(String(error)),
-        })
-      );
-
-      if (!maybeProposal) {
+      if (maybeSpaceIdForVotingPlugin) {
         slog({
-          level: 'error',
-          message: `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForPlugin}`,
           requestId: block.requestId,
+          level: 'info',
+          message: `Verifying proposal id for voting plugin with address ${vote.pluginAddress}`,
+        });
+
+        const maybeProposalsForOnchainProposalId = yield* unwrap(
+          Effect.tryPromise({
+            try: () =>
+              db
+                .select(
+                  'proposals',
+
+                  { onchain_proposal_id: vote.onchainProposalId, space_id: maybeSpaceIdForVotingPlugin },
+                  { columns: ['id', 'type'] }
+                )
+                .run(pool),
+            catch: error => new ProposalWithOnchainProposalIdAndSpaceIdNotFoundError(String(error)),
+          })
+        );
+
+        const proposalIdForAction = maybeProposalsForOnchainProposalId.find(p => p.type !== 'ADD_MEMBER');
+
+        if (!proposalIdForAction) {
+          slog({
+            level: 'error',
+            message: `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForVotingPlugin}`,
+            requestId: block.requestId,
+          });
+
+          continue;
+        }
+
+        schemaVotes.push({
+          vote: voteType,
+          space_id: maybeSpaceIdForVotingPlugin,
+          proposal_id: proposalIdForAction.id,
+          onchain_proposal_id: vote.onchainProposalId,
+          account_id: getChecksumAddress(vote.voter),
+          created_at: block.timestamp,
+          created_at_block: block.blockNumber,
         });
 
         continue;
       }
 
-      schemaVotes.push({
-        vote: voteType,
-        space_id: maybeSpaceIdForPlugin,
-        proposal_id: maybeProposal.id,
-        onchain_proposal_id: vote.onchainProposalId,
-        account_id: getChecksumAddress(vote.voter),
-        created_at: block.timestamp,
-        created_at_block: block.blockNumber,
-      });
+      if (maybeSpaceIdForMemberPlugin) {
+        slog({
+          requestId: block.requestId,
+          level: 'info',
+          message: `Verifying proposal id for membership plugin with address ${vote.pluginAddress}`,
+        });
+
+        const maybeProposalsForMemberPlugin = yield* unwrap(
+          Effect.tryPromise({
+            try: () =>
+              db
+                .select(
+                  'proposals',
+                  { onchain_proposal_id: vote.onchainProposalId, space_id: maybeSpaceIdForMemberPlugin },
+                  { columns: ['id', 'type'] }
+                )
+                .run(pool),
+            catch: error => new ProposalWithOnchainProposalIdAndSpaceIdNotFoundError(String(error)),
+          })
+        );
+
+        const proposalIdForAction = maybeProposalsForMemberPlugin.find(p => p.type === 'ADD_MEMBER');
+
+        if (!proposalIdForAction) {
+          slog({
+            level: 'error',
+            message: `Matching proposal not found for onchain proposal id ${vote.onchainProposalId} in space ${maybeSpaceIdForMemberPlugin}`,
+            requestId: block.requestId,
+          });
+
+          continue;
+        }
+
+        schemaVotes.push({
+          vote: voteType,
+          space_id: maybeSpaceIdForMemberPlugin,
+          proposal_id: proposalIdForAction.id,
+          onchain_proposal_id: vote.onchainProposalId,
+          account_id: getChecksumAddress(vote.voter),
+          created_at: block.timestamp,
+          created_at_block: block.blockNumber,
+        });
+      }
     }
 
     return schemaVotes;

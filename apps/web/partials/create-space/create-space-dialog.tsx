@@ -11,6 +11,7 @@ import { getAddress } from 'viem';
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
+import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { createSpaceWithEntities } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
@@ -31,7 +32,7 @@ import { Text } from '~/design-system/text';
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const nameAtom = atom<string>('');
 export const avatarAtom = atom<string>('');
-export const spaceAddressAtom = atom<string>('');
+export const spaceIdAtom = atom<string>('');
 
 type Step = 'start' | 'select-type' | 'onboarding' | 'creating-spaces' | 'completed';
 
@@ -43,11 +44,12 @@ export function CreateSpaceDialog() {
   const smartAccount = useSmartAccount();
   const address = smartAccount?.account.address;
   const [open, onOpenChange] = useState(false);
+  const { deploy } = useDeploySpace();
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
-  const setSpaceAddress = useSetAtom(spaceAddressAtom);
+  const setSpaceId = useSetAtom(spaceIdAtom);
   const [step, setStep] = useAtom(stepAtom);
 
   // Show retry immediately if workflow already started before initial render
@@ -59,19 +61,17 @@ export function CreateSpaceDialog() {
     if (!address || !spaceType) return;
 
     try {
-      const { spaceAddress } = await createSpaceWithEntities({
-        spaceAvatarUri: avatar,
-        spaceName: name,
+      const spaceId = await deploy({
         type: spaceType,
-        userAccount: address,
+        spaceName: name,
+        spaceAvatarUri: avatar,
       });
 
-      if (!spaceAddress) {
+      if (!spaceId) {
         throw new Error(`Creating space failed`);
       }
 
-      // Make sure we're setting the checksum'd address
-      setSpaceAddress(getAddress(spaceAddress));
+      setSpaceId(spaceId);
       setStep('completed');
     } catch (error) {
       setShowRetry(true);
@@ -251,9 +251,12 @@ function StepSelectType() {
   const setStep = useSetAtom(stepAtom);
 
   const options = [
+    // @TODO(migration): Defaulting to default space with governance for now since our templates
+    // have not yet been migrated over
     { image: '/images/onboarding/person.png', label: 'Default', value: 'default' },
-    { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
-    { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
+    { image: '/images/onboarding/person.png', label: 'Personal', value: 'personal' },
+    // { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
+    // { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
   ];
 
   return (
@@ -290,6 +293,7 @@ const placeholderMessage: Record<SpaceType, string> = {
   default: 'Space name',
   company: 'Company name',
   nonprofit: 'Nonprofit name',
+  personal: 'Personal name',
 };
 
 function StepOnboarding({ onNext, address }: StepOnboardingProps) {
@@ -392,7 +396,7 @@ type StepCompleteProps = {
 
 function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
   const name = useAtomValue(nameAtom);
-  const spaceAddress = useAtomValue(spaceAddressAtom);
+  const spaceAddress = useAtomValue(spaceIdAtom);
   const step = useAtomValue(stepAtom);
 
   return (

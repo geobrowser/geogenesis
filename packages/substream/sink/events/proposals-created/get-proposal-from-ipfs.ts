@@ -123,7 +123,7 @@ export function getProposalFromIpfs(
           // @TODO: Figure out these types
           ops: parsedContent.ops as unknown as Op[],
           creator: getChecksumAddress(proposal.creator),
-          space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
+          space: maybeSpaceIdForVotingPlugin,
         };
 
         return mappedProposal;
@@ -147,7 +147,7 @@ export function getProposalFromIpfs(
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
           subspace: getChecksumAddress(parsedSubspace.subspace),
           creator: getChecksumAddress(proposal.creator),
-          space: getChecksumAddress(maybeSpaceIdForVotingPlugin),
+          space: maybeSpaceIdForVotingPlugin,
         };
 
         return mappedProposal;
@@ -163,7 +163,7 @@ export function getProposalFromIpfs(
 
         // If both of these are null then we already early exit out of this function, so it's safe to cast
         // to the correct type here.
-        const spaceAddress = (maybeSpaceIdForMembershipPlugin ?? maybeSpaceIdForVotingPlugin) as `0x${string}`;
+        const spaceId = maybeSpaceIdForMembershipPlugin ?? maybeSpaceIdForVotingPlugin;
 
         const mappedProposal: EditorshipProposal = {
           ...proposal,
@@ -174,7 +174,7 @@ export function getProposalFromIpfs(
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
           user: getChecksumAddress(parsedMembership.user),
           creator: getChecksumAddress(proposal.creator),
-          space: getChecksumAddress(spaceAddress),
+          space: spaceId as string,
         };
 
         return mappedProposal;
@@ -190,7 +190,7 @@ export function getProposalFromIpfs(
 
         // If both of these are null then we already early exit out of this function, so it's safe to cast
         // to the correct type here.
-        const spaceAddress = (maybeSpaceIdForMembershipPlugin ?? maybeSpaceIdForVotingPlugin) as `0x${string}`;
+        const spaceId = maybeSpaceIdForMembershipPlugin ?? maybeSpaceIdForVotingPlugin;
 
         const mappedProposal: MembershipProposal = {
           ...proposal,
@@ -201,7 +201,7 @@ export function getProposalFromIpfs(
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
           user: getChecksumAddress(parsedMembership.user),
           creator: getChecksumAddress(proposal.creator),
-          space: getChecksumAddress(spaceAddress),
+          space: spaceId as string,
         };
 
         return mappedProposal;

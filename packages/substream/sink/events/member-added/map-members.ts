@@ -34,7 +34,7 @@ export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
       if (maybeSpaceIdForVotingPlugin) {
         const newMember: S.space_members.Insertable = {
           account_id: getChecksumAddress(member.memberAddress),
-          space_id: getChecksumAddress(maybeSpaceIdForVotingPlugin),
+          space_id: maybeSpaceIdForVotingPlugin,
           created_at: block.timestamp,
           created_at_block: block.blockNumber,
         };

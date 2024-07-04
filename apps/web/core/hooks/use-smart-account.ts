@@ -71,7 +71,7 @@ export function useSmartAccount() {
 
       // @TODO: Not sure what the performance implications of this are. I'm guessing this would
       // the app to re-render again when a user first logs in
-      if (!cookies.walletAddress) {
+      if (!cookies.walletAddress || cookies.walletAddress !== smartAccount.account.address) {
         await Cookie.onConnectionChange({ type: 'connect', address: smartAccount.account.address });
       }
 
