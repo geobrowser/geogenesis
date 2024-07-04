@@ -625,7 +625,7 @@ function EntityAttributes({
           return (
             <div key={`entity-${triple.attributeId}-${triple.value.value}-${i.value.value}}`} className="mt-1">
               <DeletableChipButton
-                href={NavUtils.toEntity(triple.space, triple.value.value)}
+                href={NavUtils.toEntity(triple.space, i.entity.id)}
                 onClick={() => deleteCollectionItem(i.id, triple)}
               >
                 {i.value.type === 'ENTITY' ? i.value.value : i.value.value}
