@@ -1,8 +1,7 @@
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { Effect, Either } from 'effect';
-import { decodeErrorResult, encodeFunctionData } from 'viem';
+import { encodeFunctionData } from 'viem';
 
-import { Vote } from '../types';
 import { useSmartAccountTransaction } from './use-smart-account-transaction';
 
 interface Args {
@@ -16,13 +15,6 @@ export function useExecute({ address, onchainProposalId }: Args) {
   });
 
   const execute = async () => {
-    console.log('executing');
-
-    const error = decodeErrorResult({
-      abi: MainVotingAbi,
-      data: '0x9fefd0f10000000000000000000000000000000000000000000000000000000000000002',
-    });
-
     console.log('error', error);
 
     const txEffect = await tx(
