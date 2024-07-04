@@ -61,8 +61,6 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       return;
     }
 
-    console.log('written accounts', writtenAccounts);
-
     // @TODO: We need a special function to map a proposal endtime to be now
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposalsFromIpfs, block);
 

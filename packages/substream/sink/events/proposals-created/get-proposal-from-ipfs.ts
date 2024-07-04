@@ -138,6 +138,19 @@ export function getProposalFromIpfs(
           return null;
         }
 
+        const maybeSpaceIdForSubspaceDaoAddress = yield* _(
+          Effect.promise(() => Spaces.findForDaoAddress(getChecksumAddress(parsedSubspace.subspace)))
+        );
+
+        if (!maybeSpaceIdForSubspaceDaoAddress) {
+          slog({
+            requestId: block.requestId,
+            message: `Failed to get space for subspace DAO address ${parsedSubspace.subspace}`,
+            level: 'error',
+          });
+          return null;
+        }
+
         const mappedProposal: SubspaceProposal = {
           ...proposal,
           type: validIpfsMetadata.type === ActionType.ADD_SUBSPACE ? 'ADD_SUBSPACE' : 'REMOVE_SUBSPACE',
@@ -145,7 +158,7 @@ export function getProposalFromIpfs(
           proposalId: parsedSubspace.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          subspace: getChecksumAddress(parsedSubspace.subspace),
+          subspace: maybeSpaceIdForSubspaceDaoAddress, // this should be the space id
           creator: getChecksumAddress(proposal.creator),
           space: maybeSpaceIdForVotingPlugin,
         };

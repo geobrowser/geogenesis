@@ -63,7 +63,7 @@ function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: Conten
         {filteredMembers.map(s => (
           <div key={s.id} className="flex items-center justify-between">
             <SubspaceRow subspace={s} />
-            <SmallButton onClick={() => onRemoveSubspace(s.id)}>Propose to remove</SmallButton>
+            <SmallButton onClick={() => onRemoveSubspace(s.daoAddress)}>Propose to remove</SmallButton>
           </div>
         ))}
       </div>

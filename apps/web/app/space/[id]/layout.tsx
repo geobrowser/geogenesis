@@ -251,6 +251,7 @@ const getFetchSpacesQuery = () => `query {
     totalCount
     nodes {
       id
+      daoAddress
       spaceMembers {
         totalCount
       }
@@ -268,6 +269,7 @@ interface NetworkResult {
     totalCount: number;
     nodes: {
       id: string;
+      daoAddress: string;
       spaceMembers: { totalCount: number };
       metadata: { nodes: SubstreamEntity[] };
     }[];
@@ -333,6 +335,7 @@ async function getSpacesForSubspaceManagement(): Promise<{ totalCount: number; s
 
     return {
       id: space.id,
+      daoAddress: space.daoAddress,
       spaceConfig: spaceConfigWithImage,
       totalMembers: space.spaceMembers.totalCount,
     };

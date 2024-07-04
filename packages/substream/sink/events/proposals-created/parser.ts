@@ -73,7 +73,7 @@ export type MembershipProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
-  user: `0x${string}`;
+  user: `0x${string}`; // corresponds to a user's wallet address
 };
 
 export const ZodEditorshipProposal = z.object({
@@ -90,7 +90,7 @@ export type EditorshipProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
-  user: `0x${string}`;
+  user: `0x${string}`; // corresponds to a user's wallet address
 };
 
 export const ZodSubspaceProposal = z.object({
@@ -107,7 +107,7 @@ export type SubspaceProposal = Proposal & {
   proposalId: string;
   onchainProposalId: string;
   pluginAddress: string;
-  subspace: `0x${string}`;
+  subspace: string; // corresponds to the space id
 };
 
 export const ZodProposalCreatedStreamResponse = z.object({

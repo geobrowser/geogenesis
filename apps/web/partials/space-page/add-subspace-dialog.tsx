@@ -66,7 +66,7 @@ function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: Conten
         {filteredSpaces.map(s => (
           <div key={s.id} className="flex items-center justify-between">
             <SubspaceRow subspace={s} />
-            <SmallButton onClick={() => onAddSubspace(s.id)}>Propose to add</SmallButton>
+            <SmallButton onClick={() => onAddSubspace(s.daoAddress)}>Propose to add</SmallButton>
           </div>
         ))}
       </div>
