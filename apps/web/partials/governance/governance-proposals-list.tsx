@@ -40,7 +40,6 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
   return (
     <div className="flex flex-col divide-y divide-grey-01">
       {proposals.map(p => {
-        console.log('p type', p.type);
         return (
           <Link
             key={p.id}
