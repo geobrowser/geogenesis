@@ -3,7 +3,7 @@ import { Effect, Either } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
-import { type BlockEvent } from '../../types';
+import { type GeoBlock } from '../../types';
 import { pool } from '../../utils/pool';
 import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
@@ -12,7 +12,7 @@ import { CollectionItems } from '~/sink/db/collection-items';
 
 interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
-  block: BlockEvent;
+  block: GeoBlock;
   versions: Schema.versions.Insertable[];
 }
 
@@ -151,9 +151,13 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
                   name: triple.text_value,
                   created_by_id: createdById,
                   created_at: block.timestamp,
-                  created_at_block: block.blockNumber,
                   updated_at: block.timestamp,
                   updated_at_block: block.blockNumber,
+                  updated_at_block_hash: block.hash,
+                  updated_at_block_network: block.network,
+                  created_at_block: block.blockNumber,
+                  created_at_block_hash: block.hash,
+                  created_at_block_network: block.network,
                 },
                 'id',
                 {
@@ -218,9 +222,13 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
                   name: maybeNameTripleForEntity ? maybeNameTripleForEntity.text_value : null,
                   created_by_id: createdById,
                   created_at: block.timestamp,
-                  created_at_block: block.blockNumber,
                   updated_at: block.timestamp,
                   updated_at_block: block.blockNumber,
+                  updated_at_block_hash: block.hash,
+                  updated_at_block_network: block.network,
+                  created_at_block: block.blockNumber,
+                  created_at_block_hash: block.hash,
+                  created_at_block_network: block.network,
                 },
                 'id',
                 {
@@ -257,9 +265,13 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
                   description: triple.text_value,
                   created_by_id: createdById,
                   created_at: block.timestamp,
-                  created_at_block: block.blockNumber,
                   updated_at: block.timestamp,
                   updated_at_block: block.blockNumber,
+                  updated_at_block_hash: block.hash,
+                  updated_at_block_network: block.network,
+                  created_at_block: block.blockNumber,
+                  created_at_block_hash: block.hash,
+                  created_at_block_network: block.network,
                 },
                 'id',
                 {
@@ -296,9 +308,13 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
                   description: null,
                   created_by_id: createdById,
                   created_at: block.timestamp,
-                  created_at_block: block.blockNumber,
                   updated_at: block.timestamp,
                   updated_at_block: block.blockNumber,
+                  updated_at_block_hash: block.hash,
+                  updated_at_block_network: block.network,
+                  created_at_block: block.blockNumber,
+                  created_at_block_hash: block.hash,
+                  created_at_block_network: block.network,
                 },
                 'id',
                 {
@@ -335,6 +351,8 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
                   type_id: triple.entity_value_id?.toString()!,
                   created_at: block.timestamp,
                   created_at_block: block.blockNumber,
+                  created_at_block_hash: block.hash,
+                  created_at_block_network: block.network,
                 },
                 ['entity_id', 'type_id'],
                 { updateColumns: db.doNothing }

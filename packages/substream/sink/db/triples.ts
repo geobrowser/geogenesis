@@ -12,6 +12,8 @@ export class Triples {
           'collection_value_id',
           'created_at',
           'created_at_block',
+          'created_at_block_hash',
+          'created_at_block_network',
           'entity_id',
           'entity_value_id',
           'number_value',

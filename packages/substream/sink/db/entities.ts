@@ -7,7 +7,14 @@ export class Entities {
   static async upsert(entities: S.entities.Insertable[]) {
     return await db
       .upsert('entities', entities, db.constraint('entities_pkey'), {
-        updateColumns: ['description', 'name', 'updated_at', 'updated_at_block'],
+        updateColumns: [
+          'description',
+          'name',
+          'updated_at',
+          'updated_at_block',
+          'updated_at_block_hash',
+          'updated_at_block_network',
+        ],
         noNullUpdateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
       })
       .run(pool);

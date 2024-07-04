@@ -95,7 +95,7 @@ const Versions = () => {
   // @TODO: Fix change count
   const selectedVersionChangeCount = 0;
 
-  const selectedVersionLastEditedDate = versions.selected.createdAt * 1000;
+  const selectedVersionLastEditedDate = versions.selected.createdAt;
 
   const selectedVersionFormattedLastEditedDate = new Date(selectedVersionLastEditedDate).toLocaleDateString(undefined, {
     day: '2-digit',
@@ -117,14 +117,11 @@ const Versions = () => {
     // @TODO: Fix change count
     previousVersionChangeCount = 0;
 
-    previousVersionFormattedLastEditedDate = new Date(versions.previous.createdAt * 1000).toLocaleDateString(
-      undefined,
-      {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      }
-    );
+    previousVersionFormattedLastEditedDate = new Date(versions.previous.createdAt).toLocaleDateString(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
 
     previousVersionLastEditedTime = new Date(previousVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
       hour: '2-digit',
@@ -239,14 +236,11 @@ const Proposals = () => {
     ).length;
   }
 
-  const selectedVersionFormattedLastEditedDate = new Date(proposals.selected.createdAt * 1000).toLocaleDateString(
-    undefined,
-    {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }
-  );
+  const selectedVersionFormattedLastEditedDate = new Date(proposals.selected.createdAt).toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 
   const selectedVersionLastEditedTime = new Date(selectedVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
     hour: '2-digit',
@@ -266,7 +260,7 @@ const Proposals = () => {
       []
     ).length;
 
-    previousVersionFormattedLastEditedDate = new Date(proposal.createdAt * 1000).toLocaleDateString(undefined, {
+    previousVersionFormattedLastEditedDate = new Date(proposal.createdAt).toLocaleDateString(undefined, {
       day: '2-digit',
       month: 'short',
       year: 'numeric',

@@ -119,7 +119,7 @@ export type Space = {
   editors: string[];
   members: string[];
   spaceConfig: SpaceConfigEntity | null;
-  createdAtBlock: string;
+  createdAt: string;
 };
 
 export type SpaceWithMetadata = {
@@ -226,8 +226,7 @@ export type Proposal = {
   name: string | null;
   description: string | null;
   createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: string;
+  createdAt: string;
   proposedVersions: ProposedVersion[];
   space: SpaceWithMetadata;
   startTime: number;
@@ -244,8 +243,7 @@ export type Version = {
   name: string | null;
   description: string | null;
   createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: string;
+  createdAt: string;
   space: SpaceWithMetadata;
   triples: Triple[];
   entity: {
@@ -258,8 +256,7 @@ export type ProposedVersion = {
   id: string;
   description: string | null;
   createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: string;
+  createdAt: string;
   space: SpaceWithMetadata;
   ops: AppOp[];
   entity: {

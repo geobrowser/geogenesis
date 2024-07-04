@@ -3,11 +3,11 @@ import type * as S from 'zapatos/schema';
 
 import type { EditorAdded } from './parser';
 import { Spaces } from '~/sink/db';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { slog } from '~/sink/utils/slog';
 
-export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
+export function mapEditors(editorAdded: EditorAdded[], block: GeoBlock) {
   return Effect.gen(function* (unwrap) {
     const editors: S.space_editors.Insertable[] = [];
 
@@ -37,6 +37,8 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
           space_id: maybeSpaceIdForVotingPlugin,
           created_at: block.timestamp,
           created_at_block: block.blockNumber,
+          created_at_block_network: block.hash,
+          created_at_block_hash: block.network,
         };
 
         editors.push(newMember);
@@ -48,6 +50,8 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
           space_id: maybeSpaceIdForPersonalPlugin.id,
           created_at: block.timestamp,
           created_at_block: block.blockNumber,
+          created_at_block_network: block.hash,
+          created_at_block_hash: block.network,
         };
 
         editors.push(newMember);

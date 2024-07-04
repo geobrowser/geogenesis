@@ -29,7 +29,7 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
 export type Subspace = OmitStrict<
   Space,
   | 'members'
-  | 'createdAtBlock'
+  | 'createdAt'
   | 'editors'
   | 'isRootSpace'
   | 'mainVotingPluginAddress'

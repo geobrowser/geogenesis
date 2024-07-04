@@ -2,10 +2,11 @@ import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import type * as S from 'zapatos/schema';
 
 import type { GovernancePluginsCreated, PersonalPluginsCreated, SpacePluginCreatedWithSpaceId } from './parser';
+import type { GeoBlock } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { createSpaceId } from '~/sink/utils/id';
 
-export function mapSpaces(spaces: SpacePluginCreatedWithSpaceId[], createdAtBlock: number): S.spaces.Insertable[] {
+export function mapSpaces(spaces: SpacePluginCreatedWithSpaceId[], block: GeoBlock): S.spaces.Insertable[] {
   return spaces.map(s => {
     const daoAddress = getChecksumAddress(s.daoAddress);
 
@@ -15,7 +16,9 @@ export function mapSpaces(spaces: SpacePluginCreatedWithSpaceId[], createdAtBloc
       space_plugin_address: getChecksumAddress(s.spaceAddress),
       is_root_space: false,
       type: 'public',
-      created_at_block: createdAtBlock,
+      created_at_block: block.blockNumber,
+      created_at_block_hash: block.hash,
+      created_at_block_network: block.network,
     };
   });
 }
@@ -29,13 +32,15 @@ type GovernancePluginsCreatedWithSpaceId = GovernancePluginsCreated & {
 
 export function mapGovernanceToSpaces(
   spaces: GovernancePluginsCreatedWithSpaceId[],
-  createdAtBlock: number
+  block: GeoBlock
 ): S.spaces.Insertable[] {
   return spaces.map(s => ({
     id: s.id,
     type: 'public',
     is_root_space: false,
-    created_at_block: createdAtBlock,
+    created_at_block: block.blockNumber,
+    created_at_block_hash: block.hash,
+    created_at_block_network: block.network,
     dao_address: getChecksumAddress(s.daoAddress),
     main_voting_plugin_address: getChecksumAddress(s.mainVotingAddress),
     member_access_plugin_address: getChecksumAddress(s.memberAccessAddress),
@@ -51,13 +56,15 @@ type PersonalPluginsCreatedWithSpaceId = PersonalPluginsCreated & {
 
 export function mapPersonalToSpaces(
   spaces: PersonalPluginsCreatedWithSpaceId[],
-  createdAtBlock: number
+  block: GeoBlock
 ): S.spaces.Insertable[] {
   return spaces.map(s => ({
     id: s.id,
     type: 'personal',
     is_root_space: false,
-    created_at_block: createdAtBlock,
+    created_at_block: block.blockNumber,
+    created_at_block_hash: block.hash,
+    created_at_block_network: block.network,
     dao_address: getChecksumAddress(s.daoAddress),
     personal_space_admin_plugin_address: getChecksumAddress(s.personalAdminAddress),
   }));

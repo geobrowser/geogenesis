@@ -1,8 +1,8 @@
 import type * as S from 'zapatos/schema';
 
-import type { BlockEvent, Op } from '../types';
+import type { GeoBlock, Op } from '../types';
 
-export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.triples.Insertable {
+export function getTripleFromOp(op: Op, spaceId: string, block: GeoBlock): S.triples.Insertable {
   const { entityId, attributeId } = op.payload;
   const entity_id = entityId;
   const attribute_id = attributeId;
@@ -27,6 +27,8 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
       collection_value_id,
       created_at: block.timestamp,
       created_at_block: block.blockNumber,
+      created_at_block_network: block.hash,
+      created_at_block_hash: block.network,
       is_stale: false,
     };
   }
@@ -38,6 +40,8 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
     value_type: 'TEXT', // this doesn't matter for deletes, but we populate it anyway for more ergonomic types
     created_at: block.timestamp,
     created_at_block: block.blockNumber,
+    created_at_block_network: block.hash,
+    created_at_block_hash: block.network,
     collection_value_id: null,
     entity_value_id: null,
     text_value: null,

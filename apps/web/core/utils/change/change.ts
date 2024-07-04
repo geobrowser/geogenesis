@@ -417,7 +417,8 @@ export async function fromVersion(versionId: string, previousVersionId: string, 
   if (selectedVersion) {
     entityId = selectedVersion.entity.id;
 
-    selectedBlock = parseInt(selectedVersion.createdAtBlock, 10);
+    // @TODO(migration): versions by createdAt instead of block
+    selectedBlock = parseInt(selectedVersion.createdAt, 10);
     previousBlock = selectedBlock - 1;
   }
 

@@ -5,7 +5,7 @@ import type { EditProposal } from '../proposals-created/parser';
 import { Accounts, Ops, Proposals, ProposedVersions } from '~/sink/db';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
 
@@ -13,7 +13,7 @@ class CouldNotWriteInitialSpaceProposalsError extends Error {
   _tag: 'CouldNotWriteInitialSpaceProposalsError' = 'CouldNotWriteInitialSpaceProposalsError';
 }
 
-export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[], block: BlockEvent) {
+export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
@@ -97,7 +97,9 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
 
       slog({
         requestId: block.requestId,
-        message: 'Could not write initial proposals for new spaces',
+        message: `Could not write initial proposals for new spaces
+message: ${error.message}
+        `,
         level: 'error',
       });
 

@@ -8,7 +8,7 @@ import {
   ProposalWithOnchainProposalIdAndSpaceIdNotFoundError,
   type SpaceWithPluginAddressNotFoundError,
 } from '~/sink/errors';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
@@ -24,7 +24,7 @@ import { slog } from '~/sink/utils/slog';
  */
 export function mapVotes(
   votes: VoteCast[],
-  block: BlockEvent
+  block: GeoBlock
 ): Effect.Effect<
   S.proposal_votes.Insertable[],
   ProposalWithOnchainProposalIdAndSpaceIdNotFoundError | SpaceWithPluginAddressNotFoundError,

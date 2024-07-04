@@ -95,7 +95,6 @@ export async function getActiveProposalsForSpacesWhereEditor(
           }
         }
         
-        createdAtBlock
         createdBy {
           id
           onchainProfiles {

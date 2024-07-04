@@ -1,8 +1,11 @@
 import { Effect, Either } from 'effect';
+import type * as S from 'zapatos/schema';
 
+import { handleNewGeoBlock } from '../handle-new-geo-block';
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
 import {
   Accounts,
+  Blocks,
   Ops,
   Proposals,
   ProposedEditors,
@@ -20,7 +23,7 @@ import type {
   SubspaceProposal,
 } from '~/sink/events/proposals-created/parser';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
 
@@ -28,7 +31,7 @@ class CouldNotWriteCreatedProposalsError extends Error {
   _tag: 'CouldNotWriteCreatedProposalsError' = 'CouldNotWriteCreatedProposalsError';
 }
 
-export function handleProposalsCreated(proposalsCreated: ProposalCreated[], block: BlockEvent) {
+export function handleProposalsCreated(proposalsCreated: ProposalCreated[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
@@ -55,6 +58,24 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       (maybeProposal): maybeProposal is EditProposal | SubspaceProposal | MembershipProposal | EditorshipProposal =>
         maybeProposal !== null
     );
+
+    const importedBlocks = proposals.flatMap(p => {
+      if (p.type === 'ADD_EDIT' && p.createdAtBlock) {
+        return [
+          {
+            hash: p.createdAtBlock.hash,
+            network: p.createdAtBlock.network,
+            number: p.createdAtBlock.blockNumber,
+            timestamp: p.createdAtBlock.timestamp,
+          },
+        ];
+      }
+
+      return [];
+    });
+
+    console.log('writing imported blocks');
+    yield* _(Effect.promise(() => Blocks.upsert(importedBlocks)));
 
     const { schemaEditProposals, schemaSubspaceProposals, schemaMembershipProposals, schemaEditorshipProposals } =
       mapIpfsProposalToSchemaProposalByType(proposals, block);

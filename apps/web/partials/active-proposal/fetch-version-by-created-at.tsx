@@ -20,12 +20,12 @@ const getVersionsQuery = ({
 }: {
   entityId: string;
   offset: number;
-  createdAt: number;
+  createdAt: string;
   proposalId?: string;
 }) => {
   const filter = [
     `entityId: { equalTo: ${JSON.stringify(entityId)} }`,
-    `createdAtBlock: { lessThan: ${JSON.stringify(createdAt)} }`,
+    `createdAt: { lessThan: ${JSON.stringify(createdAt)} }`,
     proposalId && `proposedVersion: { proposalId: { equalTo: ${JSON.stringify(proposalId)} } }`,
   ]
     .filter(Boolean)
@@ -37,7 +37,6 @@ const getVersionsQuery = ({
         id
         name
         createdAt
-        createdAtBlock
 
         createdBy {
           id
@@ -105,7 +104,7 @@ const getVersionsQuery = ({
 
 export interface FetchVersionsOptions {
   entityId: string;
-  createdAt: number;
+  createdAt: string;
   proposalId?: string;
   page?: number;
   signal?: AbortController['signal'];
@@ -212,7 +211,6 @@ export async function fetchVersionsByCreatedAt({
       description: null,
       entity: v.entity,
       createdAt: v.createdAt,
-      createdAtBlock: v.createdAtBlock,
       space: spaceWithMetadata,
       createdBy: profile,
       triples: fromNetworkTriples(networkTriples),

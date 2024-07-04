@@ -92,7 +92,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
     members: networkSpace.spaceMembers.nodes.map(account => account.accountId),
     spaceConfig: spaceConfigWithImage,
-    createdAtBlock: networkSpace.createdAtBlock,
+    createdAt: networkSpace.createdAt,
 
     mainVotingPluginAddress: networkSpace.mainVotingPluginAddress,
     memberAccessPluginAddress: networkSpace.memberAccessPluginAddress,

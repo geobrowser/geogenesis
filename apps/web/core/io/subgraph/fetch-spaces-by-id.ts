@@ -91,7 +91,7 @@ export async function fetchSpacesById(ids: string[]) {
       editors: space.spaceEditors.nodes.map(account => account.accountId),
       members: space.spaceMembers.nodes.map(account => account.accountId),
       spaceConfig: spaceConfigWithImage,
-      createdAtBlock: space.createdAtBlock,
+      createdAt: space.createdAt,
 
       mainVotingPluginAddress: space.mainVotingPluginAddress,
       memberAccessPluginAddress: space.memberAccessPluginAddress,

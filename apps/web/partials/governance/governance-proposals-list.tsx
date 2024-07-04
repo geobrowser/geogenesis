@@ -126,8 +126,6 @@ const getFetchSpaceProposalsQuery = (
       type
       onchainProposalId
 
-      createdAtBlock
-
       createdBy {
         id
         onchainProfiles {

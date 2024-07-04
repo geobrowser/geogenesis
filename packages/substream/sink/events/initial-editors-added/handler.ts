@@ -6,7 +6,7 @@ import type { InitialEditorsAdded } from './parser';
 import { Accounts, SpaceEditors, SpaceMembers, Spaces } from '~/sink/db';
 import { CouldNotWriteAccountsError, SpaceWithPluginAddressNotFoundError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 import { pool } from '~/sink/utils/pool';
 import { retryEffect } from '~/sink/utils/retry-effect';
@@ -16,7 +16,7 @@ class CouldNotWriteEditorsError extends Error {
   _tag: 'CouldNotWriteEditorsError' = 'CouldNotWriteEditorsError';
 }
 
-export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEditorsAdded[], block: BlockEvent) {
+export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEditorsAdded[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
@@ -122,6 +122,8 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
+            created_at_block_hash: block.hash,
+            created_at_block_network: block.network,
           };
 
           return editor;
@@ -155,6 +157,8 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
+            created_at_block_hash: block.hash,
+            created_at_block_network: block.network,
           };
 
           return member;
@@ -212,7 +216,7 @@ export function handleInitialGovernanceSpaceEditorsAdded(editorsAdded: InitialEd
   });
 }
 
-export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEditorsAdded[], block: BlockEvent) {
+export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEditorsAdded[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
@@ -311,6 +315,8 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
+            created_at_block_network: block.hash,
+            created_at_block_hash: block.network,
           };
 
           return editor;
@@ -344,6 +350,8 @@ export function handleInitialPersonalSpaceEditorsAdded(editorsAdded: InitialEdit
             account_id: getChecksumAddress(a),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
+            created_at_block_network: block.hash,
+            created_at_block_hash: block.network,
           };
 
           return member;

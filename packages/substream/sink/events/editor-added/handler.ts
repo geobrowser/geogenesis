@@ -4,7 +4,7 @@ import { mapEditors } from './map-editors';
 import type { EditorAdded } from './parser';
 import { SpaceEditors } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
 
@@ -12,7 +12,7 @@ export class CouldNotWriteAddedEditorsError extends Error {
   _tag: 'CouldNotWriteAddedEditorsError' = 'CouldNotWriteAddedEditorsError';
 }
 
-export function handleEditorsAdded(editorsAdded: EditorAdded[], block: BlockEvent) {
+export function handleEditorsAdded(editorsAdded: EditorAdded[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
     const schemaEditors = yield* _(mapEditors(editorsAdded, block));

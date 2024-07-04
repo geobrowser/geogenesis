@@ -16,7 +16,6 @@ export const getProposedVersionQuery = (id: string) => `query {
   proposedVersion(id: ${JSON.stringify(id)}) {
     id
     createdAt
-    createdAtBlock
 
     createdBy {
       id

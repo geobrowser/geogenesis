@@ -1,5 +1,4 @@
 import type { EditProposal } from '../proposals-created/parser';
-import type { SpacePluginCreated } from '../spaces-created/parser';
 
 /**
  * If we have a set of "SpacePluginCreated" events in the same block as a set of "ProposalProcessed" events

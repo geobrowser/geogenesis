@@ -3,7 +3,7 @@ import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
 import { getFetchIpfsContentEffect } from '../../ipfs';
-import type { BlockEvent, Op } from '../../types';
+import type { GeoBlock, Op } from '../../types';
 import { getChecksumAddress } from '../../utils/get-checksum-address';
 import { slog } from '../../utils/slog';
 import { type EditProposal, type ProposalProcessed } from '../proposals-created/parser';
@@ -18,7 +18,7 @@ function fetchEditProposalFromIpfs(
     ipfsUri: string;
     pluginAddress: string;
   },
-  block: BlockEvent
+  block: GeoBlock
 ) {
   return Effect.gen(function* (_) {
     const maybeSpaceIdForVotingPlugin = yield* _(
@@ -139,6 +139,10 @@ function fetchEditProposalFromIpfs(
         const decodedEdits = maybeDecodedEdits.flatMap(e => (e ? [e] : []));
 
         const proposals = decodedEdits.map(e => {
+          if (e.blockNumber === '') {
+            console.log('invalid block number for edit', { number: e.blockNumber, editId: e.id });
+          }
+
           const contentProposal: EditProposal = {
             type: 'ADD_EDIT',
             name: e.name ?? null,
@@ -151,6 +155,14 @@ function fetchEditProposalFromIpfs(
             endTime: block.timestamp.toString(),
             startTime: block.timestamp.toString(),
             metadataUri: processedProposal.ipfsUri,
+            createdAtBlock: {
+              blockNumber: e.blockNumber,
+              cursor: '',
+              hash: e.blockHash,
+              network: importResult.previousNetwork,
+              requestId: '-1',
+              timestamp: e.createdAt,
+            },
           };
 
           return contentProposal;
@@ -171,7 +183,7 @@ function fetchEditProposalFromIpfs(
   });
 }
 
-export function getProposalFromInitialSpaceProposalIpfsUri(proposalsProcessed: ProposalProcessed[], block: BlockEvent) {
+export function getProposalFromInitialSpaceProposalIpfsUri(proposalsProcessed: ProposalProcessed[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,

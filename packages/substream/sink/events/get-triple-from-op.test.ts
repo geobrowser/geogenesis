@@ -1,3 +1,4 @@
+import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { describe, expect, it } from 'vitest';
 
 import { getTripleFromOp } from './get-triple-from-op';
@@ -18,10 +19,12 @@ describe('tripleFromOp', () => {
       },
       '0x1234',
       {
-        blockNumber: 0,
+        blockNumber: '0',
         cursor: '',
         requestId: '',
-        timestamp: 0,
+        timestamp: '0',
+        hash: '',
+        network: NETWORK_IDS.GEO,
       }
     );
 
@@ -51,10 +54,12 @@ describe('tripleFromOp', () => {
       },
       '0x1234',
       {
-        blockNumber: 0,
+        blockNumber: '0',
         cursor: '',
         requestId: '',
-        timestamp: 0,
+        timestamp: '0',
+        hash: '',
+        network: NETWORK_IDS.GEO,
       }
     );
 

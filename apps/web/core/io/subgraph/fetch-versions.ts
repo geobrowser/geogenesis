@@ -26,7 +26,6 @@ const getVersionsQuery = (entityId: string, offset: number, proposalId?: string)
         id
         name
         createdAt
-        createdAtBlock
 
         createdBy {
           id

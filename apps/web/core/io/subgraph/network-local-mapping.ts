@@ -133,8 +133,7 @@ export type SubstreamVersion = {
   name: string | null;
   description: string | null;
   createdBy: CreatedBy;
-  createdAt: number;
-  createdAtBlock: string;
+  createdAt: string;
   space: SubstreamSpace;
   tripleVersions: { nodes: { triple: SubstreamTriple }[] };
   entity: {
@@ -150,8 +149,7 @@ export type SubstreamProposal = {
   type: ProposalType;
   onchainProposalId: string;
   createdBy: CreatedBy;
-  createdAt: number;
-  createdAtBlock: string;
+  createdAt: string;
   description: string | null;
   space: SubstreamSpace;
   startTime: number;

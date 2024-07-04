@@ -1,4 +1,5 @@
 import { SYSTEM_IDS, createCollectionItem, createGeoId } from '@geogenesis/sdk';
+import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { Effect } from 'effect';
 import type * as s from 'zapatos/schema';
 
@@ -8,7 +9,7 @@ import {
   ROOT_SPACE_CREATED_AT_BLOCK,
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
-import { Accounts, Collections, Entities, Proposals, Spaces, Triples } from './db';
+import { Accounts, Blocks, Collections, Entities, Proposals, Spaces, Triples } from './db';
 import { CollectionItems } from './db/collection-items';
 import { getTripleFromOp } from './events/get-triple-from-op';
 
@@ -193,14 +194,15 @@ const types: Record<string, string[]> = {
 const geoEntities: s.entities.Insertable[] = entities.map(entity => ({
   id: entity,
   name: names[entity],
-  // is_attribute: attributes[entity] ? true : false,
-  // is_type: types[entity] ? true : false,
-  // attribute_value_type_id: attributes[entity],
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+  created_at_block_hash: '',
+  created_at_block_network: NETWORK_IDS.GEO,
   created_at: ROOT_SPACE_CREATED_AT,
   updated_at: ROOT_SPACE_CREATED_AT,
   updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+  updated_at_block_hash: '',
+  updated_at_block_network: NETWORK_IDS.GEO,
 }));
 
 const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
@@ -211,6 +213,8 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
     text_value: name,
     space_id: SYSTEM_IDS.ROOT_SPACE_ID,
     created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    created_at_block_network: NETWORK_IDS.GEO,
+    created_at_block_hash: '',
     created_at: ROOT_SPACE_CREATED_AT,
     is_stale: false,
   })
@@ -226,6 +230,8 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       entity_value_id: SYSTEM_IDS.ATTRIBUTE,
       space_id: SYSTEM_IDS.ROOT_SPACE_ID,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+      created_at_block_network: NETWORK_IDS.GEO,
+      created_at_block_hash: '',
       created_at: ROOT_SPACE_CREATED_AT,
       is_stale: false,
     },
@@ -237,6 +243,8 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
       entity_value_id,
       space_id: SYSTEM_IDS.ROOT_SPACE_ID,
       created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+      created_at_block_network: NETWORK_IDS.GEO,
+      created_at_block_hash: '',
       created_at: ROOT_SPACE_CREATED_AT,
       is_stale: false,
     },
@@ -282,6 +290,8 @@ const getTypeTriples = () => {
               cursor: '',
               requestId: '',
               timestamp: ROOT_SPACE_CREATED_AT,
+              hash: '',
+              network: NETWORK_IDS.GEO,
             })
           );
         })
@@ -296,6 +306,8 @@ const getTypeTriples = () => {
           entity_value_id: SYSTEM_IDS.SCHEMA_TYPE,
           space_id: SYSTEM_IDS.ROOT_SPACE_ID,
           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+          created_at_block_network: NETWORK_IDS.GEO,
+          created_at_block_hash: '',
           created_at: ROOT_SPACE_CREATED_AT,
           is_stale: false,
         },
@@ -310,6 +322,8 @@ const getTypeTriples = () => {
           entity_value_id: SYSTEM_IDS.COLLECTION_TYPE,
           space_id: SYSTEM_IDS.ROOT_SPACE_ID,
           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+          created_at_block_network: NETWORK_IDS.GEO,
+          created_at_block_hash: '',
           created_at: ROOT_SPACE_CREATED_AT,
           is_stale: false,
         },
@@ -321,6 +335,8 @@ const getTypeTriples = () => {
           collection_value_id: collectionEntityId,
           space_id: SYSTEM_IDS.ROOT_SPACE_ID,
           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+          created_at_block_network: NETWORK_IDS.GEO,
+          created_at_block_hash: '',
           created_at: ROOT_SPACE_CREATED_AT,
           is_stale: false,
         },
@@ -345,6 +361,8 @@ const space: s.spaces.Insertable = {
   is_root_space: true,
   type: 'public',
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+  created_at_block_network: NETWORK_IDS.GEO,
+  created_at_block_hash: '',
 };
 
 const account: s.accounts.Insertable = {
@@ -359,11 +377,14 @@ const proposal: s.proposals.Insertable = {
   plugin_address: '',
   space_id: SYSTEM_IDS.ROOT_SPACE_ID,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+  created_at_block_network: NETWORK_IDS.GEO,
+  created_at_block_hash: '',
   name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
   type: 'ADD_EDIT',
   status: 'accepted',
-  start_time: ROOT_SPACE_CREATED_AT,
-  end_time: ROOT_SPACE_CREATED_AT,
+  // @TODO: This ain't right
+  start_time: new Date(ROOT_SPACE_CREATED_AT).getMilliseconds(),
+  end_time: new Date(ROOT_SPACE_CREATED_AT).getMilliseconds(),
 };
 
 export class BootstrapRootError extends Error {
@@ -380,6 +401,14 @@ export function bootstrapRoot() {
     yield _(
       Effect.tryPromise({
         try: async () => {
+          await Blocks.upsert([
+            {
+              hash: '',
+              network: NETWORK_IDS.GEO,
+              number: ROOT_SPACE_CREATED_AT_BLOCK,
+              timestamp: ROOT_SPACE_CREATED_AT,
+            },
+          ]);
           await Spaces.upsert([space]);
 
           // @TODO: Create versions for the entities

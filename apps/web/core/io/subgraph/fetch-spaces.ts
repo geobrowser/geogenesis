@@ -5,9 +5,9 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { Space } from '~/core/types';
 
-import { entityFragment, spaceFragment, spacePluginsFragment } from './fragments';
+import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, getSpaceConfigFromMetadata } from './network-local-mapping';
+import { getSpaceConfigFromMetadata } from './network-local-mapping';
 import { NetworkSpaceResult } from './types';
 
 const getFetchSpacesQuery = () => `query {
@@ -86,7 +86,7 @@ export async function fetchSpaces(): Promise<Space[]> {
       editors: space.spaceEditors.nodes.map(account => account.accountId),
       members: space.spaceMembers.nodes.map(account => account.accountId),
       spaceConfig: spaceConfigWithImage,
-      createdAtBlock: space.createdAtBlock,
+      createdAt: space.createdAt,
 
       mainVotingPluginAddress: space.mainVotingPluginAddress,
       memberAccessPluginAddress: space.memberAccessPluginAddress,

@@ -4,6 +4,14 @@ CREATE SCHEMA IF NOT EXISTS public;
 
 CREATE TABLE public.accounts (id text PRIMARY KEY);
 
+CREATE TABLE public.geo_blocks (
+    PRIMARY KEY (network, hash),
+    network text NOT NULL,
+    hash text NOT NULL,
+    number text NOT NULL,
+    timestamp text NOT NULL
+);
+
 CREATE TABLE public.cursors (
     id integer PRIMARY KEY,
     cursor text NOT NULL,
@@ -19,17 +27,27 @@ CREATE TABLE public.entities (
     cover text,
     avatar text,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    updated_at integer,
-    updated_at_block integer
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
+    updated_at text NOT NULL,
+    updated_at_block text NOT NULL,
+    updated_at_block_hash text NOT NULL,
+    updated_at_block_network text NOT NULL,
+    FOREIGN KEY (updated_at_block_network, updated_at_block_hash) REFERENCES public.geo_blocks (network, hash)
+
 );
 
 CREATE TYPE public.space_type as ENUM ('personal', 'public');
 
 CREATE TABLE public.spaces (
     id text PRIMARY KEY,
-    created_at_block integer NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     is_root_space boolean NOT NULL,
     type space_type NOT NULL,   
     dao_address text NOT NULL,
@@ -43,8 +61,11 @@ CREATE TABLE public.entity_types (
     id serial PRIMARY KEY,
     entity_id text NOT NULL REFERENCES public.entities(id),
     type_id text NOT NULL REFERENCES public.entities(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     CONSTRAINT geo_entity_types_unique_entity_type_pair UNIQUE (entity_id, type_id)
 );
 
@@ -52,8 +73,11 @@ CREATE TABLE public.onchain_profiles (
     id text PRIMARY KEY,
     account_id text REFERENCES public.accounts(id) NOT NULL,
     home_space_id text REFERENCES public.spaces(id) NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash)
 );
 
 -- ALTER TABLE
@@ -100,8 +124,11 @@ CREATE TABLE public.proposals (
     uri text,
     type proposal_type NOT NULL,
     status proposal_status NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     start_time integer NOT NULL,
     end_time integer NOT NULL
@@ -109,8 +136,11 @@ CREATE TABLE public.proposals (
 
 CREATE TABLE public.proposed_versions (
     id text PRIMARY KEY,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     entity_id text NOT NULL REFERENCES public.entities(id),
     proposal_id text NOT NULL REFERENCES public.proposals(id),
@@ -120,24 +150,33 @@ CREATE TABLE public.proposed_versions (
 CREATE TABLE public.space_editors (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     CONSTRAINT space_editors_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
 CREATE TABLE public.space_members (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     CONSTRAINT space_members_unique_account_space_pair UNIQUE (account_id, space_id)
 );
 
 CREATE TABLE public.space_subspaces (
     subspace_id text NOT NULL REFERENCES public.spaces(id),
     parent_space_id text NOT NULL REFERENCES public.spaces(id),
-    created_at_block integer NOT NULL,
-    created_at integer NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
+    created_at text NOT NULL,
     CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
@@ -153,15 +192,21 @@ CREATE TABLE public.triples (
     text_value text,
     entity_value_id text REFERENCES public.entities(id),
     collection_value_id text REFERENCES public.collections(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     is_stale boolean NOT NULL
 );
 
 CREATE TABLE public.versions (
     id text PRIMARY KEY,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     proposed_version_id text NOT NULL REFERENCES public.proposed_versions(id),
     entity_id text NOT NULL REFERENCES public.entities(id),
@@ -175,8 +220,8 @@ CREATE TABLE public.proposal_votes (
     space_id text NOT NULL REFERENCES public.spaces(id),
     account_id text NOT NULL REFERENCES public.accounts(id),
     vote vote_type NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
+    created_at text NOT NULL,
+    created_at_block text NOT NULL
 );
 
 CREATE TYPE public.op_type as ENUM ('SET_TRIPLE', 'DELETE_TRIPLE');
@@ -193,8 +238,8 @@ CREATE TABLE public.ops (
     entity_value_id text REFERENCES public.entities(id),
     collection_value_id text REFERENCES public.entities(id),
     proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
+    created_at text NOT NULL,
+    created_at_block text NOT NULL
 );
 
 CREATE TYPE public.subspace_proposal_type as ENUM ('ADD_SUBSPACE', 'REMOVE_SUBSPACE');
@@ -206,8 +251,11 @@ CREATE TABLE public.proposed_subspaces (
     id text PRIMARY KEY,
     subspace text NOT NULL REFERENCES public.spaces(id),
     parent_space text NOT NULL REFERENCES public.spaces(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     proposal_id text NOT NULL REFERENCES public.proposals(id),
     type subspace_proposal_type NOT NULL
 );
@@ -218,8 +266,11 @@ CREATE TABLE public.proposed_members (
     id text PRIMARY KEY,
     account_id text NOT NULL REFERENCES public.accounts(id),
     space_id text NOT NULL REFERENCES public.spaces(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     proposal_id text NOT NULL REFERENCES public.proposals(id),
     type member_proposal_type NOT NULL
 );
@@ -230,18 +281,13 @@ CREATE TABLE public.proposed_editors (
     id text PRIMARY KEY,
     account_id text NOT NULL REFERENCES public.accounts(id),
     space_id text NOT NULL REFERENCES public.spaces(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
+    created_at text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at_block_hash text NOT NULL,
+    created_at_block_network text NOT NULL,
+    FOREIGN KEY (created_at_block_network, created_at_block_hash) REFERENCES public.geo_blocks (network, hash),
     proposal_id text NOT NULL REFERENCES public.proposals(id),
     type editor_proposal_type NOT NULL
-);
-
-CREATE TABLE public.geo_blocks (
-    PRIMARY KEY (network, hash),
-    network text NOT NULL,
-    hash text NOT NULL,
-    number text NOT NULL,
-    timestamp text NOT NULL
 );
 
 -- CREATE TABLE public.triple_versions (

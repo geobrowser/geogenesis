@@ -6,7 +6,7 @@ import { Entities } from '../db';
 import { type SchemaTripleEdit, mapSchemaTriples } from '../events/proposal-processed/map-triples';
 import { populateTriples } from '../events/proposal-processed/populate-triples';
 import type { EditProposal } from '../events/proposals-created/parser';
-import type { BlockEvent, Op } from '../types';
+import type { GeoBlock, Op } from '../types';
 import { upsertChunked } from '../utils/db';
 import { createVersionId } from '../utils/id';
 import { pool } from '../utils/pool';
@@ -18,7 +18,7 @@ export function populateApprovedContentProposal(
   // so we don't have to query the DB. Also so we know we get the correct order
   // of the actions from IPFS.
   // ops: Op[],
-  block: BlockEvent
+  block: GeoBlock
 ) {
   return Effect.gen(function* (awaited) {
     const proposedVersionsByProposal = yield* awaited(
@@ -49,13 +49,20 @@ export function populateApprovedContentProposal(
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
     for (const proposedVersions of proposedVersionsByProposal) {
       const entities = proposedVersions.map(pv => {
-        const newEntity: Schema.Insertable = {
+        const newEntity: Schema.entities.Insertable = {
           id: pv.entity_id,
           created_by_id: pv.created_by_id,
-          created_at: block.timestamp,
-          created_at_block: block.blockNumber,
+
+          // The created metadata is derived from the proposed version. The updated metadata is the current
+          // block metadata.
+          created_at: pv.created_at,
+          created_at_block: pv.created_at_block,
+          created_at_block_hash: pv.created_at_block_hash,
+          created_at_block_network: pv.created_at_block_network,
           updated_at: block.timestamp,
           updated_at_block: block.blockNumber,
+          updated_at_block_hash: block.hash,
+          updated_at_block_network: block.network,
         };
 
         return newEntity;
@@ -68,8 +75,10 @@ export function populateApprovedContentProposal(
             proposalId: pv.proposal_id,
           }),
           entity_id: pv.entity_id,
-          created_at_block: block.blockNumber,
-          created_at: block.timestamp,
+          created_at: pv.created_at,
+          created_at_block: pv.created_at_block,
+          created_at_block_hash: pv.created_at_block_hash,
+          created_at_block_network: pv.created_at_block_network,
           created_by_id: pv.created_by_id,
           proposed_version_id: pv.id,
           space_id: pv.space_id,

@@ -8,10 +8,10 @@ import type { GeoBlock } from '../types';
 export function handleNewGeoBlock(block: GeoBlock) {
   return Effect.gen(function* (_) {
     const newBlock: S.geo_blocks.Insertable = {
-      hash: `0x${block.hash}`,
+      hash: block.hash,
       network: block.network,
       number: String(block.blockNumber),
-      timestamp: new Date(block.timestamp * 1000).toISOString(),
+      timestamp: block.timestamp,
     };
 
     yield* _(Effect.promise(() => Blocks.upsert([newBlock])));

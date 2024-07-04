@@ -37,7 +37,6 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
         }
       }
 
-      createdAtBlock
       createdBy {
         id
         onchainProfiles {

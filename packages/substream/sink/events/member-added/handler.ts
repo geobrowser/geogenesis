@@ -4,7 +4,7 @@ import { mapMembers } from './map-members';
 import type { MemberAdded } from './parser';
 import { SpaceMembers } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
 
@@ -12,7 +12,7 @@ export class CouldNotWriteAddedMembersError extends Error {
   _tag: 'CouldNotWriteAddedMembersError' = 'CouldNotWriteAddedMembersError';
 }
 
-export function handleMemberAdded(membersAdded: MemberAdded[], block: BlockEvent) {
+export function handleMemberAdded(membersAdded: MemberAdded[], block: GeoBlock) {
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
     const schemaMembers = yield* _(mapMembers(membersAdded, block));

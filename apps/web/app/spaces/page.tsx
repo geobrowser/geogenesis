@@ -39,8 +39,8 @@ export const metadata: Metadata = {
   robots: 'follow, index',
 };
 
-const sortByCreatedAtBlock = (a: Space, b: Space) =>
-  parseInt(a.createdAtBlock, 10) < parseInt(b.createdAtBlock, 10) ? -1 : 1;
+const sortByCreatedAt = (a: Space, b: Space) =>
+  parseInt(a.createdAt, 10) < parseInt(b.createdAt, 10) ? -1 : 1;
 
 export const revalidate = 60; // 1 minute
 
@@ -48,7 +48,7 @@ export default async function Spaces() {
   // Only fetch the front page spaces.
   const spaces = await cachedFetchSpacesById(PUBLIC_SPACES);
 
-  const filteredAndSortedSpaces = spaces.sort(sortByCreatedAtBlock);
+  const filteredAndSortedSpaces = spaces.sort(sortByCreatedAt);
 
   const spacesWithSpaceConfigs = filteredAndSortedSpaces.filter(
     (s): s is Space & { spaceConfig: Entity } => s.spaceConfig !== null

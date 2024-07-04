@@ -5,9 +5,9 @@ import { getChecksumAddress } from '../../utils/get-checksum-address';
 import { slog } from '../../utils/slog';
 import type { MemberAdded } from './parser';
 import { Spaces } from '~/sink/db';
-import type { BlockEvent } from '~/sink/types';
+import type { GeoBlock } from '~/sink/types';
 
-export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
+export function mapMembers(membersApproved: MemberAdded[], block: GeoBlock) {
   return Effect.gen(function* (unwrap) {
     const members: S.space_members.Insertable[] = [];
 
@@ -37,6 +37,8 @@ export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
           space_id: maybeSpaceIdForVotingPlugin,
           created_at: block.timestamp,
           created_at_block: block.blockNumber,
+          created_at_block_network: block.hash,
+          created_at_block_hash: block.network,
         };
 
         members.push(newMember);
@@ -48,6 +50,8 @@ export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
           space_id: maybeSpaceIdForPersonalPlugin.id,
           created_at: block.timestamp,
           created_at_block: block.blockNumber,
+          created_at_block_network: block.hash,
+          created_at_block_hash: block.network,
         };
 
         members.push(newMember);
