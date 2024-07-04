@@ -31,7 +31,6 @@ services:
       SUBSTREAMS_ENDPOINT: ${SUBSTREAMS_ENDPOINT:?SUBSTREAMS_ENDPOINT is not set}
       SUBSTREAMS_API_KEY: ${SUBSTREAMS_API_KEY:?SUBSTREAMS_API_KEY is not set}
       DATABASE_URL: postgres://${GEO_DB_USER}:${GEO_DB_PASSWORD}@postgres:5432/${GEO_DB_NAME}?sslmode=disable
-    command: node /app/packages/substream/dist/index.js --start-block 9000
 
   api:
     container_name: geo-api
@@ -43,7 +42,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${GEO_DB_USER}:${GEO_DB_PASSWORD}@postgres:5432/${GEO_DB_NAME}?sslmode=disable
-      CHAIN_RPC: ${CHAIN_RPC:-http://geotest-arch45.mar.eosn.io:8449}
+      CHAIN_RPC: ${CHAIN_RPC:?CHAIN_RPC is not set}
       GEO_SUBGRAPH_DEPLOYMENT_ID: ${GEO_SUBGRAPH_DEPLOYMENT_ID}
       PORT: 5001
     ports:
