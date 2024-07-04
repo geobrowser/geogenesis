@@ -13,17 +13,24 @@ import { Button } from '~/design-system/button';
 
 import { Execute } from './execute';
 
-export function AcceptOrReject({
-  isProposalDone,
-  userVote,
-  onchainProposalId,
-  votingContractAddress,
-}: {
-  isProposalDone: boolean;
+interface Props {
+  isProposalEnded: boolean;
+  // If the proposal is executable that means it's done and the
+  // acceptance threshold has passed.
+  isProposalExecutable: boolean;
+
   userVote: Vote | undefined;
   onchainProposalId: string;
   votingContractAddress: `0x${string}`;
-}) {
+}
+
+export function AcceptOrReject({
+  isProposalEnded,
+  isProposalExecutable,
+  userVote,
+  onchainProposalId,
+  votingContractAddress,
+}: Props) {
   const smartAccount = useSmartAccount();
 
   const onClick = async (option: Vote['vote']) => {
@@ -42,7 +49,7 @@ export function AcceptOrReject({
     });
   };
 
-  if (process.env.NODE_ENV === 'development' && isProposalDone) {
+  if (isProposalExecutable) {
     return (
       <Execute contractAddress={votingContractAddress} onchainProposalId={onchainProposalId}>
         Execute
@@ -58,7 +65,7 @@ export function AcceptOrReject({
     return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
   }
 
-  if (!isProposalDone && smartAccount) {
+  if (!isProposalEnded && smartAccount) {
     return (
       <div className="inline-flex items-center gap-4">
         <Button onClick={() => onClick('REJECT')} variant="error">

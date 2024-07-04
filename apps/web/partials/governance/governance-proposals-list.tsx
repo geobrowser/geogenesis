@@ -122,6 +122,7 @@ const getFetchSpaceProposalsQuery = (
   ) {
     nodes {
       id
+      name
       onchainProposalId
 
       createdAtBlock

@@ -10,12 +10,7 @@ import { Entities } from '../utils/entity';
 import { NavUtils } from '../utils/utils';
 import { entityFragment, tripleFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
-import {
-  SubstreamEntity,
-  SubstreamProposal,
-  fromNetworkOps,
-  fromNetworkTriples,
-} from './subgraph/network-local-mapping';
+import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './subgraph/network-local-mapping';
 
 const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: string) => {
   const filter = [
@@ -193,7 +188,7 @@ export async function fetchProposalsByUser({
           ...v,
           space: spaceWithMetadata,
           createdBy: profile,
-          actions: fromNetworkOps(v.actions.nodes),
+          // actions: fromNetworkOps(v.actions.nodes),
         };
       }),
     };

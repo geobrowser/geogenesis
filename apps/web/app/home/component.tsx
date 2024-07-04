@@ -8,10 +8,10 @@ import { fetchProfile } from '~/core/io/subgraph';
 import {
   NavUtils,
   getImagePath,
+  getIsProposalEnded,
   getNoVotePercentage,
   getProposalTimeRemaining,
   getYesVotePercentage,
-  isProposalEnded,
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -230,7 +230,7 @@ async function PendingContentProposal({ proposal, user }: PendingMembershipPropo
   const noVotesPercentage = getNoVotePercentage(votes.nodes, votes.totalCount);
 
   const userVote = proposal.userVotes.nodes.length !== 0 ? proposal.userVotes.nodes[0].vote : null;
-  const isProposalDone = isProposalEnded(proposal.status, proposal.endTime);
+  const isProposalDone = getIsProposalEnded(proposal.status, proposal.endTime);
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-lg border border-grey-02 p-4">

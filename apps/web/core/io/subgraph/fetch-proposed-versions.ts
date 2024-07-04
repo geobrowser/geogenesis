@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { entityFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamProposedVersion, fromNetworkOps, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, SubstreamProposedVersion, fromNetworkTriples } from './network-local-mapping';
 
 const getProposedVersionsQuery = (entityId: string, skip: number) => `query {
   proposedVersions(filter: {entityId: {equalTo: ${JSON.stringify(
@@ -179,7 +179,7 @@ export async function fetchProposedVersions({
       ...v,
       createdBy: profile,
       space: spaceWithMetadata,
-      actions: fromNetworkOps(v.actions.nodes),
+      // actions: fromNetworkOps(v.actions.nodes),
     };
   });
 }

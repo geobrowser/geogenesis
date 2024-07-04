@@ -2,7 +2,8 @@ import { Effect, Either } from 'effect';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
-import { Ops, Proposals, ProposedVersions } from '~/sink/db';
+import { Accounts, Ops, Proposals, ProposedVersions } from '~/sink/db';
+import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
@@ -20,6 +21,47 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       requestId: block.requestId,
       message: `Processing ${proposalsFromIpfs.length} initial space proposals`,
     });
+
+    // If we are importing a space we need to make accounts for any creators
+    // that don't already exist on this chain.
+    const initialAccounts = [
+      ...new Set(
+        proposalsFromIpfs.map(p => {
+          return p.creator;
+        })
+      ),
+    ].map(creator => ({
+      id: creator,
+    }));
+
+    const writtenAccounts = yield* _(
+      Effect.tryPromise({
+        try: async () => {
+          await Accounts.upsert(initialAccounts);
+        },
+        catch: error => new CouldNotWriteAccountsError(String(error)),
+      }),
+      retryEffect,
+      Effect.either
+    );
+
+    if (Either.isLeft(writtenAccounts)) {
+      const error = writtenAccounts.left;
+      telemetry.captureException(error);
+
+      slog({
+        level: 'error',
+        requestId: block.requestId,
+        message: `Could not write accounts when writing proposals
+          Cause: ${error.cause}
+          Message: ${error.message}
+        `,
+      });
+
+      return;
+    }
+
+    console.log('written accounts', writtenAccounts);
 
     // @TODO: We need a special function to map a proposal endtime to be now
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposalsFromIpfs, block);

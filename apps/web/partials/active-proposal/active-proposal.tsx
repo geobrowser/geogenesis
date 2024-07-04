@@ -6,10 +6,12 @@ import * as React from 'react';
 
 import { fetchProposal } from '~/core/io/subgraph';
 import {
+  getIsProposalEnded,
+  getIsProposalExecutable,
   getNoVotePercentage,
   getProposalTimeRemaining,
+  getUserVote,
   getYesVotePercentage,
-  isProposalEnded,
   toTitleCase,
 } from '~/core/utils/utils';
 
@@ -59,10 +61,9 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
 
   const yesVotesPercentage = getYesVotePercentage(votes, votesCount);
   const noVotesPercentage = getNoVotePercentage(votes, votesCount);
-
-  const isProposalDone = isProposalEnded(proposal.status, proposal.endTime);
-  const userVote = connectedAddress ? votes.find(v => v.account.id === getAddress(connectedAddress)) : undefined;
-
+  const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
+  const isProposalExecutable = getIsProposalExecutable(proposal, yesVotesPercentage);
+  const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
   return (
@@ -75,10 +76,10 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
           <p>Review proposal</p>
         </div>
 
-        {/* @TODO: Use actual voting address from substream */}
         <AcceptOrReject
           onchainProposalId={proposal.onchainProposalId}
-          isProposalDone={isProposalDone}
+          isProposalEnded={isProposalEnded}
+          isProposalExecutable={isProposalExecutable}
           userVote={userVote}
           // We know that the space isn't null here, so casting is safe. If the space
           // doesn't exist we redirect the user. Eventually every space with governance
@@ -104,7 +105,7 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
                   </Link>
                   <span className="text-grey-04">·</span>
                   <span className="text-text">
-                    {isProposalDone ? toTitleCase(proposal.status) : `${hours}h ${minutes}m remaining`}
+                    {isProposalEnded ? toTitleCase(proposal.status) : `${hours}h ${minutes}m remaining`}
                   </span>
                 </div>
               </div>

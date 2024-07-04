@@ -3,13 +3,6 @@ import { AppEnv } from '../types';
 
 type SupportedChainId = '31337' | '19411';
 
-/**
- * 4. Next 14.3.0
- * 5. use getBlocksCollectionData everywhere
- *
- * Look at updated APIs and types in app
- */
-
 export type AppConfig = {
   chainId: SupportedChainId;
   rpc: string;
@@ -56,7 +49,8 @@ export const options: Record<AppEnv, AppConfig> = {
     chainId: '19411',
     rpc: variables.rpcEndpoint,
     ipfs: IPFS_GATEWAY_PATH,
-    api: 'https://geo-conduit.up.railway.app/graphql',
+    // api: 'https://geo-conduit.up.railway.app/graphql',
+    api: 'http://localhost:5001/graphql',
     bundler: `https://api.pimlico.io/v2/geo-testnet/rpc?apikey=${variables.accountAbstractionApiKey}`,
   },
   testnet: {
