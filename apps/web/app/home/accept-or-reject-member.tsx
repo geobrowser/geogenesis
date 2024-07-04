@@ -18,7 +18,7 @@ export function AcceptOrRejectMember(props: Props) {
   const onApprove = async () => {
     if (!props.membershipContractAddress || !smartAccount) return;
 
-    await smartAccount.sendTransaction({
+    const hash = await smartAccount.sendTransaction({
       to: props.membershipContractAddress as `0x${string}`,
       value: 0n,
       data: encodeFunctionData({
@@ -27,12 +27,14 @@ export function AcceptOrRejectMember(props: Props) {
         args: [BigInt(props.onchainProposalId)],
       }),
     });
+
+    console.log('transaction successful', hash);
   };
 
   const onReject = async () => {
     if (!props.membershipContractAddress || !smartAccount) return;
 
-    await smartAccount.sendTransaction({
+    const hash = await smartAccount.sendTransaction({
       to: props.membershipContractAddress as `0x${string}`,
       value: 0n,
       data: encodeFunctionData({
@@ -41,6 +43,8 @@ export function AcceptOrRejectMember(props: Props) {
         args: [BigInt(props.onchainProposalId)],
       }),
     });
+
+    console.log('transaction successful', hash);
   };
 
   return (

@@ -34,7 +34,7 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
       if (maybeSpaceIdForVotingPlugin) {
         const newMember: S.space_editors.Insertable = {
           account_id: getChecksumAddress(editor.editorAddress),
-          space_id: getChecksumAddress(maybeSpaceIdForVotingPlugin),
+          space_id: maybeSpaceIdForVotingPlugin,
           created_at: block.timestamp,
           created_at_block: block.blockNumber,
         };

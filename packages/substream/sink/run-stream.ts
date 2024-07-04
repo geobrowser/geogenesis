@@ -121,7 +121,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       connectTransport: transport,
       substreamPackage,
       outputModule: 'geo_out',
-      productionMode: false,
+      productionMode: true,
       // The caller determines which block or cursor to start from based on
       // error handling, CLI flags, cache state, etc. We default to cursor
       // if it exists or start from the passed in block if not.
