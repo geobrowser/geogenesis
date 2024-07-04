@@ -165,7 +165,7 @@ const ReviewChanges = () => {
   const totalChanges = getTotalChanges(changes as Record<string, Change.Changeset>);
   const totalEdits = getTotalEdits(changes, unstagedChanges);
 
-  const changedEntityIds = Object.keys(changes);
+  // const changedEntityIds = Object.keys(changes);
 
   return (
     <>
@@ -250,7 +250,8 @@ const ReviewChanges = () => {
               />
             </div>
             <div className="flex flex-col gap-16 divide-y divide-grey-02">
-              {changedEntityIds.map((entityId: EntityId) => (
+              Diffs are temporarily disabled
+              {/* {changedEntityIds.map((entityId: EntityId) => (
                 <ChangedEntity
                   key={entityId}
                   spaceId={activeSpace}
@@ -260,7 +261,7 @@ const ReviewChanges = () => {
                   unstagedChanges={unstagedChanges}
                   setUnstagedChanges={setUnstagedChanges}
                 />
-              ))}
+              ))} */}
             </div>
           </div>
         </div>

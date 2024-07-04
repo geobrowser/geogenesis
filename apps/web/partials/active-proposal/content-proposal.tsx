@@ -8,7 +8,6 @@ import type { Change as Difference } from 'diff';
 import * as React from 'react';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
-import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { fetchEntity, fetchTriples } from '~/core/io/subgraph';
 import { TableBlockFilter } from '~/core/state/table-block-store';
@@ -21,34 +20,32 @@ import { colors } from '~/design-system/theme/colors';
 
 import { TableBlockPlaceholder } from '../blocks/table/table-block';
 import { DateTimeDiff } from '../review/review';
-import { fetchPreviousProposalId } from './fetch-previous-proposal-id';
-import { getActiveProposalDiff } from './get-active-proposal-diff';
-import { getEndedProposalDiff } from './get-ended-proposal-diff';
 
 export async function ContentProposal({ proposal }: { proposal: Proposal }) {
-  const previousProposalId = await fetchPreviousProposalId({
-    spaceId: proposal.space.id,
-    createdAt: proposal.createdAt,
-  });
+  // const previousProposalId = await fetchPreviousProposalId({
+  //   spaceId: proposal.space.id,
+  //   createdAt: proposal.createdAt,
+  // });
 
   // Depending on whether the proposal is active or ended we need to compare against
   // either the live versions of entities in the proposal or against the state of
   // entities in the proposal as they existed at the time the proposal ended.
-  const { changes, proposals } = getIsProposalEnded(proposal.status, proposal.endTime)
-    ? await getEndedProposalDiff(proposal, previousProposalId, Subgraph)
-    : await getActiveProposalDiff(proposal, previousProposalId, Subgraph);
+  // const { changes, proposals } = getIsProposalEnded(proposal.status, proposal.endTime)
+  //   ? await getEndedProposalDiff(proposal, previousProposalId, Subgraph)
+  //   : await getActiveProposalDiff(proposal, previousProposalId, Subgraph);
 
-  if (!proposals.selected) {
-    return <div className="text-metadataMedium">Selected proposal not found.</div>;
-  }
+  // if (!proposals.selected) {
+  //   return <div className="text-metadataMedium">Selected proposal not found.</div>;
+  // }
 
-  const changedEntityIds = Object.keys(changes);
+  // const changedEntityIds = Object.keys(changes);
 
   return (
     <div className="flex flex-col gap-16 divide-y divide-grey-02">
-      {changedEntityIds.map((entityId: EntityId) => (
+      {/* {changedEntityIds.map((entityId: EntityId) => (
         <ChangedEntity key={entityId} change={changes[entityId]} entityId={entityId} />
-      ))}
+      ))} */}
+      Diffs are temporarily disabled
     </div>
   );
 }
