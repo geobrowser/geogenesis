@@ -7,6 +7,7 @@ import { encodeFunctionData } from 'viem';
 import * as React from 'react';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useVote } from '~/core/hooks/use-vote';
 import { Proposal, Vote } from '~/core/types';
 
 import { Button } from '~/design-system/button';
@@ -33,25 +34,12 @@ export function AcceptOrReject({
   onchainProposalId,
   votingContractAddress,
 }: Props) {
+  const vote = useVote({
+    address: votingContractAddress,
+    onchainProposalId,
+  });
+
   const smartAccount = useSmartAccount();
-
-  const onClick = async (option: Vote['vote']) => {
-    if (!smartAccount) {
-      return;
-    }
-
-    const hash = await smartAccount.sendTransaction({
-      to: votingContractAddress,
-      value: 0n,
-      data: encodeFunctionData({
-        abi: MainVotingAbi,
-        functionName: 'vote',
-        args: [BigInt(onchainProposalId), option === 'ACCEPT' ? VoteOption.Yes : VoteOption.No, true],
-      }),
-    });
-
-    console.log('voting transaction successful', hash);
-  };
 
   if (isProposalExecutable) {
     return (
@@ -80,11 +68,11 @@ export function AcceptOrReject({
   if (!isProposalEnded && smartAccount) {
     return (
       <div className="inline-flex items-center gap-4">
-        <Button onClick={() => onClick('REJECT')} variant="error">
+        <Button onClick={() => vote('REJECT')} variant="error">
           Reject
         </Button>
         <span>or</span>
-        <Button onClick={() => onClick('ACCEPT')} variant="success">
+        <Button onClick={() => vote('ACCEPT')} variant="success">
           Accept
         </Button>
       </div>

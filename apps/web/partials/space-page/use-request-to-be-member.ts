@@ -7,15 +7,19 @@ import { encodeFunctionData, getAddress, stringToHex } from 'viem';
 
 import { TransactionWriteFailedError } from '~/core/errors';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { uploadBinary } from '~/core/io/storage/storage';
 import { Services } from '~/core/services';
 
 export function useRequestToBeMember(votingPluginAddress: string | null) {
   const { storageClient } = Services.useServices();
   const smartAccount = useSmartAccount();
+  const tx = useSmartAccountTransaction({
+    address: votingPluginAddress,
+  });
 
   const write = async () => {
-    if (!votingPluginAddress || !smartAccount) {
+    if (!smartAccount) {
       return null;
     }
 
@@ -37,15 +41,7 @@ export function useRequestToBeMember(votingPluginAddress: string | null) {
         args: [stringToHex(cid), requestorAddress],
       });
 
-      return yield* Effect.tryPromise({
-        try: () =>
-          smartAccount.sendTransaction({
-            to: votingPluginAddress as `0x${string}`,
-            value: 0n,
-            data: callData,
-          }),
-        catch: error => new TransactionWriteFailedError(`Publish failed: ${error}`),
-      });
+      return yield* tx(callData);
     });
 
     const publishProgram = Effect.gen(function* () {
