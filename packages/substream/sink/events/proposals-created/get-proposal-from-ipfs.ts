@@ -154,7 +154,7 @@ export function getProposalFromIpfs(
         const mappedProposal: SubspaceProposal = {
           ...proposal,
           type: validIpfsMetadata.type === ActionType.ADD_SUBSPACE ? 'ADD_SUBSPACE' : 'REMOVE_SUBSPACE',
-          name: validIpfsMetadata.name ?? null,
+          name: `Add subspace: ${maybeSpaceIdForSubspaceDaoAddress}`,
           proposalId: parsedSubspace.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
@@ -181,7 +181,7 @@ export function getProposalFromIpfs(
         const mappedProposal: EditorshipProposal = {
           ...proposal,
           type: validIpfsMetadata.type === ActionType.ADD_EDITOR ? 'ADD_EDITOR' : 'REMOVE_EDITOR',
-          name: validIpfsMetadata.name ?? null,
+          name: `Add Editor: ${parsedMembership.user}`,
           proposalId: parsedMembership.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
@@ -208,7 +208,7 @@ export function getProposalFromIpfs(
         const mappedProposal: MembershipProposal = {
           ...proposal,
           type: validIpfsMetadata.type === ActionType.ADD_MEMBER ? 'ADD_MEMBER' : 'REMOVE_MEMBER',
-          name: validIpfsMetadata.name ?? null,
+          name: `Add Member: ${parsedMembership.user}`,
           proposalId: parsedMembership.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
