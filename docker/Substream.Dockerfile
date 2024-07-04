@@ -34,7 +34,13 @@ COPY --from=builder /app/packages/substream/dist /app/packages/substream/dist
 
 COPY packages/substream/geo-substream.spkg /app/
 
-CMD sh -c "\
-    /app/sqlx migrate run --source /app/migrations -D ${DATABASE_URL} && \
-    node /app/packages/substream/dist/index.js --start-block 9000 \
-"
+# if $START_BLOCK is set - we always start from $START_BLOCK
+# otherwise we start from the last block in the database
+ENTRYPOINT ["sh", "-c", " \
+  /app/sqlx migrate run --source /app/migrations -D ${DATABASE_URL} && \
+  if [ -n \"${START_BLOCK}\" ]; then \
+    node /app/packages/substream/dist/index.js --start-block ${START_BLOCK}; \
+  else \
+    node /app/packages/substream/dist/index.js; \
+  fi \
+"]
