@@ -15,8 +15,6 @@ export function useExecute({ address, onchainProposalId }: Args) {
   });
 
   const execute = async () => {
-    console.log('error', error);
-
     const txEffect = await tx(
       encodeFunctionData({
         abi: MainVotingAbi,
