@@ -154,11 +154,11 @@ export function getProposalFromIpfs(
         const mappedProposal: SubspaceProposal = {
           ...proposal,
           type: validIpfsMetadata.type === ActionType.ADD_SUBSPACE ? 'ADD_SUBSPACE' : 'REMOVE_SUBSPACE',
-          name: `Add subspace: ${maybeSpaceIdForSubspaceDaoAddress}`,
+          name: `Add subspace: ${maybeSpaceIdForSubspaceDaoAddress.id}`,
           proposalId: parsedSubspace.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          subspace: maybeSpaceIdForSubspaceDaoAddress, // this should be the space id
+          subspace: maybeSpaceIdForSubspaceDaoAddress.id, // this should be the space id
           creator: getChecksumAddress(proposal.creator),
           space: maybeSpaceIdForVotingPlugin,
         };
