@@ -11,10 +11,10 @@ export class Spaces {
 
   static async findForDaoAddress(daoAddress: string) {
     const result = await db
-      .selectOne('spaces', { dao_address: getChecksumAddress(daoAddress) }, { columns: ['id'] })
+      .selectOne('spaces', { dao_address: getChecksumAddress(daoAddress) }, { columns: ['id', 'dao_address'] })
       .run(pool);
 
-    return result ? result.id : null;
+    return result ? result : null;
   }
 
   static async findForVotingPlugin(votingPluginAddress: string) {

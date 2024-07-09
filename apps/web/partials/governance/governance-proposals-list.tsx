@@ -10,7 +10,7 @@ import { fetchProfile } from '~/core/io/subgraph';
 import { tripleFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
-import { OmitStrict, Profile, Proposal, Vote } from '~/core/types';
+import { OmitStrict, Profile, Vote } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -122,6 +122,8 @@ const getFetchSpaceProposalsQuery = (
   ) {
     nodes {
       id
+      name
+      type
       onchainProposalId
 
       createdAtBlock

@@ -1,7 +1,8 @@
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
+import { getAddress } from 'viem';
 
 import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
-import { Entity as IEntity, Proposal, Vote } from '~/core/types';
+import { Entity as IEntity, OmitStrict, Proposal, Vote } from '~/core/types';
 
 import { Entities } from './entity';
 
@@ -287,8 +288,17 @@ export function toTitleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
-export function isProposalEnded(status: Proposal['status'], endTime: number) {
+export function getIsProposalEnded(status: Proposal['status'], endTime: number) {
   return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
+}
+
+export function getIsProposalExecutable(
+  proposal: OmitStrict<Proposal, 'proposedVersions'>,
+  yesVotesPercentage: number
+) {
+  return (
+    getIsProposalEnded(proposal.status, proposal.endTime) && yesVotesPercentage > 50 && proposal.status !== 'ACCEPTED'
+  );
 }
 
 export function getYesVotePercentage(votes: Vote[], votesCount: number) {
@@ -305,6 +315,10 @@ export function getNoVotePercentage(votes: Vote[], votesCount: number) {
   }
 
   return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
+}
+
+export function getUserVote(votes: Vote[], address: string) {
+  return votes.find(v => v.account.id === getAddress(address));
 }
 
 export function getProposalTimeRemaining(endTime: number) {

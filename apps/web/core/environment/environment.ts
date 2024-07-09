@@ -3,13 +3,6 @@ import { AppEnv } from '../types';
 
 type SupportedChainId = '31337' | '19411';
 
-/**
- * 4. Next 14.3.0
- * 5. use getBlocksCollectionData everywhere
- *
- * Look at updated APIs and types in app
- */
-
 export type AppConfig = {
   chainId: SupportedChainId;
   rpc: string;

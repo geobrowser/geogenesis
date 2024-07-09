@@ -15,6 +15,8 @@ import { Create } from '~/design-system/icons/create';
 // import { CsvImport } from '~/design-system/icons/csv-import';
 import { Menu } from '~/design-system/menu';
 
+import { HistoryPanel } from '../history/history-panel';
+
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
   membersComponent: React.ReactElement;
@@ -97,8 +99,9 @@ export function SpacePageMetadataHeader({
             <Create />
           </Link>
         )}
-        {/* <HistoryPanel>
-          {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
+        <HistoryPanel>
+          History is temporarily disabled
+          {/* {proposals?.pages?.length === 1 && proposals?.pages[0].length === 0 && <HistoryEmpty />}
           {renderedProposals?.map((group, index) => (
             <React.Fragment key={index}>
               {group.map((p, index) => (
@@ -128,8 +131,8 @@ export function SpacePageMetadataHeader({
                 </SmallButton>
               )}
             </div>
-          )}
-        </HistoryPanel> */}
+          )} */}
+        </HistoryPanel>
         <Menu
           open={open}
           onOpenChange={onOpenChange}

@@ -8,6 +8,7 @@ import { entityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { Proposal } from '~/core/types';
+import { getImagePath } from '~/core/utils/utils';
 
 import { AddTo } from '~/design-system/icons/add-to';
 import { EditSmall } from '~/design-system/icons/edit-small';
@@ -23,12 +24,18 @@ export async function SubspaceProposal({ proposal }: Props) {
     fetchSpace({ id: proposal.space.id }),
   ]);
 
+  console.log('subspace', subspace);
+
   if (!subspace) {
     // @TODO: Error handle though this should never happen
     return null;
   }
 
   const isAddSubspace = proposal.type === 'ADD_SUBSPACE';
+  const spaceImage = space?.spaceConfig?.image ? getImagePath(space.spaceConfig.image) : PLACEHOLDER_SPACE_IMAGE;
+  const subspaceImage = subspace?.spaceConfig?.image
+    ? getImagePath(subspace?.spaceConfig?.image)
+    : PLACEHOLDER_SPACE_IMAGE;
 
   return (
     <div className="flex w-full justify-center">
@@ -37,7 +44,7 @@ export async function SubspaceProposal({ proposal }: Props) {
           <div className="flex w-full flex-col items-center gap-6">
             <div className="relative h-[72px] w-[72px] overflow-hidden rounded-lg border border-white object-cover shadow-lg">
               <Image
-                src={space?.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE}
+                src={spaceImage}
                 alt={`Space cover image for ${space?.spaceConfig?.name ?? space?.id}`}
                 className="h-[72px] w-[72px] rounded-lg"
                 objectFit="cover"
@@ -75,7 +82,7 @@ export async function SubspaceProposal({ proposal }: Props) {
                 <div className="flex items-center gap-2">
                   <div className="relative h-4 w-4 overflow-hidden rounded-sm object-cover">
                     <Image
-                      src={subspace?.spaceConfig?.image ?? PLACEHOLDER_SPACE_IMAGE}
+                      src={subspaceImage}
                       alt={`Space cover image for ${subspace?.spaceConfig?.name ?? space?.id}`}
                       className="h-4 w-4 rounded-sm"
                       objectFit="cover"

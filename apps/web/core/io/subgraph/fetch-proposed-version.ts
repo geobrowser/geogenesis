@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { entityFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamProposedVersion, fromNetworkOps, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, SubstreamProposedVersion, fromNetworkTriples } from './network-local-mapping';
 
 export const getProposedVersionQuery = (id: string) => `query {
   proposedVersion(id: ${JSON.stringify(id)}) {
@@ -173,7 +173,7 @@ export async function fetchProposedVersion({
   return {
     ...proposedVersion,
     space: spaceWithMetadata,
-    ops: fromNetworkOps(proposedVersion.actions.nodes),
+    // ops: fromNetworkOps(proposedVersion.actions.nodes),
     createdBy: profile,
   };
 }

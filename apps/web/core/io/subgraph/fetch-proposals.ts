@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkOps, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './network-local-mapping';
 
 const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
   proposals(first: ${first}, filter: {spaceId: {equalTo: ${JSON.stringify(
@@ -199,7 +199,7 @@ export async function fetchProposals({
           ...v,
           space: spaceWithMetadata,
           createdBy: profile,
-          actions: fromNetworkOps(v.actions.nodes),
+          // actions: fromNetworkOps(v.actions.nodes),
         };
       }),
     };

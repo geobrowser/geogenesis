@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkOps, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './network-local-mapping';
 
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
@@ -232,30 +232,8 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
         ...v,
         createdBy: profile,
         space: spaceWithMetadata,
-        actions: fromNetworkOps(v.actions.nodes),
+        // actions: fromNetworkOps(v.actions.nodes),
       };
     }),
   };
 }
-
-/**
- * 
- *     
- proposalVotes: {
-      totalCount: proposal.proposalVotes.totalCount,
-      nodes: proposal.proposalVotes.nodes.map(v => {
-        return {
-          ...v,
-          vote: v.vote,
-          voter: voterProfiles[v.accountId] ?? {
-            id: v.accountId,
-            name: null,
-            avatarUrl: null,
-            coverUrl: null,
-            address: v.accountId as `0x${string}`,
-            profileLink: null,
-          },
-        };
-      }),
-    },
- */

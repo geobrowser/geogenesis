@@ -20,7 +20,7 @@ interface Props {
   searchParams: { proposalId?: string };
 }
 
-const votingPeriod = '24h';
+const votingPeriod = '1h';
 const passThreshold = '51%';
 
 export const dynamic = 'force-dynamic';

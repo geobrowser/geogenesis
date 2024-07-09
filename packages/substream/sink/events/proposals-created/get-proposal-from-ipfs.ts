@@ -138,14 +138,27 @@ export function getProposalFromIpfs(
           return null;
         }
 
+        const maybeSpaceIdForSubspaceDaoAddress = yield* _(
+          Effect.promise(() => Spaces.findForDaoAddress(getChecksumAddress(parsedSubspace.subspace)))
+        );
+
+        if (!maybeSpaceIdForSubspaceDaoAddress) {
+          slog({
+            requestId: block.requestId,
+            message: `Failed to get space for subspace DAO address ${parsedSubspace.subspace}`,
+            level: 'error',
+          });
+          return null;
+        }
+
         const mappedProposal: SubspaceProposal = {
           ...proposal,
           type: validIpfsMetadata.type === ActionType.ADD_SUBSPACE ? 'ADD_SUBSPACE' : 'REMOVE_SUBSPACE',
-          name: validIpfsMetadata.name ?? null,
+          name: `Add subspace: ${maybeSpaceIdForSubspaceDaoAddress.id}`,
           proposalId: parsedSubspace.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
-          subspace: getChecksumAddress(parsedSubspace.subspace),
+          subspace: maybeSpaceIdForSubspaceDaoAddress.id, // this should be the space id
           creator: getChecksumAddress(proposal.creator),
           space: maybeSpaceIdForVotingPlugin,
         };
@@ -168,7 +181,7 @@ export function getProposalFromIpfs(
         const mappedProposal: EditorshipProposal = {
           ...proposal,
           type: validIpfsMetadata.type === ActionType.ADD_EDITOR ? 'ADD_EDITOR' : 'REMOVE_EDITOR',
-          name: validIpfsMetadata.name ?? null,
+          name: `Add Editor: ${parsedMembership.user}`,
           proposalId: parsedMembership.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),
@@ -195,7 +208,7 @@ export function getProposalFromIpfs(
         const mappedProposal: MembershipProposal = {
           ...proposal,
           type: validIpfsMetadata.type === ActionType.ADD_MEMBER ? 'ADD_MEMBER' : 'REMOVE_MEMBER',
-          name: validIpfsMetadata.name ?? null,
+          name: `Add Member: ${parsedMembership.user}`,
           proposalId: parsedMembership.id,
           onchainProposalId: proposal.proposalId,
           pluginAddress: getChecksumAddress(proposal.pluginAddress),

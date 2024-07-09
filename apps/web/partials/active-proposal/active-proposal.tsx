@@ -1,15 +1,16 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getAddress } from 'viem';
 
 import * as React from 'react';
 
 import { fetchProposal } from '~/core/io/subgraph';
 import {
+  getIsProposalEnded,
+  getIsProposalExecutable,
   getNoVotePercentage,
   getProposalTimeRemaining,
+  getUserVote,
   getYesVotePercentage,
-  isProposalEnded,
   toTitleCase,
 } from '~/core/utils/utils';
 
@@ -54,15 +55,16 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
     redirect(`/space/${spaceId}/governance`);
   }
 
+  console.log('review active proposal type', proposal.type);
+
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
 
   const yesVotesPercentage = getYesVotePercentage(votes, votesCount);
   const noVotesPercentage = getNoVotePercentage(votes, votesCount);
-
-  const isProposalDone = isProposalEnded(proposal.status, proposal.endTime);
-  const userVote = connectedAddress ? votes.find(v => v.account.id === getAddress(connectedAddress)) : undefined;
-
+  const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
+  const isProposalExecutable = getIsProposalExecutable(proposal, yesVotesPercentage);
+  const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
 
   return (
@@ -75,14 +77,16 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
           <p>Review proposal</p>
         </div>
 
-        {/* @TODO: Use actual voting address from substream */}
         <AcceptOrReject
           onchainProposalId={proposal.onchainProposalId}
-          isProposalDone={isProposalDone}
+          isProposalEnded={isProposalEnded}
+          isProposalExecutable={isProposalExecutable}
+          status={proposal.status}
           userVote={userVote}
           // We know that the space isn't null here, so casting is safe. If the space
           // doesn't exist we redirect the user. Eventually every space with governance
           // will have a main voting plugin address
+          // @TODO(migration): This address will be different for the personal space plugin
           votingContractAddress={space?.mainVotingPluginAddress as `0x${string}`}
         />
       </div>
@@ -104,7 +108,7 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
                   </Link>
                   <span className="text-grey-04">·</span>
                   <span className="text-text">
-                    {isProposalDone ? toTitleCase(proposal.status) : `${hours}h ${minutes}m remaining`}
+                    {isProposalEnded ? toTitleCase(proposal.status) : `${hours}h ${minutes}m remaining`}
                   </span>
                 </div>
               </div>
