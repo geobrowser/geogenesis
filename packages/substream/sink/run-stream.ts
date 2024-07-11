@@ -3,7 +3,7 @@ import { createGeoId } from '@geogenesis/sdk';
 import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Effect, Secret, Stream } from 'effect';
+import { Data, Duration, Effect, Predicate, Schedule, Secret, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
@@ -77,6 +77,11 @@ export class CouldNotWriteVotesError extends Error {
   _tag: 'CouldNotWriteVotesError' = 'CouldNotWriteVotesError';
 }
 
+class TimeoutError extends Data.TaggedClass('TimeoutError')<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 interface StreamConfig {
   startBlockNumber?: number;
   // We pass in this flag as it might change depending on the execution state of the stream.
@@ -100,7 +105,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
     }
 
     const substreamPackage = readPackageFromFile(MANIFEST);
-    console.info(`Using substream package ${MANIFEST}`);
 
     const { token } = yield* _(
       Effect.tryPromise({
@@ -141,6 +145,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const blockNumber = Number(message.clock?.number.toString());
           const timestamp = Number(message.clock?.timestamp?.seconds.toString());
 
+          // @TODO: Should not write cursor until we have processed all events in it
           yield* _(
             Effect.tryPromise({
               try: () => writeCursor(cursor, blockNumber),
@@ -523,8 +528,18 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
       },
     });
 
-    const runStream = Stream.run(stream, sink);
+    // The stream might time out after a period of time and no longer receive events from
+    // the substream endpoint. We timeout the stream with a TimeoutError after 5 minutes.
+    // If the caller  receives a TimeoutError we restart the stream. Any other error types
+    // bubble up to the caller.
+    const streamWithTimeout = stream.pipe(
+      Stream.timeoutFail(
+        () => new TimeoutError({ message: 'Stream timed out after 5 minutes', cause: null }),
+        Duration.minutes(5)
+      )
+    );
 
+    const runStream = Stream.run(streamWithTimeout, sink);
     return yield* _(runStream);
   });
 }

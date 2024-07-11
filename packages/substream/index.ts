@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { Duration, Effect, Either, Schedule, pipe } from 'effect';
+import { Duration, Effect, Either, Predicate, Schedule, pipe } from 'effect';
 
 import { bootstrapRoot } from './sink/bootstrap-root';
 import { Environment, EnvironmentLive } from './sink/environment';
@@ -7,6 +7,7 @@ import { getStreamConfiguration } from './sink/get-stream-configuration';
 import { runStream } from './sink/run-stream';
 import { Telemetry, TelemetryLive } from './sink/telemetry';
 import { resetPublicTablesToGenesis } from './sink/utils/reset-public-tables-to-genesis';
+import { slog } from './sink/utils/slog';
 
 function initialize() {}
 
@@ -59,7 +60,7 @@ async function main() {
    */
   let runCount = 1;
 
-  const runStreamWithRetries = (config: { shouldUseCursor: boolean; startBlockNumber: number | undefined }) =>
+  const runStreamWithConfiguration = (config: { shouldUseCursor: boolean; startBlockNumber: number | undefined }) =>
     Effect.retry(
       Effect.gen(function* (_) {
         let shouldUseCursor = false;
@@ -89,25 +90,36 @@ async function main() {
           Effect.provideService(Environment, EnvironmentLive)
         );
       }),
-      // Retry jittered exponential with base of 100ms for up to 10 minutes.
-      Schedule.exponential(100).pipe(
+      // Retry only while we have timeout errors. All other errors will bubble
+      // to the next caller.
+      Schedule.exponential(Duration.millis(100)).pipe(
         Schedule.jittered,
-        Schedule.compose(Schedule.elapsed),
-        // Retry for 10 minutes.
-        Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(600)))
+        Schedule.whileInput(Predicate.isTagged('TimeoutError')),
+        Schedule.tapInput(() =>
+          Effect.sync(() => slog({ message: 'Restarting stream after timeout period', requestId: '-1', level: 'warn' }))
+        )
       )
     );
 
-  // Retry the stream for ~10 minutes. If it fails during indexing we will restart
-  // from the last indexed cursor. The cursor is read inside `configureStream` so that
-  // retries will try and read from the latest cursor state if available.
-  //
-  // If there is no cursor for some reason it will run using the passed in start
-  // block number. If neither the block number or cursor is available then it will
-  // throw an error.
   const stream = await pipe(
     getStreamConfiguration(options, blockNumberFromCache),
-    config => runStreamWithRetries(config),
+    config =>
+      // Retry the stream for ~10 minutes. If it fails during indexing we will restart
+      // from the last indexed cursor. The cursor is read inside `configureStream` so that
+      // retries will try and read from the latest cursor state if available.
+      //
+      // If there is no cursor for some reason it will run using the passed in start
+      // block number. If neither the block number or cursor is available then it will
+      // throw an error.
+      Effect.retry(
+        runStreamWithConfiguration(config),
+        Schedule.exponential(Duration.millis(100)).pipe(
+          Schedule.jittered,
+          Schedule.compose(Schedule.elapsed),
+          // Retry for 10 minutes.
+          Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.minutes(10)))
+        )
+      ),
     Effect.either,
     Effect.runPromise
   );
@@ -117,6 +129,9 @@ async function main() {
     TelemetryLive.captureException(error);
 
     switch (error._tag) {
+      case 'TimeoutError':
+        console.error('The stream timed out', error);
+        break;
       case 'SinkError':
         console.error('A sink error occurred:', error);
         break;
