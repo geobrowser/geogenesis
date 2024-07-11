@@ -32,7 +32,6 @@ interface DeployArgs {
 export function useDeploySpace() {
   const sdkContextParams = useAragon();
   const smartAccount = useSmartAccount();
-  const client: Client = new Client(new Context(sdkContextParams));
 
   const deploy = async (args: DeployArgs) => {
     if (!smartAccount) return;
@@ -46,6 +45,7 @@ export function useDeploySpace() {
       ops,
     });
 
+    const client: Client = new Client(new Context(sdkContextParams));
     const storage = new StorageClient(Environment.getConfig().ipfs);
     const firstBlockContentUri = await storage.uploadBinary(initialContent);
 
