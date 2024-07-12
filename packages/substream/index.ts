@@ -103,20 +103,19 @@ async function main() {
 
   const stream = await pipe(
     getStreamConfiguration(options, blockNumberFromCache),
+    // Retry the stream for ~10 minutes. If it fails during indexing we will restart
+    // from the last indexed cursor. The cursor is read inside `configureStream` so that
+    // retries will try and read from the latest cursor state if available.
+    //
+    // If there is no cursor for some reason it will run using the passed in start
+    // block number. If neither the block number or cursor is available then it will
+    // throw an error.
     config =>
-      // Retry the stream for ~10 minutes. If it fails during indexing we will restart
-      // from the last indexed cursor. The cursor is read inside `configureStream` so that
-      // retries will try and read from the latest cursor state if available.
-      //
-      // If there is no cursor for some reason it will run using the passed in start
-      // block number. If neither the block number or cursor is available then it will
-      // throw an error.
       Effect.retry(
         runStreamWithConfiguration(config),
         Schedule.exponential(Duration.millis(100)).pipe(
           Schedule.jittered,
           Schedule.compose(Schedule.elapsed),
-          // Retry for 10 minutes.
           Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.minutes(10)))
         )
       ),
