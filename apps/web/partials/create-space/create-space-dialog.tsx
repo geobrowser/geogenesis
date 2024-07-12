@@ -29,6 +29,8 @@ import { RadioGroup } from '~/design-system/radio-group';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
+import { deploy } from '~/app/api/deploy';
+
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const nameAtom = atom<string>('');
 export const avatarAtom = atom<string>('');
@@ -44,7 +46,7 @@ export function CreateSpaceDialog() {
   const smartAccount = useSmartAccount();
   const address = smartAccount?.account.address;
   const [open, onOpenChange] = useState(false);
-  const { deploy } = useDeploySpace();
+  // const { deploy } = useDeploySpace();
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const name = useAtomValue(nameAtom);
@@ -65,6 +67,7 @@ export function CreateSpaceDialog() {
         type: spaceType,
         spaceName: name,
         spaceAvatarUri: avatar,
+        initialEditorAddress: address,
       });
 
       if (!spaceId) {

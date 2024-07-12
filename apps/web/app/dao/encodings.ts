@@ -1,13 +1,29 @@
-import { PluginInstallItem } from '@aragon/sdk-client-common';
+import { CreateDaoParams } from '@aragon/sdk-client';
 import { VotingMode } from '@geogenesis/sdk';
 import {
   GOVERNANCE_PLUGIN_REPO_ADDRESS,
   PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
   SPACE_PLUGIN_REPO_ADDRESS,
 } from '@geogenesis/sdk/contracts';
-import { encodeAbiParameters, hexToBytes } from 'viem';
+import { encodeAbiParameters } from 'viem';
 
 import { ZERO_ADDRESS } from '~/core/constants';
+import { OmitStrict } from '~/core/types';
+
+// Using viem for the dao creation requires a slightly different encoding state for our plugins.
+// When using ethers the type for `data` is expected to be a Uint8Array, but when using viem and
+// encodeFunctionData it expects a hex bytes string.
+export interface CreateGeoDaoParams extends OmitStrict<CreateDaoParams, 'plugins'> {
+  plugins: PluginInstallationWithViem[];
+}
+
+// Using viem for the dao creation requires a slightly different encoding state for our plugins.
+// When using ethers the type for `data` is expected to be a Uint8Array, but when using viem and
+// encodeFunctionData it expects a hex bytes string.
+export type PluginInstallationWithViem = {
+  id: `0x${string}`;
+  data: `0x${string}`;
+};
 
 export function getSpacePluginInstallItem({
   firstBlockContentUri,
@@ -17,7 +33,7 @@ export function getSpacePluginInstallItem({
   firstBlockContentUri: string;
   pluginUpgrader: string;
   precedessorSpace?: string;
-}): PluginInstallItem {
+}): PluginInstallationWithViem {
   // from `encodeInstallationParams`
   const prepareInstallationInputs = [
     {
@@ -37,8 +53,8 @@ export function getSpacePluginInstallItem({
     },
   ];
 
-  // This works but only if it's the only plugin being published. If we try multiple plugins with the same
-  // upgrader we get an unpredictable gas limit
+  // This works but only if it's the only plugin being published. If we try multiple plugins with
+  // the same upgrader we get an unpredictable gas limit
   const encodedParams = encodeAbiParameters(prepareInstallationInputs, [
     firstBlockContentUri,
     precedessorSpace,
@@ -47,7 +63,7 @@ export function getSpacePluginInstallItem({
 
   return {
     id: SPACE_PLUGIN_REPO_ADDRESS,
-    data: hexToBytes(encodedParams),
+    data: encodedParams,
   };
 }
 
@@ -55,7 +71,7 @@ export function getPersonalSpaceGovernancePluginInstallItem({
   initialEditor,
 }: {
   initialEditor: string;
-}): PluginInstallItem {
+}): PluginInstallationWithViem {
   // Define the ABI for the prepareInstallation function's inputs. This comes from the
   // `personal-space-admin-build-metadata.json` in our contracts repo, not from the setup plugin's ABIs.
   const prepareInstallationInputs = [
@@ -71,7 +87,7 @@ export function getPersonalSpaceGovernancePluginInstallItem({
 
   return {
     id: PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
-    data: hexToBytes(encodedParams),
+    data: encodedParams,
   };
 }
 
@@ -84,7 +100,7 @@ export function getGovernancePluginInstallItem(params: {
   initialEditors: `0x${string}`[];
   memberAccessProposalDuration: bigint;
   pluginUpgrader: `0x${string}`;
-}): PluginInstallItem {
+}): PluginInstallationWithViem {
   // From `encodeInstallationParams`
   const prepareInstallationInputs = [
     {
@@ -135,6 +151,6 @@ export function getGovernancePluginInstallItem(params: {
 
   return {
     id: GOVERNANCE_PLUGIN_REPO_ADDRESS,
-    data: hexToBytes(encodedParams),
+    data: encodedParams,
   };
 }

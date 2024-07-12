@@ -1,9 +1,9 @@
-import { Client, Context, CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-client';
+import { DaoCreationSteps } from '@aragon/sdk-client';
 import { Op, SYSTEM_IDS, VotingMode, createImageEntityOps } from '@geogenesis/sdk';
 import { createEditProposal } from '@geogenesis/sdk/proto';
-import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { getAddress } from 'viem';
+import 'viem/accounts';
 
 import { Environment } from '~/core/environment';
 import { useAragon } from '~/core/hooks/use-aragon';
@@ -45,7 +45,6 @@ export function useDeploySpace() {
       ops,
     });
 
-    const client: Client = new Client(new Context(sdkContextParams));
     const storage = new StorageClient(Environment.getConfig().ipfs);
     const firstBlockContentUri = await storage.uploadBinary(initialContent);
 
@@ -78,7 +77,7 @@ export function useDeploySpace() {
       };
 
       console.log('Creating DAO!', createParams);
-      const steps = client.methods.createDao(createParams);
+      const steps = await createDao(createParams, sdkContextParams);
 
       for await (const step of steps) {
         try {
@@ -110,7 +109,7 @@ export function useDeploySpace() {
         plugins: [personalSpacePluginItem, spacePluginInstallItem],
       };
 
-      const steps = client.methods.createDao(createParams);
+      const steps = await createDao(createParams, sdkContextParams);
 
       for await (const step of steps) {
         try {
