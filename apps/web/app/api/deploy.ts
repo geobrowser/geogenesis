@@ -29,7 +29,6 @@ import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-tri
 import { Ops } from '~/core/utils/ops';
 import { Triples } from '~/core/utils/triples';
 import { slog } from '~/core/utils/utils';
-import { CONDUIT_TESTNET } from '~/core/wallet/conduit-chain';
 
 import {
   CreateGeoDaoParams,
@@ -40,6 +39,14 @@ import {
 import { abi as DaoFactoryAbi } from './abi';
 import { publicClient, signer, walletClient } from './client';
 
+const deployParams = {
+  network: SupportedNetworks.LOCAL, // I don't think this matters but is required by Aragon SDK
+  signer: signer,
+  web3Providers: new providers.JsonRpcProvider(Environment.variables.rpcEndpoint),
+  DAOFactory: DAO_FACTORY_ADDRESS,
+  ENSRegistry: ENS_REGISTRY_ADDRESS,
+};
+
 interface DeployArgs {
   type: SpaceType;
   spaceName: string;
@@ -47,15 +54,7 @@ interface DeployArgs {
   initialEditorAddress: string;
 }
 
-export async function deploy(args: DeployArgs) {
-  const deployParams = {
-    network: SupportedNetworks.LOCAL, // I don't think this matters but is required by Aragon SDK
-    signer: signer,
-    web3Providers: new providers.JsonRpcProvider(Environment.variables.rpcEndpoint),
-    DAOFactory: DAO_FACTORY_ADDRESS,
-    ENSRegistry: ENS_REGISTRY_ADDRESS,
-  };
-
+export async function deploySpace(args: DeployArgs) {
   const initialEditorAddress = getAddress(args.initialEditorAddress);
   const governanceType = getGovernanceTypeForSpaceType(args.type);
   const ops = await generateOpsForSpaceType(args);
@@ -81,7 +80,7 @@ export async function deploy(args: DeployArgs) {
   if (governanceType === 'governance') {
     const governancePluginConfig: Parameters<typeof getGovernancePluginInstallItem>[0] = {
       votingSettings: {
-        votingMode: VotingMode.Standard,
+        votingMode: VotingMode.EarlyExecution,
         supportThreshold: 50_000,
         duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
       },
@@ -97,7 +96,7 @@ export async function deploy(args: DeployArgs) {
       plugins: [governancePluginInstallItem, spacePluginInstallItem],
     };
 
-    console.log('Creating DAO!', createParams);
+    console.log('Creating DAO...');
     const steps = await createDao(createParams, deployParams);
 
     for await (const step of steps) {

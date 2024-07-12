@@ -6,14 +6,12 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import Link from 'next/link';
-import { getAddress } from 'viem';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { createSpaceWithEntities } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
 import { SpaceType } from '~/core/types';
 import { getImagePath, sleep } from '~/core/utils/utils';
@@ -28,8 +26,6 @@ import { Upload } from '~/design-system/icons/upload';
 import { RadioGroup } from '~/design-system/radio-group';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-
-import { deploy } from '~/app/api/deploy';
 
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const nameAtom = atom<string>('');
@@ -46,7 +42,7 @@ export function CreateSpaceDialog() {
   const smartAccount = useSmartAccount();
   const address = smartAccount?.account.address;
   const [open, onOpenChange] = useState(false);
-  // const { deploy } = useDeploySpace();
+  const { deploy } = useDeploySpace();
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const name = useAtomValue(nameAtom);
@@ -67,7 +63,6 @@ export function CreateSpaceDialog() {
         type: spaceType,
         spaceName: name,
         spaceAvatarUri: avatar,
-        initialEditorAddress: address,
       });
 
       if (!spaceId) {
