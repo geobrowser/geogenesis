@@ -2,12 +2,9 @@
 
 import { Client, Context, CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-client';
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { Op, VotingMode, createGeoId } from '@geogenesis/sdk';
-import { GovernanceSetupAbi, MainVotingAbi } from '@geogenesis/sdk/abis';
+import { VotingMode, createGeoId } from '@geogenesis/sdk';
 import { createEditProposal } from '@geogenesis/sdk/proto';
-import { decodeErrorResult, getAddress } from 'viem';
-
-import { useWalletClient } from 'wagmi';
+import { getAddress, hexToBytes } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { useAragon } from '~/core/hooks/use-aragon';
@@ -38,104 +35,42 @@ export function CreateDao({ type }: Prtypes) {
     if (!smartAccount) return;
 
     const entityId = createGeoId();
-    const collectionId = createGeoId();
-    const collectionItemId = createGeoId();
-    const entityA = createGeoId();
 
-    const initialContent = createEditProposal(
-      {
-        name: '1.0.3: Governance v3 test space',
-        author: getAddress(smartAccount.account.address),
-        ops: [
-          {
-            type: 'SET_TRIPLE',
-            payload: {
-              entityId,
-              attributeId: SYSTEM_IDS.NAME,
-              value: {
-                type: 'TEXT',
-                value: 'Governance v3 test space',
-              },
+    const initialContent = createEditProposal({
+      name: '1.0.3: Governance v3 test space',
+      author: getAddress(smartAccount.account.address),
+      ops: [
+        {
+          type: 'SET_TRIPLE',
+          payload: {
+            entityId,
+            attributeId: SYSTEM_IDS.NAME,
+            value: {
+              type: 'TEXT',
+              value: 'Governance v3 test space',
             },
           },
-          {
-            type: 'SET_TRIPLE',
-            payload: {
-              entityId,
-              attributeId: SYSTEM_IDS.TYPES,
-              value: {
-                type: 'ENTITY',
-                value: SYSTEM_IDS.SPACE_CONFIGURATION,
-              },
+        },
+        {
+          type: 'SET_TRIPLE',
+          payload: {
+            entityId,
+            attributeId: SYSTEM_IDS.TYPES,
+            value: {
+              type: 'ENTITY',
+              value: SYSTEM_IDS.SPACE_CONFIGURATION,
             },
           },
-        ],
-      }
-
-      // {
-      //   entityId: entityA,
-      //   attributeId: SYSTEM_IDS.NAME,
-      //   type: 'createTriple',
-      //   value: {
-      //     type: 'string',
-      //     id: createGeoId(),
-      //     value: 'Entity A is in a Collection',
-      //   },
-      // },
-      // },
-      // {
-      //   entityId: collectionId,
-      //   type: 'createTriple',
-      //   attributeId: SYSTEM_IDS.TYPES,
-      //   value: {
-      //     type: 'entity',
-      //     id: SYSTEM_IDS.COLLECTION_TYPE,
-      //   },
-      // },
-      // {
-      //   entityId: collectionItemId,
-      //   attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
-      //   type: 'createTriple',
-      //   value: {
-      //     type: 'entity',
-      //     id: collectionId,
-      //   },
-      // },
-      // {
-      //   attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
-      //   entityId: collectionItemId,
-      //   type: 'createTriple',
-      //   value: {
-      //     type: 'entity',
-      //     id: entityA,
-      //   },
-      // },
-      // {
-      //   attributeId: 'types',
-      //   entityId: collectionItemId,
-      //   type: 'createTriple',
-      //   value: {
-      //     type: 'entity',
-      //     id: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
-      //   },
-      // },
-      // {
-      //   attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-      //   entityId: collectionItemId,
-      //   type: 'createTriple',
-      //   value: {
-      //     type: 'string',
-      //     id: createGeoId(),
-      //     value: 'a0',
-      //   },
-      // },
-    );
+        },
+      ],
+    });
 
     const storage = new StorageClient(Environment.getConfig().ipfs);
     const firstBlockContentUri = await storage.uploadBinary(initialContent);
 
     const spacePluginInstallItem = getSpacePluginInstallItem({
-      firstBlockContentUri: `ipfs://${firstBlockContentUri}`,
+      // firstBlockContentUri: `ipfs://bafkreihi2yp3mg3ww3dbxprsblkr7zst2gztxwym44ewlkqmfwiva6uxii`, // Root
+      firstBlockContentUri: `ipfs://bafkreiciryzjzov2py2gys3httqxxxoin2dhqfsy2s4ui3cc3mbvgo3mwe`, // Construction
       // @HACK: Using a different upgrader from the governance plugin to work around
       // a limitation in Aragon.
       pluginUpgrader: getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
@@ -149,12 +84,7 @@ export function CreateDao({ type }: Prtypes) {
           duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
-        initialEditors: [
-          getAddress(smartAccount.account.address),
-          // getAddress('0x35483105944CD199BD336D6CEf476ea20547a9b5'),
-          // getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
-          // getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
-        ],
+        initialEditors: [getAddress(smartAccount.account.address)],
         pluginUpgrader: getAddress(smartAccount.account.address),
       };
 
@@ -162,7 +92,16 @@ export function CreateDao({ type }: Prtypes) {
 
       const createParams: CreateDaoParams = {
         metadataUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
-        plugins: [governancePluginInstallItem, spacePluginInstallItem],
+        plugins: [
+          {
+            id: governancePluginInstallItem.id,
+            data: hexToBytes(governancePluginInstallItem.data),
+          },
+          {
+            id: spacePluginInstallItem.id,
+            data: hexToBytes(spacePluginInstallItem.data),
+          },
+        ],
       };
 
       console.log('Creating DAO!', createParams);
@@ -194,7 +133,16 @@ export function CreateDao({ type }: Prtypes) {
 
       const createParams: CreateDaoParams = {
         metadataUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
-        plugins: [personalSpacePluginItem, spacePluginInstallItem],
+        plugins: [
+          {
+            id: personalSpacePluginItem.id,
+            data: hexToBytes(personalSpacePluginItem.data),
+          },
+          {
+            id: spacePluginInstallItem.id,
+            data: hexToBytes(spacePluginInstallItem.data),
+          },
+        ],
       };
 
       const steps = client.methods.createDao(createParams);
