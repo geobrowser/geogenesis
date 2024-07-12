@@ -2,7 +2,8 @@ import { atom, useAtomValue } from 'jotai';
 
 import * as React from 'react';
 
-import { StoredTriple, isDeletedSelector, localTriplesAtom } from '../state/actions-store/actions-store';
+import { isDeletedSelector, localTriplesAtom } from '../state/actions-store/actions-store';
+import { StoredTriple } from '../state/actions-store/types';
 import { store } from '../state/jotai-store';
 import { Triple as ITriple } from '../types';
 import { Triples } from '../utils/triples';

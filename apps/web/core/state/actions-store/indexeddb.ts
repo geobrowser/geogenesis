@@ -1,16 +1,12 @@
 import Dexie, { Table } from 'dexie';
 
-import { Triple } from '~/core/types';
+import { StoredTriple } from './types';
 
 const DB_NAME = 'geogenesis';
 const VERSION = 1;
 
-export interface StoredTriple extends Triple {
-  id: string;
-}
-
 export class Geo extends Dexie {
-  triples!: Table<Triple>;
+  triples!: Table<StoredTriple>;
 
   constructor() {
     super(DB_NAME);

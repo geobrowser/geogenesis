@@ -14,7 +14,8 @@ import {
 import { Triples } from '~/core/utils/triples';
 
 import { store } from '../jotai-store';
-import { StoredTriple, db } from './indexeddb';
+import { db } from './indexeddb';
+import { StoredTriple } from './types';
 
 const atomWithAsyncStorage = (initialValue: StoredTriple[] = []) => {
   const baseAtom = atom<StoredTriple[]>(initialValue);
