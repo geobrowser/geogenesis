@@ -401,7 +401,6 @@ async function* createDao(params: CreateGeoDaoParams, context: ContextParams) {
   const daoFactoryInterface = DAORegistry__factory.createInterface();
   const log = receipt.logs.find(l => {
     const expectedId = daoFactoryInterface.getEventTopic('DAORegistered');
-    console.log('expected id', { expectedId, topic: l.topics[0] });
     return l.topics[0] === expectedId;
   });
 
