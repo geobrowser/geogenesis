@@ -84,12 +84,7 @@ export function CreateDao({ type }: Prtypes) {
           duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
-        initialEditors: [
-          getAddress(smartAccount.account.address),
-          // getAddress('0x35483105944CD199BD336D6CEf476ea20547a9b5'),
-          // getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
-          // getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
-        ],
+        initialEditors: [getAddress(smartAccount.account.address)],
         pluginUpgrader: getAddress(smartAccount.account.address),
       };
 

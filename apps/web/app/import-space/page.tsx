@@ -4,7 +4,7 @@ import { Client, Context, CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-
 import { VotingMode } from '@geogenesis/sdk';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { useRouter } from 'next/navigation';
-import { getAddress } from 'viem';
+import { getAddress, hexToBytes } from 'viem';
 
 import * as React from 'react';
 
@@ -56,12 +56,7 @@ export default function ImportSpace() {
           duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
         },
         memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
-        initialEditors: [
-          getAddress(smartAccount.account.address),
-          // getAddress('0x35483105944CD199BD336D6CEf476ea20547a9b5'),
-          // getAddress('0xE343E47d821a9bcE54F12237426A6ef391066b60'),
-          // getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
-        ],
+        initialEditors: [getAddress(smartAccount.account.address)],
         pluginUpgrader: getAddress(smartAccount.account.address),
       };
 
@@ -69,7 +64,16 @@ export default function ImportSpace() {
 
       const createParams: CreateDaoParams = {
         metadataUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
-        plugins: [governancePluginInstallItem, spacePluginInstallItem],
+        plugins: [
+          {
+            id: governancePluginInstallItem.id,
+            data: hexToBytes(governancePluginInstallItem.data),
+          },
+          {
+            id: spacePluginInstallItem.id,
+            data: hexToBytes(spacePluginInstallItem.data),
+          },
+        ],
       };
 
       console.log('Creating DAO!', createParams);
@@ -104,7 +108,16 @@ export default function ImportSpace() {
 
       const createParams: CreateDaoParams = {
         metadataUri: 'ipfs://QmVnJgMByupANQ544rmPqNgr5vNqaYvCLDML4nZowfHMrt',
-        plugins: [personalSpacePluginItem, spacePluginInstallItem],
+        plugins: [
+          {
+            id: personalSpacePluginItem.id,
+            data: hexToBytes(personalSpacePluginItem.data),
+          },
+          {
+            id: spacePluginInstallItem.id,
+            data: hexToBytes(spacePluginInstallItem.data),
+          },
+        ],
       };
 
       const steps = client.methods.createDao(createParams);
