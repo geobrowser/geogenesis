@@ -5,6 +5,7 @@ import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { encodeFunctionData } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useVote } from '~/core/hooks/use-vote';
 import { Proposal, Vote } from '~/core/types';
 
 import { SmallButton } from '~/design-system/button';
@@ -31,39 +32,12 @@ export function AcceptOrRejectEditor({
   onchainProposalId,
   votingContractAddress,
 }: Props) {
+  const vote = useVote({
+    address: votingContractAddress,
+    onchainProposalId,
+  });
+
   const smartAccount = useSmartAccount();
-
-  const onApprove = async () => {
-    if (!votingContractAddress || !smartAccount) return;
-
-    const hash = await smartAccount.sendTransaction({
-      to: votingContractAddress as `0x${string}`,
-      value: 0n,
-      data: encodeFunctionData({
-        abi: MainVotingAbi,
-        functionName: 'vote',
-        args: [BigInt(onchainProposalId), VoteOption.Yes, true],
-      }),
-    });
-
-    console.log('transaction successful', hash);
-  };
-
-  const onReject = async () => {
-    if (!votingContractAddress || !smartAccount) return;
-
-    const hash = await smartAccount.sendTransaction({
-      to: votingContractAddress as `0x${string}`,
-      value: 0n,
-      data: encodeFunctionData({
-        abi: MainVotingAbi,
-        functionName: 'vote',
-        args: [BigInt(onchainProposalId), VoteOption.Yes, false],
-      }),
-    });
-
-    console.log('transaction successful', hash);
-  };
 
   if (isProposalExecutable) {
     return (
@@ -92,10 +66,10 @@ export function AcceptOrRejectEditor({
   if (!isProposalEnded && smartAccount) {
     return (
       <div className="flex items-center gap-2">
-        <SmallButton variant="secondary" onClick={onReject}>
+        <SmallButton variant="secondary" onClick={() => vote('REJECT')}>
           Reject
         </SmallButton>
-        <SmallButton variant="secondary" onClick={onApprove}>
+        <SmallButton variant="secondary" onClick={() => vote('ACCEPT')}>
           Approve
         </SmallButton>
       </div>

@@ -1,11 +1,34 @@
 'use client';
 
 import { MemberAccessAbi } from '@geogenesis/sdk/abis';
+import { Effect, Either } from 'effect';
 import { encodeFunctionData } from 'viem';
 
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 
 import { SmallButton } from '~/design-system/button';
+
+function useApproveOrReject(membershipContractAddress: string | null) {
+  const tx = useSmartAccountTransaction({
+    address: membershipContractAddress,
+  });
+
+  const approveOrReject = async (calldata: `0x${string}`) => {
+    const txEffect = await tx(calldata);
+    const maybeHash = await Effect.runPromise(Effect.either(txEffect));
+
+    if (Either.isLeft(maybeHash)) {
+      console.error('Could not approve or reject', maybeHash.left);
+      return;
+    }
+
+    // @TODO: UI states/error states
+    console.log('Approve or reject successful!', maybeHash.right);
+    return maybeHash.right;
+  };
+
+  return approveOrReject;
+}
 
 interface Props {
   onchainProposalId: string;
@@ -13,36 +36,28 @@ interface Props {
 }
 
 export function AcceptOrRejectMember(props: Props) {
-  const smartAccount = useSmartAccount();
+  const approveOrReject = useApproveOrReject(props.membershipContractAddress);
 
   const onApprove = async () => {
-    if (!props.membershipContractAddress || !smartAccount) return;
-
-    const hash = await smartAccount.sendTransaction({
-      to: props.membershipContractAddress as `0x${string}`,
-      value: 0n,
-      data: encodeFunctionData({
+    const hash = await approveOrReject(
+      encodeFunctionData({
         abi: MemberAccessAbi,
         functionName: 'approve',
         args: [BigInt(props.onchainProposalId)],
-      }),
-    });
+      })
+    );
 
     console.log('transaction successful', hash);
   };
 
   const onReject = async () => {
-    if (!props.membershipContractAddress || !smartAccount) return;
-
-    const hash = await smartAccount.sendTransaction({
-      to: props.membershipContractAddress as `0x${string}`,
-      value: 0n,
-      data: encodeFunctionData({
+    const hash = await approveOrReject(
+      encodeFunctionData({
         abi: MemberAccessAbi,
         functionName: 'reject',
         args: [BigInt(props.onchainProposalId)],
-      }),
-    });
+      })
+    );
 
     console.log('transaction successful', hash);
   };
