@@ -51,7 +51,36 @@ export function mapSubspaces({
 
           return acc;
         },
-        // Mapping of the plugin address to the space id (address)
+        // Mapping of the plugin address to the space id
+        new Map<string, string>()
+      );
+
+    const maybeSpaceIdsForSubspaceDaoAddress = yield* _(
+      Effect.all(
+        subspacesAdded.map(p =>
+          Effect.tryPromise({
+            try: () => Spaces.findForDaoAddress(p.subspace),
+            catch: error => new SpaceWithPluginAddressNotFoundError(String(error)),
+          })
+        ),
+        {
+          concurrency: 20,
+        }
+      )
+    );
+
+    const spacesForSubspaces = maybeSpaceIdsForSubspaceDaoAddress
+      .flatMap(s => (s ? [s] : []))
+      // Removing any duplicates and transforming to a map for faster access speed later
+      .reduce(
+        (acc, s) => {
+          if (!acc.has(s.dao_address)) {
+            acc.set(s.dao_address, s.id);
+          }
+
+          return acc;
+        },
+        // Mapping of the plugin address to the space id
         new Map<string, string>()
       );
 
@@ -63,7 +92,7 @@ export function mapSubspaces({
         // @NOTE: This might break if we start indexing at a block that occurs after the
         // space was created.
         parent_space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress))!,
-        subspace_id: getChecksumAddress(subspace),
+        subspace_id: spacesForSubspaces.get(getChecksumAddress(subspace))!,
         created_at: timestamp,
         created_at_block: blockNumber,
       };

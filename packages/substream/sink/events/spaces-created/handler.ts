@@ -82,7 +82,7 @@ export function handlePersonalSpacesCreated(personalPluginsCreated: PersonalPlug
 
             return {
               ...p,
-              id: maybeSpace,
+              id: maybeSpace.id,
             };
           });
         }),
@@ -152,7 +152,7 @@ export function handleGovernancePluginCreated(governancePluginsCreated: Governan
 
             return {
               ...g,
-              id: maybeSpace,
+              id: maybeSpace.id,
             };
           });
         }),

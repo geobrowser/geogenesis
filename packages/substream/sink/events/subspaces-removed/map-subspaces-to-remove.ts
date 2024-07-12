@@ -48,6 +48,35 @@ export function mapSubspacesToRemove(
         new Map<string, string>()
       );
 
+    const maybeSpaceIdsForSubspaceDaoAddress = yield* _(
+      Effect.all(
+        subspacesRemoved.map(p =>
+          Effect.tryPromise({
+            try: () => Spaces.findForDaoAddress(p.subspace),
+            catch: error => new SpaceWithPluginAddressNotFoundError(String(error)),
+          })
+        ),
+        {
+          concurrency: 20,
+        }
+      )
+    );
+
+    const spacesForSubspaces = maybeSpaceIdsForSubspaceDaoAddress
+      .flatMap(s => (s ? [s] : []))
+      // Removing any duplicates and transforming to a map for faster access speed later
+      .reduce(
+        (acc, s) => {
+          if (!acc.has(s.dao_address)) {
+            acc.set(s.dao_address, s.id);
+          }
+
+          return acc;
+        },
+        // Mapping of the plugin address to the space id
+        new Map<string, string>()
+      );
+
     return subspacesRemoved.map(({ subspace, pluginAddress }) => {
       const newSubspace: S.space_subspaces.Whereable = {
         // Can safely assert that spacesForPlugins.get(pluginAddress) is not null here
@@ -55,8 +84,8 @@ export function mapSubspacesToRemove(
         //
         // @NOTE: This might break if we start indexing at a block that occurs after the
         // space was created.
-        parent_space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress))!,
-        subspace_id: getChecksumAddress(subspace),
+        parent_space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress)),
+        subspace_id: spacesForSubspaces.get(getChecksumAddress(subspace)),
       };
 
       return newSubspace;

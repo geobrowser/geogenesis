@@ -91,7 +91,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
-    const isPlaceholderCell = cellData?.triples[0]?.placeholder;
 
     if (!cellData) return null;
 
@@ -159,8 +158,8 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownColumnIds, 
 
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
   const { editable } = useEditable();
-  const { isEditor } = useAccessControl(space);
-  const isEditMode = isEditor && editable;
+  const { isEditor, isMember } = useAccessControl(space);
+  const isEditMode = (isEditor || isMember) && editable;
 
   const table = useReactTable({
     data: rows,
@@ -179,7 +178,7 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownColumnIds, 
       expandedCells,
       space,
       editable,
-      isEditor,
+      isEditor: isEditor || isMember,
     },
   });
 
