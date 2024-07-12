@@ -8,7 +8,7 @@ import {
   PluginRepo__factory,
   PluginSetupProcessor__factory,
 } from '@aragon/osx-ethers';
-import { CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-client';
+import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
 import { Op, SYSTEM_IDS, VotingMode, createImageEntityOps } from '@geogenesis/sdk';
@@ -23,7 +23,7 @@ import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { OmitStrict, SpaceType } from '~/core/types';
+import { SpaceType } from '~/core/types';
 import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
 import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
 import { Ops } from '~/core/utils/ops';
@@ -33,7 +33,6 @@ import { CONDUIT_TESTNET } from '~/core/wallet/conduit-chain';
 
 import {
   CreateGeoDaoParams,
-  PluginInstallationWithViem,
   getGovernancePluginInstallItem,
   getPersonalSpaceGovernancePluginInstallItem,
   getSpacePluginInstallItem,
@@ -52,10 +51,7 @@ export async function deploy(args: DeployArgs) {
   const deployParams = {
     network: SupportedNetworks.LOCAL, // I don't think this matters but is required by Aragon SDK
     signer: signer,
-    web3Providers: new providers.JsonRpcProvider(Environment.variables.rpcEndpoint, {
-      chainId: CONDUIT_TESTNET.id,
-      name: CONDUIT_TESTNET.name,
-    }),
+    web3Providers: new providers.JsonRpcProvider(Environment.variables.rpcEndpoint),
     DAOFactory: DAO_FACTORY_ADDRESS,
     ENSRegistry: ENS_REGISTRY_ADDRESS,
   };
