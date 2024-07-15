@@ -17,6 +17,7 @@ export async function SpaceEditorsDialogServerContainer({
 
   return (
     <SpaceMembersManageDialog
+      header={<h1 className="text-smallTitle">Manage editors</h1>}
       trigger={<p className="px-3 py-2">Manage editors</p>}
       content={
         <SpaceEditorsManageDialogContent
