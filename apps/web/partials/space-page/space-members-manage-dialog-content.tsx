@@ -8,7 +8,7 @@ import { Button, SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 
 import { MemberRow } from './space-member-row';
-import { useAddMemberInPersonalSpace } from './use-add-member-in-personal-space';
+import { useAddMember } from './use-add-member';
 import { useProposeToRemoveMember } from './use-propose-to-remove-member';
 
 interface Props {
@@ -20,7 +20,7 @@ interface Props {
 export function SpaceMembersManageDialogContent({ members, votingPluginAddress, spaceType }: Props) {
   // @TODO:
   // 2. Remove member in personal spaces
-  const { addMember } = useAddMemberInPersonalSpace(votingPluginAddress);
+  const { addMember } = useAddMember(votingPluginAddress);
   const { proposeToRemoveMember } = useProposeToRemoveMember(votingPluginAddress);
 
   const [query, setQuery] = React.useState('');
@@ -38,7 +38,6 @@ export function SpaceMembersManageDialogContent({ members, votingPluginAddress, 
 
   return (
     <div className="flex flex-col gap-4">
-      {/* @TODO: If the space type is X, then add the user */}
       {spaceType === 'PERSONAL' ? (
         <div className="space-y-2">
           <h2 className="text-metadataMedium">Add space members</h2>

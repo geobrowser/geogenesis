@@ -290,7 +290,7 @@ type GovernanceTypeCalldataArgs = {
   spacePluginAddress: string;
 };
 
-export function getCalldataForSpaceGovernanceType(args: GovernanceTypeCalldataArgs) {
+function getCalldataForSpaceGovernanceType(args: GovernanceTypeCalldataArgs) {
   switch (args.type) {
     case 'PUBLIC':
       return encodeFunctionData({

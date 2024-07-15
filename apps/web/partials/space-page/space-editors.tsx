@@ -49,6 +49,7 @@ export async function SpaceEditors({ spaceId }: Props) {
           manageMembersComponent={
             <React.Suspense>
               <SpaceEditorsDialogServerContainer
+                spaceType={space.type}
                 spaceId={spaceId}
                 votingPluginAddress={
                   space.type === 'PERSONAL' ? space.personalSpaceAdminPluginAddress : space.mainVotingPluginAddress
