@@ -2,7 +2,7 @@ import { Op } from '@geogenesis/sdk';
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
-import { decodeErrorResult, encodeFunctionData, stringToHex } from 'viem';
+import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
@@ -50,14 +50,6 @@ export function usePublish() {
       const space = await fetchSpace({ id: spaceId });
 
       const publish = Effect.gen(function* () {
-        // const error = decodeErrorResult({
-        //   abi: PersonalSpaceAdminAbi,
-        //   data: '0x32dbe3b4000000000000000000000000b64a4b5813df2518f326f512872e0711380de940000000000000000000000000d0e078ca9674ed3e6e0b4a6a21ecfa9e9217769f00000000000000000000000035483105944cd199bd336d6cef476ea20547a9b56fd388bae34ebf69f2f68ae03174c1b3616db3ac7aecc5ce2f85785867365324',
-        // });
-
-        // console.log('error', error);
-        // return;
-
         if (!space) {
           return;
         }

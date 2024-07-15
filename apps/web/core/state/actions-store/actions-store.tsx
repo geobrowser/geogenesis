@@ -2,7 +2,7 @@ import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { getAppTripleId } from '~/core/id/create-id';
+import { createTripleId, getAppTripleId } from '~/core/id/create-id';
 import {
   DeleteTripleAppOp,
   EntityActions,
@@ -15,21 +15,23 @@ import { Triples } from '~/core/utils/triples';
 
 import { store } from '../jotai-store';
 import { db } from './indexeddb';
-
-export interface StoredTriple extends ITriple {
-  id: string;
-}
+import { StoredTriple } from './types';
 
 const atomWithAsyncStorage = (initialValue: StoredTriple[] = []) => {
   const baseAtom = atom<StoredTriple[]>(initialValue);
 
-  // baseAtom.onMount = setValue => {
-  //   (async () => {
-  //     const storedActions = await db.triples.toArray();
+  baseAtom.onMount = setValue => {
+    (async () => {
+      const storedTriples = await db.triples.toArray();
 
-  //     setValue(storedActions);
-  //   })();
-  // };
+      setValue(
+        storedTriples.map(t => ({
+          ...t,
+          id: createTripleId(t),
+        }))
+      );
+    })();
+  };
 
   return baseAtom;
 };
