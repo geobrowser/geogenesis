@@ -416,7 +416,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
         yield* _(deleteTypeEffect, retryEffect);
 
         if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
-          const deleteCollectionEffect = Effect.tryPromise({
+          const deleteCollectionEffect = Effect.try({
             try: () =>
               Collections.remove({
                 id: triple.entity_id,
