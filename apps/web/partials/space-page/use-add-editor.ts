@@ -2,7 +2,7 @@
 
 import { PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { Effect } from 'effect';
-import { encodeFunctionData, stringToHex } from 'viem';
+import { encodeFunctionData } from 'viem';
 
 import { TransactionWriteFailedError } from '~/core/errors';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
