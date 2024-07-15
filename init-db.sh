@@ -1,13 +1,17 @@
 #!/bin/bash
+## Run if starting sink without docker (docker image does migrations automatically)
 
 set -e
 source .env
 GEO_DB_URL=postgres://${GEO_DB_USER}:${GEO_DB_PASSWORD}@localhost:${GEO_DB_PORT}/${GEO_DB_NAME}
 
-echo "Running SQL scripts..."
-psql $GEO_DB_URL < ./packages/substream/sink/sql/init-public.sql
-psql $GEO_DB_URL < ./packages/substream/sink/sql/migrations/01-collections.sql
-psql $GEO_DB_URL < ./packages/substream/sink/sql/init-indexes.sql
-psql $GEO_DB_URL < ./packages/substream/sink/sql/init-cache.sql
-psql $GEO_DB_URL < ./packages/substream/sink/sql/init-functions.sql
-echo "SQL scripts executed successfully."
+if ! command -v sqlx &> /dev/null
+then
+    echo "sqlx is not installed. Please install sqlx before running migrations using:"
+    echo "    cargo install sqlx-cli --no-default-features --features native-tls,postgres"
+    exit 1
+fi
+
+echo "Running SQL migrations..."
+sqlx migrate run --source ./packages/substream/migrations -D ${GEO_DB_URL}
+echo "SQL migrations executed successfully."
