@@ -71,7 +71,9 @@ export async function SpaceEditors({ spaceId }: Props) {
       />
       <div className="h-4 w-px bg-divider" />
 
-      <SpaceEditorsJoinButton spaceId={spaceId} votingPluginAddress={space.mainVotingPluginAddress} />
+      {space.type === 'PUBLIC' ? (
+        <SpaceEditorsJoinButton spaceId={spaceId} votingPluginAddress={space.mainVotingPluginAddress} />
+      ) : null}
     </div>
   );
 }

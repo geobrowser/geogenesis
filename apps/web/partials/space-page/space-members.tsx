@@ -70,7 +70,9 @@ export async function SpaceMembers({ spaceId }: Props) {
       />
       <div className="h-4 w-px bg-divider" />
 
-      <SpaceMembersJoinButton spaceId={spaceId} votingPluginAddress={space.mainVotingPluginAddress} />
+      {space.type === 'PUBLIC' ? (
+        <SpaceMembersJoinButton spaceId={spaceId} votingPluginAddress={space.mainVotingPluginAddress} />
+      ) : null}
     </div>
   );
 }
