@@ -15,7 +15,7 @@ services:
       timeout: 10s
       retries: 15
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - geo_postgres_data:/var/lib/postgresql/data
 
   sink:
     build:
@@ -25,7 +25,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      AUTH_ISSUE_URL: https://auth.pinax.network/v1/auth/issue
+      AUTH_ISSUE_URL: ${AUTH_ISSUE_URL:-https://auth.pinax.network/v1/auth/issue}
       SUBSTREAMS_ENDPOINT: ${SUBSTREAMS_ENDPOINT:?SUBSTREAMS_ENDPOINT is not set}
       SUBSTREAMS_API_KEY: ${SUBSTREAMS_API_KEY:?SUBSTREAMS_API_KEY is not set}
       DATABASE_URL: postgres://${GEO_DB_USER}:${GEO_DB_PASSWORD}@postgres:5432/${GEO_DB_NAME}?sslmode=disable
@@ -47,4 +47,4 @@ services:
       - "${GEO_PORT:-5001}:5001"
 
 volumes:
-  postgres_data: {}
+  geo_postgres_data: {}
