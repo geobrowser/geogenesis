@@ -151,8 +151,9 @@ export function GeoConnectButton() {
   };
 
   const { logout } = useLogout({
-    onSuccess: () => {
-      Cookie.onConnectionChange({ type: 'disconnect' });
+    onSuccess: async () => {
+      console.log('disconnecting');
+      await Cookie.onConnectionChange({ type: 'disconnect' });
       resetOnboarding();
     },
   });
