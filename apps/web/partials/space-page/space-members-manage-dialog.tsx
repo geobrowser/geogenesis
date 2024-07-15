@@ -13,7 +13,6 @@ const MotionOverlay = motion(Overlay);
 
 interface Props {
   trigger: React.ReactNode;
-  header: React.ReactNode;
   content: React.ReactNode;
 }
 
@@ -41,7 +40,7 @@ export function SpaceMembersManageDialog(props: Props) {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
             <div className="flex flex-col gap-3 p-4">
               <div className="flex items-center justify-between">
-                {props.header}
+                <h1 className="text-smallTitle">Manage members</h1>
                 <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
               </div>
 

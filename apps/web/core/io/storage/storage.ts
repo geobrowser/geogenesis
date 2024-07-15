@@ -105,10 +105,6 @@ export function uploadBinary(
       try: async () => {
         const hash = await storageClient.uploadBinary(binary);
 
-        // if (!hash.startsWith('Qm')) {
-        //   throw new Error();
-        // }
-
         return `ipfs://${hash}`;
       },
       catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),

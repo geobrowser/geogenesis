@@ -23,14 +23,14 @@ export const getMembersForSpace = cache(async (spaceId: string): Promise<Members
   }
 
   const memberProfiles = await Promise.all(
-    space.editors.map(async (editor): Promise<MemberProfile> => {
-      const profile = await Subgraph.fetchProfile({ address: editor });
+    space.members.map(async (member): Promise<MemberProfile> => {
+      const profile = await Subgraph.fetchProfile({ address: member });
       if (!profile) {
         return {
-          id: editor,
+          id: member,
           avatarUrl: null,
           name: null,
-          address: editor as `0x${string}`,
+          address: member as `0x${string}`,
           profileLink: '',
         };
       }

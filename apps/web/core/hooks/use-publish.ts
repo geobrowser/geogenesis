@@ -11,7 +11,7 @@ import { IStorageClient, uploadBinary } from '../io/storage/storage';
 import { fetchSpace } from '../io/subgraph';
 import { Services } from '../services';
 import { useStatusBar } from '../state/status-bar-store';
-import { GovernanceType, Triple as ITriple, ReviewState } from '../types';
+import { Triple as ITriple, ReviewState, SpaceGovernanceType } from '../types';
 import { Triples } from '../utils/triples';
 import { sleepWithCallback } from '../utils/utils';
 import { useActionsStore } from './use-actions-store';
@@ -226,7 +226,7 @@ interface MakeProposalArgs {
     spacePluginAddress: string;
     mainVotingPluginAddress: string | null;
     personalSpaceAdminPluginAddress: string | null;
-    type: GovernanceType;
+    type: SpaceGovernanceType;
   };
   onChangePublishState: (newState: ReviewState) => void;
 }
@@ -285,7 +285,7 @@ function makeProposal(args: MakeProposalArgs) {
 }
 
 type GovernanceTypeCalldataArgs = {
-  type: GovernanceType;
+  type: SpaceGovernanceType;
   cid: string;
   spacePluginAddress: string;
 };
