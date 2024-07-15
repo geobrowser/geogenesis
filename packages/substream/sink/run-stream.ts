@@ -143,12 +143,13 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const telemetry = yield* _(Telemetry);
           const cursor = message.cursor;
           const blockNumber = Number(message.clock?.number.toString());
-          const timestamp = Number(message.clock?.timestamp?.seconds.toString());
+          const timestamp = Number(message.clock?.timestamp?.seconds.toString() ?? 0);
+          const blockHash = message.clock?.id ?? "0x";
 
           // @TODO: Should not write cursor until we have processed all events in it
           yield* _(
             Effect.tryPromise({
-              try: () => writeCursor(cursor, blockNumber),
+              try: () => writeCursor(cursor, blockNumber, blockHash, timestamp),
               catch: () => new CouldNotWriteCursorError(),
             })
           );
@@ -520,7 +521,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const blockNumber = Number(message.lastValidBlock?.number.toString());
           yield* _(
             Effect.tryPromise({
-              try: () => writeCursor(message.lastValidCursor, blockNumber),
+              try: () => writeCursor(message.lastValidCursor, blockNumber, "", 0),
               catch: error => new CouldNotWriteCursorError(String(error)),
             })
           );

@@ -1,47 +1,23 @@
 services:
   postgres:
-    container_name: geo-postgres
-    image: postgres:14
+    image: postgres:13.6
     environment:
-      POSTGRES_USER: geo
-      POSTGRES_PASSWORD: let-me-in
-      POSTGRES_DB: geo
+      POSTGRES_USER: ${GEO_DB_USER:-geo}
+      POSTGRES_PASSWORD: ${GEO_DB_PASSWORD:-let-me-in}
+      POSTGRES_DB: ${GEO_DB_NAME:-geo}
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     ports:
-      - "5432:5432"
-    volumes:
-      - ./pgdata:/var/lib/postgresql/data
+      - "${GEO_DB_PORT:-5432}:5432"
     stop_signal: SIGKILL
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER}" ]
       interval: 10s
       timeout: 10s
       retries: 15
-
-  pgweb:
-    container_name: geo-pgweb
-    image: sosedoff/pgweb:0.11.12
-    environment:
-      DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
-    restart: on-failure
-    stop_signal: SIGKILL
-    ports:
-      - "8081:8081"
-    command:
-      [
-        "pgweb",
-        "--bind=0.0.0.0",
-        "--listen=8081",
-        "--binary-codec=hex"
-      ]
-    links:
-      - postgres:postgres
-    depends_on:
-      postgres:
-        condition: service_healthy
+    volumes:
+      - geo_postgres_data:/var/lib/postgresql/data
 
   sink:
-    container_name: geo-sink
     build:
       context: .
       dockerfile: docker/Substream.Dockerfile
@@ -49,14 +25,13 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      AUTH_ISSUE_URL: https://auth.pinax.network/v1/auth/issue
-      SUBSTREAMS_ENDPOINT: https://polygon.substreams.pinax.network:443
+      AUTH_ISSUE_URL: ${AUTH_ISSUE_URL:-https://auth.pinax.network/v1/auth/issue}
+      SUBSTREAMS_ENDPOINT: ${SUBSTREAMS_ENDPOINT:?SUBSTREAMS_ENDPOINT is not set}
       SUBSTREAMS_API_KEY: ${SUBSTREAMS_API_KEY:?SUBSTREAMS_API_KEY is not set}
-      DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
-    command: node /app/packages/substream/dist/index.js --start-block 40078393
+      DATABASE_URL: postgres://${GEO_DB_USER}:${GEO_DB_PASSWORD}@postgres:5432/${GEO_DB_NAME}?sslmode=disable
+      START_BLOCK: ${START_BLOCK}
 
   api:
-    container_name: geo-api
     build:
       context: .
       dockerfile: docker/Api.Dockerfile
@@ -64,8 +39,12 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://geo:let-me-in@postgres:5432/geo?sslmode=disable
-      CHAIN_RPC: https://polygon.rpc.pinax.network/v1/${SUBSTREAMS_API_KEY}/
+      DATABASE_URL: postgres://${GEO_DB_USER}:${GEO_DB_PASSWORD}@postgres:5432/${GEO_DB_NAME}?sslmode=disable
+      CHAIN_RPC: ${CHAIN_RPC:?CHAIN_RPC is not set}
+      GEO_SUBGRAPH_DEPLOYMENT_ID: ${GEO_SUBGRAPH_DEPLOYMENT_ID}
       PORT: 5001
     ports:
-      - "5001:5001"
+      - "${GEO_PORT:-5001}:5001"
+
+volumes:
+  geo_postgres_data: {}

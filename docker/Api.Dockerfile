@@ -19,4 +19,4 @@ COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/packages/api/dist /app/packages/api/dist
 COPY --from=builder /app/packages/api/node_modules /app/packages/api/node_modules
 
-CMD ["node", "/app/packages/api/dist/server.js"]
+ENTRYPOINT ["sh", "-c", "node /app/packages/api/dist/server.js"]
