@@ -1,6 +1,6 @@
 import { gql, makeExtendSchemaPlugin } from 'graphile-utils';
 
-import { getBlockMetadata, getChainHead } from './get-block-meta';
+import { getChainHead } from './get-block-meta';
 import { getCursor } from './get-cursor';
 import { GEO_SUBGRAPH_DEPLOYMENT_ID } from './config';
 
@@ -74,19 +74,15 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
           }
           const [head, cursor] = await Promise.all([getChainHead(), getCursor()]);
 
-          let latestBlock: { number: number; hash: string; timestamp: number } = {
+          let latestBlock: { number: number; hash: string;} = {
             number: INITIAL_GEO_BLOCK,
             hash: INITIAL_BLOCK_HASH,
-            timestamp: 0,
           };
 
           if (cursor) {
-            const block = await getBlockMetadata(cursor.block_number);
-
             latestBlock = {
               number: cursor.block_number,
-              timestamp: block.timestamp,
-              hash: block.hash,
+              hash: cursor.block_hash,
             };
           }
 
@@ -106,12 +102,10 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
                   chainHeadBlock: {
                     number: head.number,
                     hash: head.hash,
-                    timestamp: 0,
                   },
                   earliestBlock: {
                     number: INITIAL_GEO_BLOCK,
                     hash: '0x0',
-                    timestamp: 0,
                   },
                   latestBlock: latestBlock,
                   latestHealthyBlock: latestBlock,
