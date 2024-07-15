@@ -70,8 +70,6 @@ export function handleMemberAdded(membersAdded: MemberAdded[], block: BlockEvent
       Effect.either
     );
 
-    console.log('schemaMembers', schemaMembers);
-
     if (Either.isLeft(writtenAddedMembers)) {
       const error = writtenAddedMembers.left;
       telemetry.captureException(error);
