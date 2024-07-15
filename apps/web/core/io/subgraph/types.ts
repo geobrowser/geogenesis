@@ -1,10 +1,10 @@
-import { GovernanceType } from '~/core/types';
+import { SpaceGovernanceType } from '~/core/types';
 
 import { SubstreamEntity } from './network-local-mapping';
 
 export type NetworkSpaceResult = {
   id: string;
-  type: GovernanceType;
+  type: SpaceGovernanceType;
   isRootSpace: boolean;
   mainVotingPluginAddress: string | null;
   memberAccessPluginAddress: string | null;
