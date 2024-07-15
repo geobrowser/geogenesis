@@ -45,7 +45,7 @@ function Content({ spaces, spaceId }: ContentProps) {
     return spaces.filter(e => e.spaceConfig?.name?.toLowerCase().includes(query.toLowerCase()));
   }, [spaces, query]);
 
-  const onAddSubspace = async (subspaceAddress: string) => {
+  const onAddSubspace = (subspaceAddress: string) => {
     proposeAddSubspace(subspaceAddress);
   };
 

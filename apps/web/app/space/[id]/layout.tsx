@@ -383,9 +383,8 @@ export default async function Layout({ children, params }: Props) {
               removeSubspaceComponent={
                 subspaces ? (
                   <RemoveSubspaceDialog
-                    mainVotingPluginAddress={props.space.mainVotingPluginAddress}
-                    spacePluginAddress={props.space.spacePluginAddress}
-                    spaces={subspaces?.subspaces}
+                    spaceId={params.id}
+                    spaces={subspaces.subspaces}
                     totalCount={subspaces.totalCount}
                   />
                 ) : null

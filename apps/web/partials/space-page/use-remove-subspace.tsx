@@ -11,11 +11,11 @@ import { uploadBinary } from '~/core/io/storage/storage';
 import { fetchSpace } from '~/core/io/subgraph';
 import { Services } from '~/core/services';
 
-interface AddSubspaceArgs {
+interface RemoveSubspaceArgs {
   spaceId: string;
 }
 
-export function useAddSubspace(args: AddSubspaceArgs) {
+export function useRemoveSubspace(args: RemoveSubspaceArgs) {
   const { storageClient } = Services.useServices();
 
   // @TODO(performance): We can pass the space down from the layout as well to avoid
@@ -35,11 +35,17 @@ export function useAddSubspace(args: AddSubspaceArgs) {
       return null;
     }
 
+    const proposal = createSubspaceProposal({
+      name: 'Remove subspace',
+      type: 'REMOVE_SUBSPACE',
+      spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
+    });
+
     const writeTxEffect = Effect.gen(function* () {
       if (space.type === 'PUBLIC') {
         const proposal = createSubspaceProposal({
-          name: 'Add subspace',
-          type: 'ADD_SUBSPACE',
+          name: 'Remove subspace',
+          type: 'REMOVE_SUBSPACE',
           spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
         });
 
@@ -78,7 +84,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
   };
 
   return {
-    proposeAddSubspace: write,
+    proposeRemoveSubspace: write,
   };
 }
 
@@ -99,16 +105,14 @@ function getCalldataForGovernanceType(args: CalldataForGovernanceTypeArgs): `0x$
   switch (args.type) {
     case 'PUBLIC':
       return encodeFunctionData({
-        functionName: 'proposeAcceptSubspace',
+        functionName: 'proposeRemoveSubspace',
         abi: MainVotingAbi,
-        // @TODO: Function for encoding
         args: [stringToHex(args.cid), args.subspaceAddress as `0x${string}`, args.spacePluginAddress as `0x${string}`],
       });
     case 'PERSONAL':
       return encodeFunctionData({
-        functionName: 'submitAcceptSubspace',
+        functionName: 'submitRemoveSubspace',
         abi: PersonalSpaceAdminAbi,
-        // @TODO: Function for encoding
         args: [args.subspaceAddress as `0x${string}`, args.spacePluginAddress as `0x${string}`],
       });
   }
