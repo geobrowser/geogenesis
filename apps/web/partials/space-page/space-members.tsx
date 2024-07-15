@@ -68,10 +68,12 @@ export async function SpaceMembers({ spaceId }: Props) {
           </React.Suspense>
         }
       />
-      <div className="h-4 w-px bg-divider" />
 
       {space.type === 'PUBLIC' ? (
-        <SpaceMembersJoinButton spaceId={spaceId} votingPluginAddress={space.mainVotingPluginAddress} />
+        <>
+          <div className="h-4 w-px bg-divider" />
+          <SpaceMembersJoinButton spaceId={spaceId} votingPluginAddress={space.mainVotingPluginAddress} />
+        </>
       ) : null}
     </div>
   );
