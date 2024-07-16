@@ -9,28 +9,21 @@ import { Input } from '~/design-system/input';
 import { AddSubspaceButton } from './space-metadata-header-add-subspace-button';
 import { SubspaceRow } from './subspace-row';
 import { SpaceToAdd } from './types';
-import { useProposeToAddSubspace } from './use-propose-add-subspace';
+import { useAddSubspace } from './use-add-subspace';
 
 interface Props {
   totalCount: number;
   spaces: SpaceToAdd[];
-  mainVotingPluginAddress: string | null;
-  spacePluginAddress: string;
+  spaceId: string;
 }
 
 // @TODO: In the future this should query for spaces as you type instead of filtering
 // the entire list of spaces in the system
-export function AddSubspaceDialog({ spaces, totalCount, mainVotingPluginAddress, spacePluginAddress }: Props) {
+export function AddSubspaceDialog({ spaces, totalCount, spaceId }: Props) {
   return (
     <Dialog
       trigger={<AddSubspaceButton />}
-      content={
-        <Content
-          spaces={spaces}
-          mainVotingPluginAddress={mainVotingPluginAddress}
-          spacePluginAddress={spacePluginAddress}
-        />
-      }
+      content={<Content spaces={spaces} spaceId={spaceId} />}
       header={<h1 className="text-smallTitle">{totalCount} spaces</h1>}
     />
   );
@@ -38,23 +31,21 @@ export function AddSubspaceDialog({ spaces, totalCount, mainVotingPluginAddress,
 
 interface ContentProps {
   spaces: SpaceToAdd[];
-  mainVotingPluginAddress: string | null;
-  spacePluginAddress: string;
+  spaceId: string;
 }
 
-function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: ContentProps) {
+function Content({ spaces, spaceId }: ContentProps) {
   const [query, setQuery] = React.useState('');
 
-  const { proposeAddSubspace } = useProposeToAddSubspace({
-    votingPluginAddress: mainVotingPluginAddress,
-    spacePluginAddress,
+  const { proposeAddSubspace } = useAddSubspace({
+    spaceId,
   });
 
   const filteredSpaces = React.useMemo(() => {
     return spaces.filter(e => e.spaceConfig?.name?.toLowerCase().includes(query.toLowerCase()));
   }, [spaces, query]);
 
-  const onAddSubspace = async (subspaceAddress: string) => {
+  const onAddSubspace = (subspaceAddress: string) => {
     proposeAddSubspace(subspaceAddress);
   };
 

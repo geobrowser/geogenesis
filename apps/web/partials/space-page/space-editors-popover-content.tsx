@@ -15,7 +15,7 @@ interface Props {
 export async function SpaceEditorsContent({ spaceId }: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
-  const [{ allEditors: allMembers, totalEditors, votingPluginAddress }, isEditor] = await Promise.all([
+  const [{ allEditors, totalEditors, votingPluginAddress }, isEditor] = await Promise.all([
     getEditorsForSpace(spaceId),
     getIsEditorForSpace(spaceId, connectedAddress),
   ]);
@@ -23,8 +23,8 @@ export async function SpaceEditorsContent({ spaceId }: Props) {
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
       <div className="max-h-[265px] overflow-hidden overflow-y-auto">
-        {allMembers.map(e => (
-          <MemberRow key={e.id} editor={e} />
+        {allEditors.map(e => (
+          <MemberRow key={e.id} user={e} />
         ))}
       </div>
 

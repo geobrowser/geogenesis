@@ -12,6 +12,7 @@ import { Environment } from '~/core/environment';
 import { useAragon } from '~/core/hooks/use-aragon';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { graphql } from '~/core/io/subgraph/graphql';
+import { SpaceGovernanceType } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
@@ -26,7 +27,7 @@ import {
 } from '../dao/encodings';
 
 export default function ImportSpace() {
-  const [type, setSelectedSpaceType] = React.useState<'personal' | 'governance'>('governance');
+  const [type, setSelectedSpaceType] = React.useState<SpaceGovernanceType>('PUBLIC');
   const [hash, setHash] = React.useState<string>('');
   const [spaceId, setSpaceId] = React.useState<string>('');
   const router = useRouter();
@@ -48,7 +49,7 @@ export default function ImportSpace() {
       pluginUpgrader: getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
     });
 
-    if (type === 'governance') {
+    if (type === 'PUBLIC') {
       const governancePluginConfig: Parameters<typeof getGovernancePluginInstallItem>[0] = {
         votingSettings: {
           votingMode: VotingMode.Standard,
@@ -101,7 +102,7 @@ export default function ImportSpace() {
       }
     }
 
-    if (type === 'personal') {
+    if (type === 'PERSONAL') {
       const personalSpacePluginItem = getPersonalSpaceGovernancePluginInstallItem({
         initialEditor: getAddress(smartAccount.account.address),
       });
@@ -197,13 +198,13 @@ export default function ImportSpace() {
           options={[
             {
               label: 'Governance',
-              onClick: () => setSelectedSpaceType('governance'),
+              onClick: () => setSelectedSpaceType('PUBLIC'),
               disabled: false,
               value: 'governance',
             },
             {
               label: 'Personal',
-              onClick: () => setSelectedSpaceType('personal'),
+              onClick: () => setSelectedSpaceType('PERSONAL'),
               disabled: false,
               value: 'personal',
             },

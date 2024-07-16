@@ -3,28 +3,29 @@ import { createGeoId } from '@geogenesis/sdk';
 import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Data, Duration, Effect, Predicate, Schedule, Secret, Stream } from 'effect';
+import { Data, Duration, Effect, Either, Predicate, Schedule, Secret, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
+import { Proposals, Spaces } from './db';
 import { Environment } from './environment';
 import { handleEditorsAdded } from './events/editor-added/handler';
 import { ZodEditorAddedStreamResponse } from './events/editor-added/parser';
 import { getDerivedSpaceIdsFromImportedSpaces } from './events/get-derived-space-ids-from-imported-spaces';
+import { getProposalsForSpaceIds } from './events/get-proposals-for-space-ids';
 import { handleNewGeoBlock } from './events/handle-new-geo-block';
 import {
   handleInitialGovernanceSpaceEditorsAdded,
   handleInitialPersonalSpaceEditorsAdded,
 } from './events/initial-editors-added/handler';
 import { type InitialEditorsAdded, ZodInitialEditorsAddedStreamResponse } from './events/initial-editors-added/parser';
-import { getInitialProposalsForSpaces } from './events/initial-proposal-created/get-initial-proposals';
 import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
 import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
-import { getProposalFromInitialSpaceProposalIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
-import { handleProposalsProcessed } from './events/proposal-processed/handler';
+import { getEditsProposalsFromIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
+import { ProposalDoesNotExistError, handleProposalsProcessed } from './events/proposal-processed/handler';
 import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
   ZodProposalCreatedStreamResponse,
@@ -420,20 +421,20 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
            * during space creation.
            *
            * If there are processed proposals as a result of an initial content uri, we need to create the appropriate
-           * proposals, proposed versions, actions, etc. before we actually set the proposal as "ACCEPTED"
+           * proposals, proposed versions, ops, etc. before we actually set the proposal as "ACCEPTED"
            */
           if (proposalProcessedResponse.success) {
             /**
-             * Since there are potentially three handlers that we need to run, we abstract out the common
+             * Since there are potentially two handlers that we need to run, we abstract out the common
              * data fetching needed for both here, and pass the result to the two handlers. This breaks
              * from the normalized pattern where we have a single handler for every event. For this event
              * there might be two handlers.
              *
-             * `getProposalFromInitialSpaceProposalIpfsUri` might be an Edit or it might be an Import which
+             * `getEditsProposalFromProposalIpfsUri` might be an Edit or it might be an Import which
              * contains many edits
              */
             const proposals = yield* _(
-              getProposalFromInitialSpaceProposalIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
+              getEditsProposalsFromIpfsUri(proposalProcessedResponse.data.proposalsProcessed, {
                 blockNumber,
                 cursor,
                 timestamp,
@@ -441,13 +442,44 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               })
             );
 
+            // We need to know if we're reading from a personal space or public space for each proposal.
+            //
+            // An alternative approach is that we don't require proposal relations for versions. That would
+            // require some rewriting of the proposal process flow.
+            const personalSpacesWithEdits = yield* _(
+              Effect.all(
+                proposals.flatMap(p => {
+                  return Effect.promise(async () => {
+                    const space = await Spaces.getById(p.space);
+
+                    if (space.type === 'personal') {
+                      return space.id;
+                    }
+
+                    return null;
+                  });
+                }),
+                {
+                  concurrency: 50,
+                }
+              )
+            );
+
+            const personalSpaceIds = personalSpacesWithEdits.flatMap(s => (s ? [s] : []));
+
+            // Combine all the spaces by their uniue id that need proposals written ensuring that we order
+            // it correctly to process the created spaces data first.
+            const spaceIdsWithMissingProposals = [
+              ...new Set([...(createdSpaceIds ?? []), ...personalSpaceIds]).values(),
+            ];
+
             /**
              * We track the spaces that were created in this block and check if any of the proposals executed
              * are from a created space. If they _are_ we need to create proposals for them before we can
              * actually execute the proposal.
              */
-            if (createdSpaceIds) {
-              const initialProposalsToWrite = getInitialProposalsForSpaces(createdSpaceIds, proposals);
+            if (spaceIdsWithMissingProposals.length > 0) {
+              const initialProposalsToWrite = getProposalsForSpaceIds(spaceIdsWithMissingProposals, proposals);
 
               yield* _(
                 handleInitialProposalsCreated(initialProposalsToWrite, {

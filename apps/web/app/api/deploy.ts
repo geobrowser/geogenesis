@@ -23,7 +23,7 @@ import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
 import { StorageClient } from '~/core/io/storage/storage';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SpaceType } from '~/core/types';
+import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
 import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
 import { Ops } from '~/core/utils/ops';
@@ -77,7 +77,7 @@ export async function deploySpace(args: DeployArgs) {
     pluginUpgrader: getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
   });
 
-  if (governanceType === 'governance') {
+  if (governanceType === 'PUBLIC') {
     const governancePluginConfig: Parameters<typeof getGovernancePluginInstallItem>[0] = {
       votingSettings: {
         votingMode: VotingMode.EarlyExecution,
@@ -119,7 +119,7 @@ export async function deploySpace(args: DeployArgs) {
     }
   }
 
-  if (governanceType === 'personal') {
+  if (governanceType === 'PERSONAL') {
     const personalSpacePluginItem = getPersonalSpaceGovernancePluginInstallItem({
       initialEditor: getAddress(initialEditorAddress),
     });
@@ -218,15 +218,15 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
   return ops;
 }
 
-function getGovernanceTypeForSpaceType(type: SpaceType): 'governance' | 'personal' {
+function getGovernanceTypeForSpaceType(type: SpaceType): SpaceGovernanceType {
   switch (type) {
     case 'default':
-      return 'governance';
+      return 'PUBLIC';
     case 'personal':
     case 'company':
     case 'nonprofit':
     default:
-      return 'personal';
+      return 'PERSONAL';
   }
 }
 

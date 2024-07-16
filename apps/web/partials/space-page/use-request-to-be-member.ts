@@ -34,6 +34,7 @@ export function useRequestToBeMember(votingPluginAddress: string | null) {
     const writeTxEffect = Effect.gen(function* () {
       const cid = yield* uploadBinary(proposal, storageClient);
 
+      // Editors have to add members or editors in personal spaces
       const callData = encodeFunctionData({
         functionName: 'proposeAddMember',
         abi: MainVotingAbi,

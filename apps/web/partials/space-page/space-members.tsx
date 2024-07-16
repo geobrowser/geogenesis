@@ -47,8 +47,11 @@ export async function SpaceMembers({ spaceId }: Props) {
           manageMembersComponent={
             <React.Suspense>
               <SpaceMembersDialogServerContainer
+                spaceType={space.type}
                 spaceId={spaceId}
-                votingPluginAddress={space.mainVotingPluginAddress}
+                votingPluginAddress={
+                  space.type === 'PERSONAL' ? space.personalSpaceAdminPluginAddress : space.mainVotingPluginAddress
+                }
               />
             </React.Suspense>
           }
@@ -68,9 +71,13 @@ export async function SpaceMembers({ spaceId }: Props) {
           </React.Suspense>
         }
       />
-      <div className="h-4 w-px bg-divider" />
 
-      <SpaceMembersJoinButton spaceId={spaceId} votingPluginAddress={space.mainVotingPluginAddress} />
+      {space.type === 'PUBLIC' ? (
+        <>
+          <div className="h-4 w-px bg-divider" />
+          <SpaceMembersJoinButton spaceId={spaceId} votingPluginAddress={space.mainVotingPluginAddress} />
+        </>
+      ) : null}
     </div>
   );
 }

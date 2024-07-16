@@ -5,8 +5,10 @@ import { OmitStrict, Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
+type MemberProfile = OmitStrict<Profile, 'coverUrl'>;
+
 type MembersForSpace = {
-  allMembers: OmitStrict<Profile, 'coverUrl'>[];
+  allMembers: MemberProfile[];
   totalMembers: number;
   votingPluginAddress: string | null;
   spacePluginAddress: string | null;
@@ -20,28 +22,31 @@ export const getMembersForSpace = cache(async (spaceId: string): Promise<Members
     throw new Error("Space doesn't exist");
   }
 
-  const maybeMembersProfiles = await Promise.all(
-    space.members.map(editor => Subgraph.fetchProfile({ address: editor }))
+  const memberProfiles = await Promise.all(
+    space.members.map(async (member): Promise<MemberProfile> => {
+      const profile = await Subgraph.fetchProfile({ address: member });
+      if (!profile) {
+        return {
+          id: member,
+          avatarUrl: null,
+          name: null,
+          address: member as `0x${string}`,
+          profileLink: '',
+        };
+      }
+
+      return {
+        id: profile.id,
+        avatarUrl: profile.avatarUrl,
+        name: profile.name,
+        address: profile.address,
+        profileLink: profile.profileLink,
+      };
+    })
   );
 
-  const allMembers = maybeMembersProfiles.map(profile => {
-    if (!profile) {
-      return null;
-    }
-
-    return {
-      id: profile.id,
-      avatarUrl: profile.avatarUrl,
-      name: profile.name,
-      address: profile.address,
-      profileLink: profile.profileLink,
-    };
-  });
-
-  const allMembersWithProfiles = allMembers.filter((editor): editor is Profile => editor !== null);
-
   return {
-    allMembers: allMembersWithProfiles,
+    allMembers: memberProfiles,
     totalMembers: space.members.length,
     votingPluginAddress: space.mainVotingPluginAddress,
     spacePluginAddress: space.spacePluginAddress,

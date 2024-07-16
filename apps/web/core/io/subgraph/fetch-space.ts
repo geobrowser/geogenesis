@@ -2,14 +2,12 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { GovernanceType, Space, SpaceConfigEntity } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
+import { Space } from '~/core/types';
 
-import { spaceFragment, spaceMetadataFragment, spacePluginsFragment, tripleFragment } from './fragments';
+import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
+import { getSpaceConfigFromMetadata } from './network-local-mapping';
 import { NetworkSpaceResult } from './types';
 
 const getFetchSpaceQuery = (id: string) => `query {

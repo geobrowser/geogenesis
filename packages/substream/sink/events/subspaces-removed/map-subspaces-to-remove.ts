@@ -79,11 +79,6 @@ export function mapSubspacesToRemove(
 
     return subspacesRemoved.map(({ subspace, pluginAddress }) => {
       const newSubspace: S.space_subspaces.Whereable = {
-        // Can safely assert that spacesForPlugins.get(pluginAddress) is not null here
-        // since we set up the mapping based on the plugin address previously
-        //
-        // @NOTE: This might break if we start indexing at a block that occurs after the
-        // space was created.
         parent_space_id: spacesForPlugins.get(getChecksumAddress(pluginAddress)),
         subspace_id: spacesForSubspaces.get(getChecksumAddress(subspace)),
       };

@@ -110,7 +110,7 @@ export type SpaceConfigEntity = Entity & {
 
 export type Space = {
   id: string;
-  type: GovernanceType;
+  type: SpaceGovernanceType;
   isRootSpace: boolean;
   mainVotingPluginAddress: string | null;
   memberAccessPluginAddress: string | null;
@@ -308,6 +308,7 @@ export type AttributeId = string;
 export type EntityActions = Record<EntityId, Record<AttributeId, Triple>>;
 
 export type SpaceType = 'default' | 'company' | 'nonprofit' | 'personal';
+export type SpaceGovernanceType = 'PUBLIC' | 'PERSONAL';
 
 export type CollectionItem = {
   id: string; // id of the collection item entity itself
@@ -326,5 +327,3 @@ export type CollectionItem = {
   };
   index: string; // the order of the item in the list
 };
-
-export type GovernanceType = 'PUBLIC' | 'PERSONAL';

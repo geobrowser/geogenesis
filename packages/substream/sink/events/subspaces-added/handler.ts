@@ -16,6 +16,11 @@ export function handleSubspacesAdded(subspacesAdded: SubspaceAdded[], block: Blo
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
+    slog({
+      message: `Writing subspaces`,
+      requestId: block.requestId,
+    });
+
     const subspaces = yield* _(
       mapSubspaces({
         subspacesAdded: subspacesAdded,

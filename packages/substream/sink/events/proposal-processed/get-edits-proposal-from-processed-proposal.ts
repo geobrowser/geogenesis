@@ -21,6 +21,7 @@ function fetchEditProposalFromIpfs(
   block: BlockEvent
 ) {
   return Effect.gen(function* (_) {
+    // @TODO: Might be the personal plugin
     const maybeSpaceIdForVotingPlugin = yield* _(
       Effect.promise(() => Spaces.findForSpacePlugin(processedProposal.pluginAddress))
     );
@@ -171,11 +172,11 @@ function fetchEditProposalFromIpfs(
   });
 }
 
-export function getProposalFromInitialSpaceProposalIpfsUri(proposalsProcessed: ProposalProcessed[], block: BlockEvent) {
+export function getEditsProposalsFromIpfsUri(proposalsProcessed: ProposalProcessed[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
-      message: `Gathering IPFS content for ${proposalsProcessed.length} initial space proposals`,
+      message: `Gathering IPFS content for ${proposalsProcessed.length} proposals`,
     });
 
     const maybeProposalsFromIpfs = yield* _(

@@ -3,7 +3,7 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { GovernanceType, OmitStrict, Space } from '~/core/types';
+import { OmitStrict, Space, SpaceGovernanceType } from '~/core/types';
 
 import { entityFragment } from './fragments';
 import { graphql } from './graphql';
@@ -44,7 +44,7 @@ interface NetworkResult {
     nodes: {
       subspace: {
         id: string;
-        type: GovernanceType;
+        type: SpaceGovernanceType;
         metadata: { nodes: SubstreamEntity[] };
       };
     }[];

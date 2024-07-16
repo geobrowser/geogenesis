@@ -55,8 +55,6 @@ async function ReviewActiveProposal({ proposalId, spaceId, connectedAddress }: P
     redirect(`/space/${spaceId}/governance`);
   }
 
-  console.log('review active proposal type', proposal.type);
-
   const votes = proposal.proposalVotes.nodes;
   const votesCount = proposal.proposalVotes.totalCount;
 

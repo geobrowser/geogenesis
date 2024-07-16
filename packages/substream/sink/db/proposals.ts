@@ -31,6 +31,18 @@ export class Proposals {
       .run(pool);
   }
 
+  static async getExactlyOneById(id: string) {
+    return await db
+      .selectExactlyOne('proposals', {
+        id,
+      })
+      .run(pool);
+  }
+
+  static async setAcceptedById(id: string) {
+    return await db.update('proposals', { status: 'accepted' }, { id }).run(pool);
+  }
+
   static async setAccepted({
     onchainProposalId,
     pluginAddress,
