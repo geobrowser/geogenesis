@@ -442,26 +442,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
               })
             );
 
-            /**
-             * We track the spaces that were created in this block and check if any of the proposals executed
-             * are from a created space. If they _are_ we need to create proposals for them before we can
-             * actually execute the proposal.
-             */
-            if (createdSpaceIds) {
-              const initialProposalsToWrite = getProposalsForSpaceIds(createdSpaceIds, proposals);
-
-              yield* _(
-                handleInitialProposalsCreated(initialProposalsToWrite, {
-                  blockNumber,
-                  cursor,
-                  timestamp,
-                  requestId,
-                })
-              );
-            }
-
-            // We need to know if we're reading from a personal space or public space for each proposal and
-            // they're not part of the createdSpaceIds list.
+            // We need to know if we're reading from a personal space or public space for each proposal.
             //
             // An alternative approach is that we don't require proposal relations for versions. That would
             // require some rewriting of the proposal process flow.
@@ -471,7 +452,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   return Effect.promise(async () => {
                     const space = await Spaces.getById(p.space);
 
-                    if (space.type === 'personal' && !createdSpaceIds?.includes(space.id)) {
+                    if (space.type === 'personal') {
                       return space.id;
                     }
 
@@ -486,8 +467,19 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
 
             const personalSpaceIds = personalSpacesWithEdits.flatMap(s => (s ? [s] : []));
 
-            if (personalSpaceIds.length > 0) {
-              const initialProposalsToWrite = getProposalsForSpaceIds(personalSpaceIds, proposals);
+            // Combine all the spaces by their uniue id that need proposals written ensuring that we order
+            // it correctly to process the created spaces data first.
+            const spaceIdsWithMissingProposals = [
+              ...new Set([...(createdSpaceIds ?? []), ...personalSpaceIds]).values(),
+            ];
+
+            /**
+             * We track the spaces that were created in this block and check if any of the proposals executed
+             * are from a created space. If they _are_ we need to create proposals for them before we can
+             * actually execute the proposal.
+             */
+            if (spaceIdsWithMissingProposals.length > 0) {
+              const initialProposalsToWrite = getProposalsForSpaceIds(spaceIdsWithMissingProposals, proposals);
 
               yield* _(
                 handleInitialProposalsCreated(initialProposalsToWrite, {
