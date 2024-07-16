@@ -447,7 +447,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
              * are from a created space. If they _are_ we need to create proposals for them before we can
              * actually execute the proposal.
              */
-            if (createdSpaceIds.length > 0) {
+            if (createdSpaceIds) {
               const initialProposalsToWrite = getProposalsForSpaceIds(createdSpaceIds, proposals);
 
               yield* _(
@@ -471,18 +471,22 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                   return Effect.promise(async () => {
                     const space = await Spaces.getById(p.space);
 
-                    if (space.type === 'personal' && !createdSpaceIds.includes(space.id)) {
-                      return space;
+                    if (space.type === 'personal' && !createdSpaceIds?.includes(space.id)) {
+                      return space.id;
                     }
 
                     return null;
                   });
-                })
+                }),
+                {
+                  concurrency: 50,
+                }
               )
             );
 
-            if (personalSpacesWithEdits.length > 0) {
-              const personalSpaceIds = personalSpacesWithEdits.flatMap(s => (s ? [s.id] : []));
+            const personalSpaceIds = personalSpacesWithEdits.flatMap(s => (s ? [s] : []));
+
+            if (personalSpaceIds.length > 0) {
               const initialProposalsToWrite = getProposalsForSpaceIds(personalSpaceIds, proposals);
 
               yield* _(
