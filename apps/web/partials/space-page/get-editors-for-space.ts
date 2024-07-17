@@ -1,5 +1,6 @@
 import { cache } from 'react';
 
+import { fetchProfile } from '~/core/io/subgraph';
 import { fetchProfileViaWalletsTripleAddress } from '~/core/io/subgraph/fetch-profile-via-wallets-triple';
 import { OmitStrict, Profile } from '~/core/types';
 
@@ -24,8 +25,7 @@ export const getEditorsForSpace = cache(async (spaceId: string): Promise<Editors
 
   const editorProfiles = await Promise.all(
     space.editors.map(async (editor): Promise<EditorProfile> => {
-      console.log('editor', editor);
-      const profile = await fetchProfileViaWalletsTripleAddress(editor);
+      const profile = await fetchProfile({ address: editor });
 
       if (!profile) {
         return {
