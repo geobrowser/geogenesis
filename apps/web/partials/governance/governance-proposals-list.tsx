@@ -7,12 +7,11 @@ import React from 'react';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { fetchProfile } from '~/core/io/subgraph';
+import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
 import { tripleFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
-import { OmitStrict, Profile, Vote } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
+import { SubstreamProposal } from '~/core/io/subgraph/network-local-mapping';
+import { OmitStrict, Vote } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -234,29 +233,19 @@ async function fetchActiveProposals({
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const proposals = result.proposals.nodes;
+  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdBy.id));
 
   return proposals.map(p => {
-    const maybeProfile = p.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-    const onchainProfile = p.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-    const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
+    const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
 
-    const profile: Profile = maybeProfile
-      ? {
-          id: p.createdBy.id,
-          address: p.createdBy.id as `0x${string}`,
-          avatarUrl: Entities.avatar(profileTriples),
-          coverUrl: Entities.cover(profileTriples),
-          name: maybeProfile.name,
-          profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-        }
-      : {
-          id: p.createdBy.id,
-          name: null,
-          avatarUrl: null,
-          coverUrl: null,
-          address: p.createdBy.id as `0x${string}`,
-          profileLink: null,
-        };
+    const profile = maybeProfile ?? {
+      id: p.createdBy.id,
+      name: null,
+      avatarUrl: null,
+      coverUrl: null,
+      address: p.createdBy.id as `0x${string}`,
+      profileLink: null,
+    };
 
     return {
       ...p,

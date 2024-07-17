@@ -4,10 +4,11 @@ import { v4 as uuid } from 'uuid';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
+import { Proposal, SpaceWithMetadata } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
+import { fetchProfile } from './fetch-profile';
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './network-local-mapping';
@@ -159,27 +160,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
-  const maybeProfile = proposal.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-  const onchainProfile = proposal.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
-
-  const profile: Profile = maybeProfile
-    ? {
-        id: proposal.createdBy.id,
-        address: proposal.createdBy.id as `0x${string}`,
-        avatarUrl: Entities.avatar(profileTriples),
-        coverUrl: Entities.cover(profileTriples),
-        name: maybeProfile.name,
-        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-      }
-    : {
-        id: proposal.createdBy.id,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: proposal.createdBy.id as `0x${string}`,
-        profileLink: null,
-      };
+  const profile = await fetchProfile({ address: proposal.createdBy.id });
 
   const spaceConfig = proposal.space.metadata.nodes[0] as SubstreamEntity | undefined;
   const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);

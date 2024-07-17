@@ -6,7 +6,7 @@ export interface FetchProfileOptions {
   address: string;
 }
 
-export async function fetchProfile(options: FetchProfileOptions): Promise<Profile | null> {
+export async function fetchProfile(options: FetchProfileOptions): Promise<Profile> {
   return await fetchProfileViaWalletsTripleAddress(options.address);
 
   // For now we're using the wallets field on entities to read wallet associations

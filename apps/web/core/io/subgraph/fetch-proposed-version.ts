@@ -4,10 +4,10 @@ import { v4 as uuid } from 'uuid';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, ProposedVersion, SpaceWithMetadata } from '~/core/types';
+import { ProposedVersion, SpaceWithMetadata } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
+import { fetchProfile } from './fetch-profile';
 import { entityFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamProposedVersion, fromNetworkTriples } from './network-local-mapping';
@@ -137,30 +137,7 @@ export async function fetchProposedVersion({
     return null;
   }
 
-  const maybeProfile = proposedVersion.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-  const onchainProfile = proposedVersion.createdBy.onchainProfiles.nodes[0] as
-    | { homeSpaceId: string; id: string }
-    | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
-
-  const profile: Profile = maybeProfile
-    ? {
-        id: proposedVersion.createdBy.id,
-        address: proposedVersion.createdBy.id as `0x${string}`,
-        avatarUrl: Entities.avatar(profileTriples),
-        coverUrl: Entities.cover(profileTriples),
-        name: maybeProfile.name,
-        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-      }
-    : {
-        id: proposedVersion.createdBy.id,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: proposedVersion.createdBy.id as `0x${string}`,
-        profileLink: null,
-      };
-
+  const profile = await fetchProfile({ address: proposedVersion.createdBy.id });
   const spaceConfig = proposedVersion.space.metadata.nodes[0] as SubstreamEntity | undefined;
   const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 

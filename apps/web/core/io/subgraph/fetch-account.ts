@@ -5,12 +5,11 @@ import { getAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
+import { fetchProfile } from './fetch-profile';
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
+import { SubstreamEntity } from './network-local-mapping';
 
 export interface FetchAccountOptions {
   address: string;
@@ -109,31 +108,11 @@ export async function fetchAccount(
   }
 
   const account = networkResult.account;
-  const maybeProfile = account.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-  const onchainProfile = account.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
-
-  const profile: Profile = maybeProfile
-    ? {
-        id: account.id,
-        address: account.id as `0x${string}`,
-        avatarUrl: Entities.avatar(profileTriples),
-        coverUrl: Entities.cover(profileTriples),
-        name: maybeProfile.name,
-        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-      }
-    : {
-        id: account.id,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: account.id as `0x${string}`,
-        profileLink: null,
-      };
+  const profile = await fetchProfile({ address: account.id });
 
   return {
     address: account.id,
     profile,
-    onchainProfile: onchainProfile ?? null,
+    onchainProfile: null,
   };
 }
