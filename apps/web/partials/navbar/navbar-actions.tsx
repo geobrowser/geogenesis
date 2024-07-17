@@ -23,11 +23,8 @@ import { Home } from '~/design-system/icons/home';
 import { Menu } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { useCreateProfile } from '../onboarding/create-profile-dialog';
-
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
-  const { showCreateProfile } = useCreateProfile();
 
   const smartAccount = useSmartAccount();
   const address = smartAccount?.account.address;
@@ -59,37 +56,24 @@ export function NavbarActions() {
         onOpenChange={onOpenChange}
         className="max-w-[165px]"
       >
-        {!account?.profile && account?.onchainProfile ? (
-          <AvatarMenuItem>
-            <div className="flex items-center gap-2">
-              <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                <Avatar value={address} size={16} />
-              </div>
-              <button onClick={showCreateProfile}>Create profile</button>
-            </div>
-          </AvatarMenuItem>
-        ) : (
+        {/* {account?.onchainProfile?.homeSpaceId && (
           <>
-            {account?.onchainProfile?.homeSpaceId && (
-              <>
-                <AvatarMenuItem>
-                  <div className="flex items-center gap-2">
-                    <div className="relative h-4 w-4 overflow-hidden rounded-full">
-                      <Avatar value={address} avatarUrl={account.profile?.avatarUrl} size={16} />
-                    </div>
-                    <Link
-                      prefetch={false}
-                      href={NavUtils.toSpace(account.onchainProfile.homeSpaceId)}
-                      className="text-button"
-                    >
-                      Personal space
-                    </Link>
-                  </div>
-                </AvatarMenuItem>
-              </>
-            )}
+            <AvatarMenuItem>
+              <div className="flex items-center gap-2">
+                <div className="relative h-4 w-4 overflow-hidden rounded-full">
+                  <Avatar value={address} avatarUrl={account.profile?.avatarUrl} size={16} />
+                </div>
+                <Link
+                  prefetch={false}
+                  href={NavUtils.toSpace(account.onchainProfile.homeSpaceId)}
+                  className="text-button"
+                >
+                  Personal space
+                </Link>
+              </div>
+            </AvatarMenuItem>
           </>
-        )}
+        )} */}
         <AvatarMenuItem>
           <Link href="/home" className="flex items-center gap-2 grayscale">
             <Home />

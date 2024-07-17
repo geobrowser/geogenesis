@@ -2,7 +2,7 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
-import { entityFragment, tripleFragment } from '~/core/io/subgraph/fragments';
+import { entityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamProposal, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { OmitStrict, Vote } from '~/core/types';

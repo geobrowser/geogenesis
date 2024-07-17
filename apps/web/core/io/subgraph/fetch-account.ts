@@ -7,24 +7,16 @@ import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
 
 import { fetchProfile } from './fetch-profile';
-import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity } from './network-local-mapping';
 
 export interface FetchAccountOptions {
   address: string;
   signal?: AbortController['signal'];
 }
 
-interface OnchainProfile {
-  homeSpaceId: string;
-}
-
 interface NetworkResult {
   account: {
     id: string;
-    geoProfiles: { nodes: SubstreamEntity[] };
-    onchainProfiles: { nodes: OnchainProfile[] };
   } | null;
 }
 
@@ -32,30 +24,13 @@ function getAccountQuery(address: string) {
   return `query {
     account(id: "${getAddress(address)}") {
       id
-      geoProfiles {
-        nodes {
-          id
-          name
-          triples(filter: { isStale: { equalTo: false } }) {
-            nodes {
-              ${tripleFragment}
-            }
-          }
-        }
-      }
-      onchainProfiles(orderBy: CREATED_AT_ASC, first: 1) {
-        nodes {
-          id
-          homeSpaceId
-        }
-      }
     }
   }`;
 }
 
 export async function fetchAccount(
   options: FetchAccountOptions
-): Promise<{ address: string; profile: Profile; onchainProfile: OnchainProfile | null } | null> {
+): Promise<{ address: string; profile: Profile } | null> {
   const queryId = uuid();
   const config = Environment.getConfig();
 
@@ -113,6 +88,5 @@ export async function fetchAccount(
   return {
     address: account.id,
     profile,
-    onchainProfile: null,
   };
 }

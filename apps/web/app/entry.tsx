@@ -14,7 +14,6 @@ import { ClientOnly } from '~/design-system/client-only';
 import { Compare } from '~/partials/history/compare';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
-import { CreateProfileDialog } from '~/partials/onboarding/create-profile-dialog';
 import { OnboardingDialog } from '~/partials/onboarding/dialog';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { Review } from '~/partials/review/review';
@@ -46,7 +45,6 @@ export function App({ children }: { children: React.ReactNode }) {
     <>
       <Navbar onSearchClick={() => setOpen(true)} />
 
-      <CreateProfileDialog />
       <Dialog
         open={open}
         onOpenChange={setOpen}

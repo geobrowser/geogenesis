@@ -1,16 +1,13 @@
 import { cookies } from 'next/headers';
-import Link from 'next/link';
 
 import * as React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { fetchProposalCountByUser } from '~/core/io/fetch-proposal-count-by-user';
-import { fetchOnchainProfile, fetchProfile } from '~/core/io/subgraph';
-import { OnchainProfile, Profile } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
+import { fetchProfile } from '~/core/io/subgraph';
+import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
-import { SmallButton } from '~/design-system/button';
 
 import { Component } from './component';
 
@@ -23,9 +20,8 @@ interface Props {
 export default async function PersonalHomePage(props: Props) {
   const connectedAddress = cookies().get(WALLET_ADDRESS)?.value;
 
-  const [person, profile, proposalsCount] = await Promise.all([
+  const [person, proposalsCount] = await Promise.all([
     connectedAddress ? fetchProfile({ address: connectedAddress }) : null,
-    connectedAddress ? fetchOnchainProfile({ address: connectedAddress }) : null,
     connectedAddress
       ? fetchProposalCountByUser({
           userId: connectedAddress,
@@ -37,7 +33,7 @@ export default async function PersonalHomePage(props: Props) {
 
   return (
     <Component
-      header={<PersonalHomeHeader person={person} address={connectedAddress ?? null} onchainProfile={profile} />}
+      header={<PersonalHomeHeader person={person} address={connectedAddress ?? null} />}
       proposalType={props.searchParams.proposalType}
       acceptedProposalsCount={acceptedProposalsCount}
       connectedAddress={connectedAddress}
@@ -51,11 +47,10 @@ export const metadata = {
 
 interface HeaderProps {
   person: Profile | null;
-  onchainProfile: OnchainProfile | null;
   address: string | null;
 }
 
-function PersonalHomeHeader({ onchainProfile, person, address }: HeaderProps) {
+function PersonalHomeHeader({ person, address }: HeaderProps) {
   return (
     <div className="flex w-full items-center justify-between">
       <div className="flex items-center gap-4">
@@ -64,11 +59,6 @@ function PersonalHomeHeader({ onchainProfile, person, address }: HeaderProps) {
         </div>
         <h2 className="text-largeTitle">{person?.name ?? person?.id ?? address ?? 'Anonymous'}</h2>
       </div>
-      {onchainProfile?.homeSpaceId && (
-        <Link prefetch={false} href={NavUtils.toSpace(onchainProfile.homeSpaceId)}>
-          <SmallButton className="!bg-transparent !text-text">View personal space</SmallButton>
-        </Link>
-      )}
     </div>
   );
 }
