@@ -232,7 +232,7 @@ export function squash(triples: Triple[]): Triple[] {
 
 export function prepareTriplesForPublishing(triples: Triple[], spaceId: string): Op[] {
   const triplesToPublish = triples.filter(
-    t => t.space === spaceId && !t.hasBeenPublished && t.attributeId !== '' && t.entityId !== ''
+    t => t.space === spaceId && !t.hasBeenPublished && t.attributeId !== '' && t.entityId !== '' && t.value.value !== ''
   );
   return triplesToPublish.map((t): Op => {
     if (t.isDeleted) {
