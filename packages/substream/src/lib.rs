@@ -24,6 +24,10 @@ use_contract!(personal_admin_setup, "abis/personal-admin-setup.json");
 use_contract!(personal_admin_plugin, "abis/personal-admin-plugin.json");
 use_contract!(main_voting_plugin, "abis/main-voting-plugin.json");
 use_contract!(member_access_plugin, "abis/member-access-plugin.json");
+use_contract!(
+    majority_voting_base_plugin,
+    "abis/majority-voting-base.json"
+);
 
 use geo_profile_registry::events::GeoProfileRegistered as GeoProfileRegisteredEvent;
 use governance_setup::events::GeoGovernancePluginsCreated as GovernancePluginCreatedEvent;
@@ -31,8 +35,9 @@ use main_voting_plugin::events::{
     EditorAdded as EditorAddedEvent, EditorRemoved as EditorRemovedEvent,
     EditorsAdded as EditorsAddedEvent, MemberAdded as MemberAddedEvent,
     MemberRemoved as MemberRemovedEvent, ProposalCreated as ProposalCreatedEvent,
-    ProposalExecuted as ProposalExecutedEvent, VoteCast as VoteCastEvent,
+    ProposalExecuted as ProposalExecutedEvent,
 };
+use majority_voting_base_plugin::events::VoteCast as VoteCastEvent;
 use personal_admin_setup::events::GeoPersonalAdminPluginCreated as GeoPersonalAdminPluginCreatedEvent;
 use space::events::{
     EditsPublished as EditsPublishedEvent, SubspaceAccepted as SubspaceAcceptedEvent,

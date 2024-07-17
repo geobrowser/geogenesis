@@ -4,11 +4,11 @@ import { v4 as uuid } from 'uuid';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, SpaceWithMetadata, Version } from '~/core/types';
+import { SpaceWithMetadata, Version } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
-import { entityFragment, tripleFragment } from './fragments';
+import { fetchProfile } from './fetch-profile';
+import { entityFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from './network-local-mapping';
 
@@ -21,23 +21,6 @@ const getVersionsQuery = (versionId: string) => `query {
 
     createdBy {
       id
-      onchainProfiles {
-        nodes {
-          homeSpaceId
-          id
-        }
-      }
-      geoProfiles {
-        nodes {
-          id
-          name
-          triples(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              ${tripleFragment}
-            }
-          }
-        }
-      }
     }
 
     space {
@@ -149,28 +132,7 @@ export async function fetchVersion({ versionId, signal, page = 0 }: FetchVersion
 
   // We need to fetch the profiles of the users who created the ProposedVersions. We look up the Wallet entity
   // of the user and fetch the Profile for the user with the matching wallet address.
-  const maybeProfile = version.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-  const onchainProfile = version.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
-
-  const profile: Profile = maybeProfile
-    ? {
-        id: version.createdBy.id,
-        address: version.createdBy.id as `0x${string}`,
-        avatarUrl: Entities.avatar(profileTriples),
-        coverUrl: Entities.cover(profileTriples),
-        name: maybeProfile.name,
-        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-      }
-    : {
-        id: version.createdBy.id,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: version.createdBy.id as `0x${string}`,
-        profileLink: null,
-      };
-
+  const profile = await fetchProfile({ address: version.createdBy.id });
   const networkTriples = version.tripleVersions.nodes.flatMap(tv => tv.triple);
 
   const spaceConfig = version.space.metadata.nodes[0] as SubstreamEntity | undefined;

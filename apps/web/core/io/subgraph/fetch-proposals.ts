@@ -4,10 +4,10 @@ import { v4 as uuid } from 'uuid';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
+import { Proposal, SpaceWithMetadata } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
+import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './network-local-mapping';
@@ -40,23 +40,6 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
       createdAtBlock
       createdBy {
         id
-        onchainProfiles {
-          nodes {
-            homeSpaceId
-            id
-          }
-        }
-        geoProfiles {
-          nodes {
-            id
-            name
-            triples(filter: {isStale: {equalTo: false}}) {
-              nodes {
-                ${tripleFragment}
-              }
-            }
-          }
-        }
       }
       
       createdAt
@@ -154,29 +137,19 @@ export async function fetchProposals({
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const proposals = result.proposals.nodes;
+  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdBy.id));
 
   return proposals.map(p => {
-    const maybeProfile = p.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-    const onchainProfile = p.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-    const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
+    const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
 
-    const profile: Profile = maybeProfile
-      ? {
-          id: p.createdBy.id,
-          address: p.createdBy.id as `0x${string}`,
-          avatarUrl: Entities.avatar(profileTriples),
-          coverUrl: Entities.cover(profileTriples),
-          name: maybeProfile.name,
-          profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-        }
-      : {
-          id: p.createdBy.id,
-          name: null,
-          avatarUrl: null,
-          coverUrl: null,
-          address: p.createdBy.id as `0x${string}`,
-          profileLink: null,
-        };
+    const profile = maybeProfile ?? {
+      id: p.createdBy.id,
+      name: null,
+      avatarUrl: null,
+      coverUrl: null,
+      address: p.createdBy.id as `0x${string}`,
+      profileLink: null,
+    };
 
     const spaceConfig = p.space.metadata.nodes[0] as SubstreamEntity | undefined;
     const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);

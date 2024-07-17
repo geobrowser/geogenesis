@@ -49,6 +49,12 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
         return [maybeProposal.right[0]];
       }
 
+      slog({
+        requestId: block.requestId,
+        message: `Failed to read proposal from DB for unknown reason`,
+        level: 'error',
+      });
+
       return [];
     });
 

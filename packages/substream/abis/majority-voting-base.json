@@ -2,22 +2,6 @@
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "proposalId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "sender",
-        "type": "address"
-      }
-    ],
-    "name": "ApprovalCastForbidden",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
         "name": "dao",
         "type": "address"
@@ -42,13 +26,46 @@
     "type": "error"
   },
   {
-    "inputs": [],
-    "name": "InvalidInterface",
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "limit",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "actual",
+        "type": "uint64"
+      }
+    ],
+    "name": "DateOutOfBounds",
     "type": "error"
   },
   {
-    "inputs": [],
-    "name": "ProposalCreationForbiddenOnSameBlock",
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "limit",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "actual",
+        "type": "uint64"
+      }
+    ],
+    "name": "DurationOutOfBounds",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      }
+    ],
+    "name": "ProposalCreationForbidden",
     "type": "error"
   },
   {
@@ -60,6 +77,43 @@
       }
     ],
     "name": "ProposalExecutionForbidden",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "limit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "actual",
+        "type": "uint256"
+      }
+    ],
+    "name": "RatioOutOfBounds",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "voteOption",
+        "type": "uint8"
+      }
+    ],
+    "name": "VoteCastForbidden",
     "type": "error"
   },
   {
@@ -86,25 +140,6 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "uint256",
-        "name": "proposalId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "editor",
-        "type": "address"
-      }
-    ],
-    "name": "Approved",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
         "internalType": "address",
         "name": "beacon",
         "type": "address"
@@ -124,19 +159,6 @@
       }
     ],
     "name": "Initialized",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "proposalDuration",
-        "type": "uint64"
-      }
-    ],
-    "name": "MultisigSettingsUpdated",
     "type": "event"
   },
   {
@@ -223,25 +245,6 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "uint256",
-        "name": "proposalId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "editor",
-        "type": "address"
-      }
-    ],
-    "name": "Rejected",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
         "internalType": "address",
         "name": "implementation",
         "type": "address"
@@ -251,21 +254,64 @@
     "type": "event"
   },
   {
-    "inputs": [],
-    "name": "PROPOSER_PERMISSION_ID",
-    "outputs": [
+    "anonymous": false,
+    "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "voter",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "voteOption",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "votingPower",
+        "type": "uint256"
       }
     ],
-    "stateMutability": "view",
-    "type": "function"
+    "name": "VoteCast",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "enum MajorityVotingBase.VotingMode",
+        "name": "votingMode",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "supportThreshold",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "duration",
+        "type": "uint64"
+      }
+    ],
+    "name": "VotingSettingsUpdated",
+    "type": "event"
   },
   {
     "inputs": [],
-    "name": "UPDATE_MULTISIG_SETTINGS_PERMISSION_ID",
+    "name": "UPDATE_VOTING_SETTINGS_PERMISSION_ID",
     "outputs": [
       {
         "internalType": "bytes32",
@@ -297,43 +343,6 @@
         "type": "uint256"
       }
     ],
-    "name": "approve",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_proposalId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "_account",
-        "type": "address"
-      }
-    ],
-    "name": "canApprove",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_proposalId",
-        "type": "uint256"
-      }
-    ],
     "name": "canExecute",
     "outputs": [
       {
@@ -346,6 +355,91 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_voter",
+        "type": "address"
+      },
+      {
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "_voteOption",
+        "type": "uint8"
+      }
+    ],
+    "name": "canVote",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "_metadata",
+        "type": "bytes"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "to",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "value",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          }
+        ],
+        "internalType": "struct IDAO.Action[]",
+        "name": "_actions",
+        "type": "tuple[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_allowFailureMap",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "_voteOption",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "_tryEarlyExecution",
+        "type": "bool"
+      }
+    ],
+    "name": "createProposal",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "dao",
     "outputs": [
@@ -353,6 +447,19 @@
         "internalType": "contract IDAO",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "duration",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
       }
     ],
     "stateMutability": "view",
@@ -383,25 +490,25 @@
     "outputs": [
       {
         "internalType": "bool",
+        "name": "open",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
         "name": "executed",
         "type": "bool"
       },
       {
-        "internalType": "uint16",
-        "name": "approvals",
-        "type": "uint16"
-      },
-      {
         "components": [
           {
-            "internalType": "uint16",
-            "name": "minApprovals",
-            "type": "uint16"
+            "internalType": "enum MajorityVotingBase.VotingMode",
+            "name": "votingMode",
+            "type": "uint8"
           },
           {
-            "internalType": "uint64",
-            "name": "snapshotBlock",
-            "type": "uint64"
+            "internalType": "uint32",
+            "name": "supportThreshold",
+            "type": "uint32"
           },
           {
             "internalType": "uint64",
@@ -412,10 +519,37 @@
             "internalType": "uint64",
             "name": "endDate",
             "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "snapshotBlock",
+            "type": "uint64"
           }
         ],
-        "internalType": "struct MemberAccessPlugin.ProposalParameters",
+        "internalType": "struct MajorityVotingBase.ProposalParameters",
         "name": "parameters",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "abstain",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yes",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "no",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct MajorityVotingBase.Tally",
+        "name": "tally",
         "type": "tuple"
       },
       {
@@ -442,7 +576,7 @@
       },
       {
         "internalType": "uint256",
-        "name": "failsafeActionMap",
+        "name": "allowFailureMap",
         "type": "uint256"
       }
     ],
@@ -458,16 +592,16 @@
       },
       {
         "internalType": "address",
-        "name": "_account",
+        "name": "_voter",
         "type": "address"
       }
     ],
-    "name": "hasApproved",
+    "name": "getVoteOption",
     "outputs": [
       {
-        "internalType": "bool",
+        "internalType": "enum IMajorityVoting.VoteOption",
         "name": "",
-        "type": "bool"
+        "type": "uint8"
       }
     ],
     "stateMutability": "view",
@@ -489,49 +623,55 @@
   {
     "inputs": [
       {
-        "internalType": "contract IDAO",
-        "name": "_dao",
-        "type": "address"
-      },
-      {
-        "components": [
-          {
-            "internalType": "uint64",
-            "name": "proposalDuration",
-            "type": "uint64"
-          }
-        ],
-        "internalType": "struct MemberAccessPlugin.MultisigSettings",
-        "name": "_multisigSettings",
-        "type": "tuple"
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
       }
     ],
-    "name": "initialize",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "lastMultisigSettingsChange",
+    "name": "isMinParticipationReached",
     "outputs": [
       {
-        "internalType": "uint64",
+        "internalType": "bool",
         "name": "",
-        "type": "uint64"
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "multisigSettings",
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      }
+    ],
+    "name": "isSupportThresholdReached",
     "outputs": [
       {
-        "internalType": "uint64",
-        "name": "proposalDuration",
-        "type": "uint64"
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      }
+    ],
+    "name": "isSupportThresholdReachedEarly",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -564,35 +704,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "bytes",
-        "name": "_metadata",
-        "type": "bytes"
-      },
-      {
-        "internalType": "address",
-        "name": "_proposedMember",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_proposer",
-        "type": "address"
-      }
-    ],
-    "name": "proposeAddMember",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "proposalId",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "proxiableUUID",
     "outputs": [
@@ -606,16 +717,16 @@
     "type": "function"
   },
   {
-    "inputs": [
+    "inputs": [],
+    "name": "supportThreshold",
+    "outputs": [
       {
-        "internalType": "uint256",
-        "name": "_proposalId",
-        "type": "uint256"
+        "internalType": "uint32",
+        "name": "",
+        "type": "uint32"
       }
     ],
-    "name": "reject",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -640,19 +751,48 @@
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "_blockNumber",
+        "type": "uint256"
+      }
+    ],
+    "name": "totalVotingPower",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "components": [
           {
+            "internalType": "enum MajorityVotingBase.VotingMode",
+            "name": "votingMode",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint32",
+            "name": "supportThreshold",
+            "type": "uint32"
+          },
+          {
             "internalType": "uint64",
-            "name": "proposalDuration",
+            "name": "duration",
             "type": "uint64"
           }
         ],
-        "internalType": "struct MemberAccessPlugin.MultisigSettings",
-        "name": "_multisigSettings",
+        "internalType": "struct MajorityVotingBase.VotingSettings",
+        "name": "_votingSettings",
         "type": "tuple"
       }
     ],
-    "name": "updateMultisigSettings",
+    "name": "updateVotingSettings",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -686,6 +826,42 @@
     "name": "upgradeToAndCall",
     "outputs": [],
     "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_proposalId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum IMajorityVoting.VoteOption",
+        "name": "_voteOption",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "_tryEarlyExecution",
+        "type": "bool"
+      }
+    ],
+    "name": "vote",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "votingMode",
+    "outputs": [
+      {
+        "internalType": "enum MajorityVotingBase.VotingMode",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   }
 ]
