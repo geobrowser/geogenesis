@@ -16,15 +16,20 @@ export function handleSubspacesRemoved(subspacesRemoved: SubspaceRemoved[], bloc
   return Effect.gen(function* (_) {
     const telemetry = yield* _(Telemetry);
 
+    slog({
+      message: `Removing subspaces`,
+      requestId: block.requestId,
+    });
+
     const subspacesToRemove = yield* _(mapSubspacesToRemove(subspacesRemoved));
 
-    const writtenSubspaces = yield* _(
+    const removedSubspaces = yield* _(
       Effect.all(
         subspacesToRemove.map(
           s =>
-            Effect.tryPromise({
-              try: async () => {
-                return await Subspaces.remove(s);
+            Effect.try({
+              try: () => {
+                return Subspaces.remove(s);
               },
               catch: error => {
                 return new CouldNotRemoveSubspacesError(String(error));
@@ -38,9 +43,11 @@ export function handleSubspacesRemoved(subspacesRemoved: SubspaceRemoved[], bloc
       )
     );
 
-    for (const writtenSubspace of writtenSubspaces) {
-      if (Either.isLeft(writtenSubspace)) {
-        const error = writtenSubspace.left;
+    let failedDeletions = 0;
+
+    for (const removedSubspace of removedSubspaces) {
+      if (Either.isLeft(removedSubspace)) {
+        const error = removedSubspace.left;
         telemetry.captureException(error);
 
         slog({
@@ -52,8 +59,17 @@ export function handleSubspacesRemoved(subspacesRemoved: SubspaceRemoved[], bloc
         `,
         });
 
+        failedDeletions++;
+
         continue;
       }
     }
+
+    slog({
+      requestId: block.requestId,
+      message: `${removedSubspaces.length - failedDeletions} out of ${
+        removedSubspaces.length
+      } subspaces removed successfully!`,
+    });
   });
 }

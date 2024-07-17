@@ -377,20 +377,14 @@ export default async function Layout({ children, params }: Props) {
               spaceId={props.spaceId}
               entityId={props.id}
               addSubspaceComponent={
-                <AddSubspaceDialog
-                  mainVotingPluginAddress={props.space.mainVotingPluginAddress}
-                  spacePluginAddress={props.space.spacePluginAddress}
-                  spaces={spaces.spaces}
-                  totalCount={spaces.totalCount}
-                />
+                <AddSubspaceDialog spaceId={params.id} spaces={spaces.spaces} totalCount={spaces.totalCount} />
               }
               // If a space does not have any subspaces then
               removeSubspaceComponent={
                 subspaces ? (
                   <RemoveSubspaceDialog
-                    mainVotingPluginAddress={props.space.mainVotingPluginAddress}
-                    spacePluginAddress={props.space.spacePluginAddress}
-                    spaces={subspaces?.subspaces}
+                    spaceId={params.id}
+                    spaces={subspaces.subspaces}
                     totalCount={subspaces.totalCount}
                   />
                 ) : null

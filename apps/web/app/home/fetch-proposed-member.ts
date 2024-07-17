@@ -1,12 +1,9 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
-import { tripleFragment } from '~/core/io/subgraph/fragments';
+import { fetchProfile } from '~/core/io/subgraph';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamTriple, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
 import { Profile } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
 const getProposedMemberInProposalQuery = (proposalId: string) => `query {
   proposedMembers(
@@ -16,25 +13,6 @@ const getProposedMemberInProposalQuery = (proposalId: string) => `query {
     nodes {
       account {
         id
-
-        onchainProfiles {
-          nodes {
-            id
-            homeSpaceId
-          }
-        }
-
-        geoProfiles {
-          nodes {
-            id
-            name
-            triples {
-              nodes {
-                ${tripleFragment}
-              }
-            }
-          }
-        }
       }
     }
   }
@@ -45,19 +23,6 @@ interface NetworkResult {
     nodes: {
       account: {
         id: string;
-        onchainProfiles: {
-          nodes: {
-            id: string;
-            homeSpaceId: string;
-          }[];
-        };
-        geoProfiles: {
-          nodes: {
-            id: string;
-            name: string;
-            triples: SubstreamTriple[];
-          }[];
-        };
       };
     }[];
   };
@@ -121,30 +86,5 @@ export async function fetchProposedMemberForProposal(proposalId: string): Promis
 
   // There should only be one proposed member in a single proposal
   const proposedMemberAccount = proposedMembers[0].account;
-  const onchainProfiles = proposedMemberAccount.onchainProfiles.nodes;
-  const proposedMemberProfiles = proposedMemberAccount.geoProfiles.nodes;
-
-  if (proposedMemberProfiles.length === 0 || onchainProfiles.length === 0) {
-    return {
-      id: proposedMemberAccount.id,
-      name: null,
-      avatarUrl: null,
-      coverUrl: null,
-      address: proposedMemberAccount.id as `0x${string}`,
-      profileLink: null,
-    };
-  }
-
-  const profile = proposedMemberProfiles[0];
-  const onchainProfile = onchainProfiles[0];
-  const triples = fromNetworkTriples(profile.triples);
-
-  return {
-    id: profile.id,
-    name: profile.name,
-    avatarUrl: Entities.avatar(triples) ?? null,
-    coverUrl: Entities.cover(triples) ?? null,
-    address: proposedMemberAccount.id as `0x${string}`,
-    profileLink: NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id),
-  };
+  return await fetchProfile({ address: proposedMemberAccount.id });
 }

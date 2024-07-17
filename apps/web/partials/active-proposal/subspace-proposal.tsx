@@ -24,8 +24,6 @@ export async function SubspaceProposal({ proposal }: Props) {
     fetchSpace({ id: proposal.space.id }),
   ]);
 
-  console.log('subspace', subspace);
-
   if (!subspace) {
     // @TODO: Error handle though this should never happen
     return null;

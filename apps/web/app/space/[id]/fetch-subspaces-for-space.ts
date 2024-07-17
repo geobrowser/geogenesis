@@ -13,6 +13,7 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
     nodes {
       subspace {
         id
+        daoAddress
 
         spaceMembers {
           totalCount

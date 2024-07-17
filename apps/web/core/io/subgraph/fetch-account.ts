@@ -5,27 +5,18 @@ import { getAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { Profile } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
-import { tripleFragment } from './fragments';
+import { fetchProfile } from './fetch-profile';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 export interface FetchAccountOptions {
   address: string;
   signal?: AbortController['signal'];
 }
 
-interface OnchainProfile {
-  homeSpaceId: string;
-}
-
 interface NetworkResult {
   account: {
     id: string;
-    geoProfiles: { nodes: SubstreamEntity[] };
-    onchainProfiles: { nodes: OnchainProfile[] };
   } | null;
 }
 
@@ -33,30 +24,13 @@ function getAccountQuery(address: string) {
   return `query {
     account(id: "${getAddress(address)}") {
       id
-      geoProfiles {
-        nodes {
-          id
-          name
-          triples(filter: { isStale: { equalTo: false } }) {
-            nodes {
-              ${tripleFragment}
-            }
-          }
-        }
-      }
-      onchainProfiles(orderBy: CREATED_AT_ASC, first: 1) {
-        nodes {
-          id
-          homeSpaceId
-        }
-      }
     }
   }`;
 }
 
 export async function fetchAccount(
   options: FetchAccountOptions
-): Promise<{ address: string; profile: Profile; onchainProfile: OnchainProfile | null } | null> {
+): Promise<{ address: string; profile: Profile } | null> {
   const queryId = uuid();
   const config = Environment.getConfig();
 
@@ -109,31 +83,10 @@ export async function fetchAccount(
   }
 
   const account = networkResult.account;
-  const maybeProfile = account.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-  const onchainProfile = account.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
-
-  const profile: Profile = maybeProfile
-    ? {
-        id: account.id,
-        address: account.id as `0x${string}`,
-        avatarUrl: Entities.avatar(profileTriples),
-        coverUrl: Entities.cover(profileTriples),
-        name: maybeProfile.name,
-        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-      }
-    : {
-        id: account.id,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: account.id as `0x${string}`,
-        profileLink: null,
-      };
+  const profile = await fetchProfile({ address: account.id });
 
   return {
     address: account.id,
     profile,
-    onchainProfile: onchainProfile ?? null,
   };
 }

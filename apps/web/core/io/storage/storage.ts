@@ -99,17 +99,13 @@ export class StorageClient implements IStorageClient {
 export function uploadBinary(
   binary: Uint8Array,
   storageClient: IStorageClient
-): Effect.Effect<string, IpfsUploadError> {
+): Effect.Effect<`ipfs://${string}`, IpfsUploadError> {
   return Effect.retry(
     Effect.tryPromise({
       try: async () => {
         const hash = await storageClient.uploadBinary(binary);
 
-        // if (!hash.startsWith('Qm')) {
-        //   throw new Error();
-        // }
-
-        return `ipfs://${hash}`;
+        return `ipfs://${hash}` as const;
       },
       catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
     }),

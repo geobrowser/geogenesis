@@ -1,74 +1,82 @@
-import { Effect } from 'effect';
-import * as db from 'zapatos/db';
-import type * as S from 'zapatos/schema';
+import { Effect, Either } from 'effect';
 
 import type { EditProposal } from '../proposals-created/parser';
+import { Proposals } from '~/sink/db';
 import { populateApprovedContentProposal } from '~/sink/entries/populate-approved-content-proposal';
 import type { BlockEvent } from '~/sink/types';
-import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
+
+export class ProposalDoesNotExistError extends Error {
+  readonly _tag = 'ProposalDoesNotExistError';
+}
 
 export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
-      message: `Mapping ${ipfsProposals.length} processed proposals`,
+      message: `Updating processed proposals to accepted`,
     });
 
-    /**
-     * 1. Fetch IPFS content
-     * 2. Find the proposal based on the proposalId
-     * 3. Update the proposal status to ACCEPTED
-     * 4. Write the proposal content as Versions, Triples, Entities, etc.
-     */
-    const maybeProposals = yield* _(
+    const dbProposals = yield* _(
       Effect.all(
-        ipfsProposals.map(p => {
+        ipfsProposals.map(proposal => {
           return Effect.tryPromise({
-            // @TODO: Exactly one
-            try: () => db.selectOne('proposals', { id: p.proposalId }).run(pool),
+            try: () => Proposals.setAcceptedById(proposal.proposalId),
             catch: error => {
-              slog({
-                requestId: block.requestId,
-                message: `Failed to read proposal from DB ${error}`,
-                level: 'error',
-              });
-            },
-          });
-        })
-      )
-    );
-
-    const dbProposals = maybeProposals.filter((maybeProposal): maybeProposal is S.proposals.Selectable =>
-      Boolean(maybeProposal)
-    );
-
-    yield* _(
-      Effect.all(
-        dbProposals.map(proposal => {
-          return Effect.tryPromise({
-            try: () => db.update('proposals', { status: 'accepted' }, { id: proposal.id }).run(pool),
-            catch: () => {
-              slog({
-                requestId: block.requestId,
-                message: `Failed to update proposal in DB ${proposal.id}`,
-                level: 'error',
-              });
+              return new ProposalDoesNotExistError(String(error));
             },
           });
         }),
         {
           concurrency: 75,
+          mode: 'either',
         }
       )
     );
 
+    const ipfsProposalsWithExistingDbProposal = dbProposals.flatMap(maybeProposal => {
+      if (Either.isLeft(maybeProposal)) {
+        slog({
+          requestId: block.requestId,
+          message: `Failed to read proposal from DB ${maybeProposal.left}`,
+          level: 'error',
+        });
+
+        return [];
+      }
+
+      if (maybeProposal.right[0]) {
+        return [maybeProposal.right[0]];
+      }
+
+      slog({
+        requestId: block.requestId,
+        message: `Failed to read proposal from DB for unknown reason`,
+        level: 'error',
+      });
+
+      return [];
+    });
+
+    const proposals = ipfsProposals.filter(ipfs =>
+      ipfsProposalsWithExistingDbProposal.some(p => p.id === ipfs.proposalId)
+    );
+
+    slog({
+      requestId: block.requestId,
+      message: `${proposals.length} proposals set to accepted successfully`,
+    });
+
+    slog({
+      requestId: block.requestId,
+      message: `Writing data for ${proposals.length} processed proposals`,
+    });
+
     // @TODO(performance):
     // We store the proposal data and ops in the DB already, so we can read the
-    // content of the ipfs proposals directly from the db using some kind of
-    // ORM/Query builder that lets us fetch the ops relationships as part of
-    // the query.
-    yield* _(populateApprovedContentProposal(ipfsProposals, block));
+    // content of the ipfs proposals directly from the db instead of fetching
+    // from IPFS again.
+    yield* _(populateApprovedContentProposal(proposals, block));
 
     slog({
       requestId: block.requestId,

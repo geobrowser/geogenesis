@@ -1,23 +1,24 @@
 import Link from 'next/link';
 
 import { OmitStrict, Profile } from '~/core/types';
+import { formatShortAddress } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 
 interface EditorRowProps {
-  editor: OmitStrict<Profile, 'coverUrl'>;
+  user: OmitStrict<Profile, 'coverUrl'>;
 }
 
-export function MemberRow({ editor }: EditorRowProps) {
+export function MemberRow({ user }: EditorRowProps) {
   return (
     <Link
-      href={editor.profileLink ?? ''}
+      href={user.profileLink ?? ''}
       className="flex flex-1 items-center gap-2 p-2 transition-colors duration-150 hover:bg-divider"
     >
       <div className="relative h-8 w-8 overflow-hidden rounded-full">
-        <Avatar size={32} avatarUrl={editor.avatarUrl} value={editor.address} />
+        <Avatar size={32} avatarUrl={user.avatarUrl} value={user.address} />
       </div>
-      <p className="text-metadataMedium">{editor.name}</p>
+      <p className="text-metadataMedium">{user.name ?? formatShortAddress(user.id)}</p>
     </Link>
   );
 }

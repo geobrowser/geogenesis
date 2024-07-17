@@ -8,7 +8,7 @@ export class Subspaces {
     return await db.upsert('space_subspaces', subspaces, ['parent_space_id', 'subspace_id']).run(pool);
   }
 
-  static async remove(subspaces: S.space_subspaces.Whereable) {
-    return await db.deletes('space_subspaces', subspaces);
+  static remove(subspaces: S.space_subspaces.Whereable) {
+    return db.deletes('space_subspaces', subspaces).run(pool);
   }
 }

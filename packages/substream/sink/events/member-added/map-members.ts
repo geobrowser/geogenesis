@@ -12,13 +12,11 @@ export function mapMembers(membersApproved: MemberAdded[], block: BlockEvent) {
     const members: S.space_members.Insertable[] = [];
 
     for (const member of membersApproved) {
-      // @TODO: effect.all
-      const maybeSpaceIdForVotingPlugin = yield* unwrap(
-        Effect.promise(() => Spaces.findForVotingPlugin(member.mainVotingPluginAddress))
-      );
-
-      const maybeSpaceIdForPersonalPlugin = yield* unwrap(
-        Effect.promise(() => Spaces.findForPersonalPlugin(member.mainVotingPluginAddress))
+      const [maybeSpaceIdForVotingPlugin, maybeSpaceIdForPersonalPlugin] = yield* unwrap(
+        Effect.all([
+          Effect.promise(() => Spaces.findForVotingPlugin(member.mainVotingPluginAddress)),
+          Effect.promise(() => Spaces.findForPersonalPlugin(member.mainVotingPluginAddress)),
+        ])
       );
 
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForPersonalPlugin) {

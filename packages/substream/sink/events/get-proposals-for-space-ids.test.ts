@@ -1,11 +1,10 @@
 import { createGeoId } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
-import type { EditProposal } from '../proposals-created/parser';
-import type { SpacePluginCreated } from '../spaces-created/parser';
-import { getInitialProposalsForSpaces } from './get-initial-proposals';
+import { getProposalsForSpaceIds } from './get-proposals-for-space-ids';
+import type { EditProposal } from './proposals-created/parser';
 
-describe('get-initial-proposals', () => {
+describe('getProposalsForSpaceIds', () => {
   it('proposal is in set of new spaces', () => {
     const spacesCreated: string[] = ['0x7eC3D9a27F89f52FAEa2C9cCC8dFBBA1A0c6a239'];
 
@@ -23,7 +22,7 @@ describe('get-initial-proposals', () => {
       ops: [],
     };
 
-    const proposals = getInitialProposalsForSpaces(spacesCreated, [processedProposal]);
+    const proposals = getProposalsForSpaceIds(spacesCreated, [processedProposal]);
     expect(proposals).toContain(processedProposal);
   });
 
@@ -46,7 +45,7 @@ describe('get-initial-proposals', () => {
       ops: [],
     };
 
-    const proposals = getInitialProposalsForSpaces(spacesCreated, [processedProposal]);
+    const proposals = getProposalsForSpaceIds(spacesCreated, [processedProposal]);
     expect(proposals).not.toContain(processedProposal);
   });
 });

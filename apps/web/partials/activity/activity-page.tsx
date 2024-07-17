@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import Image from 'next/legacy/image';
 
 import { Suspense } from 'react';
@@ -5,13 +6,14 @@ import { Suspense } from 'react';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
-import { AppOp } from '~/core/types';
+import { AppOp, TripleWithEntityValue } from '~/core/types';
 import { Action } from '~/core/utils/action';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
 
 import { ActivityLoading } from './activity-loading';
+import { cachedFetchEntity } from '~/app/space/(entity)/[id]/[entityId]/cached-fetch-entity';
 
 interface Props {
   entityId: string | null;
@@ -37,16 +39,21 @@ async function ActivityList({ searchParams, entityId }: Props) {
     return <p className="pt-1 text-body text-grey-04">There is no information here yet.</p>;
   }
 
-  const id = decodeURIComponent(entityId);
+  const entity = await cachedFetchEntity(entityId);
 
-  // Alternatively we can fetch the on-chain profile from the id and use
-  // the address associated with the on-chain profile. But this works.
-  const address = id.split('–')[0];
+  // Fetch the activity based on the wallets defined on the entity's Wallets triple
+  // Right now we assume it's set as an entity value but it might be a collection at
+  // some point in the future.
+  const address = (
+    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.WALLETS_ATTRIBUTE) as TripleWithEntityValue | undefined
+  )?.value?.name;
 
-  const proposals = await fetchProposalsByUser({
-    userId: address,
-    spaceId: searchParams.spaceId,
-  });
+  const proposals = address
+    ? await fetchProposalsByUser({
+        userId: address,
+        spaceId: searchParams.spaceId,
+      })
+    : [];
 
   if (proposals.length === 0) return <p className="pt-1 text-body text-grey-04">There is no information here yet.</p>;
 

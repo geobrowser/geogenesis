@@ -19,7 +19,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
 
     slog({
       requestId: block.requestId,
-      message: `Processing ${proposalsFromIpfs.length} initial space proposals`,
+      message: `Writing accounts for proposals for edits without proposals`,
     });
 
     // If we are importing a space we need to make accounts for any creators
@@ -52,7 +52,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       slog({
         level: 'error',
         requestId: block.requestId,
-        message: `Could not write accounts when writing proposals
+        message: `Could not write accounts when writing proposals for edits without proposals
           Cause: ${error.cause}
           Message: ${error.message}
         `,
@@ -66,7 +66,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
 
     slog({
       requestId: block.requestId,
-      message: `Writing ${schemaEditProposals.proposals.length} initial content proposals to DB`,
+      message: `Writing ${schemaEditProposals.proposals.length} proposals for edits without proposals`,
     });
 
     // @TODO: Put this in a transaction since all these writes are related
@@ -97,7 +97,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
 
       slog({
         requestId: block.requestId,
-        message: 'Could not write initial proposals for new spaces',
+        message: 'Could not write proposals for edits without proposals',
         level: 'error',
       });
 
@@ -106,7 +106,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
 
     slog({
       requestId: block.requestId,
-      message: 'Initial proposals for new spaces written successfully!',
+      message: 'Proposals for edits without proposals written successfully!',
     });
   });
 }

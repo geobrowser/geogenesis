@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { Services } from '../services';
-import { OnchainProfile } from '../types';
+import { Profile } from '../types';
 
 export function useGeoProfile(account?: `0x${string}`): {
-  profile: OnchainProfile | null;
+  profile: Profile | null;
   isLoading: boolean;
   isFetched: boolean;
 } {
@@ -19,7 +19,7 @@ export function useGeoProfile(account?: `0x${string}`): {
     queryFn: async () => {
       if (!account) return null;
 
-      return await subgraph.fetchOnchainProfile({
+      return await subgraph.fetchProfile({
         address: account,
       });
     },

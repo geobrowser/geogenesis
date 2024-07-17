@@ -2,13 +2,13 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
+import { Proposal, SpaceWithMetadata } from '~/core/types';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Environment } from '../environment';
 import { Entities } from '../utils/entity';
-import { NavUtils } from '../utils/utils';
-import { entityFragment, tripleFragment } from './subgraph/fragments';
+import { fetchProfilesByAddresses } from './subgraph/fetch-profiles-by-ids';
+import { entityFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './subgraph/network-local-mapping';
 
@@ -41,23 +41,6 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
 
         createdBy {
           id
-          onchainProfiles {
-            nodes {
-              homeSpaceId
-              id
-            }
-          }
-          geoProfiles {
-            nodes {
-              id
-              name
-              triples(filter: {isStale: {equalTo: false}}) {
-                nodes {
-                  ${tripleFragment}
-                }
-              }
-            }
-          }
         }
 
         proposedVersions {
@@ -143,29 +126,19 @@ export async function fetchProposalsByUser({
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const proposals = result.proposals.nodes;
+  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdBy.id));
 
   return proposals.map(p => {
-    const maybeProfile = p.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-    const onchainProfile = p.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-    const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
+    const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
 
-    const profile: Profile = maybeProfile
-      ? {
-          id: p.createdBy.id,
-          address: p.createdBy.id as `0x${string}`,
-          avatarUrl: Entities.avatar(profileTriples),
-          coverUrl: Entities.cover(profileTriples),
-          name: maybeProfile.name,
-          profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-        }
-      : {
-          id: p.createdBy.id,
-          name: null,
-          avatarUrl: null,
-          coverUrl: null,
-          address: p.createdBy.id as `0x${string}`,
-          profileLink: null,
-        };
+    const profile = maybeProfile ?? {
+      id: p.createdBy.id,
+      name: null,
+      avatarUrl: null,
+      coverUrl: null,
+      address: p.createdBy.id as `0x${string}`,
+      profileLink: null,
+    };
 
     const spaceConfig = p.space.metadata.nodes[0] as SubstreamEntity | undefined;
     const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
@@ -181,7 +154,6 @@ export async function fetchProposalsByUser({
       name: p.name,
       description: p.description,
       space: spaceWithMetadata,
-      // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
       createdBy: profile,
       proposedVersions: p.proposedVersions.nodes.map(v => {
         return {

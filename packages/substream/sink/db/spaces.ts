@@ -9,6 +9,10 @@ export class Spaces {
     return await db.upsert('spaces', spaces, ['id']).run(pool);
   }
 
+  static async getById(spaceId: string) {
+    return await db.selectExactlyOne('spaces', { id: spaceId }, { columns: ['id', 'type'] }).run(pool);
+  }
+
   static async findForDaoAddress(daoAddress: string) {
     const result = await db
       .selectOne('spaces', { dao_address: getChecksumAddress(daoAddress) }, { columns: ['id', 'dao_address'] })

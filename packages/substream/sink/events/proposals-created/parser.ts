@@ -15,6 +15,10 @@ import type { Op } from '~/sink/types';
  * succeeds. For example, if a proposal is to add a new editor to the space, the callback would
  * be the encoded function call to add the editor to the space.
  *
+ * Spaces without governance also emit ProposalCreated events, but with an empty metadata field.
+ * For now we don't create those proposals and instead manually create them based on the space
+ * type or action type. i.e., if it's a personal space or a space that was created with a set
+ * of data we create those proposals in a separate process.
  */
 export const ZodSubstreamProposalCreated = z.object({
   proposalId: z.string(),
@@ -147,7 +151,7 @@ const ZodEditSetTriplePayload = z.object({
 const ZodEditDeleteTriplePayload = z.object({
   entityId: z.string(),
   attributeId: z.string(),
-  value: z.any(),
+  value: z.object({}),
 });
 
 const ZodSetTripleOp = z.object({

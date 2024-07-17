@@ -12,7 +12,7 @@ export class Collections {
       .run(pool);
   }
 
-  static async remove(collectionItem: S.collections.Whereable) {
-    return await db.deletes('collections', collectionItem).run(pool);
+  static remove(collectionItem: S.collections.Whereable) {
+    return db.deletes('collections', collectionItem).run(pool);
   }
 }

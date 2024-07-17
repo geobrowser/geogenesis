@@ -9,26 +9,19 @@ import { Input } from '~/design-system/input';
 import { RemoveSubspaceButton } from './metadata-header-remove-subspace-button';
 import { SubspaceRow } from './subspace-row';
 import { SpaceToAdd } from './types';
-import { useProposeToRemoveSubspace } from './use-propose-remove-subspace';
+import { useRemoveSubspace } from './use-remove-subspace';
 
 interface Props {
   totalCount: number;
   spaces: SpaceToAdd[];
-  mainVotingPluginAddress: string | null;
-  spacePluginAddress: string;
+  spaceId: string;
 }
 
-export function RemoveSubspaceDialog({ spaces, totalCount, mainVotingPluginAddress, spacePluginAddress }: Props) {
+export function RemoveSubspaceDialog({ spaces, totalCount, spaceId }: Props) {
   return (
     <Dialog
       trigger={<RemoveSubspaceButton />}
-      content={
-        <Content
-          spaces={spaces}
-          mainVotingPluginAddress={mainVotingPluginAddress}
-          spacePluginAddress={spacePluginAddress}
-        />
-      }
+      content={<Content spaces={spaces} spaceId={spaceId} />}
       header={<h1 className="text-smallTitle">{totalCount} subspaces</h1>}
     />
   );
@@ -36,22 +29,20 @@ export function RemoveSubspaceDialog({ spaces, totalCount, mainVotingPluginAddre
 
 interface ContentProps {
   spaces: SpaceToAdd[];
-  mainVotingPluginAddress: string | null;
-  spacePluginAddress: string;
+  spaceId: string;
 }
 
-function Content({ spaces, mainVotingPluginAddress, spacePluginAddress }: ContentProps) {
+function Content({ spaces, spaceId }: ContentProps) {
   const [query, setQuery] = React.useState('');
-  const { proposeRemoveSubspace } = useProposeToRemoveSubspace({
-    votingPluginAddress: mainVotingPluginAddress,
-    spacePluginAddress,
+  const { proposeRemoveSubspace } = useRemoveSubspace({
+    spaceId,
   });
 
   const filteredMembers = React.useMemo(() => {
     return spaces.filter(e => e.spaceConfig?.name?.toLowerCase().includes(query.toLowerCase()));
   }, [spaces, query]);
 
-  const onRemoveSubspace = async (subspaceAddress: string) => {
+  const onRemoveSubspace = (subspaceAddress: string) => {
     proposeRemoveSubspace(subspaceAddress);
   };
 

@@ -4,10 +4,11 @@ import { v4 as uuid } from 'uuid';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Profile, Proposal, SpaceWithMetadata } from '~/core/types';
+import { Proposal, SpaceWithMetadata } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
 
+import { fetchProfile } from './fetch-profile';
+import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './network-local-mapping';
@@ -47,41 +48,12 @@ export const getFetchProposalQuery = (id: string) => `query {
         vote
         account {
           id
-          
-          geoProfiles {
-            nodes {
-              id
-              name
-              triples(filter: {isStale: {equalTo: false}}) {
-                nodes {
-                  ${tripleFragment}
-                }
-              }
-            }
-          }
         }
       }
     }
 
     createdBy {
       id
-      onchainProfiles {
-        nodes {
-          id
-          homeSpaceId
-        }
-      }
-      geoProfiles {
-        nodes {
-          id
-          name
-          triples(filter: {isStale: {equalTo: false}}) {
-            nodes {
-              ${tripleFragment}
-            }
-          }
-        }
-      }
     }
 
     proposedVersions {
@@ -159,27 +131,10 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
-  const maybeProfile = proposal.createdBy.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-  const onchainProfile = proposal.createdBy.onchainProfiles.nodes[0] as { homeSpaceId: string; id: string } | undefined;
-  const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
-
-  const profile: Profile = maybeProfile
-    ? {
-        id: proposal.createdBy.id,
-        address: proposal.createdBy.id as `0x${string}`,
-        avatarUrl: Entities.avatar(profileTriples),
-        coverUrl: Entities.cover(profileTriples),
-        name: maybeProfile.name,
-        profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-      }
-    : {
-        id: proposal.createdBy.id,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: proposal.createdBy.id as `0x${string}`,
-        profileLink: null,
-      };
+  const [profile, voterProfiles] = await Promise.all([
+    fetchProfile({ address: proposal.createdBy.id }),
+    fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.account.id)),
+  ]);
 
   const spaceConfig = proposal.space.metadata.nodes[0] as SubstreamEntity | undefined;
   const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
@@ -197,20 +152,10 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     proposalVotes: {
       totalCount: proposal.proposalVotes.totalCount,
       nodes: proposal.proposalVotes.nodes.map(v => {
-        const maybeProfile = v.account.geoProfiles.nodes[0] as SubstreamEntity | undefined;
-        const onchainProfile = proposal.createdBy.onchainProfiles.nodes[0] as
-          | { homeSpaceId: string; id: string }
-          | undefined;
-        const profileTriples = fromNetworkTriples(maybeProfile?.triples.nodes ?? []);
+        const maybeProfile = voterProfiles.find(voter => v.account.id === voter.address);
+
         const voter = maybeProfile
-          ? {
-              id: v.account.id,
-              address: v.account.id as `0x${string}`,
-              avatarUrl: Entities.avatar(profileTriples),
-              coverUrl: Entities.cover(profileTriples),
-              name: maybeProfile.name,
-              profileLink: onchainProfile ? NavUtils.toEntity(onchainProfile.homeSpaceId, onchainProfile.id) : null,
-            }
+          ? maybeProfile
           : {
               id: v.account.id,
               address: v.account.id as `0x${string}`,

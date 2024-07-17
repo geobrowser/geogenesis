@@ -21,6 +21,7 @@ function fetchEditProposalFromIpfs(
   block: BlockEvent
 ) {
   return Effect.gen(function* (_) {
+    // @TODO: Might be the personal plugin
     const maybeSpaceIdForVotingPlugin = yield* _(
       Effect.promise(() => Spaces.findForSpacePlugin(processedProposal.pluginAddress))
     );
@@ -97,9 +98,11 @@ function fetchEditProposalFromIpfs(
           onchainProposalId: '-1',
           pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
           ops: parsedContent.ops as Op[],
-          // @TODO: We can use the createdBy on the ImportEdit type instead of
-          // hard-coding Geo as the creator.
-          creator: getChecksumAddress('0x66703c058795B9Cb215fbcc7c6b07aee7D216F24'),
+          // @TODO: For non-import edits there's currently no event that includes the createdById
+          // for the caller. For public spaces we read it from the event that created the proposal,
+          // but for actions that don't have a proposal we don't know who triggered the action, or
+          // if the person who triggered the action is the person who actually wrote the content.
+          creator: parsedContent.authors[0] ? getChecksumAddress(parsedContent.authors[0]) : '',
           space: maybeSpaceIdForVotingPlugin.id,
           endTime: block.timestamp.toString(),
           startTime: block.timestamp.toString(),
@@ -171,11 +174,11 @@ function fetchEditProposalFromIpfs(
   });
 }
 
-export function getProposalFromInitialSpaceProposalIpfsUri(proposalsProcessed: ProposalProcessed[], block: BlockEvent) {
+export function getEditsProposalsFromIpfsUri(proposalsProcessed: ProposalProcessed[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
-      message: `Gathering IPFS content for ${proposalsProcessed.length} initial space proposals`,
+      message: `Gathering IPFS content for ${proposalsProcessed.length} proposals`,
     });
 
     const maybeProposalsFromIpfs = yield* _(
