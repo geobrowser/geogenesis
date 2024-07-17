@@ -1,6 +1,6 @@
 import { cache } from 'react';
 
-import { Subgraph } from '~/core/io';
+import { fetchProfileViaWalletsTripleAddress } from '~/core/io/subgraph/fetch-profile-via-wallets-triple';
 import { OmitStrict, Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
@@ -22,9 +22,11 @@ export const getMembersForSpace = cache(async (spaceId: string): Promise<Members
     throw new Error("Space doesn't exist");
   }
 
+  console.log('members', space.members);
+
   const memberProfiles = await Promise.all(
     space.members.map(async (member): Promise<MemberProfile> => {
-      const profile = await Subgraph.fetchProfile({ address: member });
+      const profile = await fetchProfileViaWalletsTripleAddress(member);
       if (!profile) {
         return {
           id: member,
