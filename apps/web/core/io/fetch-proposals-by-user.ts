@@ -8,7 +8,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Environment } from '../environment';
 import { Entities } from '../utils/entity';
 import { fetchProfilesByAddresses } from './subgraph/fetch-profiles-by-ids';
-import { entityFragment, tripleFragment } from './subgraph/fragments';
+import { entityFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './subgraph/network-local-mapping';
 
@@ -41,23 +41,6 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
 
         createdBy {
           id
-          onchainProfiles {
-            nodes {
-              homeSpaceId
-              id
-            }
-          }
-          geoProfiles {
-            nodes {
-              id
-              name
-              triples(filter: {isStale: {equalTo: false}}) {
-                nodes {
-                  ${tripleFragment}
-                }
-              }
-            }
-          }
         }
 
         proposedVersions {
@@ -171,7 +154,6 @@ export async function fetchProposalsByUser({
       name: p.name,
       description: p.description,
       space: spaceWithMetadata,
-      // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
       createdBy: profile,
       proposedVersions: p.proposedVersions.nodes.map(v => {
         return {

@@ -40,23 +40,6 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
       createdAtBlock
       createdBy {
         id
-        onchainProfiles {
-          nodes {
-            homeSpaceId
-            id
-          }
-        }
-        geoProfiles {
-          nodes {
-            id
-            name
-            triples(filter: {isStale: {equalTo: false}}) {
-              nodes {
-                ${tripleFragment}
-              }
-            }
-          }
-        }
       }
       
       createdAt

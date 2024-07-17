@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
-import { entityFragment, tripleFragment } from '~/core/io/subgraph/fragments';
+import { entityFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
 import { Profile, SpaceWithMetadata, Version } from '~/core/types';
@@ -40,23 +40,6 @@ const getVersionsQuery = ({
 
         createdBy {
           id
-          onchainProfiles {
-            nodes {
-              homeSpaceId
-              id
-            }
-          }
-          geoProfiles {
-            nodes {
-              id
-              name
-              triples(filter: {isStale: {equalTo: false}}) {
-                nodes {
-                  ${tripleFragment}
-                }
-              }
-            }
-          }
         }
 
         space {

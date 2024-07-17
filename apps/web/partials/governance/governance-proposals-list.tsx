@@ -8,7 +8,6 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
-import { tripleFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamProposal } from '~/core/io/subgraph/network-local-mapping';
 import { OmitStrict, Vote } from '~/core/types';
@@ -129,23 +128,6 @@ const getFetchSpaceProposalsQuery = (
 
       createdBy {
         id
-        onchainProfiles {
-          nodes {
-            homeSpaceId
-            id
-          }
-        }
-        geoProfiles {
-          nodes {
-            id
-            name
-            triples(filter: {isStale: {equalTo: false}}) {
-              nodes {
-                ${tripleFragment}
-              }
-            }
-          }
-        }
       }
 
       createdAt

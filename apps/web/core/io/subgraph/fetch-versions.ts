@@ -8,7 +8,7 @@ import { Profile, SpaceWithMetadata, Version } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { entityFragment, tripleFragment } from './fragments';
+import { entityFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from './network-local-mapping';
 
@@ -30,23 +30,6 @@ const getVersionsQuery = (entityId: string, offset: number, proposalId?: string)
 
         createdBy {
           id
-          onchainProfiles {
-            nodes {
-              homeSpaceId
-              id
-            }
-          }
-          geoProfiles {
-            nodes {
-              id
-              name
-              triples(filter: {isStale: {equalTo: false}}) {
-                nodes {
-                  ${tripleFragment}
-                }
-              }
-            }
-          }
         }
 
         space {

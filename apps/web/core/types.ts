@@ -213,8 +213,6 @@ export type Vote = {
   vote: 'ACCEPT' | 'REJECT';
   account: {
     id: string;
-    geoProfiles: { nodes: SubstreamEntity[] };
-    onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
   };
   voter: Profile;
 };

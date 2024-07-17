@@ -94,8 +94,6 @@ export type SubstreamTriple = SubstreamValue & {
 
 type CreatedBy = {
   id: string;
-  geoProfiles: { nodes: SubstreamEntity[] };
-  onchainProfiles: { nodes: { homeSpaceId: string; id: string }[] };
 };
 
 export type SubstreamOp = OmitStrict<SubstreamTriple, 'space'> &
