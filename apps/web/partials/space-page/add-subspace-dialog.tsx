@@ -29,7 +29,7 @@ interface ContentProps {
   spaceId: string;
 }
 
-function Content({ spaces, spaceId }: ContentProps) {
+function Content({ spaceId }: ContentProps) {
   const [query, setQuery] = React.useState('');
 
   const { proposeAddSubspace } = useAddSubspace({
