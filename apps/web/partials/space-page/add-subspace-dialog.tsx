@@ -7,6 +7,7 @@ import Link from 'next/link';
 
 import * as React from 'react';
 
+import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { Subspace } from '~/core/io/subgraph/fetch-subspaces';
 import { getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 
@@ -20,17 +21,18 @@ import { useAddSubspace } from './use-add-subspace';
 
 interface Props {
   subspaces: Subspace[];
+  inflightSubspaces: Subspace[];
   spaceId: string;
   trigger: React.ReactNode;
 }
 
 // @TODO: In the future this should query for spaces as you type instead of filtering
 // the entire list of spaces in the system
-export function AddSubspaceDialog({ trigger, spaceId, subspaces }: Props) {
+export function AddSubspaceDialog({ trigger, spaceId, subspaces, inflightSubspaces }: Props) {
   return (
     <Dialog
       trigger={trigger}
-      content={<Content subspaces={subspaces} spaceId={spaceId} />}
+      content={<Content subspaces={subspaces} spaceId={spaceId} inflightSubspaces={inflightSubspaces} />}
       header={<h1 className="text-smallTitle">Subspaces</h1>}
     />
   );
@@ -38,6 +40,7 @@ export function AddSubspaceDialog({ trigger, spaceId, subspaces }: Props) {
 
 interface ContentProps {
   subspaces: Subspace[];
+  inflightSubspaces: Subspace[];
   spaceId: string;
 }
 
@@ -135,14 +138,24 @@ const SpacesQuery = graphql(`
   }
 `);
 
-function Content({ spaceId, subspaces }: ContentProps) {
+function useSubspacesQuery({
+  subspaceIds,
+  spaceId,
+  inflightSubspaceIds,
+}: {
+  subspaceIds: string[];
+  inflightSubspaceIds: string[];
+  spaceId: string;
+}) {
   const [query, setQuery] = React.useState('');
+  const debouncedQuery = useDebouncedValue(query, 200);
 
   const [res] = useQuery({
     query: SpacesQuery,
     variables: {
-      name: query,
-      notIn: subspaces.map(s => s.id),
+      name: debouncedQuery,
+      // Don't query for spaces that are already subspaces or the current space
+      notIn: [...subspaceIds, spaceId],
     },
   });
 
@@ -157,13 +170,24 @@ function Content({ spaceId, subspaces }: ContentProps) {
     };
   });
 
+  return {
+    query,
+    setQuery,
+    spaces,
+  };
+}
+
+function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
   // @TODO: Fix types for graphql query results
-  // @TODO: fetch existing subspaces for the current space
-  // @TODO: only query list of spaces from spaces that aren't already subspaces, aren't
-  //        part of in-flight proposals, and aren't the current space.
   // @TODO: Render current subspaces
   // @TODO: Render in-flight subspaces
   // @TODO: Fragments
+  // @TODO: Members icons
+  const { query, setQuery, spaces } = useSubspacesQuery({
+    spaceId,
+    subspaceIds: subspaces.map(s => s.id),
+    inflightSubspaceIds: inflightSubspaces.map(s => s.id),
+  });
 
   const { proposeAddSubspace } = useAddSubspace({
     spaceId,
@@ -222,34 +246,67 @@ function Content({ spaceId, subspaces }: ContentProps) {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <h2 className="text-metadata text-grey-04">Current subspaces</h2>
+      {inflightSubspaces.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-metadata text-grey-04">In-flight subspaces</h2>
 
-        <Divider type="horizontal" />
+          <Divider type="horizontal" />
 
-        {subspaces?.map(s => (
-          <Link
-            href={s.id}
-            key={s.id}
-            className="flex w-full items-center justify-between py-2 transition-colors duration-150 hover:bg-divider"
-          >
-            <div className="flex flex-1 items-center gap-2">
-              <div className="relative h-8 w-8 overflow-hidden rounded">
-                <Avatar size={32} avatarUrl={s.spaceConfig?.image} value={s.id} />
-              </div>
+          {inflightSubspaces?.map(s => (
+            <Link
+              href={s.id}
+              key={s.id}
+              className="flex w-full items-center justify-between py-2 transition-colors duration-150 hover:bg-divider"
+            >
+              <div className="flex flex-1 items-center gap-2">
+                <div className="relative h-8 w-8 overflow-hidden rounded">
+                  <Avatar size={32} avatarUrl={s.spaceConfig?.image} value={s.id} />
+                </div>
 
-              <div className="space-y-0.5">
-                <p className="text-metadataMedium">{s.spaceConfig?.name ?? s.id}</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
-                  <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                <div className="space-y-0.5">
+                  <p className="text-metadataMedium">{s.spaceConfig?.name ?? s.id}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
+                    <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <SmallButton onClick={() => onAddSubspace(s.daoAddress)}>Propose to add</SmallButton>
-          </Link>
-        ))}
-      </div>
+              <SmallButton onClick={() => onAddSubspace(s.daoAddress)}>Propose to add</SmallButton>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {subspaces.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-metadata text-grey-04">Current subspaces</h2>
+
+          <Divider type="horizontal" />
+
+          {subspaces?.map(s => (
+            <Link
+              href={s.id}
+              key={s.id}
+              className="flex w-full items-center justify-between py-2 transition-colors duration-150 hover:bg-divider"
+            >
+              <div className="flex flex-1 items-center gap-2">
+                <div className="relative h-8 w-8 overflow-hidden rounded">
+                  <Avatar size={32} avatarUrl={s.spaceConfig?.image} value={s.id} />
+                </div>
+
+                <div className="space-y-0.5">
+                  <p className="text-metadataMedium">{s.spaceConfig?.name ?? s.id}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
+                    <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                  </div>
+                </div>
+              </div>
+              <SmallButton onClick={() => onAddSubspace(s.daoAddress)}>Propose to add</SmallButton>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

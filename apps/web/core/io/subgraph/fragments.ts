@@ -134,6 +134,7 @@ export const resultTripleFragment = `
 `;
 
 export const spacePluginsFragment = `
+  daoAddress
   mainVotingPluginAddress
   memberAccessPluginAddress
   personalSpaceAdminPluginAddress
