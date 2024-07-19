@@ -16,9 +16,11 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
         id
         type
 
-        metadata {
+        spacesMetadata {
           nodes {
-            ${entityFragment}
+            entity {
+              ${entityFragment}
+            }
           }
         }
       }
@@ -45,7 +47,7 @@ interface NetworkResult {
       subspace: {
         id: string;
         type: SpaceGovernanceType;
-        metadata: { nodes: SubstreamEntity[] };
+        spacesMetadata: { nodes: { entity: SubstreamEntity }[] };
       };
     }[];
   };
@@ -74,7 +76,7 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${endpoint}
+            `Encountered runtime graphql error in fetchSubspaces. queryId: ${queryId} endpoint: ${endpoint}
 
             queryString: ${getFetchSpacesQuery(spaceId)}
             `,
@@ -104,7 +106,10 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaceSubspaces.nodes.map((space): Subspace => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.subspace.id, space.subspace.metadata.nodes[0]);
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(
+      space.subspace.id,
+      space.subspace.spacesMetadata.nodes[0]?.entity
+    );
 
     return {
       id: space.subspace.id,

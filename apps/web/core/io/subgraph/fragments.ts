@@ -111,23 +111,25 @@ export const resultTripleFragment = `
   valueType
   space {
     id
-    metadata {
-      nodes {
-        id
-        name
-        types {
-          nodes {
+      spacesMetadata {
+        nodes {
+          entity {
             id
             name
-          }
-        }
-        triples {
-          nodes {
-            ${tripleFragment}
+            types {
+              nodes {
+                id
+                name
+              }
+            }
+            triples {
+              nodes {
+                ${tripleFragment}
+              }
+            }
           }
         }
       }
-    }
   }
 `;
 
@@ -194,9 +196,11 @@ export const spaceFragment = `
 
   createdAtBlock
 
-  metadata {
+  spacesMetadata {
     nodes {
-      ${entityFragment}
+      entity {
+        ${entityFragment}
+      }
     }
   }
 `;

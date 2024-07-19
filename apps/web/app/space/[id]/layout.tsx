@@ -255,9 +255,11 @@ const getFetchSpacesQuery = () => `query {
       spaceMembers {
         totalCount
       }
-      metadata {
+      spacesMetadata {
         nodes {
-          ${entityFragment}
+          entity {
+            ${entityFragment}
+          }
         }
       }
     }
@@ -271,7 +273,7 @@ interface NetworkResult {
       id: string;
       daoAddress: string;
       spaceMembers: { totalCount: number };
-      metadata: { nodes: SubstreamEntity[] };
+      spacesMetadata: { nodes: { entity: SubstreamEntity }[] };
     }[];
   };
 }
@@ -299,7 +301,7 @@ async function getSpacesForSubspaceManagement(): Promise<{ totalCount: number; s
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${endpoint}
+            `Encountered runtime graphql error in getSpacesForSubspaceManagement. queryId: ${queryId} endpoint: ${endpoint}
 
             queryString: ${getFetchSpacesQuery()}
             `,
@@ -331,7 +333,7 @@ async function getSpacesForSubspaceManagement(): Promise<{ totalCount: number; s
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaces.nodes.map((space): SpaceToAdd => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.metadata.nodes[0]);
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.spacesMetadata.nodes[0]?.entity);
 
     return {
       id: space.id,

@@ -7,7 +7,7 @@ import { type BlockEvent } from '../../types';
 import { pool } from '../../utils/pool';
 import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
-import { Collections, Triples } from '~/sink/db';
+import { Collections, SpaceMetadata, Triples } from '~/sink/db';
 import { CollectionItems } from '~/sink/db/collection-items';
 
 interface PopulateTriplesArgs {
@@ -345,6 +345,26 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
 
         yield* _(insertTypeEffect, retryEffect);
 
+        if (triple.entity_value_id && triple.entity_value_id === SYSTEM_IDS.SPACE_CONFIGURATION) {
+          const insertSpaceMetadataEffect = Effect.tryPromise({
+            try: () =>
+              SpaceMetadata.upsert([
+                {
+                  space_id: triple.space_id,
+                  entity_id: triple.entity_id,
+                },
+              ]),
+            catch: error =>
+              new Error(
+                `Failed to insert space metadata with id ${triple.entity_value_id?.toString()} for space ${
+                  triple.space_id
+                } ${String(error)}`
+              ),
+          });
+
+          yield* _(insertSpaceMetadataEffect, retryEffect);
+        }
+
         if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
           const insertCollectionEffect = Effect.tryPromise({
             try: () =>
@@ -413,7 +433,26 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
               .run(pool),
           catch: () => new Error('Failed to delete type'),
         });
+
         yield* _(deleteTypeEffect, retryEffect);
+
+        if (triple.entity_value_id && triple.entity_value_id === SYSTEM_IDS.SPACE_CONFIGURATION) {
+          const deleteSpaceMetadataEffect = Effect.tryPromise({
+            try: () =>
+              SpaceMetadata.remove({
+                entity_id: triple.entity_id,
+                space_id: triple.space_id,
+              }),
+            catch: error =>
+              new Error(
+                `Failed to remove space metadata with id ${triple.entity_value_id?.toString()} for space ${
+                  triple.space_id
+                } ${String(error)}`
+              ),
+          });
+
+          yield* _(deleteSpaceMetadataEffect, retryEffect);
+        }
 
         if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
           const deleteCollectionEffect = Effect.try({
