@@ -111,7 +111,7 @@ export type SubstreamOp = OmitStrict<SubstreamTriple, 'space'> &
     entityValue: string | null;
   };
 
-export type SubstreamEntity = OmitStrict<Entity, 'triples' | 'types' | 'nameTripleSpaces'> & {
+export type SubstreamEntity = OmitStrict<Entity, 'triples' | 'types' | 'nameTripleSpaces' | 'description'> & {
   triples: { nodes: SubstreamTriple[] };
   types: {
     nodes: { id: string; name: string | null }[];

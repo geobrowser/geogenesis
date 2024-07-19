@@ -145,13 +145,20 @@ function Content({ spaceId }: ContentProps) {
     return {
       id: s!.id,
       daoAddress: s!.daoAddress,
-      spaceConfig: getSpaceConfigFromMetadata(s!.id, s?.spacesMetadata.nodes?.[0]?.entity),
+      spaceConfig: getSpaceConfigFromMetadata(s!.id, s?.spacesMetadata.nodes?.[0]?.entity ?? undefined),
       totalMembers: s?.spaceMembers.totalCount ?? 0,
       totalEditors: s?.spaceEditors.totalCount ?? 0,
     };
   });
 
+  // @TODO: Fix starting height of dialog
+  // @TODO: Fix types for graphql query results
   // @TODO: fetch existing subspaces for the current space
+  // @TODO: only query list of spaces from spaces that aren't already subspaces, aren't
+  //        part of in-flight proposals, and aren't the current space.
+  // @TODO: Render current subspaces
+  // @TODO: Render in-flight subspaces
+  // @TODO: Fragments
 
   const { proposeAddSubspace } = useAddSubspace({
     spaceId,
