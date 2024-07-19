@@ -13,5 +13,5 @@ export type NetworkSpaceResult = {
   spaceEditors: { nodes: { accountId: string }[] };
   spaceMembers: { nodes: { accountId: string }[] };
   createdAtBlock: string;
-  metadata: { nodes: SubstreamEntity[] };
+  spacesMetadata: { nodes: { entity: SubstreamEntity }[] };
 };

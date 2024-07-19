@@ -32,6 +32,8 @@ interface IMergedDataSource
     | 'fetchSpace'
     | 'fetchSpaces'
     | 'fetchProfile'
+    // Merging logic may be added in the future
+    | 'fetchResults'
   > {
   // Rows and columns aren't part of the subgraph API and instead are higher-order functions that
   // call the subgraph APIs themselves. This is because rows and columns are not entities in the

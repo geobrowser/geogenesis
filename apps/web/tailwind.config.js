@@ -274,14 +274,14 @@ module.exports = {
           },
         ],
         footnote: [
-          '0.678rem',
+          '0.6875rem',
           {
             lineHeight: '0.8125rem',
             fontWeight: '400',
           },
         ],
         footnoteMedium: [
-          '0.678rem',
+          '0.6875rem',
           {
             lineHeight: '0.8125rem',
             fontWeight: '500',

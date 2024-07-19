@@ -77,7 +77,7 @@ export async function fetchSpaces(): Promise<Space[]> {
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaces.nodes.map((space): Space => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.metadata.nodes[0]);
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.spacesMetadata.nodes[0]?.entity);
 
     return {
       id: space.id,

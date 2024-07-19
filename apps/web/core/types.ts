@@ -1,5 +1,7 @@
 import { ProposalStatus, ProposalType, SYSTEM_IDS } from '@geogenesis/sdk';
 
+import { SubstreamEntity } from '~/core/io/subgraph/network-local-mapping';
+
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
@@ -99,6 +101,35 @@ export type Triple = {
   hasBeenPublished?: boolean;
   timestamp?: string; // ISO-8601
   isDeleted?: boolean;
+};
+
+export type TripleWithSpaceMetadata = {
+  space: SpaceMetadata;
+  entityId: string;
+  attributeId: string;
+  value: Value;
+
+  entityName: string | null;
+  attributeName: string | null;
+
+  // We have a set of application-specific metadata that we attach to each local version of a triple.
+  id?: string; // `${spaceId}:${entityId}:${attributeId}`
+  placeholder?: boolean;
+  // We keep published triples optimistically in the store. It can take a while for the blockchain
+  // to process our transaction, then a few seconds for the subgraph to pick it up and index it.
+  // We keep the published triples so we can continue to render them locally while the backend
+  // catches up.
+  hasBeenPublished?: boolean;
+  timestamp?: string; // ISO-8601
+  isDeleted?: boolean;
+};
+
+export type SpaceMetadata = {
+  id: string;
+  name: string;
+  metadata: {
+    nodes: SubstreamEntity[];
+  };
 };
 
 export type SpaceConfigEntity = Entity & {

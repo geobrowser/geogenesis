@@ -16,6 +16,7 @@ import {
 import { Entities as EntityModule } from '~/core/utils/entity';
 
 import { fetchEntity } from './fetch-entity';
+import { NetworkSpaceResult } from './types';
 
 interface SubstreamType {
   id: string;
@@ -92,6 +93,12 @@ export type SubstreamTriple = SubstreamValue & {
   space: Space;
 };
 
+export type SubstreamTripleWithSpaceMetadata = SubstreamValue & {
+  entity: Identifiable & Nameable;
+  attribute: Identifiable & Nameable;
+  space: Pick<NetworkSpaceResult, 'id' | 'spacesMetadata'>;
+};
+
 type CreatedBy = {
   id: string;
 };
@@ -106,6 +113,13 @@ export type SubstreamOp = OmitStrict<SubstreamTriple, 'space'> &
 
 export type SubstreamEntity = OmitStrict<Entity, 'triples' | 'types' | 'nameTripleSpaces'> & {
   triples: { nodes: SubstreamTriple[] };
+  types: {
+    nodes: { id: string; name: string | null }[];
+  };
+};
+
+export type SubstreamEntityWithSpaceMetadata = OmitStrict<Entity, 'triples' | 'types' | 'nameTripleSpaces'> & {
+  triples: { nodes: SubstreamTripleWithSpaceMetadata[] };
   types: {
     nodes: { id: string; name: string | null }[];
   };
@@ -321,7 +335,7 @@ function networkTripleHasEmptyAttribute(networkTriple: SubstreamOp | SubstreamTr
 
 export function fromNetworkTriples(networkTriples: SubstreamTriple[]): Triple[] {
   return networkTriples
-    .map((networkTriple, i) => {
+    .map(networkTriple => {
       // There's an edge-case bug where the value can be null even though it should be an object.
       // Right now we're not doing any triple validation, but once we do we will no longer be indexing
       // empty triples.

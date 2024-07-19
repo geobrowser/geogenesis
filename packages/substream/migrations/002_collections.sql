@@ -1,22 +1,22 @@
-CREATE OR REPLACE FUNCTION public.spaces_metadata(e_row spaces)
-RETURNS SETOF public.entities AS $$
-BEGIN
-    -- Using CTE to first fetch all types of the given entity
-    RETURN QUERY
-    -- Get the entity id
-    WITH space_configuration_entity_ids AS (
-        SELECT t.*
-        FROM triples t
-        WHERE t.space_id = e_row.id
-        AND t.attribute_id = '8f151ba4de204e3c9cb499ddf96f48f1'
-        AND t.entity_value_id = '1d5d0c2adb23466ca0b09abe879df457' -- space configuration
-        AND t.is_stale = FALSE
-    )
-    SELECT e.*
-    FROM entities e
-    JOIN space_configuration_entity_ids eids ON e.id = eids.entity_id;
-END;
-$$ LANGUAGE plpgsql STRICT STABLE;
+-- CREATE OR REPLACE FUNCTION public.spaces_metadata(e_row spaces)
+-- RETURNS SETOF public.entities AS $$
+-- BEGIN
+--     -- Using CTE to first fetch all types of the given entity
+--     RETURN QUERY
+--     -- Get the entity id
+--     WITH space_configuration_entity_ids AS (
+--         SELECT t.*
+--         FROM triples t
+--         WHERE t.space_id = e_row.id
+--         AND t.attribute_id = '8f151ba4de204e3c9cb499ddf96f48f1'
+--         AND t.entity_value_id = '1d5d0c2adb23466ca0b09abe879df457' -- space configuration
+--         AND t.is_stale = FALSE
+--     )
+--     SELECT e.*
+--     FROM entities e
+--     JOIN space_configuration_entity_ids eids ON e.id = eids.entity_id;
+-- END;
+-- $$ LANGUAGE plpgsql STRICT STABLE;
 
 -- Map the account id to a geo profile based on the entity id of
 -- the account's onchain profile if it exists
