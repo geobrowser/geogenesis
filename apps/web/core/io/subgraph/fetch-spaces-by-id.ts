@@ -50,7 +50,7 @@ export async function fetchSpacesById(ids: string[]) {
           throw error;
         case 'GraphqlRuntimeError':
           console.error(
-            `Encountered runtime graphql error in fetchSpaces. queryId: ${queryId} endpoint: ${endpoint}
+            `Encountered runtime graphql error in fetchSpacesById. queryId: ${queryId} endpoint: ${endpoint}
 
             queryString: ${getFetchSpacesQuery(ids)}
             `,
@@ -80,7 +80,7 @@ export async function fetchSpacesById(ids: string[]) {
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaces.nodes.map((space): Space => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.metadata.nodes[0]);
+    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.spacesMetadata.nodes[0]?.entity);
 
     return {
       id: space.id,

@@ -96,7 +96,7 @@ export type SubstreamTriple = SubstreamValue & {
 export type SubstreamTripleWithSpaceMetadata = SubstreamValue & {
   entity: Identifiable & Nameable;
   attribute: Identifiable & Nameable;
-  space: Pick<NetworkSpaceResult, 'id' | 'metadata'>;
+  space: Pick<NetworkSpaceResult, 'id' | 'spacesMetadata'>;
 };
 
 type CreatedBy = {

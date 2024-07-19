@@ -168,6 +168,12 @@ CREATE TABLE public.versions (
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
+CREATE TABLE public.spaces_metadata (
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    CONSTRAINT space_metadata_unique_entity_space_pair UNIQUE (entity_id, space_id)
+);
+
 CREATE TABLE public.proposal_votes (
     PRIMARY KEY (onchain_proposal_id, space_id, account_id),
     proposal_id text NOT NULL REFERENCES public.proposals(id),

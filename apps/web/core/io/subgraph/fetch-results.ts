@@ -79,6 +79,11 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Result
     signal: options?.signal,
   });
 
+  console.log(
+    'query',
+    getFetchResultsQuery(options.query ?? '', entityOfWhere, options.typeIds, options.first, options.skip)
+  );
+
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
@@ -122,6 +127,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Result
   });
 
   const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  console.log('entities', entities);
 
   const sortedResults = sortSearchResultsByRelevance(entities.nodes);
 
@@ -140,7 +146,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Result
 
     const nameTripleSpaces = triples.map(triple => triple.space.id);
     const spaces = triples.flatMap(triple =>
-      getSpaceConfigFromMetadata(triple.space.id, triple.space.metadata.nodes[0])
+      getSpaceConfigFromMetadata(triple.space.id, triple.space.spacesMetadata.nodes[0]?.entity)
     );
 
     return {
