@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
+import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { getBlocksCollectionData } from '~/core/io/subgraph/network-local-mapping';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -236,7 +237,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
 }
 
 export default async function Layout({ children, params }: Props) {
-  const props = await await getData(params.id);
+  const [props, subspaces] = await await Promise.all([getData(params.id), fetchSubspacesBySpaceId(params.id)]);
   const coverUrl = Entities.cover(props.triples);
 
   const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
@@ -261,7 +262,11 @@ export default async function Layout({ children, params }: Props) {
               spaceId={props.spaceId}
               entityId={props.id}
               addSubspaceComponent={
-                <AddSubspaceDialog spaceId={params.id} trigger={<MenuItem>Add subspace</MenuItem>} />
+                <AddSubspaceDialog
+                  spaceId={params.id}
+                  trigger={<MenuItem>Add subspace</MenuItem>}
+                  subspaces={subspaces}
+                />
               }
               membersComponent={
                 <React.Suspense fallback={<MembersSkeleton />}>

@@ -7,40 +7,46 @@ import Link from 'next/link';
 
 import * as React from 'react';
 
+import { Subspace } from '~/core/io/subgraph/fetch-subspaces';
 import { getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
+import { Divider } from '~/design-system/divider';
 import { Input } from '~/design-system/input';
 
 import { useAddSubspace } from './use-add-subspace';
 
 interface Props {
+  subspaces: Subspace[];
   spaceId: string;
   trigger: React.ReactNode;
 }
 
 // @TODO: In the future this should query for spaces as you type instead of filtering
 // the entire list of spaces in the system
-export function AddSubspaceDialog({ trigger, spaceId }: Props) {
+export function AddSubspaceDialog({ trigger, spaceId, subspaces }: Props) {
   return (
     <Dialog
       trigger={trigger}
-      content={<Content spaceId={spaceId} />}
+      content={<Content subspaces={subspaces} spaceId={spaceId} />}
       header={<h1 className="text-smallTitle">Subspaces</h1>}
     />
   );
 }
 
 interface ContentProps {
+  subspaces: Subspace[];
   spaceId: string;
 }
 
-// @TODO: How do we do fragments?
 const SpacesQuery = graphql(`
-  query Spaces($name: String!) {
-    spaces(filter: { spacesMetadata: { some: { entity: { name: { includesInsensitive: $name } } } } }, first: 10) {
+  query Spaces($name: String!, $notIn: [String!]!) {
+    spaces(
+      filter: { spacesMetadata: { some: { entity: { name: { includesInsensitive: $name } } } }, id: { notIn: $notIn } }
+      first: 10
+    ) {
       nodes {
         id
         daoAddress
@@ -129,13 +135,14 @@ const SpacesQuery = graphql(`
   }
 `);
 
-function Content({ spaceId }: ContentProps) {
+function Content({ spaceId, subspaces }: ContentProps) {
   const [query, setQuery] = React.useState('');
 
   const [res] = useQuery({
     query: SpacesQuery,
     variables: {
       name: query,
+      notIn: subspaces.map(s => s.id),
     },
   });
 
@@ -144,7 +151,7 @@ function Content({ spaceId }: ContentProps) {
     return {
       id: s!.id,
       daoAddress: s!.daoAddress,
-      spaceConfig: getSpaceConfigFromMetadata(s!.id, s?.spacesMetadata.nodes?.[0]?.entity ?? undefined),
+      spaceConfig: getSpaceConfigFromMetadata(s!.id, s?.spacesMetadata.nodes?.[0]?.entity),
       totalMembers: s?.spaceMembers.totalCount ?? 0,
       totalEditors: s?.spaceEditors.totalCount ?? 0,
     };
@@ -167,50 +174,81 @@ function Content({ spaceId }: ContentProps) {
   };
 
   return (
-    <div className="flex w-[460px] flex-col gap-2">
-      <h2 className="text-metadata text-grey-04">Find subspaces to add</h2>
+    <div className="flex w-[460px] flex-col gap-4">
+      <div className="space-y-2">
+        <h2 className="text-metadata text-grey-04">Find subspaces to add</h2>
 
-      <div className="relative">
-        <Input withSearchIcon onChange={e => setQuery(e.currentTarget.value)} />
+        <div className="relative">
+          <Input withSearchIcon onChange={e => setQuery(e.currentTarget.value)} />
 
-        {query && spaces?.length !== 0 && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -10 }}
-            transition={{
-              type: 'spring',
-              duration: 0.1,
-              bounce: 0,
-            }}
-            // Doing some fixed positioning to be able to break out the results list
-            // from the height and flow of the dialog component
-            className="fixed z-[102] mt-1 max-h-[243px] w-[460px] divide-y divide-grey-02 overflow-hidden overflow-y-auto rounded-lg border border-grey-02 bg-white"
-          >
-            {spaces?.map(s => (
-              <Link
-                href={s.id}
-                key={s.id}
-                className="flex w-full items-center justify-between px-3 py-2 transition-colors duration-150 hover:bg-divider"
-              >
-                <div className="flex flex-1 items-center gap-2">
-                  <div className="relative h-8 w-8 overflow-hidden rounded">
-                    <Avatar size={32} avatarUrl={s.spaceConfig?.image} value={s.id} />
-                  </div>
+          {query && spaces?.length !== 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              transition={{
+                type: 'spring',
+                duration: 0.1,
+                bounce: 0,
+              }}
+              // Doing some fixed positioning to be able to break out the results list
+              // from the height and flow of the dialog component
+              className="fixed z-[102] mt-1 max-h-[243px] w-[460px] divide-y divide-grey-02 overflow-hidden overflow-y-auto rounded-lg border border-grey-02 bg-white"
+            >
+              {spaces?.map(s => (
+                <Link
+                  href={s.id}
+                  key={s.id}
+                  className="flex w-full items-center justify-between px-3 py-2 transition-colors duration-150 hover:bg-divider"
+                >
+                  <div className="flex flex-1 items-center gap-2">
+                    <div className="relative h-8 w-8 overflow-hidden rounded">
+                      <Avatar size={32} avatarUrl={s.spaceConfig?.image} value={s.id} />
+                    </div>
 
-                  <div className="space-y-0.5">
-                    <p className="text-metadataMedium">{s.spaceConfig?.name ?? s.id}</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
-                      <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                    <div className="space-y-0.5">
+                      <p className="text-metadataMedium">{s.spaceConfig?.name ?? s.id}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
+                        <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                      </div>
                     </div>
                   </div>
+                  <SmallButton onClick={() => onAddSubspace(s.daoAddress)}>Propose to add</SmallButton>
+                </Link>
+              ))}
+            </motion.div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-metadata text-grey-04">Current subspaces</h2>
+
+        <Divider type="horizontal" />
+
+        {subspaces?.map(s => (
+          <Link
+            href={s.id}
+            key={s.id}
+            className="flex w-full items-center justify-between py-2 transition-colors duration-150 hover:bg-divider"
+          >
+            <div className="flex flex-1 items-center gap-2">
+              <div className="relative h-8 w-8 overflow-hidden rounded">
+                <Avatar size={32} avatarUrl={s.spaceConfig?.image} value={s.id} />
+              </div>
+
+              <div className="space-y-0.5">
+                <p className="text-metadataMedium">{s.spaceConfig?.name ?? s.id}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
+                  <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
                 </div>
-                <SmallButton onClick={() => onAddSubspace(s.daoAddress)}>Propose to add</SmallButton>
-              </Link>
-            ))}
-          </motion.div>
-        )}
+              </div>
+            </div>
+            <SmallButton onClick={() => onAddSubspace(s.daoAddress)}>Propose to add</SmallButton>
+          </Link>
+        ))}
       </div>
     </div>
   );

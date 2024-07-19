@@ -408,7 +408,7 @@ export function fromNetworkOps(networkOps: SubstreamOp[]): AppOp[] {
   }
 }
 
-export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamEntity | undefined) {
+export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamEntity | undefined | null) {
   const spaceConfigTriples = fromNetworkTriples(metadata?.triples.nodes ?? []);
 
   const spaceConfigWithImage: SpaceConfigEntity = metadata
