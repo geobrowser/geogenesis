@@ -156,3 +156,11 @@ textarea::placeholder {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Font utility classes */
+.font-inherit {
+  font-family: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  color: inherit;
+}

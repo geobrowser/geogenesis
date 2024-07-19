@@ -19,7 +19,7 @@ import type {
 import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils, groupBy } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 
 import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
@@ -36,6 +36,7 @@ import { Relation } from '~/design-system/icons/relation';
 import { Text as TextIcon } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
 import { Url } from '~/design-system/icons/url';
+import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
@@ -355,8 +356,11 @@ function EntityAttributes({
     linkedEntity: {
       id: string;
       name: string | null;
+      space?: string;
     }
   ) => {
+    // @TODO add space for linked entities
+
     const existingTriple = groupedTriplesByAttributeId[attributeId];
     // If it's an empty triple value
     send({
@@ -563,21 +567,16 @@ function EntityAttributes({
           const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
 
           return (
-            <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
-              <EntityTextAutocomplete
+            <div data-testid={triple.placeholder ? 'placeholder-select-entity' : 'select-entity'} className="w-full">
+              <SelectEntity
                 spaceId={spaceId}
-                key={`entity-${attributeId}-${triple.value.value}`}
-                placeholder="Add value..."
+                onDone={result => {
+                  if (attributeId) {
+                    addEntityValue(attributeId, result);
+                  }
+                }}
                 allowedTypes={relationTypes}
-                onDone={result =>
-                  triple.placeholder
-                    ? createEntityTripleFromPlaceholder(triple, result)
-                    : addEntityValue(attributeId, result)
-                }
-                alreadySelectedIds={entityValueTriples
-                  .filter(triple => triple.attributeId === attributeId)
-                  .map(triple => triple.value.value)}
-                attributeId={attributeId}
+                className="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
               />
             </div>
           );
@@ -672,7 +671,7 @@ function EntityAttributes({
           </div>
         )}
       </div>
-      {/* 
+      {/*
         @TODO: We only ever render a single triple at a time for any (S,E,A) tuple.
       */}
       {orderedGroupedTriples.map(([attributeId, triple], index) => {
@@ -712,7 +711,7 @@ function EntityAttributes({
             <div className="flex flex-wrap items-center gap-1">
               {tripleToEditableField(attributeId, triple, isEmptyEntity)}
               {/* This is the + button next to attribute ids with existing entity values */}
-              {((isCollection && !isEmptyCollection) || (isEntity && !isEmptyEntity)) && (
+              {isCollection && !isEmptyCollection && (
                 <EntityAutocompleteDialog
                   spaceId={spaceId}
                   onDone={entity =>
@@ -757,7 +756,7 @@ function EntityAttributes({
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                               <Relation />
                               <Spacer width={8} />
-                              Relation
+                              Entity
                             </div>
                           ),
                           value: 'ENTITY',
