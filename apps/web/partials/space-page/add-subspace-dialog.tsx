@@ -131,7 +131,6 @@ const SpacesQuery = graphql(`
 
 function Content({ spaceId }: ContentProps) {
   const [query, setQuery] = React.useState('');
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
 
   const [res] = useQuery({
     query: SpacesQuery,
@@ -151,7 +150,6 @@ function Content({ spaceId }: ContentProps) {
     };
   });
 
-  // @TODO: Fix starting height of dialog
   // @TODO: Fix types for graphql query results
   // @TODO: fetch existing subspaces for the current space
   // @TODO: only query list of spaces from spaces that aren't already subspaces, aren't
@@ -169,10 +167,11 @@ function Content({ spaceId }: ContentProps) {
   };
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex w-[460px] flex-col gap-2">
       <h2 className="text-metadata text-grey-04">Find subspaces to add</h2>
+
       <div className="relative">
-        <Input ref={inputRef} withSearchIcon onChange={e => setQuery(e.currentTarget.value)} />
+        <Input withSearchIcon onChange={e => setQuery(e.currentTarget.value)} />
 
         {query && spaces?.length !== 0 && (
           <motion.div
@@ -181,12 +180,12 @@ function Content({ spaceId }: ContentProps) {
             exit={{ opacity: 0, scale: 0.95, y: -10 }}
             transition={{
               type: 'spring',
-              duration: 0.15,
+              duration: 0.1,
               bounce: 0,
             }}
             // Doing some fixed positioning to be able to break out the results list
             // from the height and flow of the dialog component
-            className={`fixed top-[456px] z-20 w-[554px] origin-top divide-y divide-grey-02 overflow-hidden rounded-lg border border-grey-02 bg-white`}
+            className="fixed z-[102] mt-1 max-h-[243px] w-[460px] divide-y divide-grey-02 overflow-hidden overflow-y-auto rounded-lg border border-grey-02 bg-white"
           >
             {spaces?.map(s => (
               <Link
