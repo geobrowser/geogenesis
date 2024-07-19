@@ -4,7 +4,6 @@ import { Effect, Either } from 'effect';
 import {
   type EditProposal,
   type EditorshipProposal,
-  type EmptyProposal,
   type MembershipProposal,
   type ProposalCreated,
   type SubspaceProposal,
