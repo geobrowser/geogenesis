@@ -36,7 +36,7 @@ export function Dialog(props: Props) {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15 }}
-          className="fixed inset-0 top-[25%] z-100 mx-auto h-[415px] max-w-[586px] overflow-hidden overflow-y-auto rounded bg-white focus:outline-none"
+          className="fixed inset-0 top-[25%] z-100 mx-auto max-h-[415px] max-w-[586px] overflow-hidden overflow-y-auto rounded bg-white focus:outline-none"
         >
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
             <div className="flex flex-col gap-3 p-4">
