@@ -79,11 +79,6 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Result
     signal: options?.signal,
   });
 
-  console.log(
-    'query',
-    getFetchResultsQuery(options.query ?? '', entityOfWhere, options.typeIds, options.first, options.skip)
-  );
-
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
