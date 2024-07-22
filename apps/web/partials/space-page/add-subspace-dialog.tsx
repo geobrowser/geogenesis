@@ -177,7 +177,7 @@ function useSubspacesQuery({
 }
 
 function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
-  // @TODO: Members icons
+  // @TODO: Remove subspace
   const { query, setQuery, spaces } = useSubspacesQuery({
     spaceId,
     subspaceIds: subspaces.map(s => s.id),
@@ -188,7 +188,8 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
     spaceId,
   });
 
-  const onAddSubspace = (subspaceAddress: string) => {
+  const onClick = (event: React.MouseEvent<HTMLButtonElement>, subspaceAddress: string) => {
+    event.preventDefault(); // Don't bubble the event to the Link wrapping the button
     proposeAddSubspace(subspaceAddress);
   };
 
@@ -239,7 +240,7 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                       </div>
                     </div>
                   </div>
-                  <SmallButton onClick={() => onAddSubspace(s.daoAddress)}>Propose to add</SmallButton>
+                  <SmallButton onClick={event => onClick(event, s.daoAddress)}>Propose to add</SmallButton>
                 </Link>
               ))}
             </motion.div>
@@ -278,7 +279,7 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                   </div>
                 </div>
               </div>
-              <SmallButton onClick={() => onAddSubspace(s.daoAddress)}>Propose to add</SmallButton>
+              <SmallButton onClick={event => onClick(event, s.daoAddress)}>Propose to add</SmallButton>
             </Link>
           ))}
         </div>
@@ -315,7 +316,7 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                   </div>
                 </div>
               </div>
-              <SmallButton onClick={() => onAddSubspace(s.daoAddress)}>Propose to add</SmallButton>
+              <SmallButton onClick={event => onClick(event, s.daoAddress)}>Propose to add</SmallButton>
             </Link>
           ))}
         </div>
