@@ -4,11 +4,12 @@ import cors from 'cors';
 import express from 'express';
 import { postgraphile } from 'postgraphile';
 import ConnectionFilterPlugin from 'postgraphile-plugin-connection-filter';
-import { DATABASE_URL, PORT } from './config';
 
-import { IndexingStatusPlugin } from './status-plugin';
+import { DATABASE_URL, PORT } from './config';
 import { MetaPlugin } from './meta-plugin';
 import { rewriteRequestkMiddleware } from './middleware';
+import { makeNonNullRelationsPlugin } from './non-null-plugin';
+import { IndexingStatusPlugin } from './status-plugin';
 
 const postgraphileMiddleware = postgraphile(DATABASE_URL, 'public', {
   watchPg: true,
@@ -17,8 +18,17 @@ const postgraphileMiddleware = postgraphile(DATABASE_URL, 'public', {
   graphileBuildOptions: {
     connectionFilterRelations: true, // default: false
   },
+  setofFunctionsContainNulls: false,
   disableDefaultMutations: true,
-  appendPlugins: [PgOrderByRelatedPlugin, ConnectionFilterPlugin, PgSimplifyInflectorPlugin, IndexingStatusPlugin, MetaPlugin],
+  appendPlugins: [
+    PgOrderByRelatedPlugin,
+    ConnectionFilterPlugin,
+    PgSimplifyInflectorPlugin,
+    IndexingStatusPlugin,
+    MetaPlugin,
+    // @ts-expect-error
+    makeNonNullRelationsPlugin,
+  ],
 });
 
 const app = express();

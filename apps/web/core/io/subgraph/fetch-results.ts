@@ -122,7 +122,6 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Result
   });
 
   const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  console.log('entities', entities);
 
   const sortedResults = sortSearchResultsByRelevance(entities.nodes);
 

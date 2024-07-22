@@ -94,7 +94,7 @@ export class GeoDate {
   }
 
   static toGeoTime(value: number) {
-    return value / 1000;
+    return Math.floor(value / 1000);
   }
 
   static isValidDate(date: Date): date is Date {

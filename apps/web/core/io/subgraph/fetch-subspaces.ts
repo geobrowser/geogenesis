@@ -14,7 +14,16 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
     nodes {
       subspace {
         id
+        daoAddress
         type
+
+        spaceMembers {
+          totalCount
+        }
+
+        spaceEditors {
+          totalCount
+        }
 
         spacesMetadata {
           nodes {
@@ -39,7 +48,10 @@ export type Subspace = OmitStrict<
   | 'personalSpaceAdminPluginAddress'
   | 'spacePluginAddress'
   | 'type'
->;
+> & {
+  totalMembers: number;
+  totalEditors: number;
+};
 
 interface NetworkResult {
   spaceSubspaces: {
@@ -47,6 +59,9 @@ interface NetworkResult {
       subspace: {
         id: string;
         type: SpaceGovernanceType;
+        daoAddress: string;
+        spaceEditors: { totalCount: number };
+        spaceMembers: { totalCount: number };
         spacesMetadata: { nodes: { entity: SubstreamEntity }[] };
       };
     }[];
@@ -113,6 +128,9 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
 
     return {
       id: space.subspace.id,
+      daoAddress: space.subspace.daoAddress,
+      totalEditors: space.subspace.spaceEditors.totalCount,
+      totalMembers: space.subspace.spaceMembers.totalCount,
       spaceConfig: spaceConfigWithImage,
     };
   });

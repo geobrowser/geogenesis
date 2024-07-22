@@ -88,6 +88,7 @@ export async function fetchSpaces(): Promise<Space[]> {
       spaceConfig: spaceConfigWithImage,
       createdAtBlock: space.createdAtBlock,
 
+      daoAddress: space.daoAddress,
       mainVotingPluginAddress: space.mainVotingPluginAddress,
       memberAccessPluginAddress: space.memberAccessPluginAddress,
       personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
