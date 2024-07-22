@@ -14,6 +14,7 @@ import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
 import { NetworkSpaceResult } from '~/core/io/subgraph/types';
+import { SpaceGovernanceType } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
@@ -27,25 +28,27 @@ import { useAddSubspace } from './use-add-subspace';
 import { useRemoveSubspace } from './use-remove-subspace';
 
 interface Props {
+  spaceType: SpaceGovernanceType;
   subspaces: Subspace[];
   inflightSubspaces: Subspace[];
   spaceId: string;
   trigger: React.ReactNode;
 }
 
-// @TODO: In the future this should query for spaces as you type instead of filtering
-// the entire list of spaces in the system
-export function AddSubspaceDialog({ trigger, spaceId, subspaces, inflightSubspaces }: Props) {
+export function AddSubspaceDialog({ trigger, spaceType, spaceId, subspaces, inflightSubspaces }: Props) {
   return (
     <Dialog
       trigger={trigger}
-      content={<Content subspaces={subspaces} spaceId={spaceId} inflightSubspaces={inflightSubspaces} />}
+      content={
+        <Content spaceType={spaceType} subspaces={subspaces} spaceId={spaceId} inflightSubspaces={inflightSubspaces} />
+      }
       header={<h1 className="text-smallTitle">Subspaces</h1>}
     />
   );
 }
 
 interface ContentProps {
+  spaceType: SpaceGovernanceType;
   subspaces: Subspace[];
   inflightSubspaces: Subspace[];
   spaceId: string;
@@ -176,7 +179,7 @@ function useSubspacesQuery({
   };
 }
 
-function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
+function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentProps) {
   const { query, setQuery, spaces } = useSubspacesQuery({
     spaceId,
     subspaceIds: subspaces.map(s => s.id),
@@ -287,7 +290,9 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                   </div>
                 </div>
               </div>
-              <SmallButton onClick={event => onAddSubspace(event, s.daoAddress)}>Propose to add</SmallButton>
+              <SmallButton onClick={event => onAddSubspace(event, s.daoAddress)}>
+                {spaceType === 'PUBLIC' ? 'Propose to add' : 'Add'}
+              </SmallButton>
             </Link>
           ))}
         </div>
@@ -324,7 +329,9 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                   </div>
                 </div>
               </div>
-              <SmallButton onClick={event => onRemoveSubspace(event, s.daoAddress)}>Propose to add</SmallButton>
+              <SmallButton onClick={event => onRemoveSubspace(event, s.daoAddress)}>
+                {spaceType === 'PUBLIC' ? 'Propose to add' : 'Add'}
+              </SmallButton>
             </Link>
           ))}
         </div>

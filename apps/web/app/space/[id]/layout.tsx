@@ -272,6 +272,7 @@ export default async function Layout({ children, params }: Props) {
                   trigger={<MenuItem>Add subspace</MenuItem>}
                   subspaces={subspaces}
                   inflightSubspaces={inflightSubspaces}
+                  spaceType={props.space.type}
                 />
               }
               membersComponent={
