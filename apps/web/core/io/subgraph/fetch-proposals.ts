@@ -8,7 +8,7 @@ import { Proposal, SpaceWithMetadata } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { tripleFragment } from './fragments';
+import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './network-local-mapping';
 
@@ -24,14 +24,10 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
 
       space {
         id
-        metadata {
-          nodes {
-            id
-            name
-            triples(filter: {isStale: {equalTo: false}}) {
-              nodes {
-                ${tripleFragment}
-              }
+        spacesMetadata {
+        nodes {
+            entity {
+              ${spaceMetadataFragment}
             }
           }
         }
@@ -151,7 +147,7 @@ export async function fetchProposals({
       profileLink: null,
     };
 
-    const spaceConfig = p.space.metadata.nodes[0] as SubstreamEntity | undefined;
+    const spaceConfig = p.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
     const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 
     const spaceWithMetadata: SpaceWithMetadata = {

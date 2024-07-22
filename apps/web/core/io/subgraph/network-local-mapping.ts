@@ -132,7 +132,7 @@ export type SubstreamImage = {
   };
 };
 
-export type SubstreamSpace = { id: string; metadata: { nodes: SubstreamEntity[] } };
+export type SubstreamSpace = { id: string; spacesMetadata: { nodes: { entity: SubstreamEntity }[] } };
 
 export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy' | 'space'> & {
   actions: { nodes: SubstreamOp[] };

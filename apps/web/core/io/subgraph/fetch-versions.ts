@@ -8,7 +8,7 @@ import { Profile, SpaceWithMetadata, Version } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { entityFragment } from './fragments';
+import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from './network-local-mapping';
 
@@ -34,10 +34,12 @@ const getVersionsQuery = (entityId: string, offset: number, proposalId?: string)
 
         space {
           id
-          metadata {
+          spacesMetadata {
             nodes {
-              ${entityFragment}
-            }           
+              entity {
+                ${spaceMetadataFragment}
+              }
+            }
           }
         }
 
@@ -160,7 +162,7 @@ export async function fetchVersions({
           profileLink: null,
         };
 
-    const spaceConfig = v.space.metadata.nodes[0] as SubstreamEntity | undefined;
+    const spaceConfig = v.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
     const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 
     const spaceWithMetadata: SpaceWithMetadata = {
