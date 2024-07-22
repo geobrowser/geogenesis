@@ -19,6 +19,9 @@ import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
 import { Divider } from '~/design-system/divider';
+import { Member } from '~/design-system/icons/member';
+import { MemberTiny } from '~/design-system/icons/member-tiny';
+import { MemberTinyFilled } from '~/design-system/icons/member-tiny-filled';
 import { Input } from '~/design-system/input';
 
 import { useAddSubspace } from './use-add-subspace';
@@ -156,12 +159,11 @@ function useSubspacesQuery({
     };
   }
 
-  // @TODO: A collection result should never be null and is just an empty array
   const spaces = data?.spaces?.nodes.map(s => {
     return {
-      id: s!.id,
-      daoAddress: s!.daoAddress,
-      spaceConfig: getSpaceConfigFromMetadata(s!.id, s?.spacesMetadata.nodes?.[0]?.entity),
+      id: s.id,
+      daoAddress: s.daoAddress,
+      spaceConfig: getSpaceConfigFromMetadata(s.id, s.spacesMetadata.nodes[0].entity),
       totalMembers: s?.spaceMembers.totalCount ?? 0,
       totalEditors: s?.spaceEditors.totalCount ?? 0,
     };
@@ -175,10 +177,6 @@ function useSubspacesQuery({
 }
 
 function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
-  // @TODO: Fix types for graphql query results
-  // @TODO: Render current subspaces
-  // @TODO: Render in-flight subspaces
-  // @TODO: Fragments
   // @TODO: Members icons
   const { query, setQuery, spaces } = useSubspacesQuery({
     spaceId,
@@ -230,8 +228,14 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                     <div className="space-y-0.5">
                       <p className="text-metadataMedium">{s.spaceConfig?.name ?? s.id}</p>
                       <div className="flex items-center gap-2">
-                        <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
-                        <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                        <div className="flex items-center gap-1">
+                          <MemberTinyFilled color="grey-03" />
+                          <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <MemberTiny color="grey-03" />
+                          <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -263,8 +267,14 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                 <div className="space-y-0.5">
                   <p className="text-metadataMedium">{s.spaceConfig?.name ?? s.id}</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
-                    <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                    <div className="flex items-center gap-1">
+                      <MemberTinyFilled color="grey-03" />
+                      <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <MemberTiny color="grey-03" />
+                      <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -294,8 +304,14 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                 <div className="space-y-0.5">
                   <p className="text-metadataMedium">{s.spaceConfig?.name ?? s.id}</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
-                    <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                    <div className="flex items-center gap-1">
+                      <MemberTinyFilled color="grey-03" />
+                      <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <MemberTiny color="grey-03" />
+                      <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
+                    </div>
                   </div>
                 </div>
               </div>
