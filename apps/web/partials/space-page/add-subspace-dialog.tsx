@@ -19,12 +19,12 @@ import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
 import { Divider } from '~/design-system/divider';
-import { Member } from '~/design-system/icons/member';
 import { MemberTiny } from '~/design-system/icons/member-tiny';
 import { MemberTinyFilled } from '~/design-system/icons/member-tiny-filled';
 import { Input } from '~/design-system/input';
 
 import { useAddSubspace } from './use-add-subspace';
+import { useRemoveSubspace } from './use-remove-subspace';
 
 interface Props {
   subspaces: Subspace[];
@@ -177,20 +177,28 @@ function useSubspacesQuery({
 }
 
 function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
-  // @TODO: Remove subspace
   const { query, setQuery, spaces } = useSubspacesQuery({
     spaceId,
     subspaceIds: subspaces.map(s => s.id),
     inflightSubspaceIds: inflightSubspaces.map(s => s.id),
   });
 
-  const { proposeAddSubspace } = useAddSubspace({
+  const { addSubspace } = useAddSubspace({
     spaceId,
   });
 
-  const onClick = (event: React.MouseEvent<HTMLButtonElement>, subspaceAddress: string) => {
+  const { removeSubspace } = useRemoveSubspace({
+    spaceId,
+  });
+
+  const onAddSubspace = (event: React.MouseEvent<HTMLButtonElement>, subspaceAddress: string) => {
     event.preventDefault(); // Don't bubble the event to the Link wrapping the button
-    proposeAddSubspace(subspaceAddress);
+    addSubspace(subspaceAddress);
+  };
+
+  const onRemoveSubspace = (event: React.MouseEvent<HTMLButtonElement>, subspaceAddress: string) => {
+    event.preventDefault(); // Don't bubble the event to the Link wrapping the button
+    removeSubspace(subspaceAddress);
   };
 
   return (
@@ -240,7 +248,7 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                       </div>
                     </div>
                   </div>
-                  <SmallButton onClick={event => onClick(event, s.daoAddress)}>Propose to add</SmallButton>
+                  <SmallButton onClick={event => onAddSubspace(event, s.daoAddress)}>Propose to add</SmallButton>
                 </Link>
               ))}
             </motion.div>
@@ -279,7 +287,7 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                   </div>
                 </div>
               </div>
-              <SmallButton onClick={event => onClick(event, s.daoAddress)}>Propose to add</SmallButton>
+              <SmallButton onClick={event => onAddSubspace(event, s.daoAddress)}>Propose to add</SmallButton>
             </Link>
           ))}
         </div>
@@ -316,7 +324,7 @@ function Content({ spaceId, subspaces, inflightSubspaces }: ContentProps) {
                   </div>
                 </div>
               </div>
-              <SmallButton onClick={event => onClick(event, s.daoAddress)}>Propose to add</SmallButton>
+              <SmallButton onClick={event => onRemoveSubspace(event, s.daoAddress)}>Propose to add</SmallButton>
             </Link>
           ))}
         </div>

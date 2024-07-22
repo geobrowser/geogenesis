@@ -84,7 +84,7 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
   };
 
   return {
-    proposeRemoveSubspace: write,
+    removeSubspace: write,
   };
 }
 

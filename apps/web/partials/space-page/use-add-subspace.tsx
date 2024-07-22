@@ -78,7 +78,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
   };
 
   return {
-    proposeAddSubspace: write,
+    addSubspace: write,
   };
 }
 
