@@ -1,15 +1,19 @@
 'use client';
 
-import { useQuery } from '@urql/next';
+import { useQuery } from '@tanstack/react-query';
+import { Effect, Either } from 'effect';
 import { motion } from 'framer-motion';
-import { graphql } from 'gql.tada';
 import Link from 'next/link';
 
 import * as React from 'react';
 
+import { Environment } from '~/core/environment';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { Subspace } from '~/core/io/subgraph/fetch-subspaces';
+import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
+import { graphql } from '~/core/io/subgraph/graphql';
 import { getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
+import { NetworkSpaceResult } from '~/core/io/subgraph/types';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
@@ -44,10 +48,12 @@ interface ContentProps {
   spaceId: string;
 }
 
-const SpacesQuery = graphql(`
-  query Spaces($name: String!, $notIn: [String!]!) {
+const subspacesQuery = (name: string, notIn: string[]) => `
+  {
     spaces(
-      filter: { spacesMetadata: { some: { entity: { name: { includesInsensitive: $name } } } }, id: { notIn: $notIn } }
+      filter: { spacesMetadata: { some: { entity: { name: { includesInsensitive: "${name}" } } } }, id: { notIn: ${JSON.stringify(
+        notIn
+      )} } }
       first: 10
     ) {
       nodes {
@@ -62,81 +68,23 @@ const SpacesQuery = graphql(`
         spacesMetadata {
           nodes {
             entity {
-              id
-              name
-              types {
-                nodes {
-                  id
-                  name
-                }
-              }
-              triples {
-                nodes {
-                  attribute {
-                    id
-                    name
-                  }
-                  entityId
-                  entity {
-                    id
-                    name
-                  }
-                  entityValue {
-                    id
-                    types {
-                      nodes {
-                        id
-                      }
-                    }
-                    name
-                    triples {
-                      nodes {
-                        attributeId
-                        textValue
-                        valueType
-                      }
-                    }
-                  }
-                  numberValue
-                  collectionValue {
-                    id
-                    collectionItems {
-                      nodes {
-                        index
-                        collectionItemEntityId
-                        entity {
-                          id
-                          name
-                          types {
-                            nodes {
-                              id
-                            }
-                          }
-                          triples {
-                            nodes {
-                              attributeId
-                              textValue
-                              valueType
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                  textValue
-                  valueType
-                  space {
-                    id
-                  }
-                }
-              }
+              ${spaceMetadataFragment}
             }
           }
         }
       }
     }
   }
-`);
+`;
+
+interface NetworkResult {
+  spaces: {
+    nodes: (Pick<NetworkSpaceResult, 'spacesMetadata' | 'id' | 'daoAddress'> & {
+      spaceMembers: { totalCount: number };
+      spaceEditors: { totalCount: number };
+    })[];
+  };
+}
 
 function useSubspacesQuery({
   subspaceIds,
@@ -150,17 +98,66 @@ function useSubspacesQuery({
   const [query, setQuery] = React.useState('');
   const debouncedQuery = useDebouncedValue(query, 200);
 
-  const [res] = useQuery({
-    query: SpacesQuery,
-    variables: {
-      name: debouncedQuery,
-      // Don't query for spaces that are already subspaces or the current space
-      notIn: [...subspaceIds, spaceId],
+  const { data } = useQuery({
+    queryKey: ['subspaces-by-name', debouncedQuery],
+    queryFn: async ({ signal }) => {
+      const queryEffect = graphql<NetworkResult>({
+        query: subspacesQuery(query, [...subspaceIds, ...inflightSubspaceIds, spaceId]),
+        endpoint: Environment.getConfig().api,
+        signal,
+      });
+
+      const resultOrError = await Effect.runPromise(Effect.either(queryEffect));
+
+      if (Either.isLeft(resultOrError)) {
+        const error = resultOrError.left;
+
+        switch (error._tag) {
+          case 'AbortError':
+            // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+            // the caller to consume the error channel as an effect. We throw here the typical JS
+            // way so we don't infect more of the codebase with the effect runtime.
+            throw error;
+          case 'GraphqlRuntimeError':
+            console.error(
+              `Encountered runtime graphql error in subspaces-by-name. 
+  
+              queryString: ${subspacesQuery(query, [...subspaceIds, ...inflightSubspaceIds, spaceId])}
+              `,
+              error.message
+            );
+
+            return {
+              spaces: {
+                nodes: [],
+              },
+            };
+
+          default:
+            console.error(`${error._tag}: Unable to fetch spaces in subspaces-by-name`);
+
+            return {
+              spaces: {
+                nodes: [],
+              },
+            };
+        }
+      }
+
+      return resultOrError.right;
     },
   });
 
+  if (!data) {
+    return {
+      query,
+      setQuery,
+      spaces: [],
+    };
+  }
+
   // @TODO: A collection result should never be null and is just an empty array
-  const spaces = res.data?.spaces?.nodes.map(s => {
+  const spaces = data?.spaces?.nodes.map(s => {
     return {
       id: s!.id,
       daoAddress: s!.daoAddress,

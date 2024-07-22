@@ -1,104 +1,22 @@
-import { graphql } from 'gql.tada';
+import { Effect, Either } from 'effect';
 
-import { getClient } from '~/core/gql/client';
+import { Environment } from '~/core/environment';
+import { GeoDate } from '~/core/utils/utils';
 
 import { Subspace } from './fetch-subspaces';
+import { spaceMetadataFragment } from './fragments';
+import { graphql } from './graphql';
 import { getSpaceConfigFromMetadata } from './network-local-mapping';
+import { NetworkSpaceResult } from './types';
 
-const ImageValueTripleFragment = graphql(`
-  fragment ImageValue on Triple {
-    attributeId
-    textValue
-    valueType
-  }
-`);
-
-const TripleFragment = graphql(
+const inflightSubspacesForSpaceIdQuery = (spaceId: string, endTime: number) =>
   `
-    fragment Triple on Triple {
-      attribute {
-        id
-        name
-      }
-      entityId
-      entity {
-        id
-        name
-      }
-      entityValue {
-        id
-        types {
-          nodes {
-            id
-          }
-        }
-        name
-        triples {
-          nodes {
-            ...ImageValue
-          }
-        }
-      }
-      numberValue
-      collectionValue {
-        id
-        collectionItems {
-          nodes {
-            index
-            collectionItemEntityId
-            entity {
-              id
-              name
-              types {
-                nodes {
-                  id
-                }
-              }
-              triples {
-                nodes {
-                  ...ImageValue
-                }
-              }
-            }
-          }
-        }
-      }
-      textValue
-      valueType
-      space {
-        id
-      }
-    }
-  `,
-  [ImageValueTripleFragment]
-);
-
-const SpaceMetadataFragment = graphql(
-  `
-    fragment SpaceMetadata on SpacesMetadatum {
-      entity {
-        id
-        name
-
-        triples {
-          nodes {
-            ...Triple
-          }
-        }
-      }
-    }
-  `,
-  [TripleFragment]
-);
-
-const InflightSubspacesForSpaceIdQuery = graphql(
-  `
-    query InflightSubspacessForSpaceIdQuery($spaceId: String!, $endTime: Int!) {
+    {
       proposals(
         filter: {
           type: { equalTo: ADD_SUBSPACE }
-          spaceId: { equalTo: $spaceId }
-          endTime: { greaterThanOrEqualTo: $endTime }
+          spaceId: { equalTo: "${spaceId}" }
+          endTime: { greaterThanOrEqualTo: ${GeoDate.toGeoTime(endTime)} }
         }
       ) {
         nodes {
@@ -115,7 +33,9 @@ const InflightSubspacesForSpaceIdQuery = graphql(
                 }
                 spacesMetadata {
                   nodes {
-                    ...SpaceMetadata
+                    entity {
+                      ${spaceMetadataFragment}
+                    }
                   }
                 }
               }
@@ -124,14 +44,69 @@ const InflightSubspacesForSpaceIdQuery = graphql(
         }
       }
     }
-  `,
-  [SpaceMetadataFragment]
-);
+`;
+
+interface NetworkResult {
+  proposals: {
+    nodes: {
+      proposedSubspaces: {
+        nodes: {
+          spaceBySubspace: Pick<NetworkSpaceResult, 'spacesMetadata' | 'id' | 'daoAddress'> & {
+            spaceMembers: { totalCount: number };
+            spaceEditors: { totalCount: number };
+          };
+        }[];
+      };
+    }[];
+  };
+}
 
 export async function fetchInFlightSubspaceProposalsForSpaceId(spaceId: string) {
-  const result = await getClient().query(InflightSubspacesForSpaceIdQuery, { spaceId, endTime: Date.now() });
+  const queryEffect = graphql<NetworkResult>({
+    query: inflightSubspacesForSpaceIdQuery(spaceId, Date.now()),
+    endpoint: Environment.getConfig().api,
+  });
 
-  const subspaces = result.data?.proposals?.nodes.flatMap(p => p?.proposedSubspaces.nodes);
+  const resultOrError = await Effect.runPromise(Effect.either(queryEffect));
+
+  if (Either.isLeft(resultOrError)) {
+    const error = resultOrError.left;
+
+    switch (error._tag) {
+      case 'AbortError':
+        // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+        // the caller to consume the error channel as an effect. We throw here the typical JS
+        // way so we don't infect more of the codebase with the effect runtime.
+        throw error;
+      case 'GraphqlRuntimeError':
+        console.error(
+          `Encountered runtime graphql error in subspaces-by-name. 
+
+          queryString: ${inflightSubspacesForSpaceIdQuery(spaceId, Date.now())}
+          `,
+          error.message
+        );
+
+        return {
+          proposals: {
+            nodes: [],
+          },
+        };
+
+      default:
+        console.error(`${error._tag}: Unable to fetch spaces in subspaces-by-name`);
+
+        return {
+          proposals: {
+            nodes: [],
+          },
+        };
+    }
+  }
+
+  const result = resultOrError.right;
+
+  const subspaces = result?.proposals?.nodes.flatMap(p => p?.proposedSubspaces.nodes);
 
   const spaces = subspaces?.map((spaceBySubspace): Subspace => {
     const subspace = spaceBySubspace?.spaceBySubspace;

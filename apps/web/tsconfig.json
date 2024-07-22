@@ -23,12 +23,6 @@
     "plugins": [
       {
         "name": "next"
-      },
-      {
-        "name": "gql.tada/ts-plugin",
-        "schema": "https://geo-conduit.up.railway.app/graphql",
-        "tadaOutputLocation": "./graphql-env.d.ts",
-        "trackFieldUsage": false
       }
     ]
   },

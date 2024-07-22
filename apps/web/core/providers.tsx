@@ -5,7 +5,6 @@ import { Provider as JotaiProvider } from 'jotai';
 
 import * as React from 'react';
 
-import { GraphqlProvider } from './gql/provider';
 import { ReactQueryProvider } from './query-client';
 import { Services } from './services';
 import { DiffProvider } from './state/diff-store';
@@ -20,21 +19,19 @@ interface Props {
 
 export function Providers({ children }: Props) {
   return (
-    <GraphqlProvider>
-      <PrivyProvider>
-        <ReactQueryProvider>
-          <JotaiProvider store={store}>
-            <WalletProvider>
-              <Services.Provider>
-                <StatusBarContextProvider>
-                  <DiffProvider>{children}</DiffProvider>
-                </StatusBarContextProvider>
-              </Services.Provider>
-            </WalletProvider>
-            <ReactQueryDevtools initialIsOpen={false} />
-          </JotaiProvider>
-        </ReactQueryProvider>
-      </PrivyProvider>
-    </GraphqlProvider>
+    <PrivyProvider>
+      <ReactQueryProvider>
+        <JotaiProvider store={store}>
+          <WalletProvider>
+            <Services.Provider>
+              <StatusBarContextProvider>
+                <DiffProvider>{children}</DiffProvider>
+              </StatusBarContextProvider>
+            </Services.Provider>
+          </WalletProvider>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </JotaiProvider>
+      </ReactQueryProvider>
+    </PrivyProvider>
   );
 }
