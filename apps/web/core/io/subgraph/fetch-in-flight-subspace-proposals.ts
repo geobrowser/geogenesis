@@ -86,21 +86,11 @@ export async function fetchInFlightSubspaceProposalsForSpaceId(spaceId: string) 
           `,
           error.message
         );
-
-        return {
-          proposals: {
-            nodes: [],
-          },
-        };
+        return [];
 
       default:
         console.error(`${error._tag}: Unable to fetch spaces in subspaces-by-name`);
-
-        return {
-          proposals: {
-            nodes: [],
-          },
-        };
+        return [];
     }
   }
 
