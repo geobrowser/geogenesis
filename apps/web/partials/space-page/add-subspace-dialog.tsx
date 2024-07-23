@@ -328,7 +328,6 @@ function SpaceQueryResult({ subspace, spaceId }: { subspace: Subspace; spaceId: 
   }
 
   const onAddSubspace = (event: React.MouseEvent<HTMLButtonElement>, subspaceAddress: string) => {
-    console.log('onAddSubspace', subspaceAddress);
     event.preventDefault(); // Don't bubble the event to the Link wrapping the button
     addSubspace(subspaceAddress);
   };
