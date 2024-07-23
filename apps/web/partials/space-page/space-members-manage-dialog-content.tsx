@@ -11,30 +11,41 @@ import { MemberRow } from './space-member-row';
 import { useAddMember } from './use-add-member';
 import { useProposeToRemoveMember } from './use-propose-to-remove-member';
 
+type Member = OmitStrict<Profile, 'coverUrl'>;
+
 interface Props {
   spaceType: SpaceGovernanceType;
-  members: OmitStrict<Profile, 'coverUrl'>[];
+  members: Member[];
   votingPluginAddress: string | null;
 }
 
 export function SpaceMembersManageDialogContent({ members, votingPluginAddress, spaceType }: Props) {
-  // @TODO:
+  const { addMember, status } = useAddMember({
+    pluginAddress: votingPluginAddress,
+    shouldRefreshOnSuccess: true,
+  });
+
   // 2. Remove member in personal spaces
-  const { addMember } = useAddMember(votingPluginAddress);
   const { proposeToRemoveMember } = useProposeToRemoveMember(votingPluginAddress);
+  const { setQuery, queriedMembers } = useQueriedMembers(members);
 
-  const [query, setQuery] = React.useState('');
-  const [member, setMember] = React.useState('');
+  const [memberToAdd, setMemberToAdd] = React.useState('');
 
-  const filteredMembers = React.useMemo(() => {
-    return members.filter(e => {
-      if (e.name) {
-        return e.name?.toLowerCase().includes(query.toLowerCase());
-      }
+  const onAddMember = () => {
+    addMember(memberToAdd);
+    setMemberToAdd('');
+  };
 
-      return e.id.toLowerCase().includes(query.toLowerCase());
-    });
-  }, [members, query]);
+  // Default to Add Member, and back to Add Member once mutation succeeds
+  // and we are idle again after 3 seconds
+  const addMemberText =
+    status === 'idle'
+      ? 'Add member'
+      : status === 'pending'
+      ? 'Adding member...'
+      : status === 'success'
+      ? 'Member added!'
+      : 'Add member';
 
   return (
     <div className="flex flex-col gap-4">
@@ -42,14 +53,18 @@ export function SpaceMembersManageDialogContent({ members, votingPluginAddress, 
         <div className="space-y-2">
           <h2 className="text-metadataMedium">Add space members</h2>
           <div className="flex items-center gap-2">
-            <Input onChange={e => setMember(e.currentTarget.value)} placeholder="0x1234...890" />
+            <Input
+              disabled={status === 'pending'}
+              onChange={e => setMemberToAdd(e.currentTarget.value)}
+              placeholder="0x1234...890"
+            />
             <SmallButton
               className="min-w-max self-stretch"
               variant="secondary"
-              disabled={member === ''}
-              onClick={() => addMember(member)}
+              disabled={memberToAdd === '' || status === 'pending'}
+              onClick={onAddMember}
             >
-              Add member
+              {addMemberText}
             </SmallButton>
           </div>
         </div>
@@ -61,7 +76,7 @@ export function SpaceMembersManageDialogContent({ members, votingPluginAddress, 
         <Input withSearchIcon onChange={e => setQuery(e.currentTarget.value)} />
 
         <div className="divide-y divide-grey-02">
-          {filteredMembers.map(m => (
+          {queriedMembers.map(m => (
             <div key={m.id} className="flex items-center justify-between">
               <MemberRow user={m} />
               <SmallButton onClick={() => proposeToRemoveMember(m.address)}>Propose to remove</SmallButton>
@@ -71,4 +86,23 @@ export function SpaceMembersManageDialogContent({ members, votingPluginAddress, 
       </div>
     </div>
   );
+}
+
+function useQueriedMembers(members: Member[]) {
+  const [query, setQuery] = React.useState('');
+
+  const queriedMembers = React.useMemo(() => {
+    return members.filter(e => {
+      if (e.name) {
+        return e.name?.toLowerCase().includes(query.toLowerCase());
+      }
+
+      return e.id.toLowerCase().includes(query.toLowerCase());
+    });
+  }, [members, query]);
+
+  return {
+    setQuery,
+    queriedMembers,
+  };
 }

@@ -4,6 +4,7 @@ import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { createSubspaceProposal } from '@geogenesis/sdk/proto';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
+import { useRouter } from 'next/navigation';
 import { encodeFunctionData, stringToHex } from 'viem';
 
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
@@ -13,9 +14,11 @@ import { Services } from '~/core/services';
 
 interface RemoveSubspaceArgs {
   spaceId: string;
+  shouldRefreshOnSuccess?: boolean;
 }
 
 export function useRemoveSubspace(args: RemoveSubspaceArgs) {
+  const router = useRouter();
   const { storageClient } = Services.useServices();
 
   // @TODO(performance): We can pass the space down from the layout as well to avoid
@@ -30,7 +33,17 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
       space?.type === 'PERSONAL' ? space?.personalSpaceAdminPluginAddress : space?.mainVotingPluginAddress ?? null,
   });
 
-  const { mutate, isPending, isSuccess } = useMutation({
+  const { mutate, status } = useMutation({
+    onSuccess: () => {
+      if (args.shouldRefreshOnSuccess) {
+        // @TODO: Might make more sense to call a server action somewhere to revalidate the page?
+        // The main problem is that the transaction has to occur on the client side, so adding
+        // piping to call the server after the client-side transaction finishes is kinda wonky vs
+        // just calling router.refresh() directly. Using a server action with revalidateTag will
+        // let us more granularly revalidate the page though which might result in less data transfer.
+        router.refresh();
+      }
+    },
     mutationFn: async (subspaceAddress: string) => {
       if (!space) {
         return null;
@@ -87,8 +100,7 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
 
   return {
     removeSubspace: mutate,
-    isPending,
-    isSuccess,
+    status,
   };
 }
 

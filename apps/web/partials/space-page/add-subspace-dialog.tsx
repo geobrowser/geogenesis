@@ -3,9 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { motion } from 'framer-motion';
-import { revalidatePath } from 'next/cache';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 
@@ -276,18 +274,12 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
 }
 
 function SpaceQueryResult({ subspace, spaceId }: { subspace: Subspace; spaceId: string }) {
-  const router = useRouter();
-  const { addSubspace, isPending, isSuccess } = useAddSubspace({
+  const { addSubspace, status } = useAddSubspace({
     spaceId,
+    shouldRefreshOnSuccess: true,
   });
 
-  if (isSuccess) {
-    // @TODO: Might make more sense to call a server action somewhere to revalidate the page?
-    // The main problem is that the transaction has to occur on the client side, so adding
-    // piping to call the server after the client-side transaction finishes is kinda wonky vs
-    // just calling router.refresh() directly. Using a server action with revalidateTag will
-    // let us more granularly revalidate the page though which might result in less data transfer.
-    router.refresh();
+  if (status === 'success') {
     // Remove the item from the list once we succeed
     return null;
   }
@@ -323,8 +315,8 @@ function SpaceQueryResult({ subspace, spaceId }: { subspace: Subspace; spaceId: 
         </div>
       </div>
       {/* @TODO: Actual states with animations */}
-      {isPending && <SmallButton disabled>Pending</SmallButton>}
-      {!isPending && !isSuccess && (
+      {status === 'pending' && <SmallButton disabled>Pending</SmallButton>}
+      {status === 'idle' && (
         <SmallButton onClick={event => onAddSubspace(event, subspace.daoAddress)}>Propose to add</SmallButton>
       )}
     </Link>
@@ -340,18 +332,12 @@ function CurrentSubspace({
   spaceId: string;
   spaceType: SpaceGovernanceType;
 }) {
-  const router = useRouter();
-  const { removeSubspace, isPending, isSuccess } = useRemoveSubspace({
+  const { removeSubspace, status } = useRemoveSubspace({
     spaceId,
+    shouldRefreshOnSuccess: true,
   });
 
-  if (isSuccess) {
-    // @TODO: Might make more sense to call a server action somewhere to revalidate the page?
-    // The main problem is that the transaction has to occur on the client side, so adding
-    // piping to call the server after the client-side transaction finishes is kinda wonky vs
-    // just calling router.refresh() directly. Using a server action with revalidateTag will
-    // let us more granularly revalidate the page though which might result in less data transfer.
-    router.refresh();
+  if (status === 'success') {
     // Remove the item from the list once we succeed
     return null;
   }
@@ -387,8 +373,8 @@ function CurrentSubspace({
         </div>
       </div>
       {/* @TODO: Actual states with animations */}
-      {isPending && <SmallButton disabled>Pending</SmallButton>}
-      {!isPending && !isSuccess && (
+      {status === 'pending' && <SmallButton disabled>Pending</SmallButton>}
+      {status === 'idle' && (
         <SmallButton onClick={event => onRemoveSubspace(event, subspace.daoAddress)}>
           {spaceType === 'PUBLIC' ? 'Propose to remove' : 'Remove subspace'}
         </SmallButton>
