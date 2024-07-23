@@ -13,16 +13,10 @@ export function SpaceMembersMenu(props: Props) {
   const [isOpen, setIsOpen] = React.useState(false);
 
   return (
-    <Menu
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      trigger={props.trigger}
-      className="max-w-[160px] bg-white"
-      sideOffset={16}
-    >
+    <Menu open={isOpen} onOpenChange={setIsOpen} trigger={props.trigger} className="max-w-40 bg-white" sideOffset={16}>
       <MenuItem>{props.manageMembersComponent}</MenuItem>
       <MenuItem>
-        <p className="px-3 py-2">Leave as member</p>
+        <p>Leave as member</p>
       </MenuItem>
     </Menu>
   );
