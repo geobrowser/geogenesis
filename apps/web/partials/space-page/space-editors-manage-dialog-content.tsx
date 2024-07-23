@@ -1,5 +1,7 @@
 'use client';
 
+import { isAddress } from 'viem';
+
 import * as React from 'react';
 
 import { OmitStrict, Profile, SpaceGovernanceType } from '~/core/types';
@@ -11,30 +13,37 @@ import { MemberRow } from './space-member-row';
 import { useAddEditor } from './use-add-editor';
 import { useProposeToRemoveEditor } from './use-propose-to-remove-editor';
 
+type Member = OmitStrict<Profile, 'coverUrl'>;
+
 interface Props {
   spaceType: SpaceGovernanceType;
-  members: OmitStrict<Profile, 'coverUrl'>[];
+  members: Member[];
   votingPluginAddress: string | null;
 }
 
 export function SpaceEditorsManageDialogContent({ members, votingPluginAddress, spaceType }: Props) {
+  const { addEditor, status } = useAddEditor({ pluginAddress: votingPluginAddress, shouldRefreshOnSuccess: true });
   // @TODO:
   // 2. Remove member in personal spaces
-  const { addEditor } = useAddEditor(votingPluginAddress);
   const { proposeToRemoveEditor } = useProposeToRemoveEditor(votingPluginAddress);
+  const [editorToAdd, setEditorToAdd] = React.useState('');
+  const { setQuery, queriedMembers } = useQueriedEditors(members);
 
-  const [query, setQuery] = React.useState('');
-  const [editor, setEditor] = React.useState('');
+  const onAddEditor = () => {
+    addEditor(editorToAdd);
+    setEditorToAdd('');
+  };
 
-  const filteredEditors = React.useMemo(() => {
-    return members.filter(e => {
-      if (e.name) {
-        return e.name?.toLowerCase().includes(query.toLowerCase());
-      }
-
-      return e.id.toLowerCase().includes(query.toLowerCase());
-    });
-  }, [members, query]);
+  // Default to Add Member, and back to Add Member once mutation succeeds
+  // and we are idle again after 3 seconds
+  const addEditorText =
+    status === 'idle'
+      ? 'Add member'
+      : status === 'pending'
+      ? 'Adding member...'
+      : status === 'success'
+      ? 'Member added!'
+      : 'Add member';
 
   return (
     <div className="flex flex-col gap-4">
@@ -42,14 +51,14 @@ export function SpaceEditorsManageDialogContent({ members, votingPluginAddress, 
         <div className="space-y-2">
           <h2 className="text-metadataMedium">Add space editors</h2>
           <div className="flex items-center gap-2">
-            <Input onChange={e => setEditor(e.currentTarget.value)} placeholder="0x1234...890" />
+            <Input onChange={e => setEditorToAdd(e.currentTarget.value)} placeholder="0x1234...890" />
             <SmallButton
               className="min-w-max self-stretch"
               variant="secondary"
-              disabled={editor === ''}
-              onClick={() => addEditor(editor)}
+              disabled={status === 'pending' || !isAddress(editorToAdd)}
+              onClick={onAddEditor}
             >
-              Add editor
+              {addEditorText}
             </SmallButton>
           </div>
         </div>
@@ -61,7 +70,7 @@ export function SpaceEditorsManageDialogContent({ members, votingPluginAddress, 
         <Input withSearchIcon onChange={e => setQuery(e.currentTarget.value)} />
 
         <div className="divide-y divide-grey-02">
-          {filteredEditors.map(m => (
+          {queriedMembers.map(m => (
             <div key={m.id} className="flex items-center justify-between">
               <MemberRow user={m} />
               <SmallButton onClick={() => proposeToRemoveEditor(m.address)}>Propose to remove</SmallButton>
@@ -71,4 +80,23 @@ export function SpaceEditorsManageDialogContent({ members, votingPluginAddress, 
       </div>
     </div>
   );
+}
+
+function useQueriedEditors(members: Member[]) {
+  const [query, setQuery] = React.useState('');
+
+  const queriedEditors = React.useMemo(() => {
+    return members.filter(e => {
+      if (e.name) {
+        return e.name?.toLowerCase().includes(query.toLowerCase());
+      }
+
+      return e.id.toLowerCase().includes(query.toLowerCase());
+    });
+  }, [members, query]);
+
+  return {
+    setQuery,
+    queriedMembers: queriedEditors,
+  };
 }

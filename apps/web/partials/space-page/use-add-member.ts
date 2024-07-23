@@ -4,7 +4,7 @@ import { PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';
-import { encodeFunctionData } from 'viem';
+import { encodeFunctionData, isAddress } from 'viem';
 
 import * as React from 'react';
 
@@ -40,7 +40,9 @@ export function useAddMember(args: AddMemberArgs) {
         return;
       }
 
-      // @TODO: Verify the editor is an actual address
+      if (!isAddress(memberToAdd)) {
+        return;
+      }
 
       const writeTxEffect = Effect.gen(function* () {
         // We don't need offchain data for personal space membership actions as

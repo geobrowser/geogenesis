@@ -1,5 +1,7 @@
 'use client';
 
+import { isAddress } from 'viem';
+
 import * as React from 'react';
 
 import { OmitStrict, Profile, SpaceGovernanceType, SpaceType } from '~/core/types';
@@ -61,7 +63,7 @@ export function SpaceMembersManageDialogContent({ members, votingPluginAddress, 
             <SmallButton
               className="min-w-max self-stretch"
               variant="secondary"
-              disabled={memberToAdd === '' || status === 'pending'}
+              disabled={!isAddress(memberToAdd) || status === 'pending'}
               onClick={onAddMember}
             >
               {addMemberText}
