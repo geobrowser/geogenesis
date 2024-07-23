@@ -1,6 +1,6 @@
 'use client';
 
-import { useRequestToBeMember } from './use-request-to-be-member';
+import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 
 interface Props {
   votingPluginAddress: string | null;

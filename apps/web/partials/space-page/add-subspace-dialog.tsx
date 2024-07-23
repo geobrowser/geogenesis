@@ -8,7 +8,9 @@ import Link from 'next/link';
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
+import { useAddSubspace } from '~/core/hooks/use-add-subspace';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { useRemoveSubspace } from '~/core/hooks/use-remove-subspace';
 import { Subspace } from '~/core/io/subgraph/fetch-subspaces';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
@@ -24,9 +26,6 @@ import { Divider } from '~/design-system/divider';
 import { MemberTiny } from '~/design-system/icons/member-tiny';
 import { MemberTinyFilled } from '~/design-system/icons/member-tiny-filled';
 import { Input } from '~/design-system/input';
-
-import { useAddSubspace } from './use-add-subspace';
-import { useRemoveSubspace } from './use-remove-subspace';
 
 interface Props {
   spaceType: SpaceGovernanceType;

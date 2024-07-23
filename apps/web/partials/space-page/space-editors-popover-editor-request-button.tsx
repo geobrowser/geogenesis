@@ -1,6 +1,6 @@
 'use client';
 
-import { useRequestToBeEditor } from './use-request-to-be-editor';
+import { useRequestToBeEditor } from '~/core/hooks/use-request-to-be-editor';
 
 interface Props {
   votingContractAddress: string | null;

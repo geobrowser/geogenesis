@@ -6,12 +6,12 @@ import * as React from 'react';
 
 import { OmitStrict, Profile, SpaceGovernanceType, SpaceType } from '~/core/types';
 
-import { Button, SmallButton } from '~/design-system/button';
+import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 
+import { useAddMember } from '../../core/hooks/use-add-member';
+import { useRemoveMember } from '../../core/hooks/use-remove-member';
 import { MemberRow } from './space-member-row';
-import { useAddMember } from './use-add-member';
-import { useProposeToRemoveMember } from './use-propose-to-remove-member';
 
 type Member = OmitStrict<Profile, 'coverUrl'>;
 
@@ -27,8 +27,6 @@ export function SpaceMembersManageDialogContent({ members, votingPluginAddress, 
     shouldRefreshOnSuccess: true,
   });
 
-  // 2. Remove member in personal spaces
-  const { proposeToRemoveMember } = useProposeToRemoveMember(votingPluginAddress);
   const { setQuery, queriedMembers } = useQueriedMembers(members);
 
   const [memberToAdd, setMemberToAdd] = React.useState('');
@@ -79,13 +77,42 @@ export function SpaceMembersManageDialogContent({ members, votingPluginAddress, 
 
         <div className="divide-y divide-grey-02">
           {queriedMembers.map(m => (
-            <div key={m.id} className="flex items-center justify-between">
-              <MemberRow user={m} />
-              <SmallButton onClick={() => proposeToRemoveMember(m.address)}>Propose to remove</SmallButton>
-            </div>
+            <CurrentMember key={m.id} member={m} votingPluginAddress={votingPluginAddress} spaceType={spaceType} />
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface CurrentMemberProps {
+  member: Member;
+  votingPluginAddress: string | null;
+  spaceType: SpaceGovernanceType;
+}
+
+function CurrentMember({ member, votingPluginAddress, spaceType }: CurrentMemberProps) {
+  const { removeEditor, status } = useRemoveMember({ votingPluginAddress, spaceType });
+
+  if (status === 'success') {
+    return null;
+  }
+
+  // @TODO: Text might be different depending on the space type
+  const removeMemberText = status === 'idle' ? 'Remove member' : status === 'pending' ? 'Removing...' : 'Remove member';
+
+  return (
+    <div key={member.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">
+      <MemberRow user={member} />
+      <SmallButton
+        disabled={status === 'pending'}
+        onClick={event => {
+          event.preventDefault();
+          removeEditor(member.address);
+        }}
+      >
+        {removeMemberText}
+      </SmallButton>
     </div>
   );
 }

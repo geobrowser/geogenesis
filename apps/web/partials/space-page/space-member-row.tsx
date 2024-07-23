@@ -11,10 +11,7 @@ interface EditorRowProps {
 
 export function MemberRow({ user }: EditorRowProps) {
   return (
-    <Link
-      href={user.profileLink ?? ''}
-      className="flex flex-1 items-center gap-2 p-2 transition-colors duration-150 hover:bg-divider"
-    >
+    <Link href={user.profileLink ?? ''} className="flex flex-1 items-center gap-2 p-2">
       <div className="relative h-8 w-8 overflow-hidden rounded-full">
         <Avatar size={32} avatarUrl={user.avatarUrl} value={user.address} />
       </div>
