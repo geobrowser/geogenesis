@@ -3,6 +3,7 @@ import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { useGlobalSearch } from '~/core/hooks/use-global-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
@@ -23,6 +24,7 @@ interface Props {
 
 export function Dialog({ onDone, open, onOpenChange }: Props) {
   const autocomplete = useGlobalSearch();
+  const router = useRouter();
   const { spaces } = useSpaces();
 
   if (!open) return null;
@@ -90,7 +92,13 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
                 >
                   {/* It's safe to cast nameTripleSpace since we only render entities that have a name triple */}
                   <Link href={NavUtils.toEntity(result.nameTripleSpaces![0], result.id)} onClick={() => onDone()}>
-                    <Command.Item className="transition-colors duration-75 aria-selected:bg-grey-01">
+                    <Command.Item
+                      className="transition-colors duration-75 aria-selected:bg-grey-01"
+                      onSelect={() => {
+                        router.push(NavUtils.toEntity(result.nameTripleSpaces![0], result.id));
+                        onDone();
+                      }}
+                    >
                       <ResultContent
                         onClick={() => {
                           // The on-click is being handled by the ResultItem here. This is so we can
