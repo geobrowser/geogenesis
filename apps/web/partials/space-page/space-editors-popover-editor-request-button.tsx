@@ -7,11 +7,13 @@ interface Props {
 }
 
 export function SpaceEditorsPopoverEditorRequestButton({ votingContractAddress }: Props) {
-  const { requestToBeEditor } = useRequestToBeEditor(votingContractAddress);
+  const { requestToBeEditor, status } = useRequestToBeEditor(votingContractAddress);
 
-  const onClick = () => {
-    requestToBeEditor?.();
-  };
+  const text = status === 'idle' ? 'Request to be an editor' : status === 'pending' ? 'Pending...' : 'Requested';
 
-  return <button onClick={onClick}>Request to be an editor</button>;
+  return (
+    <button disabled={status !== 'idle'} onClick={() => requestToBeEditor()}>
+      {text}
+    </button>
+  );
 }

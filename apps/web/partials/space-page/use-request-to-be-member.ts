@@ -2,10 +2,10 @@
 
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { createMembershipProposal } from '@geogenesis/sdk/proto';
+import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData, getAddress, stringToHex } from 'viem';
 
-import { TransactionWriteFailedError } from '~/core/errors';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { uploadBinary } from '~/core/io/storage/storage';
@@ -18,43 +18,44 @@ export function useRequestToBeMember(votingPluginAddress: string | null) {
     address: votingPluginAddress,
   });
 
-  const write = async () => {
-    if (!smartAccount) {
-      return null;
-    }
+  const { mutate, status } = useMutation({
+    mutationFn: async () => {
+      if (!smartAccount) {
+        return null;
+      }
 
-    const requestorAddress = getAddress(smartAccount.account.address);
+      const requestorAddress = getAddress(smartAccount.account.address);
 
-    const proposal = createMembershipProposal({
-      name: 'Member request',
-      type: 'ADD_MEMBER',
-      userAddress: smartAccount.account.address,
-    });
-
-    const writeTxEffect = Effect.gen(function* () {
-      const cid = yield* uploadBinary(proposal, storageClient);
-
-      // Editors have to add members or editors in personal spaces
-      const callData = encodeFunctionData({
-        functionName: 'proposeAddMember',
-        abi: MainVotingAbi,
-        // @TODO: Function for encoding
-        args: [stringToHex(cid), requestorAddress],
+      const proposal = createMembershipProposal({
+        name: 'Member request',
+        type: 'ADD_MEMBER',
+        userAddress: smartAccount.account.address,
       });
 
-      return yield* tx(callData);
-    });
+      const writeTxEffect = Effect.gen(function* () {
+        const cid = yield* uploadBinary(proposal, storageClient);
 
-    const publishProgram = Effect.gen(function* () {
-      const writeTxHash = yield* writeTxEffect;
-      console.log('Transaction hash: ', writeTxHash);
-      return writeTxHash;
-    });
+        const callData = encodeFunctionData({
+          functionName: 'proposeAddMember',
+          abi: MainVotingAbi,
+          args: [stringToHex(cid), requestorAddress],
+        });
 
-    await Effect.runPromise(publishProgram);
-  };
+        return yield* tx(callData);
+      });
+
+      const publishProgram = Effect.gen(function* () {
+        const writeTxHash = yield* writeTxEffect;
+        console.log('Transaction hash: ', writeTxHash);
+        return writeTxHash;
+      });
+
+      await Effect.runPromise(publishProgram);
+    },
+  });
 
   return {
-    requestToBeMember: write,
+    requestToBeMember: mutate,
+    status,
   };
 }

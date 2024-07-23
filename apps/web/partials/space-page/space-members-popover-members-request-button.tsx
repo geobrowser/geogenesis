@@ -7,11 +7,12 @@ interface Props {
 }
 
 export function SpaceMembersPopoverMemberRequestButton({ votingPluginAddress }: Props) {
-  const { requestToBeMember: requestMembership } = useRequestToBeMember(votingPluginAddress);
+  const { requestToBeMember, status } = useRequestToBeMember(votingPluginAddress);
+  const text = status === 'idle' ? 'Request to join' : status === 'pending' ? 'Pending...' : 'Requested';
 
-  const onClick = () => {
-    requestMembership?.();
-  };
-
-  return <button onClick={onClick}>Request to join</button>;
+  return (
+    <button disabled={status !== 'idle'} onClick={() => requestToBeMember()}>
+      {text}
+    </button>
+  );
 }

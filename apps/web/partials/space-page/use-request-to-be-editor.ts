@@ -2,6 +2,7 @@
 
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { createMembershipProposal } from '@geogenesis/sdk/proto';
+import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 
@@ -17,41 +18,42 @@ export function useRequestToBeEditor(votingPluginAddress: string | null) {
     address: votingPluginAddress,
   });
 
-  // @TODO(baiirun): What should this API look like in the SDK?
-  const write = async () => {
-    if (!smartAccount) {
-      return;
-    }
+  const { mutate, status } = useMutation({
+    mutationFn: async () => {
+      if (!smartAccount) {
+        return;
+      }
 
-    const proposal = createMembershipProposal({
-      name: 'Editor request',
-      type: 'ADD_EDITOR',
-      userAddress: smartAccount.account.address,
-    });
-
-    const writeTxEffect = Effect.gen(function* () {
-      const cid = yield* uploadBinary(proposal, storageClient);
-
-      const callData = encodeFunctionData({
-        functionName: 'proposeAddEditor',
-        abi: MainVotingAbi,
-        // @TODO: Function for encoding
-        args: [stringToHex(cid), smartAccount.account.address],
+      const proposal = createMembershipProposal({
+        name: 'Editor request',
+        type: 'ADD_EDITOR',
+        userAddress: smartAccount.account.address,
       });
 
-      return yield* tx(callData);
-    });
+      const writeTxEffect = Effect.gen(function* () {
+        const cid = yield* uploadBinary(proposal, storageClient);
 
-    const publishProgram = Effect.gen(function* () {
-      const writeTxHash = yield* writeTxEffect;
-      console.log('Transaction hash: ', writeTxHash);
-      return writeTxHash;
-    });
+        const callData = encodeFunctionData({
+          functionName: 'proposeAddEditor',
+          abi: MainVotingAbi,
+          args: [stringToHex(cid), smartAccount.account.address],
+        });
 
-    await Effect.runPromise(publishProgram);
-  };
+        return yield* tx(callData);
+      });
+
+      const publishProgram = Effect.gen(function* () {
+        const writeTxHash = yield* writeTxEffect;
+        console.log('Transaction hash: ', writeTxHash);
+        return writeTxHash;
+      });
+
+      await Effect.runPromise(publishProgram);
+    },
+  });
 
   return {
-    requestToBeEditor: write,
+    requestToBeEditor: mutate,
+    status,
   };
 }
