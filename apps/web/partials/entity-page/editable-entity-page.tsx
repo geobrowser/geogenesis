@@ -21,7 +21,6 @@ import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
-import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-autocomplete';
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { SquareButton } from '~/design-system/button';
 import { DeletableChipButton } from '~/design-system/chip';
@@ -29,6 +28,7 @@ import { DateField } from '~/design-system/editable-fields/date-field';
 import { PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CogSmall } from '~/design-system/icons/cog-small';
+import { Collection } from '~/design-system/icons/collection';
 import { Create } from '~/design-system/icons/create';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
@@ -37,6 +37,7 @@ import { Text as TextIcon } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
 import { Url } from '~/design-system/icons/url';
 import { SelectEntity } from '~/design-system/select-entity';
+import { SelectEntityDialog } from '~/design-system/select-entity-dialog';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
@@ -576,7 +577,9 @@ function EntityAttributes({
                   }
                 }}
                 allowedTypes={relationTypes}
-                className="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
+                wrapperClassName="contents"
+                inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
+                resultsClassName="absolute z-[1000]"
               />
             </div>
           );
@@ -599,27 +602,23 @@ function EntityAttributes({
           const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
 
           return (
-            <div data-testid={triple.placeholder ? 'placeholder-entity-autocomplete' : 'entity-autocomplete'}>
-              <EntityTextAutocomplete
+            <div data-testid={triple.placeholder ? 'placeholder-select-entity' : 'select-entity'} className="w-full">
+              <SelectEntity
                 spaceId={spaceId}
-                key={`entity-${attributeId}-${triple.value.value}`}
-                placeholder="Add value..."
+                onDone={result => {
+                  if (attributeId) {
+                    createCollectionItem(triple.value.value, result, triple);
+                  }
+                }}
                 allowedTypes={relationTypes}
-                onDone={result =>
-                  triple.placeholder
-                    ? createEntityTripleFromPlaceholder(triple, result)
-                    : addEntityValue(attributeId, result)
-                }
-                alreadySelectedIds={entityValueTriples
-                  .filter(triple => triple.attributeId === attributeId)
-                  .map(triple => triple.value.value)}
-                attributeId={attributeId}
+                wrapperClassName="contents"
+                inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
+                resultsClassName="absolute z-[1000]"
               />
             </div>
           );
         }
 
-        // @TODO: Switch from an entity to a collection when adding another item
         return triple.value.items.map(i => {
           return (
             <div key={`entity-${triple.attributeId}-${triple.value.value}-${i.value.value}}`} className="mt-1">
@@ -688,9 +687,6 @@ function EntityAttributes({
         const isPlaceholder = triple.placeholder;
         const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
 
-        // only show multiple editable fields for relations
-        const renderedTriples = tripleType === 'ENTITY' ? triple : [triple];
-
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
             {attributeId === '' ? (
@@ -712,18 +708,15 @@ function EntityAttributes({
               {tripleToEditableField(attributeId, triple, isEmptyEntity)}
               {/* This is the + button next to attribute ids with existing entity values */}
               {isCollection && !isEmptyCollection && (
-                <EntityAutocompleteDialog
+                // @TODO check purpose of entity value ids in autocomplete dialog
+                <SelectEntityDialog
                   spaceId={spaceId}
-                  onDone={entity =>
-                    isCollection
-                      ? createCollectionItem(triple.value.value, entity, triple)
-                      : addEntityValue(attributeId, entity)
-                  }
+                  onDone={result => {
+                    if (attributeId) {
+                      createCollectionItem(triple.value.value, result, triple);
+                    }
+                  }}
                   allowedTypes={relationTypes}
-                  entityValueIds={entityValueTriples
-                    .filter(triple => triple.attributeId === attributeId)
-                    .map(triple => triple.value.value)}
-                  attributeId={attributeId}
                 />
               )}
               <div className="absolute right-0 top-6 flex items-center gap-1">
@@ -761,6 +754,18 @@ function EntityAttributes({
                           ),
                           value: 'ENTITY',
                           onClick: () => onChangeTriple('ENTITY', triple),
+                          disabled: false,
+                        },
+                        {
+                          label: (
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <Collection />
+                              <Spacer width={8} />
+                              Collection
+                            </div>
+                          ),
+                          value: 'COLLECTION',
+                          onClick: () => onChangeTriple('COLLECTION', triple),
                           disabled: false,
                         },
                         {
