@@ -1,10 +1,8 @@
-import { VoteOption } from '@geogenesis/sdk';
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { useMutation } from '@tanstack/react-query';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { encodeFunctionData } from 'viem';
 
-import { Vote } from '../types';
 import { useSmartAccountTransaction } from './use-smart-account-transaction';
 
 interface Args {
@@ -12,28 +10,28 @@ interface Args {
   onchainProposalId: string;
 }
 
-export function useVote({ address, onchainProposalId }: Args) {
+export function useExecuteProposal({ address, onchainProposalId }: Args) {
   const tx = useSmartAccountTransaction({
     address,
   });
 
   const { mutate, status } = useMutation({
-    mutationFn: async (option: Vote['vote']) => {
+    mutationFn: async () => {
       const txEffect = await tx(
         encodeFunctionData({
           abi: MainVotingAbi,
-          functionName: 'vote',
-          args: [BigInt(onchainProposalId), option === 'ACCEPT' ? VoteOption.Yes : VoteOption.No, true],
+          functionName: 'execute',
+          args: [BigInt(onchainProposalId)],
         })
       );
 
       const hash = await Effect.runPromise(txEffect);
-      console.log('Vote successful!', hash);
+      console.log('Execute successful!', hash);
     },
   });
 
   return {
-    vote: mutate,
+    execute: mutate,
     status,
   };
 }

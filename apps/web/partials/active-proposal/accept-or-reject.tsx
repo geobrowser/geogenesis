@@ -34,7 +34,7 @@ export function AcceptOrReject({
   onchainProposalId,
   votingContractAddress,
 }: Props) {
-  const vote = useVote({
+  const { vote } = useVote({
     address: votingContractAddress,
     onchainProposalId,
   });
