@@ -2,7 +2,7 @@
 
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { createSubspaceProposal } from '@geogenesis/sdk/proto';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 
@@ -30,61 +30,65 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
       space?.type === 'PERSONAL' ? space?.personalSpaceAdminPluginAddress : space?.mainVotingPluginAddress ?? null,
   });
 
-  const write = async (subspaceAddress: string) => {
-    if (!space) {
-      return null;
-    }
-
-    const proposal = createSubspaceProposal({
-      name: 'Remove subspace',
-      type: 'REMOVE_SUBSPACE',
-      spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
-    });
-
-    const writeTxEffect = Effect.gen(function* () {
-      if (space.type === 'PUBLIC') {
-        const proposal = createSubspaceProposal({
-          name: 'Remove subspace',
-          type: 'REMOVE_SUBSPACE',
-          spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
-        });
-
-        const cid = yield* uploadBinary(proposal, storageClient);
-
-        const calldata = getCalldataForGovernanceType({
-          type: space.type,
-          spacePluginAddress: space.spacePluginAddress,
-          subspaceAddress,
-          cid,
-        });
-
-        return yield* tx(calldata);
+  const { mutate, isPending, isSuccess } = useMutation({
+    mutationFn: async (subspaceAddress: string) => {
+      if (!space) {
+        return null;
       }
 
-      if (space.type === 'PERSONAL') {
-        const calldata = getCalldataForGovernanceType({
-          type: space.type,
-          spacePluginAddress: space.spacePluginAddress,
-          subspaceAddress,
-        });
+      const proposal = createSubspaceProposal({
+        name: 'Remove subspace',
+        type: 'REMOVE_SUBSPACE',
+        spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
+      });
 
-        return yield* tx(calldata);
-      }
+      const writeTxEffect = Effect.gen(function* () {
+        if (space.type === 'PUBLIC') {
+          const proposal = createSubspaceProposal({
+            name: 'Remove subspace',
+            type: 'REMOVE_SUBSPACE',
+            spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
+          });
 
-      throw new Error('Invalid governance type found when writing subspace proposal', space.type);
-    });
+          const cid = yield* uploadBinary(proposal, storageClient);
 
-    const publishProgram = Effect.gen(function* () {
-      const writeTxHash = yield* writeTxEffect;
-      console.log('Transaction hash: ', writeTxHash);
-      return writeTxHash;
-    });
+          const calldata = getCalldataForGovernanceType({
+            type: space.type,
+            spacePluginAddress: space.spacePluginAddress,
+            subspaceAddress,
+            cid,
+          });
 
-    await Effect.runPromise(publishProgram);
-  };
+          return yield* tx(calldata);
+        }
+
+        if (space.type === 'PERSONAL') {
+          const calldata = getCalldataForGovernanceType({
+            type: space.type,
+            spacePluginAddress: space.spacePluginAddress,
+            subspaceAddress,
+          });
+
+          return yield* tx(calldata);
+        }
+
+        throw new Error('Invalid governance type found when writing subspace proposal', space.type);
+      });
+
+      const publishProgram = Effect.gen(function* () {
+        const writeTxHash = yield* writeTxEffect;
+        console.log('Transaction hash: ', writeTxHash);
+        return writeTxHash;
+      });
+
+      await Effect.runPromise(publishProgram);
+    },
+  });
 
   return {
-    removeSubspace: write,
+    removeSubspace: mutate,
+    isPending,
+    isSuccess,
   };
 }
 

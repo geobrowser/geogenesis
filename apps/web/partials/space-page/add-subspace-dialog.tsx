@@ -193,15 +193,6 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
     inflightSubspaceIds: inflightSubspaces.map(s => s.id),
   });
 
-  const { removeSubspace } = useRemoveSubspace({
-    spaceId,
-  });
-
-  const onRemoveSubspace = (event: React.MouseEvent<HTMLButtonElement>, subspaceAddress: string) => {
-    event.preventDefault(); // Don't bubble the event to the Link wrapping the button
-    removeSubspace(subspaceAddress);
-  };
-
   return (
     <div className="flex w-[460px] flex-col gap-4">
       <div className="space-y-2">
@@ -277,36 +268,7 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
 
           <Divider type="horizontal" />
 
-          {subspaces?.map(s => (
-            <Link
-              href={s.id}
-              key={s.id}
-              className="flex w-full items-center justify-between py-2 transition-colors duration-150 hover:bg-divider"
-            >
-              <div className="flex flex-1 items-center gap-2">
-                <div className="relative h-8 w-8 overflow-hidden rounded">
-                  <Avatar size={32} avatarUrl={s.spaceConfig?.image} value={s.id} />
-                </div>
-
-                <div className="space-y-0.5">
-                  <p className="text-metadataMedium">{s.spaceConfig?.name ?? s.id}</p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <MemberTinyFilled color="grey-03" />
-                      <p className="text-footnoteMedium text-grey-03">{s.totalEditors}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <MemberTiny color="grey-03" />
-                      <p className="text-footnoteMedium text-grey-03">{s.totalMembers}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <SmallButton onClick={event => onRemoveSubspace(event, s.daoAddress)}>
-                {spaceType === 'PUBLIC' ? 'Propose to remove' : 'Remove subspace'}
-              </SmallButton>
-            </Link>
-          ))}
+          {subspaces?.map(s => <CurrentSubspace subspace={s} spaceId={spaceId} spaceType={spaceType} />)}
         </div>
       )}
     </div>
@@ -361,6 +323,69 @@ function SpaceQueryResult({ subspace, spaceId }: { subspace: Subspace; spaceId: 
       {isPending && <SmallButton disabled>Pending</SmallButton>}
       {!isPending && !isSuccess && (
         <SmallButton onClick={event => onAddSubspace(event, subspace.daoAddress)}>Propose to add</SmallButton>
+      )}
+    </Link>
+  );
+}
+
+function CurrentSubspace({
+  subspace,
+  spaceId,
+  spaceType,
+}: {
+  subspace: Subspace;
+  spaceId: string;
+  spaceType: SpaceGovernanceType;
+}) {
+  const router = useRouter();
+  const { removeSubspace, isPending, isSuccess } = useRemoveSubspace({
+    spaceId,
+  });
+
+  if (isSuccess) {
+    // @TODO: Might make more sense to call a server action somewhere to revalidate the page?
+    // The main problem is that the transaction has to occur on the client side.
+    router.refresh();
+    // Remove the item from the list once we succeed
+    return null;
+  }
+
+  const onRemoveSubspace = (event: React.MouseEvent<HTMLButtonElement>, subspaceAddress: string) => {
+    event.preventDefault(); // Don't bubble the event to the Link wrapping the button
+    removeSubspace(subspaceAddress);
+  };
+
+  return (
+    <Link
+      href={subspace.id}
+      key={subspace.id}
+      className="flex w-full items-center justify-between py-2 transition-colors duration-150 hover:bg-divider"
+    >
+      <div className="flex flex-1 items-center gap-2">
+        <div className="relative h-8 w-8 overflow-hidden rounded">
+          <Avatar size={32} avatarUrl={subspace.spaceConfig?.image} value={subspace.id} />
+        </div>
+
+        <div className="space-y-0.5">
+          <p className="text-metadataMedium">{subspace.spaceConfig?.name ?? subspace.id}</p>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <MemberTinyFilled color="grey-03" />
+              <p className="text-footnoteMedium text-grey-03">{subspace.totalEditors}</p>
+            </div>
+            <div className="flex items-center gap-1">
+              <MemberTiny color="grey-03" />
+              <p className="text-footnoteMedium text-grey-03">{subspace.totalMembers}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* @TODO: Actual states with animations */}
+      {isPending && <SmallButton disabled>Pending</SmallButton>}
+      {!isPending && !isSuccess && (
+        <SmallButton onClick={event => onRemoveSubspace(event, subspace.daoAddress)}>
+          {spaceType === 'PUBLIC' ? 'Propose to remove' : 'Remove subspace'}
+        </SmallButton>
       )}
     </Link>
   );
