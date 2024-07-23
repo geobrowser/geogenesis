@@ -283,7 +283,9 @@ function SpaceQueryResult({ subspace, spaceId }: { subspace: Subspace; spaceId: 
 
   if (isSuccess) {
     // @TODO: Might make more sense to call a server action somewhere to revalidate the page?
-    // The main problem is that the transaction has to occur on the client side.
+    // The main problem is that the transaction has to occur on the client side, so adding
+    // piping to call the server after the client-side transaction finishes is kinda wonky vs
+    // just calling router.refresh() directly.
     router.refresh();
     // Remove the item from the list once we succeed
     return null;
@@ -344,7 +346,9 @@ function CurrentSubspace({
 
   if (isSuccess) {
     // @TODO: Might make more sense to call a server action somewhere to revalidate the page?
-    // The main problem is that the transaction has to occur on the client side.
+    // The main problem is that the transaction has to occur on the client side, so adding
+    // piping to call the server after the client-side transaction finishes is kinda wonky vs
+    // just calling router.refresh() directly.
     router.refresh();
     // Remove the item from the list once we succeed
     return null;
