@@ -22,6 +22,8 @@ import { type InitialEditorsAdded, ZodInitialEditorsAddedStreamResponse } from '
 import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
 import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
+import { handleMemberRemoved } from './events/member-removed/handler';
+import { ZodMemberRemovedStreamResponse } from './events/member-removed/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
 import { getEditsProposalsFromIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
@@ -192,6 +194,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
           const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
           const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
+          const membersRemoved = ZodMemberRemovedStreamResponse.safeParse(jsonOutput);
           // members removed
           const editorsAdded = ZodEditorAddedStreamResponse.safeParse(jsonOutput);
           // editors removed
@@ -504,6 +507,17 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           if (membersAdded.success) {
             yield* _(
               handleMemberAdded(membersAdded.data.membersAdded, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          if (membersRemoved.success) {
+            yield* _(
+              handleMemberRemoved(membersRemoved.data.membersRemoved, {
                 blockNumber,
                 cursor,
                 timestamp,

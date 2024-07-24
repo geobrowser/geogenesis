@@ -15,7 +15,11 @@ export class Spaces {
 
   static async findForDaoAddress(daoAddress: string) {
     const result = await db
-      .selectOne('spaces', { dao_address: getChecksumAddress(daoAddress) }, { columns: ['id', 'dao_address'] })
+      .selectOne(
+        'spaces',
+        { dao_address: getChecksumAddress(daoAddress) },
+        { columns: ['id', 'dao_address', 'main_voting_plugin_address', 'personal_space_admin_plugin_address'] }
+      )
       .run(pool);
 
     return result ? result : null;

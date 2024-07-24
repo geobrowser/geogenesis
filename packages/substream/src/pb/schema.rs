@@ -309,8 +309,10 @@ pub struct MemberRemoved {
     #[prost(string, tag="1")]
     pub member_address: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
-    pub main_voting_plugin_address: ::prost::alloc::string::String,
+    pub dao_address: ::prost::alloc::string::String,
     #[prost(string, tag="3")]
+    pub plugin_address: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
     pub change_type: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -382,5 +384,7 @@ pub struct GeoOutput {
     pub editors_added: ::prost::alloc::vec::Vec<EditorAdded>,
     #[prost(message, repeated, tag="14")]
     pub personal_plugins_created: ::prost::alloc::vec::Vec<GeoPersonalSpaceAdminPluginCreated>,
+    #[prost(message, repeated, tag="15")]
+    pub members_removed: ::prost::alloc::vec::Vec<MemberRemoved>,
 }
 // @@protoc_insertion_point(module)

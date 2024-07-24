@@ -119,6 +119,14 @@ modules:
     output:
       type: proto:schema.MembersAdded
 
+  - name: map_members_removed
+    kind: map
+    initialBlock: 620
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:schema.MembersRemoved
+
   - name: map_editors_added
     kind: map
     initialBlock: 620
@@ -143,10 +151,10 @@ modules:
       - map: map_subspaces_removed
       - map: map_proposals_executed
       - map: map_members_added
-      # - map: map_members_removed
       - map: map_editors_added
       # - map: map_editors_removed
       - map: map_personal_admin_plugins_created
+      - map: map_members_removed
     output:
       type: proto:schema.GeoOutput
 
