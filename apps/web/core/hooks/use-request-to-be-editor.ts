@@ -8,11 +8,10 @@ import { encodeFunctionData, stringToHex } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { uploadBinary } from '~/core/io/storage/storage';
-import { Services } from '~/core/services';
+
+import { IpfsEffectClient } from '../io/ipfs-client';
 
 export function useRequestToBeEditor(votingPluginAddress: string | null) {
-  const { storageClient } = Services.useServices();
   const smartAccount = useSmartAccount();
   const tx = useSmartAccountTransaction({
     address: votingPluginAddress,
@@ -31,7 +30,7 @@ export function useRequestToBeEditor(votingPluginAddress: string | null) {
       });
 
       const writeTxEffect = Effect.gen(function* () {
-        const cid = yield* uploadBinary(proposal, storageClient);
+        const cid = yield* IpfsEffectClient.upload(proposal);
 
         const callData = encodeFunctionData({
           functionName: 'proposeAddEditor',

@@ -48,6 +48,7 @@ type FindTeamMemberProps = {
 };
 
 export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
+  const { ipfs } = Services.useServices();
   const setStep = useSetAtom(teamMemberStepAtom);
   const [avatar, setAvatar] = useAtom(teamMemberAvatarAtom);
   const [name, setName] = useAtom(teamMemberNameAtom);
@@ -206,8 +207,6 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     [setAvatar, setName, error]
   );
 
-  const { storageClient } = Services.useServices();
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUploadAvatar = useCallback(() => {
@@ -219,7 +218,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
   const handleOnChangeAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       const file = event.target.files[0];
-      const ipfsUri = await storageClient.uploadFile(file);
+      const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
       setIsAvatarMenuOpen(false);

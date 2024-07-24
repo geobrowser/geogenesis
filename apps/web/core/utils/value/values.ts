@@ -39,7 +39,7 @@ export function imageValue(triple: Triple) {
 }
 
 // Get the image triple value from an image path
-// this converts the raw image string from `this.storageClient.uploadFile` into the appropriate
+// this converts the raw image string from ipfs.uploadFile into the appropriate
 // format for storing in the triple
 // e.g., https://api.thegraph.com/ipfs/api/v0/cat?arg=HASH -> ipfs://HASH
 export function toImageValue(rawValue: string) {

@@ -15,7 +15,9 @@ export function mapRemovedEditors(editorsRemoved: EditorRemoved[], block: BlockE
     for (const editor of editorsRemoved) {
       // @TODO(performance): We can query for this outside of the loop. Alternatively we
       // can use effect's structured concurrency to run every block of the loop concurrently.
-      const maybeSpace = yield* _(Effect.promise(() => Spaces.findForDaoAddress(editor.daoAddress)));
+      const maybeSpace = yield* _(
+        Effect.tryPromise({ try: () => Spaces.findForDaoAddress(editor.daoAddress), catch: () => new Error() })
+      );
 
       if (!maybeSpace) {
         const message = `Could not find space for removed editor ${editor.editorAddress} with plugin address ${editor.pluginAddress} and dao address ${editor.daoAddress}`;

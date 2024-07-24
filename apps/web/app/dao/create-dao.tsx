@@ -6,10 +6,9 @@ import { VotingMode, createGeoId } from '@geogenesis/sdk';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { getAddress, hexToBytes } from 'viem';
 
-import { Environment } from '~/core/environment';
 import { useAragon } from '~/core/hooks/use-aragon';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { StorageClient } from '~/core/io/storage/storage';
+import { IpfsEffectClient } from '~/core/io/ipfs-client';
 
 import { Button } from '~/design-system/button';
 
@@ -65,8 +64,7 @@ export function CreateDao({ type }: Prtypes) {
       ],
     });
 
-    const storage = new StorageClient(Environment.getConfig().ipfs);
-    const firstBlockContentUri = await storage.uploadBinary(initialContent);
+    const firstBlockContentUri = await IpfsEffectClient.upload(initialContent);
 
     const spacePluginInstallItem = getSpacePluginInstallItem({
       // firstBlockContentUri: `ipfs://bafkreihi2yp3mg3ww3dbxprsblkr7zst2gztxwym44ewlkqmfwiva6uxii`, // Root

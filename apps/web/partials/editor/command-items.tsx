@@ -3,7 +3,7 @@ import { Editor, Range } from '@tiptap/core';
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
-import { Publish, Storage } from '~/core/io';
+import { IpfsClient } from '~/core/io/ipfs-client';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
@@ -115,7 +115,8 @@ export const commandItems: CommandSuggestionItem[] = [
         // It doesn't really matter which configuration we use here since all IPFS
         // nodes are essentially production.
         const config = Environment.getConfig();
-        const src = await Publish.uploadFile(new Storage.StorageClient(config.ipfs), file);
+
+        const src = await IpfsClient.uploadFile(file);
         editor.chain().focus().deleteRange(range).setImage({ src }).run();
       };
       input.click();

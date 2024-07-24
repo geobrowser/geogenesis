@@ -6,7 +6,6 @@ import * as Schedule from 'effect/Schedule';
 
 import { ADMIN_ROLE_BINARY, EDITOR_CONTROLLER_ROLE_BINARY, EDITOR_ROLE_BINARY } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { StorageClient } from '~/core/io/storage/storage';
 import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
 import { Ops } from '~/core/utils/ops';
 import { Triples } from '~/core/utils/triples';
@@ -112,7 +111,6 @@ export async function makeCompanyEffect(
         ops,
         name: `Creating profile for ${userAccount}`,
         space: spaceAddress,
-        storageClient: new StorageClient(Environment.getConfig().ipfs),
         account: geoAccount,
         wallet: walletClient,
         publicClient: publicClient,

@@ -4,13 +4,17 @@ import * as React from 'react';
 import { ReactNode, createContext, useContext, useMemo } from 'react';
 
 import { Environment } from '~/core/environment';
-import { Publish, Storage, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
+
+import { IpfsClient } from '../io/ipfs-client';
 
 type Services = {
-  storageClient: Storage.IStorageClient;
+  ipfs: {
+    uploadFile: typeof IpfsClient.uploadFile;
+    upload: typeof IpfsClient.upload;
+  };
   subgraph: Subgraph.ISubgraph;
   config: Environment.AppConfig;
-  publish: Publish.IPublish;
 };
 
 const ServicesContext = createContext<Services | undefined>(undefined);
@@ -22,13 +26,14 @@ interface Props {
 export function ServicesProvider({ children }: Props) {
   const services = useMemo((): Services => {
     let config = Environment.getConfig();
-    const storageClient = new Storage.StorageClient(config.ipfs);
 
     return {
+      ipfs: {
+        uploadFile: IpfsClient.uploadFile,
+        upload: IpfsClient.upload,
+      },
       config,
-      storageClient,
       subgraph: Subgraph,
-      publish: Publish,
     };
   }, []);
 

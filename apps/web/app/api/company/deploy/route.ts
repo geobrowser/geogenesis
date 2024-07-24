@@ -3,7 +3,8 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 import { getAddress } from 'viem';
 
-import { getGeoPersonIdFromOnchainId, slog } from '~/core/utils/utils';
+import { ID } from '~/core/id';
+import { slog } from '~/core/utils/utils';
 
 import { makeCompanyEffect } from './make-company-effect';
 
@@ -57,7 +58,9 @@ export async function GET(request: Request) {
     });
   }
 
-  const geoEntityIdFromOnchainId = getGeoPersonIdFromOnchainId(userAddress, profileId);
+  // @TODO: We don't need the profile id from the onchain data anymore, this can just be a random id
+  // set during makeCompanyEffect
+  const geoEntityIdFromOnchainId = ID.createEntityId();
 
   const createProfileEffect = await makeCompanyEffect(requestId, {
     account: userAddress as `0x${string}`,

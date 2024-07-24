@@ -43,6 +43,7 @@ type EditTeamMemberProps = {
 type Status = 'initial' | 'edited' | 'updated' | 'linked' | 'unlinked' | 'removed';
 
 export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => {
+  const { ipfs } = Services.useServices();
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>('initial');
   const hasEditedTeamMember = !['initial', 'edited'].includes(status);
@@ -414,8 +415,6 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     setStatus('removed');
   };
 
-  const { storageClient } = Services.useServices();
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUploadAvatar = useCallback(() => {
@@ -427,7 +426,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
   const handleChangeAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       const file = event.target.files[0];
-      const ipfsUri = await storageClient.uploadFile(file);
+      const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
       setIsAvatarMenuOpen(false);

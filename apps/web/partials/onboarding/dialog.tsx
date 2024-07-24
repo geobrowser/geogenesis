@@ -1,6 +1,5 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { Command } from 'cmdk';
@@ -13,13 +12,11 @@ import { getAddress } from 'viem';
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
-import { useConfig } from 'wagmi';
-
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type AccountType, createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
 import { Services } from '~/core/services';
-import { getGeoPersonIdFromOnchainId, getImagePath, sleep } from '~/core/utils/utils';
+import { getImagePath, sleep } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -36,37 +33,21 @@ export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceAddressAtom = atomWithStorage<string>('onboardingSpaceAddress', '');
 export const profileIdAtom = atomWithStorage<string>('onboardingProfileId', '');
 
-type Step =
-  | 'start'
-  | 'select-type'
-  | 'onboarding'
-  | 'creating-spaces'
-  | 'registering-profile'
-  | 'creating-geo-profile-entity'
-  | 'completed';
+type Step = 'start' | 'select-type' | 'onboarding' | 'creating-spaces' | 'creating-geo-profile-entity' | 'completed';
 
 export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
-const workflowSteps: Array<Step> = [
-  'creating-spaces',
-  'registering-profile',
-  'creating-geo-profile-entity',
-  'completed',
-];
+const workflowSteps: Array<Step> = ['creating-spaces', 'creating-geo-profile-entity', 'completed'];
 
 export const OnboardingDialog = () => {
   const { isOnboardingVisible } = useOnboarding();
 
-  const config = useConfig();
   const smartAccount = useSmartAccount();
-  const { publish } = Services.useServices();
-  const queryClient = useQueryClient();
 
   const accountType = useAtomValue(accountTypeAtom);
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
   const [spaceAddress, setSpaceAddress] = useAtom(spaceAddressAtom);
-  const [profileId, setProfileId] = useAtom(profileIdAtom);
 
   const [step, setStep] = useAtom(stepAtom);
 
@@ -91,42 +72,6 @@ export const OnboardingDialog = () => {
 
       // Make sure we're setting the checksum'd address
       setSpaceAddress(getAddress(spaceAddress));
-      setStep('registering-profile');
-
-      setTimeout(() => {
-        registerProfile(spaceAddress, accountType);
-      }, 100);
-    } catch (error) {
-      setShowRetry(true);
-      console.error(error);
-    }
-  }
-
-  async function registerProfile(spaceAddress: `0x${string}`, accountType: AccountType) {
-    if (!address || !smartAccount || !accountType) return;
-
-    try {
-      const profileId = await publish.registerGeoProfile(config, spaceAddress);
-
-      if (!profileId) {
-        throw new Error(`Registering profile failed`);
-      }
-
-      setProfileId(`${profileId}`);
-
-      // Update the query cache with the new profile while we wait for the profiles subgraph to
-      // index the new onchain profile.
-      queryClient.setQueryData(['onchain-profile', address], {
-        id: getGeoPersonIdFromOnchainId(address, profileId),
-        homeSpace: spaceAddress,
-        account: address,
-      });
-
-      setStep('creating-geo-profile-entity');
-
-      setTimeout(() => {
-        createGeoProfileEntity(spaceAddress, profileId, accountType);
-      }, 100);
     } catch (error) {
       setShowRetry(true);
       console.error(error);
@@ -175,11 +120,9 @@ export const OnboardingDialog = () => {
       case 'creating-spaces':
         createSpaces(accountType);
         break;
-      case 'registering-profile':
-        registerProfile(spaceAddress as `0x${string}`, accountType);
-        break;
       case 'creating-geo-profile-entity':
-        createGeoProfileEntity(spaceAddress as `0x${string}`, profileId, accountType);
+        // @TODO: DOn't need profile entity id here anymore
+        createGeoProfileEntity(spaceAddress as `0x${string}`, '', accountType);
         break;
     }
   }
@@ -370,13 +313,12 @@ const placeholderMessage: Record<AccountType, string> = {
 };
 
 function StepOnboarding({ onNext, address }: StepOnboardingProps) {
+  const { ipfs } = Services.useServices();
   const accountType = useAtomValue(accountTypeAtom);
   const [name, setName] = useAtom(nameAtom);
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
   const validName = name.length > 0;
-
-  const { storageClient } = Services.useServices();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -389,7 +331,7 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const ipfsUri = await storageClient.uploadFile(file);
+      const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
     }
@@ -471,8 +413,7 @@ const stepNumber: Record<Step, number> = {
   'select-type': 0,
   onboarding: 0,
   'creating-spaces': 1,
-  'registering-profile': 2,
-  'creating-geo-profile-entity': 3,
+  'creating-geo-profile-entity': 2,
   completed: 4,
 };
 
@@ -481,7 +422,6 @@ const retryMessage: Record<Step, string> = {
   'select-type': '',
   onboarding: '',
   'creating-spaces': 'Space creation failed',
-  'registering-profile': 'Profile registration failed',
   'creating-geo-profile-entity': 'Geo profile creation failed',
   completed: '',
 };

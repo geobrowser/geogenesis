@@ -295,13 +295,12 @@ const placeholderMessage: Record<SpaceType, string> = {
 };
 
 function StepOnboarding({ onNext, address }: StepOnboardingProps) {
+  const { ipfs } = Services.useServices();
   const spaceType = useAtomValue(spaceTypeAtom);
   const [name, setName] = useAtom(nameAtom);
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
   const validName = name.length > 0;
-
-  const { storageClient } = Services.useServices();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -314,7 +313,7 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const ipfsUri = await storageClient.uploadFile(file);
+      const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
     }

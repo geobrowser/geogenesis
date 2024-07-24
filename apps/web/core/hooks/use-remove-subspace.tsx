@@ -8,9 +8,9 @@ import { useRouter } from 'next/navigation';
 import { encodeFunctionData, stringToHex } from 'viem';
 
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { uploadBinary } from '~/core/io/storage/storage';
 import { fetchSpace } from '~/core/io/subgraph';
-import { Services } from '~/core/services';
+
+import { IpfsEffectClient } from '../io/ipfs-client';
 
 interface RemoveSubspaceArgs {
   spaceId: string;
@@ -19,7 +19,6 @@ interface RemoveSubspaceArgs {
 
 export function useRemoveSubspace(args: RemoveSubspaceArgs) {
   const router = useRouter();
-  const { storageClient } = Services.useServices();
 
   // @TODO(performance): We can pass the space down from the layout as well to avoid
   // fetching on the client here.
@@ -63,7 +62,7 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
             spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
           });
 
-          const cid = yield* uploadBinary(proposal, storageClient);
+          const cid = yield* IpfsEffectClient.upload(proposal);
 
           const calldata = getCalldataForGovernanceType({
             type: space.type,
