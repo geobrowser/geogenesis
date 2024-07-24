@@ -9,7 +9,7 @@ import { encodeFunctionData, getAddress, stringToHex } from 'viem';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 
-import { IpfsClient } from '../io/ipfs-client';
+import { IpfsEffectClient } from '../io/ipfs-client';
 
 export function useRequestToBeMember(votingPluginAddress: string | null) {
   const smartAccount = useSmartAccount();
@@ -32,7 +32,7 @@ export function useRequestToBeMember(votingPluginAddress: string | null) {
       });
 
       const writeTxEffect = Effect.gen(function* () {
-        const cid = yield* IpfsClient.upload(proposal);
+        const cid = yield* IpfsEffectClient.upload(proposal);
 
         const callData = encodeFunctionData({
           functionName: 'proposeAddMember',

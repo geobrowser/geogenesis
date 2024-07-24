@@ -21,6 +21,7 @@ import { encodeFunctionData, getAddress, stringToHex, zeroAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
+import { IpfsClient } from '~/core/io/ipfs-client';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
@@ -37,7 +38,6 @@ import {
 } from '../dao/encodings';
 import { abi as DaoFactoryAbi } from './abi';
 import { publicClient, signer, walletClient } from './client';
-import { IpfsService } from './ipfs-service';
 
 const deployParams = {
   network: SupportedNetworks.LOCAL, // I don't think this matters but is required by Aragon SDK
@@ -65,10 +65,8 @@ export async function deploySpace(args: DeployArgs) {
     ops,
   });
 
-  const storage = new IpfsService(Environment.getConfig().ipfs);
-
   // @TODO: Effectify and use uploadBinary helper
-  const firstBlockContentUri = await storage.upload(initialContent);
+  const firstBlockContentUri = await IpfsClient.upload(initialContent);
 
   const spacePluginInstallItem = getSpacePluginInstallItem({
     firstBlockContentUri: `ipfs://${firstBlockContentUri}`,

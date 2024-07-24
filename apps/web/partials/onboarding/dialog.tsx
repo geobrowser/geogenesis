@@ -15,6 +15,7 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type AccountType, createProfileEntity, deploySpaceContract } from '~/core/io/publish/contracts';
+import { Services } from '~/core/services';
 import { getImagePath, sleep } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 
@@ -25,8 +26,6 @@ import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { RadioGroup } from '~/design-system/radio-group';
 import { Text } from '~/design-system/text';
-
-import { uploadFileToIpfsAction } from '~/app/api/upload';
 
 export const accountTypeAtom = atomWithStorage<AccountType | null>('onboardingAccountType', null);
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
@@ -314,6 +313,7 @@ const placeholderMessage: Record<AccountType, string> = {
 };
 
 function StepOnboarding({ onNext, address }: StepOnboardingProps) {
+  const { ipfs } = Services.useServices();
   const accountType = useAtomValue(accountTypeAtom);
   const [name, setName] = useAtom(nameAtom);
   const [avatar, setAvatar] = useAtom(avatarAtom);
@@ -331,7 +331,7 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const ipfsUri = await uploadFileToIpfsAction(file);
+      const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
     }

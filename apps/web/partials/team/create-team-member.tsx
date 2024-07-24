@@ -9,6 +9,7 @@ import type { ChangeEvent } from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
+import { Services } from '~/core/services';
 import { Images } from '~/core/utils/images';
 import { Values } from '~/core/utils/value';
 
@@ -32,13 +33,13 @@ import {
 import { NoAvatar } from './no-avatar';
 import { TeamMemberCreatedToast } from './toast';
 import type { Role } from './types';
-import { uploadFileToIpfsAction } from '~/app/api/upload';
 
 type CreateTeamMemberProps = {
   spaceId: string;
 };
 
 export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
+  const { ipfs } = Services.useServices();
   const setStep = useSetAtom(teamMemberStepAtom);
   const [avatar, setAvatar] = useAtom(teamMemberAvatarAtom);
   const [name, setName] = useAtom(teamMemberNameAtom);
@@ -176,7 +177,7 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
   const handleChangeAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       const file = event.target.files[0];
-      const ipfsUri = await uploadFileToIpfsAction(file);
+      const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
       setIsAvatarMenuOpen(false);

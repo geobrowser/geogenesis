@@ -10,7 +10,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { SpaceGovernanceType } from '~/core/types';
 
-import { IpfsClient } from '../io/ipfs-client';
+import { IpfsEffectClient } from '../io/ipfs-client';
 
 interface RemoveEditorArgs {
   votingPluginAddress: string | null;
@@ -38,7 +38,7 @@ export function useRemoveMember(args: RemoveEditorArgs) {
             userAddress: getAddress(memberToRemove) as `0x${string}`,
           });
 
-          const cid = yield* IpfsClient.upload(membershipProposalMetadata);
+          const cid = yield* IpfsEffectClient.upload(membershipProposalMetadata);
 
           const callData = getCalldataForGovernanceType({
             type: args.spaceType,

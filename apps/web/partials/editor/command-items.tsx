@@ -3,6 +3,7 @@ import { Editor, Range } from '@tiptap/core';
 import * as React from 'react';
 
 import { Environment } from '~/core/environment';
+import { IpfsClient } from '~/core/io/ipfs-client';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
@@ -11,8 +12,6 @@ import { EditorImage } from '~/design-system/icons/editor-image';
 import { EditorList } from '~/design-system/icons/editor-list';
 import { EditorTable } from '~/design-system/icons/editor-table';
 import { EditorText } from '~/design-system/icons/editor-text';
-
-import { uploadFileToIpfsAction } from '~/app/api/upload';
 
 export interface CommandSuggestionItem {
   title: string;
@@ -117,7 +116,7 @@ export const commandItems: CommandSuggestionItem[] = [
         // nodes are essentially production.
         const config = Environment.getConfig();
 
-        const src = await uploadFileToIpfsAction(file);
+        const src = await IpfsClient.uploadFile(file);
         editor.chain().focus().deleteRange(range).setImage({ src }).run();
       };
       input.click();

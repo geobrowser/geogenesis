@@ -7,7 +7,7 @@ import { encodeFunctionData, stringToHex } from 'viem';
 import * as React from 'react';
 
 import { TransactionWriteFailedError } from '../errors';
-import { IpfsClient } from '../io/ipfs-client';
+import { IpfsEffectClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';
 import { useStatusBar } from '../state/status-bar-store';
 import { Triple as ITriple, ReviewState, SpaceGovernanceType } from '../types';
@@ -242,7 +242,7 @@ function makeProposal(args: MakeProposalArgs) {
     }
 
     onChangePublishState('publishing-ipfs');
-    const cid = yield* IpfsClient.upload(proposal);
+    const cid = yield* IpfsEffectClient.upload(proposal);
     onChangePublishState('publishing-contract');
 
     const callData = getCalldataForSpaceGovernanceType({

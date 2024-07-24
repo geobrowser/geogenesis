@@ -5,13 +5,13 @@ import Textarea from 'react-textarea-autosize';
 import * as React from 'react';
 import { ChangeEvent, useEffect, useRef } from 'react';
 
+import { Services } from '~/core/services';
 import { getImagePath } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 
 import { Trash } from '../icons/trash';
 import { Upload } from '../icons/upload';
-import { uploadFileToIpfsAction } from '~/app/api/upload';
 
 const textareaStyles = cva(
   // The react-textarea-autosize library miscalculates the height by 1 pixel. We add a negative margin
@@ -127,6 +127,8 @@ interface ImageFieldProps {
 }
 
 export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+  const { ipfs } = Services.useServices();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputClick = () => {
     // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
@@ -138,7 +140,7 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const imageSrc = await uploadFileToIpfsAction(file);
+      const imageSrc = await ipfs.uploadFile(file);
       onImageChange(imageSrc);
     }
   };
@@ -173,6 +175,7 @@ export function PageImageField({ imageSrc, onImageChange, onImageRemove, variant
 }
 
 export function TableImageField({ imageSrc, onImageChange, onImageRemove, variant = 'avatar' }: ImageFieldProps) {
+  const { ipfs } = Services.useServices();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputClick = () => {
     // This is a hack to get around label htmlFor triggering a file input not working with nested React components.
@@ -184,7 +187,7 @@ export function TableImageField({ imageSrc, onImageChange, onImageRemove, varian
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const imageSrc = await uploadFileToIpfsAction(file);
+      const imageSrc = await ipfs.uploadFile(file);
       onImageChange(imageSrc);
     }
   };

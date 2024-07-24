@@ -10,6 +10,7 @@ import type { ChangeEvent } from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
+import { Services } from '~/core/services';
 import { Triple as TripleType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
@@ -32,7 +33,6 @@ import { Text } from '~/design-system/text';
 
 import { NoAvatar } from './no-avatar';
 import type { Role } from './types';
-import { uploadFileToIpfsAction } from '~/app/api/upload';
 import type { TeamMember as TeamMemberType } from '~/app/space/[id]/team/page';
 
 type EditTeamMemberProps = {
@@ -43,6 +43,7 @@ type EditTeamMemberProps = {
 type Status = 'initial' | 'edited' | 'updated' | 'linked' | 'unlinked' | 'removed';
 
 export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => {
+  const { ipfs } = Services.useServices();
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>('initial');
   const hasEditedTeamMember = !['initial', 'edited'].includes(status);
@@ -425,7 +426,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
   const handleChangeAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       const file = event.target.files[0];
-      const ipfsUri = await uploadFileToIpfsAction(file);
+      const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
       setIsAvatarMenuOpen(false);

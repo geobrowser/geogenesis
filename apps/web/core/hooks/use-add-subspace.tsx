@@ -10,7 +10,7 @@ import { encodeFunctionData, stringToHex } from 'viem';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { fetchSpace } from '~/core/io/subgraph';
 
-import { IpfsClient } from '../io/ipfs-client';
+import { IpfsEffectClient } from '../io/ipfs-client';
 
 interface AddSubspaceArgs {
   spaceId: string;
@@ -56,7 +56,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
             spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
           });
 
-          const cid = yield* IpfsClient.upload(proposal);
+          const cid = yield* IpfsEffectClient.upload(proposal);
 
           const calldata = getCalldataForGovernanceType({
             type: space.type,

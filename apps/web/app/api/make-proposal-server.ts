@@ -5,6 +5,7 @@ import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
 import { PrivateKeyAccount, PublicClient, WalletClient } from 'viem';
 
+import { IpfsClient } from '~/core/io/ipfs-client';
 import { fetchSpace } from '~/core/io/subgraph';
 
 import { uploadToIpfsAction } from './upload';
@@ -60,7 +61,7 @@ export async function makeProposalServer({
     Effect.tryPromise({
       try: async () => {
         const proposal = createEditProposal({ name, ops, author: account.address });
-        return await uploadToIpfsAction(proposal);
+        return await IpfsClient.upload(proposal);
       },
       catch: error => new IpfsUploadFailedError(`IPFS upload failed: ${error}`),
     }),
