@@ -8,7 +8,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Environment } from '../environment';
 import { Entities } from '../utils/entity';
 import { fetchProfilesByAddresses } from './subgraph/fetch-profiles-by-ids';
-import { entityFragment } from './subgraph/fragments';
+import { entityFragment, spaceMetadataFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
 import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './subgraph/network-local-mapping';
 
@@ -28,10 +28,12 @@ const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: s
         type
         space {
           id
-          metadata {
+          spacesMetadata {
             nodes {
-              ${entityFragment}
-            }           
+              entity {
+                ${spaceMetadataFragment}
+              }
+            }
           }
         }
         createdAtBlock
@@ -140,7 +142,7 @@ export async function fetchProposalsByUser({
       profileLink: null,
     };
 
-    const spaceConfig = p.space.metadata.nodes[0] as SubstreamEntity | undefined;
+    const spaceConfig = p.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
     const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 
     const spaceWithMetadata: SpaceWithMetadata = {

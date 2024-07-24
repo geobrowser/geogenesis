@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useRequestToBeMember } from './use-request-to-be-member';
+import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 
 interface Props {
   spaceId: string;
@@ -10,20 +10,21 @@ interface Props {
 }
 
 export function SpaceMembersJoinButton({ votingPluginAddress }: Props) {
-  const [hasRequested, setHasRequested] = React.useState(false);
-  const { requestToBeMember } = useRequestToBeMember(votingPluginAddress);
+  const { requestToBeMember, status } = useRequestToBeMember(votingPluginAddress);
 
   const onClick = async () => {
     await requestToBeMember();
-    setHasRequested(true);
   };
+
+  const text = status === 'idle' ? 'Request to join' : status === 'pending' ? 'Pending...' : 'Requested';
 
   return (
     <button
       onClick={onClick}
+      disabled={status !== 'idle'}
       className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text"
     >
-      {hasRequested ? 'Requested' : 'Join'}
+      {text}
     </button>
   );
 }

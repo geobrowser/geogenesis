@@ -95,6 +95,7 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
     spaceConfig: spaceConfigWithImage,
     createdAtBlock: networkSpace.createdAtBlock,
 
+    daoAddress: networkSpace.daoAddress,
     mainVotingPluginAddress: networkSpace.mainVotingPluginAddress,
     memberAccessPluginAddress: networkSpace.memberAccessPluginAddress,
     personalSpaceAdminPluginAddress: networkSpace.personalSpaceAdminPluginAddress,

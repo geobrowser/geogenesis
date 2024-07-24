@@ -91,6 +91,7 @@ export async function fetchSpacesById(ids: string[]) {
       spaceConfig: spaceConfigWithImage,
       createdAtBlock: space.createdAtBlock,
 
+      daoAddress: space.daoAddress,
       mainVotingPluginAddress: space.mainVotingPluginAddress,
       memberAccessPluginAddress: space.memberAccessPluginAddress,
       personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
@@ -98,7 +99,6 @@ export async function fetchSpacesById(ids: string[]) {
     };
   });
 
-  // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
-  // the query level when we index the space config entity as part of a Space.
+  // Only return spaces that have a spaceConfig.
   return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
 }

@@ -111,7 +111,7 @@ export type SubstreamOp = OmitStrict<SubstreamTriple, 'space'> &
     entityValue: string | null;
   };
 
-export type SubstreamEntity = OmitStrict<Entity, 'triples' | 'types' | 'nameTripleSpaces'> & {
+export type SubstreamEntity = OmitStrict<Entity, 'triples' | 'types' | 'nameTripleSpaces' | 'description'> & {
   triples: { nodes: SubstreamTriple[] };
   types: {
     nodes: { id: string; name: string | null }[];
@@ -132,7 +132,7 @@ export type SubstreamImage = {
   };
 };
 
-export type SubstreamSpace = { id: string; metadata: { nodes: SubstreamEntity[] } };
+export type SubstreamSpace = { id: string; spacesMetadata: { nodes: { entity: SubstreamEntity }[] } };
 
 export type SubstreamProposedVersion = OmitStrict<ProposedVersion, 'createdBy' | 'space'> & {
   actions: { nodes: SubstreamOp[] };
@@ -408,7 +408,7 @@ export function fromNetworkOps(networkOps: SubstreamOp[]): AppOp[] {
   }
 }
 
-export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamEntity | undefined) {
+export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamEntity | undefined | null) {
   const spaceConfigTriples = fromNetworkTriples(metadata?.triples.nodes ?? []);
 
   const spaceConfigWithImage: SpaceConfigEntity = metadata

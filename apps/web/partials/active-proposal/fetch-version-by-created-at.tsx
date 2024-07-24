@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
-import { entityFragment } from '~/core/io/subgraph/fragments';
+import { entityFragment, spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from '~/core/io/subgraph/network-local-mapping';
 import { Profile, SpaceWithMetadata, Version } from '~/core/types';
@@ -44,10 +44,12 @@ const getVersionsQuery = ({
 
         space {
           id
-          metadata {
+          spacesMetadata {
             nodes {
-              ${entityFragment}
-            }           
+              entity {
+                ${spaceMetadataFragment}
+              }
+            }
           }
         }
 
@@ -170,7 +172,7 @@ export async function fetchVersionsByCreatedAt({
           profileLink: null,
         };
 
-    const spaceConfig = v.space.metadata.nodes[0] as SubstreamEntity | undefined;
+    const spaceConfig = v.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
     const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
 
     const spaceWithMetadata: SpaceWithMetadata = {

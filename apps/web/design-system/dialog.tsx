@@ -35,19 +35,18 @@ export function Dialog(props: Props) {
         <MotionContent
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15 }}
-          className="fixed inset-0 top-[25%] z-100 mx-auto h-[415px] max-w-[586px] overflow-hidden overflow-y-auto rounded bg-white focus:outline-none"
+          exit={{ opacity: 0 }}
+          transition={{ type: 'spring', bounce: 0, duration: 0.15 }}
+          className="fixed inset-0 z-[101] flex items-start justify-center focus:outline-none"
         >
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}>
-            <div className="flex flex-col gap-3 p-4">
-              <div className="flex items-center justify-between">
-                {props.header}
-                <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
-              </div>
-
-              {props.content}
+          <div className="mt-40 inline-flex max-h-[415px] max-w-[586px] flex-col gap-3 overflow-y-auto rounded-lg bg-white p-4">
+            <div className="flex items-center justify-between">
+              {props.header}
+              <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
             </div>
-          </motion.div>
+
+            {props.content}
+          </div>
         </MotionContent>
       </Portal>
     </Root>

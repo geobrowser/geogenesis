@@ -141,6 +141,7 @@ export type Space = {
   id: string;
   type: SpaceGovernanceType;
   isRootSpace: boolean;
+  daoAddress: string;
   mainVotingPluginAddress: string | null;
   memberAccessPluginAddress: string | null;
   personalSpaceAdminPluginAddress: string | null;

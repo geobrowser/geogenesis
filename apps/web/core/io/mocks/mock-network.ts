@@ -136,6 +136,7 @@ export const makeStubSpace = (spaceId: string): Space => {
     members: [],
     spaceConfig: null,
     createdAtBlock: '36472399',
+    daoAddress: '',
     mainVotingPluginAddress: null,
     memberAccessPluginAddress: '',
     spacePluginAddress: '',

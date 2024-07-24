@@ -4,6 +4,7 @@ import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
+import Link from 'next/link';
 
 import * as React from 'react';
 
@@ -22,18 +23,15 @@ interface Props {
 
 const MotionContent = motion(PopoverContent);
 
-const contentStyles = cva(
-  'z-10 w-[360px] divide-y divide-grey-02 overflow-hidden rounded-lg border border-grey-02 shadow-lg',
-  {
-    variants: {
-      align: {
-        start: 'origin-top-left',
-        center: 'origin-top',
-        end: 'origin-top-right',
-      },
+const contentStyles = cva('z-10 w-[360px] overflow-hidden rounded-lg border border-grey-02 shadow-lg', {
+  variants: {
+    align: {
+      start: 'origin-top-left',
+      center: 'origin-top',
+      end: 'origin-top-right',
     },
-  }
-);
+  },
+});
 
 export function Menu({
   children,
@@ -75,11 +73,41 @@ export function Menu({
   );
 }
 
-type MenuItemProps = { active?: boolean } & React.ComponentPropsWithoutRef<'div'>;
+type MenuItemProps = {
+  active?: boolean;
+  href?: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+  className?: string;
+};
 
-export function MenuItem({ className = '', active = false, children, ...rest }: MenuItemProps) {
+export function MenuItem({ className = '', active = false, children, href, ...rest }: MenuItemProps) {
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={cx(
+          'group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text',
+          className
+        )}
+        {...rest}
+      >
+        <div
+          className={cx(
+            'absolute inset-1 z-0 rounded',
+            active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
+          )}
+        />
+        <div className="relative z-10">{children}</div>
+      </Link>
+    );
+  }
+
   return (
-    <div className={cx('group relative text-button text-text', className)} {...rest}>
+    <button
+      className={cx('group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text', className)}
+      {...rest}
+    >
       <div
         className={cx(
           'absolute inset-1 z-0 rounded',
@@ -87,6 +115,6 @@ export function MenuItem({ className = '', active = false, children, ...rest }: 
         )}
       />
       <div className="relative z-10">{children}</div>
-    </div>
+    </button>
   );
 }
