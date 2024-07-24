@@ -7,11 +7,11 @@ pub struct DeployRequest {
     #[prost(bool, tag="2")]
     pub development_mode: bool,
     #[prost(message, repeated, tag="3")]
-    pub environment: ::prost::alloc::vec::Vec<EnvironmentVariable>,
+    pub parameters: ::prost::alloc::vec::Vec<Parameter>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EnvironmentVariable {
+pub struct Parameter {
     #[prost(string, tag="1")]
     pub key: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
@@ -29,6 +29,8 @@ pub struct DeployResponse {
     pub services: ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     #[prost(string, tag="4")]
     pub reason: ::prost::alloc::string::String,
+    #[prost(string, tag="5")]
+    pub motd: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -49,6 +51,8 @@ pub struct UpdateResponse {
     pub services: ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     #[prost(string, tag="3")]
     pub reason: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub motd: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -69,6 +73,8 @@ pub struct InfoResponse {
     pub package_info: ::core::option::Option<PackageInfo>,
     #[prost(message, optional, tag="5")]
     pub progress: ::core::option::Option<SinkProgress>,
+    #[prost(string, tag="6")]
+    pub motd: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -111,6 +117,8 @@ pub struct DeploymentWithStatus {
     pub package_info: ::core::option::Option<PackageInfo>,
     #[prost(message, optional, tag="5")]
     pub progress: ::core::option::Option<SinkProgress>,
+    #[prost(string, tag="6")]
+    pub motd: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
