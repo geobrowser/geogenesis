@@ -10,7 +10,6 @@ import type { ChangeEvent } from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useToast } from '~/core/hooks/use-toast';
 import { Subgraph } from '~/core/io';
-import { Services } from '~/core/services';
 import { Entity as EntityType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
@@ -41,6 +40,7 @@ import {
 import { NoAvatar } from './no-avatar';
 import { TeamMemberCreatedToast } from './toast';
 import type { Role } from './types';
+import { uploadFileToIpfsAction } from '~/app/api/upload';
 import { cachedFetchEntityType } from '~/app/space/(entity)/[id]/[entityId]/cached-entity-type';
 
 type FindTeamMemberProps = {
@@ -206,8 +206,6 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     [setAvatar, setName, error]
   );
 
-  const { storageClient } = Services.useServices();
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUploadAvatar = useCallback(() => {
@@ -219,7 +217,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
   const handleOnChangeAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       const file = event.target.files[0];
-      const ipfsUri = await storageClient.uploadFile(file);
+      const ipfsUri = await uploadFileToIpfsAction(file);
       const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
       setIsAvatarMenuOpen(false);

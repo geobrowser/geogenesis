@@ -12,7 +12,6 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 
 import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { Services } from '~/core/services';
 import { SpaceType } from '~/core/types';
 import { getImagePath, sleep } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
@@ -26,6 +25,8 @@ import { Upload } from '~/design-system/icons/upload';
 import { RadioGroup } from '~/design-system/radio-group';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
+
+import { uploadFileToIpfsAction } from '~/app/api/upload';
 
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const nameAtom = atom<string>('');
@@ -301,8 +302,6 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
 
   const validName = name.length > 0;
 
-  const { storageClient } = Services.useServices();
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileInputClick = useCallback(() => {
@@ -314,7 +313,7 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const ipfsUri = await storageClient.uploadFile(file);
+      const ipfsUri = await uploadFileToIpfsAction(file);
       const imageValue = Values.toImageValue(ipfsUri);
       setAvatar(imageValue);
     }

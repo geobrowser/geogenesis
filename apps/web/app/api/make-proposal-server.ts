@@ -5,8 +5,9 @@ import { Schedule } from 'effect';
 import * as Effect from 'effect/Effect';
 import { PrivateKeyAccount, PublicClient, WalletClient } from 'viem';
 
-import { Storage } from '~/core/io';
 import { fetchSpace } from '~/core/io/subgraph';
+
+import { uploadToIpfsAction } from './upload';
 
 export class TransactionRevertedError extends Error {
   readonly _tag = 'TransactionRevertedError';
@@ -39,7 +40,6 @@ export type MakeProposalServerOptions = {
   ops: Op[];
   space: string;
   name: string;
-  storageClient: Storage.IStorageClient;
 };
 
 export async function makeProposalServer({
@@ -48,7 +48,6 @@ export async function makeProposalServer({
   wallet,
   space,
   name,
-  storageClient,
   publicClient,
 }: MakeProposalServerOptions) {
   const maybeSpace = await fetchSpace({ id: space });
@@ -61,7 +60,7 @@ export async function makeProposalServer({
     Effect.tryPromise({
       try: async () => {
         const proposal = createEditProposal({ name, ops, author: account.address });
-        return await storageClient.uploadObject(proposal);
+        return await uploadToIpfsAction(proposal);
       },
       catch: error => new IpfsUploadFailedError(`IPFS upload failed: ${error}`),
     }),

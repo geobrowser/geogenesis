@@ -4,13 +4,11 @@ import * as React from 'react';
 import { ReactNode, createContext, useContext, useMemo } from 'react';
 
 import { Environment } from '~/core/environment';
-import { Publish, Storage, Subgraph } from '~/core/io';
+import { Subgraph } from '~/core/io';
 
 type Services = {
-  storageClient: Storage.IStorageClient;
   subgraph: Subgraph.ISubgraph;
   config: Environment.AppConfig;
-  publish: Publish.IPublish;
 };
 
 const ServicesContext = createContext<Services | undefined>(undefined);
@@ -22,13 +20,10 @@ interface Props {
 export function ServicesProvider({ children }: Props) {
   const services = useMemo((): Services => {
     let config = Environment.getConfig();
-    const storageClient = new Storage.StorageClient(config.ipfs);
 
     return {
       config,
-      storageClient,
       subgraph: Subgraph,
-      publish: Publish,
     };
   }, []);
 

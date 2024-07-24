@@ -6,12 +6,11 @@ import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData, getAddress, stringToHex } from 'viem';
 
-import { TransactionWriteFailedError } from '~/core/errors';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { uploadBinary } from '~/core/io/storage/storage';
-import { Services } from '~/core/services';
 import { SpaceGovernanceType } from '~/core/types';
+
+import { IpfsClient } from '../io/ipfs-client';
 
 interface RemoveEditorArgs {
   votingPluginAddress: string | null;
@@ -20,7 +19,6 @@ interface RemoveEditorArgs {
 
 export function useRemoveEditor(args: RemoveEditorArgs) {
   const smartAccount = useSmartAccount();
-  const { storageClient } = Services.useServices();
 
   const tx = useSmartAccountTransaction({
     address: args.votingPluginAddress,
@@ -40,7 +38,7 @@ export function useRemoveEditor(args: RemoveEditorArgs) {
             userAddress: getAddress(editorToRemove) as `0x${string}`,
           });
 
-          const cid = yield* uploadBinary(membershipProposalMetadata, storageClient);
+          const cid = yield* IpfsClient.upload(membershipProposalMetadata);
 
           const callData = getCalldataForGovernanceType({
             type: args.spaceType,

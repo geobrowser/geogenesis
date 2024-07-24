@@ -273,10 +273,6 @@ export function slog({
   );
 }
 
-export function getGeoPersonIdFromOnchainId(address: `0x${string}`, onchainId: string) {
-  return `${address}–${onchainId}`;
-}
-
 export const sleep = (delay: number) => new Promise(resolve => setTimeout(resolve, delay));
 
 export function isPermissionlessSpace(spaceId: string) {

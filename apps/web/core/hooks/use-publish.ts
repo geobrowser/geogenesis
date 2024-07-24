@@ -7,9 +7,8 @@ import { encodeFunctionData, stringToHex } from 'viem';
 import * as React from 'react';
 
 import { TransactionWriteFailedError } from '../errors';
-import { IStorageClient, uploadBinary } from '../io/storage/storage';
+import { IpfsClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';
-import { Services } from '../services';
 import { useStatusBar } from '../state/status-bar-store';
 import { Triple as ITriple, ReviewState, SpaceGovernanceType } from '../types';
 import { Triples } from '../utils/triples';
@@ -26,7 +25,6 @@ interface MakeProposalOptions {
 }
 
 export function usePublish() {
-  const { storageClient } = Services.useServices();
   const { restore, actions: actionsBySpace } = useActionsStore();
   const smartAccount = useSmartAccount();
   const { dispatch } = useStatusBar();
@@ -58,7 +56,6 @@ export function usePublish() {
 
         yield* makeProposal({
           name,
-          storage: storageClient,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -133,7 +130,7 @@ export function usePublish() {
         onSuccess?.();
       }, 3000);
     },
-    [storageClient, restore, actionsBySpace, smartAccount, dispatch]
+    [restore, actionsBySpace, smartAccount, dispatch]
   );
 
   return {
@@ -142,7 +139,6 @@ export function usePublish() {
 }
 
 export function useBulkPublish() {
-  const { storageClient } = Services.useServices();
   const smartAccount = useSmartAccount();
   const { dispatch } = useStatusBar();
 
@@ -167,7 +163,6 @@ export function useBulkPublish() {
 
         yield* makeProposal({
           name,
-          storage: storageClient,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -208,7 +203,7 @@ export function useBulkPublish() {
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
     },
-    [storageClient, smartAccount, dispatch]
+    [smartAccount, dispatch]
   );
 
   return {
@@ -219,7 +214,6 @@ export function useBulkPublish() {
 interface MakeProposalArgs {
   name: string;
   ops: Op[];
-  storage: IStorageClient;
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>>;
   space: {
     id: string;
@@ -231,11 +225,8 @@ interface MakeProposalArgs {
   onChangePublishState: (newState: ReviewState) => void;
 }
 
-// @TODO: depending on the type of space we need to call different functions
-// If it's a public space we call proposeEdits, if it's a personal space we
-// call submitEdits
 function makeProposal(args: MakeProposalArgs) {
-  const { name, ops, smartAccount, space, storage, onChangePublishState } = args;
+  const { name, ops, smartAccount, space, onChangePublishState } = args;
 
   const proposal = createEditProposal({ name, ops, author: smartAccount.account.address });
 
@@ -251,7 +242,7 @@ function makeProposal(args: MakeProposalArgs) {
     }
 
     onChangePublishState('publishing-ipfs');
-    const cid = yield* uploadBinary(proposal, storage);
+    const cid = yield* IpfsClient.upload(proposal);
     onChangePublishState('publishing-contract');
 
     const callData = getCalldataForSpaceGovernanceType({
