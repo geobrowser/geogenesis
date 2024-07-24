@@ -11,4 +11,8 @@ export class SpaceMembers {
       })
       .run(pool);
   }
+
+  static async remove(spaceMember: S.space_members.Whereable) {
+    return await db.deletes('space_members', spaceMember).run(pool);
+  }
 }

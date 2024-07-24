@@ -3,14 +3,16 @@ import { createGeoId } from '@geogenesis/sdk';
 import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Data, Duration, Effect, Either, Predicate, Schedule, Secret, Stream } from 'effect';
+import { Data, Duration, Effect, Secret, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
-import { Proposals, Spaces } from './db';
+import { Spaces } from './db';
 import { Environment } from './environment';
 import { handleEditorsAdded } from './events/editor-added/handler';
 import { ZodEditorAddedStreamResponse } from './events/editor-added/parser';
+import { handleEditorRemoved } from './events/editor-removed/handler';
+import { ZodEditorRemovedStreamResponse } from './events/editor-removed/parser';
 import { getDerivedSpaceIdsFromImportedSpaces } from './events/get-derived-space-ids-from-imported-spaces';
 import { getProposalsForSpaceIds } from './events/get-proposals-for-space-ids';
 import { handleNewGeoBlock } from './events/handle-new-geo-block';
@@ -22,6 +24,8 @@ import { type InitialEditorsAdded, ZodInitialEditorsAddedStreamResponse } from '
 import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
 import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
+import { handleMemberRemoved } from './events/member-removed/handler';
+import { ZodMemberRemovedStreamResponse } from './events/member-removed/parser';
 import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
 import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
 import { getEditsProposalsFromIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
@@ -192,9 +196,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
           const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
           const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
-          // members removed
+          const membersRemoved = ZodMemberRemovedStreamResponse.safeParse(jsonOutput);
           const editorsAdded = ZodEditorAddedStreamResponse.safeParse(jsonOutput);
-          // editors removed
+          const editorsRemoved = ZodEditorRemovedStreamResponse.safeParse(jsonOutput);
 
           const hasValidEvent =
             spacePluginCreatedResponse.success ||
@@ -209,7 +213,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             profilesRegistered.success ||
             executedProposals.success ||
             membersAdded.success ||
-            editorsAdded.success;
+            editorsAdded.success ||
+            membersRemoved ||
+            editorsRemoved;
 
           if (hasValidEvent) {
             console.info(`==================== @BLOCK ${blockNumber} ====================`);
@@ -512,9 +518,31 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             );
           }
 
+          if (membersRemoved.success) {
+            yield* _(
+              handleMemberRemoved(membersRemoved.data.membersRemoved, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
           if (editorsAdded.success) {
             yield* _(
               handleEditorsAdded(editorsAdded.data.editorsAdded, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          if (editorsRemoved.success) {
+            yield* _(
+              handleEditorRemoved(editorsRemoved.data.editorsRemoved, {
                 blockNumber,
                 cursor,
                 timestamp,

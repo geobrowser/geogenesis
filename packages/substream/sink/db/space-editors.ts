@@ -11,4 +11,8 @@ export class SpaceEditors {
       })
       .run(pool);
   }
+
+  static async remove(spaceEditor: S.space_editors.Whereable) {
+    return await db.deletes('space_editors', spaceEditor).run(pool);
+  }
 }

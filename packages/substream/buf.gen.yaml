@@ -1,5 +1,12 @@
+
 version: v1
 plugins:
-  - plugin: es
-    opt: target=ts
-    out: sink/proto/gen
+- plugin: buf.build/community/neoeinstein-prost:v0.2.2
+  out: src/pb
+  opt:
+    - file_descriptor_set=false
+
+- plugin: buf.build/community/neoeinstein-prost-crate:v0.3.1
+  out: src/pb
+  opt:
+    - no_features

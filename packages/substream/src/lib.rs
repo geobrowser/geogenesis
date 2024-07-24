@@ -1,4 +1,5 @@
 pub mod helpers;
+
 mod pb;
 
 use pb::schema::{
@@ -310,7 +311,8 @@ fn map_members_removed(block: eth::v2::Block) -> Result<MembersRemoved, substrea
             if let Some(members_approved) = MemberRemovedEvent::match_and_decode(log) {
                 return Some(MemberRemoved {
                     change_type: "removed".to_string(),
-                    main_voting_plugin_address: format_hex(&log.address()),
+                    dao_address: format_hex(&members_approved.dao),
+                    plugin_address: format_hex(&log.address()),
                     member_address: format_hex(&members_approved.member),
                 });
             }
@@ -350,8 +352,9 @@ fn map_editors_removed(block: eth::v2::Block) -> Result<EditorsRemoved, substrea
             if let Some(members_approved) = EditorRemovedEvent::match_and_decode(log) {
                 return Some(EditorRemoved {
                     change_type: "removed".to_string(),
-                    main_voting_plugin_address: format_hex(&log.address()),
+                    plugin_address: format_hex(&log.address()),
                     editor_address: format_hex(&members_approved.editor),
+                    dao_address: format_hex(&members_approved.dao),
                 });
             }
 
@@ -506,6 +509,8 @@ fn geo_out(
     members_added: MembersAdded,
     editors_added: EditorsAdded,
     personal_admin_plugins_created: GeoPersonalSpaceAdminPluginsCreated,
+    members_removed: MembersRemoved,
+    editors_removed: EditorsRemoved,
 ) -> Result<GeoOutput, substreams::errors::Error> {
     let profiles_registered = profiles_registered.profiles;
     let spaces_created = spaces_created.spaces;
@@ -520,6 +525,8 @@ fn geo_out(
     let executed_proposals = proposals_executed.executed_proposals;
     let members_added = members_added.members;
     let editors_added = editors_added.editors;
+    let members_removed = members_removed.members;
+    let editors_removed = editors_removed.editors;
     let personal_admin_plugins_created = personal_admin_plugins_created.plugins;
 
     Ok(GeoOutput {
@@ -537,5 +544,7 @@ fn geo_out(
         members_added,
         editors_added,
         personal_plugins_created: personal_admin_plugins_created,
+        members_removed,
+        editors_removed,
     })
 }
