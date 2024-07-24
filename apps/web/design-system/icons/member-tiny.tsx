@@ -15,7 +15,7 @@ export function MemberTiny({ color }: Props) {
       <path
         d="M7.53916 7.7068H0.460844C0.501086 5.99886 1.89821 4.6267 3.61582 4.6267H4.38418C6.10179 4.6267 7.49891 5.99886 7.53916 7.7068Z"
         stroke={themeColor}
-        stroke-width="0.919904"
+        strokeWidth="0.919904"
       />
     </svg>
   );

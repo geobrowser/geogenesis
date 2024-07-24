@@ -36,14 +36,14 @@ export async function SpaceMembersContent({ spaceId }: Props) {
 
         {isEditor ? (
           <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            {connectedAddress ? 'Leave space' : 'Connect wallet'}
+            {connectedAddress ? 'Leave space' : 'Sign in to join'}
           </button>
         ) : (
           <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
             {connectedAddress ? (
               <SpaceMembersPopoverMemberRequestButton votingPluginAddress={votingPluginAddress} />
             ) : (
-              'Connect wallet'
+              'Sign in to join'
             )}
           </button>
         )}
