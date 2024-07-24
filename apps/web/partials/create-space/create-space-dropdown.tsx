@@ -19,10 +19,10 @@ export function CreateSpaceDropdown() {
           <Create />
         </button>
       }
-      className="max-w-[96px] bg-white"
+      className="max-w-[98px] bg-white"
     >
       <MenuItem>
-        <p className="py-2 text-center text-button">
+        <p className="text-center text-button">
           <CreateSpaceDialog />
         </p>
       </MenuItem>

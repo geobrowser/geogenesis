@@ -86,7 +86,10 @@ export function MenuItem({ className = '', active = false, children, href, ...re
     return (
       <Link
         href={href}
-        className={cx('group relative flex w-full items-center bg-white text-button text-text', className)}
+        className={cx(
+          'group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text',
+          className
+        )}
         {...rest}
       >
         <div
@@ -102,7 +105,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
 
   return (
     <button
-      className={cx('group relative flex w-full items-center bg-white text-button text-text', className)}
+      className={cx('group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text', className)}
       {...rest}
     >
       <div

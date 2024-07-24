@@ -306,7 +306,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
                   <MenuItem
                   // @TODO add onclick beahvior for menu
                   >
-                    <button className="flex w-full items-center justify-between gap-2 px-3 py-2.5">
+                    <button className="flex w-full items-center justify-between gap-2">
                       <span>Change data source</span>
                       <ChevronRight />
                     </button>
@@ -314,7 +314,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
                   <MenuItem>
                     <button
                       onClick={() => setIsEditingColumns(true)}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
+                      className="flex w-full items-center justify-between gap-2"
                     >
                       <span>Edit columns</span>
                       <ChevronRight />
@@ -323,7 +323,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
                   <TableBlockSchemaConfigurationDialog
                     trigger={
                       <MenuItem>
-                        <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="text-button">Edit types</span>
                           <FilteredTableView />
                         </div>
@@ -354,17 +354,14 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
                   <MenuItem>
                     <Link
                       href={NavUtils.toEntity(spaceId, entityId)}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
+                      className="flex w-full items-center justify-between gap-2"
                     >
                       <span>View config</span>
                       <Cog />
                     </Link>
                   </MenuItem>
                   <MenuItem>
-                    <button
-                      onClick={onCopyBlockId}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
-                    >
+                    <button onClick={onCopyBlockId} className="flex w-full items-center justify-between gap-2">
                       <span>Copy block ID</span>
                       <Copy />
                     </button>
@@ -463,7 +460,7 @@ const ToggleColumn = ({
     <MenuItem>
       <button
         onClick={onToggleColumn}
-        className={cx('flex w-full items-center justify-between gap-2 px-3 py-2.5', !isShown && 'text-grey-03')}
+        className={cx('flex w-full items-center justify-between gap-2', !isShown && 'text-grey-03')}
       >
         <span>{column.name}</span>
         {isShown ? <Eye /> : <EyeHide />}
