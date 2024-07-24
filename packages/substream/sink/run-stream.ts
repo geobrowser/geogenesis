@@ -3,14 +3,16 @@ import { createGeoId } from '@geogenesis/sdk';
 import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
-import { Data, Duration, Effect, Either, Predicate, Schedule, Secret, Stream } from 'effect';
+import { Data, Duration, Effect, Secret, Stream } from 'effect';
 
 import { MANIFEST } from './constants/constants';
 import { readCursor, writeCursor } from './cursor';
-import { Proposals, Spaces } from './db';
+import { Spaces } from './db';
 import { Environment } from './environment';
 import { handleEditorsAdded } from './events/editor-added/handler';
 import { ZodEditorAddedStreamResponse } from './events/editor-added/parser';
+import { handleEditorRemoved } from './events/editor-removed/handler';
+import { ZodEditorRemovedStreamResponse } from './events/editor-removed/parser';
 import { getDerivedSpaceIdsFromImportedSpaces } from './events/get-derived-space-ids-from-imported-spaces';
 import { getProposalsForSpaceIds } from './events/get-proposals-for-space-ids';
 import { handleNewGeoBlock } from './events/handle-new-geo-block';
@@ -195,9 +197,8 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
           const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
           const membersRemoved = ZodMemberRemovedStreamResponse.safeParse(jsonOutput);
-          // members removed
           const editorsAdded = ZodEditorAddedStreamResponse.safeParse(jsonOutput);
-          // editors removed
+          const editorsRemoved = ZodEditorRemovedStreamResponse.safeParse(jsonOutput);
 
           const hasValidEvent =
             spacePluginCreatedResponse.success ||
@@ -212,7 +213,9 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             profilesRegistered.success ||
             executedProposals.success ||
             membersAdded.success ||
-            editorsAdded.success;
+            editorsAdded.success ||
+            membersRemoved ||
+            editorsRemoved;
 
           if (hasValidEvent) {
             console.info(`==================== @BLOCK ${blockNumber} ====================`);
@@ -529,6 +532,17 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           if (editorsAdded.success) {
             yield* _(
               handleEditorsAdded(editorsAdded.data.editorsAdded, {
+                blockNumber,
+                cursor,
+                timestamp,
+                requestId,
+              })
+            );
+          }
+
+          if (editorsRemoved.success) {
+            yield* _(
+              handleEditorRemoved(editorsRemoved.data.editorsRemoved, {
                 blockNumber,
                 cursor,
                 timestamp,

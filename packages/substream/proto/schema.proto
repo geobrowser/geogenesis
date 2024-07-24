@@ -257,8 +257,9 @@ message EditorsAdded {
 
 message EditorRemoved {
   string editor_address = 1;
-  string main_voting_plugin_address = 2;
-  string change_type = 3;
+  string dao_address = 2;
+  string plugin_address = 3;
+  string change_type = 4;
 }
 
 message EditorsRemoved {
@@ -281,4 +282,5 @@ message GeoOutput {
   repeated EditorAdded editors_added = 13;
   repeated GeoPersonalSpaceAdminPluginCreated personal_plugins_created = 14;
   repeated MemberRemoved members_removed = 15;
+  repeated EditorRemoved editors_removed = 16;
 }

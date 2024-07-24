@@ -18,7 +18,7 @@ export function handleMemberRemoved(membersRemoved: MemberRemoved[], block: Bloc
 
     slog({
       requestId: block.requestId,
-      message: `Writing ${schemaMembers.length} added members to DB`,
+      message: `Writing ${schemaMembers.length} removed members to DB`,
     });
 
     const writtenRemovedMembers = yield* _(
