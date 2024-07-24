@@ -7,14 +7,13 @@ import { Environment } from '~/core/environment';
 import { IpfsUploadError } from '~/core/errors';
 import { slog } from '~/core/utils/utils';
 
-class IpfsService {
+export class IpfsService {
   constructor(public ipfsUrl: string) {}
 
   async upload(binary: Uint8Array): Promise<string> {
     const blob = new Blob([binary], { type: 'application/octet-stream' });
     const formData = new FormData();
     formData.append('file', blob);
-
     const url = `${this.ipfsUrl}/api/v0/add`;
     console.log(`Posting to url`, url);
 

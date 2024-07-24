@@ -162,15 +162,13 @@ function fetchEditProposalFromIpfs(
         return proposals;
     }
 
-    yield* _(
-      Effect.fail(
-        new InvalidProcessedProposalContentTypeError(
-          `Invalid processed proposal content type ${validIpfsMetadata.type}`
-        )
-      )
-    );
+    slog({
+      message: `Invalid processed proposal content type ${validIpfsMetadata.type}`,
+      requestId: block.requestId,
+      level: 'warn',
+    });
 
-    return null;
+    return [];
   });
 }
 
