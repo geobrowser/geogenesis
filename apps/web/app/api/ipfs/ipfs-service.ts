@@ -1,5 +1,3 @@
-'use server';
-
 import { Effect, Either, Schedule } from 'effect';
 import { v4 as uuid } from 'uuid';
 

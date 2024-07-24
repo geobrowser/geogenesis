@@ -8,8 +8,6 @@ import { PrivateKeyAccount, PublicClient, WalletClient } from 'viem';
 import { IpfsClient } from '~/core/io/ipfs-client';
 import { fetchSpace } from '~/core/io/subgraph';
 
-import { uploadToIpfsAction } from './upload';
-
 export class TransactionRevertedError extends Error {
   readonly _tag = 'TransactionRevertedError';
 }
