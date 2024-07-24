@@ -39,7 +39,6 @@ use main_voting_plugin::events::{
     ProposalExecuted as ProposalExecutedEvent,
 };
 use majority_voting_base_plugin::events::VoteCast as VoteCastEvent;
-use personal_admin_plugin::events::MemberRemoved as PersonalSpaceMemberRemovedEvent;
 use personal_admin_setup::events::GeoPersonalAdminPluginCreated as GeoPersonalAdminPluginCreatedEvent;
 use space::events::{
     EditsPublished as EditsPublishedEvent, SubspaceAccepted as SubspaceAcceptedEvent,
