@@ -9,10 +9,6 @@ import { slog } from '../../utils/slog';
 import { type EditProposal, type ProposalProcessed } from '../proposals-created/parser';
 import { Decoder, decode } from '~/sink/proto';
 
-class InvalidProcessedProposalContentTypeError extends Error {
-  _tag: 'InvalidProcessedProposalContentTypeError' = 'InvalidProcessedProposalContentTypeError';
-}
-
 function fetchEditProposalFromIpfs(
   processedProposal: {
     ipfsUri: string;

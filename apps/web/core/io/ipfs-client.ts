@@ -3,9 +3,9 @@ import { Effect } from 'effect';
 import { IpfsUploadError } from '~/core/errors';
 
 /**
- * This class provides a simple namespace for interacting with the functions
+ * This class provides a simple namespace for interacting with the API routes
  * used for uploading binary or files to IPFS. All IPFS interactions are done
- * on the server in the upload server actions.
+ * on the server as API routes.
  */
 export class IpfsClient {
   static async upload(binary: Uint8Array): Promise<`ipfs://${string}`> {
@@ -58,7 +58,7 @@ export class IpfsClient {
 }
 
 /**
- * This class provides a simple namespace for interacting with the functions
+ * This class provides a simple namespace for interacting with the API routes
  * used for uploading binary or files to IPFS as effects.
  */
 export class IpfsEffectClient {
