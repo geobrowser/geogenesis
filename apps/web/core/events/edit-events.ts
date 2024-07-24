@@ -70,6 +70,7 @@ export type EditEvent =
     }
   | {
       // @TODO: Make this work with collections
+      // @TODO: add support for preseving entity triple value when converting to collection
       type: 'CHANGE_TRIPLE_TYPE';
       payload: {
         type: TripleValueType;

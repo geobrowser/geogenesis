@@ -1,10 +1,12 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import cx from 'classnames';
 import { useAtom } from 'jotai';
 import pluralize from 'pluralize';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
@@ -13,6 +15,7 @@ import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
+import { Search } from '~/design-system/icons/search';
 import { Tag } from '~/design-system/tag';
 import { Toggle } from '~/design-system/toggle';
 
@@ -24,7 +27,10 @@ type SelectEntityProps = {
   spaceId: string;
   allowedTypes?: RelationValueType[];
   placeholder?: string;
-  className?: string;
+  wrapperClassName?: string;
+  inputClassName?: string;
+  resultsClassName?: string;
+  withSearchIcon?: boolean;
 };
 
 export const SelectEntity = ({
@@ -32,7 +38,10 @@ export const SelectEntity = ({
   spaceId,
   allowedTypes,
   placeholder = 'Find or create...',
-  className = '',
+  wrapperClassName = '',
+  inputClassName = '',
+  resultsClassName = '',
+  withSearchIcon = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
 
@@ -92,19 +101,34 @@ export const SelectEntity = ({
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
+  // Close on outside click
+  const ref = useRef(null);
+  useOnClickOutside(() => {
+    onQueryChange('');
+  }, ref);
+
   return (
-    <>
+    <div ref={ref} className={wrapperClassName}>
       <input
         type="text"
         value={query}
         onChange={({ currentTarget: { value } }) => onQueryChange(value)}
         placeholder={placeholder}
-        className={className}
+        className={cx(withSearchIcon && 'pl-9', inputClassName)}
       />
-
+      {withSearchIcon && (
+        <div className="absolute left-3 top-3.5 z-10">
+          <Search />
+        </div>
+      )}
       {query && (
-        <div className="absolute z-[1000]">
-          <div className="w-[400px] overflow-hidden rounded-md border border-divider bg-white">
+        <div className={resultsClassName}>
+          <div
+            className={cx(
+              'w-[400px] overflow-hidden rounded-md border border-divider bg-white',
+              withSearchIcon && 'rounded-t-none'
+            )}
+          >
             {!result ? (
               <div className="flex max-h-[180px] flex-col overflow-y-auto">
                 {!results?.length && isLoading && (
@@ -167,7 +191,6 @@ export const SelectEntity = ({
                   </div>
                 </div>
                 <div className="flex max-h-[180px] flex-col overflow-y-auto">
-                  {/* @TODO create triple */}
                   <button
                     onClick={() => {
                       onDone({
@@ -184,7 +207,6 @@ export const SelectEntity = ({
                       </div>
                     </div>
                     <div className="flex items-center">
-                      {/* @TODO add spaces */}
                       {(result.spaces ?? []).slice(0, 3).map(space => (
                         <div
                           key={space.spaceId}
@@ -210,7 +232,6 @@ export const SelectEntity = ({
                       <div>
                         <div className="truncate text-button text-text">{space.name}</div>
                         <div>
-                          {/* @TODO add space type */}
                           <Tag>Space</Tag>
                         </div>
                       </div>
@@ -238,6 +259,6 @@ export const SelectEntity = ({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };

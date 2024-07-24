@@ -164,3 +164,8 @@ textarea::placeholder {
   font-size: inherit;
   color: inherit;
 }
+
+/* Radix UI utility classes */
+.elevated-popover > [data-radix-popper-content-wrapper] {
+  z-index: 1001 !important;
+}
