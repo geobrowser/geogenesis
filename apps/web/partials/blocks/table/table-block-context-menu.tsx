@@ -12,7 +12,6 @@ import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
-import { useCallback } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
@@ -263,7 +262,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
   const { spaces } = useSpaces();
   const space = spaces.find(s => s.id === type.space);
 
-  const onCopyViewId = async () => {
+  const onCopyBlockId = async () => {
     try {
       await navigator.clipboard.writeText(entityId);
       setIsMenuOpen(false);
@@ -300,30 +299,32 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
           className="z-100 block !w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           align="end"
         >
-          {!isEditingColumns ? (
+          {!isEditingColumns && (
             <>
-              <MenuItem>
-                <button onClick={onCopyViewId} className="flex w-full items-center justify-between gap-2 px-3 py-2.5">
-                  <span>Copy view ID</span>
-                  <Copy />
-                </button>
-              </MenuItem>
-              <MenuItem>
-                <Link
-                  href={NavUtils.toEntity(spaceId, entityId)}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
-                >
-                  <span>View config</span>
-                  <Cog />
-                </Link>
-              </MenuItem>
               {isEditing && (
                 <>
+                  <MenuItem
+                  // @TODO add onclick beahvior for menu
+                  >
+                    <button className="flex w-full items-center justify-between gap-2 px-3 py-2.5">
+                      <span>Change data source</span>
+                      <ChevronRight />
+                    </button>
+                  </MenuItem>
+                  <MenuItem>
+                    <button
+                      onClick={() => setIsEditingColumns(true)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
+                    >
+                      <span>Edit columns</span>
+                      <ChevronRight />
+                    </button>
+                  </MenuItem>
                   <TableBlockSchemaConfigurationDialog
                     trigger={
                       <MenuItem>
                         <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-                          <span className="text-button">Edit type</span>
+                          <span className="text-button">Edit types</span>
                           <FilteredTableView />
                         </div>
                       </MenuItem>
@@ -351,18 +352,28 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
                     }
                   />
                   <MenuItem>
-                    <button
-                      onClick={() => setIsEditingColumns(true)}
+                    <Link
+                      href={NavUtils.toEntity(spaceId, entityId)}
                       className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
                     >
-                      <span>Edit columns</span>
-                      <ChevronRight />
+                      <span>View config</span>
+                      <Cog />
+                    </Link>
+                  </MenuItem>
+                  <MenuItem>
+                    <button
+                      onClick={onCopyBlockId}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
+                    >
+                      <span>Copy block ID</span>
+                      <Copy />
                     </button>
                   </MenuItem>
                 </>
               )}
             </>
-          ) : (
+          )}
+          {isEditingColumns && (
             <>
               <MenuItem className="border-b border-grey-02">
                 <button
