@@ -17,7 +17,7 @@ import { SpaceType } from '~/core/types';
 import { getImagePath, sleep } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 
-import { Button, IconButton, SmallButton, SquareButton } from '~/design-system/button';
+import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
@@ -65,6 +65,9 @@ export function CreateSpaceDialog() {
         spaceAvatarUri: avatar,
       });
 
+      console.log('spaceId', { spaceId });
+
+      // @ts-expect-error
       if (!spaceId) {
         throw new Error(`Creating space failed`);
       }

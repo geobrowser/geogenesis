@@ -1,7 +1,10 @@
+'use client';
+
+import { useMutation } from '@tanstack/react-query';
+
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
 import { SpaceType } from '../types';
-import { deploySpace } from '~/app/api/deploy';
 
 interface DeployArgs {
   type: SpaceType;
@@ -12,19 +15,38 @@ interface DeployArgs {
 export function useDeploySpace() {
   const smartAccount = useSmartAccount();
 
-  const deploy = async (args: DeployArgs) => {
-    if (!smartAccount) {
-      return;
-    }
+  const { mutate, status, error } = useMutation({
+    mutationFn: async (args: DeployArgs) => {
+      if (!smartAccount) {
+        return;
+      }
 
-    // @TODO: Effectify
-    return await deploySpace({
-      ...args,
-      initialEditorAddress: smartAccount?.account.address,
-    });
-  };
+      const initialEditorAddress = smartAccount?.account.address;
+
+      if (!initialEditorAddress) {
+        return;
+      }
+
+      const { spaceAvatarUri, spaceName, type } = args;
+
+      const url = new URL(
+        `/api/space/deploy?spaceName=${spaceName}&type=${type}&initialEditorAddress=${initialEditorAddress}`,
+        window.location.href
+      );
+
+      if (spaceAvatarUri) {
+        url.searchParams.set('spaceAvatarUri', spaceAvatarUri);
+      }
+
+      const deployResult = await fetch(url);
+
+      const json: { spaceId: string } = await deployResult.json();
+      return json.spaceId;
+    },
+  });
 
   return {
-    deploy,
+    deploy: mutate,
+    status,
   };
 }

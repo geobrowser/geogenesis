@@ -1,5 +1,3 @@
-'use server';
-
 import { SupportedNetworks } from '@aragon/osx-commons-configs';
 import {
   DAOFactory,
@@ -30,14 +28,14 @@ import { Ops } from '~/core/utils/ops';
 import { Triples } from '~/core/utils/triples';
 import { slog } from '~/core/utils/utils';
 
+import { publicClient, signer, walletClient } from '../../client';
+import { abi as DaoFactoryAbi } from './abi';
 import {
   CreateGeoDaoParams,
   getGovernancePluginInstallItem,
   getPersonalSpaceGovernancePluginInstallItem,
   getSpacePluginInstallItem,
-} from '../dao/encodings';
-import { abi as DaoFactoryAbi } from './abi';
-import { publicClient, signer, walletClient } from './client';
+} from '~/app/dao/encodings';
 
 const deployParams = {
   network: SupportedNetworks.LOCAL, // I don't think this matters but is required by Aragon SDK
@@ -50,8 +48,9 @@ const deployParams = {
 interface DeployArgs {
   type: SpaceType;
   spaceName: string;
-  spaceAvatarUri: string;
+  spaceAvatarUri: string | null;
   initialEditorAddress: string;
+  baseUrl: string;
 }
 
 export async function deploySpace(args: DeployArgs) {
@@ -66,7 +65,7 @@ export async function deploySpace(args: DeployArgs) {
   });
 
   // @TODO: Effectify and use uploadBinary helper
-  const firstBlockContentUri = await IpfsClient.upload(initialContent);
+  const firstBlockContentUri = await IpfsClient.upload(initialContent, args.baseUrl);
 
   const spacePluginInstallItem = getSpacePluginInstallItem({
     firstBlockContentUri: `ipfs://${firstBlockContentUri}`,

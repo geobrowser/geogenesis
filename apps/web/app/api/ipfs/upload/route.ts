@@ -11,8 +11,6 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const file = formData.get('file') as File;
 
-  console.log('request', { file });
-
   if (!file) {
     return new Response('No file provided', { status: 400 });
   }
@@ -24,6 +22,7 @@ export async function POST(request: Request) {
     Effect.tryPromise({
       try: async () => {
         const hash = await ipfs.upload(Buffer.from(await file.arrayBuffer()));
+        console.log('hash', hash);
         return `ipfs://${hash}` as const;
       },
       catch: error => new IpfsUploadError(`IPFS upload failed: ${error}`),
