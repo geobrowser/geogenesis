@@ -17,7 +17,7 @@ import { SpaceType } from '~/core/types';
 import { getImagePath, sleep } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 
-import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { Button, IconButton, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
@@ -348,11 +348,9 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
                 Upload
               </SmallButton>
             </label>
-            {avatar !== '' && (
-              <div>
-                <SquareButton onClick={() => setAvatar('')} icon={<Trash />} />
-              </div>
-            )}
+            <div>
+              <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
+            </div>
             <input
               ref={fileInputRef}
               accept="image/png, image/jpeg"

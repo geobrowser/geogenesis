@@ -82,7 +82,9 @@ export const SquareButton = forwardRef(function SquareButton(
   const squareButtonClassNames = cva([
     'relative box-border flex h-6 w-6 items-center justify-center rounded-sm border bg-white p-1 text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
     !isActive ? 'border-grey-02' : 'border-text !bg-bg !text-text',
-    !disabled ? 'cursor-pointer' : 'cursor-not-allowed',
+    !disabled
+      ? 'cursor-pointer'
+      : '!hover:border-divider !hover:bg-divider cursor-not-allowed !border-divider !bg-divider',
   ]);
 
   return (
