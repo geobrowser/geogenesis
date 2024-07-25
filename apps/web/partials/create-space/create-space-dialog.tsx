@@ -65,9 +65,6 @@ export function CreateSpaceDialog() {
         spaceAvatarUri: avatar,
       });
 
-      console.log('spaceId', { spaceId });
-
-      // @ts-expect-error
       if (!spaceId) {
         throw new Error(`Creating space failed`);
       }

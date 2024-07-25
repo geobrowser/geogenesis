@@ -15,16 +15,16 @@ interface DeployArgs {
 export function useDeploySpace() {
   const smartAccount = useSmartAccount();
 
-  const { mutate, status, error } = useMutation({
+  const { mutateAsync } = useMutation({
     mutationFn: async (args: DeployArgs) => {
       if (!smartAccount) {
-        return;
+        return null;
       }
 
       const initialEditorAddress = smartAccount?.account.address;
 
       if (!initialEditorAddress) {
-        return;
+        return null;
       }
 
       const { spaceAvatarUri, spaceName, type } = args;
@@ -34,19 +34,17 @@ export function useDeploySpace() {
         window.location.href
       );
 
-      if (spaceAvatarUri) {
+      if (spaceAvatarUri !== '') {
         url.searchParams.set('spaceAvatarUri', spaceAvatarUri);
       }
 
       const deployResult = await fetch(url);
-
       const json: { spaceId: string } = await deployResult.json();
       return json.spaceId;
     },
   });
 
   return {
-    deploy: mutate,
-    status,
+    deploy: mutateAsync,
   };
 }

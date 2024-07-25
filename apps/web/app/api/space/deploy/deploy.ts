@@ -19,7 +19,6 @@ import { encodeFunctionData, getAddress, stringToHex, zeroAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { ID } from '~/core/id';
-import { IpfsClient } from '~/core/io/ipfs-client';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
@@ -29,6 +28,7 @@ import { Triples } from '~/core/utils/triples';
 import { slog } from '~/core/utils/utils';
 
 import { publicClient, signer, walletClient } from '../../client';
+import { IpfsService } from '../../ipfs/ipfs-service';
 import { abi as DaoFactoryAbi } from './abi';
 import {
   CreateGeoDaoParams,
@@ -65,7 +65,7 @@ export async function deploySpace(args: DeployArgs) {
   });
 
   // @TODO: Effectify and use uploadBinary helper
-  const firstBlockContentUri = await IpfsClient.upload(initialContent, args.baseUrl);
+  const firstBlockContentUri = await new IpfsService(Environment.getConfig().ipfs).upload(initialContent);
 
   const spacePluginInstallItem = getSpacePluginInstallItem({
     firstBlockContentUri: `ipfs://${firstBlockContentUri}`,
