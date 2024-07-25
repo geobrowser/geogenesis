@@ -320,68 +320,71 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
   };
 
   return (
-    <>
+    <div className="space-y-4">
       <StepContents childKey="onboarding">
-        <div className="flex w-full justify-center">
-          <div className="inline-block pb-4">
+        <div className="space-y-4">
+          <div className="flex justify-center">
+            <div className="overflow-hidden rounded-lg bg-cover bg-center shadow-lg">
+              <div className="overflow-hidden rounded-lg">
+                {avatar ? (
+                  <div
+                    style={{
+                      backgroundImage: `url(${getImagePath(avatar)})`,
+                      height: 152,
+                      width: 152,
+                      backgroundSize: 'cover',
+                      backgroundRepeat: 'no-repeat',
+                    }}
+                  />
+                ) : (
+                  <BoringAvatar size={154} name={address} variant="beam" square />
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-center gap-1.5 pb-4">
+            <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
+              <SmallButton icon={<Upload />} onClick={handleFileInputClick}>
+                Upload
+              </SmallButton>
+            </label>
+            {avatar !== '' && (
+              <div>
+                <SquareButton onClick={() => setAvatar('')} icon={<Trash />} />
+              </div>
+            )}
             <input
-              placeholder={placeholderMessage[spaceType as SpaceType]}
-              className="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
-              value={name}
-              onChange={({ currentTarget: { value } }) => setName(value)}
-              autoFocus
+              ref={fileInputRef}
+              accept="image/png, image/jpeg"
+              id="avatar-file"
+              onChange={handleChange}
+              type="file"
+              className="hidden"
             />
           </div>
         </div>
-        <div className="flex justify-center pb-4">
-          <div className="rounded-lg border-8 border-white bg-cover bg-center shadow-card">
-            <div className="overflow-hidden rounded-lg">
-              {avatar ? (
-                <div
-                  style={{
-                    backgroundImage: `url(${getImagePath(avatar)})`,
-                    height: 154,
-                    width: 154,
-                    backgroundSize: 'cover',
-                    backgroundRepeat: 'no-repeat',
-                  }}
-                />
-              ) : (
-                <BoringAvatar size={154} name={address} variant="beam" square />
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center justify-center gap-1.5 pb-4">
-          <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
-            <SmallButton icon={<Upload />} onClick={handleFileInputClick}>
-              Upload
-            </SmallButton>
-          </label>
-          {avatar !== '' && (
-            <div>
-              <SquareButton onClick={() => setAvatar('')} icon={<Trash />} />
-            </div>
-          )}
+      </StepContents>
+      <div className="flex w-full flex-col items-center justify-center gap-3">
+        <div className="inline-block">
           <input
-            ref={fileInputRef}
-            accept="image/png, image/jpeg"
-            id="avatar-file"
-            onChange={handleChange}
-            type="file"
-            className="hidden"
+            placeholder={placeholderMessage[spaceType as SpaceType]}
+            className="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
+            value={name}
+            onChange={({ currentTarget: { value } }) => setName(value)}
+            autoFocus
           />
         </div>
         <Text as="h3" variant="body" className="text-center !text-base">
-          You can update this later.
+          You can update this at any time.
         </Text>
-      </StepContents>
+      </div>
+
       <div className="absolute inset-x-4 bottom-4 flex">
         <Button variant="secondary" disabled={!validName} onClick={onNext} className="w-full">
           Create Space
         </Button>
       </div>
-    </>
+    </div>
   );
 }
 
