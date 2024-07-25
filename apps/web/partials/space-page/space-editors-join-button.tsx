@@ -16,7 +16,7 @@ export function SpaceEditorsJoinButton({ votingPluginAddress }: Props) {
     await requestToBeEditor();
   };
 
-  const text = status === 'idle' ? 'Request to be an editor' : status === 'pending' ? 'Pending...' : 'Requested';
+  const text = status === 'idle' ? 'Join' : status === 'pending' ? 'Pending...' : 'Requested';
 
   return (
     <button

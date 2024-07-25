@@ -16,7 +16,7 @@ export function SpaceMembersJoinButton({ votingPluginAddress }: Props) {
     await requestToBeMember();
   };
 
-  const text = status === 'idle' ? 'Request to join' : status === 'pending' ? 'Pending...' : 'Requested';
+  const text = status === 'idle' ? 'Join' : status === 'pending' ? 'Pending...' : 'Requested';
 
   return (
     <button
