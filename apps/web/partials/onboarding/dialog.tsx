@@ -279,12 +279,19 @@ type StepOnboardingProps = {
 };
 
 const placeholderMessage: Record<SpaceType, string> = {
-  personal: 'Your name',
+  personal: 'Personal name',
   company: 'Company name',
   nonprofit: 'Nonprofit name',
 
-  // Should never trigger default
-  default: '',
+  // Should never trigger these governance types
+  default: 'Space name',
+  'academic-field': 'Academic field name',
+  region: 'Region name',
+  industry: 'Industry name',
+  protocol: 'Protocol name',
+  dao: 'DAO name',
+  'government-org': 'Government org name',
+  'interest-group': 'Interest group name',
 };
 
 function StepOnboarding({ onNext, address }: StepOnboardingProps) {
@@ -400,13 +407,12 @@ const retryMessage: Record<Step, string> = {
   completed: '',
 };
 
-const completeMessage: Record<SpaceType, string> = {
+type SpaceTypeSubsetForOnboarding = Extract<SpaceType, 'personal' | 'company' | 'nonprofit'>;
+
+const completeMessage: Record<SpaceTypeSubsetForOnboarding, string> = {
   personal: 'Go to my personal space',
   company: 'Go to my company space',
   nonprofit: 'Go to my nonprofit space',
-
-  // Should never trigger default
-  default: '',
 };
 
 const complete: Record<number, { label: string; image: string }> = {
@@ -466,7 +472,7 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Link href={NavUtils.toSpace(spaceId)} className="w-full" onClick={hideOnboarding}>
             <Button className="w-full" disabled={step !== 'completed'}>
-              {completeMessage[accountType as SpaceType]}
+              {completeMessage[accountType as SpaceTypeSubsetForOnboarding]}
             </Button>
           </Link>
         </div>
