@@ -195,8 +195,8 @@ export type EditProposal = Proposal & {
 };
 
 const ZodImportEditSetTriplePayload = z.object({
-  entity: z.instanceof(Uint8Array).transform(a => a.toString()),
-  attribute: z.instanceof(Uint8Array).transform(a => a.toString()),
+  entity: z.string(),
+  attribute: z.string(),
   // zod has issues with discriminated unions. We set the value
   // to any here and trust that it is constructed into the correct
   // format once it's decoded.
@@ -235,8 +235,8 @@ const ZodImportEditSetTriplePayload = z.object({
 });
 
 const ZodImportEditDeleteTriplePayload = z.object({
-  entity: z.instanceof(Uint8Array).transform(a => a.toString()),
-  attribute: z.instanceof(Uint8Array).transform(a => a.toString()),
+  entity: z.string(),
+  attribute: z.string(),
 });
 
 const ZodImportEditSetTripleOp = z.object({

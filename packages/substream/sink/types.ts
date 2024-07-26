@@ -27,8 +27,8 @@ export type Op =
   | {
       type: 'SET_TRIPLE';
       triple: {
-        entityId: string;
-        attributeId: string;
+        entity: string;
+        attribute: string;
         value: {
           type: ValueType;
           value: string;
@@ -38,8 +38,8 @@ export type Op =
   | {
       type: 'DELETE_TRIPLE';
       triple: {
-        entityId: string;
-        attributeId: string;
+        entity: string;
+        attribute: string;
         value: Record<string, never>;
       };
     };

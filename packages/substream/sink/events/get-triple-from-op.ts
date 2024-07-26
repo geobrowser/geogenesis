@@ -3,9 +3,7 @@ import type * as S from 'zapatos/schema';
 import type { BlockEvent, Op } from '../types';
 
 export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.triples.Insertable {
-  const { entityId, attributeId } = op.triple;
-  const entity_id = entityId;
-  const attribute_id = attributeId;
+  const { entity, attribute } = op.triple;
   const space_id = spaceId;
 
   if (op.type === 'SET_TRIPLE') {
@@ -19,8 +17,8 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
 
     return {
       space_id,
-      entity_id,
-      attribute_id,
+      entity_id: entity,
+      attribute_id: attribute,
       value_type,
       entity_value_id,
       text_value,
@@ -33,8 +31,8 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
 
   return {
     space_id,
-    entity_id,
-    attribute_id,
+    entity_id: entity,
+    attribute_id: attribute,
     value_type: 'TEXT', // this doesn't matter for deletes, but we populate it anyway for more ergonomic types
     created_at: block.timestamp,
     created_at_block: block.blockNumber,

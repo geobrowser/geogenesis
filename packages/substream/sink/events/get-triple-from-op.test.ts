@@ -8,8 +8,8 @@ describe('tripleFromOp', () => {
       {
         type: 'SET_TRIPLE',
         triple: {
-          attributeId: 'attribute-id',
-          entityId: 'entity-id',
+          attribute: 'attribute-id',
+          entity: 'entity-id',
           value: {
             type: 'TEXT',
             value: 'test value',
@@ -44,8 +44,8 @@ describe('tripleFromOp', () => {
       {
         type: 'DELETE_TRIPLE',
         triple: {
-          attributeId: 'attribute-id',
-          entityId: 'entity-id',
+          attribute: 'attribute-id',
+          entity: 'entity-id',
           value: {},
         },
       },
