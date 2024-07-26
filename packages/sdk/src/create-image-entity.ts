@@ -5,8 +5,8 @@ type CreateImageEntityOpsReturnType = [
   {
     type: 'SET_TRIPLE',
     triple: {
-      entityId: string;
-      attributeId: typeof SYSTEM_IDS.TYPES;
+      entity: string;
+      attribute: typeof SYSTEM_IDS.TYPES;
       value: {
         type: 'ENTITY';
         value: typeof SYSTEM_IDS.IMAGE;
@@ -16,8 +16,8 @@ type CreateImageEntityOpsReturnType = [
   {
     type: 'SET_TRIPLE',
     triple: {
-      entityId: string;
-      attributeId: typeof SYSTEM_IDS.IMAGE_URL_ATTRIBUTE;
+      entity: string;
+      attribute: typeof SYSTEM_IDS.IMAGE_URL_ATTRIBUTE;
       value: {
         type: 'URL';
         value: string;
@@ -38,8 +38,8 @@ export function createImageEntityOps(src: string): CreateImageEntityOpsReturnTyp
     {
       type: 'SET_TRIPLE',
       triple: {
-        entityId,
-        attributeId: SYSTEM_IDS.TYPES,
+        entity: entityId,
+        attribute: SYSTEM_IDS.TYPES,
         value: {
           type: 'ENTITY',
           value: SYSTEM_IDS.IMAGE
@@ -49,8 +49,8 @@ export function createImageEntityOps(src: string): CreateImageEntityOpsReturnTyp
     {
       type: 'SET_TRIPLE',
       triple: {
-        entityId,
-        attributeId: SYSTEM_IDS.IMAGE_URL_ATTRIBUTE,
+        entity: entityId,
+        attribute: SYSTEM_IDS.IMAGE_URL_ATTRIBUTE,
         value: {
           type: 'URL',
           value: src

@@ -18,7 +18,7 @@ export function createEditProposal(
     name,
     ops: ops.map(o => {
       return new OpBinary({
-        opType: o.type === 'SET_TRIPLE' ? OpType.SET_TRIPLE : OpType.DELETE_TRIPLE,
+        type: o.type === 'SET_TRIPLE' ? OpType.SET_TRIPLE : OpType.DELETE_TRIPLE,
         triple: Triple.fromJson(o.triple) // janky but works
       })
     }),

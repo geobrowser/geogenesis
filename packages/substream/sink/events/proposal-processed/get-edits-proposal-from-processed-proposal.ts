@@ -1,4 +1,4 @@
-import { ActionType, Import, IpfsMetadata } from '@geogenesis/sdk/proto';
+import { Import } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 
 import { Spaces } from '../../db';
@@ -17,12 +17,11 @@ function fetchEditProposalFromIpfs(
   block: BlockEvent
 ) {
   return Effect.gen(function* (_) {
-    // @TODO: Might be the personal plugin
-    const maybeSpaceIdForVotingPlugin = yield* _(
+    const maybeSpaceIdForSpacePlugin = yield* _(
       Effect.promise(() => Spaces.findForSpacePlugin(processedProposal.pluginAddress))
     );
 
-    if (!maybeSpaceIdForVotingPlugin) {
+    if (!maybeSpaceIdForSpacePlugin) {
       slog({
         message: `Matching space in Proposal not found for plugin address ${processedProposal.pluginAddress}`,
         requestId: block.requestId,
@@ -71,7 +70,7 @@ function fetchEditProposalFromIpfs(
       return null;
     }
 
-    const validIpfsMetadata = yield* _(decode(() => IpfsMetadata.fromBinary(ipfsContent)));
+    const validIpfsMetadata = yield* _(Decoder.decodeIpfsMetadata(ipfsContent));
 
     if (!validIpfsMetadata) {
       // @TODO: Effectify error handling
@@ -79,8 +78,14 @@ function fetchEditProposalFromIpfs(
       return null;
     }
 
+    console.log('validIpfsMetadata', {
+      name: validIpfsMetadata.name,
+      type: validIpfsMetadata.type,
+      id: validIpfsMetadata.id,
+    });
+
     switch (validIpfsMetadata.type) {
-      case ActionType.ADD_EDIT: {
+      case 'ADD_EDIT': {
         const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));
 
         if (!parsedContent) {
@@ -99,7 +104,7 @@ function fetchEditProposalFromIpfs(
           // but for actions that don't have a proposal we don't know who triggered the action, or
           // if the person who triggered the action is the person who actually wrote the content.
           creator: parsedContent.authors[0] ? getChecksumAddress(parsedContent.authors[0]) : '',
-          space: maybeSpaceIdForVotingPlugin.id,
+          space: maybeSpaceIdForSpacePlugin.id,
           endTime: block.timestamp.toString(),
           startTime: block.timestamp.toString(),
           metadataUri: processedProposal.ipfsUri,
@@ -109,7 +114,7 @@ function fetchEditProposalFromIpfs(
       }
       // The initial content set might not be an Edit and instead be an import. If it's an import
       // we need to turn every Edit in the import into an individual EditProposal.
-      case ActionType.IMPORT_SPACE:
+      case 'IMPORT_SPACE':
         const importResult = yield* _(decode(() => Import.fromBinary(ipfsContent)));
 
         if (!importResult) {
@@ -121,7 +126,7 @@ function fetchEditProposalFromIpfs(
             const ipfsContent = yield* _(getFetchIpfsContentEffect(hash));
             if (!ipfsContent) return null;
 
-            const validIpfsMetadata = yield* _(decode(() => IpfsMetadata.fromBinary(ipfsContent)));
+            const validIpfsMetadata = yield* _(Decoder.decodeIpfsMetadata(ipfsContent));
             if (!validIpfsMetadata) return null;
 
             return yield* _(Decoder.decodeImportEdit(ipfsContent));
@@ -146,7 +151,7 @@ function fetchEditProposalFromIpfs(
             pluginAddress: getChecksumAddress(processedProposal.pluginAddress),
             ops: e.ops as Op[],
             creator: getChecksumAddress(e.createdBy),
-            space: maybeSpaceIdForVotingPlugin.id,
+            space: maybeSpaceIdForSpacePlugin.id,
             endTime: block.timestamp.toString(),
             startTime: block.timestamp.toString(),
             metadataUri: processedProposal.ipfsUri,

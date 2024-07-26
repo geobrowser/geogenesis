@@ -9,10 +9,10 @@ interface CreateCollectionItemArgs {
 }
 
 type CreateCollectionItemTypeOp = {
-  opType: 'SET_TRIPLE';
+  type: 'SET_TRIPLE';
   triple: {
-    attributeId: typeof SYSTEM_IDS.TYPES;
-    entityId: string;
+    attribute: typeof SYSTEM_IDS.TYPES;
+    entity: string;
     value: {
       type: 'ENTITY';
       value: typeof SYSTEM_IDS.COLLECTION_ITEM_TYPE;
@@ -21,10 +21,10 @@ type CreateCollectionItemTypeOp = {
 };
 
 type CreateCollectionItemCollectionReferenceOp = {
-  opType: 'SET_TRIPLE';
+  type: 'SET_TRIPLE';
   triple: {
-    attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE;
-    entityId: string;
+    attribute: typeof SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE;
+    entity: string;
     value: {
       type: 'ENTITY';
       value: string;
@@ -33,10 +33,10 @@ type CreateCollectionItemCollectionReferenceOp = {
 };
 
 type CreateCollectionItemEntityReferenceOp = {
-  opType: 'SET_TRIPLE';
+  type: 'SET_TRIPLE';
   triple: {
-    attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE;
-    entityId: string;
+    attribute: typeof SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE;
+    entity: string;
     value: {
       type: 'ENTITY';
       value: string;
@@ -45,10 +45,10 @@ type CreateCollectionItemEntityReferenceOp = {
 };
 
 interface CreateCollectionItemIndexOp {
-  opType: 'SET_TRIPLE';
+  type: 'SET_TRIPLE';
   triple: {
-    attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_INDEX;
-    entityId: string;
+    attribute: typeof SYSTEM_IDS.COLLECTION_ITEM_INDEX;
+    entity: string;
     value: {
       type: 'TEXT';
       value: string;
@@ -69,10 +69,10 @@ export function createCollectionItem(
   return [
     // Type of Collection Item
     {
-      opType: 'SET_TRIPLE',
+      type: 'SET_TRIPLE',
       triple: {
-        attributeId: SYSTEM_IDS.TYPES,
-        entityId: newEntityId,
+        attribute: SYSTEM_IDS.TYPES,
+        entity: newEntityId,
         value: {
           type: 'ENTITY',
           value: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
@@ -81,10 +81,10 @@ export function createCollectionItem(
     },
     // Entity value for the collection itself
     {
-      opType: 'SET_TRIPLE',
+      type: 'SET_TRIPLE',
       triple: {
-        attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
-        entityId: newEntityId,
+        attribute: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
+        entity: newEntityId,
         value: {
           type: 'ENTITY',
           value: args.collectionId,
@@ -93,10 +93,10 @@ export function createCollectionItem(
     },
     // Entity value for the entity referenced by this collection item
     {
-      opType: 'SET_TRIPLE',
+      type: 'SET_TRIPLE',
       triple: {
-        attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
-        entityId: newEntityId,
+        attribute: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
+        entity: newEntityId,
         value: {
           type: 'ENTITY',
           value: args.entityId,
@@ -104,10 +104,10 @@ export function createCollectionItem(
       }
     },
     {
-      opType: 'SET_TRIPLE',
+      type: 'SET_TRIPLE',
       triple: {
-        attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-        entityId: newEntityId,
+        attribute: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
+        entity: newEntityId,
         value: {
           type: 'TEXT',
           value: INITIAL_COLLECTION_ITEM_INDEX_VALUE,

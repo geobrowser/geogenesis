@@ -8,7 +8,7 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
   const attribute_id = attributeId;
   const space_id = spaceId;
 
-  if (op.opType === 'SET_TRIPLE') {
+  if (op.type === 'SET_TRIPLE') {
     const value = op.triple.value;
 
     const value_type = value.type;

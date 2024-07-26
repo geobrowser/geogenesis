@@ -7,8 +7,8 @@ describe("create-edit-proposal", () => {
     const editBinary = createEditProposal({name: "test", ops: [{
       type: 'SET_TRIPLE',
       triple: {
-        attributeId: btoa('test-attribute-id'),
-        entityId: btoa('test-entity-id'),
+        attribute: btoa('test-attribute-id'),
+        entity: btoa('test-entity-id'),
         value: {
           type: 'TEXT',
           value: btoa('test value')

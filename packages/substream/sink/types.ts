@@ -25,7 +25,7 @@ export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX'
 // trust that it is constructed into the correct ormat once it's decoded.
 export type Op =
   | {
-      opType: 'SET_TRIPLE';
+      type: 'SET_TRIPLE';
       triple: {
         entityId: string;
         attributeId: string;
@@ -36,7 +36,7 @@ export type Op =
       };
     }
   | {
-      opType: 'DELETE_TRIPLE';
+      type: 'DELETE_TRIPLE';
       triple: {
         entityId: string;
         attributeId: string;

@@ -1,4 +1,4 @@
-import { Edit, ImportEdit, IpfsMetadata, Membership, Op, Subspace } from '@geogenesis/sdk/proto';
+import { Edit, ImportEdit, IpfsMetadata, Membership, Subspace } from '@geogenesis/sdk/proto';
 import { Effect, Either } from 'effect';
 import { z } from 'zod';
 
@@ -74,6 +74,7 @@ function decodeIpfsMetadata(data: Buffer): Effect.Effect<z.infer<typeof ZodIpfsM
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const metadata = IpfsMetadata.fromBinary(data);
+
       const parseResult = ZodIpfsMetadata.safeParse(metadata.toJson());
 
       if (parseResult.success) {
@@ -121,18 +122,23 @@ function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> 
   return Effect.gen(function* (_) {
     const decodeEffect = decode(() => {
       const edit = ImportEdit.fromBinary(data);
+
+      console.log('edit', edit);
+
       const parseResult = ZodImportEdit.safeParse(edit);
 
       if (parseResult.success) {
         // @TODO(migration): For now we have some invalid ops while we still work on the data migration
         const validOps = parseResult.data.ops.filter(
-          o => o.opType === 'SET_TRIPLE' && (o.triple as unknown as any)?.value?.type !== 'FILTER_ME_OUT'
+          o => o.type === 'SET_TRIPLE' && (o.triple as unknown as any)?.value?.type !== 'FILTER_ME_OUT'
         );
 
         parseResult.data.ops = validOps;
 
         return parseResult.data;
       }
+
+      console.log('parseResult', parseResult.error);
 
       return null;
     });

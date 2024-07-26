@@ -26,7 +26,7 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
 
     return {
       createdById: edit.createdById,
-      op: op.opType,
+      op: op.type,
       triple,
     };
   });
