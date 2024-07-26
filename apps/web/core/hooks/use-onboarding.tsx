@@ -15,7 +15,7 @@ export function useOnboarding() {
   const address = smartAccount?.account.address;
 
   const { isModalOpen } = usePrivy();
-  const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
+  const [, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const { profile, isFetched, isLoading } = useGeoProfile(address);
 
   // Set the onboarding to visible the first time we fetch the

@@ -32,11 +32,11 @@ export const nameAtom = atom<string>('');
 export const avatarAtom = atom<string>('');
 export const spaceIdAtom = atom<string>('');
 
-type Step = 'start' | 'select-type' | 'onboarding' | 'creating-spaces' | 'completed';
+type Step = 'select-type' | 'select-governance' | 'enter-profile' | 'create-space' | 'completed';
 
-export const stepAtom = atom<Step>('start');
+export const stepAtom = atom<Step>('select-type');
 
-const workflowSteps: Array<Step> = ['creating-spaces', 'completed'];
+const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
 export function CreateSpaceDialog() {
   const smartAccount = useSmartAccount();
@@ -83,12 +83,12 @@ export function CreateSpaceDialog() {
     setShowRetry(false);
 
     switch (step) {
-      case 'onboarding':
-        setStep('creating-spaces');
+      case 'enter-profile':
+        setStep('create-space');
         await sleep(100);
         createSpaces(spaceType);
         break;
-      case 'creating-spaces':
+      case 'create-space':
         createSpaces(spaceType);
         break;
     }
@@ -121,9 +121,8 @@ export function CreateSpaceDialog() {
               >
                 <ModalCard childKey="card">
                   <StepHeader />
-                  {step === 'start' && <StepStart />}
                   {step === 'select-type' && <StepSelectType />}
-                  {step === 'onboarding' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
+                  {step === 'enter-profile' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
                   {workflowSteps.includes(step) && (
                     <StepComplete
                       onRetry={onRunOnboardingWorkflow}
@@ -161,17 +160,26 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
   );
 };
 
+const headerText: Record<Step, string> = {
+  'select-type': 'Select space type',
+  'select-governance': 'Select governance type',
+  'enter-profile': '',
+  'create-space': '',
+  completed: '',
+};
+
 const StepHeader = () => {
   const [step, setStep] = useAtom(stepAtom);
 
-  const showBack = step === 'select-type' || step === 'onboarding';
+  // @TODO: Governance type
+  const showBack = step === 'enter-profile';
 
   const handleBack = () => {
     switch (step) {
-      case 'select-type':
-        setStep('start');
+      case 'select-governance':
+        setStep('select-type');
         break;
-      case 'onboarding':
+      case 'enter-profile':
         setStep('select-type');
         break;
       default:
@@ -182,14 +190,20 @@ const StepHeader = () => {
   return (
     <div className="relative z-20 flex items-center justify-between pb-2">
       <div className="rotate-180">
-        {showBack && (
+        {showBack ? (
           <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="!border-none !bg-transparent" />
+        ) : (
+          <div className="h-1 w-4" />
         )}
       </div>
-      {step !== 'creating-spaces' && (
+      <h3 className="text-smallTitle">{headerText[step]}</h3>
+      {step !== 'create-space' ? (
         <Dialog.Close asChild>
-          <SquareButton icon={<Close />} className="!border-none !bg-transparent" />
+          <SquareButton icon={<Close color="grey-04" />} className="!border-none !bg-transparent" />
         </Dialog.Close>
+      ) : (
+        // Render an empty span to position header text in the middle
+        <div className="h-1 w-4" />
       )}
     </div>
   );
@@ -215,56 +229,29 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
   );
 };
 
-function StepStart() {
-  const setStep = useSetAtom(stepAtom);
-
-  return (
-    <>
-      <StepContents childKey="start">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
-            Create a Space
-          </Text>
-          <Text as="p" variant="body" className="mx-auto mt-2 px-8 text-center !text-base">
-            We’ll get you set up a new Geo Space
-          </Text>
-        </div>
-      </StepContents>
-      <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="aspect-video">
-          <div className="-m-[16px]">
-            <img src="/images/onboarding/0.png" alt="" className="inline-block h-full w-full" />
-          </div>
-        </div>
-        <Button onClick={() => setStep('select-type')} className="w-full">
-          Start
-        </Button>
-      </div>
-    </>
-  );
-}
-
 function StepSelectType() {
   const [spaceType, setspaceType] = useAtom(spaceTypeAtom);
   const setStep = useSetAtom(stepAtom);
 
-  const options = [
+  const options: { image: string; label: string; value: SpaceType }[] = [
     // @TODO(migration): Defaulting to default space with governance for now since our templates
-    // have not yet been migrated over
-    { image: '/images/onboarding/person.png', label: 'Default', value: 'default' },
-    { image: '/images/onboarding/person.png', label: 'Personal', value: 'personal' },
-    // { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
-    // { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
+    // have not yet been migrated over. Make sure we're setting the correct value for each
+    // template type.
+    { image: '', label: 'Blank', value: 'default' },
+    { image: '/images/onboarding/academic-field.png', label: 'Academic field', value: 'personal' },
+    { image: '/images/onboarding/company.png', label: 'Company', value: 'personal' },
+    { image: '/images/onboarding/dao.png', label: 'DAO', value: 'personal' },
+    { image: '/images/onboarding/nonprofit.png', label: 'Government org', value: 'personal' },
+    { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'personal' },
+    { image: '/images/onboarding/interest-group.png', label: 'Interest group', value: 'personal' },
+    { image: '/images/onboarding/industry.png', label: 'Industry', value: 'personal' },
+    { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'personal' },
+    { image: '/images/onboarding/region.png', label: 'Region', value: 'personal' },
   ];
 
   return (
     <>
       <StepContents childKey="account-type">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
-            Select the account type
-          </Text>
-        </div>
         <div className="mt-8">
           <RadioGroup
             value={spaceType ?? ''}
@@ -274,7 +261,7 @@ function StepSelectType() {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <Button onClick={() => setStep('onboarding')} disabled={spaceType === null} className="w-full">
+        <Button onClick={() => setStep('create-space')} disabled={spaceType === null} className="w-full">
           Continue
         </Button>
       </div>
@@ -412,7 +399,7 @@ function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
             Setting up your new space
           </Text>
 
-          {step === 'creating-spaces' && (
+          {step === 'create-space' && (
             <>
               <Spacer height={24} />
 
@@ -434,9 +421,7 @@ function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
         <div className="aspect-video">
-          <div className="-m-[16px]">
-            <img src="/images/onboarding/1.png" alt="" className="inline-block h-full w-full" />
-          </div>
+          <img src="/images/onboarding/1.png" alt="" className="inline-block h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Link href={`/space/${spaceAddress}`} className="w-full" onClick={onDone}>

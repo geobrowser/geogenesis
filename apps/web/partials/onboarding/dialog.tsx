@@ -6,7 +6,6 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import Image from 'next/legacy/image';
 import Link from 'next/link';
 
 import * as React from 'react';
@@ -227,7 +226,7 @@ function StepStart() {
           </div>
         </StepContents>
         <div className="relative aspect-video">
-          <Image layout="fill" src="/images/onboarding/0.png" alt="" className="inline-block h-full w-full" />
+          <img src="/images/onboarding/0.png" alt="" className="inline-block h-full w-full" />
         </div>
       </div>
       <div className="absolute inset-x-4 bottom-4">
@@ -462,7 +461,7 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
         <div className="relative aspect-video">
-          <Image layout="fill" src={complete[stepNumber[step]].image} alt="" className="inline-block h-full w-full" />
+          <img src={complete[stepNumber[step]].image} alt="" className="inline-block h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Link href={NavUtils.toSpace(spaceId)} className="w-full" onClick={hideOnboarding}>
