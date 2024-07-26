@@ -1,5 +1,7 @@
 import { SpaceType } from '~/core/types';
 
+// @TODO: Delete these functions once we have actual onboarding
+
 export async function deploySpaceContract({ account }: { account: string }): Promise<{ spaceAddress: `0x${string}` }> {
   const url = new URL(`/api/contracts/deploy?userAddress=${account}`, window.location.href);
 

@@ -18,6 +18,7 @@ import { v4 as uuid } from 'uuid';
 import { encodeFunctionData, getAddress, stringToHex, zeroAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
+import { IpfsUploadError } from '~/core/errors';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
@@ -32,6 +33,7 @@ import { IpfsService } from '../../ipfs/ipfs-service';
 import { abi as DaoFactoryAbi } from './abi';
 import {
   CreateGeoDaoParams,
+  PluginInstallationWithViem,
   getGovernancePluginInstallItem,
   getPersonalSpaceGovernancePluginInstallItem,
   getSpacePluginInstallItem,
@@ -45,6 +47,14 @@ const deployParams = {
   ENSRegistry: ENS_REGISTRY_ADDRESS,
 };
 
+class DeployDaoError extends Error {
+  readonly _tag = 'DeployDaoError';
+}
+
+class GenerateOpsError extends Error {
+  readonly _tag = 'GenerateOpsError';
+}
+
 interface DeployArgs {
   type: SpaceType;
   spaceName: string;
@@ -53,100 +63,94 @@ interface DeployArgs {
   baseUrl: string;
 }
 
-export async function deploySpace(args: DeployArgs) {
-  const initialEditorAddress = getAddress(args.initialEditorAddress);
-  const governanceType = getGovernanceTypeForSpaceType(args.type);
-  const ops = await generateOpsForSpaceType(args);
+export function deploySpace(args: DeployArgs) {
+  return Effect.gen(function* () {
+    const initialEditorAddress = getAddress(args.initialEditorAddress);
+    const governanceType = getGovernanceTypeForSpaceType(args.type);
 
-  const initialContent = createEditProposal({
-    name: args.spaceName,
-    author: initialEditorAddress,
-    ops,
-  });
-
-  // @TODO: Effectify and use uploadBinary helper
-  const firstBlockContentUri = await new IpfsService(Environment.getConfig().ipfs).upload(initialContent);
-
-  const spacePluginInstallItem = getSpacePluginInstallItem({
-    firstBlockContentUri: `ipfs://${firstBlockContentUri}`,
-    // @HACK: Using a different upgrader from the governance plugin to work around
-    // a limitation in Aragon.
-    pluginUpgrader: getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
-  });
-
-  if (governanceType === 'PUBLIC') {
-    const governancePluginConfig: Parameters<typeof getGovernancePluginInstallItem>[0] = {
-      votingSettings: {
-        votingMode: VotingMode.EarlyExecution,
-        supportThreshold: 50_000,
-        duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
-      },
-      memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
-      initialEditors: [getAddress(initialEditorAddress)],
-      pluginUpgrader: getAddress(initialEditorAddress),
-    };
-
-    const governancePluginInstallItem = getGovernancePluginInstallItem(governancePluginConfig);
-
-    const createParams: CreateGeoDaoParams = {
-      metadataUri: `ipfs://${firstBlockContentUri}`,
-      plugins: [governancePluginInstallItem, spacePluginInstallItem],
-    };
-
-    console.log('Creating DAO...');
-    const steps = await createDao(createParams, deployParams);
-
-    for await (const step of steps) {
-      try {
-        switch (step.key) {
-          case DaoCreationSteps.CREATING:
-            console.log({ txHash: step.txHash });
-            break;
-          case DaoCreationSteps.DONE:
-            console.log({
-              daoAddress: step.address,
-              pluginAddresses: step.pluginAddresses,
-            });
-
-            return await waitForSpaceToBeIndexed(step.address);
-        }
-      } catch (err) {
-        console.error('Failed creating DAO', err);
-      }
-    }
-  }
-
-  if (governanceType === 'PERSONAL') {
-    const personalSpacePluginItem = getPersonalSpaceGovernancePluginInstallItem({
-      initialEditor: getAddress(initialEditorAddress),
+    const ops = yield* Effect.tryPromise({
+      try: () => generateOpsForSpaceType(args),
+      catch: e => new GenerateOpsError(`Failed to generate ops: ${String(e)}`),
     });
 
+    const initialContent = createEditProposal({
+      name: args.spaceName,
+      author: initialEditorAddress,
+      ops,
+    });
+
+    const firstBlockContentUri = yield* Effect.tryPromise({
+      try: () => new IpfsService(Environment.getConfig().ipfs).upload(initialContent),
+      catch: e => new IpfsUploadError(`IPFS upload failed: ${e}`),
+    });
+
+    const plugins: PluginInstallationWithViem[] = [];
+
+    const spacePluginInstallItem = getSpacePluginInstallItem({
+      firstBlockContentUri: `ipfs://${firstBlockContentUri}`,
+      // @HACK: Using a different upgrader from the governance plugin to work around
+      // a limitation in Aragon.
+      pluginUpgrader: getAddress('0x42de4E0f9CdFbBc070e25efFac78F5E5bA820853'),
+    });
+
+    plugins.push(spacePluginInstallItem);
+
+    if (governanceType === 'PUBLIC') {
+      const governancePluginConfig: Parameters<typeof getGovernancePluginInstallItem>[0] = {
+        votingSettings: {
+          votingMode: VotingMode.EarlyExecution,
+          supportThreshold: 50_000,
+          duration: BigInt(60 * 60 * 1), // 1 hour seems to be the minimum we can do
+        },
+        memberAccessProposalDuration: BigInt(60 * 60 * 1), // one hour in seconds
+        initialEditors: [getAddress(initialEditorAddress)],
+        pluginUpgrader: getAddress(initialEditorAddress),
+      };
+
+      const governancePluginInstallItem = getGovernancePluginInstallItem(governancePluginConfig);
+      plugins.push(governancePluginInstallItem);
+    }
+
+    if (governanceType === 'PERSONAL') {
+      const personalSpacePluginItem = getPersonalSpaceGovernancePluginInstallItem({
+        initialEditor: getAddress(initialEditorAddress),
+      });
+
+      plugins.push(personalSpacePluginItem);
+    }
+
     const createParams: CreateGeoDaoParams = {
       metadataUri: `ipfs://${firstBlockContentUri}`,
-      plugins: [personalSpacePluginItem, spacePluginInstallItem],
+      plugins,
     };
 
-    const steps = await createDao(createParams, deployParams);
+    return yield* Effect.tryPromise({
+      try: async () => {
+        console.log('Creating DAO...');
+        const steps = await createDao(createParams, deployParams);
 
-    for await (const step of steps) {
-      try {
-        switch (step.key) {
-          case DaoCreationSteps.CREATING:
-            console.log({ txHash: step.txHash });
-            break;
-          case DaoCreationSteps.DONE:
-            console.log({
-              daoAddress: step.address,
-              pluginAddresses: step.pluginAddresses,
-            });
+        for await (const step of steps) {
+          try {
+            switch (step.key) {
+              case DaoCreationSteps.CREATING:
+                console.log({ txHash: step.txHash });
+                break;
+              case DaoCreationSteps.DONE:
+                console.log({
+                  daoAddress: step.address,
+                  pluginAddresses: step.pluginAddresses,
+                });
 
-            return await waitForSpaceToBeIndexed(step.address);
+                return await waitForSpaceToBeIndexed(step.address);
+            }
+          } catch (err) {
+            throw err;
+          }
         }
-      } catch (err) {
-        console.error('Failed creating DAO', err);
-      }
-    }
-  }
+      },
+      catch: e => new DeployDaoError(`Failed creating DAO: ${e}`),
+    });
+  });
 }
 
 async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: DeployArgs) {

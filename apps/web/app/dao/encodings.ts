@@ -20,7 +20,7 @@ export interface CreateGeoDaoParams extends OmitStrict<CreateDaoParams, 'plugins
 // Using viem for the dao creation requires a slightly different encoding state for our plugins.
 // When using ethers the type for `data` is expected to be a Uint8Array, but when using viem and
 // encodeFunctionData it expects a hex bytes string.
-type PluginInstallationWithViem = {
+export type PluginInstallationWithViem = {
   id: `0x${string}`;
   data: `0x${string}`;
 };

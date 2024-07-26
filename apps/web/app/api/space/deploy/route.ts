@@ -1,3 +1,4 @@
+import { Duration, Effect, Either, Schedule } from 'effect';
 import { v4 as uuid } from 'uuid';
 
 import { SpaceType } from '~/core/types';
@@ -5,7 +6,8 @@ import { slog } from '~/core/utils/utils';
 
 import { deploySpace } from './deploy';
 
-export const maxDuration = 180;
+// 5 minutes
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   const requestId = uuid();
@@ -32,7 +34,7 @@ export async function GET(request: Request) {
     return new Response(
       JSON.stringify({
         error: 'Missing required parameters',
-        reason: 'A user account, space name, and space type are required to deploy a space.',
+        reason: 'An initial editor account, space name, and space type are required to deploy a space.',
       }),
       {
         status: 400,
@@ -40,25 +42,42 @@ export async function GET(request: Request) {
     );
   }
 
-  if (initialEditorAddress === null) {
-    return new Response(
-      JSON.stringify({
-        error: 'Missing user address',
-        reason: "A user's wallet address is required to set permissions on the deployed space.",
-      }),
-      {
-        status: 400,
-      }
-    );
-  }
+  const deployWithRetry = Effect.retry(
+    deploySpace({
+      initialEditorAddress,
+      spaceName,
+      spaceAvatarUri,
+      type,
+      baseUrl: `${protocol}//${baseUrl}`,
+    }),
+    // Retry deploys for 5 minutes with a 100ms exponential, jittered delay between retries.
+    Schedule.exponential(Duration.millis(100)).pipe(
+      Schedule.jittered,
+      Schedule.compose(Schedule.elapsed),
+      Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.minutes(5)))
+    )
+  );
 
-  const spaceId = await deploySpace({
-    initialEditorAddress,
-    spaceName,
-    spaceAvatarUri,
-    type,
-    baseUrl: `${protocol}//${baseUrl}`,
+  const result = await Effect.runPromise(Effect.either(deployWithRetry));
+
+  return Either.match(result, {
+    onLeft: error => {
+      slog({
+        level: 'error',
+        message: `Failed to deploy space. message: ${error.message} – cause: ${error.cause}`,
+        requestId,
+      });
+
+      return new Response(
+        JSON.stringify({
+          message: `Failed to deploy space. message: ${error.message} – cause: ${error.cause}`,
+          reason: error.message,
+        }),
+        {
+          status: 500,
+        }
+      );
+    },
+    onRight: spaceId => Response.json({ spaceId }),
   });
-
-  return Response.json({ spaceId });
 }
