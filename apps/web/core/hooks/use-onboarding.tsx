@@ -15,7 +15,7 @@ export function useOnboarding() {
   const address = smartAccount?.account.address;
 
   const { isModalOpen } = usePrivy();
-  const [, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
+  const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const { profile, isFetched, isLoading } = useGeoProfile(address);
 
   // Set the onboarding to visible the first time we fetch the
@@ -25,10 +25,14 @@ export function useOnboarding() {
   //
   // Whenever the user reloads Geo they will be prompted to go through
   // onboarding again if they don't have a profile.
+  //
+  // @TODO: We should only show onboarding if the user is not a member
+  // of any spaces OR there is no profile representing the user in
+  // any of the spaces where they are a member.
   React.useEffect(() => {
     if (isModalOpen) {
       setIsOnboardingVisible(false);
-    } else if (isFetched && !isLoading && !profile) {
+    } else if (isFetched && !isLoading && !profile?.profileLink) {
       setIsOnboardingVisible(true);
     } else {
       setIsOnboardingVisible(false);
