@@ -34,11 +34,11 @@ export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
-type Step = 'start' | 'select-type' | 'onboarding' | 'creating-space' | 'completed';
+type Step = 'start' | 'select-type' | 'enter-profile' | 'create-space' | 'completed';
 
 export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
-const workflowSteps: Array<Step> = ['creating-space', 'completed'];
+const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
 const MotionContent = motion(Content);
 const MotionOverlay = motion(Overlay);
@@ -93,12 +93,12 @@ export const OnboardingDialog = () => {
     setShowRetry(false);
 
     switch (step) {
-      case 'onboarding':
-        setStep('creating-space');
+      case 'enter-profile':
+        setStep('create-space');
         await sleep(100);
         createSpaces(accountType);
         break;
-      case 'creating-space':
+      case 'create-space':
         createSpaces(accountType);
         break;
     }
@@ -125,7 +125,7 @@ export const OnboardingDialog = () => {
               <StepHeader />
               {step === 'start' && <StepStart />}
               {step === 'select-type' && <StepSelectType />}
-              {step === 'onboarding' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
+              {step === 'enter-profile' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
               {workflowSteps.includes(step) && <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />}
             </ModalCard>
           </MotionContent>
@@ -160,14 +160,14 @@ const StepHeader = () => {
 
   const [step, setStep] = useAtom(stepAtom);
 
-  const showBack = step === 'select-type' || step === 'onboarding';
+  const showBack = step === 'select-type' || step === 'enter-profile';
 
   const handleBack = () => {
     switch (step) {
       case 'select-type':
         setStep('start');
         break;
-      case 'onboarding':
+      case 'enter-profile':
         setStep('select-type');
         break;
       default:
@@ -265,7 +265,7 @@ function StepSelectType() {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <Button onClick={() => setStep('onboarding')} disabled={accountType === null} className="w-full">
+        <Button onClick={() => setStep('enter-profile')} disabled={accountType === null} className="w-full">
           Continue
         </Button>
       </div>
@@ -394,16 +394,16 @@ type StepCompleteProps = {
 const stepNumber: Record<Step, number> = {
   start: 0,
   'select-type': 0,
-  onboarding: 0,
-  'creating-space': 1,
-  completed: 2,
+  'enter-profile': 1,
+  'create-space': 2,
+  completed: 3,
 };
 
 const retryMessage: Record<Step, string> = {
   start: '',
   'select-type': '',
-  onboarding: '',
-  'creating-space': 'Space creation failed',
+  'enter-profile': '',
+  'create-space': 'Space creation failed',
   completed: '',
 };
 
