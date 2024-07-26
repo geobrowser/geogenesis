@@ -427,7 +427,7 @@ export function useEditorStore() {
       // Returns the blockIds that exist in prevBlockIds, but do not exist in newBlockIds
       const removedBlockIds = A.difference(prevBlockIds, newBlockIds);
       const addedBlockIds = A.difference(newBlockIds, prevBlockIds);
-      const collectionId = existingBlocksCollectionId ? existingBlocksCollectionId : createCollection().triple.entityId;
+      const collectionId = existingBlocksCollectionId ? existingBlocksCollectionId : createCollection().triple.entity;
 
       if (!existingBlocksCollectionId && newBlockIds.length > 0) {
         upsert(
@@ -494,8 +494,8 @@ export function useEditorStore() {
             type: 'SET_TRIPLE',
             attributeName: 'Types',
             entityName: null,
-            attributeId: typeOp.triple.attributeId,
-            entityId: typeOp.triple.entityId,
+            attributeId: typeOp.triple.attribute,
+            entityId: typeOp.triple.entity,
             value: {
               type: 'ENTITY',
               name: 'Collection Item',
@@ -510,8 +510,8 @@ export function useEditorStore() {
             type: 'SET_TRIPLE',
             attributeName: 'Collection reference',
             entityName: null,
-            attributeId: collectionOp.triple.attributeId,
-            entityId: collectionOp.triple.entityId,
+            attributeId: collectionOp.triple.attribute,
+            entityId: collectionOp.triple.entity,
             value: {
               type: 'ENTITY',
               name: null,
@@ -526,8 +526,8 @@ export function useEditorStore() {
             type: 'SET_TRIPLE',
             attributeName: 'Entity reference',
             entityName: null,
-            attributeId: entityOp.triple.attributeId,
-            entityId: entityOp.triple.entityId,
+            attributeId: entityOp.triple.attribute,
+            entityId: entityOp.triple.entity,
             value: {
               type: 'ENTITY',
               name: null,
@@ -553,7 +553,7 @@ export function useEditorStore() {
           newCollectionItems.find(c => c.entityId === afterBlockIndex)?.index;
 
         const newTripleOrdering = reorderCollectionItem({
-          collectionItemId: indexOp.triple.entityId,
+          collectionItemId: indexOp.triple.entity,
           beforeIndex: beforeCollectionItemIndex,
           afterIndex: afterCollectionItemIndex,
         });
@@ -563,8 +563,8 @@ export function useEditorStore() {
             type: 'SET_TRIPLE',
             attributeName: 'Index',
             entityName: null,
-            attributeId: indexOp.triple.attributeId,
-            entityId: indexOp.triple.entityId,
+            attributeId: indexOp.triple.attribute,
+            entityId: indexOp.triple.entity,
             value: {
               type: 'TEXT',
               value: newTripleOrdering.triple.value.value,
@@ -576,7 +576,7 @@ export function useEditorStore() {
         newCollectionItems.push({
           collectionId,
           entityId: entityOp.triple.value.value, // The id of the block the item points to
-          id: entityOp.triple.entityId, // The id of the collection item itself
+          id: entityOp.triple.entity, // The id of the collection item itself
           index: newTripleOrdering.triple.value.value,
         });
       }

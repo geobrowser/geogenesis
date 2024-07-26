@@ -239,8 +239,8 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
       return {
         type: 'DELETE_TRIPLE',
         triple: {
-          entityId: t.entityId,
-          attributeId: t.attributeId,
+          entity: t.entityId,
+          attribute: t.attributeId,
         },
       };
     }
@@ -253,8 +253,8 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
       return {
         type: 'SET_TRIPLE',
         triple: {
-          entityId: t.entityId,
-          attributeId: t.attributeId,
+          entity: t.entityId,
+          attribute: t.attributeId,
           value: {
             type: 'ENTITY',
             value: t.value.value,
@@ -266,8 +266,8 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
     return {
       type: 'SET_TRIPLE',
       triple: {
-        entityId: t.entityId,
-        attributeId: t.attributeId,
+        entity: t.entityId,
+        attribute: t.attributeId,
         value: {
           type: t.value.type,
           value: t.value.value,

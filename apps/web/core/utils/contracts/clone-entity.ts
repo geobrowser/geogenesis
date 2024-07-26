@@ -89,8 +89,8 @@ export const cloneEntity = async (options: Options) => {
     // Create the collection entity by adding the collection type
     newTriples.push({
       space: spaceId,
-      attributeId: collectionOp.triple.attributeId,
-      entityId: collectionOp.triple.entityId,
+      attributeId: collectionOp.triple.attribute,
+      entityId: collectionOp.triple.entity,
       entityName: null,
       attributeName: 'Types',
       value: {
@@ -106,7 +106,7 @@ export const cloneEntity = async (options: Options) => {
     const collectionItemsTriples = newBlockIds
       .map(id =>
         Collections.createCollectionItemTriples({
-          collectionId: collectionOp.triple.entityId,
+          collectionId: collectionOp.triple.entity,
           entityId: id,
           spaceId,
         })
@@ -123,7 +123,7 @@ export const cloneEntity = async (options: Options) => {
       entityName: newEntityName,
       value: {
         type: 'COLLECTION',
-        value: collectionOp.triple.entityId,
+        value: collectionOp.triple.entity,
         items: Collections.itemFromTriples(groupBy(collectionItemsTriples, c => c.entityId)),
       },
     });

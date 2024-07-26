@@ -43,9 +43,9 @@ export function createImageEntityTriples({
   return [
     {
       space: spaceId,
-      entityId: typeOp.triple.entityId,
+      entityId: typeOp.triple.entity,
       entityName: null,
-      attributeId: typeOp.triple.attributeId,
+      attributeId: typeOp.triple.attribute,
       attributeName: 'Types',
       value: {
         type: 'ENTITY',
@@ -55,9 +55,9 @@ export function createImageEntityTriples({
     },
     {
       space: spaceId,
-      entityId: urlOp.triple.entityId,
+      entityId: urlOp.triple.entity,
       entityName: null,
-      attributeId: urlOp.triple.attributeId,
+      attributeId: urlOp.triple.attribute,
       attributeName: 'Image URL',
       value: {
         type: 'URL',

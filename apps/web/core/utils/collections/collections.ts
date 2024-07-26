@@ -53,9 +53,9 @@ export function createCollectionItemTriples(args: OpsToTriplesArgs): Triple[] {
   return [
     {
       space: spaceId,
-      attributeId: typeOp.triple.attributeId,
+      attributeId: typeOp.triple.attribute,
       attributeName: 'Types',
-      entityId: typeOp.triple.entityId,
+      entityId: typeOp.triple.entity,
       entityName: null,
       value: {
         type: 'ENTITY',
@@ -65,9 +65,9 @@ export function createCollectionItemTriples(args: OpsToTriplesArgs): Triple[] {
     },
     {
       space: spaceId,
-      attributeId: collectionRefOp.triple.attributeId,
+      attributeId: collectionRefOp.triple.attribute,
       attributeName: 'Collection Reference',
-      entityId: collectionRefOp.triple.entityId,
+      entityId: collectionRefOp.triple.entity,
       entityName: null,
       value: {
         type: 'ENTITY',
@@ -77,9 +77,9 @@ export function createCollectionItemTriples(args: OpsToTriplesArgs): Triple[] {
     },
     {
       space: spaceId,
-      attributeId: entityRefOp.triple.attributeId,
+      attributeId: entityRefOp.triple.attribute,
       attributeName: 'Collection Reference',
-      entityId: entityRefOp.triple.entityId,
+      entityId: entityRefOp.triple.entity,
       entityName: null,
       value: {
         type: 'ENTITY',
@@ -89,9 +89,9 @@ export function createCollectionItemTriples(args: OpsToTriplesArgs): Triple[] {
     },
     {
       space: spaceId,
-      attributeId: indexOp.triple.attributeId,
+      attributeId: indexOp.triple.attribute,
       attributeName: 'Index',
-      entityId: indexOp.triple.entityId,
+      entityId: indexOp.triple.entity,
       entityName: null,
       value: {
         type: 'TEXT',

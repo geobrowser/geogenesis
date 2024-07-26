@@ -756,8 +756,8 @@ const listener =
         const collection = createCollection();
 
         const collectionOp: StoreOp = {
-          attributeId: collection.triple.attributeId,
-          entityId: collection.triple.entityId,
+          attributeId: collection.triple.attribute,
+          entityId: collection.triple.entity,
           attributeName: 'Types',
           entityName: null,
           type: 'SET_TRIPLE',
@@ -776,7 +776,7 @@ const listener =
         const collectionItemsTriples = entityIds
           .map(id =>
             Collections.createCollectionItemTriples({
-              collectionId: collection.triple.entityId,
+              collectionId: collection.triple.entity,
               entityId: id,
               spaceId,
             })
@@ -799,7 +799,7 @@ const listener =
             entityName,
             value: {
               type: 'COLLECTION',
-              value: collection.triple.entityId,
+              value: collection.triple.entity,
               items: collectionItemsFromTriples,
             },
           },
