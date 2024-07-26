@@ -50,6 +50,7 @@ export function CreateSpaceDialog() {
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
+  const governanceType = useAtomValue(governanceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
 
   // Show retry immediately if workflow already started before initial render
@@ -65,6 +66,7 @@ export function CreateSpaceDialog() {
         type: spaceType,
         spaceName: name,
         spaceAvatarUri: avatar,
+        governanceType: governanceType ?? undefined,
       });
 
       if (!spaceId) {

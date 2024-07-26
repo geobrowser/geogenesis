@@ -4,12 +4,16 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
-import { SpaceType } from '../types';
+import { SpaceGovernanceType, SpaceType } from '../types';
 
 interface DeployArgs {
   type: SpaceType;
   spaceName: string;
   spaceAvatarUri: string;
+
+  // Governance type is only manually set if the space is a "Blank"/default space.
+  // Otherwise we manually set the governance type depending on the space type.
+  governanceType?: SpaceGovernanceType;
 }
 
 export function useDeploySpace() {
@@ -27,7 +31,7 @@ export function useDeploySpace() {
         return null;
       }
 
-      const { spaceAvatarUri, spaceName, type } = args;
+      const { spaceAvatarUri, spaceName, type, governanceType } = args;
 
       const url = new URL(
         `/api/space/deploy?spaceName=${spaceName}&type=${type}&initialEditorAddress=${initialEditorAddress}`,
@@ -36,6 +40,10 @@ export function useDeploySpace() {
 
       if (spaceAvatarUri !== '') {
         url.searchParams.set('spaceAvatarUri', spaceAvatarUri);
+      }
+
+      if (governanceType) {
+        url.searchParams.set('governanceType', governanceType);
       }
 
       const deployResult = await fetch(url);

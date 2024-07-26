@@ -1,7 +1,7 @@
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { v4 as uuid } from 'uuid';
 
-import { SpaceType } from '~/core/types';
+import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { slog } from '~/core/utils/utils';
 
 import { deploySpace } from './deploy';
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   const spaceName = url.searchParams.get('spaceName');
   const spaceAvatarUri = url.searchParams.get('spaceAvatarUri');
   const type = url.searchParams.get('type') as SpaceType | null;
+  const governanceType = url.searchParams.get('governanceType') as SpaceGovernanceType | null;
 
   if (initialEditorAddress === null || spaceName === null || type === null) {
     slog({
@@ -47,8 +48,9 @@ export async function GET(request: Request) {
       initialEditorAddress,
       spaceName,
       spaceAvatarUri,
-      type,
       baseUrl: `${protocol}//${baseUrl}`,
+      type,
+      governanceType: governanceType ?? undefined,
     }),
     // Retry deploys for 5 minutes with a 100ms exponential, jittered delay between retries.
     Schedule.exponential(Duration.millis(100)).pipe(
