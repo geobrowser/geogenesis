@@ -12,14 +12,7 @@ import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors'
 import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 
-import {
-  accountTypeAtom,
-  avatarAtom,
-  nameAtom,
-  profileIdAtom,
-  spaceAddressAtom,
-  stepAtom,
-} from '~/partials/onboarding/dialog';
+import { accountTypeAtom, avatarAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
 import { Cookie } from '../cookie';
 import { CONDUIT_TESTNET } from './conduit-chain';
@@ -118,23 +111,20 @@ export function GeoConnectButton() {
   const setAccountType = useSetAtom(accountTypeAtom);
   const setName = useSetAtom(nameAtom);
   const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceAddress = useSetAtom(spaceAddressAtom);
-  const setProfileId = useSetAtom(profileIdAtom);
+  const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
 
   const resetOnboarding = () => {
     setAccountType(null);
     setName('');
     setAvatar('');
-    setSpaceAddress('');
-    setProfileId('');
+    setSpaceId('');
     setStep('start');
   };
 
   const { login } = useLogin({
     onComplete: async user => {
       const userWallet = user.wallet;
-      console.log('user wallet', userWallet);
 
       if (userWallet !== undefined) {
         const wallet = wallets.find(wallet => wallet.address === userWallet.address);
@@ -150,9 +140,6 @@ export function GeoConnectButton() {
   });
 
   const onLogin = () => {
-    console.log('on login');
-    // logout();
-    // return;
     resetOnboarding();
     login();
   };

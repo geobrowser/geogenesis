@@ -15,7 +15,7 @@ export function useGeoProfile(account?: `0x${string}`): {
     isLoading,
     isFetched,
   } = useQuery({
-    queryKey: ['onchain-profile', account],
+    queryKey: ['profile', account],
     queryFn: async () => {
       if (!account) return null;
 
