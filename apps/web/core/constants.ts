@@ -21,10 +21,6 @@ export const DEFAULT_OPENGRAPH_DESCRIPTION =
 export const IPFS_GATEWAY_PATH = 'https://node.lighthouse.storage';
 export const IPFS_GATEWAY_READ_PATH = `https://gateway.lighthouse.storage/ipfs/`;
 
-export const ADMIN_ROLE_BINARY = '0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775';
-export const EDITOR_CONTROLLER_ROLE_BINARY = '0xbc2c04b16435c5f4eaa37fec9ad808fec563d665b1febf40775380f3f1b592b4';
-export const EDITOR_ROLE_BINARY = '0x21d1167972f621f75904fb065136bc8b53c7ba1c60ccd3a7758fbee465851e9c';
-
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 export const PUBLIC_SPACES = [
   'ab7d4b9e02f840dab9746d352acb0ac6', // root
