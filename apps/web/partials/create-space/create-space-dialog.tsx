@@ -305,7 +305,7 @@ function SelectGovernanceType() {
       label: 'Personal',
       value: 'PERSONAL',
       image: '/images/onboarding/personal.png',
-      sublabel: 'All edits made are automatically added without a voting period.',
+      sublabel: 'All edits are automatically added without a voting period.',
     },
   ];
 
