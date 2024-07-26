@@ -239,14 +239,14 @@ function StepSelectType() {
     // template type.
     { image: '', label: 'Blank', value: 'default' },
     { image: '/images/onboarding/academic-field.png', label: 'Academic field', value: 'personal' },
-    { image: '/images/onboarding/company.png', label: 'Company', value: 'personal' },
-    { image: '/images/onboarding/dao.png', label: 'DAO', value: 'personal' },
-    { image: '/images/onboarding/nonprofit.png', label: 'Government org', value: 'personal' },
-    { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'personal' },
-    { image: '/images/onboarding/interest-group.png', label: 'Interest group', value: 'personal' },
-    { image: '/images/onboarding/industry.png', label: 'Industry', value: 'personal' },
-    { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'personal' },
-    { image: '/images/onboarding/region.png', label: 'Region', value: 'personal' },
+    { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
+    { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao' },
+    { image: '/images/onboarding/nonprofit.png', label: 'Government org', value: 'government-org' },
+    { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
+    { image: '/images/onboarding/interest-group.png', label: 'Interest group', value: 'interest-group' },
+    { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry' },
+    { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol' },
+    { image: '/images/onboarding/region.png', label: 'Region', value: 'region' },
   ];
 
   return (
@@ -261,7 +261,7 @@ function StepSelectType() {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <Button onClick={() => setStep('create-space')} disabled={spaceType === null} className="w-full">
+        <Button onClick={() => setStep('enter-profile')} disabled={spaceType === null} className="w-full">
           Continue
         </Button>
       </div>
@@ -279,6 +279,13 @@ const placeholderMessage: Record<SpaceType, string> = {
   company: 'Company name',
   nonprofit: 'Nonprofit name',
   personal: 'Personal name',
+  'academic-field': 'Academic field name',
+  region: 'Region name',
+  industry: 'Industry name',
+  protocol: 'Protocol name',
+  dao: 'DAO name',
+  'government-org': 'Government org name',
+  'interest-group': 'Interest group name',
 };
 
 function StepOnboarding({ onNext, address }: StepOnboardingProps) {

@@ -21,7 +21,7 @@ export const RadioGroup = ({ value, onValueChange, options, ...rest }: RadioGrou
         key={value}
         value={value}
         className={cx(
-          'flex items-center justify-between rounded-lg bg-divider py-2 pr-3 text-grey-04 transition duration-300 hover:border-text hover:text-text data-[state=checked]:text-text',
+          'data-[state=checked]:to-ctaSecondary flex items-center justify-between rounded-lg bg-divider py-2 pr-3 text-grey-04 transition-all duration-300 hover:border-text hover:text-text data-[state=checked]:bg-gradient-to-tr data-[state=checked]:from-[#BAFEFF] data-[state=checked]:via-[#E5C4F6] data-[state=checked]:to-[#FFCBB4] data-[state=checked]:text-text',
           image === '' ? 'pl-3' : 'pl-2',
           disabled && 'cursor-not-allowed opacity-50'
         )}

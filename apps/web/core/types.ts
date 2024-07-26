@@ -329,7 +329,18 @@ export type EntityId = string;
 export type AttributeId = string;
 export type EntityActions = Record<EntityId, Record<AttributeId, Triple>>;
 
-export type SpaceType = 'default' | 'company' | 'nonprofit' | 'personal';
+export type SpaceType =
+  | 'default'
+  | 'company'
+  | 'nonprofit'
+  | 'personal'
+  | 'academic-field'
+  | 'region'
+  | 'industry'
+  | 'protocol'
+  | 'dao'
+  | 'government-org'
+  | 'interest-group';
 export type SpaceGovernanceType = 'PUBLIC' | 'PERSONAL';
 
 export type CollectionItem = {
