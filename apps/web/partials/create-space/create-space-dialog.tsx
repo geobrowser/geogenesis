@@ -251,7 +251,7 @@ function StepSelectType() {
     { image: '/images/onboarding/academic-field.png', label: 'Academic field', value: 'personal' },
     { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
     { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao' },
-    { image: '/images/onboarding/nonprofit.png', label: 'Government org', value: 'government-org' },
+    { image: '/images/onboarding/nonprofit.png', label: 'Government organization', value: 'government-org' },
     { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
     { image: '/images/onboarding/interest-group.png', label: 'Interest group', value: 'interest-group' },
     { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry' },
