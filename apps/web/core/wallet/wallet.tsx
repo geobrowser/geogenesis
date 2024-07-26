@@ -3,10 +3,7 @@
 import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
-import { ENTRYPOINT_ADDRESS_V07 } from 'permissionless';
-import { signerToSafeSmartAccount } from 'permissionless/accounts';
 import { createPublicClient, http } from 'viem';
-import { toAccount } from 'viem/accounts';
 
 import * as React from 'react';
 
@@ -14,7 +11,6 @@ import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors'
 
 import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
-import { Wallet } from '~/design-system/icons/wallet';
 
 import {
   accountTypeAtom,
@@ -119,6 +115,13 @@ export function GeoConnectButton() {
   const { user } = usePrivy();
   const { wallets } = useWallets();
 
+  const setAccountType = useSetAtom(accountTypeAtom);
+  const setName = useSetAtom(nameAtom);
+  const setAvatar = useSetAtom(avatarAtom);
+  const setSpaceAddress = useSetAtom(spaceAddressAtom);
+  const setProfileId = useSetAtom(profileIdAtom);
+  const setStep = useSetAtom(stepAtom);
+
   const resetOnboarding = () => {
     setAccountType(null);
     setName('');
@@ -131,6 +134,7 @@ export function GeoConnectButton() {
   const { login } = useLogin({
     onComplete: async user => {
       const userWallet = user.wallet;
+      console.log('user wallet', userWallet);
 
       if (userWallet !== undefined) {
         const wallet = wallets.find(wallet => wallet.address === userWallet.address);
@@ -146,6 +150,9 @@ export function GeoConnectButton() {
   });
 
   const onLogin = () => {
+    console.log('on login');
+    // logout();
+    // return;
     resetOnboarding();
     login();
   };
@@ -158,17 +165,10 @@ export function GeoConnectButton() {
     },
   });
 
-  const setAccountType = useSetAtom(accountTypeAtom);
-  const setName = useSetAtom(nameAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceAddress = useSetAtom(spaceAddressAtom);
-  const setProfileId = useSetAtom(profileIdAtom);
-  const setStep = useSetAtom(stepAtom);
-
   if (!user) {
     return (
-      <Button onClick={onLogin} variant="secondary">
-        <Wallet />
+      <Button onClick={onLogin}>
+        {/* <Wallet color="white" /> */}
         Sign in
       </Button>
     );
