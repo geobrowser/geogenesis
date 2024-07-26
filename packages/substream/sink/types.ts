@@ -26,7 +26,7 @@ export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX'
 export type Op =
   | {
       opType: 'SET_TRIPLE';
-      payload: {
+      triple: {
         entityId: string;
         attributeId: string;
         value: {
@@ -37,7 +37,7 @@ export type Op =
     }
   | {
       opType: 'DELETE_TRIPLE';
-      payload: {
+      triple: {
         entityId: string;
         attributeId: string;
         value: Record<string, never>;

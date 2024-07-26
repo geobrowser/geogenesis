@@ -10,7 +10,7 @@ interface CreateCollectionItemArgs {
 
 type CreateCollectionItemTypeOp = {
   opType: 'SET_TRIPLE';
-  payload: {
+  triple: {
     attributeId: typeof SYSTEM_IDS.TYPES;
     entityId: string;
     value: {
@@ -22,7 +22,7 @@ type CreateCollectionItemTypeOp = {
 
 type CreateCollectionItemCollectionReferenceOp = {
   opType: 'SET_TRIPLE';
-  payload: {
+  triple: {
     attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE;
     entityId: string;
     value: {
@@ -34,7 +34,7 @@ type CreateCollectionItemCollectionReferenceOp = {
 
 type CreateCollectionItemEntityReferenceOp = {
   opType: 'SET_TRIPLE';
-  payload: {
+  triple: {
     attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE;
     entityId: string;
     value: {
@@ -46,7 +46,7 @@ type CreateCollectionItemEntityReferenceOp = {
 
 interface CreateCollectionItemIndexOp {
   opType: 'SET_TRIPLE';
-  payload: {
+  triple: {
     attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_INDEX;
     entityId: string;
     value: {
@@ -70,7 +70,7 @@ export function createCollectionItem(
     // Type of Collection Item
     {
       opType: 'SET_TRIPLE',
-      payload: {
+      triple: {
         attributeId: SYSTEM_IDS.TYPES,
         entityId: newEntityId,
         value: {
@@ -82,7 +82,7 @@ export function createCollectionItem(
     // Entity value for the collection itself
     {
       opType: 'SET_TRIPLE',
-      payload: {
+      triple: {
         attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
         entityId: newEntityId,
         value: {
@@ -94,7 +94,7 @@ export function createCollectionItem(
     // Entity value for the entity referenced by this collection item
     {
       opType: 'SET_TRIPLE',
-      payload: {
+      triple: {
         attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
         entityId: newEntityId,
         value: {
@@ -105,7 +105,7 @@ export function createCollectionItem(
     },
     {
       opType: 'SET_TRIPLE',
-      payload: {
+      triple: {
         attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
         entityId: newEntityId,
         value: {

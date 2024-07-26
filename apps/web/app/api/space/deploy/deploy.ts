@@ -214,7 +214,7 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
         attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
         value: {
           type: 'ENTITY',
-          value: typeOp.payload.entityId,
+          value: typeOp.triple.entityId,
         },
       })
     );

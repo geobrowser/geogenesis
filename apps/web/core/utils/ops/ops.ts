@@ -11,7 +11,7 @@ interface CreateArgs {
 export function create({ entityId, attributeId, value }: CreateArgs): Op {
   return {
     type: 'SET_TRIPLE',
-    payload: {
+    triple: {
       attributeId,
       entityId,
       value,

@@ -34,10 +34,10 @@ message Edit {
 
 message Op {
   OpType opType = 1;
-  Payload payload = 2;
+  Triple triple = 2;
 }
 
-message Payload {
+message Triple {
   bytes entityId = 1;
   bytes attributeId = 2;
   Value value = 3;
@@ -96,7 +96,6 @@ message ImportEdit {
   string transactionHash = 11;
 }
 
-// https://gateway.lighthouse.storage/ipfs/bafkreic5vxtnkgpkf54zo3jubf7fadegfwuui6nmonf6rze235ddxgl6we
 message Import {
   ActionType type = 1;
   string version = 2;

@@ -6,7 +6,7 @@ describe("create-edit-proposal", () => {
   it("encodes and decodes Edit correctly", () => {
     const editBinary = createEditProposal({name: "test", ops: [{
       type: 'SET_TRIPLE',
-      payload: {
+      triple: {
         attributeId: btoa('test-attribute-id'),
         entityId: btoa('test-entity-id'),
         value: {

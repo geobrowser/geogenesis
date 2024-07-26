@@ -2,7 +2,7 @@ import { SYSTEM_IDS, createGeoId } from '../../';
 
 interface CreateCollectionReturnType {
   opType: 'SET_TRIPLE';
-  payload: {
+  triple: {
     attributeId: typeof SYSTEM_IDS.TYPES;
     entityId: string;
     value: {
@@ -14,7 +14,7 @@ interface CreateCollectionReturnType {
 export function createCollection(): CreateCollectionReturnType {
   return {
     opType: 'SET_TRIPLE',
-    payload: {
+    triple: {
       attributeId: SYSTEM_IDS.TYPES,
       entityId: createGeoId(),
       value: {

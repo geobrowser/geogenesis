@@ -3,13 +3,13 @@ import type * as S from 'zapatos/schema';
 import type { BlockEvent, Op } from '../types';
 
 export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.triples.Insertable {
-  const { entityId, attributeId } = op.payload;
+  const { entityId, attributeId } = op.triple;
   const entity_id = entityId;
   const attribute_id = attributeId;
   const space_id = spaceId;
 
   if (op.opType === 'SET_TRIPLE') {
-    const value = op.payload.value;
+    const value = op.triple.value;
 
     const value_type = value.type;
 

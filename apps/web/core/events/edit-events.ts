@@ -756,14 +756,14 @@ const listener =
         const collection = createCollection();
 
         const collectionOp: StoreOp = {
-          attributeId: collection.payload.attributeId,
-          entityId: collection.payload.entityId,
+          attributeId: collection.triple.attributeId,
+          entityId: collection.triple.entityId,
           attributeName: 'Types',
           entityName: null,
           type: 'SET_TRIPLE',
           value: {
-            type: collection.payload.value.type,
-            value: collection.payload.value.value,
+            type: collection.triple.value.type,
+            value: collection.triple.value.value,
             name: null,
           },
         };
@@ -776,7 +776,7 @@ const listener =
         const collectionItemsTriples = entityIds
           .map(id =>
             Collections.createCollectionItemTriples({
-              collectionId: collection.payload.entityId,
+              collectionId: collection.triple.entityId,
               entityId: id,
               spaceId,
             })
@@ -799,7 +799,7 @@ const listener =
             entityName,
             value: {
               type: 'COLLECTION',
-              value: collection.payload.entityId,
+              value: collection.triple.entityId,
               items: collectionItemsFromTriples,
             },
           },

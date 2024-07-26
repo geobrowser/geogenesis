@@ -10,7 +10,7 @@ export type Value = {
  */
 export type SetTripleOp = {
   type: 'SET_TRIPLE';
-  payload: {
+  triple: {
     entityId: string;
     attributeId: string;
     value: Value;
@@ -22,7 +22,7 @@ export type SetTripleOp = {
  */
 export type DeleteTripleOp = {
   type: 'DELETE_TRIPLE';
-  payload: {
+  triple: {
     entityId: string;
     attributeId: string;
     // Delete operations don't need a value since there can only be one (spaceId, entityId, attributeId) tuple combination

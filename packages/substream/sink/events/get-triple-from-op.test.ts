@@ -7,7 +7,7 @@ describe('tripleFromOp', () => {
     const triple = getTripleFromOp(
       {
         opType: 'SET_TRIPLE',
-        payload: {
+        triple: {
           attributeId: 'attribute-id',
           entityId: 'entity-id',
           value: {
@@ -43,7 +43,7 @@ describe('tripleFromOp', () => {
     const triple = getTripleFromOp(
       {
         opType: 'DELETE_TRIPLE',
-        payload: {
+        triple: {
           attributeId: 'attribute-id',
           entityId: 'entity-id',
           value: {},

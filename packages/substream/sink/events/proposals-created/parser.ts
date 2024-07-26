@@ -156,12 +156,12 @@ const ZodEditDeleteTriplePayload = z.object({
 
 const ZodSetTripleOp = z.object({
   opType: z.literal('SET_TRIPLE'),
-  payload: ZodEditSetTriplePayload,
+  triple: ZodEditSetTriplePayload,
 });
 
 const ZodDeleteTripleOp = z.object({
   opType: z.literal('DELETE_TRIPLE'),
-  payload: ZodEditDeleteTriplePayload,
+  triple: ZodEditDeleteTriplePayload,
 });
 
 export const ZodOp = z.union([ZodSetTripleOp, ZodDeleteTripleOp]);
@@ -229,12 +229,12 @@ const ZodImportEditDeleteTriplePayload = z.object({
 
 const ZodImportEditSetTripleOp = z.object({
   opType: z.literal(1).transform(() => 'SET_TRIPLE'),
-  payload: ZodImportEditSetTriplePayload,
+  triple: ZodImportEditSetTriplePayload,
 });
 
 const ZodImportEditDeleteTripleOp = z.object({
   opType: z.literal(2).transform(() => 'DELETE_TRIPLE'),
-  payload: ZodImportEditDeleteTriplePayload,
+  triple: ZodImportEditDeleteTriplePayload,
 });
 
 const ZodImportEditOp = z.union([ZodImportEditSetTripleOp, ZodImportEditDeleteTripleOp]);

@@ -89,15 +89,15 @@ export const cloneEntity = async (options: Options) => {
     // Create the collection entity by adding the collection type
     newTriples.push({
       space: spaceId,
-      attributeId: collectionOp.payload.attributeId,
-      entityId: collectionOp.payload.entityId,
+      attributeId: collectionOp.triple.attributeId,
+      entityId: collectionOp.triple.entityId,
       entityName: null,
       attributeName: 'Types',
       value: {
         // @TODO(migration): This might be a collection in the future which
         // would create a recursive collection creation loop
         type: 'ENTITY',
-        value: collectionOp.payload.value.value,
+        value: collectionOp.triple.value.value,
         name: 'Collection',
       },
     });
@@ -106,7 +106,7 @@ export const cloneEntity = async (options: Options) => {
     const collectionItemsTriples = newBlockIds
       .map(id =>
         Collections.createCollectionItemTriples({
-          collectionId: collectionOp.payload.entityId,
+          collectionId: collectionOp.triple.entityId,
           entityId: id,
           spaceId,
         })
@@ -123,7 +123,7 @@ export const cloneEntity = async (options: Options) => {
       entityName: newEntityName,
       value: {
         type: 'COLLECTION',
-        value: collectionOp.payload.entityId,
+        value: collectionOp.triple.entityId,
         items: Collections.itemFromTriples(groupBy(collectionItemsTriples, c => c.entityId)),
       },
     });

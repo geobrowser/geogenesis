@@ -298,9 +298,9 @@ export class Op extends Message<Op> {
   opType = OpType.NONE;
 
   /**
-   * @generated from field: Payload payload = 2;
+   * @generated from field: Triple triple = 2;
    */
-  payload?: Payload;
+  triple?: Triple;
 
   constructor(data?: PartialMessage<Op>) {
     super();
@@ -311,7 +311,7 @@ export class Op extends Message<Op> {
   static readonly typeName = "Op";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "opType", kind: "enum", T: proto3.getEnumType(OpType) },
-    { no: 2, name: "payload", kind: "message", T: Payload },
+    { no: 2, name: "triple", kind: "message", T: Triple },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Op {
@@ -332,9 +332,9 @@ export class Op extends Message<Op> {
 }
 
 /**
- * @generated from message Payload
+ * @generated from message Triple
  */
-export class Payload extends Message<Payload> {
+export class Triple extends Message<Triple> {
   /**
    * @generated from field: bytes entityId = 1;
    */
@@ -350,33 +350,33 @@ export class Payload extends Message<Payload> {
    */
   value?: Value;
 
-  constructor(data?: PartialMessage<Payload>) {
+  constructor(data?: PartialMessage<Triple>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Payload";
+  static readonly typeName = "Triple";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "entityId", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 2, name: "attributeId", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 3, name: "value", kind: "message", T: Value },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Payload {
-    return new Payload().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Triple {
+    return new Triple().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Payload {
-    return new Payload().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Triple {
+    return new Triple().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Payload {
-    return new Payload().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Triple {
+    return new Triple().fromJsonString(jsonString, options);
   }
 
-  static equals(a: Payload | PlainMessage<Payload> | undefined, b: Payload | PlainMessage<Payload> | undefined): boolean {
-    return proto3.util.equals(Payload, a, b);
+  static equals(a: Triple | PlainMessage<Triple> | undefined, b: Triple | PlainMessage<Triple> | undefined): boolean {
+    return proto3.util.equals(Triple, a, b);
   }
 }
 
@@ -643,8 +643,6 @@ export class ImportEdit extends Message<ImportEdit> {
 }
 
 /**
- * https://gateway.lighthouse.storage/ipfs/bafkreic5vxtnkgpkf54zo3jubf7fadegfwuui6nmonf6rze235ddxgl6we
- *
  * @generated from message Import
  */
 export class Import extends Message<Import> {

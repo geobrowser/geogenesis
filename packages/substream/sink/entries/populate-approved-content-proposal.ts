@@ -115,7 +115,7 @@ export function populateApprovedContentProposal(
        */
       const opsWithCreatedById = proposedVersions.map((pv): SchemaTripleEdit => {
         // Safe to cast with ! since we know that we set this in the mapping earlier in this function
-        const ops = opsByProposalId.get(pv.proposal_id)!.filter(o => o.payload.entityId === pv.entity_id);
+        const ops = opsByProposalId.get(pv.proposal_id)!.filter(o => o.triple.entityId === pv.entity_id);
 
         return {
           proposalId: pv.proposal_id,

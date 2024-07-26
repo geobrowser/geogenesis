@@ -41,7 +41,7 @@ export function CreateDao({ type }: Prtypes) {
       ops: [
         {
           type: 'SET_TRIPLE',
-          payload: {
+          triple: {
             entityId,
             attributeId: SYSTEM_IDS.NAME,
             value: {
@@ -52,7 +52,7 @@ export function CreateDao({ type }: Prtypes) {
         },
         {
           type: 'SET_TRIPLE',
-          payload: {
+          triple: {
             entityId,
             attributeId: SYSTEM_IDS.TYPES,
             value: {

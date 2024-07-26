@@ -4,7 +4,7 @@ import { SYSTEM_IDS } from './system-ids';
 type CreateImageEntityOpsReturnType = [
   {
     type: 'SET_TRIPLE',
-    payload: {
+    triple: {
       entityId: string;
       attributeId: typeof SYSTEM_IDS.TYPES;
       value: {
@@ -15,7 +15,7 @@ type CreateImageEntityOpsReturnType = [
   },
   {
     type: 'SET_TRIPLE',
-    payload: {
+    triple: {
       entityId: string;
       attributeId: typeof SYSTEM_IDS.IMAGE_URL_ATTRIBUTE;
       value: {
@@ -37,7 +37,7 @@ export function createImageEntityOps(src: string): CreateImageEntityOpsReturnTyp
   return [
     {
       type: 'SET_TRIPLE',
-      payload: {
+      triple: {
         entityId,
         attributeId: SYSTEM_IDS.TYPES,
         value: {
@@ -48,7 +48,7 @@ export function createImageEntityOps(src: string): CreateImageEntityOpsReturnTyp
     },
     {
       type: 'SET_TRIPLE',
-      payload: {
+      triple: {
         entityId,
         attributeId: SYSTEM_IDS.IMAGE_URL_ATTRIBUTE,
         value: {

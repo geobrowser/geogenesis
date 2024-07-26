@@ -238,7 +238,7 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
     if (t.isDeleted) {
       return {
         type: 'DELETE_TRIPLE',
-        payload: {
+        triple: {
           entityId: t.entityId,
           attributeId: t.attributeId,
         },
@@ -252,7 +252,7 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
     if (t.value.type === 'IMAGE') {
       return {
         type: 'SET_TRIPLE',
-        payload: {
+        triple: {
           entityId: t.entityId,
           attributeId: t.attributeId,
           value: {
@@ -265,7 +265,7 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
 
     return {
       type: 'SET_TRIPLE',
-      payload: {
+      triple: {
         entityId: t.entityId,
         attributeId: t.attributeId,
         value: {

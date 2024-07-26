@@ -10,7 +10,7 @@ interface ReorderCollectionItemArgs {
 
 type ReorderCollectionItemOp = {
   type: 'SET_TRIPLE';
-  payload: {
+  triple: {
     attributeId: typeof SYSTEM_IDS.COLLECTION_ITEM_INDEX;
     entityId: string;
     value: {
@@ -26,7 +26,7 @@ export function reorderCollectionItem(args: ReorderCollectionItemArgs): ReorderC
 
   return {
     type: 'SET_TRIPLE',
-    payload: {
+    triple: {
       attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
       entityId: args.collectionItemId,
       value: {

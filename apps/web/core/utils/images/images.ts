@@ -43,25 +43,25 @@ export function createImageEntityTriples({
   return [
     {
       space: spaceId,
-      entityId: typeOp.payload.entityId,
+      entityId: typeOp.triple.entityId,
       entityName: null,
-      attributeId: typeOp.payload.attributeId,
+      attributeId: typeOp.triple.attributeId,
       attributeName: 'Types',
       value: {
         type: 'ENTITY',
-        value: typeOp.payload.value.value,
+        value: typeOp.triple.value.value,
         name: null,
       },
     },
     {
       space: spaceId,
-      entityId: urlOp.payload.entityId,
+      entityId: urlOp.triple.entityId,
       entityName: null,
-      attributeId: urlOp.payload.attributeId,
+      attributeId: urlOp.triple.attributeId,
       attributeName: 'Image URL',
       value: {
         type: 'URL',
-        value: typeOp.payload.value.value,
+        value: typeOp.triple.value.value,
       },
     },
   ];
