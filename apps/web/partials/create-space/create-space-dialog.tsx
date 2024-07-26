@@ -158,7 +158,7 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="pointer-events-auto relative z-10 mt-32 h-full max-h-[440px] w-full max-w-[360px] overflow-hidden rounded-lg border border-grey-02 bg-white p-4 shadow-dropdown"
+      className="pointer-events-auto relative z-10 mt-32 h-full max-h-[460px] w-full max-w-[360px] overflow-hidden rounded-lg border border-grey-02 bg-white p-4 shadow-dropdown"
     >
       {children}
     </motion.div>
@@ -298,13 +298,14 @@ function SelectGovernanceType() {
       label: 'Public',
       value: 'PUBLIC',
       image: '/images/onboarding/public.png',
-      sublabel: 'All proposed edits are either accepted or rejected by editors of the space.',
+      sublabel:
+        'All proposed edits go through governance and are either accepted or rejected by the Editors of the space.',
     },
     {
       label: 'Personal',
       value: 'PERSONAL',
       image: '/images/onboarding/personal.png',
-      sublabel: 'All edits made by editors automatically get added without any voting required.',
+      sublabel: 'All edits made are automatically added without a voting period.',
     },
   ];
 
