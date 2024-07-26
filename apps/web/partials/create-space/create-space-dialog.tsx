@@ -172,6 +172,7 @@ const headerText: Record<Step, string> = {
 };
 
 const StepHeader = () => {
+  const spaceType = useAtomValue(spaceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
 
   // @TODO: Governance type
@@ -183,7 +184,11 @@ const StepHeader = () => {
         setStep('select-type');
         break;
       case 'enter-profile':
-        setStep('select-type');
+        if (spaceType === 'default') {
+          setStep('select-type');
+        } else {
+          setStep('select-governance');
+        }
         break;
       default:
         break;
@@ -252,6 +257,16 @@ function StepSelectType() {
     { image: '/images/onboarding/region.png', label: 'Region', value: 'region' },
   ];
 
+  const onNext = () => {
+    // We only let users select the governance type if they select "Blank", otherwise
+    // we default to a specific governance type depending on the space type.
+    if (spaceType === 'default') {
+      setStep('select-governance');
+    } else {
+      setStep('enter-profile');
+    }
+  };
+
   return (
     <>
       <StepContents childKey="account-type">
@@ -264,7 +279,7 @@ function StepSelectType() {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <Button onClick={() => setStep('select-governance')} disabled={spaceType === null} className="w-full">
+        <Button onClick={onNext} disabled={spaceType === null} className="w-full">
           Continue
         </Button>
       </div>
