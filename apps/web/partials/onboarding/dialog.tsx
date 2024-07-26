@@ -6,7 +6,6 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import Image from 'next/legacy/image';
 import Link from 'next/link';
 
 import * as React from 'react';
@@ -35,11 +34,11 @@ export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
-type Step = 'start' | 'select-type' | 'onboarding' | 'creating-space' | 'completed';
+type Step = 'start' | 'select-type' | 'enter-profile' | 'create-space' | 'completed';
 
 export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
-const workflowSteps: Array<Step> = ['creating-space', 'completed'];
+const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
 const MotionContent = motion(Content);
 const MotionOverlay = motion(Overlay);
@@ -94,12 +93,12 @@ export const OnboardingDialog = () => {
     setShowRetry(false);
 
     switch (step) {
-      case 'onboarding':
-        setStep('creating-space');
+      case 'enter-profile':
+        setStep('create-space');
         await sleep(100);
         createSpaces(accountType);
         break;
-      case 'creating-space':
+      case 'create-space':
         createSpaces(accountType);
         break;
     }
@@ -126,7 +125,7 @@ export const OnboardingDialog = () => {
               <StepHeader />
               {step === 'start' && <StepStart />}
               {step === 'select-type' && <StepSelectType />}
-              {step === 'onboarding' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
+              {step === 'enter-profile' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
               {workflowSteps.includes(step) && <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />}
             </ModalCard>
           </MotionContent>
@@ -161,14 +160,14 @@ const StepHeader = () => {
 
   const [step, setStep] = useAtom(stepAtom);
 
-  const showBack = step === 'select-type' || step === 'onboarding';
+  const showBack = step === 'select-type' || step === 'enter-profile';
 
   const handleBack = () => {
     switch (step) {
       case 'select-type':
         setStep('start');
         break;
-      case 'onboarding':
+      case 'enter-profile':
         setStep('select-type');
         break;
       default:
@@ -227,7 +226,7 @@ function StepStart() {
           </div>
         </StepContents>
         <div className="relative aspect-video">
-          <Image layout="fill" src="/images/onboarding/0.png" alt="" className="inline-block h-full w-full" />
+          <img src="/images/onboarding/0.png" alt="" className="inline-block h-full w-full" />
         </div>
       </div>
       <div className="absolute inset-x-4 bottom-4">
@@ -266,7 +265,7 @@ function StepSelectType() {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <Button onClick={() => setStep('onboarding')} disabled={accountType === null} className="w-full">
+        <Button onClick={() => setStep('enter-profile')} disabled={accountType === null} className="w-full">
           Continue
         </Button>
       </div>
@@ -280,12 +279,19 @@ type StepOnboardingProps = {
 };
 
 const placeholderMessage: Record<SpaceType, string> = {
-  personal: 'Your name',
+  personal: 'Personal name',
   company: 'Company name',
   nonprofit: 'Nonprofit name',
 
-  // Should never trigger default
-  default: '',
+  // Should never trigger these governance types
+  default: 'Space name',
+  'academic-field': 'Academic field name',
+  region: 'Region name',
+  industry: 'Industry name',
+  protocol: 'Protocol name',
+  dao: 'DAO name',
+  'government-org': 'Government org name',
+  'interest-group': 'Interest group name',
 };
 
 function StepOnboarding({ onNext, address }: StepOnboardingProps) {
@@ -388,26 +394,25 @@ type StepCompleteProps = {
 const stepNumber: Record<Step, number> = {
   start: 0,
   'select-type': 0,
-  onboarding: 0,
-  'creating-space': 1,
-  completed: 2,
+  'enter-profile': 1,
+  'create-space': 2,
+  completed: 3,
 };
 
 const retryMessage: Record<Step, string> = {
   start: '',
   'select-type': '',
-  onboarding: '',
-  'creating-space': 'Space creation failed',
+  'enter-profile': '',
+  'create-space': 'Space creation failed',
   completed: '',
 };
 
-const completeMessage: Record<SpaceType, string> = {
+type SpaceTypeSubsetForOnboarding = Extract<SpaceType, 'personal' | 'company' | 'nonprofit'>;
+
+const completeMessage: Record<SpaceTypeSubsetForOnboarding, string> = {
   personal: 'Go to my personal space',
   company: 'Go to my company space',
   nonprofit: 'Go to my nonprofit space',
-
-  // Should never trigger default
-  default: '',
 };
 
 const complete: Record<number, { label: string; image: string }> = {
@@ -462,12 +467,12 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
         <div className="relative aspect-video">
-          <Image layout="fill" src={complete[stepNumber[step]].image} alt="" className="inline-block h-full w-full" />
+          <img src={complete[stepNumber[step]].image} alt="" className="inline-block h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Link href={NavUtils.toSpace(spaceId)} className="w-full" onClick={hideOnboarding}>
             <Button className="w-full" disabled={step !== 'completed'}>
-              {completeMessage[accountType as SpaceType]}
+              {completeMessage[accountType as SpaceTypeSubsetForOnboarding]}
             </Button>
           </Link>
         </div>

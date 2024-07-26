@@ -21,7 +21,7 @@ import { Environment } from '~/core/environment';
 import { IpfsUploadError } from '~/core/errors';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SpaceGovernanceType, SpaceType } from '~/core/types';
+import { OmitStrict, SpaceGovernanceType, SpaceType } from '~/core/types';
 import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
 import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
 import { Ops } from '~/core/utils/ops';
@@ -57,6 +57,7 @@ class GenerateOpsError extends Error {
 
 interface DeployArgs {
   type: SpaceType;
+  governanceType?: SpaceGovernanceType;
   spaceName: string;
   spaceAvatarUri: string | null;
   initialEditorAddress: string;
@@ -66,7 +67,12 @@ interface DeployArgs {
 export function deploySpace(args: DeployArgs) {
   return Effect.gen(function* () {
     const initialEditorAddress = getAddress(args.initialEditorAddress);
-    const governanceType = getGovernanceTypeForSpaceType(args.type);
+
+    if (args.type === 'default' && args.governanceType === undefined) {
+      throw new Error('Governance type is required for default spaces');
+    }
+
+    const governanceType = getGovernanceTypeForSpaceType(args.type, args.governanceType);
 
     const ops = yield* Effect.tryPromise({
       try: () => generateOpsForSpaceType(args),
@@ -180,6 +186,8 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
     // @TODO: Do we add the Person type? That would mean this has to be a collection
   }
 
+  // @TODO: Clone entity for the other governance types
+
   if (type === 'company') {
     // Space address doesn't matter here since we're immediately writing the ops and not persisting
     // in the local db.
@@ -215,13 +223,14 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
   return ops;
 }
 
-function getGovernanceTypeForSpaceType(type: SpaceType): SpaceGovernanceType {
+function getGovernanceTypeForSpaceType(type: SpaceType, governanceType?: SpaceGovernanceType): SpaceGovernanceType {
   switch (type) {
     case 'default':
-      return 'PUBLIC';
-    case 'personal':
-    case 'company':
-    case 'nonprofit':
+      // Adding a fallback to appease TS. Ideally we can discriminate whether governanceType
+      // should exist based on the space type.
+      return governanceType ?? 'PUBLIC';
+
+    // @TODO: Space types for each of the governance types
     default:
       return 'PERSONAL';
   }
