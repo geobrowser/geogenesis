@@ -130,21 +130,17 @@ export function deploySpace(args: DeployArgs) {
         const steps = await createDao(createParams, deployParams);
 
         for await (const step of steps) {
-          try {
-            switch (step.key) {
-              case DaoCreationSteps.CREATING:
-                console.log({ txHash: step.txHash });
-                break;
-              case DaoCreationSteps.DONE:
-                console.log({
-                  daoAddress: step.address,
-                  pluginAddresses: step.pluginAddresses,
-                });
+          switch (step.key) {
+            case DaoCreationSteps.CREATING:
+              console.log({ txHash: step.txHash });
+              break;
+            case DaoCreationSteps.DONE:
+              console.log({
+                daoAddress: step.address,
+                pluginAddresses: step.pluginAddresses,
+              });
 
-                return await waitForSpaceToBeIndexed(step.address);
-            }
-          } catch (err) {
-            throw err;
+              return await waitForSpaceToBeIndexed(step.address);
           }
         }
       },
