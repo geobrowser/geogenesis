@@ -1,6 +1,7 @@
 'use client';
 
 import * as Dialog from '@radix-ui/react-dialog';
+import * as Component from '@radix-ui/react-radio-group';
 import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -13,7 +14,7 @@ import { ChangeEvent, useCallback, useRef, useState } from 'react';
 import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { Services } from '~/core/services';
-import { SpaceType } from '~/core/types';
+import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { getImagePath, sleep } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 
@@ -28,6 +29,7 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 export const spaceTypeAtom = atom<SpaceType | null>(null);
+export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
 export const nameAtom = atom<string>('');
 export const avatarAtom = atom<string>('');
 export const spaceIdAtom = atom<string>('');
@@ -122,7 +124,8 @@ export function CreateSpaceDialog() {
                 <ModalCard childKey="card">
                   <StepHeader />
                   {step === 'select-type' && <StepSelectType />}
-                  {step === 'enter-profile' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
+                  {step === 'select-governance' && <SelectGovernanceType />}
+                  {step === 'enter-profile' && <StepEnterProfile onNext={onRunOnboardingWorkflow} address={address} />}
                   {workflowSteps.includes(step) && (
                     <StepComplete
                       onRetry={onRunOnboardingWorkflow}
@@ -172,7 +175,7 @@ const StepHeader = () => {
   const [step, setStep] = useAtom(stepAtom);
 
   // @TODO: Governance type
-  const showBack = step === 'enter-profile';
+  const showBack = step === 'select-governance' || step === 'enter-profile';
 
   const handleBack = () => {
     switch (step) {
@@ -252,7 +255,7 @@ function StepSelectType() {
   return (
     <>
       <StepContents childKey="account-type">
-        <div className="mt-8">
+        <div className="mt-3">
           <RadioGroup
             value={spaceType ?? ''}
             onValueChange={setspaceType as (value: string) => void}
@@ -261,7 +264,7 @@ function StepSelectType() {
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <Button onClick={() => setStep('enter-profile')} disabled={spaceType === null} className="w-full">
+        <Button onClick={() => setStep('select-governance')} disabled={spaceType === null} className="w-full">
           Continue
         </Button>
       </div>
@@ -269,7 +272,46 @@ function StepSelectType() {
   );
 }
 
-type StepOnboardingProps = {
+function SelectGovernanceType() {
+  const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
+  const setStep = useSetAtom(stepAtom);
+
+  const options: GovernanceTypeRadioOption[] = [
+    {
+      label: 'Public',
+      value: 'PUBLIC',
+      image: '/images/onboarding/public.png',
+      sublabel: 'All proposed edits are either accepted or rejected by editors of the space.',
+    },
+    {
+      label: 'Personal',
+      value: 'PERSONAL',
+      image: '/images/onboarding/personal.png',
+      sublabel: 'All edits made by editors automatically get added without any voting required.',
+    },
+  ];
+
+  return (
+    <>
+      <StepContents childKey="account-type">
+        <div className="mt-3">
+          <GovernanceTypeRadioGroup
+            value={governanceType ?? ''}
+            onValueChange={setGovernanceType as (value: string) => void}
+            options={options}
+          />
+        </div>
+      </StepContents>
+      <div className="absolute inset-x-4 bottom-4 space-y-4">
+        <Button onClick={() => setStep('enter-profile')} disabled={governanceType === null} className="w-full">
+          Continue
+        </Button>
+      </div>
+    </>
+  );
+}
+
+type StepEnterProfileProps = {
   onNext: () => void;
   address: string;
 };
@@ -288,7 +330,7 @@ const placeholderMessage: Record<SpaceType, string> = {
   'interest-group': 'Interest group name',
 };
 
-function StepOnboarding({ onNext, address }: StepOnboardingProps) {
+function StepEnterProfile({ onNext, address }: StepEnterProfileProps) {
   const { ipfs } = Services.useServices();
   const spaceType = useAtomValue(spaceTypeAtom);
   const [name, setName] = useAtom(nameAtom);
@@ -439,5 +481,43 @@ function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
         </div>
       </div>
     </>
+  );
+}
+
+type RadioGroupProps = {
+  value: string;
+  onValueChange: (value: string) => void;
+  options: Array<GovernanceTypeRadioOption>;
+};
+
+type GovernanceTypeRadioOption = {
+  value: string;
+  label: string;
+  sublabel: string;
+  image: string;
+};
+
+function GovernanceTypeRadioGroup({ value, onValueChange, options, ...rest }: RadioGroupProps) {
+  return (
+    <Component.Root value={value} onValueChange={onValueChange} className="flex flex-col gap-3" {...rest}>
+      {options.map(({ label, image, value, sublabel, ...rest }) => (
+        <Component.Item
+          key={value}
+          value={value}
+          className={cx(
+            'data-[state=checked]:to-ctaSecondary flex items-center justify-between rounded-lg bg-divider p-4 text-text transition-all duration-300 data-[state=checked]:bg-gradient-to-tr data-[state=checked]:from-[#BAFEFF] data-[state=checked]:via-[#E5C4F6] data-[state=checked]:to-[#FFCBB4]'
+          )}
+          {...rest}
+        >
+          <div className="space-y-7">
+            <div className="space-y-2">
+              <h4 className="text-quoteMedium">{label}</h4>
+              <p className="text-metadata">{sublabel}</p>
+            </div>
+            <img src={image} alt={label} className="max-h-6 w-auto" />
+          </div>
+        </Component.Item>
+      ))}
+    </Component.Root>
   );
 }
