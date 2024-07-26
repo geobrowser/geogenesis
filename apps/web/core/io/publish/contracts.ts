@@ -1,11 +1,11 @@
 import { SpaceType } from '~/core/types';
 
+// @TODO: Delete these functions once we have actual onboarding
+
 export async function deploySpaceContract({ account }: { account: string }): Promise<{ spaceAddress: `0x${string}` }> {
   const url = new URL(`/api/contracts/deploy?userAddress=${account}`, window.location.href);
 
   // @TODO: Error and success handling with Effect
-  const spaceContractDeploymentResponse = await fetch(url);
-
   const createAndConfigureSpaceResponse = await fetch(url);
 
   if (!createAndConfigureSpaceResponse.ok || createAndConfigureSpaceResponse.status >= 400) {
@@ -17,7 +17,7 @@ export async function deploySpaceContract({ account }: { account: string }): Pro
     throw new Error(`Unable to create and configure space: ${createAndConfigureSpaceResponse.statusText}`);
   }
 
-  return await spaceContractDeploymentResponse.json();
+  return await createAndConfigureSpaceResponse.json();
 }
 
 export type AccountType = 'person' | 'company' | 'nonprofit';

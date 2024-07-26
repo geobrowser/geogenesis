@@ -2,18 +2,28 @@ import { Effect } from 'effect';
 
 import { IpfsUploadError } from '~/core/errors';
 
+import { Environment } from '../environment';
+
 /**
  * This class provides a simple namespace for interacting with the API routes
  * used for uploading binary or files to IPFS. All IPFS interactions are done
  * on the server as API routes.
  */
 export class IpfsClient {
-  static async upload(binary: Uint8Array): Promise<`ipfs://${string}`> {
+  /**
+   * Uploads a binary blob to IPFS and returns the URI.
+   *
+   * @param binary - The binary to upload as a Uint8Array.
+   * @param baseUrl - The base URL to use for the upload. This is required if calling
+   *                  the API from a route handler. If calling from the client it's
+   *                  okay to call the route handler using a relative URL.
+   */
+  static async upload(binary: Uint8Array, baseUrl?: string): Promise<`ipfs://${string}`> {
     const blob = new Blob([binary], { type: 'application/octet-stream' });
     const formData = new FormData();
     formData.append('file', blob);
 
-    const url = `/api/ipfs/upload`;
+    const url = baseUrl ? `${baseUrl}/api/ipfs/upload` : '/api/ipfs/upload';
     console.log(`Posting to url`, url);
 
     const response = await fetch(url, {

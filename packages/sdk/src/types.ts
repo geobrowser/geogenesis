@@ -1,5 +1,3 @@
-import type { CreateTripleAction, DeleteTripleAction } from '../legacy';
-
 export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';
 
 export type Value = {
@@ -32,11 +30,6 @@ export type DeleteTripleOp = {
 };
 
 export type Op = SetTripleOp | DeleteTripleOp;
-
-/**
- * @deprecated Use operations instead of actions
- */
-export type Action = CreateTripleAction | DeleteTripleAction;
 
 export type EditProposalMetadata = {
   type: 'ADD_EDIT';

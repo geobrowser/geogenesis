@@ -3,7 +3,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 import { Environment } from '~/core/environment';
 import { CONDUIT_TESTNET } from '~/core/wallet/conduit-chain';
-import { walletClientToSigner } from '~/core/wallet/ethers-adapters';
+import { walletClientToSigner } from '~/core/wallet/wallet-client-to-signer';
 
 export const geoAccount = privateKeyToAccount(Environment.variables.geoPk as `0x${string}`);
 
