@@ -12,7 +12,7 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
     const value_type = value.type;
 
     const entity_value_id = value_type === 'ENTITY' ? value.value : null;
-    const text_value = value_type === 'TEXT' || value_type === 'URL' ? value.value : null;
+    const text_value = value_type !== 'ENTITY' ? value.value : null;
 
     return {
       space_id,

@@ -255,7 +255,7 @@ const makeTypeRelations = () => {
 
   // 2. Make the relation triples for the type entity
   //    For every type we need to make a relation entity to represent the type
-  for (let [typeId] of Object.entries(types)) {
+  for (let [typeEntityId] of Object.entries(types)) {
     const typeRelationEntityId = createGeoId();
 
     // Make a relation of Type -> Type
@@ -263,7 +263,7 @@ const makeTypeRelations = () => {
       // @TODO: we don't need entity_id if we can use the id as the entity_id
       id: typeRelationEntityId,
       type_of_id: SYSTEM_IDS.SCHEMA_TYPE, // Making a relation of Type -> Type, i.e., this entity is a Type
-      from_entity_id: typeId,
+      from_entity_id: typeEntityId,
       to_entity_id: SYSTEM_IDS.SCHEMA_TYPE,
       index: INITIAL_COLLECTION_ITEM_INDEX,
       entity_id: typeRelationEntityId,
@@ -271,10 +271,10 @@ const makeTypeRelations = () => {
 
     // Create all the relationship triples for the Type -> Type relation
     const typeRelationshipTriples = createRelationship({
-      fromId: typeId,
-      toId: createGeoId(),
-      spaceId: SYSTEM_IDS.ROOT_SPACE_ID,
       relationTypeId: SYSTEM_IDS.SCHEMA_TYPE,
+      fromId: typeEntityId,
+      toId: SYSTEM_IDS.SCHEMA_TYPE,
+      spaceId: SYSTEM_IDS.ROOT_SPACE_ID,
     }).map(op =>
       getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, {
         blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
@@ -299,10 +299,10 @@ const makeTypeRelations = () => {
       relationsToWrite.push({
         // @TODO: we don't need entity_id if we can use the id as the entity_id
         id: newRelationEntityId,
+        from_entity_id: typeId,
         type_of_id: SYSTEM_IDS.ATTRIBUTE, // Making a relation of type Attribute
         to_entity_id: attributeId,
         index: INITIAL_COLLECTION_ITEM_INDEX,
-        from_entity_id: SYSTEM_IDS.RELATION,
         entity_id: newRelationEntityId,
       });
 
@@ -320,113 +320,19 @@ const makeTypeRelations = () => {
         })
       );
 
+      if (typeId === SYSTEM_IDS.PERSON_TYPE) {
+        console.log(`relationshipTriples for person`, relationshipTriples);
+      }
+
       triplesToWrite.push(...relationshipTriples);
     }
   }
-
-  // Value types?
-  // 3. Return the relation ids to make entities in DB
-  // 4. Return the relation triples to make relation triples in DB
-  // 5. Return the relation triple fields to make relation rows in the DB
-  //
-  // Don't make collection items anymore
 
   return {
     relationsForTypesAndAttributes: relationsToWrite,
     triplesForTypesAndAttributes: triplesToWrite,
   };
 };
-
-// These are triples on the relation entity
-// const getTypeTriples = () => {
-//   const relationsToWrite: s.relations.Insertable[] = [];
-
-//   const triples = Object.entries(types)
-//     .map(([typeId, attributes]): s.triples.Insertable[] => {
-//       const collectionEntityId = createGeoId(); // This is the relation entity
-
-//       const collectionItemsForAttributes = attributes
-//         .map((attributeId): s.triples.Insertable[] => {
-//           const collectionItemEntityId = createGeoId();
-
-//           // This is used to write the collection item to the collection_items
-//           // table in the database. The below objects are used to write the
-//           // triples for each collection item.
-//           relationsToWrite.push({
-//             id: collectionItemEntityId,
-//             to_entity_id: collectionItemEntityId, // id of the to field
-//             from_entity_id: collectionEntityId, // id of the from field
-//             entity_id: attributeId,
-//             index: INITIAL_COLLECTION_ITEM_INDEX,
-//           });
-
-//           const collectionItemTriples = createRelationship({
-//             collectionId: collectionEntityId,
-//             entityId: attributeId,
-//             spaceId: SYSTEM_IDS.ROOT_SPACE_ID,
-//           });
-
-//           return collectionItemTriples.map(op =>
-//             getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, {
-//               blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
-//               cursor: '',
-//               requestId: '',
-//               timestamp: ROOT_SPACE_CREATED_AT,
-//             })
-//           );
-//         })
-//         .flat();
-
-//       return [
-//         /* Giving these entities a type of type */
-//         {
-//           entity_id: typeId,
-//           attribute_id: SYSTEM_IDS.TYPES,
-//           value_type: 'ENTITY',
-//           entity_value_id: SYSTEM_IDS.SCHEMA_TYPE,
-//           space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-//           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-//           created_at: ROOT_SPACE_CREATED_AT,
-//           is_stale: false,
-//         },
-
-//         // Create a collection entity with type Collection. We might be
-//         // adding multiple attributes so need to use a collection list
-//         // many entity references.
-//         {
-//           entity_id: collectionEntityId,
-//           attribute_id: SYSTEM_IDS.TYPES,
-//           value_type: 'ENTITY',
-//           entity_value_id: SYSTEM_IDS.COLLECTION_TYPE,
-//           space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-//           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-//           created_at: ROOT_SPACE_CREATED_AT,
-//           is_stale: false,
-//         },
-
-//         {
-//           entity_id: typeId,
-//           attribute_id: SYSTEM_IDS.ATTRIBUTES,
-//           value_type: 'COLLECTION',
-//           entity_value_id: collectionEntityId,
-//           space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-//           created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-//           created_at: ROOT_SPACE_CREATED_AT,
-//           is_stale: false,
-//         },
-
-//         // Create the collection + collection items to map multiple
-//         // attributes to the "Attributes" attribute (lol)
-//         ...collectionItemsForAttributes,
-//       ];
-//     })
-//     .flat();
-
-//   return {
-//     typeTriples: triples,
-//     collectionItems: relationsToWrite,
-//   };
-// };
 
 const space: s.spaces.Insertable = {
   id: SYSTEM_IDS.ROOT_SPACE_ID,
