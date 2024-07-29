@@ -9,7 +9,6 @@ export type ValueType =
   | 'TEXT'
   | 'NUMBER'
   | 'ENTITY'
-  | 'COLLECTION'
   | 'CHECKBOX'
   | 'URL'
   | 'TIME'
@@ -47,18 +46,12 @@ export type AppImageValue = {
   image: string; // the image source itself
 };
 
-export type AppCollectionValue = {
-  type: 'COLLECTION';
-  value: string;
-  items: CollectionItem[];
-};
-
 export type AppCheckboxValue = {
   type: 'CHECKBOX';
   value: string; // @TODO: Really it's a boolean
 };
 
-export type Value = AppEntityValue | AppCollectionValue | AppCheckboxValue | AppImageValue | AppValue;
+export type Value = AppEntityValue | AppCheckboxValue | AppImageValue | AppValue;
 
 export type SetTripleAppOp = {
   type: 'SET_TRIPLE';
@@ -320,7 +313,6 @@ export type TripleWithEntityValue = OmitStrict<Triple, 'value'> & { value: AppEn
 export type TripleWithImageValue = OmitStrict<Triple, 'value'> & { value: Value };
 export type TripleWithDateValue = OmitStrict<Triple, 'value'> & { value: Value };
 export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: Value };
-export type TripleWithCollectionValue = OmitStrict<Triple, 'value'> & { value: AppCollectionValue };
 
 export type SpaceId = string;
 export type SpaceTriples = Record<SpaceId, Triple[]>;

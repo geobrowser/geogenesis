@@ -197,9 +197,6 @@ const types: Record<string, string[]> = {
 const geoEntities: s.entities.Insertable[] = entities.map(entity => ({
   id: entity,
   name: names[entity],
-  // is_attribute: attributes[entity] ? true : false,
-  // is_type: types[entity] ? true : false,
-  // attribute_value_type_id: attributes[entity],
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
   created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
   created_at: ROOT_SPACE_CREATED_AT,
@@ -246,6 +243,8 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
     },
   ])
   .flat();
+
+// @TODO: Make attribute relations
 
 // Make the type entities themselves and any relations that they have
 const makeTypeRelations = () => {

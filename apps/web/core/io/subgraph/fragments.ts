@@ -29,28 +29,6 @@ export const tripleFragment = `
     }
   }
   numberValue
-  collectionValue {
-    id
-    collectionItems {
-      nodes {
-        index
-        collectionItemEntityId
-        entity {
-          id
-          name
-          types {
-            nodes {
-              id
-            }
-          }
-          triples {
-            nodes {
-              ${imageValueTypeTripleFragment}
-            }
-          }
-        }
-      }
-    }
   }
   textValue
   valueType
@@ -84,29 +62,6 @@ export const resultTripleFragment = `
     }
   }
   numberValue
-  collectionValue {
-    id
-    collectionItems {
-      nodes {
-        index
-        collectionItemEntityId
-        entity {
-          id
-          name
-          types {
-            nodes {
-              id
-            }
-          }
-          triples {
-            nodes {
-              ${imageValueTypeTripleFragment}
-            }
-          }
-        }
-      }
-    }
-  }
   textValue
   valueType
   space {

@@ -1,18 +1,12 @@
 'use client';
 
 import { SYSTEM_IDS, createCollection } from '@geogenesis/sdk';
-import { createCollectionItem, createGeoId, createImageEntityOps } from '@geogenesis/sdk';
+import { createGeoId } from '@geogenesis/sdk';
 
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import {
-  EntitySearchResult,
-  Value as IValue,
-  Triple as TripleType,
-  ValueType as TripleValueType,
-  TripleWithCollectionValue,
-} from '~/core/types';
+import { EntitySearchResult, Value as IValue, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
@@ -173,51 +167,6 @@ export type EditEvent =
       payload: {
         triple: TripleType;
       };
-    }
-  | {
-      type: 'CREATE_COLLECTION_ITEM';
-      payload: {
-        collectionId: string;
-        entity: EntitySearchResult;
-        collectionTriple: TripleWithCollectionValue;
-      };
-    }
-  | {
-      type: 'DELETE_COLLECTION_ITEM';
-      payload: {
-        collectionItemId: string;
-        collectionTriple: TripleWithCollectionValue;
-      };
-    }
-  | {
-      // This occurs automatically when the user adds a second image
-      // in the UI. We automatically take the first image and the new
-      // image and add them to a newly created collection.
-      type: 'CONVERT_IMAGE_TO_IMAGE_COLLECTION';
-      payload: {
-        // The entity ids of the original image and the new image
-        // being created
-        entityIds: string[];
-
-        // The attribute for the triple we're making a collection for
-        attribute: {
-          id: string;
-          name: string | null;
-        };
-      };
-    }
-  | {
-      // This occurs automatically when the user toggles the Many/One
-      // toggle to a One. We delete the collection and collection items
-      // associated with the image collection and create a new IMAGE
-      // triple with just the entity id of the image being used.
-      //
-      // If there is no first image we create a placeholder image triple.
-      type: 'CONVERT_IMAGE_COLLECTION_TO_IMAGE';
-      payload: {
-        entityId: string;
-        value: string;
-      } | null;
     };
 
 interface EditApi {
@@ -656,177 +605,6 @@ const listener =
           },
           context.spaceId
         );
-      }
-      case 'CREATE_COLLECTION_ITEM': {
-        const { collectionId, entity, collectionTriple } = event.payload;
-        const { spaceId } = context;
-
-        const triples = Collections.createCollectionItemTriples({
-          collectionId,
-          entityId: entity.id,
-          spaceId,
-        });
-
-        const newCollectionTriple: TripleWithCollectionValue = {
-          ...collectionTriple,
-          value: {
-            ...collectionTriple.value,
-            items: [
-              ...collectionTriple.value.items,
-              {
-                collectionId: collectionTriple.entityId,
-                entity: {
-                  id: entity.id,
-                  name: entity.name,
-                  types: [],
-                },
-                id: triples[0].entityId,
-                index: triples[3].value.value,
-                value: {
-                  type: 'ENTITY',
-                  value: entity.name,
-                },
-              },
-            ],
-          },
-        };
-
-        return upsertMany(
-          [...triples, newCollectionTriple].map(t => {
-            return {
-              spaceId: t.space,
-              op: {
-                ...t,
-                type: 'SET_TRIPLE',
-              },
-            };
-          })
-        );
-      }
-      case 'DELETE_COLLECTION_ITEM': {
-        const { collectionItemId, collectionTriple } = event.payload;
-        const { spaceId } = context;
-
-        remove(
-          {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
-            entityId: collectionItemId,
-          },
-          spaceId
-        );
-        remove(
-          {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
-            entityId: collectionItemId,
-          },
-          spaceId
-        );
-        remove(
-          {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
-            entityId: collectionItemId,
-          },
-          spaceId
-        );
-        remove(
-          {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-            entityId: collectionItemId,
-          },
-          spaceId
-        );
-
-        const newCollectionTriple: TripleWithCollectionValue = {
-          ...collectionTriple,
-          value: {
-            ...collectionTriple.value,
-            items: collectionTriple.value.items.filter(i => i.id !== collectionItemId),
-          },
-        };
-
-        return upsert({ ...newCollectionTriple, type: 'SET_TRIPLE' }, spaceId);
-      }
-      // This occurs automatically when the user adds a second image
-      // in the UI. We automatically take the first image and the new
-      // image and add them to a newly created collection.
-      case 'CONVERT_IMAGE_TO_IMAGE_COLLECTION': {
-        const { entityIds, attribute } = event.payload;
-        const { spaceId, entityId, entityName } = context;
-
-        const collection = createCollection();
-
-        const collectionOp: StoreOp = {
-          attributeId: collection.triple.attribute,
-          entityId: collection.triple.entity,
-          attributeName: 'Types',
-          entityName: null,
-          type: 'SET_TRIPLE',
-          value: {
-            type: collection.triple.value.type,
-            value: collection.triple.value.value,
-            name: null,
-          },
-        };
-
-        // @TODO: if entityIds is 0 then skip and make the triple a placeholder.
-        // We can receive 0 entity ids if the user manually decides to create
-        // a brand new triple as a collection and not a single IMAGE/ENTITY.
-        //
-        // Create all of the triples for all of the new collection items
-        const collectionItemsTriples = entityIds
-          .map(id =>
-            Collections.createCollectionItemTriples({
-              collectionId: collection.triple.entity,
-              entityId: id,
-              spaceId,
-            })
-          )
-          .flat();
-
-        // Map all of the triples for a collection item into the CollectionItem
-        // data structure so it's easy to read later.
-        const collectionItemsFromTriples = Collections.itemFromTriples(
-          groupBy(collectionItemsTriples, t => t.entityId)
-        );
-
-        // @TODO: Make collection triple from the images
-        const newCollectionTriple: { op: StoreOp; spaceId: string } = {
-          op: {
-            type: 'SET_TRIPLE',
-            attributeId: attribute.id,
-            attributeName: attribute.name,
-            entityId,
-            entityName,
-            value: {
-              type: 'COLLECTION',
-              value: collection.triple.entity,
-              items: collectionItemsFromTriples,
-            },
-          },
-          spaceId,
-        };
-
-        const collectionItemTriplesAsStoreOps = collectionItemsTriples.map((t): { op: StoreOp; spaceId: string } => {
-          return {
-            op: {
-              ...t,
-              type: 'SET_TRIPLE',
-            },
-            spaceId,
-          };
-        });
-
-        upsertMany([
-          {
-            op: collectionOp,
-            spaceId,
-          },
-          ...collectionItemTriplesAsStoreOps,
-          newCollectionTriple,
-        ]);
-      }
-      case 'CONVERT_IMAGE_COLLECTION_TO_IMAGE': {
-        throw new Error('CONVERT_IMAGE_COLLECTION_TO_IMAGE not implemented');
       }
     }
   };

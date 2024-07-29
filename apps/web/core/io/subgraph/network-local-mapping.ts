@@ -36,19 +36,6 @@ type Identifiable = {
   id: string;
 };
 
-type SubstreamCollectionItem = {
-  collectionItemEntityId: string;
-  index: string;
-  entity: {
-    id: string;
-    name: string | null;
-    types: { nodes: SubstreamType[] };
-    triples: {
-      nodes: SubstreamImageValueTriple[];
-    };
-  } | null;
-};
-
 type SubstreamNumberValue = { valueType: 'NUMBER'; numberValue: string };
 type SubstreamTextValue = { valueType: 'TEXT'; textValue: string };
 type SubstreamEntityValue = {
@@ -69,23 +56,13 @@ type SubstreamEntityValue = {
 };
 type SubstreamTimeValue = { valueType: 'TIME'; textValue: string };
 type SubstreamUrlValue = { valueType: 'URL'; textValue: string };
-type SubstreamCollectionValue = {
-  valueType: 'COLLECTION';
-  collectionValue: {
-    id: string;
-    collectionItems: {
-      nodes: SubstreamCollectionItem[];
-    };
-  };
-};
 
 type SubstreamValue =
   | SubstreamNumberValue
   | SubstreamTextValue
   | SubstreamEntityValue
   | SubstreamTimeValue
-  | SubstreamUrlValue
-  | SubstreamCollectionValue;
+  | SubstreamUrlValue;
 
 export type SubstreamTriple = SubstreamValue & {
   entity: Identifiable & Nameable;
@@ -206,54 +183,6 @@ export function extractValue(networkTriple: SubstreamTriple | SubstreamOp): Valu
       return { type: 'TIME', value: networkTriple.textValue };
     case 'URL':
       return { type: 'URL', value: networkTriple.textValue };
-    case 'COLLECTION':
-      return {
-        type: 'COLLECTION',
-        value: networkTriple.collectionValue.id,
-        items: networkTriple.collectionValue.collectionItems.nodes.flatMap((c): CollectionItem[] => {
-          // @TODO(migration) We can have a null entity if the value doesn't exist in the db at the
-          // time of indexing the collection item
-          if (!c.entity) {
-            return [];
-          }
-
-          if (isImageEntity(c.entity.types.nodes)) {
-            return [
-              {
-                id: c.collectionItemEntityId,
-                collectionId: networkTriple.collectionValue.id,
-                index: c.index,
-                entity: {
-                  id: c.entity.id,
-                  name: c.entity.name,
-                  types: flattenTypeIds(c.entity.types.nodes),
-                },
-                value: {
-                  type: 'IMAGE',
-                  value: getImageUrlFromImageEntity(c.entity.triples.nodes),
-                },
-              },
-            ];
-          }
-
-          return [
-            {
-              id: c.collectionItemEntityId,
-              collectionId: networkTriple.collectionValue.id,
-              index: c.index,
-              entity: {
-                id: c.entity.id,
-                name: c.entity.name,
-                types: flattenTypeIds(c.entity.types.nodes),
-              },
-              value: {
-                type: 'ENTITY',
-                value: c.entity.name,
-              },
-            },
-          ];
-        }),
-      };
   }
 }
 
@@ -290,8 +219,6 @@ export function extractActionValue(networkAction: SubstreamOp): Value {
       return { type: 'TIME', value: networkAction.textValue };
     case 'URL':
       return { type: 'URL', value: networkAction.textValue };
-    case 'COLLECTION':
-      return { type: 'COLLECTION', value: networkAction.collectionValue.id, items: [] };
   }
 }
 
@@ -307,8 +234,6 @@ function networkTripleHasEmptyValue(networkTriple: SubstreamTriple | SubstreamOp
       return !networkTriple.textValue;
     case 'URL':
       return !networkTriple.textValue;
-    case 'COLLECTION':
-      return !networkTriple.collectionValue;
   }
 }
 
@@ -324,8 +249,6 @@ function substreamTripleHasEmptyValue(networkTriple: SubstreamOp): boolean {
       return !networkTriple.textValue;
     case 'URL':
       return !networkTriple.textValue;
-    case 'COLLECTION':
-      return !networkTriple.collectionValue;
   }
 }
 
@@ -444,46 +367,4 @@ function getImageUrlFromImageEntity(triples: SubstreamImageValueTriple[]): strin
 
 function isImageEntity(types: SubstreamType[]): boolean {
   return types.some(t => t.id === SYSTEM_IDS.IMAGE);
-}
-
-function flattenTypeIds(types: SubstreamType[]) {
-  return types.map(t => t.id);
-}
-
-export function getCollectionItemsFromBlocksTriple(entity: Entity) {
-  const blockIdsTriple =
-    entity.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
-
-  const blockCollectionItems =
-    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
-
-  return {
-    blockIdsTriple,
-    blockCollectionItems,
-  };
-}
-
-export async function getBlocksCollectionData(entity: Entity) {
-  const { blockCollectionItems, blockIdsTriple } = getCollectionItemsFromBlocksTriple(entity);
-  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
-
-  const [blockTriples, collectionItemTriples] = await Promise.all([
-    Promise.all(
-      blockIds.map(blockId => {
-        return fetchEntity({ id: blockId });
-      })
-    ),
-    Promise.all(
-      blockCollectionItems.map(item => {
-        return fetchEntity({ id: item.id });
-      })
-    ),
-  ]);
-
-  return {
-    blockIdsTriple,
-    blockTriples,
-    blockCollectionItems,
-    collectionItemTriples,
-  };
 }

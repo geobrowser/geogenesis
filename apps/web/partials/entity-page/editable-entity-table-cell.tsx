@@ -4,7 +4,7 @@ import { memo } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { Cell, EntitySearchResult, Triple, TripleWithCollectionValue } from '~/core/types';
+import { Cell, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
@@ -61,7 +61,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   // might be multiple triples if we don't filter by the space.
   const firstTriple = triples[0];
   const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
-  const isCollectionValueTypeColumn = valueType === SYSTEM_IDS.COLLECTION_VALUE_TYPE;
   const isRelationValueTypeColumn = valueType === SYSTEM_IDS.RELATION;
   const isTextValueTypeColumn = valueType === SYSTEM_IDS.TEXT;
   const isImageValueTypeColumn = valueType === SYSTEM_IDS.IMAGE;
@@ -71,7 +70,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const isEmptyRelation = isRelationValueTypeColumn && isEmptyCell;
   const isPopulatedRelation = isRelationValueTypeColumn && !isEmptyCell;
-  const isPopulatedCollection = isCollectionValueTypeColumn && !isEmptyCell;
 
   const typesToFilter = columnRelationTypes
     ? columnRelationTypes.length > 0
@@ -84,27 +82,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       type: 'DELETE_ENTITY',
       payload: {
         triple,
-      },
-    });
-  };
-
-  const createCollectionItem = (collectionId: string, entity: EntitySearchResult, collectionTriple: Triple) => {
-    send({
-      type: 'CREATE_COLLECTION_ITEM',
-      payload: {
-        entity,
-        collectionId,
-        collectionTriple: collectionTriple as TripleWithCollectionValue,
-      },
-    });
-  };
-
-  const deleteCollectionItem = (collectionItemId: string, collectionTriple: Triple) => {
-    send({
-      type: 'DELETE_COLLECTION_ITEM',
-      payload: {
-        collectionItemId,
-        collectionTriple: collectionTriple as TripleWithCollectionValue,
       },
     });
   };
@@ -235,30 +212,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   return (
     <div className="flex w-full flex-wrap gap-2">
-      {isPopulatedCollection && triples[0].value.type === 'COLLECTION' && (
-        <>
-          {triples[0].value.items.map(item => (
-            <div key={`entity-${item.id}`}>
-              <DeletableChipButton
-                href={NavUtils.toEntity(triples[0].space, item.entity.id)}
-                onClick={() => deleteCollectionItem(item.id, triples[0])}
-              >
-                {item.value.value ?? item.entity.id}
-              </DeletableChipButton>
-            </div>
-          ))}
-
-          <EntityAutocompleteDialog
-            onDone={entity => createCollectionItem(triples[0].entityId, entity, triples[0])}
-            entityValueIds={entityValueTriples
-              .filter(triple => triple.attributeId === attributeId)
-              .map(triple => triple.value.value)}
-            allowedTypes={typesToFilter}
-            spaceId={space}
-            attributeId={attributeId}
-          />
-        </>
-      )}
       {isPopulatedRelation && (
         <>
           {triples.map(triple => (

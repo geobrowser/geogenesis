@@ -9,13 +9,7 @@ import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import type {
-  EntitySearchResult,
-  Entity as EntityType,
-  Triple,
-  TripleWithCollectionValue,
-  TripleWithEntityValue,
-} from '~/core/types';
+import type { EntitySearchResult, Entity as EntityType, Triple, TripleWithEntityValue } from '~/core/types';
 import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Entities } from '~/core/utils/entity';
@@ -320,27 +314,6 @@ function EntityAttributes({
     });
   };
 
-  const createCollectionItem = (collectionId: string, entity: EntitySearchResult, collectionTriple: Triple) => {
-    send({
-      type: 'CREATE_COLLECTION_ITEM',
-      payload: {
-        entity,
-        collectionId,
-        collectionTriple: collectionTriple as TripleWithCollectionValue,
-      },
-    });
-  };
-
-  const deleteCollectionItem = (collectionItemId: string, collectionTriple: Triple) => {
-    send({
-      type: 'DELETE_COLLECTION_ITEM',
-      payload: {
-        collectionItemId,
-        collectionTriple: collectionTriple as TripleWithCollectionValue,
-      },
-    });
-  };
-
   const addAttribute = (attribute: { id: string; name: string | null }, oldTriple: Triple) => {
     send({
       type: 'ADD_ATTRIBUTE_TO_TRIPLE',
@@ -595,43 +568,6 @@ function EntityAttributes({
             </DeletableChipButton>
           </div>
         );
-      case 'COLLECTION': {
-        const isEmptyCollection = triple.value.items.length === 0;
-
-        if (isEmptyCollection) {
-          const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
-
-          return (
-            <div data-testid={triple.placeholder ? 'placeholder-select-entity' : 'select-entity'} className="w-full">
-              <SelectEntity
-                spaceId={spaceId}
-                onDone={result => {
-                  if (attributeId) {
-                    createCollectionItem(triple.value.value, result, triple);
-                  }
-                }}
-                allowedTypes={relationTypes}
-                wrapperClassName="contents"
-                inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
-                resultsClassName="absolute z-[1000]"
-              />
-            </div>
-          );
-        }
-
-        return triple.value.items.map(i => {
-          return (
-            <div key={`entity-${triple.attributeId}-${triple.value.value}-${i.value.value}}`} className="mt-1">
-              <DeletableChipButton
-                href={NavUtils.toEntity(triple.space, i.entity.id)}
-                onClick={() => deleteCollectionItem(i.id, triple)}
-              >
-                {i.value.type === 'ENTITY' ? i.value.value : i.value.value}
-              </DeletableChipButton>
-            </div>
-          );
-        });
-      }
     }
   };
 
@@ -676,13 +612,10 @@ function EntityAttributes({
       {orderedGroupedTriples.map(([attributeId, triple], index) => {
         if (attributeId === SYSTEM_IDS.BLOCKS) return null;
         const isEntity = triple.value.type === 'ENTITY';
-        const isCollection = triple.value.type === 'COLLECTION';
-        const shouldShowEntityDialog = isEntity || isCollection;
 
         const tripleType: TripleValueType = triple.value.type || 'TEXT';
 
         const isEmptyEntity = triple.value.type === 'ENTITY' && !triple.value.value;
-        const isEmptyCollection = triple.value.type === 'COLLECTION' && triple.value.items.length === 0;
         const attributeName = triple.attributeName;
         const isPlaceholder = triple.placeholder;
         const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
@@ -703,22 +636,9 @@ function EntityAttributes({
                 {attributeName || attributeId}
               </Text>
             )}
-            {shouldShowEntityDialog && <Spacer height={4} />}
+            {isEntity && <Spacer height={4} />}
             <div className="flex flex-wrap items-center gap-1">
               {tripleToEditableField(attributeId, triple, isEmptyEntity)}
-              {/* This is the + button next to attribute ids with existing entity values */}
-              {isCollection && !isEmptyCollection && (
-                // @TODO check purpose of entity value ids in autocomplete dialog
-                <SelectEntityDialog
-                  spaceId={spaceId}
-                  onDone={result => {
-                    if (attributeId) {
-                      createCollectionItem(triple.value.value, result, triple);
-                    }
-                  }}
-                  allowedTypes={relationTypes}
-                />
-              )}
               <div className="absolute right-0 top-6 flex items-center gap-1">
                 {isEntity ? (
                   <AttributeConfigurationMenu
@@ -754,18 +674,6 @@ function EntityAttributes({
                           ),
                           value: 'ENTITY',
                           onClick: () => onChangeTriple('ENTITY', triple),
-                          disabled: false,
-                        },
-                        {
-                          label: (
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <Collection />
-                              <Spacer width={8} />
-                              Collection
-                            </div>
-                          ),
-                          value: 'COLLECTION',
-                          onClick: () => onChangeTriple('COLLECTION', triple),
                           disabled: false,
                         },
                         {
