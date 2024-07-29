@@ -7,8 +7,8 @@ import { type BlockEvent } from '../../types';
 import { pool } from '../../utils/pool';
 import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
-import { Collections, SpaceMetadata, Triples } from '~/sink/db';
-import { CollectionItems } from '~/sink/db/collection-items';
+import { SpaceMetadata, Triples } from '~/sink/db';
+import { Relations } from '~/sink/db/relations';
 
 interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
@@ -365,31 +365,13 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           yield* _(insertSpaceMetadataEffect, retryEffect);
         }
 
-        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
-          const insertCollectionEffect = Effect.tryPromise({
-            try: () =>
-              Collections.upsert([
-                {
-                  id: triple.entity_id,
-                  entity_id: triple.entity_id,
-                },
-              ]),
-            catch: error => new Error(`Failed to create collection item ${String(error)}`),
-          });
-
-          yield* _(insertCollectionEffect, retryEffect);
-        }
-
-        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_ITEM_TYPE) {
-          const schemaCollectionItem = getCollectionItemTriplesFromSchemaTriples(
-            schemaTriples,
-            triple.entity_id.toString()
-          );
+        if (triple.entity_value_id === SYSTEM_IDS.RELATION_TYPE) {
+          const schemaCollectionItem = getRelationTriplesFromSchemaTriples(schemaTriples, triple.entity_id.toString());
 
           if (schemaCollectionItem) {
             const insertCollectionItemEffect = Effect.tryPromise({
-              try: () => CollectionItems.upsert([schemaCollectionItem]),
-              catch: error => new Error(`Failed to create collection item ${String(error)}`),
+              try: () => Relations.upsert([schemaCollectionItem]),
+              catch: error => new Error(`Failed to relation ${String(error)}`),
             });
 
             yield* _(insertCollectionItemEffect, retryEffect);
@@ -402,14 +384,14 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
         //
         // Really only the index changes ad-hoc. The other triples are only ever created
         // or deleted at the time of creating or deleting the entire collection item.
-        if (triple.attribute_id === SYSTEM_IDS.COLLECTION_ITEM_INDEX) {
+        if (triple.attribute_id === SYSTEM_IDS.RELATION_INDEX) {
           const insertCollectionItemIndexEffect = Effect.tryPromise({
             try: () =>
-              CollectionItems.update({
+              Relations.update({
                 id: triple.entity_id,
                 index: triple.text_value,
               }),
-            catch: error => new Error(`Failed to update collection item fractional index ${String(error)}`),
+            catch: error => new Error(`Failed to update relation fractional index ${String(error)}`),
           });
 
           yield* _(insertCollectionItemIndexEffect, retryEffect);
@@ -454,25 +436,13 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           yield* _(deleteSpaceMetadataEffect, retryEffect);
         }
 
-        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_TYPE) {
-          const deleteCollectionEffect = Effect.try({
-            try: () =>
-              Collections.remove({
-                id: triple.entity_id,
-              }),
-            catch: error => new Error(`Failed to delete collection ${String(error)}`),
-          });
-
-          yield* _(deleteCollectionEffect, retryEffect);
-        }
-
-        if (triple.entity_value_id === SYSTEM_IDS.COLLECTION_ITEM_TYPE) {
+        if (triple.entity_value_id === SYSTEM_IDS.RELATION_TYPE) {
           const insertCollectionItemEffect = Effect.tryPromise({
             try: () =>
-              CollectionItems.remove({
+              Relations.remove({
                 id: triple.entity_id,
               }),
-            catch: error => new Error(`Failed to delete collection item ${String(error)}`),
+            catch: error => new Error(`Failed to delete relation ${String(error)}`),
           });
 
           yield* _(insertCollectionItemEffect, retryEffect);
@@ -489,36 +459,36 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
  * exist before creating the item. If not all properties exist we don't create the collection
  * item.
  */
-function getCollectionItemTriplesFromSchemaTriples(
+function getRelationTriplesFromSchemaTriples(
   schemaTriples: OpWithCreatedBy[],
   entityId: string
-): Schema.collection_items.Insertable | null {
+): Schema.relations.Insertable | null {
   // Grab other triples in this edit that match the collection item's entity id. We
   // want to add all of the collection item properties to the item in the
   // collection_items table.
   const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
 
-  const collectionItemIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.COLLECTION_ITEM_INDEX);
-  const collectionItemEntityReferenceId = otherTriples.find(
-    t => t.triple.attribute_id === SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE
-  );
-  const collectionItemCollectionReferenceId = otherTriples.find(
-    t => t.triple.attribute_id === SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE
-  );
+  // @TODO: Type of the relation
+  const collectionItemIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_INDEX);
+  const to = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+  const from = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+  const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_OF_ATTRIBUTE);
 
   const indexValue = collectionItemIndex?.triple.text_value;
-  const entityReferenceId = collectionItemEntityReferenceId?.triple.entity_value_id;
-  const collectionReferenceId = collectionItemCollectionReferenceId?.triple.entity_value_id;
+  const toId = to?.triple.entity_value_id;
+  const fromId = from?.triple.entity_value_id;
+  const typeId = type?.triple.entity_value_id;
 
-  if (!indexValue || !entityReferenceId || !collectionReferenceId) {
+  if (!indexValue || !toId || !fromId || !typeId) {
     return null;
   }
 
   return {
     id: entityId,
-    collection_item_entity_id: entityId,
-    collection_id: collectionReferenceId.toString(),
-    entity_id: entityReferenceId.toString(),
+    to_entity_id: entityId,
+    from_entity_id: fromId.toString(),
+    entity_id: toId.toString(),
+    type_of_id: typeId.toString(),
     index: indexValue,
   };
 }

@@ -11,6 +11,5 @@ export * from './subspaces';
 export * from './triples';
 export * from './ops';
 export * from './entities';
-export * from './collections';
 export * from './blocks';
 export * from './space-metadata';

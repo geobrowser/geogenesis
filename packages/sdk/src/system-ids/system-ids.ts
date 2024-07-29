@@ -30,28 +30,33 @@ export const ATTRIBUTE = '808a04ceb21c4d888ad12e240613e5ca';
 export const COLLECTION_TYPE = 'c373a33052df47b3a6d2df552bda4b44';
 
 /**
- * Collection item type. This is the entity representing the Join between the
+ * Relation type. This is the entity representing the Join between the
  * the Collection and the Entity
  */
-export const COLLECTION_ITEM_TYPE = 'c167ef23fb2a40449ed945123ce7d2a9';
+export const RELATION_TYPE = 'c167ef23fb2a40449ed945123ce7d2a9';
 
 /**
- * Collection item's collection reference. This is the attribute that references
+ * Relation's from reference. This is the attribute that references
  * the Collection id
  */
-export const COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE = 'c43b537bcff742718822717fdf2c9c01';
+export const RELATION_FROM_ATTRIBUTE = 'c43b537bcff742718822717fdf2c9c01';
 
 /**
- * Collection item's entity reference. This is the attribute that references
+ * Relation to reference. This is the attribute that references
  * the Entity id for a given Collection item entry
  */
-export const COLLECTION_ITEM_ENTITY_REFERENCE = 'c1f4cb6fece44c3ca447ab005b756972';
+export const RELATION_TO_ATTRIBUTE = 'c1f4cb6fece44c3ca447ab005b756972';
+
+/**
+ * The type of the Relation. e.g., Type, Attribute, Friend, Married to
+ */
+export const RELATION_TYPE_OF_ATTRIBUTE = 'c167ef23fb2a40449ed945123ce7d277'
 
 /**
  * Collection item's ordering within the collection. Collections are unordered by
  * default, but we set all collection items to a default index value of 0.
  */
-export const COLLECTION_ITEM_INDEX = 'ede47e6930b044998ea4aafbda449609';
+export const RELATION_INDEX = 'ede47e6930b044998ea4aafbda449609';
 
 /*
   Example Usage: Rhonda Patrick > TYPES > Person
@@ -93,7 +98,6 @@ export const WEB_URL = 'dfc221d98cce4f0b9353e437a98387e3';
 // This sets the type of values which can be set as part of a relation value.
 // e.g. An attribute called People can only accept values of type Person
 export const RELATION_VALUE_RELATIONSHIP_TYPE = 'cfa6a2f5151f43bfa684f7f0228f63ff';
-
 
 /* Note that this is a temporary workaround for production MVP release. As such, this system ID isn't included in the bootstrap process.*/
 export const DEFAULT_TYPE = 'aeebbd5e4d794d24ae99239e9142d9ed';

@@ -46,8 +46,8 @@ CREATE INDEX onchain_profile_space_id
 CREATE INDEX proposed_versions_ops
     on ops (proposed_version_id);
 
-CREATE INDEX collection_item_collections
-    on collection_items (collection_id);
+CREATE INDEX relations_to_entity_id
+    on relations (to_entity_id);
 
-CREATE INDEX collection_item_entities
-    on collection_items (entity_id);
+CREATE INDEX relations_from_entity_id
+    on relations (from_entity_id);

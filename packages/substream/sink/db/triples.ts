@@ -9,7 +9,6 @@ export class Triples {
       .upsert('triples', triples, db.constraint('triples_pkey'), {
         updateColumns: [
           'attribute_id',
-          'collection_value_id',
           'created_at',
           'created_at_block',
           'entity_id',

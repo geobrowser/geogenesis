@@ -12,7 +12,6 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
     const value_type = value.type;
 
     const entity_value_id = value_type === 'ENTITY' ? value.value : null;
-    const collection_value_id = value_type === 'COLLECTION' ? value.value : null;
     const text_value = value_type === 'TEXT' || value_type === 'URL' ? value.value : null;
 
     return {
@@ -22,7 +21,6 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
       value_type,
       entity_value_id,
       text_value,
-      collection_value_id,
       created_at: block.timestamp,
       created_at_block: block.blockNumber,
       is_stale: false,
@@ -36,7 +34,6 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
     value_type: 'TEXT', // this doesn't matter for deletes, but we populate it anyway for more ergonomic types
     created_at: block.timestamp,
     created_at_block: block.blockNumber,
-    collection_value_id: null,
     entity_value_id: null,
     text_value: null,
     is_stale: false,

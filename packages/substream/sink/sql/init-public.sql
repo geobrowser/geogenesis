@@ -71,17 +71,13 @@ CREATE TABLE public.log_entries (
     json text
 );
 
-CREATE TABLE public.collections (
+CREATE TABLE public.relations (
     id text PRIMARY KEY NOT NULL,
-    entity_id text REFERENCES public.entities(id) NOT NULL
-);
-
-CREATE TABLE public.collection_items (
-    id text PRIMARY KEY NOT NULL,
-    collection_item_entity_id text REFERENCES public.entities(id) NOT NULL,
-    index text,
-    collection_id text REFERENCES public.collections(id) NOT NULL,
-    entity_id text REFERENCES public.entities(id) NOT NULL
+    type_of_id text REFERENCES public.entities(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
+    to_entity_id text REFERENCES public.entities(id) NOT NULL, -- the entity the relation is pointing to
+    index text, -- the fractional index of the relation relative to other relations of the same type
+    from_entity_id text REFERENCES public.entities(id) NOT NULL, -- the entity the relation is pointing from
+    entity_id text REFERENCES public.entities(id) NOT NULL -- the entity id of the relation entity itself
 );
 
 CREATE TYPE public.proposal_type as ENUM ('ADD_EDIT', 'ADD_SUBSPACE', 'REMOVE_SUBSPACE', 'ADD_EDITOR', 'REMOVE_EDITOR', 'ADD_MEMBER', 'REMOVE_MEMBER');
@@ -152,7 +148,6 @@ CREATE TABLE public.triples (
     number_value text,
     text_value text,
     entity_value_id text REFERENCES public.entities(id),
-    collection_value_id text REFERENCES public.collections(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     is_stale boolean NOT NULL

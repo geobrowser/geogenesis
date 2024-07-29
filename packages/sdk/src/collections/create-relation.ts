@@ -4,26 +4,27 @@ import { SYSTEM_IDS } from '../system-ids';
 
 interface CreateCollectionItemArgs {
   spaceId: string; // 0x...
-  collectionId: string; // uuid
-  entityId: string; // uuid
+  fromId: string; // uuid
+  toId: string; // uuid
+  relationTypeId: string; // uuid
 }
 
-type CreateCollectionItemTypeOp = {
+type CreateRelationTypeOp = {
   type: 'SET_TRIPLE';
   triple: {
     attribute: typeof SYSTEM_IDS.TYPES;
     entity: string;
     value: {
       type: 'ENTITY';
-      value: typeof SYSTEM_IDS.COLLECTION_ITEM_TYPE;
+      value: typeof SYSTEM_IDS.RELATION_TYPE;
     };
   };
 };
 
-type CreateCollectionItemCollectionReferenceOp = {
+type CreateRelationTypeOfOp = {
   type: 'SET_TRIPLE';
   triple: {
-    attribute: typeof SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE;
+    attribute: typeof SYSTEM_IDS.RELATION_TYPE_OF_ATTRIBUTE;
     entity: string;
     value: {
       type: 'ENTITY';
@@ -32,10 +33,10 @@ type CreateCollectionItemCollectionReferenceOp = {
   };
 };
 
-type CreateCollectionItemEntityReferenceOp = {
+type CreateRelationFromOp = {
   type: 'SET_TRIPLE';
   triple: {
-    attribute: typeof SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE;
+    attribute: typeof SYSTEM_IDS.RELATION_FROM_ATTRIBUTE;
     entity: string;
     value: {
       type: 'ENTITY';
@@ -44,10 +45,22 @@ type CreateCollectionItemEntityReferenceOp = {
   };
 };
 
-interface CreateCollectionItemIndexOp {
+type CreateRelationToOp = {
   type: 'SET_TRIPLE';
   triple: {
-    attribute: typeof SYSTEM_IDS.COLLECTION_ITEM_INDEX;
+    attribute: typeof SYSTEM_IDS.RELATION_TO_ATTRIBUTE;
+    entity: string;
+    value: {
+      type: 'ENTITY';
+      value: string;
+    };
+  };
+};
+
+interface CreateRelationIndexOp {
+  type: 'SET_TRIPLE';
+  triple: {
+    attribute: typeof SYSTEM_IDS.RELATION_INDEX;
     entity: string;
     value: {
       type: 'TEXT';
@@ -56,13 +69,14 @@ interface CreateCollectionItemIndexOp {
   };
 };
 
-export function createCollectionItem(
+export function createRelationship(
   args: CreateCollectionItemArgs
 ): readonly [
-  CreateCollectionItemTypeOp,
-  CreateCollectionItemCollectionReferenceOp,
-  CreateCollectionItemEntityReferenceOp,
-  CreateCollectionItemIndexOp,
+  CreateRelationTypeOp,
+  CreateRelationFromOp,
+  CreateRelationToOp,
+  CreateRelationIndexOp,
+  CreateRelationTypeOfOp,
 ] {
   const newEntityId = createGeoId();
 
@@ -75,7 +89,7 @@ export function createCollectionItem(
         entity: newEntityId,
         value: {
           type: 'ENTITY',
-          value: SYSTEM_IDS.COLLECTION_ITEM_TYPE,
+          value: SYSTEM_IDS.RELATION_TYPE,
         },
       }
     },
@@ -83,11 +97,11 @@ export function createCollectionItem(
     {
       type: 'SET_TRIPLE',
       triple: {
-        attribute: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
+        attribute: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
         entity: newEntityId,
         value: {
           type: 'ENTITY',
-          value: args.collectionId,
+          value: args.fromId,
         },
       }
     },
@@ -95,21 +109,32 @@ export function createCollectionItem(
     {
       type: 'SET_TRIPLE',
       triple: {
-        attribute: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
+        attribute: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
         entity: newEntityId,
         value: {
           type: 'ENTITY',
-          value: args.entityId,
+          value: args.toId,
         },
       }
     },
     {
       type: 'SET_TRIPLE',
       triple: {
-        attribute: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
+        attribute: SYSTEM_IDS.RELATION_INDEX,
         entity: newEntityId,
         value: {
           type: 'TEXT',
+          value: args.relationTypeId,
+        }
+      },
+    },
+    {
+      type: 'SET_TRIPLE',
+      triple: {
+        attribute: SYSTEM_IDS.RELATION_TYPE_OF_ATTRIBUTE,
+        entity: newEntityId,
+        value: {
+          type: 'ENTITY',
           value: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
         }
       },
