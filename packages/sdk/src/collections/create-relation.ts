@@ -124,7 +124,7 @@ export function createRelationship(
         entity: newEntityId,
         value: {
           type: 'TEXT',
-          value: args.relationTypeId,
+          value: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
         }
       },
     },
@@ -135,7 +135,7 @@ export function createRelationship(
         entity: newEntityId,
         value: {
           type: 'ENTITY',
-          value: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+          value: args.relationTypeId,
         }
       },
     },

@@ -249,26 +249,12 @@ const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
 
 // Make the type entities themselves and any relations that they have
 const makeTypeRelations = () => {
-  // 1. Make the relation entity id
   const relationsToWrite: s.relations.Insertable[] = [];
   const triplesToWrite: s.triples.Insertable[] = [];
 
-  // 2. Make the relation triples for the type entity
-  //    For every type we need to make a relation entity to represent the type
+  // Make the relation triples for the type entity. For every type we need
+  // to make a relation entity to represent the type
   for (let [typeEntityId] of Object.entries(types)) {
-    const typeRelationEntityId = createGeoId();
-
-    // Make a relation of Type -> Type
-    relationsToWrite.push({
-      // @TODO: we don't need entity_id if we can use the id as the entity_id
-      id: typeRelationEntityId,
-      type_of_id: SYSTEM_IDS.SCHEMA_TYPE, // Making a relation of Type -> Type, i.e., this entity is a Type
-      from_entity_id: typeEntityId,
-      to_entity_id: SYSTEM_IDS.SCHEMA_TYPE,
-      index: INITIAL_COLLECTION_ITEM_INDEX,
-      entity_id: typeRelationEntityId,
-    });
-
     // Create all the relationship triples for the Type -> Type relation
     const typeRelationshipTriples = createRelationship({
       relationTypeId: SYSTEM_IDS.SCHEMA_TYPE,
@@ -284,6 +270,17 @@ const makeTypeRelations = () => {
       })
     );
 
+    // Make a relation of Type -> Type
+    relationsToWrite.push({
+      // @TODO: we don't need entity_id if we can use the id as the entity_id
+      id: typeRelationshipTriples[0]!.entity_id,
+      type_of_id: SYSTEM_IDS.SCHEMA_TYPE, // Making a relation of Type -> Type, i.e., this entity is a Type
+      from_entity_id: typeEntityId,
+      to_entity_id: SYSTEM_IDS.SCHEMA_TYPE,
+      index: INITIAL_COLLECTION_ITEM_INDEX,
+      entity_id: typeRelationshipTriples[0]!.entity_id,
+    });
+
     triplesToWrite.push(...typeRelationshipTriples);
   }
 
@@ -294,18 +291,6 @@ const makeTypeRelations = () => {
     // Person -> Attribute -> Age
     // Person -> Attribute -> Date of Birth
     for (let attributeId of attributeIds) {
-      const newRelationEntityId = createGeoId();
-
-      relationsToWrite.push({
-        // @TODO: we don't need entity_id if we can use the id as the entity_id
-        id: newRelationEntityId,
-        from_entity_id: typeId,
-        type_of_id: SYSTEM_IDS.ATTRIBUTE, // Making a relation of type Attribute
-        to_entity_id: attributeId,
-        index: INITIAL_COLLECTION_ITEM_INDEX,
-        entity_id: newRelationEntityId,
-      });
-
       const relationshipTriples = createRelationship({
         fromId: typeId,
         toId: attributeId,
@@ -319,6 +304,16 @@ const makeTypeRelations = () => {
           timestamp: ROOT_SPACE_CREATED_AT,
         })
       );
+
+      relationsToWrite.push({
+        // @TODO: we don't need entity_id if we can use the id as the entity_id
+        id: relationshipTriples[0]!.entity_id,
+        from_entity_id: typeId,
+        type_of_id: SYSTEM_IDS.ATTRIBUTE, // Making a relation of type Attribute
+        to_entity_id: attributeId,
+        index: INITIAL_COLLECTION_ITEM_INDEX,
+        entity_id: relationshipTriples[0]!.entity_id,
+      });
 
       if (typeId === SYSTEM_IDS.PERSON_TYPE) {
         console.log(`relationshipTriples for person`, relationshipTriples);
