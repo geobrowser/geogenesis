@@ -13,9 +13,7 @@ interface Props {
 }
 
 export default async function EntityTemplateStrategy({ params, searchParams }: Props) {
-  const decodedId = decodeURI(params.entityId);
-
-  const types = await cachedFetchEntityType(decodedId);
+  const types = await cachedFetchEntityType(params.entityId);
 
   if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
     return <ProfileEntityServerContainer params={params} />;

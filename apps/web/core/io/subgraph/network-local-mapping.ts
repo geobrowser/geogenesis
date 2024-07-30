@@ -76,6 +76,22 @@ export type SubstreamTripleWithSpaceMetadata = SubstreamValue & {
   space: Pick<NetworkSpaceResult, 'id' | 'spacesMetadata'>;
 };
 
+export type SubstreamRelation = {
+  index: number;
+  typeOf: {
+    id: string;
+    name: string | null;
+  };
+  fromEntity: {
+    id: string;
+    name: string | null;
+  };
+  toEntity: {
+    id: string;
+    name: string | null;
+  };
+};
+
 type CreatedBy = {
   id: string;
 };
@@ -88,10 +104,16 @@ export type SubstreamOp = OmitStrict<SubstreamTriple, 'space'> &
     entityValue: string | null;
   };
 
-export type SubstreamEntity = OmitStrict<Entity, 'triples' | 'types' | 'nameTripleSpaces' | 'description'> & {
+export type SubstreamEntity = OmitStrict<
+  Entity,
+  'triples' | 'types' | 'nameTripleSpaces' | 'description' | 'relationsOut'
+> & {
   triples: { nodes: SubstreamTriple[] };
   types: {
     nodes: { id: string; name: string | null }[];
+  };
+  relationsByFromEntityId: {
+    nodes: SubstreamRelation[];
   };
 };
 
@@ -345,6 +367,7 @@ export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamE
         triples: spaceConfigTriples,
         types: EntityModule.types(spaceConfigTriples),
         nameTripleSpaces: EntityModule.nameTriples(spaceConfigTriples).map(t => t.space),
+        relationsOut: metadata.relationsByFromEntityId.nodes,
       }
     : {
         id: '',
@@ -355,6 +378,7 @@ export function getSpaceConfigFromMetadata(spaceId: string, metadata: SubstreamE
         triples: [],
         types: [],
         nameTripleSpaces: [],
+        relationsOut: [],
       };
 
   return spaceConfigWithImage;

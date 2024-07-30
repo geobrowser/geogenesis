@@ -4,6 +4,22 @@ export const imageValueTypeTripleFragment = `
     valueType
 `;
 
+export const relationFragment = `
+  index
+  typeOf {
+    id
+    name
+  }
+  fromEntity {
+    id
+    name
+  }
+  toEntity {
+    id
+    name
+  }
+`;
+
 export const tripleFragment = `
   attribute {
     id
@@ -29,7 +45,6 @@ export const tripleFragment = `
     }
   }
   numberValue
-  }
   textValue
   valueType
   space {
@@ -55,11 +70,6 @@ export const resultTripleFragment = `
       }
     }
     name
-    triples {
-      nodes {
-        ${imageValueTypeTripleFragment}
-      }
-    }
   }
   numberValue
   textValue
@@ -103,6 +113,11 @@ export const entityFragment = `
     nodes {
       id
       name
+    }
+  }
+  relationsByFromEntityId {
+    nodes {
+      ${relationFragment}
     }
   }
   triples(filter: {isStale: {equalTo: false}}) {

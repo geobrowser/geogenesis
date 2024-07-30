@@ -123,7 +123,7 @@ function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> 
     const decodeEffect = decode(() => {
       const edit = ImportEdit.fromBinary(data);
 
-      console.log('edit', edit);
+      console.log('edit', edit.ops[0]?.toJson());
 
       const parseResult = ZodImportEdit.safeParse(edit);
 
@@ -137,8 +137,6 @@ function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> 
 
         return parseResult.data;
       }
-
-      console.log('parseResult', parseResult.error);
 
       return null;
     });

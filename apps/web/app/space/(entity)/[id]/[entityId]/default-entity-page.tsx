@@ -45,8 +45,7 @@ export default async function DefaultEntityPage({
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
-  const decodedId = decodeURIComponent(params.entityId);
-  const props = await getData(params.id, decodedId);
+  const props = await getData(params.id, params.entityId);
 
   const avatarUrl = Entities.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entities.cover(props.triples) ?? props.serverCoverUrl;
@@ -120,11 +119,10 @@ const getData = async (spaceId: string, entityId: string) => {
   const serverAvatarUrl = Entities.avatar(entity?.triples);
   const serverCoverUrl = Entities.cover(entity?.triples);
 
-  const blockIdsTriple =
-    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
+  const blockRelations = entity?.relationsOut.filter(r => r.typeOf.id === SYSTEM_IDS.BLOCKS);
 
-  const blockCollectionItems =
-    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
+  // @TODO: What is this supposed to be type wise?
+  const blockCollectionItems: { id: string; entity: { id: string } }[] = [];
 
   const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
 
@@ -149,11 +147,13 @@ const getData = async (spaceId: string, entityId: string) => {
     spaceId,
     serverAvatarUrl,
     serverCoverUrl,
+    relationsOut: entity?.relationsOut ?? [],
 
     // For entity page editor
-    blockIdsTriple,
+    blockIdsTriple: null,
     blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
-    blockCollectionItems,
-    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
+    blockCollectionItems: [],
+    // blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
+    blockCollectionItemTriples: [],
   };
 };

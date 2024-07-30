@@ -87,12 +87,15 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
   const triples = fromNetworkTriples(networkTriples);
   const nameTriples = Entities.nameTriples(triples);
 
+  console.log('relations', entity.relationsByFromEntityId.nodes);
+
   return {
     id: entity.id,
     name: entity.name,
     description: Entities.description(triples),
     nameTripleSpaces: nameTriples.map(t => t.space),
     types: entity.types.nodes,
+    relationsOut: entity.relationsByFromEntityId.nodes,
     triples,
   };
 }

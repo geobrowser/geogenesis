@@ -9,7 +9,7 @@ import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import type { EntitySearchResult, Entity as EntityType, Triple, TripleWithEntityValue } from '~/core/types';
+import type { EntitySearchResult, Entity as EntityType, Relation, Triple, TripleWithEntityValue } from '~/core/types';
 import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Entities } from '~/core/utils/entity';
@@ -45,6 +45,7 @@ interface Props {
   spaceId: string;
   typeId?: string | null;
   attributes?: Array<Attribute> | null;
+  relations: Relation[]
 }
 
 type Attribute = [AttributeId, AttributeValue];
@@ -262,15 +263,6 @@ function EntityAttributes({
 
   const visibleTriples = [...triples, ...visibleSchemaTriples];
 
-  // @TODO: Should work with collections
-  // We use these later to check which entities have already been selected as one
-  // of the values of a triple/collection. We filter out any already selected
-  // entity ids in the search result list so you don't add the same value more
-  // than once.
-  const entityValueTriples = triples.filter(
-    (triple): triple is TripleWithEntityValue => triple.value.type === 'ENTITY'
-  );
-
   // Some triples are rendered outside of the normal attribute list to better control their styling.
   const filteredAttributeIds = [SYSTEM_IDS.NAME, SYSTEM_IDS.DESCRIPTION];
   const sortedTriples = sortEntityPageTriples(visibleTriples, schemaTriples).filter(
@@ -350,24 +342,6 @@ function EntityAttributes({
         },
         linkedEntity,
         entityName: name,
-      },
-    });
-  };
-
-  const createEntityTripleFromPlaceholder = (
-    triple: ITriple,
-    linkedEntity: {
-      id: string;
-      name: string | null;
-    }
-  ) => {
-    send({
-      type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
-      payload: {
-        attributeId: triple.attributeId,
-        attributeName: triple.attributeName ?? null,
-        entityId: linkedEntity.id,
-        entityName: linkedEntity.name ?? null,
       },
     });
   };

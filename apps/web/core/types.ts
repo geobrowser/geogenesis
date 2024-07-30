@@ -197,6 +197,22 @@ export type ValueTypeId =
 //   };
 // };
 
+export type Relation = {
+  index: number;
+  typeOf: {
+    id: string;
+    name: string | null;
+  };
+  fromEntity: {
+    id: string;
+    name: string | null;
+  };
+  toEntity: {
+    id: string;
+    name: string | null;
+  };
+};
+
 export type Entity = {
   id: string;
   name: string | null;
@@ -204,6 +220,7 @@ export type Entity = {
   types: EntitySearchResult[];
   triples: Triple[];
   nameTripleSpaces?: string[];
+  relationsOut: Relation[];
 };
 
 export type GeoType = {

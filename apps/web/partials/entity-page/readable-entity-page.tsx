@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Triple } from '~/core/types';
+import { Triple as ITriple, Relation } from '~/core/types';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
 import { LinkableChip } from '~/design-system/chip';
@@ -14,11 +14,12 @@ import { Text } from '~/design-system/text';
 import { sortEntityPageTriples } from './entity-page-utils';
 
 interface Props {
-  triples: Triple[];
+  triples: ITriple[];
+  relations: Relation[];
   id: string;
 }
 
-export function ReadableEntityPage({ triples: serverTriples, id }: Props) {
+export function ReadableEntityPage({ triples: serverTriples, relations, id }: Props) {
   const { actionsFromSpace } = useActionsStore();
   const { triples: localTriples } = useEntityPageStore();
 
@@ -29,52 +30,26 @@ export function ReadableEntityPage({ triples: serverTriples, id }: Props) {
   const sortedTriples = sortEntityPageTriples(triples, []);
 
   return (
-    <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
-      <EntityAttributes entityId={id} triples={sortedTriples} />
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <h3 className="text-smallTitle">Triples</h3>
+        <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
+          <EntityAttributes entityId={id} triples={sortedTriples} />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-smallTitle">Relations</h3>
+        <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
+          <EntityRelations relations={relations} />
+        </div>
+      </div>
     </div>
   );
 }
 
 function EntityAttributes({ entityId, triples }: { entityId: string; triples: Props['triples'] }) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
-
-  const tripleToEditableField = (triple: Triple) => {
-    switch (triple.value.type) {
-      case 'TEXT':
-        return (
-          <Text key={`string-${triple.attributeId}-${triple.value.value}`} as="p">
-            {triple.value.value}
-          </Text>
-        );
-      case 'IMAGE':
-        return <ImageZoom key={`image-${triple.attributeId}-${triple.value.value}}`} imageSrc={triple.value.image} />;
-      case 'TIME':
-        return <DateField isEditing={false} value={triple.value.value} />;
-      case 'URL':
-        return <WebUrlField isEditing={false} value={triple.value.value} />;
-      case 'ENTITY': {
-        return (
-          <div key={`entity-${triple.attributeId}-${triple.value.value}}`} className="mt-1">
-            <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.value)}>
-              {triple.value.name || triple.value.value}
-            </LinkableChip>
-          </div>
-        );
-      }
-      case 'COLLECTION':
-        return triple.value.items.map(i => {
-          return (
-            <div key={`entity-${triple.attributeId}-${triple.value.value}-${i.value.value}}`} className="mt-1">
-              <LinkableChip href={NavUtils.toEntity(triple.space, i.entity.id)}>
-                {i.value.type === 'ENTITY' ? i.value.value : i.value.value}
-              </LinkableChip>
-            </div>
-          );
-        });
-      case 'NUMBER':
-        return null;
-    }
-  };
 
   return (
     <>
@@ -86,10 +61,77 @@ function EntityAttributes({ entityId, triples }: { entityId: string; triples: Pr
             <Text as="p" variant="bodySemibold">
               {triples[0].attributeName || attributeId}
             </Text>
-            <div className="flex flex-wrap gap-2">{triples.map(tripleToEditableField)}</div>
+            <div className="flex flex-wrap gap-2">
+              {triples.map(t => (
+                <Triple key={t.id} triple={t} />
+              ))}
+            </div>
           </div>
         );
       })}
     </>
   );
 }
+
+function EntityRelations({ relations }: { relations: Relation[] }) {
+  const groupedRelations = groupBy(relations, r => r.typeOf.id);
+
+  const relationNamesById = relations.reduce((map, relation) => {
+    map.set(relation.typeOf.id, relation.typeOf.name);
+    return map;
+  }, new Map<string, string | null>());
+
+  return (
+    <>
+      {Object.entries(groupedRelations).map(([relationId, relations], index) => {
+        const relationName = relationNamesById.get(relationId);
+        return (
+          <div key={`${relationId}-${index}`} className="break-words">
+            <Text as="p" variant="bodySemibold">
+              {relationName ?? relationId}
+            </Text>
+            <div className="flex flex-wrap gap-2">
+              {relations.map(r => (
+                <div key={`relation-${relationId}-${r.toEntity.id}`} className="mt-1">
+                  <LinkableChip href={NavUtils.toEntity('', r.toEntity.id)}>
+                    {r.toEntity.name ?? r.toEntity.id}
+                  </LinkableChip>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+const Triple = ({ triple }: { triple: ITriple }) => {
+  switch (triple.value.type) {
+    case 'TEXT':
+      return (
+        <Text key={`string-${triple.attributeId}-${triple.value.value}`} as="p">
+          {triple.value.value}
+        </Text>
+      );
+    case 'IMAGE':
+      return <ImageZoom key={`image-${triple.attributeId}-${triple.value.value}`} imageSrc={triple.value.image} />;
+    case 'TIME':
+      return <DateField isEditing={false} value={triple.value.value} />;
+    case 'URL':
+      return <WebUrlField isEditing={false} value={triple.value.value} />;
+    case 'ENTITY': {
+      return (
+        <div key={`entity-${triple.attributeId}-${triple.value.value}}`} className="mt-1">
+          <LinkableChip href={NavUtils.toEntity(triple.space, triple.value.value)}>
+            {triple.value.name || triple.value.value}
+          </LinkableChip>
+        </div>
+      );
+    }
+    case 'NUMBER':
+      return null;
+  }
+
+  return null;
+};
