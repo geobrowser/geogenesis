@@ -8,7 +8,7 @@ import {
   ROOT_SPACE_CREATED_AT_BLOCK,
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
-import { Accounts, Entities, Proposals, Spaces, Triples } from './db';
+import { Accounts, Entities, Proposals, Spaces, Triples, Types } from './db';
 import { Relations } from './db/relations';
 import { getTripleFromOp } from './events/get-triple-from-op';
 
@@ -217,33 +217,6 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
   })
 );
 
-const attributeTriples: s.triples.Insertable[] = Object.entries(attributes)
-  .map(([id, entity_value_id]): s.triples.Insertable[] => [
-    /* Giving these entities a type of attribute */
-    {
-      entity_id: id,
-      attribute_id: SYSTEM_IDS.TYPES,
-      value_type: 'TEXT',
-      entity_value_id: SYSTEM_IDS.ATTRIBUTE,
-      space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-      created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-      created_at: ROOT_SPACE_CREATED_AT,
-      is_stale: false,
-    },
-    /* Giving these attributes a value type of the type they are */
-    {
-      entity_id: id,
-      attribute_id: SYSTEM_IDS.VALUE_TYPE,
-      value_type: 'ENTITY',
-      entity_value_id,
-      space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-      created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-      created_at: ROOT_SPACE_CREATED_AT,
-      is_stale: false,
-    },
-  ])
-  .flat();
-
 // @TODO: Make attribute relations
 
 // Make the type entities themselves and any relations that they have
@@ -314,8 +287,36 @@ const makeTypeRelations = () => {
         entity_id: relationshipTriples[0]!.entity_id,
       });
 
-      if (typeId === SYSTEM_IDS.PERSON_TYPE) {
-        console.log(`relationshipTriples for person`, relationshipTriples);
+      // Make the relation of Type -> Attribute for the attribute entity
+      // Don't add this relation if it already exists.
+      if (!relationsToWrite.find(r => r.id === attributeId)) {
+        relationsToWrite.push({
+          id: attributeId,
+          from_entity_id: attributeId,
+          type_of_id: SYSTEM_IDS.SCHEMA_TYPE,
+          to_entity_id: SYSTEM_IDS.ATTRIBUTE,
+          index: INITIAL_COLLECTION_ITEM_INDEX,
+          entity_id: attributeId,
+        });
+      }
+
+      const relationValueTypeIdForAttribute = attributes[attributeId];
+
+      if (relationValueTypeIdForAttribute) {
+        const relationValueTypeRelationId = createGeoId();
+
+        // Make the relation of Relation Value Type -> Value Type for the attribute entity.
+        // Don't add this relation if it already exists.
+        if (!relationsToWrite.find(r => r.id === relationValueTypeRelationId)) {
+          relationsToWrite.push({
+            id: relationValueTypeRelationId,
+            from_entity_id: attributeId,
+            type_of_id: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
+            to_entity_id: relationValueTypeIdForAttribute,
+            index: INITIAL_COLLECTION_ITEM_INDEX,
+            entity_id: relationValueTypeRelationId,
+          });
+        }
       }
 
       triplesToWrite.push(...relationshipTriples);
@@ -379,17 +380,40 @@ export function bootstrapRoot() {
     yield _(
       Effect.tryPromise({
         try: async () => {
-          await Spaces.upsert([space]);
+          const typesToWrite = relationsForTypesAndAttributes.filter(r => r.type_of_id === SYSTEM_IDS.SCHEMA_TYPE);
+          const attributesToWrite = relationsForTypesAndAttributes.filter(
+            r => r.type_of_id === SYSTEM_IDS.RELATION_TYPE
+          );
 
+          console.log('relationsForTypesAndAttributes', { typesToWrite });
+
+          await Spaces.upsert([space]);
+          // @TODO: Add types from relations to db.entity_types
           // @TODO: Create versions for the entities
           await Promise.all([
             Accounts.upsert([account]),
             Entities.upsert(geoEntities),
             Entities.upsert(entitiesForRelations),
+            Types.upsert(
+              typesToWrite.map(r => ({
+                type_id: SYSTEM_IDS.SCHEMA_TYPE,
+                entity_id: r.from_entity_id,
+                created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+                created_at: ROOT_SPACE_CREATED_AT,
+              }))
+            ),
+            Types.upsert(
+              attributesToWrite.map(r => ({
+                type_id: SYSTEM_IDS.RELATION_TYPE,
+                entity_id: r.to_entity_id,
+                created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+                created_at: ROOT_SPACE_CREATED_AT,
+              }))
+            ),
 
             Triples.insert(namesTriples),
             Triples.upsert(triplesForTypesAndAttributes),
-            Triples.insert(attributeTriples),
+            // Triples.insert(attributeTriples),
 
             Proposals.upsert([proposal]),
             Relations.upsert(relationsForTypesAndAttributes),

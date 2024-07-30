@@ -366,11 +366,11 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
         }
 
         if (triple.entity_value_id === SYSTEM_IDS.RELATION_TYPE) {
-          const schemaCollectionItem = getRelationTriplesFromSchemaTriples(schemaTriples, triple.entity_id.toString());
+          const schemaRelation = getRelationTriplesFromSchemaTriples(schemaTriples, triple.entity_id.toString());
 
-          if (schemaCollectionItem) {
+          if (schemaRelation) {
             const insertCollectionItemEffect = Effect.tryPromise({
-              try: () => Relations.upsert([schemaCollectionItem]),
+              try: () => Relations.upsert([schemaRelation]),
               catch: error => new Error(`Failed to relation ${String(error)}`),
             });
 
