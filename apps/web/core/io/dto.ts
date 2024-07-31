@@ -31,7 +31,8 @@ function extractValue(networkTriple: SubstreamTriple): Value {
         return {
           type: 'IMAGE',
           value: networkTriple.entityValue.id,
-          image: getImageUrlFromImageEntity(networkTriple.entityValue.triples.nodes) ?? '',
+          // image: getImageUrlFromImageEntity(networkTriple.entityValue.triples.nodes) ?? '',
+          image: '',
         };
       }
 

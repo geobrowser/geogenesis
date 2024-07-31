@@ -9,7 +9,6 @@ import { Space, SpaceDto } from '../dto/spaces';
 import { SubstreamSpace } from '../schema';
 import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
-import { NetworkSpaceResult } from './types';
 
 const getFetchSpacesQuery = () => `query {
   spaces {
@@ -21,7 +20,7 @@ const getFetchSpacesQuery = () => `query {
 
 interface NetworkResult {
   spaces: {
-    nodes: NetworkSpaceResult[];
+    nodes: SubstreamSpace[];
   };
 }
 

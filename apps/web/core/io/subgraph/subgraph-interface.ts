@@ -1,7 +1,8 @@
-import { Entity, Profile, Space, Triple } from '~/core/types';
+import { Entity, Profile, Triple } from '~/core/types';
 
 import { Proposal, ProposalWithoutVoters } from '../dto/proposals';
 import { Result } from '../dto/search';
+import { Space } from '../dto/spaces';
 import { FetchEntitiesOptions } from './fetch-entities';
 import { FetchEntityOptions } from './fetch-entity';
 import { FetchProfileOptions } from './fetch-profile';
