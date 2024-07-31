@@ -7,9 +7,9 @@ import { Environment } from '~/core/environment';
 import { Space, SpaceConfigEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
+import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from '../schema';
 import { entityFragment, spacePluginsFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 const getFetchSpacesWhereEditorQuery = (address: string) => `query {
   spaces(filter: { spaceEditors: { some: { accountId: { equalTo: "${address}" } } } }) {

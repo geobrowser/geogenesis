@@ -5,9 +5,9 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { Space } from '~/core/types';
 
+import { getSpaceConfigFromMetadata } from '../schema';
 import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
-import { getSpaceConfigFromMetadata } from './network-local-mapping';
 import { NetworkSpaceResult } from './types';
 
 const getFetchSpacesQuery = (ids: string[]) => `query {

@@ -76,25 +76,25 @@ export const resultTripleFragment = `
   valueType
   space {
     id
-      spacesMetadata {
-        nodes {
-          entity {
-            id
-            name
-            types {
-              nodes {
-                id
-                name
-              }
+    spacesMetadata {
+      nodes {
+        entity {
+          id
+          name
+          types {
+            nodes {
+              id
+              name
             }
-            triples {
-              nodes {
-                ${tripleFragment}
-              }
+          }
+          triples {
+            nodes {
+              ${tripleFragment}
             }
           }
         }
       }
+    }
   }
 `;
 

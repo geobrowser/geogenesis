@@ -3,10 +3,10 @@ import { Effect, Either } from 'effect';
 import { Environment } from '~/core/environment';
 import { GeoDate } from '~/core/utils/utils';
 
+import { getSpaceConfigFromMetadata } from '../schema';
 import { Subspace } from './fetch-subspaces';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
-import { getSpaceConfigFromMetadata } from './network-local-mapping';
 import { NetworkSpaceResult } from './types';
 
 const inflightSubspacesForSpaceIdQuery = (spaceId: string, endTime: number) =>

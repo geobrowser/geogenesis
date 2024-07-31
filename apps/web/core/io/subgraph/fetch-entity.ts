@@ -6,9 +6,9 @@ import { Environment } from '~/core/environment';
 import { Entity as IEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
+import { SubstreamEntity, fromNetworkTriples } from '../schema';
 import { entityFragment, tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntityQuery(id: string) {
   return `query {

@@ -7,10 +7,10 @@ import { Environment } from '~/core/environment';
 import { Proposal, SpaceWithMetadata } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
+import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '../schema';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './network-local-mapping';
 
 const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
   proposals(first: ${first}, filter: {spaceId: {equalTo: ${JSON.stringify(

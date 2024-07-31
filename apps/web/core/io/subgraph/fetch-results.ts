@@ -6,9 +6,9 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { SpaceConfigEntity } from '~/core/types';
 
+import { SubstreamSearchResult, getSpaceConfigFromMetadata } from '../schema';
 import { resultEntityFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntityWithSpaceMetadata, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 export type Result = {
   id: string;
@@ -62,7 +62,7 @@ export interface FetchResultsOptions {
 }
 
 interface NetworkResult {
-  entities: { nodes: SubstreamEntityWithSpaceMetadata[] };
+  entities: { nodes: SubstreamSearchResult[] };
 }
 
 export async function fetchResults(options: FetchResultsOptions): Promise<Result[]> {
@@ -168,6 +168,6 @@ const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
   return a.length - b.length;
 };
 
-function sortSearchResultsByRelevance(startEntities: SubstreamEntityWithSpaceMetadata[]) {
+function sortSearchResultsByRelevance(startEntities: SubstreamSearchResult[]) {
   return startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
 }

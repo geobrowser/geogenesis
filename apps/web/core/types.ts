@@ -1,6 +1,6 @@
 import { ProposalStatus, ProposalType, SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { SubstreamEntity } from '~/core/io/subgraph/network-local-mapping';
+import { SubstreamEntity } from './io/schema';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
@@ -198,7 +198,7 @@ export type ValueTypeId =
 // };
 
 export type Relation = {
-  index: number;
+  index: string;
   typeOf: {
     id: string;
     name: string | null;
@@ -262,7 +262,6 @@ export type Proposal = {
   type: ProposalType;
   onchainProposalId: string;
   name: string | null;
-  description: string | null;
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;

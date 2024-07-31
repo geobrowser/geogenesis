@@ -7,10 +7,10 @@ import { Environment } from '~/core/environment';
 import { Profile, SpaceWithMetadata, Version } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
+import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from '../schema';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamVersion, fromNetworkTriples } from './network-local-mapping';
 
 const getVersionsQuery = (entityId: string, offset: number, proposalId?: string) => {
   const filter = [

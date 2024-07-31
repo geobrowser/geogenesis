@@ -5,9 +5,9 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { OmitStrict, Space, SpaceGovernanceType } from '~/core/types';
 
+import { SubstreamEntity, getSpaceConfigFromMetadata } from '../schema';
 import { entityFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 const getFetchSpacesQuery = (spaceId: string) => `query {
   spaceSubspaces(filter: { parentSpaceId: { equalTo: "${spaceId}" } }) {

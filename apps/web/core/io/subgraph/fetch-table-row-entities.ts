@@ -6,9 +6,9 @@ import { Environment } from '~/core/environment';
 import { Entity as IEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
+import { SubstreamEntity, fromNetworkTriples } from '../schema';
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 // this differs from the fetchEntities method in that we pass in a custom graphql string that represents
 // the set of custom Table filters set on the table. These filters have small differences from the other

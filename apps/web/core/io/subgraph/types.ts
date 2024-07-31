@@ -1,6 +1,6 @@
 import { SpaceGovernanceType } from '~/core/types';
 
-import { SubstreamEntity } from './network-local-mapping';
+import { SubstreamEntity } from '../schema';
 
 export type NetworkSpaceResult = {
   id: string;

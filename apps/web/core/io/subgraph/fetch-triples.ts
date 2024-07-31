@@ -5,9 +5,9 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
 
+import { SubstreamTriple, fromNetworkTriples } from '../schema';
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamTriple, fromNetworkTriples } from './network-local-mapping';
 
 interface GetFetchTriplesQueryOptions {
   where: string;

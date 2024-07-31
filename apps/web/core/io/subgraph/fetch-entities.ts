@@ -7,9 +7,9 @@ import { Environment } from '~/core/environment';
 import { Entity as EntityType, FilterField, FilterState } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
+import { SubstreamEntity, fromNetworkTriples } from '../schema';
 import { entityFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntitiesQuery(
   query: string | undefined,
