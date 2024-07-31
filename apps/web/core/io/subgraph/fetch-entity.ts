@@ -84,6 +84,21 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
     return null;
   }
 
-  const decodedEntity = Schema.decodeSync(SubstreamEntity)(entity);
+  const entityOrError = Schema.decodeEither(SubstreamEntity)(entity);
+
+  const decodedEntity = Either.match(entityOrError, {
+    onLeft: error => {
+      console.error(`Unable to decode entity ${entity.id} with error ${error}`);
+      return null;
+    },
+    onRight: entity => {
+      return entity;
+    },
+  });
+
+  if (decodedEntity === null) {
+    return null;
+  }
+
   return EntityDto(decodedEntity);
 }

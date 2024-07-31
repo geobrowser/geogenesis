@@ -1,3 +1,4 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -128,6 +129,22 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     fetchProfile({ address: proposal.createdBy.id }),
     fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.account.id)),
   ]);
+
+  const proposalOrError = Schema.decodeEither(SubstreamProposal)(proposal);
+
+  const decodedProposal = Either.match(proposalOrError, {
+    onLeft: error => {
+      console.error(`Unable to decode proposal ${proposal.id} with error ${error}`);
+      return null;
+    },
+    onRight: proposal => {
+      return proposal;
+    },
+  });
+
+  if (decodedProposal === null) {
+    return null;
+  }
 
   return ProposalDto(proposal, profile, voterProfiles);
 }

@@ -134,7 +134,22 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
 
   const { entities: unknownEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const entities = unknownEntities.nodes.map(e => Schema.decodeSync(SubstreamEntity)(e));
+  const entities = unknownEntities.nodes
+    .map(e => {
+      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
+
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Unable to decode entity ${e.id} with error ${error}`);
+          return null;
+        },
+        onRight: entity => {
+          return entity;
+        },
+      });
+    })
+    .filter(e => e !== null);
+
   const sortedResults = sortSearchResultsByRelevance(entities);
   return sortedResults.map(EntityDto);
 }

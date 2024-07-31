@@ -82,6 +82,21 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   }
 
   const networkSpace = result.space;
-  const decodedSpace = Schema.decodeSync(SubstreamSpace)(networkSpace);
+  const spaceOrError = Schema.decodeEither(SubstreamSpace)(networkSpace);
+
+  const decodedSpace = Either.match(spaceOrError, {
+    onLeft: error => {
+      console.error(`Unable to decode space ${networkSpace.id} with error ${error}`);
+      return null;
+    },
+    onRight: space => {
+      return space;
+    },
+  });
+
+  if (decodedSpace === null) {
+    return null;
+  }
+
   return SpaceDto(decodedSpace);
 }
