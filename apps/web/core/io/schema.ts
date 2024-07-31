@@ -137,7 +137,9 @@ const SubstreamTriple = Schema.extend(
     attribute: Schema.extend(Identifiable, Nameable),
     // @TODO: Including the metadata makes the schema circular which is not allowed atm.
     // For now we make a separate schema entry to not include the metadata
-    space: SubstreamSpaceWithoutMetadata,
+    space: Schema.Struct({
+      id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
+    }),
   })
 );
 

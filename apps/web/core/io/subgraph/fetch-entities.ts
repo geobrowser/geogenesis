@@ -1,3 +1,4 @@
+import { Schema } from '@effect/schema';
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
@@ -131,10 +132,10 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
     return resultOrError.right;
   });
 
-  const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const { entities: unknownEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const sortedResults = sortSearchResultsByRelevance(entities.nodes);
-
+  const entities = unknownEntities.nodes.map(e => Schema.decodeSync(SubstreamEntity)(e));
+  const sortedResults = sortSearchResultsByRelevance(entities);
   return sortedResults.map(EntityDto);
 }
 

@@ -109,6 +109,7 @@ export const spacePluginsFragment = `
 export const entityFragment = `
   id
   name
+  description
   types {
     nodes {
       id

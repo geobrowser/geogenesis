@@ -1,3 +1,4 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -83,5 +84,6 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
     return null;
   }
 
-  return EntityDto(entity);
+  const decodedEntity = Schema.decodeSync(SubstreamEntity)(entity);
+  return EntityDto(decodedEntity);
 }

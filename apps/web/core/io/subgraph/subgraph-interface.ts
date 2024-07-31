@@ -1,14 +1,13 @@
-import { Entity, Profile, Proposal, ProposedVersion, Space, Triple } from '~/core/types';
+import { Entity, Profile, Space, Triple } from '~/core/types';
 
+import { Proposal, ProposalWithoutVoters } from '../dto/proposals';
+import { Result } from '../dto/search';
 import { FetchEntitiesOptions } from './fetch-entities';
 import { FetchEntityOptions } from './fetch-entity';
 import { FetchProfileOptions } from './fetch-profile';
 import { FetchProposalOptions } from './fetch-proposal';
 import { FetchProposalsOptions } from './fetch-proposals';
-import { FetchProposedVersionOptions } from './fetch-proposed-version';
-import { FetchProposedVersionsOptions } from './fetch-proposed-versions';
 import { FetchResultsOptions } from './fetch-results';
-import type { Result } from './fetch-results';
 import { FetchSpaceOptions } from './fetch-space';
 import { FetchTableRowEntitiesOptions } from './fetch-table-row-entities';
 import { FetchTriplesOptions } from './fetch-triples';
@@ -21,9 +20,7 @@ export interface ISubgraph {
   fetchSpace: (options: FetchSpaceOptions) => Promise<Space | null>;
   fetchEntity: (options: FetchEntityOptions) => Promise<Entity | null>;
   fetchProfile: (options: FetchProfileOptions) => Promise<Profile | null>;
-  fetchProposals: (options: FetchProposalsOptions) => Promise<Proposal[]>;
+  fetchProposals: (options: FetchProposalsOptions) => Promise<ProposalWithoutVoters[]>;
   fetchProposal: (options: FetchProposalOptions) => Promise<Proposal | null>;
-  fetchProposedVersions: (options: FetchProposedVersionsOptions) => Promise<ProposedVersion[]>;
-  fetchProposedVersion: (options: FetchProposedVersionOptions) => Promise<ProposedVersion | null>;
   fetchTableRowEntities: (options: FetchTableRowEntitiesOptions) => Promise<Entity[]>;
 }
