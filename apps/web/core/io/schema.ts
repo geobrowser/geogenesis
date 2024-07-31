@@ -96,16 +96,13 @@ const SubstreamEntityValue = Schema.Struct({
     // @TODO: We might be fetching an entity that's meant to be used as an image.
     // If so we need to read from the triples on the entity to get the
     // image url for to render.
+    //
+    // This should go on the entity in the To field of the relation instead of here
+    // probably.
   }),
 });
 
 type SubstreamEntityValue = Schema.Schema.Type<typeof SubstreamEntityValue>;
-
-const SubstreamTextTypeValue = Schema.Struct({
-  valueType: Schema.Union(Schema.Literal('TEXT')),
-  textValue: Schema.String,
-  entityValue: Schema.Null,
-});
 
 const SubstreamValue = Schema.Union(SubstreamTextValue, SubstreamEntityValue, SubstreamTimeValue, SubstreamUrlValue);
 type SubstreamValue = Schema.Schema.Type<typeof SubstreamValue>;

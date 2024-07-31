@@ -35,6 +35,7 @@ export const tripleFragment = `
     types {
       nodes {
         id
+        name
       }
     }
     name
@@ -67,6 +68,7 @@ export const resultTripleFragment = `
     types {
       nodes {
         id
+        name
       }
     }
     name
