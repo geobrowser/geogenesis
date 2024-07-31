@@ -9,12 +9,13 @@ const TypeId = Brand.nominal<TypeId>();
 
 const SubstreamType = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(TypeId)),
+  name: Schema.NullOr(Schema.String),
 });
 
 export type SubstreamType = Schema.Schema.Type<typeof SubstreamType>;
 
-type EntityId = string & Brand.Brand<'EntityId'>;
-const EntityId = Brand.nominal<EntityId>();
+export type EntityId = string & Brand.Brand<'EntityId'>;
+export const EntityId = Brand.nominal<EntityId>();
 
 const Nameable = Schema.Struct({
   name: Schema.NullOr(Schema.String),
@@ -27,8 +28,8 @@ const Identifiable = Schema.Struct({
 
 type Identifiable = Schema.Schema.Type<typeof Identifiable>;
 
-type SpaceId = string & Brand.Brand<'SpaceId'>;
-const SpaceId = Brand.nominal<SpaceId>();
+export type SpaceId = string & Brand.Brand<'SpaceId'>;
+export const SpaceId = Brand.nominal<SpaceId>();
 
 const Address = Schema.String.pipe(Schema.length(42), Schema.startsWith('0x'));
 type Address = Schema.Schema.Type<typeof Address> & Brand.Brand<'Address'>;

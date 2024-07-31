@@ -4,10 +4,8 @@ import Image from 'next/legacy/image';
 import { Suspense } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { AppOp, TripleWithEntityValue } from '~/core/types';
-import { Action } from '~/core/utils/action';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';

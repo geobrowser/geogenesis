@@ -2,15 +2,13 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Proposal, SpaceWithMetadata } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 
-import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '../schema';
+import { Proposal, ProposalDto } from '../dto/proposals';
+import { SubstreamProposal } from '../schema';
 import { fetchProfile } from './fetch-profile';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { spaceMetadataFragment, tripleFragment } from './fragments';
+import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 export const getFetchProposalQuery = (id: string) => `query {
@@ -131,49 +129,5 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.account.id)),
   ]);
 
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
-  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
-
-  const spaceWithMetadata: SpaceWithMetadata = {
-    id: proposal.space.id,
-    name: spaceConfig?.name ?? null,
-    image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-  };
-
-  return {
-    ...proposal,
-    space: spaceWithMetadata,
-    createdBy: profile,
-    proposalVotes: {
-      totalCount: proposal.proposalVotes.totalCount,
-      nodes: proposal.proposalVotes.nodes.map(v => {
-        const maybeProfile = voterProfiles.find(voter => v.account.id === voter.address);
-
-        const voter = maybeProfile
-          ? maybeProfile
-          : {
-              id: v.account.id,
-              address: v.account.id as `0x${string}`,
-              name: null,
-              avatarUrl: null,
-              coverUrl: null,
-              profileLink: null,
-            };
-
-        return {
-          ...v,
-          vote: v.vote,
-          voter,
-        };
-      }),
-    },
-    proposedVersions: proposal.proposedVersions.nodes.map(v => {
-      return {
-        ...v,
-        createdBy: profile,
-        space: spaceWithMetadata,
-        // actions: fromNetworkOps(v.actions.nodes),
-      };
-    }),
-  };
+  return ProposalDto(proposal, profile, voterProfiles);
 }

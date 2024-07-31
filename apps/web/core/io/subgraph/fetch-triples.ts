@@ -5,7 +5,8 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
 
-import { SubstreamTriple, fromNetworkTriples } from '../schema';
+import { TripleDto } from '../dto';
+import { SubstreamTriple } from '../schema';
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -107,5 +108,5 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  return fromNetworkTriples(result.triples.nodes);
+  return result.triples.nodes.map(TripleDto);
 }

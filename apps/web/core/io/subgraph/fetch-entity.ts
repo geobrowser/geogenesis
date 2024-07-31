@@ -3,11 +3,11 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity as IEntity } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
+import { Entity } from '~/core/io/dto/entities';
 
-import { SubstreamEntity, fromNetworkTriples } from '../schema';
-import { entityFragment, tripleFragment } from './fragments';
+import { EntityDto } from '../dto/entities';
+import { SubstreamEntity } from '../schema';
+import { entityFragment } from './fragments';
 import { graphql } from './graphql';
 
 function getFetchEntityQuery(id: string) {
@@ -27,7 +27,7 @@ interface NetworkResult {
   entity: SubstreamEntity | null;
 }
 
-export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity | null> {
+export async function fetchEntity(options: FetchEntityOptions): Promise<Entity | null> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
@@ -83,19 +83,5 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<IEntity 
     return null;
   }
 
-  const networkTriples = entity.triples.nodes;
-  const triples = fromNetworkTriples(networkTriples);
-  const nameTriples = Entities.nameTriples(triples);
-
-  console.log('relations', entity.relationsByFromEntityId.nodes);
-
-  return {
-    id: entity.id,
-    name: entity.name,
-    description: Entities.description(triples),
-    nameTripleSpaces: nameTriples.map(t => t.space),
-    types: entity.types.nodes,
-    relationsOut: entity.relationsByFromEntityId.nodes,
-    triples,
-  };
+  return EntityDto(entity);
 }

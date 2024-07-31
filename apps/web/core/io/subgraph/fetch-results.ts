@@ -4,18 +4,11 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { SpaceConfigEntity } from '~/core/types';
 
-import { SubstreamSearchResult, getSpaceConfigFromMetadata } from '../schema';
+import { Result, SearchResultDto } from '../dto/search';
+import { SubstreamSearchResult } from '../schema';
 import { resultEntityFragment } from './fragments';
 import { graphql } from './graphql';
-
-export type Result = {
-  id: string;
-  name: string | null;
-  nameTripleSpaces: Array<string>;
-  spaces: Array<SpaceConfigEntity>;
-};
 
 function getFetchResultsQuery(
   query: string | undefined,
@@ -122,34 +115,8 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Result
   });
 
   const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-
   const sortedResults = sortSearchResultsByRelevance(entities.nodes);
-
-  return sortedResults.map(result => {
-    const triples = result.triples.nodes;
-
-    // If there is no latest version just return an empty entity.
-    if (triples.length === 0) {
-      return {
-        id: result.id,
-        name: result.name,
-        nameTripleSpaces: [],
-        spaces: [],
-      };
-    }
-
-    const nameTripleSpaces = triples.map(triple => triple.space.id);
-    const spaces = triples.flatMap(triple =>
-      getSpaceConfigFromMetadata(triple.space.id, triple.space.spacesMetadata.nodes[0]?.entity)
-    );
-
-    return {
-      id: result.id,
-      name: result.name,
-      nameTripleSpaces,
-      spaces,
-    };
-  });
+  return sortedResults.map(SearchResultDto);
 }
 
 const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {

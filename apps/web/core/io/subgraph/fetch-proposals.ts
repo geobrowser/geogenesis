@@ -2,12 +2,10 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Proposal, SpaceWithMetadata } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 
-import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from '../schema';
+import { ProposalWithoutVoters, ProposalWithoutVotersDto } from '../dto/proposals';
+import { SubstreamProposal } from '../schema';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
@@ -81,7 +79,7 @@ export async function fetchProposals({
   signal,
   page = 0,
   first = 5,
-}: FetchProposalsOptions): Promise<Proposal[]> {
+}: FetchProposalsOptions): Promise<ProposalWithoutVoters[]> {
   const queryId = uuid();
   const offset = page * first;
 
@@ -137,40 +135,6 @@ export async function fetchProposals({
 
   return proposals.map(p => {
     const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
-
-    const profile = maybeProfile ?? {
-      id: p.createdBy.id,
-      name: null,
-      avatarUrl: null,
-      coverUrl: null,
-      address: p.createdBy.id as `0x${string}`,
-      profileLink: null,
-    };
-
-    const spaceConfig = p.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
-    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
-
-    const spaceWithMetadata: SpaceWithMetadata = {
-      id: p.space.id,
-      name: spaceConfig?.name ?? null,
-      image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-    };
-
-    return {
-      ...p,
-      name: p.name,
-      description: p.description,
-      space: spaceWithMetadata,
-      // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profile,
-      proposedVersions: p.proposedVersions.nodes.map(v => {
-        return {
-          ...v,
-          space: spaceWithMetadata,
-          createdBy: profile,
-          // actions: fromNetworkOps(v.actions.nodes),
-        };
-      }),
-    };
+    return ProposalWithoutVotersDto(p, maybeProfile);
   });
 }

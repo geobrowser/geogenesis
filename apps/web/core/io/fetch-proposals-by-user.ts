@@ -2,13 +2,9 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { Proposal, SpaceWithMetadata } from '~/core/types';
-
-import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Environment } from '../environment';
-import { Entities } from '../utils/entity';
-import { ProposalDto, TripleDto } from './dto';
-import { SubstreamEntity, type SubstreamProposal } from './schema';
+import { ProposalWithoutVoters, ProposalWithoutVotersDto } from './dto/proposals';
+import { type SubstreamProposal } from './schema';
 import { fetchProfilesByAddresses } from './subgraph/fetch-profiles-by-ids';
 import { spaceMetadataFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
@@ -77,7 +73,7 @@ export async function fetchProposalsByUser({
   spaceId,
   signal,
   page = 0,
-}: FetchUserProposalsOptions): Promise<Proposal[]> {
+}: FetchUserProposalsOptions): Promise<ProposalWithoutVoters[]> {
   const queryId = uuid();
   const offset = page * 5;
 
@@ -133,6 +129,6 @@ export async function fetchProposalsByUser({
 
   return proposals.map(p => {
     const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
-    return ProposalDto(p, maybeProfile);
+    return ProposalWithoutVotersDto(p, maybeProfile);
   });
 }

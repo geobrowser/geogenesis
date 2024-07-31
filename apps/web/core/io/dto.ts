@@ -1,17 +1,9 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
-import { Profile, ProposedVersion, SpaceConfigEntity, SpaceWithMetadata, Value, Vote } from '../types';
+import { SpaceConfigEntity, Value } from '../types';
 import { Entities } from '../utils/entity';
-import {
-  ProposalStatus,
-  ProposalType,
-  SubstreamEntity,
-  SubstreamImageValueTriple,
-  SubstreamProposal,
-  SubstreamTriple,
-  SubstreamType,
-} from './schema';
+import { SubstreamEntity, SubstreamImageValueTriple, SubstreamTriple, SubstreamType } from './schema';
 
 function getImageUrlFromImageEntity(triples: readonly SubstreamImageValueTriple[]): string | null {
   const triple = triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE);
@@ -95,69 +87,4 @@ export function SpaceMetadataDto(spaceId: string, metadata: SubstreamEntity | un
       };
 
   return spaceConfigWithImage;
-}
-
-export type Proposal = {
-  id: string;
-  type: ProposalType;
-  onchainProposalId: string;
-  name: string | null;
-  createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: string;
-  proposedVersions: ProposedVersion[];
-  space: SpaceWithMetadata;
-  startTime: number;
-  endTime: number;
-  status: ProposalStatus;
-  proposalVotes: {
-    totalCount: number;
-    nodes: Vote[];
-  };
-};
-
-export function ProposalDto(proposal: SubstreamProposal, maybeCreatorProfile: Profile | undefined): Proposal {
-  const profile = maybeCreatorProfile ?? {
-    id: proposal.createdBy.id,
-    name: null,
-    avatarUrl: null,
-    coverUrl: null,
-    address: proposal.createdBy.id as `0x${string}`,
-    profileLink: null,
-  };
-
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
-  const spaceConfigTriples = (spaceConfig?.triples.nodes ?? []).map(TripleDto);
-
-  const spaceWithMetadata: SpaceWithMetadata = {
-    id: proposal.space.id,
-    name: spaceConfig?.name ?? null,
-    image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-  };
-
-  return {
-    id: proposal.id,
-    name: proposal.name,
-    type: proposal.type,
-    onchainProposalId: proposal.onchainProposalId,
-    createdAt: proposal.createdAt,
-    createdAtBlock: proposal.createdAtBlock,
-    startTime: proposal.startTime,
-    endTime: proposal.endTime,
-    status: proposal.status,
-    space: spaceWithMetadata,
-    createdBy: profile,
-    proposalVotes: {
-      nodes: proposal.proposalVotes.nodes.map(v => v), // remove readonly
-      totalCount: proposal.proposalVotes.totalCount,
-    },
-    proposedVersions: proposal.proposedVersions.nodes.map(v => {
-      return {
-        ...v,
-        space: spaceWithMetadata,
-        createdBy: profile,
-        // actions: fromNetworkOps(v.actions.nodes),
-      };
-    }),
-  };
 }

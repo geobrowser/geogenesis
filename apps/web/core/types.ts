@@ -257,25 +257,6 @@ export type Vote = {
   voter: Profile;
 };
 
-export type Proposal = {
-  id: string;
-  type: ProposalType;
-  onchainProposalId: string;
-  name: string | null;
-  createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: string;
-  proposedVersions: ProposedVersion[];
-  space: SpaceWithMetadata;
-  startTime: number;
-  endTime: number;
-  status: ProposalStatus;
-  proposalVotes: {
-    totalCount: number;
-    nodes: Vote[];
-  };
-};
-
 export type Version = {
   id: string;
   name: string | null;
@@ -293,7 +274,6 @@ export type Version = {
 
 export type ProposedVersion = {
   id: string;
-  description: string | null;
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;

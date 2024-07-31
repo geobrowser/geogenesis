@@ -4,10 +4,10 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity as EntityType, FilterField, FilterState } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
+import { FilterField, FilterState } from '~/core/types';
 
-import { SubstreamEntity, fromNetworkTriples } from '../schema';
+import { Entity, EntityDto } from '../dto/entities';
+import { SubstreamEntity } from '../schema';
 import { entityFragment } from './fragments';
 import { graphql } from './graphql';
 
@@ -60,7 +60,7 @@ interface NetworkResult {
   entities: { nodes: SubstreamEntity[] };
 }
 
-export async function fetchEntities(options: FetchEntitiesOptions): Promise<EntityType[]> {
+export async function fetchEntities(options: FetchEntitiesOptions): Promise<Entity[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
@@ -135,35 +135,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
 
   const sortedResults = sortSearchResultsByRelevance(entities.nodes);
 
-  return sortedResults.map(result => {
-    const networkTriples = result.triples.nodes;
-
-    // If there is no latest version just return an empty entity.
-    if (networkTriples.length === 0) {
-      return {
-        id: result.id,
-        name: result.name,
-        description: null,
-        nameTripleSpaces: [],
-        types: [],
-        triples: [],
-        relationsOut: [],
-      };
-    }
-
-    const triples = fromNetworkTriples(networkTriples);
-    const nameTriples = Entities.nameTriples(triples);
-
-    return {
-      id: result.id,
-      name: result.name,
-      description: Entities.description(triples),
-      nameTripleSpaces: nameTriples.map(t => t.space),
-      types: result.types.nodes,
-      relationsOut: result.relationsByFromEntityId.nodes,
-      triples,
-    };
-  });
+  return sortedResults.map(EntityDto);
 }
 
 const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
