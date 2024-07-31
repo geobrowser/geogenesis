@@ -31,8 +31,8 @@ type Identifiable = Schema.Schema.Type<typeof Identifiable>;
 export type SpaceId = string & Brand.Brand<'SpaceId'>;
 export const SpaceId = Brand.nominal<SpaceId>();
 
-const Address = Schema.String.pipe(Schema.length(42), Schema.startsWith('0x'));
-type Address = Schema.Schema.Type<typeof Address> & Brand.Brand<'Address'>;
+export const Address = Schema.String.pipe(Schema.length(42), Schema.startsWith('0x'));
+export type Address = Schema.Schema.Type<typeof Address> & Brand.Brand<'Address'>;
 
 /*******************************************************************************
  * Triples
@@ -46,41 +46,6 @@ const SubstreamTextValue = Schema.Struct({
 });
 
 type SubstreamTextValue = Schema.Schema.Type<typeof SubstreamTextValue>;
-
-/**
- * ImageValueTriple is a special case of a substream triple where we only query
- * the image url value of an image entity.
- */
-export const SubstreamImageValueTriple = Schema.Struct({
-  valueType: Schema.Literal('URL'),
-  attributeId: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  textValue: Schema.String,
-});
-
-export type SubstreamImageValueTriple = Schema.Schema.Type<typeof SubstreamImageValueTriple>;
-
-/**
- * Entity value
- */
-const SubstreamEntityValue = Schema.Struct({
-  valueType: Schema.Literal('ENTITY'),
-  entityValue: Schema.Struct({
-    id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
-    name: Schema.NullOr(Schema.String),
-    types: Schema.Struct({
-      nodes: Schema.Array(SubstreamType),
-    }),
-
-    // We might be fetching an entity that's meant to be used as an image.
-    // If so we need to read from the triples on the entity to get the
-    // image url for to render.
-    triples: Schema.Struct({
-      nodes: Schema.Array(SubstreamImageValueTriple),
-    }),
-  }),
-});
-
-type SubstreamEntityValue = Schema.Schema.Type<typeof SubstreamEntityValue>;
 
 /**
  * Time value
@@ -101,7 +66,46 @@ const SubstreamUrlValue = Schema.Struct({
   textValue: Schema.String,
 });
 
-type SubstreamUrlValue = Schema.Schema.Type<typeof SubstreamTimeValue>;
+type SubstreamUrlValue = Schema.Schema.Type<typeof SubstreamUrlValue>;
+
+/**
+ * ImageValueTriple is a special case of a substream triple where we only query
+ * the image url value of an image entity.
+ */
+export const SubstreamImageValueTriple = Schema.Struct({
+  valueType: Schema.Literal('URL'),
+  attributeId: Schema.String.pipe(Schema.fromBrand(EntityId)),
+  textValue: Schema.String,
+});
+
+export type SubstreamImageValueTriple = Schema.Schema.Type<typeof SubstreamImageValueTriple>;
+
+/**
+ * Entity value
+ */
+const SubstreamEntityValue = Schema.Struct({
+  valueType: Schema.Literal('ENTITY'),
+  textValue: Schema.Null,
+  entityValue: Schema.Struct({
+    id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
+    name: Schema.NullOr(Schema.String),
+    types: Schema.Struct({
+      nodes: Schema.Array(SubstreamType),
+    }),
+
+    // @TODO: We might be fetching an entity that's meant to be used as an image.
+    // If so we need to read from the triples on the entity to get the
+    // image url for to render.
+  }),
+});
+
+type SubstreamEntityValue = Schema.Schema.Type<typeof SubstreamEntityValue>;
+
+const SubstreamTextTypeValue = Schema.Struct({
+  valueType: Schema.Union(Schema.Literal('TEXT')),
+  textValue: Schema.String,
+  entityValue: Schema.Null,
+});
 
 const SubstreamValue = Schema.Union(SubstreamTextValue, SubstreamEntityValue, SubstreamTimeValue, SubstreamUrlValue);
 type SubstreamValue = Schema.Schema.Type<typeof SubstreamValue>;
@@ -113,7 +117,7 @@ const Account = Schema.Struct({
   id: Address,
 });
 
-const SchemaMembers = Schema.Array(Schema.Struct({ nodes: Schema.Array(Account) }));
+const SchemaMembers = Schema.Struct({ nodes: Schema.Array(Schema.Struct({ accountId: Address })) });
 type SchemaMembers = Schema.Schema.Type<typeof SchemaMembers>;
 
 const SubstreamSpaceWithoutMetadata = Schema.Struct({
@@ -198,7 +202,7 @@ export const SubstreamSpace = Schema.extend(
   })
 );
 
-// export type SubstreamSpace = Schema.Schema.Type<typeof SubstreamSpace>;
+export type SubstreamSpace = Schema.Schema.Type<typeof SubstreamSpace>;
 
 /**
  * Search results

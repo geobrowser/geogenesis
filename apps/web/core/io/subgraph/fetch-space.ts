@@ -1,3 +1,4 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -5,7 +6,8 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { Space } from '~/core/types';
 
-import { getSpaceConfigFromMetadata } from '../schema';
+import { SpaceDto } from '../dto/spaces';
+import { SubstreamSpace } from '../schema';
 import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
 import { NetworkSpaceResult } from './types';
@@ -81,24 +83,6 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   }
 
   const networkSpace = result.space;
-  const spaceConfigWithImage = getSpaceConfigFromMetadata(
-    networkSpace.id,
-    networkSpace.spacesMetadata.nodes[0]?.entity
-  );
-
-  return {
-    id: networkSpace.id,
-    type: networkSpace.type,
-    isRootSpace: networkSpace.isRootSpace,
-    editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
-    members: networkSpace.spaceMembers.nodes.map(account => account.accountId),
-    spaceConfig: spaceConfigWithImage,
-    createdAtBlock: networkSpace.createdAtBlock,
-
-    daoAddress: networkSpace.daoAddress,
-    mainVotingPluginAddress: networkSpace.mainVotingPluginAddress,
-    memberAccessPluginAddress: networkSpace.memberAccessPluginAddress,
-    personalSpaceAdminPluginAddress: networkSpace.personalSpaceAdminPluginAddress,
-    spacePluginAddress: networkSpace.spacePluginAddress,
-  };
+  const decodedSpace = Schema.decodeSync(SubstreamSpace)(networkSpace);
+  return SpaceDto(decodedSpace);
 }
