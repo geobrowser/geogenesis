@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import Link from 'next/link';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -85,15 +86,18 @@ function EntityRelations({ relations }: { relations: Relation[] }) {
     <>
       {Object.entries(groupedRelations).map(([relationId, relations], index) => {
         const relationName = relationNamesById.get(relationId);
+
         return (
           <div key={`${relationId}-${index}`} className="break-words">
-            <Text as="p" variant="bodySemibold">
-              {relationName ?? relationId}
-            </Text>
+            <Link href={NavUtils.toEntity('ab7d4b9e02f840dab9746d352acb0ac6', relationId)}>
+              <Text as="p" variant="bodySemibold">
+                {relationName ?? relationId}
+              </Text>
+            </Link>
             <div className="flex flex-wrap gap-2">
               {relations.map(r => (
                 <div key={`relation-${relationId}-${r.toEntity.id}`} className="mt-1">
-                  <LinkableChip href={NavUtils.toEntity('', r.toEntity.id)}>
+                  <LinkableChip href={NavUtils.toEntity('ab7d4b9e02f840dab9746d352acb0ac6', r.toEntity.id)}>
                     {r.toEntity.name ?? r.toEntity.id}
                   </LinkableChip>
                 </div>

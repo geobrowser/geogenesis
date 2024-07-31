@@ -62,7 +62,7 @@ const entities: string[] = [
   SYSTEM_IDS.RELATION_INDEX,
   SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
   SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
-  SYSTEM_IDS.RELATION_TYPE_OF_ATTRIBUTE,
+  SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
 
   // Templates
   SYSTEM_IDS.TEMPLATE_ATTRIBUTE,
@@ -81,6 +81,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: 'Types',
   [SYSTEM_IDS.NAME]: 'Name',
   [SYSTEM_IDS.ATTRIBUTE]: 'Attribute',
+  [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: 'Relation Type',
   [SYSTEM_IDS.SPACE]: 'Indexed Space',
   [SYSTEM_IDS.ATTRIBUTES]: 'Attributes',
   [SYSTEM_IDS.SCHEMA_TYPE]: 'Type',
@@ -128,7 +129,6 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.COLLECTION_TYPE]: 'Collection',
   [SYSTEM_IDS.RELATION_TYPE]: 'Relation',
   [SYSTEM_IDS.RELATION_INDEX]: 'Index',
-  [SYSTEM_IDS.RELATION_TYPE_OF_ATTRIBUTE]: 'Relation type',
   [SYSTEM_IDS.RELATION_TO_ATTRIBUTE]: 'To entity',
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: 'From entity',
 };
@@ -137,6 +137,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.ATTRIBUTES]: SYSTEM_IDS.RELATION,
+  [SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.VALUE_TYPE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.IMAGE_ATTRIBUTE]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.DESCRIPTION]: SYSTEM_IDS.TEXT,
@@ -161,7 +162,6 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.RELATION_INDEX]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.RELATION_TO_ATTRIBUTE]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: SYSTEM_IDS.RELATION,
-  [SYSTEM_IDS.RELATION_TYPE_OF_ATTRIBUTE]: SYSTEM_IDS.RELATION,
 
   [SYSTEM_IDS.IMAGE_URL_ATTRIBUTE]: SYSTEM_IDS.WEB_URL,
   [SYSTEM_IDS.BROADER_SPACES]: SYSTEM_IDS.RELATION,
@@ -190,7 +190,7 @@ const types: Record<string, string[]> = {
     SYSTEM_IDS.RELATION_INDEX,
     SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
     SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
-    SYSTEM_IDS.RELATION_TYPE_OF_ATTRIBUTE,
+    SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
   ],
 };
 
@@ -384,8 +384,6 @@ export function bootstrapRoot() {
           const attributesToWrite = relationsForTypesAndAttributes.filter(
             r => r.type_of_id === SYSTEM_IDS.RELATION_TYPE
           );
-
-          console.log('relationsForTypesAndAttributes', { typesToWrite });
 
           await Spaces.upsert([space]);
           // @TODO: Add types from relations to db.entity_types

@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import { getTripleFromOp } from '../get-triple-from-op';
@@ -15,6 +16,13 @@ export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string
 export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
   return edit.ops.map((op): OpWithCreatedBy => {
     const triple = getTripleFromOp(op, edit.spaceId, block);
+
+    if (
+      triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE &&
+      triple.entity_value_id === SYSTEM_IDS.SCHEMA_TYPE
+    ) {
+      console.log('found relation type attribute with value of Type', triple);
+    }
 
     if (!triple.value_type) {
       console.log('invalid triple', {

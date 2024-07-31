@@ -78,12 +78,6 @@ function fetchEditProposalFromIpfs(
       return null;
     }
 
-    console.log('validIpfsMetadata', {
-      name: validIpfsMetadata.name,
-      type: validIpfsMetadata.type,
-      id: validIpfsMetadata.id,
-    });
-
     switch (validIpfsMetadata.type) {
       case 'ADD_EDIT': {
         const parsedContent = yield* _(Decoder.decodeEdit(ipfsContent));

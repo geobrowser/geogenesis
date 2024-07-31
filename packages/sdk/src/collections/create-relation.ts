@@ -24,7 +24,7 @@ type CreateRelationTypeOp = {
 type CreateRelationTypeOfOp = {
   type: 'SET_TRIPLE';
   triple: {
-    attribute: typeof SYSTEM_IDS.RELATION_TYPE_OF_ATTRIBUTE;
+    attribute: typeof SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE;
     entity: string;
     value: {
       type: 'ENTITY';
@@ -131,7 +131,7 @@ export function createRelationship(
     {
       type: 'SET_TRIPLE',
       triple: {
-        attribute: SYSTEM_IDS.RELATION_TYPE_OF_ATTRIBUTE,
+        attribute: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
         entity: newEntityId,
         value: {
           type: 'ENTITY',

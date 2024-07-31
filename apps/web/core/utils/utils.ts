@@ -58,7 +58,7 @@ export const NavUtils = {
 export function groupBy<T, U extends PropertyKey>(values: T[], projection: (value: T) => U) {
   const result: { [key in PropertyKey]: T[] } = {};
 
-  values.forEach(value => {
+  for (let value of values) {
     const key = projection(value);
 
     if (key in result) {
@@ -66,7 +66,7 @@ export function groupBy<T, U extends PropertyKey>(values: T[], projection: (valu
     } else {
       result[key] = [value];
     }
-  });
+  }
 
   return result;
 }

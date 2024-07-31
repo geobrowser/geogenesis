@@ -9,7 +9,7 @@ import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import type { EntitySearchResult, Entity as EntityType, Relation, Triple, TripleWithEntityValue } from '~/core/types';
+import type { Entity as EntityType, Relation, Triple } from '~/core/types';
 import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Entities } from '~/core/utils/entity';
@@ -26,7 +26,7 @@ import { Collection } from '~/design-system/icons/collection';
 import { Create } from '~/design-system/icons/create';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
-import { Relation } from '~/design-system/icons/relation';
+import { Relation as RelationIcon } from '~/design-system/icons/relation';
 import { Text as TextIcon } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
 import { Url } from '~/design-system/icons/url';
@@ -45,7 +45,7 @@ interface Props {
   spaceId: string;
   typeId?: string | null;
   attributes?: Array<Attribute> | null;
-  relations: Relation[]
+  relations: Relation[];
 }
 
 type Attribute = [AttributeId, AttributeValue];
@@ -641,7 +641,7 @@ function EntityAttributes({
                         {
                           label: (
                             <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <Relation />
+                              <RelationIcon />
                               <Spacer width={8} />
                               Entity
                             </div>

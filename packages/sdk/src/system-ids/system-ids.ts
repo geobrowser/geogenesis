@@ -50,7 +50,8 @@ export const RELATION_TO_ATTRIBUTE = 'c1f4cb6fece44c3ca447ab005b756972';
 /**
  * The type of the Relation. e.g., Type, Attribute, Friend, Married to
  */
-export const RELATION_TYPE_OF_ATTRIBUTE = 'c167ef23fb2a40449ed945123ce7d277'
+export const RELATION_TYPE_ATTRIBUTE = 'd747a35a6aa14f468f76e6c2064c7036'
+// export const RELATION_TYPE_OF_ATTRIBUTE = 'c167ef23fb2a40449ed945123ce7d277'
 
 /**
  * Collection item's ordering within the collection. Collections are unordered by

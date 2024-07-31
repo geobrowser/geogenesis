@@ -7,7 +7,7 @@ import { type BlockEvent } from '../../types';
 import { pool } from '../../utils/pool';
 import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
-import { SpaceMetadata, Triples } from '~/sink/db';
+import { SpaceMetadata, Triples, Types } from '~/sink/db';
 import { Relations } from '~/sink/db/relations';
 
 interface PopulateTriplesArgs {
@@ -327,54 +327,69 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
       if (isAddType) {
         const insertTypeEffect = Effect.tryPromise({
           try: () =>
-            db
-              .upsert(
-                'entity_types',
-                {
-                  entity_id: triple.entity_id,
-                  type_id: triple.entity_value_id?.toString()!,
-                  created_at: block.timestamp,
-                  created_at_block: block.blockNumber,
-                },
-                ['entity_id', 'type_id'],
-                { updateColumns: db.doNothing }
-              )
-              .run(pool),
+            Types.upsert([
+              {
+                entity_id: triple.entity_id,
+                type_id: triple.entity_value_id?.toString()!,
+                created_at: block.timestamp,
+                created_at_block: block.blockNumber,
+              },
+            ]),
           catch: () => new Error('Failed to create type'),
         });
 
         yield* _(insertTypeEffect, retryEffect);
 
-        if (triple.entity_value_id && triple.entity_value_id === SYSTEM_IDS.SPACE_CONFIGURATION) {
-          const insertSpaceMetadataEffect = Effect.tryPromise({
-            try: () =>
-              SpaceMetadata.upsert([
-                {
-                  space_id: triple.space_id,
-                  entity_id: triple.entity_id,
-                },
-              ]),
-            catch: error =>
-              new Error(
-                `Failed to insert space metadata with id ${triple.entity_value_id?.toString()} for space ${
-                  triple.space_id
-                } ${String(error)}`
-              ),
-          });
-
-          yield* _(insertSpaceMetadataEffect, retryEffect);
-        }
-
         if (triple.entity_value_id === SYSTEM_IDS.RELATION_TYPE) {
           const schemaRelation = getRelationTriplesFromSchemaTriples(schemaTriples, triple.entity_id.toString());
 
           if (schemaRelation) {
-            const insertCollectionItemEffect = Effect.tryPromise({
+            const insertRelationEffect = Effect.tryPromise({
               try: () => Relations.upsert([schemaRelation]),
               catch: error => new Error(`Failed to relation ${String(error)}`),
             });
 
-            yield* _(insertCollectionItemEffect, retryEffect);
+            yield* _(insertRelationEffect, retryEffect);
+
+            // Write any relations with relation type -> types to the types table
+            if (schemaRelation.type_of_id === SYSTEM_IDS.TYPES) {
+              const insertTypeEffect = Effect.tryPromise({
+                try: async () => {
+                  return await Types.upsert([
+                    {
+                      entity_id: schemaRelation.from_entity_id,
+                      type_id: schemaRelation.to_entity_id,
+                      created_at: block.timestamp,
+                      created_at_block: block.blockNumber,
+                    },
+                  ]);
+                },
+                catch: error => new Error(`Failed to create type from relation ${String(error)}`),
+              });
+
+              yield* _(insertTypeEffect, retryEffect);
+
+              // Insert a space configuration type to the space metadata table
+              if (schemaRelation.to_entity_id === SYSTEM_IDS.SPACE_CONFIGURATION) {
+                const insertSpaceMetadataEffect = Effect.tryPromise({
+                  try: () =>
+                    SpaceMetadata.upsert([
+                      {
+                        space_id: triple.space_id,
+                        entity_id: schemaRelation.from_entity_id,
+                      },
+                    ]),
+                  catch: error =>
+                    new Error(
+                      `Failed to insert space metadata with id ${triple.entity_value_id?.toString()} for space ${
+                        triple.space_id
+                      } ${String(error)}`
+                    ),
+                });
+
+                yield* _(insertSpaceMetadataEffect, retryEffect);
+              }
+            }
           }
         }
 
@@ -403,6 +418,8 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
        * querying the name and description of an entity easier.
        *
        * There's probably a better way to do this in SQL.
+       *
+       * @TODO: Delete types and space metadata when deleting relations with type -> type
        */
       if (isDeleteType) {
         const deleteTypeEffect = Effect.tryPromise({
@@ -468,11 +485,10 @@ function getRelationTriplesFromSchemaTriples(
   // collection_items table.
   const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
 
-  // @TODO: Type of the relation
   const collectionItemIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_INDEX);
   const to = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
   const from = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
-  const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_OF_ATTRIBUTE);
+  const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
 
   const indexValue = collectionItemIndex?.triple.text_value;
   const toId = to?.triple.entity_value_id;
@@ -485,9 +501,9 @@ function getRelationTriplesFromSchemaTriples(
 
   return {
     id: entityId,
-    to_entity_id: entityId,
+    to_entity_id: toId.toString(),
     from_entity_id: fromId.toString(),
-    entity_id: toId.toString(),
+    entity_id: entityId,
     type_of_id: typeId.toString(),
     index: indexValue,
   };

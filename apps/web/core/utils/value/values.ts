@@ -61,32 +61,3 @@ export function isRelationValueType(t: Triple): t is Triple & { value: AppEntity
 export function isRelationValue(t: Triple): t is Triple & { value: AppEntityValue } {
   return t.value.type === 'ENTITY';
 }
-
-export function idsForEntityorCollectionItems(t: Triple) {
-  let typeTripleContents: string[] = [];
-
-  if (t.value.type === 'COLLECTION') {
-    typeTripleContents = t.value.items.map(i => i.entity.id);
-  }
-
-  if (t.value.type === 'ENTITY') {
-    typeTripleContents = [t.value.value];
-  }
-
-  return typeTripleContents;
-}
-
-export function entitiesForEntityOrCollectionItems(t: Triple) {
-  if (t.value.type === 'ENTITY') {
-    return [{ id: t.value.value, name: t.value.name }];
-  }
-
-  if (t.value.type === 'COLLECTION') {
-    return t.value.items.map(i => ({
-      id: i.entity.id,
-      name: i.entity.name,
-    }));
-  }
-
-  return null;
-}

@@ -6,7 +6,6 @@ import * as React from 'react';
 import { Subgraph } from '~/core/io';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
-import { getBlocksCollectionData } from '~/core/io/subgraph/network-local-mapping';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -314,11 +313,6 @@ const getData = async (spaceId: string) => {
 
   const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
 
-  const blockIdsTriple =
-    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
-
-  const { blockTriples, collectionItemTriples, blockCollectionItems } = await getBlocksCollectionData(entity);
-
   return {
     triples: entity?.triples ?? [],
     id: entity.id,
@@ -327,10 +321,10 @@ const getData = async (spaceId: string) => {
     spaceId,
 
     // For entity page editor
-    blockIdsTriple,
-    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
-    blockCollectionItems,
-    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
+    blockIdsTriple: null,
+    blockTriples: [],
+    blockCollectionItems: [],
+    blockCollectionItemTriples: [],
 
     space,
   };
