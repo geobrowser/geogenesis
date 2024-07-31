@@ -1,7 +1,7 @@
 import { SpaceConfigEntity, SpaceGovernanceType } from '~/core/types';
 
 import { SpaceMetadataDto } from '../dto';
-import { Address, SpaceId, SubstreamSpace } from '../schema';
+import { Address, type Address as IAddress, SpaceId, SubstreamSpace } from '../schema';
 
 export type Space = {
   id: SpaceId;
@@ -10,14 +10,14 @@ export type Space = {
   members: string[];
   spaceConfig: SpaceConfigEntity;
 
-  daoAddress: Address;
-  spacePluginAddress: Address;
+  daoAddress: IAddress;
+  spacePluginAddress: IAddress;
   mainVotingPluginAddress: Address | null;
   memberAccessPluginAddress: Address | null;
   personalSpaceAdminPluginAddress: Address | null;
 };
 
-export function SpaceDto(space: SubstreamSpace) {
+export function SpaceDto(space: SubstreamSpace): Space {
   const spaceConfigEntity = SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.entity);
 
   return {

@@ -130,21 +130,6 @@ export type SpaceConfigEntity = Entity & {
   image: string;
 };
 
-export type Space = {
-  id: string;
-  type: SpaceGovernanceType;
-  isRootSpace: boolean;
-  daoAddress: string;
-  mainVotingPluginAddress: string | null;
-  memberAccessPluginAddress: string | null;
-  personalSpaceAdminPluginAddress: string | null;
-  spacePluginAddress: string;
-  editors: string[];
-  members: string[];
-  spaceConfig: SpaceConfigEntity | null;
-  createdAtBlock: string;
-};
-
 export type SpaceWithMetadata = {
   id: string;
   name: string | null;

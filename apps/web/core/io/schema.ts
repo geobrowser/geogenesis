@@ -31,8 +31,14 @@ type Identifiable = Schema.Schema.Type<typeof Identifiable>;
 export type SpaceId = string & Brand.Brand<'SpaceId'>;
 export const SpaceId = Brand.nominal<SpaceId>();
 
-export const Address = Schema.String.pipe(Schema.length(42), Schema.startsWith('0x'));
-export type Address = Schema.Schema.Type<typeof Address> & Brand.Brand<'Address'>;
+// export const Address = Schema.String.pipe(Schema.length(42), Schema.startsWith('0x'));
+export type Address = string & Brand.Brand<'Address'>;
+export const Address = Brand.nominal<Address>();
+export const AddressWithValidation = Schema.String.pipe(
+  Schema.length(42),
+  Schema.startsWith('0x'),
+  Schema.fromBrand(Address)
+);
 
 /*******************************************************************************
  * Triples
@@ -111,20 +117,20 @@ const SpaceGovernanceType = Schema.Union(Schema.Literal('PUBLIC'), Schema.Litera
 type SpaceGovernanceType = Schema.Schema.Type<typeof SpaceGovernanceType>;
 
 const Account = Schema.Struct({
-  id: Address,
+  id: AddressWithValidation,
 });
 
-const SchemaMembers = Schema.Struct({ nodes: Schema.Array(Schema.Struct({ accountId: Address })) });
+const SchemaMembers = Schema.Struct({ nodes: Schema.Array(Schema.Struct({ accountId: AddressWithValidation })) });
 type SchemaMembers = Schema.Schema.Type<typeof SchemaMembers>;
 
 const SubstreamSpaceWithoutMetadata = Schema.Struct({
   id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
   type: SpaceGovernanceType,
-  daoAddress: Address,
-  spacePluginAddress: Address,
-  mainVotingPluginAddress: Schema.NullOr(Address),
-  memberAccessPluginAddress: Schema.NullOr(Address),
-  personalSpaceAdminPluginAddress: Schema.NullOr(Address),
+  daoAddress: AddressWithValidation,
+  spacePluginAddress: AddressWithValidation,
+  mainVotingPluginAddress: Schema.NullOr(AddressWithValidation),
+  memberAccessPluginAddress: Schema.NullOr(AddressWithValidation),
+  personalSpaceAdminPluginAddress: Schema.NullOr(AddressWithValidation),
   spaceEditors: SchemaMembers,
   spaceMembers: SchemaMembers,
 });

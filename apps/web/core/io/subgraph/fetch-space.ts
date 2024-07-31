@@ -4,9 +4,8 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Space } from '~/core/types';
 
-import { SpaceDto } from '../dto/spaces';
+import { Space, SpaceDto } from '../dto/spaces';
 import { SubstreamSpace } from '../schema';
 import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
