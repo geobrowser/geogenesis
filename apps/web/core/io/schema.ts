@@ -137,7 +137,7 @@ const SubstreamSpaceWithoutMetadata = Schema.Struct({
 
 type SubstreamSpaceWithoutMetadata = Schema.Schema.Type<typeof SubstreamSpaceWithoutMetadata>;
 
-const SubstreamTriple = Schema.extend(
+export const SubstreamTriple = Schema.extend(
   SubstreamValue,
   Schema.Struct({
     entity: Schema.extend(Identifiable, Nameable),

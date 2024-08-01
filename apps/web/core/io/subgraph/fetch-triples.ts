@@ -1,3 +1,4 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -108,5 +109,22 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  return result.triples.nodes.map(TripleDto);
+
+  const decodedTriples = result.triples.nodes
+    .map(t => {
+      const decodedSpace = Schema.decodeEither(SubstreamTriple)(t);
+
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Unable to decode triple ${t} with error ${error}`);
+          return null;
+        },
+        onRight: triple => {
+          return triple;
+        },
+      });
+    })
+    .filter(t => t !== null);
+
+  return decodedTriples.map(TripleDto);
 }
