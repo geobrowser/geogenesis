@@ -1,14 +1,14 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Space } from '~/core/types';
 
-import { getSpaceConfigFromMetadata } from '../schema';
+import { Space, SpaceDto } from '../dto/spaces';
+import { SubstreamSpace } from '../schema';
 import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
-import { NetworkSpaceResult } from './types';
 
 const getFetchSpacesQuery = (ids: string[]) => `query {
   spaces(filter: {id: {in: ${JSON.stringify(ids)}}}) {
@@ -20,7 +20,7 @@ const getFetchSpacesQuery = (ids: string[]) => `query {
 
 interface NetworkResult {
   spaces: {
-    nodes: NetworkSpaceResult[];
+    nodes: SubstreamSpace[];
   };
 }
 export async function fetchSpacesById(ids: string[]) {
@@ -80,25 +80,11 @@ export async function fetchSpacesById(ids: string[]) {
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
   const spaces = result.spaces.nodes.map((space): Space => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.spacesMetadata.nodes[0]?.entity);
-
-    return {
-      id: space.id,
-      type: space.type,
-      isRootSpace: space.isRootSpace,
-      editors: space.spaceEditors.nodes.map(account => account.accountId),
-      members: space.spaceMembers.nodes.map(account => account.accountId),
-      spaceConfig: spaceConfigWithImage,
-      createdAtBlock: space.createdAtBlock,
-
-      daoAddress: space.daoAddress,
-      mainVotingPluginAddress: space.mainVotingPluginAddress,
-      memberAccessPluginAddress: space.memberAccessPluginAddress,
-      personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
-      spacePluginAddress: space.spacePluginAddress,
-    };
+    const decodedSpace = Schema.decodeSync(SubstreamSpace)(space);
+    return SpaceDto(decodedSpace);
   });
 
-  // Only return spaces that have a spaceConfig.
+  // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
+  // the query level when we index the space config entity as part of a Space.
   return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
 }

@@ -9,7 +9,6 @@ import { Space, SpaceDto } from '../dto/spaces';
 import { SubstreamSpace } from '../schema';
 import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
-import { NetworkSpaceResult } from './types';
 
 const getFetchSpaceQuery = (id: string) => `query {
   space(id: "${id}") {
@@ -22,7 +21,7 @@ export interface FetchSpaceOptions {
 }
 
 type NetworkResult = {
-  space: NetworkSpaceResult | null;
+  space: SubstreamSpace | null;
 };
 
 export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | null> {
