@@ -35,7 +35,7 @@ interface NetworkResult {
   };
 }
 
-export async function fetchSpacesWhereEditor(address: string) {
+export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWhereEditor[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 

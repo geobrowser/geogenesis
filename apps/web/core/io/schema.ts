@@ -207,6 +207,24 @@ export const SubstreamSpace = Schema.extend(
 
 export type SubstreamSpace = Schema.Schema.Type<typeof SubstreamSpace>;
 
+export const SubstreamSubspace = Schema.Struct({
+  subspace: Schema.Struct({
+    id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
+    daoAddress: AddressWithValidation,
+    spaceEditors: Schema.Struct({
+      totalCount: Schema.Int,
+    }),
+    spaceMembers: Schema.Struct({
+      totalCount: Schema.Int,
+    }),
+    spacesMetadata: Schema.Struct({
+      nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
+    }),
+  }),
+});
+
+export type SubstreamSubspace = Schema.Schema.Type<typeof SubstreamSubspace>;
+
 /**
  * Search results
  *

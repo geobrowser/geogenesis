@@ -1,13 +1,13 @@
+import { Schema } from '@effect/schema';
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { GeoDate } from '~/core/utils/utils';
 
-import { getSpaceConfigFromMetadata } from '../schema';
-import { Subspace } from './fetch-subspaces';
+import { Subspace, SubspaceDto } from '../dto/subspaces';
+import { SubstreamSubspace } from '../schema';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
-import { NetworkSpaceResult } from './types';
 
 const inflightSubspacesForSpaceIdQuery = (spaceId: string, endTime: number) =>
   `
@@ -51,10 +51,7 @@ interface NetworkResult {
     nodes: {
       proposedSubspaces: {
         nodes: {
-          spaceBySubspace: Pick<NetworkSpaceResult, 'spacesMetadata' | 'id' | 'daoAddress'> & {
-            spaceMembers: { totalCount: number };
-            spaceEditors: { totalCount: number };
-          };
+          spaceBySubspace: SubstreamSubspace;
         }[];
       };
     }[];
@@ -98,22 +95,27 @@ export async function fetchInFlightSubspaceProposalsForSpaceId(spaceId: string) 
 
   const subspaces = result?.proposals?.nodes.flatMap(p => p?.proposedSubspaces.nodes);
 
-  const spaces = subspaces?.map((spaceBySubspace): Subspace => {
-    const subspace = spaceBySubspace?.spaceBySubspace;
-    console.log('subspace', subspace);
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(
-      subspace?.id ?? '',
-      subspace?.spacesMetadata.nodes[0].entity
-    );
+  const spaces = subspaces
+    ?.map((spaceBySubspace): Subspace | null => {
+      const decodedSpace = Schema.decodeEither(SubstreamSubspace)(spaceBySubspace.spaceBySubspace);
 
-    return {
-      id: subspace!.id,
-      daoAddress: subspace!.daoAddress,
-      totalEditors: subspace?.spaceEditors.totalCount ?? 0,
-      totalMembers: subspace?.spaceMembers.totalCount ?? 0,
-      spaceConfig: spaceConfigWithImage,
-    };
-  });
+      const result = Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Encountered error decoding proposed subspace for space with id ${spaceId} – error: ${error}`);
+          return null;
+        },
+        onRight: space => {
+          return space;
+        },
+      });
+
+      if (result === null) {
+        return null;
+      }
+
+      return SubspaceDto(result);
+    })
+    .filter(s => s !== null);
 
   return spaces ?? [];
 }
