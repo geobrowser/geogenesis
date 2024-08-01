@@ -1,5 +1,6 @@
 'use client';
 
+import { Schema } from '@effect/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { motion } from 'framer-motion';
@@ -11,11 +12,11 @@ import { Environment } from '~/core/environment';
 import { useAddSubspace } from '~/core/hooks/use-add-subspace';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useRemoveSubspace } from '~/core/hooks/use-remove-subspace';
-import { Subspace } from '~/core/io/subgraph/fetch-subspaces';
+import { SpaceDto } from '~/core/io/dto/spaces';
+import { Subspace, SubspaceDto } from '~/core/io/dto/subspaces';
+import { SubstreamSubspace } from '~/core/io/schema';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
-import { NetworkSpaceResult } from '~/core/io/subgraph/types';
 import { SpaceGovernanceType } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -85,10 +86,7 @@ const subspacesQuery = (name: string, notIn: string[]) => `
 
 interface NetworkResult {
   spaces: {
-    nodes: (Pick<NetworkSpaceResult, 'spacesMetadata' | 'id' | 'daoAddress'> & {
-      spaceMembers: { totalCount: number };
-      spaceEditors: { totalCount: number };
-    })[];
+    nodes: SubstreamSubspace[];
   };
 }
 
@@ -162,15 +160,23 @@ function useSubspacesQuery({
     };
   }
 
-  const spaces = data?.spaces?.nodes.map(s => {
-    return {
-      id: s.id,
-      daoAddress: s.daoAddress,
-      spaceConfig: getSpaceConfigFromMetadata(s.id, s.spacesMetadata.nodes[0].entity),
-      totalMembers: s?.spaceMembers.totalCount ?? 0,
-      totalEditors: s?.spaceEditors.totalCount ?? 0,
-    };
-  });
+  const spaces = data?.spaces?.nodes
+    .map(s => {
+      const spaceOrError = Schema.decodeEither(SubstreamSubspace)(s);
+
+      const decodedSpace = Either.match(spaceOrError, {
+        onRight: s => s,
+        onLeft: e => {
+          console.error('Could not fetch subspaces by name in add-subspace dialog', e);
+          return null;
+        },
+      });
+
+      if (!decodedSpace) return null;
+
+      return SubspaceDto(decodedSpace);
+    })
+    .filter(s => s !== null);
 
   return {
     query,

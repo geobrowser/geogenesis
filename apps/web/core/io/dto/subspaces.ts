@@ -11,14 +11,14 @@ export type Subspace = {
   spaceConfig: SpaceConfigEntity;
 };
 
-export function SubspaceDto(space: SubstreamSubspace) {
-  const spaceConfigWithImage = SpaceMetadataDto(space.subspace.id, space.subspace.spacesMetadata.nodes[0]?.entity);
+export function SubspaceDto(subspace: SubstreamSubspace) {
+  const spaceConfigWithImage = SpaceMetadataDto(subspace.id, subspace.spacesMetadata.nodes[0]?.entity);
 
   return {
-    id: space.subspace.id,
-    daoAddress: space.subspace.daoAddress,
-    totalEditors: space.subspace.spaceEditors.totalCount,
-    totalMembers: space.subspace.spaceMembers.totalCount,
+    id: subspace.id,
+    daoAddress: subspace.daoAddress,
+    totalEditors: subspace.spaceEditors.totalCount,
+    totalMembers: subspace.spaceMembers.totalCount,
     spaceConfig: spaceConfigWithImage,
   };
 }
