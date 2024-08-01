@@ -2,8 +2,9 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
-import { Entity as IEntity, OmitStrict, Proposal, Vote } from '~/core/types';
+import { Entity as IEntity, OmitStrict, Vote } from '~/core/types';
 
+import { Proposal } from '../io/dto/proposals';
 import { Entities } from './entity';
 
 export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
@@ -24,34 +25,32 @@ export const NavUtils = {
     attributes?: Array<[string, string]> | null
   ) => {
     if (typeId && attributes && attributes?.length > 0) {
-      return decodeURIComponent(
-        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&attributes=${encodeURI(JSON.stringify(attributes))}`
-      );
+      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}&attributes=${encodeURI(JSON.stringify(attributes))}`;
     }
 
     if (typeId) {
-      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?typeId=${typeId}`);
+      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}`;
     }
 
     if (attributes && attributes.length > 0) {
       return decodeURIComponent(`/space/${spaceId}/${newEntityId}?attributes=${encodeURI(JSON.stringify(attributes))}`);
     }
 
-    return decodeURIComponent(`/space/${spaceId}/${newEntityId}`);
+    return `/space/${spaceId}/${newEntityId}`;
   },
   toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
-      return decodeURIComponent(`/space/${spaceId}/activity?spaceId=${spaceIdParam}`);
+      return `/space/${spaceId}/activity?spaceId=${spaceIdParam}`;
     }
 
-    return decodeURIComponent(`/space/${spaceId}/activity`);
+    return `/space/${spaceId}/activity`;
   },
   toProfileActivity: (spaceId: string, entityId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
-      return decodeURIComponent(`/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`);
+      return `/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`;
     }
 
-    return decodeURIComponent(`/space/${spaceId}/${entityId}/activity`);
+    return `/space/${spaceId}/${entityId}/activity`;
   },
 };
 
@@ -288,10 +287,7 @@ export function getIsProposalEnded(status: Proposal['status'], endTime: number) 
   return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
 }
 
-export function getIsProposalExecutable(
-  proposal: OmitStrict<Proposal, 'proposedVersions'>,
-  yesVotesPercentage: number
-) {
+export function getIsProposalExecutable(proposal: Proposal, yesVotesPercentage: number) {
   return (
     getIsProposalEnded(proposal.status, proposal.endTime) && yesVotesPercentage > 50 && proposal.status !== 'ACCEPTED'
   );
