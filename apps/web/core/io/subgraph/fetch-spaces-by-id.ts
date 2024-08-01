@@ -85,7 +85,7 @@ export async function fetchSpacesById(ids: string[]) {
 
       return Either.match(decodedSpace, {
         onLeft: error => {
-          console.error(`Unable to decode space: ${String(error)}`);
+          console.error(`Unable to decode spaces by id for space with id ${space.id} – ${String(error)}`);
           return null;
         },
         onRight: space => {
