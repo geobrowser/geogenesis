@@ -1,3 +1,4 @@
+import { Schema } from '@effect/schema';
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
@@ -115,6 +116,21 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Result
   });
 
   const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+
+  const decodedResults = entities.nodes.map(result => {
+    const decodedResult = Schema.decodeEither(SubstreamSearchResult)(result);
+
+    return Either.match({
+      onLeft: error => {
+        console.error(`Unable to decode search result: ${String(error)}`);
+        return null;
+      },
+      onRight: () => {
+        return decodedResult;
+      },
+    });
+  });
+
   const sortedResults = sortSearchResultsByRelevance(entities.nodes);
   return sortedResults.map(SearchResultDto);
 }

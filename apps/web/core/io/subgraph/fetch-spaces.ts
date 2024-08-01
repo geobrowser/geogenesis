@@ -76,10 +76,21 @@ export async function fetchSpaces(): Promise<Space[]> {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const spaces = result.spaces.nodes.map((space): Space => {
-    const decodedSpace = Schema.decodeSync(SubstreamSpace)(space);
-    return SpaceDto(decodedSpace);
-  });
+  const spaces = result.spaces.nodes
+    .map(space => {
+      const decodedSpace = Schema.decodeEither(SubstreamSpace)(space);
+
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Unable to decode space: ${String(error)}`);
+          return null;
+        },
+        onRight: space => {
+          return SpaceDto(space);
+        },
+      });
+    })
+    .filter(space => space !== null);
 
   // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
   // the query level when we index the space config entity as part of a Space.
