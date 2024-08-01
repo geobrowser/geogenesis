@@ -10,7 +10,7 @@ export type ValueType =
   | 'NUMBER'
   | 'ENTITY'
   | 'CHECKBOX'
-  | 'URL'
+  | 'URI'
   | 'TIME'
   // IMAGE is only a value type in the web app. It's modeled as an Entity on the server,
   // but we create a "helper" value type to map the contents of the image to a more
@@ -18,7 +18,7 @@ export type ValueType =
   | 'IMAGE';
 
 export type AppValue = {
-  type: 'TEXT' | 'NUMBER' | 'URL' | 'TIME';
+  type: 'TEXT' | 'NUMBER' | 'URI' | 'TIME';
   value: string;
 };
 
@@ -32,7 +32,7 @@ export type AppEntityValue = {
   space?: string;
 };
 
-// Images are stored as an entity instead of the actual image resource url.
+// Images are stored as an entity instead of the actual image resource uri.
 // This is so we can add additional metadata about the image to the entity
 // representing the image, e.g., image type, dimensions, etc.
 //

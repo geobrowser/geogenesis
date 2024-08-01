@@ -427,7 +427,7 @@ const listener =
             attributeId,
             attributeName,
             value: {
-              type: 'URL',
+              type: 'URI',
               value: value,
             },
           },

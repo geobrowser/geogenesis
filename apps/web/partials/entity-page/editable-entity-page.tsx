@@ -398,7 +398,7 @@ function EntityAttributes({
       payload: {
         triple,
         value: {
-          type: 'URL',
+          type: 'URI',
           value,
         },
       },
@@ -497,7 +497,7 @@ function EntityAttributes({
             onBlur={v => (triple.placeholder ? createDateTripleFromPlaceholder(triple, v) : updateDateValue(triple, v))}
           />
         );
-      case 'URL':
+      case 'URI':
         return (
           <WebUrlField
             isEditing
@@ -682,8 +682,8 @@ function EntityAttributes({
                               Web URL
                             </div>
                           ),
-                          value: 'URL',
-                          onClick: () => onChangeTriple('URL', triple),
+                          value: 'URI',
+                          onClick: () => onChangeTriple('URI', triple),
                           disabled: false,
                         },
                       ]}

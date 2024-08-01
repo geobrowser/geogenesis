@@ -7,7 +7,7 @@ import { SubstreamEntity, SubstreamImageValueTriple, SubstreamTriple, SubstreamT
 
 function getImageUrlFromImageEntity(triples: readonly SubstreamImageValueTriple[]): string | null {
   const triple = triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE);
-  return triple?.valueType === 'URL' ? triple.textValue : null;
+  return triple?.valueType === 'URI' ? triple.textValue : null;
 }
 
 function isImageEntity(types: readonly SubstreamType[]): boolean {
@@ -44,8 +44,8 @@ function extractValue(networkTriple: SubstreamTriple): Value {
     }
     case 'TIME':
       return { type: 'TIME', value: networkTriple.textValue };
-    case 'URL':
-      return { type: 'URL', value: networkTriple.textValue };
+    case 'URI':
+      return { type: 'URI', value: networkTriple.textValue };
   }
 }
 

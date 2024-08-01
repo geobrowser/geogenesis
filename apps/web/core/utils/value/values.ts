@@ -25,7 +25,7 @@ export function stringValue(triple?: Triple) {
 export function urlValue(triple?: Triple) {
   if (!triple) return null;
 
-  return triple.value.type === 'URL' ? triple.value.value : null;
+  return triple.value.type === 'URI' ? triple.value.value : null;
 }
 
 export function timeValue(triple?: Triple) {

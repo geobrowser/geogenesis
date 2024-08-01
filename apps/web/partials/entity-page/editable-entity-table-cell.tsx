@@ -180,7 +180,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       payload: {
         triple,
         value: {
-          type: 'URL',
+          type: 'URI',
           value,
         },
       },

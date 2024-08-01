@@ -53,11 +53,6 @@ export function emptyValue(type: TripleValueType): Value {
       value: '',
       name: null,
     } as AppEntityValue,
-    COLLECTION: {
-      value: '',
-      items: [],
-      type: 'COLLECTION',
-    },
     NUMBER: {
       type: 'NUMBER',
       value: '',
@@ -71,8 +66,8 @@ export function emptyValue(type: TripleValueType): Value {
       type: 'TIME',
       value: '',
     },
-    URL: {
-      type: 'URL',
+    URI: {
+      type: 'URI',
       value: '',
     },
     CHECKBOX: {
@@ -216,8 +211,7 @@ export const getValue = (triple: Triple): string | null => {
     case 'ENTITY':
     case 'IMAGE':
     case 'TIME':
-    case 'URL':
-    case 'COLLECTION':
+    case 'URI':
       return triple.value.value;
     case 'IMAGE':
       return triple.value.image;

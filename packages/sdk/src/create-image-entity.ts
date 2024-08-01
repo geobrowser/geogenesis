@@ -19,7 +19,7 @@ type CreateImageEntityOpsReturnType = [
       entity: string;
       attribute: typeof SYSTEM_IDS.IMAGE_URL_ATTRIBUTE;
       value: {
-        type: 'URL';
+        type: 'URI';
         value: string;
       }
     }
@@ -52,7 +52,7 @@ export function createImageEntityOps(src: string): CreateImageEntityOpsReturnTyp
         entity: entityId,
         attribute: SYSTEM_IDS.IMAGE_URL_ATTRIBUTE,
         value: {
-          type: 'URL',
+          type: 'URI',
           value: src
         }
       }

@@ -730,7 +730,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'URL': {
+    case 'URI': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);

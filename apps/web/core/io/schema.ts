@@ -79,7 +79,7 @@ type SubstreamUriValue = Schema.Schema.Type<typeof SubstreamUriValue>;
  * the image url value of an image entity.
  */
 export const SubstreamImageValueTriple = Schema.Struct({
-  valueType: Schema.Literal('URL'),
+  valueType: Schema.Literal('URI'),
   attributeId: Schema.String.pipe(Schema.fromBrand(EntityId)),
   textValue: Schema.String,
 });

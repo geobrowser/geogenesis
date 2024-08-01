@@ -111,6 +111,11 @@ function EntityRelations({ relations }: { relations: Relation[] }) {
 }
 
 const Triple = ({ triple }: { triple: ITriple }) => {
+  if (!triple.value) {
+    console.log('triple', triple);
+    return null;
+  }
+
   switch (triple.value.type) {
     case 'TEXT':
       return (
@@ -122,7 +127,7 @@ const Triple = ({ triple }: { triple: ITriple }) => {
       return <ImageZoom key={`image-${triple.attributeId}-${triple.value.value}`} imageSrc={triple.value.image} />;
     case 'TIME':
       return <DateField isEditing={false} value={triple.value.value} />;
-    case 'URL':
+    case 'URI':
       return <WebUrlField isEditing={false} value={triple.value.value} />;
     case 'ENTITY': {
       return (

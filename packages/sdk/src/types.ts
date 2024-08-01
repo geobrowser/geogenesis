@@ -1,4 +1,4 @@
-export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';
+export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URI' | 'TIME' | 'GEO_LOCATION';
 
 export type Value = {
   type: ValueType;

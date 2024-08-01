@@ -27,7 +27,7 @@ type CreateImageTriplesReturnType = [
     attributeId: typeof SYSTEM_IDS.IMAGE_URL_ATTRIBUTE;
     attributeName: 'Image URL';
     value: {
-      type: 'URL';
+      type: 'URI';
       value: string;
     };
   },
@@ -60,7 +60,7 @@ export function createImageEntityTriples({
       attributeId: urlOp.triple.attribute,
       attributeName: 'Image URL',
       value: {
-        type: 'URL',
+        type: 'URI',
         value: typeOp.triple.value.value,
       },
     },
