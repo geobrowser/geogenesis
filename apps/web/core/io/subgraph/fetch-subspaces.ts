@@ -109,7 +109,7 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
 
   const spaces = result.spaceSubspaces.nodes
     .map((space): Subspace | null => {
-      const decodedSpace = Schema.decodeEither(SubstreamSubspace)(space);
+      const decodedSpace = Schema.decodeEither(SubstreamSubspace)(space.subspace);
 
       const result = Either.match(decodedSpace, {
         onLeft: error => {

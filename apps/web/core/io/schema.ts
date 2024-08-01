@@ -67,12 +67,12 @@ type SubstreamTimeValue = Schema.Schema.Type<typeof SubstreamTimeValue>;
 /**
  * Url value
  */
-const SubstreamUrlValue = Schema.Struct({
-  valueType: Schema.Literal('URL'),
+const SubstreamUriValue = Schema.Struct({
+  valueType: Schema.Literal('URI'),
   textValue: Schema.String,
 });
 
-type SubstreamUrlValue = Schema.Schema.Type<typeof SubstreamUrlValue>;
+type SubstreamUriValue = Schema.Schema.Type<typeof SubstreamUriValue>;
 
 /**
  * ImageValueTriple is a special case of a substream triple where we only query
@@ -110,7 +110,7 @@ const SubstreamEntityValue = Schema.Struct({
 
 type SubstreamEntityValue = Schema.Schema.Type<typeof SubstreamEntityValue>;
 
-const SubstreamValue = Schema.Union(SubstreamTextValue, SubstreamEntityValue, SubstreamTimeValue, SubstreamUrlValue);
+const SubstreamValue = Schema.Union(SubstreamTextValue, SubstreamEntityValue, SubstreamTimeValue, SubstreamUriValue);
 type SubstreamValue = Schema.Schema.Type<typeof SubstreamValue>;
 
 const SpaceGovernanceType = Schema.Union(Schema.Literal('PUBLIC'), Schema.Literal('PERSONAL'));
@@ -208,18 +208,16 @@ export const SubstreamSpace = Schema.extend(
 export type SubstreamSpace = Schema.Schema.Type<typeof SubstreamSpace>;
 
 export const SubstreamSubspace = Schema.Struct({
-  subspace: Schema.Struct({
-    id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
-    daoAddress: AddressWithValidation,
-    spaceEditors: Schema.Struct({
-      totalCount: Schema.Int,
-    }),
-    spaceMembers: Schema.Struct({
-      totalCount: Schema.Int,
-    }),
-    spacesMetadata: Schema.Struct({
-      nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
-    }),
+  id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
+  daoAddress: AddressWithValidation,
+  spaceEditors: Schema.Struct({
+    totalCount: Schema.Int,
+  }),
+  spaceMembers: Schema.Struct({
+    totalCount: Schema.Int,
+  }),
+  spacesMetadata: Schema.Struct({
+    nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
   }),
 });
 
