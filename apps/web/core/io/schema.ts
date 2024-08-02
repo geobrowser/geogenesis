@@ -133,6 +133,10 @@ const SubstreamSpaceWithoutMetadata = Schema.Struct({
   personalSpaceAdminPluginAddress: Schema.NullOr(AddressWithValidation),
   spaceEditors: SchemaMembers,
   spaceMembers: SchemaMembers,
+  // @TODO: Including the metadata makes the schema circular when defining triples
+  // and entities which is not allowed atm. There is another schema entry called
+  // `SubstreamSpace` which adds the metadata after triples and entities schemas
+  // are defined to avoid the circular schema issue.
 });
 
 type SubstreamSpaceWithoutMetadata = Schema.Schema.Type<typeof SubstreamSpaceWithoutMetadata>;
@@ -142,11 +146,7 @@ export const SubstreamTriple = Schema.extend(
   Schema.Struct({
     entity: Schema.extend(Identifiable, Nameable),
     attribute: Schema.extend(Identifiable, Nameable),
-    // @TODO: Including the metadata makes the schema circular which is not allowed atm.
-    // For now we make a separate schema entry to not include the metadata
-    space: Schema.Struct({
-      id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
-    }),
+    space: SubstreamSpaceWithoutMetadata.pick('id'),
   })
 );
 
@@ -161,6 +161,9 @@ const SubstreamRelation = Schema.Struct({
     id: Schema.String.pipe(Schema.fromBrand(EntityId)),
     name: Schema.NullOr(Schema.String),
   }),
+  // @TODO: Picking from SubstreamEntity here creates a circular schema which is not
+  // allowed atm. For now we hard-code which fields from SubstreamEntity we want to
+  // use from the SubstreamRelation.
   fromEntity: Schema.Struct({
     id: Schema.String.pipe(Schema.fromBrand(EntityId)),
     name: Schema.NullOr(Schema.String),
@@ -168,6 +171,9 @@ const SubstreamRelation = Schema.Struct({
   toEntity: Schema.Struct({
     id: Schema.String.pipe(Schema.fromBrand(EntityId)),
     name: Schema.NullOr(Schema.String),
+
+    // @TODO(relations): This should include the image triples for the to entity as well
+    // as the space.
   }),
 });
 
@@ -196,9 +202,15 @@ export type SubstreamEntity = Schema.Schema.Type<typeof SubstreamEntity>;
 // @TODO: Including the metadata makes the schema circular when defining triples
 // and entities which is not allowed atm.For now we make a separate schema entry
 // to not include the metadata the nextend it here to include the metadata.
+//
+// If you want metadata with the space then SubstreamSpace should be the schema
+// used throughout the app.
 export const SubstreamSpace = Schema.extend(
   SubstreamSpaceWithoutMetadata,
   Schema.Struct({
+    // There might be more than one instance of an entity with type: Space in a space
+    // at a given time. Once we add cardinality as part of schemas we can make some
+    // safer assumptions about how many entities of a given type exist.
     spacesMetadata: Schema.Struct({
       nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
     }),
@@ -207,19 +219,19 @@ export const SubstreamSpace = Schema.extend(
 
 export type SubstreamSpace = Schema.Schema.Type<typeof SubstreamSpace>;
 
-export const SubstreamSubspace = Schema.Struct({
-  id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
-  daoAddress: AddressWithValidation,
-  spaceEditors: Schema.Struct({
-    totalCount: Schema.Int,
-  }),
-  spaceMembers: Schema.Struct({
-    totalCount: Schema.Int,
-  }),
-  spacesMetadata: Schema.Struct({
-    nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
-  }),
-});
+// Subspaces are currently only used in the app as a subset of all the properties
+// available on a space, which is why they are a special type.
+//
+// For some reason we can't pick from an extended schema which is why we can't just
+// use SubstreamSpace here to pick from.
+export const SubstreamSubspace = Schema.extend(
+  SubstreamSpaceWithoutMetadata.pick('id', 'daoAddress', 'spaceEditors', 'spaceMembers'),
+  Schema.Struct({
+    spacesMetadata: Schema.Struct({
+      nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
+    }),
+  })
+);
 
 export type SubstreamSubspace = Schema.Schema.Type<typeof SubstreamSubspace>;
 
@@ -231,7 +243,11 @@ export type SubstreamSubspace = Schema.Schema.Type<typeof SubstreamSubspace>;
  * metadata is used to aggregate all of the spaces that a space belongs to. Ideally
  * this is derived by the database and query so we don't have to do this locally.
  *
- * These triples get aggregated into an entity result
+ * These triples get aggregated into an entity result.
+ *
+ * @TODO(relations): Once we have spaces indexed onto an entity we won't need a
+ * substream triple search result since the space data will be encoded directly
+ * on the entity already.
  */
 const SubstreamTripleSearchResult = Schema.extend(
   SubstreamValue,
@@ -252,14 +268,11 @@ const SubstreamTripleSearchResult = Schema.extend(
 type SubstreamTripleSearchResult = Schema.Schema.Type<typeof SubstreamTripleSearchResult>;
 
 export const SubstreamSearchResult = Schema.extend(
-  SubstreamEntity.pick('id', 'name'),
+  SubstreamEntity.pick('id', 'name', 'types'),
   Schema.Struct({
-    // Triples and types are unique to the search result struct and not picked from SubstreamEntity
+    // These triples are unique to the search result struct and not picked from SubstreamEntity
     triples: Schema.Struct({
       nodes: Schema.Array(SubstreamTripleSearchResult),
-    }),
-    types: Schema.Struct({
-      nodes: Schema.Array(SubstreamType),
     }),
   })
 );
