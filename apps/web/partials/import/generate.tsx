@@ -13,11 +13,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
-import { createTripleId } from '~/core/id/create-id';
 import { Subgraph } from '~/core/io';
+import { Space } from '~/core/io/dto/spaces';
 import { Entity as EntityType, Triple as TripleType } from '~/core/types';
-import type { AppOp, Space, Value } from '~/core/types';
-import { Triples } from '~/core/utils/triples';
+import type { Value } from '~/core/types';
 import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
 
 import { Accordion } from '~/design-system/accordion';

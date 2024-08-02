@@ -151,6 +151,7 @@ async function getProfilePage(entityId: string): Promise<
     };
   }
 
+  // @TODO(relations): fix
   // const blockIdsTriple =
   //   person?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
 

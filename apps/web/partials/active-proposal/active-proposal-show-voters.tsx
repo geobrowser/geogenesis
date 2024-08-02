@@ -6,13 +6,13 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 
-import { Vote } from '~/core/types';
+import { VoteWithProfile } from '~/core/io/dto/proposals';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
 
 interface Props {
-  votes: Vote[];
+  votes: VoteWithProfile[];
   votesCount: number;
 }
 

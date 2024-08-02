@@ -5,6 +5,8 @@ import { Entities } from '~/core/utils/entity';
 import { TripleDto } from '../dto';
 import { ProposalStatus, ProposalType, SubstreamEntity, SubstreamProposal } from '../schema';
 
+export type VoteWithProfile = Vote & { voter: Profile };
+
 export type Proposal = {
   id: string;
   type: ProposalType;
@@ -19,7 +21,7 @@ export type Proposal = {
   status: ProposalStatus;
   proposalVotes: {
     totalCount: number;
-    nodes: Vote[];
+    nodes: VoteWithProfile[];
   };
   // @TODO: Proposed versions
 };
