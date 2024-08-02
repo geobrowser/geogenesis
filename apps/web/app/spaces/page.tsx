@@ -1,7 +1,8 @@
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE, PUBLIC_SPACES } from '~/core/constants';
-import { Entity, Space } from '~/core/types';
+import { Space } from '~/core/io/dto/spaces';
+import { Entity } from '~/core/types';
 import { Entities as EntityModule } from '~/core/utils/entity';
 
 import { Card } from '~/design-system/card';
@@ -42,10 +43,9 @@ export const metadata: Metadata = {
 export const revalidate = 60; // 1 minute
 
 export default async function Spaces() {
-  // Only fetch the front page spaces.
+  // Only fetch the front page spaces until we have space graphs with subspaces.
   const spaces = await cachedFetchSpacesById(PUBLIC_SPACES);
-
-  const spacesWithSpaceConfigs = spaces.filter((s): s is Space & { spaceConfig: Entity } => s.spaceConfig !== null);
+  const spacesWithSpaceConfigs = spaces.filter(s => s.spaceConfig !== null);
 
   const spaceConfigs = spacesWithSpaceConfigs.map(space => {
     const entity = space.spaceConfig;

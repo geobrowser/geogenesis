@@ -1,9 +1,9 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 
 import * as React from 'react';
 
-import { Entity, Space } from '~/core/types';
+import { Space } from '~/core/io/dto/spaces';
+import { Entity } from '~/core/types';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';

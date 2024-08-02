@@ -37,14 +37,12 @@ export async function fetchColumns({ params, api, signal }: FetchColumnsOptions)
   /* Then we fetch all of the associated triples for each column */
 
   // This will return null if the entity we're fetching does not exist remotely
-  // @TODO: The value might be a collection
+  // @TODO(relations): The value will likely be a relation
   const columnsEntityIds = columnsTriples
-    .map(t => Values.entitiesForEntityOrCollectionItems(t))
-    // @TODO: Yes this is a monstrosity
-    .flatMap(t => (t ? [t] : []))
-    .flat();
+    .map(t => (t.value.type === 'ENTITY' ? t.value.value : null))
+    .filter(id => id !== null);
 
-  const maybeRelatedColumnTriples = await Promise.all(columnsEntityIds.map(c => api.fetchEntity({ id: c.id })));
+  const maybeRelatedColumnTriples = await Promise.all(columnsEntityIds.map(c => api.fetchEntity({ id: c })));
 
   const relatedColumnTriples = maybeRelatedColumnTriples.flatMap(entity => (entity ? [entity] : []));
 

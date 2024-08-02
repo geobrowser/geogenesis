@@ -21,7 +21,7 @@ import { Environment } from '~/core/environment';
 import { IpfsUploadError } from '~/core/errors';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { OmitStrict, SpaceGovernanceType, SpaceType } from '~/core/types';
+import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
 import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
 import { Ops } from '~/core/utils/ops';

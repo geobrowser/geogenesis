@@ -120,6 +120,8 @@ export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
         nameTripleSpaces: nameTriples(triples).map(triple => triple.space),
         types: types(triples, tripleForName?.space),
         triples,
+        // @TODO(realtions): fix
+        relationsOut: [],
       };
     })
   );
@@ -165,6 +167,9 @@ export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEnti
     nameTripleSpaces: nameTriples(triplesForEntity).map(triple => triple.space),
     types: types(triplesForEntity, triplesForEntity[0]?.space),
     triples: triplesForEntity,
+
+    // @TODO(realtions): fix
+    relationsOut: [],
   };
 }
 
@@ -183,6 +188,8 @@ export function fromTriples(allTriplesInStore: ITriple[], entityId: string): IEn
     nameTripleSpaces: nameTriples(triplesForEntityWithLocalNames).map(triple => triple.space),
     types: types(triplesForEntityWithLocalNames, triplesForEntityWithLocalNames[0]?.space),
     triples: triplesForEntityWithLocalNames,
+    // @TODO(realtions): fix
+    relationsOut: [],
   };
 }
 

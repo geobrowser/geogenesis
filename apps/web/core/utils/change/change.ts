@@ -1,36 +1,37 @@
 // import { SYSTEM_IDS } from '@geogenesis/sdk';
-
 // import { Subgraph } from '~/core/io/';
 // import { fetchVersion } from '~/core/io/subgraph/fetch-version';
 // import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
-// import type { Entity as EntityType, Triple as TripleType, ValueType as TripleValueType, Version } from '~/core/types';
+import { Subgraph } from '~/core/io';
+import type { ValueType as TripleValueType } from '~/core/types';
+
 // import { Entities } from '~/core/utils/entity';
 // import { Triples } from '~/core/utils/triples';
 // import { Values } from '~/core/utils/value';
 
-// export type ActionId = string;
-// export type EntityId = string;
-// export type BlockId = string;
-// export type BlockValueType = 'textBlock' | 'tableFilter' | 'imageBlock' | 'tableBlock' | 'markdownContent';
-// export type AttributeId = string;
-// export type Changeset = {
-//   name: string;
-//   blocks?: Record<BlockId, BlockChange>;
-//   attributes?: Record<AttributeId, AttributeChange>;
-//   actions?: Array<ActionId>;
-// };
-// export type BlockChange = {
-//   type: BlockValueType;
-//   before: string | null;
-//   after: string | null;
-// };
-// export type AttributeChange = {
-//   type: TripleValueType;
-//   name: string;
-//   before: string | null | Array<string | null>;
-//   after: string | null | Array<string | null>;
-//   actions: Array<ActionId>;
-// };
+export type ActionId = string;
+export type EntityId = string;
+export type BlockId = string;
+export type BlockValueType = 'textBlock' | 'tableFilter' | 'imageBlock' | 'tableBlock' | 'markdownContent';
+export type AttributeId = string;
+export type Changeset = {
+  name: string;
+  blocks?: Record<BlockId, BlockChange>;
+  attributes?: Record<AttributeId, AttributeChange>;
+  actions?: Array<ActionId>;
+};
+export type BlockChange = {
+  type: BlockValueType;
+  before: string | null;
+  after: string | null;
+};
+export type AttributeChange = {
+  type: TripleValueType;
+  name: string;
+  before: string | null | Array<string | null>;
+  after: string | null | Array<string | null>;
+  actions: Array<ActionId>;
+};
 
 // export async function fromTriples(triples: TripleType[], subgraph: Subgraph.ISubgraph) {
 //   const entities: Record<EntityId, EntityType> = await getEntitiesFromActions(triples, subgraph);
@@ -398,7 +399,7 @@
 // };
 
 // export async function fromVersion(versionId: string, previousVersionId: string, subgraph: Subgraph.ISubgraph) {
-//   const changes: Record<EntityId, Changeset> = {};
+// const changes: Record<EntityId, Changeset> = {};
 
 //   const [selectedVersion, previousVersion] = await Promise.all([
 //     fetchVersion({ versionId: versionId }),
@@ -827,3 +828,5 @@
 //   SYSTEM_IDS.MARKDOWN_CONTENT,
 //   SYSTEM_IDS.FILTER,
 // ];
+
+export {};

@@ -147,37 +147,39 @@ async function getProfilePage(entityId: string): Promise<
       blockIdsTriple: null,
       blockCollectionItems: [],
       blockCollectionItemTriples: [],
+      relationsOut: [],
     };
   }
 
-  const blockIdsTriple =
-    person?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
+  // const blockIdsTriple =
+  //   person?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
 
-  const blockCollectionItems =
-    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
+  // const blockCollectionItems =
+  //   blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
 
-  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
+  // const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
 
-  const [blockTriples, collectionItemTriples] = await Promise.all([
-    Promise.all(
-      blockIds.map(blockId => {
-        return cachedFetchEntity(blockId);
-      })
-    ),
-    Promise.all(
-      blockCollectionItems.map(item => {
-        return cachedFetchEntity(item.id);
-      })
-    ),
-  ]);
+  // const [blockTriples, collectionItemTriples] = await Promise.all([
+  //   Promise.all(
+  //     blockIds.map(blockId => {
+  //       return cachedFetchEntity(blockId);
+  //     })
+  //   ),
+  //   Promise.all(
+  //     blockCollectionItems.map(item => {
+  //       return cachedFetchEntity(item.id);
+  //     })
+  //   ),
+  // ]);
 
   return {
     ...person,
     avatarUrl: Entities.avatar(person.triples),
     coverUrl: Entities.cover(person.triples),
-    blockIdsTriple,
-    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
-    blockCollectionItems,
-    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
+    blockIdsTriple: null,
+    blockTriples: [],
+    blockCollectionItems: [],
+    blockCollectionItemTriples: [],
+    relationsOut: [],
   };
 }

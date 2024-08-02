@@ -238,33 +238,31 @@ const SubstreamTripleSearchResult = Schema.extend(
   Schema.Struct({
     entity: Schema.extend(Identifiable, Nameable),
     attribute: Schema.extend(Identifiable, Nameable),
-    // @TODO: Should be picked from SubstreamSpace, but SubstreamSpace.pick
-    // is not working as of @effect/schema@0.70.0
-    space: Schema.Struct({
-      id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
-      spacesMetadata: Schema.Struct({
-        nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
-      }),
-    }),
+    space: Schema.extend(
+      SubstreamSpaceWithoutMetadata.pick('id'),
+      Schema.Struct({
+        spacesMetadata: Schema.Struct({
+          nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
+        }),
+      })
+    ),
   })
 );
 
 type SubstreamTripleSearchResult = Schema.Schema.Type<typeof SubstreamTripleSearchResult>;
 
-export const SubstreamSearchResult = Schema.Struct({
-  // @TODO: These properties should be picked from SubstreamEntity, but SubstreamEntity.pick
-  // is not working as of @effect/schema@0.70.0
-  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  name: Schema.NullOr(Schema.String),
-
-  // Triples and types are unique to the search result struct and not picked from SubstreamEntity
-  triples: Schema.Struct({
-    nodes: Schema.Array(SubstreamTripleSearchResult),
-  }),
-  types: Schema.Struct({
-    nodes: Schema.Array(SubstreamType),
-  }),
-});
+export const SubstreamSearchResult = Schema.extend(
+  SubstreamEntity.pick('id', 'name'),
+  Schema.Struct({
+    // Triples and types are unique to the search result struct and not picked from SubstreamEntity
+    triples: Schema.Struct({
+      nodes: Schema.Array(SubstreamTripleSearchResult),
+    }),
+    types: Schema.Struct({
+      nodes: Schema.Array(SubstreamType),
+    }),
+  })
+);
 
 export type SubstreamSearchResult = Schema.Schema.Type<typeof SubstreamSearchResult>;
 
@@ -295,6 +293,8 @@ export const SubstreamVote = Schema.Struct({
   vote: VoteType,
   account: Account,
 });
+
+export type SubstreamVote = Schema.Schema.Type<typeof SubstreamVote>;
 
 export const SubstreamProposedVersion = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),

@@ -24,11 +24,9 @@ interface IMergedDataSource
   extends OmitStrict<
     Subgraph.ISubgraph,
     // These data models don't have local equivalents, so we don't need merging logic for them.
-    | 'fetchProposedVersion'
     | 'fetchProposal'
     | 'fetchProposals'
     | 'fetchTableRowEntities'
-    | 'fetchProposedVersions'
     | 'fetchSpace'
     | 'fetchSpaces'
     | 'fetchProfile'

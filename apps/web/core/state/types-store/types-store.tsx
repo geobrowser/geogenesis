@@ -6,13 +6,14 @@ import { A, pipe } from '@mobily/ts-belt';
 import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { GeoType, Space, Triple as TripleType } from '~/core/types';
+import { Space } from '~/core/io/dto/spaces';
+import { GeoType, Triple as ITriple } from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 
 import { useLocalStore } from '../local-store';
 
 interface TypesStoreProviderState {
-  initialTypes: TripleType[];
+  initialTypes: ITriple[];
   space: Space | null;
 }
 

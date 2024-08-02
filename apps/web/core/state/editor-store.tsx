@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS, createCollection, createCollectionItem, reorderCollectionItem } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createCollection, createRelationship, reorderCollectionItem } from '@geogenesis/sdk';
 import { A } from '@mobily/ts-belt';
 import { Editor } from '@tiptap/core';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
@@ -31,16 +31,13 @@ interface BlockCollectionItem extends OmitStrict<CollectionItem, 'value' | 'enti
   entityId: string;
 }
 
+// @TODO(relations): fix
 const createBlocksCollectionIdAtom = (initialBlocksIdsTriple: ITriple | null, entityId: string) => {
   return atom(get => {
     const triplesForEntityId = get(localTriplesAtom).filter(activeTriplesForEntityIdSelector(entityId));
     const entityChanges = Triples.merge(triplesForEntityId, initialBlocksIdsTriple ? [initialBlocksIdsTriple] : []);
     const blocksIdTriple: ITriple | undefined = entityChanges.find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
     const triple = blocksIdTriple ?? initialBlocksIdsTriple;
-
-    if (triple?.value.type !== 'COLLECTION') {
-      return null;
-    }
 
     // Favor the local version of the blockIdsTriple's collection value id if it exists
     return triple?.value.value ?? null;
@@ -58,7 +55,7 @@ const createCollectionItemsAtom = (initialBlockCollectionItemTriples: ITriple[],
     const collectionItemEntityIdsForCollectionId = Triples.merge(
       localTriples.filter(
         a =>
-          a.attributeId === SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE &&
+          a.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE &&
           a.value.value === blocksCollectionId &&
           a.isDeleted === false
       ),
@@ -419,6 +416,7 @@ export function useEditorStore() {
 
   // Helper function to create or update the block IDs on an entity
   // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
+  // @TODO(relations): fix
   const upsertBlocksTriple = React.useCallback(
     async (newBlockIds: string[]) => {
       const existingBlocksCollectionId = blocksCollectionId;
@@ -446,229 +444,209 @@ export function useEditorStore() {
           spaceId
         );
 
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            entityId: entityId,
-            // entityName: name,
-            entityName: '@TODO: Replace',
-            attributeId: SYSTEM_IDS.BLOCKS,
-            attributeName: 'Blocks',
-            value: {
-              type: 'COLLECTION',
-              value: collectionId,
-              // @TODO: What do we put here? We aren't using it in the UI anywhere
-              // so maybe we can just leave it empty since we don't actually render
-              // the blocks list in the triples list.
-              items: [],
+        /**
+         * @TODO: Rethink the best way to structure state of the edit in the Geo state
+         * vs. the Editor state.
+         */
+        // We store the new collection items being created so we can check if the new
+        // ordering for a block is dependent on other blocks being created at the same time.
+        //
+        // @TODO: Ideally this isn't needed as ordering should be updated as the users are making
+        // changes, but right now that would require updating the actions store for every keystroke
+        // which could cause performance problems in the app. We need more granular reactive state
+        // from our store to prevent potentially re-rendering _everything_ that depends on the store
+        // when changes are made anywhere.
+        const newCollectionItems: BlockCollectionItem[] = [];
+
+        for (const addedBlock of addedBlockIds) {
+          const [typeOp, collectionOp, entityOp, indexOp] = createRelationship({
+            relationTypeId: SYSTEM_IDS.BLOCKS,
+            fromId: collectionId,
+            toId: addedBlock,
+            // @TODO: index (what does this TODO mean???)
+            spaceId,
+          });
+
+          upsert(
+            {
+              type: 'SET_TRIPLE',
+              attributeName: 'Types',
+              entityName: null,
+              attributeId: typeOp.triple.attribute,
+              entityId: typeOp.triple.entity,
+              value: {
+                type: 'ENTITY',
+                name: 'Collection Item',
+                value: typeOp.triple.value.value,
+              },
             },
-          },
-          spaceId
-        );
-      }
+            spaceId
+          );
 
-      /**
-       * @TODO: Rethink the best way to structure state of the edit in the Geo state
-       * vs. the Editor state.
-       */
-      // We store the new collection items being created so we can check if the new
-      // ordering for a block is dependent on other blocks being created at the same time.
-      //
-      // @TODO: Ideally this isn't needed as ordering should be updated as the users are making
-      // changes, but right now that would require updating the actions store for every keystroke
-      // which could cause performance problems in the app. We need more granular reactive state
-      // from our store to prevent potentially re-rendering _everything_ that depends on the store
-      // when changes are made anywhere.
-      const newCollectionItems: BlockCollectionItem[] = [];
+          upsert(
+            {
+              type: 'SET_TRIPLE',
+              attributeName: 'Collection reference',
+              entityName: null,
+              attributeId: collectionOp.triple.attribute,
+              entityId: collectionOp.triple.entity,
+              value: {
+                type: 'ENTITY',
+                name: null,
+                value: collectionOp.triple.value.value,
+              },
+            },
+            spaceId
+          );
 
-      for (const addedBlock of addedBlockIds) {
-        const [typeOp, collectionOp, entityOp, indexOp] = createCollectionItem({
-          collectionId,
-          entityId: addedBlock,
-          // @TODO: index (what does this TODO mean???)
-          spaceId,
+          upsert(
+            {
+              type: 'SET_TRIPLE',
+              attributeName: 'Entity reference',
+              entityName: null,
+              attributeId: entityOp.triple.attribute,
+              entityId: entityOp.triple.entity,
+              value: {
+                type: 'ENTITY',
+                name: null,
+                value: entityOp.triple.value.value,
+              },
+            },
+            spaceId
+          );
+
+          const position = newBlockIds.indexOf(addedBlock);
+          // @TODO: noUncheckedIndexAccess
+          const beforeBlockIndex = newBlockIds[position - 1] as string | undefined;
+          const afterBlockIndex = newBlockIds[position + 1] as string | undefined;
+
+          // Check both the existing collection items and any that are created as part of this
+          // same update tick. This is necessary as right now we don't update the Geo state
+          // until the user blurs the editor. See the comment earlier in this function.
+          const beforeCollectionItemIndex =
+            collectionItems.find(c => c.entityId === beforeBlockIndex)?.index ??
+            newCollectionItems.find(c => c.entityId === beforeBlockIndex)?.index;
+          const afterCollectionItemIndex =
+            collectionItems.find(c => c.entityId === afterBlockIndex)?.index ??
+            newCollectionItems.find(c => c.entityId === afterBlockIndex)?.index;
+
+          const newTripleOrdering = reorderCollectionItem({
+            collectionItemId: indexOp.triple.entity,
+            beforeIndex: beforeCollectionItemIndex,
+            afterIndex: afterCollectionItemIndex,
+          });
+
+          upsert(
+            {
+              type: 'SET_TRIPLE',
+              attributeName: 'Index',
+              entityName: null,
+              attributeId: indexOp.triple.attribute,
+              entityId: indexOp.triple.entity,
+              value: {
+                type: 'TEXT',
+                value: newTripleOrdering.triple.value.value,
+              },
+            },
+            spaceId
+          );
+
+          newCollectionItems.push({
+            collectionId,
+            entityId: entityOp.triple.value.value, // The id of the block the item points to
+            id: entityOp.triple.entity, // The id of the collection item itself
+            index: newTripleOrdering.triple.value.value,
+          });
+        }
+
+        // If a block is deleted we want to make sure that we delete the block entity as well.
+        // The block entity might exist remotely, so we need to fetch all the triple associated
+        // with that block entity in order to delete them all.
+        //
+        // Additionally,there may be local triples associated with the block entity that we need
+        // to delete.
+        if (!removedBlockIds) return;
+
+        const removedCollectionItems = collectionItems.filter(c => removedBlockIds.includes(c.entityId));
+
+        // Delete all collection items referencing the removed blocks
+        removedCollectionItems.forEach(c => {
+          remove(
+            {
+              attributeId: SYSTEM_IDS.TYPES,
+              entityId: c.id,
+            },
+            spaceId
+          );
+
+          remove(
+            {
+              attributeId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+              entityId: c.id,
+            },
+            spaceId
+          );
+
+          remove(
+            {
+              attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+              entityId: c.id,
+            },
+            spaceId
+          );
+
+          remove(
+            {
+              attributeId: SYSTEM_IDS.RELATION_INDEX,
+              entityId: c.id,
+            },
+            spaceId
+          );
         });
 
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            attributeName: 'Types',
-            entityName: null,
-            attributeId: typeOp.triple.attribute,
-            entityId: typeOp.triple.entity,
-            value: {
-              type: 'ENTITY',
-              name: 'Collection Item',
-              value: typeOp.triple.value.value,
-            },
-          },
-          spaceId
+        // Fetch all the subgraph data for all the deleted block entities.
+        const maybeRemoteBlocks = await Promise.all(
+          // @TODO: Can use a single fetchEntities with id_in
+          removedBlockIds.map(async blockId => fetchEntity({ id: blockId }))
         );
+        const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
 
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            attributeName: 'Collection reference',
-            entityName: null,
-            attributeId: collectionOp.triple.attribute,
-            entityId: collectionOp.triple.entity,
-            value: {
-              type: 'ENTITY',
-              name: null,
-              value: collectionOp.triple.value.value,
-            },
-          },
-          spaceId
-        );
-
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            attributeName: 'Entity reference',
-            entityName: null,
-            attributeId: entityOp.triple.attribute,
-            entityId: entityOp.triple.entity,
-            value: {
-              type: 'ENTITY',
-              name: null,
-              value: entityOp.triple.value.value,
-            },
-          },
-          spaceId
-        );
-
-        const position = newBlockIds.indexOf(addedBlock);
-        // @TODO: noUncheckedIndexAccess
-        const beforeBlockIndex = newBlockIds[position - 1] as string | undefined;
-        const afterBlockIndex = newBlockIds[position + 1] as string | undefined;
-
-        // Check both the existing collection items and any that are created as part of this
-        // same update tick. This is necessary as right now we don't update the Geo state
-        // until the user blurs the editor. See the comment earlier in this function.
-        const beforeCollectionItemIndex =
-          collectionItems.find(c => c.entityId === beforeBlockIndex)?.index ??
-          newCollectionItems.find(c => c.entityId === beforeBlockIndex)?.index;
-        const afterCollectionItemIndex =
-          collectionItems.find(c => c.entityId === afterBlockIndex)?.index ??
-          newCollectionItems.find(c => c.entityId === afterBlockIndex)?.index;
-
-        const newTripleOrdering = reorderCollectionItem({
-          collectionItemId: indexOp.triple.entity,
-          beforeIndex: beforeCollectionItemIndex,
-          afterIndex: afterCollectionItemIndex,
+        // To delete an entity we delete all of its triples
+        remoteBlocks.forEach(block => {
+          block.triples.forEach(t => remove(t, spaceId));
         });
 
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            attributeName: 'Index',
-            entityName: null,
-            attributeId: indexOp.triple.attribute,
-            entityId: indexOp.triple.entity,
-            value: {
-              type: 'TEXT',
-              value: newTripleOrdering.triple.value.value,
+        // Delete any local triples associated with the deleted block entities
+        // @TODO: Put back
+        // const localTriplesForDeletedBlocks = pipe(
+        //   allTriples,
+        //   actions => Triple.merge(actions, []),
+        //   triples => triples.filter(t => removedBlockIds.includes(t.entityId))
+        // );
+
+        // localTriplesForDeletedBlocks.forEach(t => remove(t, spaceId));
+
+        // We delete the existingBlockTriple if the page content is completely empty
+        if (newBlockIds.length === 0) {
+          remove(
+            {
+              attributeId: SYSTEM_IDS.BLOCKS,
+              entityId,
             },
-          },
-          spaceId
-        );
+            spaceId
+          );
 
-        newCollectionItems.push({
-          collectionId,
-          entityId: entityOp.triple.value.value, // The id of the block the item points to
-          id: entityOp.triple.entity, // The id of the collection item itself
-          index: newTripleOrdering.triple.value.value,
-        });
-      }
-
-      // If a block is deleted we want to make sure that we delete the block entity as well.
-      // The block entity might exist remotely, so we need to fetch all the triple associated
-      // with that block entity in order to delete them all.
-      //
-      // Additionally,there may be local triples associated with the block entity that we need
-      // to delete.
-      if (!removedBlockIds) return;
-
-      const removedCollectionItems = collectionItems.filter(c => removedBlockIds.includes(c.entityId));
-
-      // Delete all collection items referencing the removed blocks
-      removedCollectionItems.forEach(c => {
-        remove(
-          {
-            attributeId: SYSTEM_IDS.TYPES,
-            entityId: c.id,
-          },
-          spaceId
-        );
-
-        remove(
-          {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
-            entityId: c.id,
-          },
-          spaceId
-        );
-
-        remove(
-          {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
-            entityId: c.id,
-          },
-          spaceId
-        );
-
-        remove(
-          {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-            entityId: c.id,
-          },
-          spaceId
-        );
-      });
-
-      // Fetch all the subgraph data for all the deleted block entities.
-      const maybeRemoteBlocks = await Promise.all(
-        // @TODO: Can use a single fetchEntities with id_in
-        removedBlockIds.map(async blockId => fetchEntity({ id: blockId }))
-      );
-      const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
-
-      // To delete an entity we delete all of its triples
-      remoteBlocks.forEach(block => {
-        block.triples.forEach(t => remove(t, spaceId));
-      });
-
-      // Delete any local triples associated with the deleted block entities
-      // @TODO: Put back
-      // const localTriplesForDeletedBlocks = pipe(
-      //   allTriples,
-      //   actions => Triple.merge(actions, []),
-      //   triples => triples.filter(t => removedBlockIds.includes(t.entityId))
-      // );
-
-      // localTriplesForDeletedBlocks.forEach(t => remove(t, spaceId));
-
-      // We delete the existingBlockTriple if the page content is completely empty
-      if (newBlockIds.length === 0) {
-        remove(
-          {
-            attributeId: SYSTEM_IDS.BLOCKS,
-            entityId,
-          },
-          spaceId
-        );
-
-        // Delete the collection
-        remove(
-          {
-            attributeId: SYSTEM_IDS.TYPES,
-            entityId: collectionId,
-          },
-          spaceId
-        );
+          // Delete the collection
+          remove(
+            {
+              attributeId: SYSTEM_IDS.TYPES,
+              entityId: collectionId,
+            },
+            spaceId
+          );
+        }
       }
     },
-    // [allTriples, blockIds, blocksCollectionId, upsert, entityId, name, remove, subgraph, spaceId, collectionItems]
     [blockIds, blocksCollectionId, upsert, entityId, remove, spaceId, collectionItems]
   );
 

@@ -1,7 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Entity, Space, Triple } from '../types';
-import { ISubgraph, fetchEntities, fetchEntity, fetchTriples } from './subgraph';
+import { Triple } from '../types';
+import { Space } from './dto/spaces';
+import { fetchTriples } from './subgraph';
 
 export async function fetchSpaceTypeTriples(spaceId: string): Promise<Triple[]> {
   const triples = await fetchTriples({

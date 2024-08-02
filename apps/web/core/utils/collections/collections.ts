@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, createCollectionItem } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
 
 import { CollectionItem, Triple } from '~/core/types';
 
@@ -7,7 +7,7 @@ export function itemIndexValue(triple?: Triple): string | null {
     return null;
   }
 
-  const isIndexTriple = triple.attributeId === SYSTEM_IDS.COLLECTION_ITEM_INDEX && triple.value.type === 'TEXT';
+  const isIndexTriple = triple.attributeId === SYSTEM_IDS.RELATION_INDEX && triple.value.type === 'TEXT';
 
   return isIndexTriple ? triple.value.value : null;
 }
@@ -18,8 +18,7 @@ export function itemCollectionIdValue(triple?: Triple): string | null {
   }
 
   const isCollectionIdValue =
-    triple.attributeId === SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE &&
-    triple.value.type === 'ENTITY';
+    triple.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE && triple.value.type === 'ENTITY';
 
   return isCollectionIdValue ? triple.value.value : null;
 }
@@ -29,25 +28,26 @@ export function itemEntityIdValue(triple?: Triple): string | null {
     return null;
   }
 
-  const isCollectionIdValue =
-    triple.attributeId === SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE && triple.value.type === 'ENTITY';
+  const isCollectionIdValue = triple.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE && triple.value.type === 'ENTITY';
 
   return isCollectionIdValue ? triple.value.value : null;
 }
 
 interface OpsToTriplesArgs {
-  entityId: string;
-  collectionId: string;
+  toId: string;
+  fromId: string;
   spaceId: string;
+  typeId: string;
 }
 
-export function createCollectionItemTriples(args: OpsToTriplesArgs): Triple[] {
-  const { collectionId, entityId, spaceId } = args;
+export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
+  const { fromId, toId, spaceId, typeId } = args;
 
-  const [typeOp, collectionRefOp, entityRefOp, indexOp] = createCollectionItem({
-    collectionId,
-    entityId,
+  const [typeOp, collectionRefOp, entityRefOp, indexOp] = createRelationship({
+    fromId,
+    toId,
     spaceId,
+    relationTypeId: typeId,
   });
 
   return [

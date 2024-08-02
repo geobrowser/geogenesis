@@ -239,7 +239,6 @@ export type Vote = {
   account: {
     id: string;
   };
-  voter: Profile;
 };
 
 export type Version = {

@@ -1,12 +1,9 @@
 'use client';
 
-import { VoteOption } from '@geogenesis/sdk';
-import { MainVotingAbi } from '@geogenesis/sdk/abis';
-import { encodeFunctionData } from 'viem';
-
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
-import { Proposal, Vote } from '~/core/types';
+import { Proposal } from '~/core/io/dto/proposals';
+import { Vote } from '~/core/types';
 
 import { SmallButton } from '~/design-system/button';
 

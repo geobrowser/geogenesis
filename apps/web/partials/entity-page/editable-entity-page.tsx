@@ -45,7 +45,7 @@ interface Props {
   spaceId: string;
   typeId?: string | null;
   attributes?: Array<Attribute> | null;
-  relations: Relation[];
+  relationsOut: Relation[];
 }
 
 type Attribute = [AttributeId, AttributeValue];

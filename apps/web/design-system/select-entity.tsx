@@ -10,7 +10,7 @@ import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import type { Result } from '~/core/io/subgraph/fetch-results';
+import { Result } from '~/core/io/dto/search';
 import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
