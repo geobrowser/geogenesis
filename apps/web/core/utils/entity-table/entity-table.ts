@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Column, Entity as IEntity, Triple as ITriple, Row } from '~/core/types';
+import { Entity } from '~/core/io/dto/entities';
+import { Column, Triple as ITriple, Row } from '~/core/types';
 
 import { Entities } from '../entity';
 
@@ -13,7 +14,7 @@ export type EntityCell = {
   image?: string | null;
 };
 
-export function fromColumnsAndRows(entities: IEntity[], columns: Column[]) {
+export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
   /* Finally, we can build our initialRows */
   const aggregatedRows = entities.map(({ triples, id }) => {
     return columns.reduce((acc, column) => {

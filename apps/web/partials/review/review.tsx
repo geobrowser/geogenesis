@@ -17,13 +17,14 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
+import { Entity } from '~/core/io/dto/entities';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Entity as EntityType, Triple } from '~/core/types';
+import type { Triple } from '~/core/types';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entities } from '~/core/utils/entity';
@@ -255,7 +256,7 @@ const ReviewChanges = () => {
                   spaceId={activeSpace}
                   change={changes[entityId] as Changeset}
                   entityId={entityId}
-                  entity={entities[entityId] as EntityType}
+                  entity={entities[entityId] as Entity}
                   unstagedChanges={unstagedChanges}
                   setUnstagedChanges={setUnstagedChanges}
                 />
@@ -316,7 +317,7 @@ type ChangedEntityProps = {
   spaceId: SpaceId;
   change: Changeset;
   entityId: EntityId;
-  entity: EntityType;
+  entity: Entity;
   unstagedChanges: Record<string, Record<string, boolean>>;
   setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
@@ -574,7 +575,7 @@ type ChangedAttributeProps = {
   attributeId: AttributeId;
   attribute: AttributeChange;
   entityId: EntityId;
-  entity: EntityType;
+  entity: Entity;
   unstagedChanges: Record<string, Record<string, boolean>>;
   setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };

@@ -14,8 +14,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
+import { Entity } from '~/core/io/dto/entities';
 import { Space } from '~/core/io/dto/spaces';
-import { Entity as EntityType, Triple as TripleType } from '~/core/types';
+import { Triple as TripleType } from '~/core/types';
 import type { Value } from '~/core/types';
 import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
 
@@ -59,7 +60,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   const pathname = usePathname();
   const spacePath = pathname?.split('/import')[0] ?? '/spaces';
 
-  const [entityType, setEntityType] = useState<EntityType | undefined>(undefined);
+  const [entityType, setEntityType] = useState<Entity | undefined>(undefined);
   const { supportedAttributes, unsupportedAttributes } = useMemo(() => getAttributes(entityType), [entityType]);
 
   const [entityNameIndex, setEntityNameIndex] = useState<number | undefined>(undefined);
@@ -147,9 +148,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
         })
       );
 
-      const filteredRelatedEntities: Array<EntityType> = relatedEntities.filter(
-        entity => entity !== null
-      ) as Array<EntityType>;
+      const filteredRelatedEntities: Array<Entity> = relatedEntities.filter(entity => entity !== null);
 
       const relatedEntitiesMap = new Map(filteredRelatedEntities.map(entity => [entity.id, entity.name ?? '']));
 
@@ -328,7 +327,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                   spaceId={spaceId}
                   placeholder="Select entity type..."
                   onDone={result => {
-                    setEntityType(result as EntityType);
+                    setEntityType(result as Entity);
                     setStep('step2');
                   }}
                   itemIds={[]}
@@ -587,7 +586,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
   );
 };
 
-const getAttributes = (entityType: EntityType | undefined) => {
+const getAttributes = (entityType: Entity | undefined) => {
   const supportedAttributes: TripleType[] = [];
   const unsupportedAttributes: TripleType[] = [];
 

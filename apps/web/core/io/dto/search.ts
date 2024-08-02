@@ -1,7 +1,6 @@
-import { SpaceConfigEntity } from '~/core/types';
-
 import { SpaceMetadataDto } from '../dto';
 import { EntityId, SubstreamSearchResult } from '../schema';
+import { SpaceConfigEntity } from './spaces';
 
 export type Result = {
   id: EntityId;

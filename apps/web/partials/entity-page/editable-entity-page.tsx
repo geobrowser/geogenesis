@@ -7,9 +7,10 @@ import { useEffect, useState } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { Entity, Relation } from '~/core/io/dto/entities';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import type { Entity as EntityType, Relation, Triple } from '~/core/types';
+import { Triple } from '~/core/types';
 import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Entities } from '~/core/utils/entity';
@@ -171,7 +172,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
         })
       );
 
-      attributeEntities.forEach((attributeEntities: [EntityType | null, EntityType | null]) => {
+      attributeEntities.forEach((attributeEntities: [Entity | null, Entity | null]) => {
         const idEntity = attributeEntities[0];
         const valueEntity = attributeEntities[1];
 

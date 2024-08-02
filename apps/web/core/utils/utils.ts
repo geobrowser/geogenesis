@@ -2,8 +2,9 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
-import { Entity as IEntity, OmitStrict, Vote } from '~/core/types';
+import { Vote } from '~/core/types';
 
+import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';
 import { Entities } from './entity';
 
@@ -182,7 +183,7 @@ export const getOpenGraphImageUrl = (value: string) => {
   return null;
 };
 
-export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
+export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
   const entityName = entity?.name ?? null;
   const serverAvatarUrl = Entities.avatar(entity?.triples) ?? null;
   const serverCoverUrl = Entities.cover(entity?.triples);

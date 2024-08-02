@@ -1,7 +1,8 @@
-import { SpaceConfigEntity, SpaceGovernanceType } from '~/core/types';
+import { SpaceGovernanceType } from '~/core/types';
 
 import { SpaceMetadataDto } from '../dto';
-import { Address, type Address as IAddress, SpaceId, SubstreamSpace } from '../schema';
+import { Address, type Address as IAddress, SpaceId, SubstreamEntity, SubstreamSpace } from '../schema';
+import { Entity } from './entities';
 
 export type Space = {
   id: SpaceId;
@@ -15,6 +16,25 @@ export type Space = {
   mainVotingPluginAddress: Address | null;
   memberAccessPluginAddress: Address | null;
   personalSpaceAdminPluginAddress: Address | null;
+};
+
+export type SpaceMetadata = {
+  id: string;
+  name: string;
+  metadata: {
+    nodes: SubstreamEntity[];
+  };
+};
+
+export type SpaceWithMetadata = {
+  id: string;
+  name: string | null;
+  image: string;
+};
+
+export type SpaceConfigEntity = Entity & {
+  spaceId: string;
+  image: string;
 };
 
 export function SpaceDto(space: SubstreamSpace): Space {

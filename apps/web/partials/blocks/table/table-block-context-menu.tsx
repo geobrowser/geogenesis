@@ -18,9 +18,10 @@ import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { Entity } from '~/core/io/dto/entities';
 import { useMigrateHub } from '~/core/migrate/migrate';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Entity as IEntity, Triple as ITriple, ValueTypeId } from '~/core/types';
+import { Triple as ITriple, ValueTypeId } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -61,7 +62,7 @@ const MotionContent = motion(Dropdown.Content);
 // We keep track of the attributes in local state in order to quickly render
 // the changes the user has made to the schema. Otherwise there will be loading
 // states for several actions which will make the UI feel slow.
-const optimisticAttributesAtom = atom<IEntity[]>([]);
+const optimisticAttributesAtom = atom<Entity[]>([]);
 
 function useOptimisticAttributes({
   entityId,
@@ -77,7 +78,7 @@ function useOptimisticAttributes({
   const { upsert, remove } = useActionsStore();
   const migrateHub = useMigrateHub();
 
-  const onAddAttribute = (attribute: IEntity) => {
+  const onAddAttribute = (attribute: Entity) => {
     upsert(
       {
         type: 'SET_TRIPLE',
@@ -97,7 +98,7 @@ function useOptimisticAttributes({
     setOptimisticAttributes([...optimisticAttributes, attribute]);
   };
 
-  const onUpdateAttribute = (attribute: IEntity) => {
+  const onUpdateAttribute = (attribute: Entity) => {
     const remappedOptimisticAttributes = optimisticAttributes.map(a => {
       if (a.id === attribute.id) {
         return attribute;
@@ -109,7 +110,7 @@ function useOptimisticAttributes({
     setOptimisticAttributes(remappedOptimisticAttributes);
   };
 
-  const onRemoveAttribute = (attribute: IEntity, nameTriple?: ITriple) => {
+  const onRemoveAttribute = (attribute: Entity, nameTriple?: ITriple) => {
     if (!nameTriple) {
       return;
     }
@@ -133,7 +134,7 @@ function useOptimisticAttributes({
     setOptimisticAttributes(optimisticAttributes.filter(a => a.id !== attribute.id));
   };
 
-  const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: IEntity) => {
+  const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: Entity) => {
     const attributeValueTypeTriple = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE);
     // This _should_ only be one space, but there may be a situation now where it's multiple spaces. Need to monitor this.
     const attributeSpace = attribute.nameTripleSpaces?.[0];
@@ -514,7 +515,7 @@ function AddAttribute() {
     spaceId: type.space,
   });
 
-  const onSelect = (result: IEntity) => {
+  const onSelect = (result: Entity) => {
     autocomplete.onQueryChange('');
     onAddAttribute(result);
   };
@@ -606,7 +607,7 @@ function SchemaAttributes() {
     spaceId: type.space,
   });
 
-  const onChangeAttributeName = (newName: string, attribute: IEntity, oldNameTriple?: ITriple) => {
+  const onChangeAttributeName = (newName: string, attribute: Entity, oldNameTriple?: ITriple) => {
     // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
     const attributeSpace = attribute.nameTripleSpaces?.[0];
 

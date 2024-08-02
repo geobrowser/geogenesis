@@ -7,9 +7,10 @@ import * as React from 'react';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { Entity } from '~/core/io/dto/entities';
 import { Space } from '~/core/io/dto/spaces';
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { Entity, ValueType as TripleValueType } from '~/core/types';
+import { ValueType as TripleValueType } from '~/core/types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';

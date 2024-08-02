@@ -4,8 +4,8 @@ import { Brand } from 'effect';
 /*******************************************************************************
  * Nominal/branded types for the various ids in the data model
  ******************************************************************************/
-type TypeId = string & Brand.Brand<'TypeId'>;
-const TypeId = Brand.nominal<TypeId>();
+export type TypeId = string & Brand.Brand<'TypeId'>;
+export const TypeId = Brand.nominal<TypeId>();
 
 const SubstreamType = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(TypeId)),
@@ -120,7 +120,9 @@ const Account = Schema.Struct({
   id: AddressWithValidation,
 });
 
-const SchemaMembers = Schema.Struct({ nodes: Schema.Array(Schema.Struct({ accountId: AddressWithValidation })) });
+const SchemaMembers = Schema.Struct({
+  nodes: Schema.Array(Schema.Struct({ accountId: AddressWithValidation })),
+});
 type SchemaMembers = Schema.Schema.Type<typeof SchemaMembers>;
 
 const SubstreamSpaceWithoutMetadata = Schema.Struct({
@@ -225,8 +227,14 @@ export type SubstreamSpace = Schema.Schema.Type<typeof SubstreamSpace>;
 // For some reason we can't pick from an extended schema which is why we can't just
 // use SubstreamSpace here to pick from.
 export const SubstreamSubspace = Schema.extend(
-  SubstreamSpaceWithoutMetadata.pick('id', 'daoAddress', 'spaceEditors', 'spaceMembers'),
+  SubstreamSpaceWithoutMetadata.pick('id', 'daoAddress'),
   Schema.Struct({
+    spaceEditors: Schema.Struct({
+      totalCount: Schema.Number,
+    }),
+    spaceMembers: Schema.Struct({
+      totalCount: Schema.Number,
+    }),
     spacesMetadata: Schema.Struct({
       nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
     }),

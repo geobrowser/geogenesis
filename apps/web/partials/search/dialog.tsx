@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import { useGlobalSearch } from '~/core/hooks/use-global-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Entity, OmitStrict } from '~/core/types';
+import { Entity } from '~/core/io/dto/entities';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';

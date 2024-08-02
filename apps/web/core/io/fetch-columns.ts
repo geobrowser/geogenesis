@@ -4,7 +4,6 @@ import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
 
 import { Subgraph } from '.';
 import { Column } from '../types';
-import { Values } from '../utils/value';
 
 interface FetchColumnsOptions {
   api: {

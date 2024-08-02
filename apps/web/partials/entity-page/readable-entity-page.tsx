@@ -2,8 +2,9 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import Link from 'next/link';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { Relation } from '~/core/io/dto/entities';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Triple as ITriple, Relation } from '~/core/types';
+import { Triple as ITriple } from '~/core/types';
 import { NavUtils, groupBy } from '~/core/utils/utils';
 
 import { LinkableChip } from '~/design-system/chip';

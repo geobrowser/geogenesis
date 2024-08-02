@@ -1,8 +1,6 @@
 import { Metadata } from 'next';
 
 import { DEFAULT_OPENGRAPH_IMAGE, PUBLIC_SPACES } from '~/core/constants';
-import { Space } from '~/core/io/dto/spaces';
-import { Entity } from '~/core/types';
 import { Entities as EntityModule } from '~/core/utils/entity';
 
 import { Card } from '~/design-system/card';

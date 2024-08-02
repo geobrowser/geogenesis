@@ -1,7 +1,9 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { A, D, pipe } from '@mobily/ts-belt';
 
-import { EntitySearchResult, Entity as IEntity, Triple as ITriple, ValueTypeId } from '~/core/types';
+import { Entity } from '~/core/io/dto/entities';
+import { TypeId } from '~/core/io/schema';
+import { EntitySearchResult, Triple as ITriple, ValueTypeId } from '~/core/types';
 
 import { Triples } from '../triples';
 import { groupBy } from '../utils';
@@ -102,7 +104,7 @@ export function valueTypeId(triples: ITriple[]): ValueTypeId | null {
 /**
  * This function takes an array of triples and maps them to an array of Entity types.
  */
-export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
+export function entitiesFromTriples(triples: ITriple[]): Entity[] {
   return pipe(
     triples,
     // ts-belt returns readonly arrays from groupBy, so we use our own
@@ -118,7 +120,10 @@ export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
         name: name(triples),
         description: description(triples),
         nameTripleSpaces: nameTriples(triples).map(triple => triple.space),
-        types: types(triples, tripleForName?.space),
+        types: types(triples, tripleForName?.space).map(t => ({
+          ...t,
+          id: TypeId(t.id),
+        })),
         triples,
         // @TODO(realtions): fix
         relationsOut: [],
@@ -132,7 +137,7 @@ export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
  * if you have a collection of Entities from the network and want to display any updates
  * that were made to them during local editing.
  */
-export function mergeActionsWithEntities(actions: Record<string, ITriple[]>, networkEntities: IEntity[]): IEntity[] {
+export function mergeActionsWithEntities(actions: Record<string, ITriple[]>, networkEntities: Entity[]): Entity[] {
   return pipe(
     actions,
     D.values,
@@ -153,7 +158,7 @@ export function mergeActionsWithEntities(actions: Record<string, ITriple[]>, net
   );
 }
 
-export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEntity: IEntity): IEntity {
+export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEntity: Entity): Entity {
   const triplesForEntity = pipe(
     allTriplesInStore.filter(t => t.entityId === networkEntity.id),
     actions => Triples.merge(actions, networkEntity.triples),
@@ -165,7 +170,10 @@ export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEnti
     name: name(triplesForEntity),
     description: description(triplesForEntity),
     nameTripleSpaces: nameTriples(triplesForEntity).map(triple => triple.space),
-    types: types(triplesForEntity, triplesForEntity[0]?.space),
+    types: types(triplesForEntity, triplesForEntity[0]?.space).map(t => ({
+      ...t,
+      id: TypeId(t.id),
+    })),
     triples: triplesForEntity,
 
     // @TODO(realtions): fix
@@ -173,7 +181,7 @@ export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEnti
   };
 }
 
-export function fromTriples(allTriplesInStore: ITriple[], entityId: string): IEntity {
+export function fromTriples(allTriplesInStore: ITriple[], entityId: string): Entity {
   const triplesForEntity = Triples.merge(
     allTriplesInStore.filter(t => t.entityId === entityId),
     []
@@ -186,7 +194,10 @@ export function fromTriples(allTriplesInStore: ITriple[], entityId: string): IEn
     name: name(triplesForEntityWithLocalNames),
     description: description(triplesForEntityWithLocalNames),
     nameTripleSpaces: nameTriples(triplesForEntityWithLocalNames).map(triple => triple.space),
-    types: types(triplesForEntityWithLocalNames, triplesForEntityWithLocalNames[0]?.space),
+    types: types(triplesForEntityWithLocalNames, triplesForEntityWithLocalNames[0]?.space).map(t => ({
+      ...t,
+      id: TypeId(t.id),
+    })),
     triples: triplesForEntityWithLocalNames,
     // @TODO(realtions): fix
     relationsOut: [],
@@ -228,4 +239,4 @@ export const getParentEntityId = (triples: ITriple[] = []) => {
   return parentEntityId;
 };
 
-export const isNonNull = (entity: IEntity | null): entity is IEntity => entity !== null;
+export const isNonNull = (entity: Entity | null): entity is Entity => entity !== null;

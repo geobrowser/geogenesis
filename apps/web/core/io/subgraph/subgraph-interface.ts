@@ -1,5 +1,6 @@
-import { Entity, Profile, Triple } from '~/core/types';
+import { Profile, Triple } from '~/core/types';
 
+import { Entity } from '../dto/entities';
 import { Proposal, ProposalWithoutVoters } from '../dto/proposals';
 import { Result } from '../dto/search';
 import { Space } from '../dto/spaces';

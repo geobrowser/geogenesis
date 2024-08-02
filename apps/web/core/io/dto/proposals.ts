@@ -1,9 +1,10 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { OmitStrict, Profile, SpaceWithMetadata, Vote } from '~/core/types';
+import { AppOp, OmitStrict, Profile, Triple, Vote } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { TripleDto } from '../dto';
 import { ProposalStatus, ProposalType, SubstreamEntity, SubstreamProposal } from '../schema';
+import { SpaceWithMetadata } from './spaces';
 
 export type VoteWithProfile = Vote & { voter: Profile };
 
@@ -125,3 +126,31 @@ export function ProposalWithoutVotersDto(
     createdBy: profile,
   };
 }
+
+export type Version = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  createdBy: Profile;
+  createdAt: number;
+  createdAtBlock: string;
+  space: SpaceWithMetadata;
+  triples: Triple[];
+  entity: {
+    id: string;
+    name: string;
+  };
+};
+
+export type ProposedVersion = {
+  id: string;
+  createdBy: Profile;
+  createdAt: number;
+  createdAtBlock: string;
+  space: SpaceWithMetadata;
+  ops: AppOp[];
+  entity: {
+    id: string;
+    name: string;
+  };
+};

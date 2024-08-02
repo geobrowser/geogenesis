@@ -1,4 +1,4 @@
-import { EntityId, Relation, Triple } from '~/core/types';
+import { EntityId, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { TripleDto } from '../dto';
@@ -12,6 +12,22 @@ export type Entity = {
   types: SubstreamType[];
   relationsOut: Relation[];
   triples: Triple[];
+};
+
+export type Relation = {
+  index: string;
+  typeOf: {
+    id: EntityId;
+    name: string | null;
+  };
+  fromEntity: {
+    id: EntityId;
+    name: string | null;
+  };
+  toEntity: {
+    id: EntityId;
+    name: string | null;
+  };
 };
 
 export function EntityDto(entity: SubstreamEntity): Entity {

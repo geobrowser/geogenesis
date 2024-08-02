@@ -1,9 +1,31 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
-import { SpaceConfigEntity, Value } from '../types';
+import { Value } from '../types';
 import { Entities } from '../utils/entity';
-import { SubstreamEntity, SubstreamImageValueTriple, SubstreamTriple, SubstreamType } from './schema';
+import { SpaceConfigEntity, SpaceMetadata } from './dto/spaces';
+import { SubstreamEntity, SubstreamImageValueTriple, SubstreamTriple, SubstreamType, TypeId } from './schema';
+
+export type TripleWithSpaceMetadata = {
+  space: SpaceMetadata;
+  entityId: string;
+  attributeId: string;
+  value: Value;
+
+  entityName: string | null;
+  attributeName: string | null;
+
+  // We have a set of application-specific metadata that we attach to each local version of a triple.
+  id?: string; // `${spaceId}:${entityId}:${attributeId}`
+  placeholder?: boolean;
+  // We keep published triples optimistically in the store. It can take a while for the blockchain
+  // to process our transaction, then a few seconds for the subgraph to pick it up and index it.
+  // We keep the published triples so we can continue to render them locally while the backend
+  // catches up.
+  hasBeenPublished?: boolean;
+  timestamp?: string; // ISO-8601
+  isDeleted?: boolean;
+};
 
 function getImageUrlFromImageEntity(triples: readonly SubstreamImageValueTriple[]): string | null {
   const triple = triples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE);
@@ -71,7 +93,12 @@ export function SpaceMetadataDto(spaceId: string, metadata: SubstreamEntity | un
         description: null,
         image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
         triples: spaceConfigTriples,
-        types: Entities.types(spaceConfigTriples),
+        types: Entities.types(spaceConfigTriples).map(t => {
+          return {
+            ...t,
+            id: TypeId(t.id),
+          };
+        }),
         nameTripleSpaces: Entities.nameTriples(spaceConfigTriples).map(t => t.space),
         relationsOut: metadata.relationsByFromEntityId.nodes.map(t => t), // remove readonly,
       }

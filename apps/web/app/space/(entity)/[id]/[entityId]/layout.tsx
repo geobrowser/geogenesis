@@ -4,10 +4,11 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
+import { Entity } from '~/core/io/dto/entities';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
-import { CollectionItem, Entity as IEntity, Triple } from '~/core/types';
+import { CollectionItem, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
@@ -122,7 +123,7 @@ export default async function ProfileLayout({ children, params }: Props) {
 }
 
 async function getProfilePage(entityId: string): Promise<
-  IEntity & {
+  Entity & {
     avatarUrl: string | null;
     coverUrl: string | null;
     blockTriples: Triple[];
@@ -138,6 +139,7 @@ async function getProfilePage(entityId: string): Promise<
     return {
       id: entityId,
       name: null,
+      nameTripleSpaces: [],
       avatarUrl: null,
       coverUrl: null,
       triples: [],

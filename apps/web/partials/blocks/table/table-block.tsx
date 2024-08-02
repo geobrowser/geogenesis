@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
@@ -12,8 +11,8 @@ import * as React from 'react';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import { Entity } from '~/core/io/dto/entities';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Entity as EntityType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -259,7 +258,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   );
 });
 
-const getPlaceholders = (blockEntity: EntityType | null | undefined) => {
+const getPlaceholders = (blockEntity: Entity | null | undefined) => {
   // @TODO add defaults for list/gallery views
   let placeholderText = 'Add an entity';
   let placeholderImage = getImagePath('ipfs://QmfC4DoT7uVNoFRbP6DBYn9T79gpLXw2Uv6qJ2G8wmqT1d');

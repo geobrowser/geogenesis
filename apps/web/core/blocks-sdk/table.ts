@@ -1,8 +1,9 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Entity as IEntity, Triple as ITriple, ValueType as TripleValueType } from '~/core/types';
+import { ValueType as TripleValueType } from '~/core/types';
 
 import { useActionsStore } from '../hooks/use-actions-store';
+import { Entity } from '../io/dto/entities';
 
 export function upsertName({
   newName,
@@ -162,7 +163,7 @@ export function createGraphQLStringFromFilters(
  */
 export async function createFiltersFromGraphQLString(
   graphQLString: string,
-  fetchEntity: (entityId: string) => Promise<IEntity | null>
+  fetchEntity: (entityId: string) => Promise<Entity | null>
 ): Promise<
   {
     columnId: string;

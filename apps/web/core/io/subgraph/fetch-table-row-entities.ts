@@ -4,10 +4,8 @@ import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity as IEntity } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 
-import { EntityDto } from '../dto/entities';
+import { Entity, EntityDto } from '../dto/entities';
 import { SubstreamEntity } from '../schema';
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
@@ -46,7 +44,7 @@ interface NetworkResult {
   entities: { nodes: SubstreamEntity[] };
 }
 
-export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<IEntity[]> {
+export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<Entity[]> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({

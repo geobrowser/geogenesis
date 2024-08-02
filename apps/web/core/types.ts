@@ -96,50 +96,6 @@ export type Triple = {
   isDeleted?: boolean;
 };
 
-export type TripleWithSpaceMetadata = {
-  space: SpaceMetadata;
-  entityId: string;
-  attributeId: string;
-  value: Value;
-
-  entityName: string | null;
-  attributeName: string | null;
-
-  // We have a set of application-specific metadata that we attach to each local version of a triple.
-  id?: string; // `${spaceId}:${entityId}:${attributeId}`
-  placeholder?: boolean;
-  // We keep published triples optimistically in the store. It can take a while for the blockchain
-  // to process our transaction, then a few seconds for the subgraph to pick it up and index it.
-  // We keep the published triples so we can continue to render them locally while the backend
-  // catches up.
-  hasBeenPublished?: boolean;
-  timestamp?: string; // ISO-8601
-  isDeleted?: boolean;
-};
-
-export type SpaceMetadata = {
-  id: string;
-  name: string;
-  metadata: {
-    nodes: SubstreamEntity[];
-  };
-};
-
-export type SpaceConfigEntity = Entity & {
-  spaceId: string;
-  image: string;
-};
-
-export type SpaceWithMetadata = {
-  id: string;
-  name: string | null;
-  image: string;
-};
-
-export type Account = {
-  id: string;
-};
-
 export type ReviewState =
   | 'idle'
   | 'reviewing'
@@ -173,41 +129,6 @@ export type ValueTypeId =
   | typeof SYSTEM_IDS.DATE
   | typeof SYSTEM_IDS.WEB_URL;
 
-// export type Schema = {
-//   id: string;
-//   name: string | null;
-//   valueType: {
-//     id: string;
-//     name: string | null;
-//   };
-// };
-
-export type Relation = {
-  index: string;
-  typeOf: {
-    id: string;
-    name: string | null;
-  };
-  fromEntity: {
-    id: string;
-    name: string | null;
-  };
-  toEntity: {
-    id: string;
-    name: string | null;
-  };
-};
-
-export type Entity = {
-  id: string;
-  name: string | null;
-  description: string | null;
-  types: EntitySearchResult[];
-  triples: Triple[];
-  nameTripleSpaces?: string[];
-  relationsOut: Relation[];
-};
-
 export type GeoType = {
   entityId: string;
   entityName: string | null;
@@ -238,34 +159,6 @@ export type Vote = {
   vote: 'ACCEPT' | 'REJECT';
   account: {
     id: string;
-  };
-};
-
-export type Version = {
-  id: string;
-  name: string | null;
-  description: string | null;
-  createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: string;
-  space: SpaceWithMetadata;
-  triples: Triple[];
-  entity: {
-    id: string;
-    name: string;
-  };
-};
-
-export type ProposedVersion = {
-  id: string;
-  createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: string;
-  space: SpaceWithMetadata;
-  ops: AppOp[];
-  entity: {
-    id: string;
-    name: string;
   };
 };
 
