@@ -7,7 +7,6 @@ import React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
-import { Space } from '~/core/io/dto/spaces';
 import {
   type SubstreamVote as ISubstreamVote,
   ProposalStatus,
@@ -18,7 +17,7 @@ import {
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { OmitStrict, Profile, Vote } from '~/core/types';
+import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -41,7 +40,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
     if (p.userVotes.length === 0) return acc;
 
     return acc.set(p.id, p.userVotes[0].vote);
-  }, new Map<string, Vote['vote']>());
+  }, new Map<string, SubstreamVote['vote']>());
 
   return (
     <div className="flex flex-col divide-y divide-grey-01">

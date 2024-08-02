@@ -2,10 +2,10 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
-import { Vote } from '~/core/types';
 
 import { Entity } from '../io/dto/entities';
 import { Proposal } from '../io/dto/proposals';
+import { SubstreamVote } from '../io/schema';
 import { Entities } from './entity';
 
 export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
@@ -294,7 +294,7 @@ export function getIsProposalExecutable(proposal: Proposal, yesVotesPercentage: 
   );
 }
 
-export function getYesVotePercentage(votes: Vote[], votesCount: number) {
+export function getYesVotePercentage(votes: SubstreamVote[], votesCount: number) {
   if (votesCount === 0) {
     return 0;
   }
@@ -302,7 +302,7 @@ export function getYesVotePercentage(votes: Vote[], votesCount: number) {
   return Math.floor((votes.filter(v => v.vote === 'ACCEPT').length / votesCount) * 100);
 }
 
-export function getNoVotePercentage(votes: Vote[], votesCount: number) {
+export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) {
   if (votesCount === 0) {
     return 0;
   }
@@ -310,7 +310,7 @@ export function getNoVotePercentage(votes: Vote[], votesCount: number) {
   return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
 }
 
-export function getUserVote(votes: Vote[], address: string) {
+export function getUserVote(votes: SubstreamVote[], address: string) {
   return votes.find(v => v.account.id === getAddress(address));
 }
 

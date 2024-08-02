@@ -1,20 +1,18 @@
 'use client';
 
-import { SYSTEM_IDS, createCollection } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { createGeoId } from '@geogenesis/sdk';
 
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { EntitySearchResult, Value as IValue, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
+import { Value as IValue, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { useActionsStore } from '../hooks/use-actions-store';
-import { StoreOp } from '../state/actions-store/actions-store';
-import { Collections } from '../utils/collections';
 import { Images } from '../utils/images';
 
 export type EditEvent =

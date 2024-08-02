@@ -1,12 +1,12 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { AppOp, OmitStrict, Profile, Triple, Vote } from '~/core/types';
+import { AppOp, OmitStrict, Profile, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { TripleDto } from '../dto';
-import { ProposalStatus, ProposalType, SubstreamEntity, SubstreamProposal } from '../schema';
+import { ProposalStatus, ProposalType, SubstreamEntity, SubstreamProposal, SubstreamVote } from '../schema';
 import { SpaceWithMetadata } from './spaces';
 
-export type VoteWithProfile = Vote & { voter: Profile };
+export type VoteWithProfile = SubstreamVote & { voter: Profile };
 
 export type Proposal = {
   id: string;

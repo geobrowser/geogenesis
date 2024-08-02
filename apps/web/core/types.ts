@@ -135,6 +135,7 @@ export type GeoType = {
   space: string;
 };
 
+// @TODO: Use SubstreamSearchResult
 export type EntitySearchResult = {
   id: string;
   name: string | null;
@@ -154,13 +155,6 @@ export interface Cell {
 }
 
 export type Row = Record<string, Cell>;
-
-export type Vote = {
-  vote: 'ACCEPT' | 'REJECT';
-  account: {
-    id: string;
-  };
-};
 
 export type Profile = {
   id: string;

@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
-import { Vote } from '~/core/types';
+import { SubstreamVote } from '~/core/io/schema';
 
 import { Button } from '~/design-system/button';
 
@@ -18,7 +18,7 @@ interface Props {
   isProposalExecutable: boolean;
   status: Proposal['status'];
 
-  userVote: Vote | undefined;
+  userVote: SubstreamVote | undefined;
   onchainProposalId: string;
   votingContractAddress: `0x${string}`;
 }

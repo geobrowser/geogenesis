@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
-import { A Triple as TripleType } from '~/core/types';
+import { Triple as TripleType } from '~/core/types';
 
 import { empty, withId, withLocalNames } from './triples';
 
