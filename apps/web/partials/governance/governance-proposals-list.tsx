@@ -7,13 +7,7 @@ import React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
-import {
-  type SubstreamVote as ISubstreamVote,
-  ProposalStatus,
-  ProposalType,
-  SubstreamProposal,
-  SubstreamVote,
-} from '~/core/io/schema';
+import { ProposalStatus, ProposalType, SubstreamProposal, SubstreamVote } from '~/core/io/schema';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
 import { graphql } from '~/core/io/subgraph/graphql';
@@ -125,9 +119,9 @@ type ActiveProposal = {
   status: ProposalStatus;
   proposalVotes: {
     totalCount: number;
-    votes: ISubstreamVote[];
+    votes: SubstreamVote[];
   };
-  userVotes: ISubstreamVote[];
+  userVotes: SubstreamVote[];
 };
 
 function ActiveProposalsDto(activeProposal: SubstreamActiveProposal, maybeProfile?: Profile): ActiveProposal {
