@@ -27,6 +27,10 @@ export type Relation = {
   toEntity: {
     id: EntityId;
     name: string | null;
+    types: {
+      id: EntityId;
+      name: string | null;
+    }[];
   };
 };
 
@@ -41,7 +45,17 @@ export function EntityDto(entity: SubstreamEntity): Entity {
     description: Entities.description(triples),
     nameTripleSpaces: nameTriples.map(t => t.space),
     types: entity.types.nodes.map(t => t),
-    relationsOut: entity.relationsByFromEntityId.nodes.map(t => t),
+    relationsOut: entity.relationsByFromEntityId.nodes.map(t => {
+      return {
+        ...t,
+        toEntity: {
+          id: t.toEntity.id,
+          name: t.toEntity.name,
+          types: t.toEntity.entityTypes.nodes.map(t => t.type),
+          triples: t.toEntity.triples.nodes.map(TripleDto),
+        },
+      };
+    }),
     triples,
   };
 }

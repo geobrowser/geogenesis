@@ -1,3 +1,5 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+
 export const imageValueTypeTripleFragment = `
     attributeId
     textValue
@@ -50,7 +52,7 @@ export const relationFragment = `
     name
     ${entityTypesFragment}
 
-    triples(filter: {valueType: {equalTo: "URI"}, attributeId: {equalTo: "a126ca530c8e48d5b88882c734c38935"}}) {
+    triples(filter: {valueType: {equalTo: URI}, attributeId: {equalTo: "${SYSTEM_IDS.IMAGE_URL_ATTRIBUTE}}"}}) {
       nodes {
         ${imageValueTypeTripleFragment}
       }
@@ -156,7 +158,7 @@ export const entityFragment = `
       ${relationFragment}
     }
   }
-  triples(filter: {isStale: {equalTo: false}}) {
+  triples {
     nodes {
       ${tripleFragment}
     }

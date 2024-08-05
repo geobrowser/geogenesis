@@ -157,8 +157,12 @@ const SubstreamRelation = Schema.Struct({
 
     // @TODO(relations): This should include the image triples for the to entity as well
     // as the space.
-    types: Schema.Struct({
-      nodes: Schema.Array(SubstreamType),
+    entityTypes: Schema.Struct({
+      nodes: Schema.Array(
+        Schema.Struct({
+          type: SubstreamType,
+        })
+      ),
     }),
     triples: Schema.Struct({
       // @TODO(relations: Do we only need the image triples?

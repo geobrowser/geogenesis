@@ -1,6 +1,7 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Value } from '../types';
 import { Entities } from '../utils/entity';
+import { EntityDto } from './dto/entities';
 import { SpaceConfigEntity } from './dto/spaces';
 import { SubstreamEntity, SubstreamTriple, SubstreamType, TypeId } from './schema';
 
@@ -65,20 +66,9 @@ export function SpaceMetadataDto(spaceId: string, metadata: SubstreamEntity | un
 
   const spaceConfigWithImage: SpaceConfigEntity = metadata
     ? {
-        id: metadata.id,
         spaceId: spaceId,
-        name: metadata.name,
-        description: null,
         image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-        triples: spaceConfigTriples,
-        types: Entities.types(spaceConfigTriples).map(t => {
-          return {
-            ...t,
-            id: TypeId(t.id),
-          };
-        }),
-        nameTripleSpaces: Entities.nameTriples(spaceConfigTriples).map(t => t.space),
-        relationsOut: metadata.relationsByFromEntityId.nodes.map(t => t), // remove readonly,
+        ...EntityDto(metadata),
       }
     : {
         id: '',

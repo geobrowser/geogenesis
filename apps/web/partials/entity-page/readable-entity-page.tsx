@@ -96,13 +96,22 @@ function EntityRelations({ relations }: { relations: Relation[] }) {
               </Text>
             </Link>
             <div className="flex flex-wrap gap-2">
-              {relations.map(r => (
-                <div key={`relation-${relationId}-${r.toEntity.id}`} className="mt-1">
-                  <LinkableChip href={NavUtils.toEntity('ab7d4b9e02f840dab9746d352acb0ac6', r.toEntity.id)}>
-                    {r.toEntity.name ?? r.toEntity.id}
-                  </LinkableChip>
-                </div>
-              ))}
+              {relations.map(r => {
+                console.log('r', r);
+
+                // @TODO: The type of the relation might be an image
+                if (r.toEntity.types.map(t => t.id).includes(SYSTEM_IDS.IMAGE)) {
+                  return <div>Hello world</div>;
+                }
+
+                return (
+                  <div key={`relation-${relationId}-${r.toEntity.id}`} className="mt-1">
+                    <LinkableChip href={NavUtils.toEntity('ab7d4b9e02f840dab9746d352acb0ac6', r.toEntity.id)}>
+                      {r.toEntity.name ?? r.toEntity.id}
+                    </LinkableChip>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
