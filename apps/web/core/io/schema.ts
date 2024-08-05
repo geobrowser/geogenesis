@@ -170,8 +170,9 @@ const SubstreamRelation = Schema.Struct({
     name: Schema.NullOr(Schema.String),
 
     entityTypes: SubstreamEntityTypes,
+
+    // Currently our relation query only returns triples where the value type is URI
     triples: Schema.Struct({
-      // @TODO(relations: Do we only need the image triples?
       nodes: Schema.Array(SubstreamTriple),
     }),
   }),
