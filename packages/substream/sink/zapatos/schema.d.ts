@@ -638,12 +638,6 @@ declare module 'zapatos/schema' {
     export type Table = 'entity_types';
     export interface Selectable {
       /**
-      * **entity_types.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('entity_types_id_seq'::regclass)`
-      */
-      id: number;
-      /**
       * **entity_types.entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -669,12 +663,6 @@ declare module 'zapatos/schema' {
       created_at_block: number;
     }
     export interface JSONSelectable {
-      /**
-      * **entity_types.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('entity_types_id_seq'::regclass)`
-      */
-      id: number;
       /**
       * **entity_types.entity_id**
       * - `text` in database
@@ -702,12 +690,6 @@ declare module 'zapatos/schema' {
     }
     export interface Whereable {
       /**
-      * **entity_types.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('entity_types_id_seq'::regclass)`
-      */
-      id?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
-      /**
       * **entity_types.entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -733,12 +715,6 @@ declare module 'zapatos/schema' {
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
-      /**
-      * **entity_types.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('entity_types_id_seq'::regclass)`
-      */
-      id?: number | db.Parameter<number> | db.DefaultType | db.SQLFragment;
       /**
       * **entity_types.entity_id**
       * - `text` in database
@@ -766,12 +742,6 @@ declare module 'zapatos/schema' {
     }
     export interface Updatable {
       /**
-      * **entity_types.id**
-      * - `int4` in database
-      * - `NOT NULL`, default: `nextval('entity_types_id_seq'::regclass)`
-      */
-      id?: number | db.Parameter<number> | db.DefaultType | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.DefaultType | db.SQLFragment>;
-      /**
       * **entity_types.entity_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -796,7 +766,7 @@ declare module 'zapatos/schema' {
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
-    export type UniqueIndex = 'entity_types_pkey' | 'geo_entity_types_unique_entity_type_pair';
+    export type UniqueIndex = 'entity_types_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
     export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;

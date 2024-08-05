@@ -23,4 +23,12 @@ export class Relations {
       })
       .run(pool);
   }
+
+  static async selectOne(relation: S.relations.Whereable) {
+    return await db
+      .selectOne('relations', relation, {
+        columns: ['id', 'entity_id', 'from_entity_id', 'to_entity_id', 'type_of_id'],
+      })
+      .run(pool);
+  }
 }

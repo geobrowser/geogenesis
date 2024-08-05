@@ -40,12 +40,11 @@ CREATE TABLE public.spaces (
 );
 
 CREATE TABLE public.entity_types (
-    id serial PRIMARY KEY,
+    PRIMARY KEY (entity_id, type_id),
     entity_id text NOT NULL REFERENCES public.entities(id),
     type_id text NOT NULL REFERENCES public.entities(id),
     created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    CONSTRAINT geo_entity_types_unique_entity_type_pair UNIQUE (entity_id, type_id)
+    created_at_block integer NOT NULL
 );
 
 CREATE TABLE public.onchain_profiles (

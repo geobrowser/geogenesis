@@ -9,6 +9,7 @@ import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
 import { Entities, EntitySpaces, SpaceMetadata, Triples, Types } from '~/sink/db';
 import { Relations } from '~/sink/db/relations';
+import { slog } from '~/sink/utils/slog';
 
 interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
@@ -43,7 +44,7 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
 
       // @TODO(migration): These could be a collection
       const isAddTypeViaTriple = triple.attribute_id === SYSTEM_IDS.TYPES && isUpsertTriple && triple.entity_value_id;
-      const isDeleteType = triple.attribute_id === SYSTEM_IDS.TYPES && isDeleteTriple;
+      const isDeleteTypeViaTriple = triple.attribute_id === SYSTEM_IDS.TYPES && isDeleteTriple;
 
       const isNameAttribute = triple.attribute_id === SYSTEM_IDS.NAME;
       const isDescriptionAttribute = triple.attribute_id === SYSTEM_IDS.DESCRIPTION;
@@ -161,19 +162,15 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
           const schemaRelation = getRelationTriplesFromSchemaTriples(schemaTriples, triple.entity_id.toString());
 
           // If we have a valid relation entity, we add it to the public.relations table.
-
           if (schemaRelation) {
             yield* _(upsertRelation(schemaRelation), retryEffect);
 
-            // Additionally, if this relation defines a type of space configuration we add it to the
-            // public.spaces_metadata table.
-
-            // @TODO: If it's relation of Relation type: Types then we should add it to entity_types
             // Write any relations with Relation type -> Types to the types table
             if (schemaRelation.type_of_id === SYSTEM_IDS.TYPES) {
-              yield* _(upsertEntityTypeFromRelation(schemaRelation, block), retryEffect);
+              yield* _(upsertEntityTypeViaRelation(schemaRelation, block), retryEffect);
 
-              // Insert a space configuration type to the space metadata table
+              // Additionally, if this relation defines a type of space configuration we add it to the
+              // public.spaces_metadata table.
               if (schemaRelation.to_entity_id === SYSTEM_IDS.SPACE_CONFIGURATION) {
                 yield* _(upsertSpaceMetadata(schemaRelation, triple.space_id.toString()), retryEffect);
               }
@@ -193,55 +190,38 @@ export function populateTriples({ schemaTriples, block, versions }: PopulateTrip
       }
 
       /**
-       * We associate the triple data for the name and description triples with the entity itself to make
-       * querying the name and description of an entity easier.
+       * If an entity has a type removed from it then there are several side-effects we need to trigger.
        *
-       * There's probably a better way to do this in SQL.
-       *
-       * @TODO: Delete types and space metadata when deleting relations with type -> type
+       * There's probably a better way to do this in SQL with triggers.
        */
-      if (isDeleteType) {
-        const deleteTypeEffect = Effect.tryPromise({
-          try: () =>
-            db
-              .deletes('entity_types', {
-                entity_id: triple.entity_id,
-                type_id: triple.entity_value_id?.toString(),
-              })
-              .run(pool),
-          catch: () => new Error('Failed to delete type'),
-        });
+      if (isDeleteTypeViaTriple) {
+        yield* _(deleteEntityType(triple), retryEffect);
 
-        yield* _(deleteTypeEffect, retryEffect);
-
-        if (triple.entity_value_id && triple.entity_value_id === SYSTEM_IDS.SPACE_CONFIGURATION) {
-          const deleteSpaceMetadataEffect = Effect.tryPromise({
-            try: () =>
-              SpaceMetadata.remove({
-                entity_id: triple.entity_id,
-                space_id: triple.space_id,
-              }),
-            catch: error =>
-              new Error(
-                `Failed to remove space metadata with id ${triple.entity_value_id?.toString()} for space ${
-                  triple.space_id
-                } ${String(error)}`
-              ),
-          });
-
-          yield* _(deleteSpaceMetadataEffect, retryEffect);
-        }
-
+        // If the deleted type is a Relation then we need to remove it from the public.relations table.
         if (triple.entity_value_id === SYSTEM_IDS.RELATION_TYPE) {
-          const insertCollectionItemEffect = Effect.tryPromise({
-            try: () =>
-              Relations.remove({
-                id: triple.entity_id,
-              }),
-            catch: error => new Error(`Failed to delete relation ${String(error)}`),
-          });
+          const relation = yield* _(Effect.promise(() => Relations.selectOne({ id: triple.entity_id })));
 
-          yield* _(insertCollectionItemEffect, retryEffect);
+          if (!relation) {
+            slog({
+              message: `Failed to find relation with id ${triple.entity_id}`,
+              requestId: block.requestId,
+              level: 'error',
+            });
+
+            continue;
+          }
+
+          yield* _(deleteRelation(relation.id), retryEffect);
+
+          // If the relation defines a type for an entity we need to delete that type from the public.entity_types table.
+          if (relation?.type_of_id === SYSTEM_IDS.TYPES) {
+            yield* _(deleteEntityTypeViaRelation(relation), retryEffect);
+
+            // If the type is space configuration we need to delete it from the public.spaces_metadata table.
+            if (relation.to_entity_id === SYSTEM_IDS.SPACE_CONFIGURATION) {
+              yield* _(deleteSpaceMetadata(relation, triple.space_id.toString()), retryEffect);
+            }
+          }
         }
       }
     }
@@ -596,7 +576,7 @@ function upsertRelation(relation: Schema.relations.Insertable) {
   });
 }
 
-function upsertEntityTypeFromRelation(relation: Schema.relations.Insertable, block: BlockEvent) {
+function upsertEntityTypeViaRelation(relation: Schema.relations.Insertable, block: BlockEvent) {
   return Effect.gen(function* (_) {
     const insertTypeEffect = Effect.tryPromise({
       try: async () => {
@@ -650,5 +630,62 @@ function updateRelationIndex(triple: Schema.triples.Insertable) {
     });
 
     yield* _(insertCollectionItemIndexEffect, retryEffect);
+  });
+}
+
+function deleteRelation(id: string) {
+  return Effect.gen(function* (_) {
+    const deleteRelationEffect = Effect.tryPromise({
+      try: () => Relations.remove({ id: id }),
+      catch: error => new Error(`Failed to delete relation ${String(error)}`),
+    });
+
+    yield* _(deleteRelationEffect, retryEffect);
+  });
+}
+
+function deleteEntityType(triple: Schema.triples.Insertable) {
+  return Effect.gen(function* (_) {
+    const deleteTypeEffect = Effect.tryPromise({
+      try: () =>
+        Types.remove({
+          entity_id: triple.entity_id,
+          type_id: triple.entity_value_id?.toString(),
+        }),
+      catch: () => new Error('Failed to delete type'),
+    });
+
+    yield* _(deleteTypeEffect, retryEffect);
+  });
+}
+
+function deleteEntityTypeViaRelation(relation: Schema.relations.Insertable) {
+  return Effect.gen(function* (_) {
+    const deleteTypeEffect = Effect.tryPromise({
+      try: () => Types.remove({ entity_id: relation.from_entity_id, type_id: relation.type_of_id }),
+      catch: () => new Error('Failed to delete type'),
+    });
+
+    yield* _(deleteTypeEffect, retryEffect);
+  });
+}
+
+function deleteSpaceMetadata(relation: Schema.relations.Insertable, space_id: string) {
+  return Effect.gen(function* (_) {
+    const deleteSpaceMetadataEffect = Effect.tryPromise({
+      try: () =>
+        SpaceMetadata.remove({
+          entity_id: relation.from_entity_id,
+          space_id: space_id,
+        }),
+      catch: error =>
+        new Error(
+          `Failed to delete space metadata with id ${relation.from_entity_id?.toString()} for space ${space_id} ${String(
+            error
+          )}`
+        ),
+    });
+
+    yield* _(deleteSpaceMetadataEffect, retryEffect);
   });
 }
