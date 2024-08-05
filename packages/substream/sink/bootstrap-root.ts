@@ -8,7 +8,7 @@ import {
   ROOT_SPACE_CREATED_AT_BLOCK,
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
-import { Accounts, Entities, Proposals, Spaces, Triples, Types } from './db';
+import { Accounts, Entities, EntitySpaces, Proposals, Spaces, Triples, Types } from './db';
 import { Relations } from './db/relations';
 import { getTripleFromOp } from './events/get-triple-from-op';
 
@@ -418,6 +418,13 @@ export function bootstrapRoot() {
 
             Proposals.upsert([proposal]),
             Relations.upsert(relationsForTypesAndAttributes),
+          ]);
+
+          await Promise.all([
+            EntitySpaces.upsert(geoEntities.map(e => ({ entity_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }))),
+            EntitySpaces.upsert(
+              entitiesForRelations.map(e => ({ entity_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }))
+            ),
           ]);
         },
         catch: error => new BootstrapRootError(String(error)),

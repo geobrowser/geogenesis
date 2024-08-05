@@ -26,4 +26,12 @@ export class Triples {
   static async insert(triples: S.triples.Insertable[]) {
     return await db.insert('triples', triples).run(pool);
   }
+
+  static async remove(triples: S.triples.Whereable) {
+    return await db.deletes('triples', triples).run(pool);
+  }
+
+  static async select(where: S.triples.Whereable) {
+    return await db.select('triples', where).run(pool);
+  }
 }

@@ -11,4 +11,8 @@ export class EntitySpaces {
       })
       .run(pool);
   }
+
+  static async remove(entities: S.entity_spaces.Whereable) {
+    return await db.deletes('entity_spaces', entities).run(pool);
+  }
 }
