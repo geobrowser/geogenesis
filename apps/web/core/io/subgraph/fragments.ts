@@ -72,13 +72,8 @@ export const tripleFragment = `
   }
   entityValue {
     id
-    types {
-      nodes {
-        id
-        name
-      }
-    }
     name
+    ${entityTypesFragment}
   }
   numberValue
   textValue
@@ -100,12 +95,7 @@ export const resultTripleFragment = `
   }
   entityValue {
     id
-    types {
-      nodes {
-        id
-        name
-      }
-    }
+    ${entityTypesFragment}
     name
   }
   numberValue
@@ -118,12 +108,8 @@ export const resultTripleFragment = `
         entity {
           id
           name
-          types {
-            nodes {
-              id
-              name
-            }
-          }
+          ${entityTypesFragment}
+
           triples {
             nodes {
               ${tripleFragment}
@@ -147,12 +133,7 @@ export const entityFragment = `
   id
   name
   description
-  types {
-    nodes {
-      id
-      name
-    }
-  }
+  ${entityTypesFragment}
   relationsByFromEntityId {
     nodes {
       ${relationFragment}

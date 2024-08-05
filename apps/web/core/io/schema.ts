@@ -40,6 +40,20 @@ export const AddressWithValidation = Schema.String.pipe(
   Schema.fromBrand(Address)
 );
 
+/**
+ * Entity types
+ *
+ * Entity types are a field that exist on any entity query. These define the types
+ * for that entity. e.g., Person, Space, Nonprofit, etc.
+ */
+const SubstreamEntityTypes = Schema.Struct({
+  nodes: Schema.Array(
+    Schema.Struct({
+      type: SubstreamType,
+    })
+  ),
+});
+
 /*******************************************************************************
  * Triples
  ******************************************************************************/
@@ -83,9 +97,7 @@ const SubstreamEntityValue = Schema.Struct({
   entityValue: Schema.Struct({
     id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
     name: Schema.NullOr(Schema.String),
-    types: Schema.Struct({
-      nodes: Schema.Array(SubstreamType),
-    }),
+    entityTypes: SubstreamEntityTypes,
   }),
 });
 
@@ -135,6 +147,8 @@ export const SubstreamTriple = Schema.extend(
 
 export type SubstreamTriple = Schema.Schema.Type<typeof SubstreamTriple>;
 
+type SubstreamEntityTypes = Schema.Schema.Type<typeof SubstreamEntityTypes>;
+
 /**
  * Relations
  */
@@ -155,15 +169,7 @@ const SubstreamRelation = Schema.Struct({
     id: Schema.String.pipe(Schema.fromBrand(EntityId)),
     name: Schema.NullOr(Schema.String),
 
-    // @TODO(relations): This should include the image triples for the to entity as well
-    // as the space.
-    entityTypes: Schema.Struct({
-      nodes: Schema.Array(
-        Schema.Struct({
-          type: SubstreamType,
-        })
-      ),
-    }),
+    entityTypes: SubstreamEntityTypes,
     triples: Schema.Struct({
       // @TODO(relations: Do we only need the image triples?
       nodes: Schema.Array(SubstreamTriple),
@@ -180,9 +186,7 @@ export const SubstreamEntity = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
-  types: Schema.Struct({
-    nodes: Schema.Array(SubstreamType),
-  }),
+  entityTypes: SubstreamEntityTypes,
   relationsByFromEntityId: Schema.Struct({
     nodes: Schema.Array(SubstreamRelation),
   }),
@@ -268,7 +272,7 @@ const SubstreamTripleSearchResult = Schema.extend(
 type SubstreamTripleSearchResult = Schema.Schema.Type<typeof SubstreamTripleSearchResult>;
 
 export const SubstreamSearchResult = Schema.extend(
-  SubstreamEntity.pick('id', 'name', 'types'),
+  SubstreamEntity.pick('id', 'name', 'entityTypes'),
   Schema.Struct({
     // These triples are unique to the search result struct and not picked from SubstreamEntity
     triples: Schema.Struct({
