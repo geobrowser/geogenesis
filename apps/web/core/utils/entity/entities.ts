@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { A, D, pipe } from '@mobily/ts-belt';
 
 import { Entity } from '~/core/io/dto/entities';
-import { TypeId } from '~/core/io/schema';
+import { EntityId, TypeId } from '~/core/io/schema';
 import { EntitySearchResult, Triple as ITriple, ValueTypeId } from '~/core/types';
 
 import { Triples } from '../triples';
@@ -116,7 +116,7 @@ export function entitiesFromTriples(triples: ITriple[]): Entity[] {
       const tripleForName = nameTriple(triples);
 
       return {
-        id: entityId,
+        id: EntityId(entityId),
         name: name(triples),
         description: description(triples),
         nameTripleSpaces: nameTriples(triples).map(triple => triple.space),
@@ -190,7 +190,7 @@ export function fromTriples(allTriplesInStore: ITriple[], entityId: string): Ent
   const triplesForEntityWithLocalNames = Triples.withLocalNames(allTriplesInStore, triplesForEntity);
 
   return {
-    id: entityId,
+    id: EntityId(entityId),
     name: name(triplesForEntityWithLocalNames),
     description: description(triplesForEntityWithLocalNames),
     nameTripleSpaces: nameTriples(triplesForEntityWithLocalNames).map(triple => triple.space),

@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Relation } from '~/core/io/dto/entities';
+import { TypeId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple } from '~/core/types';
 import { NavUtils, groupBy } from '~/core/utils/utils';
@@ -100,12 +101,13 @@ function EntityRelations({ relations }: { relations: Relation[] }) {
                 console.log('r', r);
 
                 // @TODO: The type of the relation might be an image
-                if (r.toEntity.types.map(t => t.id).includes(SYSTEM_IDS.IMAGE)) {
+                if (r.toEntity.types.map(t => t.id).includes(TypeId(SYSTEM_IDS.IMAGE))) {
                   return <div>Hello world</div>;
                 }
 
                 return (
                   <div key={`relation-${relationId}-${r.toEntity.id}`} className="mt-1">
+                    {/* @TODO: The link should go to the correct space */}
                     <LinkableChip href={NavUtils.toEntity('ab7d4b9e02f840dab9746d352acb0ac6', r.toEntity.id)}>
                       {r.toEntity.name ?? r.toEntity.id}
                     </LinkableChip>

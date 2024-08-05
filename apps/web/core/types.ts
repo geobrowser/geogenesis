@@ -97,6 +97,8 @@ export type Triple = {
   isDeleted?: boolean;
 };
 
+export type RenderableEntityType = 'IMAGE' | 'DEFAULT';
+
 export type ReviewState =
   | 'idle'
   | 'reviewing'

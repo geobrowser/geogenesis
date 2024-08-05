@@ -5,6 +5,7 @@ import * as React from 'react';
 import { Metadata } from 'next';
 
 import { Entity } from '~/core/io/dto/entities';
+import { EntityId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -67,19 +68,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProfileLayout({ children, params }: Props) {
-  const decodedId = decodeURIComponent(params.entityId);
+  const entityId = params.entityId;
 
-  const types = await cachedFetchEntityType(decodedId);
+  const types = await cachedFetchEntityType(entityId);
 
   if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
     return <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>;
   }
 
-  const profile = await getProfilePage(decodedId);
+  const profile = await getProfilePage(entityId);
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider id={decodedId} spaceId={params.id} initialTriples={profile.triples}>
+      <EntityStoreProvider id={entityId} spaceId={params.id} initialTriples={profile.triples}>
         <EditorProvider
           id={profile.id}
           spaceId={params.id}
@@ -92,8 +93,8 @@ export default async function ProfileLayout({ children, params }: Props) {
           <EntityPageContentContainer>
             <EditableHeading
               spaceId={params.id}
-              entityId={decodedId}
-              name={profile.name ?? decodedId}
+              entityId={entityId}
+              name={profile.name ?? entityId}
               triples={profile.triples}
             />
             <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
@@ -103,8 +104,8 @@ export default async function ProfileLayout({ children, params }: Props) {
               tabs={TABS.map(label => {
                 const href =
                   label === 'Overview'
-                    ? decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}`)
-                    : decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}/${label.toLowerCase()}`);
+                    ? `${NavUtils.toEntity(params.id, entityId)}`
+                    : `${NavUtils.toEntity(params.id, entityId)}/${label.toLowerCase()}`;
                 return {
                   href,
                   label,
@@ -137,7 +138,7 @@ async function getProfilePage(entityId: string): Promise<
   // @TODO: Real error handling
   if (!person) {
     return {
-      id: entityId,
+      id: EntityId(entityId),
       name: null,
       nameTripleSpaces: [],
       avatarUrl: null,

@@ -4,7 +4,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Triple, TripleWithDateValue, TripleWithStringValue, TripleWithUrlValue, Value } from '~/core/types';
 
 import { Space } from '../dto/spaces';
-import { Address, SpaceId } from '../schema';
+import { Address, EntityId, SpaceId } from '../schema';
 
 export const makeStubTriple = (name: string, entityId?: string): Triple => {
   return {
@@ -138,7 +138,7 @@ export const makeStubSpace = (spaceId: string): Space => {
     editors: [],
     members: [],
     spaceConfig: {
-      id: '',
+      id: EntityId(''),
       spaceId: spaceId,
       name: null,
       description: null,

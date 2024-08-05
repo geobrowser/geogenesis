@@ -16,6 +16,7 @@ import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/io/dto/entities';
 import { Space } from '~/core/io/dto/spaces';
+import { EntityId } from '~/core/io/schema';
 import { Triple as TripleType } from '~/core/types';
 import type { Value } from '~/core/types';
 import { GeoDate, uuidValidateV4 } from '~/core/utils/utils';
@@ -154,7 +155,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
 
       if (typeof entityNameIndex === 'number' && typeof entityIdIndex === 'number') {
         entities.forEach(entity => {
-          relatedEntitiesMap.set(entity[entityIdIndex], entity[entityNameIndex]);
+          relatedEntitiesMap.set(EntityId(entity[entityIdIndex]), entity[entityNameIndex]);
         });
       }
 
@@ -234,7 +235,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 value: {
                   type: 'ENTITY',
                   value: value,
-                  name: relatedEntitiesMap.get(value) ?? null,
+                  name: relatedEntitiesMap.get(EntityId(value)) ?? null,
                 },
               });
             });
