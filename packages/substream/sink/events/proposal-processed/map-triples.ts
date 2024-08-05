@@ -42,6 +42,7 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
 }
 
 function squashOps(ops: Op[], spaceId: string): Op[] {
+  // We take the last op for each (S,E,A) tuple
   const squashedOps = ops.reduce((acc, op) => {
     const idForOp = `${spaceId}:${op.triple.entity}:${op.triple.attribute}`;
     acc.set(idForOp, op);
