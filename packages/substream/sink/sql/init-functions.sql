@@ -127,12 +127,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STRICT STABLE;
 
-CREATE OR REPLACE FUNCTION public.set_entities_spaces()
-  RETURNS trigger AS
-$$
+CREATE OR REPLACE FUNCTION public.set_entities_spaces() RETURNS trigger AS $$
 BEGIN
-    INSERT INTO public.entity_spaces (entity_id, space_id) VALUES (NEW.id, NEW.space_id)
+    INSERT INTO public.entity_spaces(entity_id, space_id) VALUES (NEW.entity_id, NEW.space_id)
         ON CONFLICT DO NOTHING;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql STRICT;
+
+CREATE TRIGGER set_space_for_entity
+AFTER INSERT ON public.triples
+FOR EACH ROW
+EXECUTE FUNCTION public.set_entities_spaces();
