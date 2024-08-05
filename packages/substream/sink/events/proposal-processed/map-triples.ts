@@ -12,9 +12,10 @@ export interface OpWithCreatedBy {
 
 export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string; proposalId: string };
 
-// @TODO: Do we squash actions in the new data model?
 export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
-  return edit.ops.map((op): OpWithCreatedBy => {
+  const squashedOps = squashOps(edit.ops, edit.spaceId);
+
+  return squashedOps.map((op): OpWithCreatedBy => {
     const triple = getTripleFromOp(op, edit.spaceId, block);
 
     if (
@@ -38,4 +39,14 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
       triple,
     };
   });
+}
+
+function squashOps(ops: Op[], spaceId: string): Op[] {
+  const squashedOps = ops.reduce((acc, op) => {
+    const idForOp = `${spaceId}:${op.triple.entity}:${op.triple.attribute}`;
+    acc.set(idForOp, op);
+    return acc;
+  }, new Map<string, Op>());
+
+  return [...squashedOps.values()];
 }
