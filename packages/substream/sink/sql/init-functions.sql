@@ -126,3 +126,13 @@ BEGIN
     RETURN attribute_count;
 END;
 $$ LANGUAGE plpgsql STRICT STABLE;
+
+CREATE OR REPLACE FUNCTION public.set_entities_spaces()
+  RETURNS trigger AS
+$$
+BEGIN
+    INSERT INTO public.entity_spaces (entity_id, space_id) VALUES (NEW.id, NEW.space_id)
+        ON CONFLICT DO NOTHING;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql STRICT;

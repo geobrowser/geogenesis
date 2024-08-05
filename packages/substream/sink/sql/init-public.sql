@@ -245,6 +245,12 @@ CREATE TABLE public.geo_blocks (
     timestamp text NOT NULL
 );
 
+CREATE TABLE public.entity_spaces (
+    PRIMARY KEY (entity_id, space_id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    space_id text NOT NULL REFERENCES public.spaces(id)
+);
+
 -- CREATE TABLE public.triple_versions (
 --     PRIMARY KEY (triple_id, version_id),
 --     triple_id text NOT NULL REFERENCES public.triples(id),

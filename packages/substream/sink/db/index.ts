@@ -14,3 +14,4 @@ export * from './entities';
 export * from './blocks';
 export * from './space-metadata';
 export * from './types';
+export * from './entities_spaces';
