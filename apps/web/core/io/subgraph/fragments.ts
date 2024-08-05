@@ -33,33 +33,6 @@ export const entityTypesFragment = `
   }
 `;
 
-/**
- * The relations fragment fetches the type of the relation and the from and to entities.
- * The to entity also includes any triples that could be used to represent an image entity.
- */
-export const relationFragment = `
-  index
-  typeOf {
-    id
-    name
-  }
-  fromEntity {
-    id
-    name
-  }
-  toEntity {
-    id
-    name
-    ${entityTypesFragment}
-
-    triples(filter: {valueType: {equalTo: URI}, attributeId: {equalTo: "${SYSTEM_IDS.IMAGE_URL_ATTRIBUTE}}"}}) {
-      nodes {
-        ${imageValueTypeTripleFragment}
-      }
-    }
-  }
-`;
-
 export const tripleFragment = `
   attribute {
     id
@@ -83,39 +56,28 @@ export const tripleFragment = `
   }
 `;
 
-export const resultTripleFragment = `
-  attribute {
+/**
+ * The relations fragment fetches the type of the relation and the from and to entities.
+ * The to entity also includes any triples that could be used to represent an image entity.
+ */
+export const relationFragment = `
+  index
+  typeOf {
     id
     name
   }
-  entityId
-  entity {
+  fromEntity {
     id
     name
   }
-  entityValue {
+  toEntity {
     id
+    name
     ${entityTypesFragment}
-    name
-  }
-  numberValue
-  textValue
-  valueType
-  space {
-    id
-    spacesMetadata {
-      nodes {
-        entity {
-          id
-          name
-          ${entityTypesFragment}
 
-          triples {
-            nodes {
-              ${tripleFragment}
-            }
-          }
-        }
+    triples {
+      nodes {
+        ${tripleFragment}
       }
     }
   }
@@ -142,16 +104,6 @@ export const entityFragment = `
   triples {
     nodes {
       ${tripleFragment}
-    }
-  }
-`;
-
-export const resultEntityFragment = `
-  id
-  name
-  triples(filter: { attributeId: { equalTo: "a126ca530c8e48d5b88882c734c38935" } }) {
-    nodes {
-      ${resultTripleFragment}
     }
   }
 `;
@@ -192,5 +144,16 @@ export const spaceFragment = `
         ${entityFragment}
       }
     }
+  }
+`;
+
+export const resultEntityFragment = `
+  id
+  name
+  description
+  ${entityTypesFragment}
+  entitySpacs {
+  nodes {
+    ${spaceFragment}
   }
 `;
