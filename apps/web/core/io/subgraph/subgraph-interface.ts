@@ -2,7 +2,7 @@ import { Profile, Triple } from '~/core/types';
 
 import { Entity } from '../dto/entities';
 import { Proposal, ProposalWithoutVoters } from '../dto/proposals';
-import { Result } from '../dto/search';
+import { SearchResult } from '../dto/search';
 import { Space } from '../dto/spaces';
 import { FetchEntitiesOptions } from './fetch-entities';
 import { FetchEntityOptions } from './fetch-entity';
@@ -17,7 +17,7 @@ import { FetchTriplesOptions } from './fetch-triples';
 export interface ISubgraph {
   fetchTriples: (options: FetchTriplesOptions) => Promise<Triple[]>;
   fetchEntities: (options: FetchEntitiesOptions) => Promise<Entity[]>;
-  fetchResults: (options: FetchResultsOptions) => Promise<Result[]>;
+  fetchResults: (options: FetchResultsOptions) => Promise<SearchResult[]>;
   fetchSpaces: () => Promise<Space[]>;
   fetchSpace: (options: FetchSpaceOptions) => Promise<Space | null>;
   fetchEntity: (options: FetchEntityOptions) => Promise<Entity | null>;

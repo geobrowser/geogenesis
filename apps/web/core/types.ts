@@ -138,12 +138,6 @@ export type GeoType = {
   space: string;
 };
 
-// @TODO: Use SubstreamSearchResult
-export type EntitySearchResult = {
-  id: string;
-  name: string | null;
-};
-
 // A column in the table _is_ an Entity. It's a reference to a specific Attribute entity.
 // In this use case we don't really care about description, types, etc.
 export interface Column {

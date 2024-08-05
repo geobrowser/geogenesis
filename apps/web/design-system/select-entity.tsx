@@ -10,7 +10,7 @@ import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { Result } from '~/core/io/dto/search';
+import { SearchResult } from '~/core/io/dto/search';
 import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -45,7 +45,7 @@ export const SelectEntity = ({
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
 
-  const [result, setResult] = useState<Result | null>(null);
+  const [result, setResult] = useState<SearchResult | null>(null);
 
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
     allowedTypes: allowedTypes?.map(type => type.typeId),

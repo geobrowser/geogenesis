@@ -49,7 +49,7 @@ export default async function DefaultEntityPage({
 
   const avatarUrl = Entities.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entities.cover(props.triples) ?? props.serverCoverUrl;
-  const types = Entities.types(props.triples);
+  const types = props.types;
 
   const typeId = searchParams.typeId ?? null;
 
@@ -148,6 +148,7 @@ const getData = async (spaceId: string, entityId: string) => {
     serverAvatarUrl,
     serverCoverUrl,
     relationsOut: entity?.relationsOut ?? [],
+    types: entity?.types ?? [],
 
     // For entity page editor
     blockIdsTriple: null,

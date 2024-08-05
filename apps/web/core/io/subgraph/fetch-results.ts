@@ -6,7 +6,7 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 
-import { Result, SearchResultDto } from '../dto/search';
+import { SearchResult, SearchResultDto } from '../dto/search';
 import { SubstreamSearchResult } from '../schema';
 import { resultEntityFragment } from './fragments';
 import { graphql } from './graphql';
@@ -59,7 +59,7 @@ interface NetworkResult {
   entities: { nodes: SubstreamSearchResult[] };
 }
 
-export async function fetchResults(options: FetchResultsOptions): Promise<Result[]> {
+export async function fetchResults(options: FetchResultsOptions): Promise<SearchResult[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 

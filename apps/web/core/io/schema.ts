@@ -246,7 +246,7 @@ export type SubstreamSubspace = Schema.Schema.Type<typeof SubstreamSubspace>;
  * An entity belongs to a space when it has at least one triple in that space.
  */
 export const SubstreamSearchResult = Schema.extend(
-  SubstreamEntity.pick('id', 'name', 'entityTypes'),
+  SubstreamEntity.pick('id', 'name', 'entityTypes', 'description'),
   Schema.Struct({
     entitySpaces: Schema.Struct({
       nodes: Schema.Array(SubstreamSpace),

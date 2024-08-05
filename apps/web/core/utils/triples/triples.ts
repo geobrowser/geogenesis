@@ -135,38 +135,6 @@ export function merge(local: Triple[], remote: Triple[]): Triple[] {
   return triples;
 }
 
-export function collectionItemsFromTriples(triples: Record<string, Triple[]>): CollectionItem[] {
-  const items = Object.entries(triples).map(([collectionItemId, items]): CollectionItem | null => {
-    const index = items.find(i => Boolean(Collections.itemIndexValue(i)))?.value.value;
-    const collectionId = items.find(i => Boolean(Collections.itemCollectionIdValue(i)))?.value.value;
-    const entityIdTriple = items.find(i => Boolean(Collections.itemEntityIdValue(i)));
-    const entityId = entityIdTriple?.value.value;
-
-    if (!(index && collectionId && entityId)) {
-      return null;
-    }
-
-    return {
-      id: collectionItemId,
-      collectionId,
-      entity: {
-        id: entityId,
-        name: entityIdTriple?.value.type === 'ENTITY' ? entityIdTriple?.value.name : null,
-        // @TODO(local-first): The entity may not exist locally in which case this will be empty
-        types: Entities.types(triples[entityId] ?? []).map(t => t.id),
-      },
-      index,
-      value: {
-        type: 'ENTITY',
-        // @TODO(local-first): We may not have the name locally in which case the value will be null
-        value: entityIdTriple?.value.type === 'ENTITY' ? entityIdTriple?.value.name : null,
-      },
-    };
-  });
-
-  return items.flatMap(i => (i ? [i] : []));
-}
-
 /**
  * This function applies locally changed entity names to all triples being rendered.
  */

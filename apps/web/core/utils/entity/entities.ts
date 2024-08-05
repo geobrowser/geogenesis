@@ -2,8 +2,8 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { A, D, pipe } from '@mobily/ts-belt';
 
 import { Entity } from '~/core/io/dto/entities';
-import { EntityId, TypeId } from '~/core/io/schema';
-import { EntitySearchResult, Triple as ITriple, ValueTypeId } from '~/core/types';
+import { EntityId, SubstreamType, TypeId } from '~/core/io/schema';
+import { Triple as ITriple, ValueTypeId } from '~/core/types';
 
 import { Triples } from '../triples';
 import { groupBy } from '../utils';
@@ -40,7 +40,7 @@ export function descriptionTriple(triples: ITriple[]): ITriple | undefined {
  * there are Triples from multiple Spaces and they are Types, and they have the same name, we will
  * only show the Type from the current space.
  */
-export function types(triples: ITriple[], currentSpace?: string): EntitySearchResult[] {
+function types(triples: ITriple[], currentSpace?: string): SubstreamType[] {
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
   const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
 
@@ -48,7 +48,7 @@ export function types(triples: ITriple[], currentSpace?: string): EntitySearchRe
     .flatMap(([, triples]) => {
       if (triples.length === 1) {
         return triples.flatMap(triple =>
-          triple.value.type === 'ENTITY' ? { id: triple.value.value, name: triple.value.name } : []
+          triple.value.type === 'ENTITY' ? { id: TypeId(triple.value.value), name: triple.value.name } : []
         );
       }
 
@@ -59,19 +59,19 @@ export function types(triples: ITriple[], currentSpace?: string): EntitySearchRe
         return triples
           .filter(triple => triple.space === currentSpace)
           .flatMap(triple =>
-            triple.value.type === 'ENTITY' ? { id: triple.value.value, name: triple.value.name } : []
+            triple.value.type === 'ENTITY' ? { id: TypeId(triple.value.value), name: triple.value.name } : []
           );
       }
 
       if (triples.length > 1) {
         return triples.flatMap(triple =>
-          triple.value.type === 'ENTITY' ? { id: triple.value.value, name: triple.value.name } : []
+          triple.value.type === 'ENTITY' ? { id: TypeId(triple.value.value), name: triple.value.name } : []
         );
       }
 
-      return [];
+      return null;
     })
-    .flatMap(type => (type ? type : []));
+    .filter(type => type !== null);
 }
 
 /**

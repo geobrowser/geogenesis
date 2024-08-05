@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { EntitySearchResult } from '~/core/types';
+import { SubstreamType } from '~/core/io/schema';
 
 import { HistoryPanel } from '../history/history-panel';
 import { EntityPageContextMenu } from './entity-page-context-menu';
@@ -11,7 +11,7 @@ import { EntityPageTypeChip } from './entity-page-type-chip';
 interface EntityPageMetadataHeaderProps {
   id: string;
   spaceId: string;
-  types: Array<EntitySearchResult>;
+  types: Array<SubstreamType>;
 }
 
 export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: EntityPageMetadataHeaderProps) {
