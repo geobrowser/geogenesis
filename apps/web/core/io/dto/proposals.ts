@@ -4,9 +4,14 @@ import { Entities } from '~/core/utils/entity';
 
 import { TripleDto } from '../dto';
 import { ProposalStatus, ProposalType, SubstreamEntity, SubstreamProposal, SubstreamVote } from '../schema';
-import { SpaceWithMetadata } from './spaces';
 
 export type VoteWithProfile = SubstreamVote & { voter: Profile };
+
+type SpaceWithImage = {
+  id: string;
+  name: string | null;
+  image: string;
+};
 
 export type Proposal = {
   id: string;
@@ -16,7 +21,7 @@ export type Proposal = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
-  space: SpaceWithMetadata;
+  space: SpaceWithImage;
   startTime: number;
   endTime: number;
   status: ProposalStatus;
@@ -44,7 +49,7 @@ export function ProposalDto(
   const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
   const spaceConfigTriples = (spaceConfig?.triples.nodes ?? []).map(TripleDto);
 
-  const spaceWithMetadata: SpaceWithMetadata = {
+  const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
     name: spaceConfig?.name ?? null,
     image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
@@ -106,7 +111,7 @@ export function ProposalWithoutVotersDto(
   const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
   const spaceConfigTriples = (spaceConfig?.triples.nodes ?? []).map(TripleDto);
 
-  const spaceWithMetadata: SpaceWithMetadata = {
+  const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
     name: spaceConfig?.name ?? null,
     image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
@@ -134,7 +139,7 @@ export type Version = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
-  space: SpaceWithMetadata;
+  space: SpaceWithImage;
   triples: Triple[];
   entity: {
     id: string;
@@ -147,7 +152,7 @@ export type ProposedVersion = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: string;
-  space: SpaceWithMetadata;
+  space: SpaceWithImage;
   ops: AppOp[];
   entity: {
     id: string;
