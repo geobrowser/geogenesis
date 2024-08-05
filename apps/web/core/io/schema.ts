@@ -240,43 +240,16 @@ export const SubstreamSubspace = Schema.extend(
 export type SubstreamSubspace = Schema.Schema.Type<typeof SubstreamSubspace>;
 
 /**
- * Search results
+ * Search results are a subspace of entities which also include the spaces
+ * that the entity belongs to.
  *
- * Triples with space metadata are a special triple that's used by our search results
- * API to include the space metadata in the results of each triple. Each triple with
- * metadata is used to aggregate all of the spaces that a space belongs to. Ideally
- * this is derived by the database and query so we don't have to do this locally.
- *
- * These triples get aggregated into an entity result.
- *
- * @TODO(relations): Once we have spaces indexed onto an entity we won't need a
- * substream triple search result since the space data will be encoded directly
- * on the entity already.
+ * An entity belongs to a space when it has at least one triple in that space.
  */
-const SubstreamTripleSearchResult = Schema.extend(
-  SubstreamValue,
-  Schema.Struct({
-    entity: Schema.extend(Identifiable, Nameable),
-    attribute: Schema.extend(Identifiable, Nameable),
-    space: Schema.extend(
-      SubstreamSpaceWithoutMetadata.pick('id'),
-      Schema.Struct({
-        spacesMetadata: Schema.Struct({
-          nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
-        }),
-      })
-    ),
-  })
-);
-
-type SubstreamTripleSearchResult = Schema.Schema.Type<typeof SubstreamTripleSearchResult>;
-
 export const SubstreamSearchResult = Schema.extend(
   SubstreamEntity.pick('id', 'name', 'entityTypes'),
   Schema.Struct({
-    // These triples are unique to the search result struct and not picked from SubstreamEntity
-    triples: Schema.Struct({
-      nodes: Schema.Array(SubstreamTripleSearchResult),
+    entitySpaces: Schema.Struct({
+      nodes: Schema.Array(SubstreamSpace),
     }),
   })
 );

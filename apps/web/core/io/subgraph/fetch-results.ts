@@ -117,21 +117,23 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Result
 
   const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const decodedResults = entities.nodes.map(result => {
-    const decodedResult = Schema.decodeEither(SubstreamSearchResult)(result);
+  const decodedResults = entities.nodes
+    .map(result => {
+      const decodedResult = Schema.decodeEither(SubstreamSearchResult)(result);
 
-    return Either.match({
-      onLeft: error => {
-        console.error(`Unable to decode search result: ${String(error)}`);
-        return null;
-      },
-      onRight: () => {
-        return decodedResult;
-      },
-    });
-  });
+      return Either.match(decodedResult, {
+        onLeft: error => {
+          console.error(`Unable to decode search result: ${String(error)}`);
+          return null;
+        },
+        onRight: result => {
+          return result;
+        },
+      });
+    })
+    .filter(s => s !== null);
 
-  const sortedResults = sortSearchResultsByRelevance(entities.nodes);
+  const sortedResults = sortSearchResultsByRelevance(decodedResults);
   return sortedResults.map(SearchResultDto);
 }
 
