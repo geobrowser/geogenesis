@@ -44,7 +44,7 @@ export function EntityDto(entity: SubstreamEntity): Entity {
     name: entity.name,
     description: Entities.description(triples),
     nameTripleSpaces: nameTriples.map(t => t.space),
-    types: entity.types.nodes.map(t => t),
+    types: entity.entityTypes.nodes.map(t => t.type),
     relationsOut: entity.relationsByFromEntityId.nodes.map(t => {
       return {
         ...t,
