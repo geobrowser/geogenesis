@@ -4,6 +4,37 @@ export const imageValueTypeTripleFragment = `
     valueType
 `;
 
+/**
+ * `
+ *  entity {
+ *    id
+ *    name
+ *    entityTypes {
+ *      nodes {
+ *        type {
+ *          id
+ *          name
+ *        }
+ *      }
+ *    }
+ *  }
+ * `
+ */
+export const entityTypesFragment = `
+  entityTypes {
+    nodes {
+      type {
+        id
+        name
+      }
+    }
+  }
+`;
+
+/**
+ * The relations fragment fetches the type of the relation and the from and to entities.
+ * The to entity also includes any triples that could be used to represent an image entity.
+ */
 export const relationFragment = `
   index
   typeOf {
@@ -17,6 +48,13 @@ export const relationFragment = `
   toEntity {
     id
     name
+    ${entityTypesFragment}
+
+    triples(filter: {valueType: {equalTo: "URI"}, attributeId: {equalTo: "a126ca530c8e48d5b88882c734c38935"}}) {
+      nodes {
+        ${imageValueTypeTripleFragment}
+      }
+    }
   }
 `;
 
@@ -39,11 +77,6 @@ export const tripleFragment = `
       }
     }
     name
-    triples {
-      nodes {
-        ${imageValueTypeTripleFragment}
-      }
-    }
   }
   numberValue
   textValue

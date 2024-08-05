@@ -75,18 +75,6 @@ const SubstreamUriValue = Schema.Struct({
 type SubstreamUriValue = Schema.Schema.Type<typeof SubstreamUriValue>;
 
 /**
- * ImageValueTriple is a special case of a substream triple where we only query
- * the image url value of an image entity.
- */
-export const SubstreamImageValueTriple = Schema.Struct({
-  valueType: Schema.Literal('URI'),
-  attributeId: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  textValue: Schema.String,
-});
-
-export type SubstreamImageValueTriple = Schema.Schema.Type<typeof SubstreamImageValueTriple>;
-
-/**
  * Entity value
  */
 const SubstreamEntityValue = Schema.Struct({
@@ -98,13 +86,6 @@ const SubstreamEntityValue = Schema.Struct({
     types: Schema.Struct({
       nodes: Schema.Array(SubstreamType),
     }),
-
-    // @TODO: We might be fetching an entity that's meant to be used as an image.
-    // If so we need to read from the triples on the entity to get the
-    // image url for to render.
-    //
-    // This should go on the entity in the To field of the relation instead of here
-    // probably.
   }),
 });
 
@@ -176,6 +157,13 @@ const SubstreamRelation = Schema.Struct({
 
     // @TODO(relations): This should include the image triples for the to entity as well
     // as the space.
+    types: Schema.Struct({
+      nodes: Schema.Array(SubstreamType),
+    }),
+    triples: Schema.Struct({
+      // @TODO(relations: Do we only need the image triples?
+      nodes: Schema.Array(SubstreamTriple),
+    }),
   }),
 });
 

@@ -18,20 +18,6 @@ export type Space = {
   personalSpaceAdminPluginAddress: Address | null;
 };
 
-export type SpaceMetadata = {
-  id: string;
-  name: string;
-  metadata: {
-    nodes: SubstreamEntity[];
-  };
-};
-
-export type SpaceWithMetadata = {
-  id: string;
-  name: string | null;
-  image: string;
-};
-
 export type SpaceConfigEntity = Entity & {
   spaceId: string;
   image: string;
