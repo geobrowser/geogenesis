@@ -395,22 +395,6 @@ export function bootstrapRoot() {
             Accounts.upsert([account]),
             Entities.upsert(geoEntities),
             Entities.upsert(entitiesForRelations),
-            Types.upsert(
-              typesToWrite.map(r => ({
-                type_id: r.type_of_id,
-                entity_id: r.from_entity_id,
-                created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-                created_at: ROOT_SPACE_CREATED_AT,
-              }))
-            ),
-            Types.upsert(
-              attributesToWrite.map(r => ({
-                type_id: r.type_of_id,
-                entity_id: r.to_entity_id,
-                created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-                created_at: ROOT_SPACE_CREATED_AT,
-              }))
-            ),
 
             Triples.insert(namesTriples),
             Triples.upsert(triplesForTypesAndAttributes),
@@ -420,12 +404,27 @@ export function bootstrapRoot() {
             Relations.upsert(relationsForTypesAndAttributes),
           ]);
 
-          await Promise.all([
-            EntitySpaces.upsert(geoEntities.map(e => ({ entity_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }))),
-            EntitySpaces.upsert(
-              entitiesForRelations.map(e => ({ entity_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }))
-            ),
-          ]);
+          await Types.upsert(
+            typesToWrite.map(r => ({
+              type_id: r.type_of_id,
+              entity_id: r.from_entity_id,
+              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+              created_at: ROOT_SPACE_CREATED_AT,
+            }))
+          );
+          await Types.upsert(
+            attributesToWrite.map(r => ({
+              type_id: r.type_of_id,
+              entity_id: r.to_entity_id,
+              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+              created_at: ROOT_SPACE_CREATED_AT,
+            }))
+          );
+
+          await EntitySpaces.upsert(geoEntities.map(e => ({ entity_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID })));
+          await EntitySpaces.upsert(
+            entitiesForRelations.map(e => ({ entity_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }))
+          );
         },
         catch: error => new BootstrapRootError(String(error)),
       })
