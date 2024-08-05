@@ -1,6 +1,4 @@
-import { ProposalStatus, ProposalType, SYSTEM_IDS } from '@geogenesis/sdk';
-
-import { SubstreamEntity } from './io/schema';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
@@ -11,10 +9,13 @@ export type ValueType =
   | 'ENTITY'
   | 'CHECKBOX'
   | 'URI'
+  // | GEO_LOCATION
   | 'TIME'
   // IMAGE is only a value type in the web app. It's modeled as an Entity on the server,
   // but we create a "helper" value type to map the contents of the image to a more
   // ergnomic way of rendering it.
+  //
+  // At publish time we map the image value type back to an entity.
   | 'IMAGE';
 
 export type AppValue = {
