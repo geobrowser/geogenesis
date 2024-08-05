@@ -36,7 +36,7 @@ export function ReadableEntityPage({ triples: serverTriples, relations, id }: Pr
       <div className="space-y-2">
         <h3 className="text-smallTitle">Triples</h3>
         <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
-          <EntityAttributes entityId={id} triples={sortedTriples} />
+          <EntityTriples entityId={id} triples={sortedTriples} />
         </div>
       </div>
 
@@ -50,7 +50,7 @@ export function ReadableEntityPage({ triples: serverTriples, relations, id }: Pr
   );
 }
 
-function EntityAttributes({ entityId, triples }: { entityId: string; triples: Props['triples'] }) {
+function EntityTriples({ entityId, triples }: { entityId: string; triples: Props['triples'] }) {
   const groupedTriples = groupBy(triples, t => t.attributeId);
 
   return (
