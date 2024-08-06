@@ -74,7 +74,7 @@ export const relationFragment = `
     id
     name
     ${entityTypesFragment}
-
+    # We also need the relations for the To entity
     triples {
       nodes {
         ${tripleFragment}

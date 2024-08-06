@@ -1,5 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
+import { TypeId } from '~/core/io/schema';
+
 import { cachedFetchEntityType } from './cached-entity-type';
 import DefaultEntityPage from './default-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
@@ -15,7 +17,7 @@ interface Props {
 export default async function EntityTemplateStrategy({ params, searchParams }: Props) {
   const types = await cachedFetchEntityType(params.entityId);
 
-  if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
+  if (types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
     return <ProfileEntityServerContainer params={params} />;
   }
 

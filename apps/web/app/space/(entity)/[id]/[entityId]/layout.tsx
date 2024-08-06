@@ -5,7 +5,7 @@ import * as React from 'react';
 import { Metadata } from 'next';
 
 import { Entity } from '~/core/io/dto/entities';
-import { EntityId } from '~/core/io/schema';
+import { EntityId, TypeId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -72,7 +72,7 @@ export default async function ProfileLayout({ children, params }: Props) {
 
   const types = await cachedFetchEntityType(entityId);
 
-  if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
+  if (!types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
     return <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>;
   }
 

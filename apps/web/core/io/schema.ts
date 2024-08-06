@@ -46,13 +46,15 @@ export const AddressWithValidation = Schema.String.pipe(
  * Entity types are a field that exist on any entity query. These define the types
  * for that entity. e.g., Person, Space, Nonprofit, etc.
  */
-const SubstreamEntityTypes = Schema.Struct({
+export const SubstreamEntityTypes = Schema.Struct({
   nodes: Schema.Array(
     Schema.Struct({
       type: SubstreamType,
     })
   ),
 });
+
+export type SubstreamEntityTypes = Schema.Schema.Type<typeof SubstreamEntityTypes>;
 
 /*******************************************************************************
  * Triples
@@ -146,8 +148,6 @@ export const SubstreamTriple = Schema.extend(
 );
 
 export type SubstreamTriple = Schema.Schema.Type<typeof SubstreamTriple>;
-
-type SubstreamEntityTypes = Schema.Schema.Type<typeof SubstreamEntityTypes>;
 
 /**
  * Relations

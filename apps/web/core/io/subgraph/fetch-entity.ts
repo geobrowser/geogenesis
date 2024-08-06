@@ -1,4 +1,5 @@
 import { Schema } from '@effect/schema';
+import { Console } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -38,8 +39,8 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
     signal: options.signal,
   });
 
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
+  const graphqlFetchWithErrorFallbacks = Effect.gen(function* () {
+    const resultOrError = yield* Effect.either(graphqlFetchEffect);
 
     if (Either.isLeft(resultOrError)) {
       const error = resultOrError.left;
