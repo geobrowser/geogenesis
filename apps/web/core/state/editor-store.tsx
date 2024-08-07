@@ -7,7 +7,6 @@ import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateHTML, generateJSON } from '@tiptap/react';
 import { atom, useAtomValue } from 'jotai';
 import pluralize from 'pluralize';
-import Showdown from 'showdown';
 
 import * as React from 'react';
 
@@ -23,10 +22,6 @@ import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
 import { remove, upsert } from './actions-store/actions-store';
 import { createRelationsForEntityAtom } from './actions-store/create-relations-for-entity-atom';
-
-// @TODO: Make custom markdown converter specifically for tiptap. Doing so should
-// be a lot smaller and faster than showdown.
-const markdownConverter = new Showdown.Converter();
 
 // We don't care about the value of the collection item in the block editor or
 // any of the entity properties except the id.
@@ -155,7 +150,7 @@ export function useEditorStore() {
           };
         }
 
-        const html = markdownTriple ? markdownConverter.makeHtml(Values.stringValue(markdownTriple) || '') : '';
+        const html = markdownTriple ? markdownToHtml(Values.stringValue(markdownTriple) || '') : '';
         /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
         const isSSR = typeof window === 'undefined';
         const json = isSSR ? generateServerJSON(html, tiptapExtensions) : generateJSON(html, tiptapExtensions);
@@ -257,13 +252,15 @@ export function useEditorStore() {
       }
 
       const nodeHTML = textNodeHTML(node);
+      console.log('nodeHTML', nodeHTML);
 
       const entityName = getNodeName(node);
-      let markdown = markdownConverter.makeMarkdown(nodeHTML);
+      let markdown = htmlToMarkdown(nodeHTML);
 
       //  Overrides Showdown's unwanted "consecutive list" behavior found in
       //  `src/subParsers/makeMarkdown/list.js`
       if (isList) {
+        // @TODO: Do we need this with our custom parser?
         markdown = markdown.replaceAll('\n<!-- -->\n', '');
       }
 
@@ -757,4 +754,108 @@ export function useEditorInstance() {
   }
 
   return value;
+}
+
+function htmlToMarkdown(html: string) {
+  let md = html;
+
+  // Convert headings
+  md = md.replace(/<h1>(.*?)<\/h1>/gi, '# $1\n');
+  md = md.replace(/<h2>(.*?)<\/h2>/gi, '## $1\n');
+  md = md.replace(/<h3>(.*?)<\/h3>/gi, '### $1\n');
+  md = md.replace(/<h4>(.*?)<\/h4>/gi, '#### $1\n');
+  md = md.replace(/<h5>(.*?)<\/h5>/gi, '##### $1\n');
+  md = md.replace(/<h6>(.*?)<\/h6>/gi, '###### $1\n');
+
+  // Convert paragraphs
+  md = md.replace(/<p>(.*?)<\/p>/gi, '$1\n\n');
+
+  // Convert bold
+  md = md.replace(/<strong>(.*?)<\/strong>/gi, '**$1**');
+
+  // Convert italic
+  md = md.replace(/<em>(.*?)<\/em>/gi, '*$1*');
+
+  // Convert links
+  // We don't support links atm
+  // md = md.replace(/<a href="(.*?)">(.*?)<\/a>/gi, '[$2]($1)');
+
+  // Convert unordered lists
+  md = md.replace(/<ul>(.*?)<\/ul>/gis, match => {
+    return match.replace(/<li>(.*?)<\/li>/gi, '- $1\n');
+  });
+
+  // Convert ordered lists
+  md = md.replace(/<ol>(.*?)<\/ol>/gis, match => {
+    let counter = 1;
+    return match.replace(/<li>(.*?)<\/li>/gi, () => `${counter++}. $1\n`);
+  });
+
+  // Convert blockquotes
+  // We don't support blockquotes atm
+  // md = md.replace(/<blockquote>(.*?)<\/blockquote>/gi, '> $1\n');
+
+  // Convert code blocks
+  // We don't support code blocks atm
+  // md = md.replace(/<pre><code>(.*?)<\/code><\/pre>/gi, '```\n$1\n```\n');
+
+  // Convert inline code
+  // We don't support inline code atm
+  // md = md.replace(/<code>(.*?)<\/code>/gi, '`$1`');
+
+  // Remove remaining tags
+  md = md.replace(/<[^>]*>/g, '');
+
+  // Decode HTML entities
+  md = md.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+  return md.trim();
+}
+
+function markdownToHtml(markdown: string) {
+  let html = markdown;
+
+  // Convert headings
+  html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+  html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+  html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+  html = html.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
+  html = html.replace(/^##### (.*$)/gim, '<h5>$1</h5>');
+  html = html.replace(/^###### (.*$)/gim, '<h6>$1</h6>');
+
+  // Convert paragraphs
+  html = html.replace(/^\s*(\n)?(.+)/gim, function (m) {
+    return /\<(\/)?(h\d|ul|ol|li|blockquote|pre|img)/.test(m) ? m : '<p>' + m + '</p>';
+  });
+
+  // Convert bold
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+  // Convert italic
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+  // Convert links
+  html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
+
+  // Convert unordered lists
+  html = html.replace(/^\s*(-|\*)\s(.*)$/gim, '<ul>\n<li>$2</li>\n</ul>');
+  html = html.replace(/<\/ul>\s*<ul>/g, '');
+
+  // Convert ordered lists
+  html = html.replace(/^\s*(\d+\.)\s(.*)$/gim, '<ol>\n<li>$2</li>\n</ol>');
+  html = html.replace(/<\/ol>\s*<ol>/g, '');
+
+  // Convert blockquotes
+  html = html.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
+
+  // Convert code blocks
+  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+
+  // Convert inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Convert line breaks
+  html = html.replace(/\n/g, '<br>');
+
+  return html.trim();
 }
