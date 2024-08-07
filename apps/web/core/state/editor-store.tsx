@@ -153,22 +153,22 @@ const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Re
           name: maybeLocalFromTriple
             ? maybeLocalFromTriple.value.type === 'ENTITY'
               ? maybeLocalFromTriple.value.name
-              : r.typeOf.name
-            : r.typeOf.name,
+              : r.fromEntity.name
+            : r.fromEntity.name,
         },
         toEntity: {
-          id: maybeLocalToTriple ? EntityId(maybeLocalToTriple.value.value) : r.fromEntity.id,
+          id: maybeLocalToTriple ? EntityId(maybeLocalToTriple.value.value) : r.toEntity.id,
           renderableType: 'DEFAULT',
           value: maybeLocalToTriple
             ? maybeLocalToTriple.value.type === 'ENTITY'
               ? maybeLocalToTriple.value.name
-              : r.typeOf.name
-            : r.typeOf.name,
+              : r.toEntity.name
+            : r.toEntity.name,
           name: maybeLocalToTriple
             ? maybeLocalToTriple.value.type === 'ENTITY'
               ? maybeLocalToTriple.value.name
-              : r.typeOf.name
-            : r.typeOf.name,
+              : r.toEntity.name
+            : r.toEntity.name,
         },
       };
     });
@@ -180,8 +180,7 @@ const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Re
 const createMergedBlockRelationsAtom = (
   initialRelations: Relation[],
   initialBlocks: Entity[],
-  entityPageId: string,
-  spaceId: string
+  entityPageId: string
 ) => {
   return atom(get => {
     const relationsForEntityId = get(createRelationsForEntityAtom(entityPageId, initialRelations));
@@ -190,6 +189,8 @@ const createMergedBlockRelationsAtom = (
     // Merging blocks is a different process from merging relations. We can compose merging relations
     // and merging blocks together with two different functions.
     /************************************** */
+
+    // @TODO: Get local blocks
     const blocksByBlockId = initialBlocks.reduce((acc, block) => {
       acc.set(block.id, block);
       return acc;
@@ -240,7 +241,7 @@ export function useEditorStore() {
 
   const relations: RelationWithBlock[] = useAtomValue(
     React.useMemo(
-      () => createMergedBlockRelationsAtom(initialBlockRelations, initialBlocks, entityId, spaceId),
+      () => createMergedBlockRelationsAtom(initialBlockRelations, initialBlocks, entityId),
       [initialBlockRelations, entityId, initialBlocks, spaceId]
     )
   );
