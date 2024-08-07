@@ -42,13 +42,6 @@ export const activeTriplesForEntityIdSelector = (entityId: string) => (triple: S
   return triple.entityId === entityId && triple.isDeleted === false;
 };
 
-export const createTriplesForEntityAtom = (initialTriples: ITriple[], entityId: string) => {
-  return atom(get => {
-    const triplesForEntityId = get(localTriplesAtom).filter(activeTriplesForEntityIdSelector(entityId));
-    return Triples.merge(triplesForEntityId, initialTriples);
-  });
-};
-
 export const isDeletedSelector = (triple: StoredTriple) => {
   return triple.isDeleted === false;
 };
