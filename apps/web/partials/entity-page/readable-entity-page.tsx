@@ -103,7 +103,7 @@ function EntityRelations({ relations }: { relations: Relation[] }) {
             <div className="flex flex-wrap gap-2">
               {relations.map(r => {
                 // @TODO: The type of the relation might be an image
-                if (r.toEntity.types.map(t => t.id).includes(TypeId(SYSTEM_IDS.IMAGE))) {
+                if (r.toEntity.renderableType === 'IMAGE') {
                   return <div>Hello world</div>;
                 }
 
