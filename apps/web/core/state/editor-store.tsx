@@ -19,9 +19,9 @@ import { Entity, Relation } from '../io/dto/entities';
 import { EntityId, SubstreamType, TypeId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
 import { CollectionItem, AppEntityValue as EntityValue, OmitStrict } from '../types';
-import { getImagePath } from '../utils/utils';
+import { getImagePath, groupBy } from '../utils/utils';
 import { Values } from '../utils/value';
-import { remove, upsert } from './actions-store/actions-store';
+import { localTriplesAtom, remove, upsert } from './actions-store/actions-store';
 
 const markdownConverter = new Showdown.Converter();
 
@@ -34,10 +34,113 @@ interface BlockRelation extends OmitStrict<CollectionItem, 'value' | 'entity'> {
 
 interface RelationWithBlock {
   relationId: EntityId;
-  typeOf: SubstreamType;
+  typeOfId: TypeId;
   index: string;
   block: Entity;
 }
+
+// A simple relation is the bare-bones metadata we need to merge remote and local
+// relations.
+interface SimpleRelation {
+  relationId: EntityId;
+  typeOfId: TypeId;
+  index: string;
+  fromEntityId: EntityId;
+  toEntityId: EntityId;
+}
+
+const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Relation[]) => {
+  return atom(get => {
+    const localTriples = get(localTriplesAtom);
+
+    /***********************************************************************************************
+     * Map all triples for locally created relations to SimpleRelation for the given entity page id
+     **********************************************************************************************/
+    // We assume if there is a created triple with Types -> Relation that it's creating an entire
+    // relation. Users shouldn't normally have a reason to change this type to something else locally,
+    // so using this triple should be a good heuristic to get all locally created relations while
+    // still reading from triples.
+    const typeTriplesForAllLocallyCreatedRelations = localTriples.filter(
+      t => t.attributeId === SYSTEM_IDS.TYPES && t.value.value === SYSTEM_IDS.RELATION_TYPE && t.isDeleted === false
+    );
+
+    // Map all the triples for locally created relations to a SimpleRelation
+    const locallyCreatedRelationTriplesByRelationId = groupBy(
+      typeTriplesForAllLocallyCreatedRelations,
+      t => t.entityId
+    );
+
+    const locallyCreatedRelations = Object.entries(locallyCreatedRelationTriplesByRelationId)
+      .map(([relationId, relationTriples]): SimpleRelation | null => {
+        const typeOfTriple = relationTriples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+        const indexTriple = relationTriples.find(t => t.attributeId === SYSTEM_IDS.RELATION_INDEX);
+        const fromEntityTriple = relationTriples.find(t => t.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+        const toEntityTriple = relationTriples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+
+        if (!typeOfTriple || !indexTriple || !fromEntityTriple || !toEntityTriple) {
+          return null;
+        }
+
+        return {
+          typeOfId: TypeId(typeOfTriple.value.value),
+          index: indexTriple.value.value,
+          relationId: EntityId(relationId),
+          fromEntityId: EntityId(fromEntityTriple.value.value),
+          toEntityId: EntityId(toEntityTriple.value.value),
+        };
+      })
+      .filter(r => r !== null)
+      // Only return relations coming from the entity page id
+      .filter(r => r.fromEntityId === entityPageId);
+    /***********************************************************************************************/
+
+    /***********************************************************************************************
+     * Merge all local triples for non-deleted remote relations into the SimpleRelation
+     **********************************************************************************************/
+
+    // A relation might exist remotely but is deleted locally. We need to remove those from the
+    // list of relations that we return.
+    //
+    // We can consider a relation as being deleted when its Types -> Relation triple is deleted. This set
+    // of ids might include relations from entities besides the entityPageId that were deleted locally.
+    //
+    // Later we filter these to only be the relations that are from the entityPageId.
+    const locallyDeletedRelations = localTriples
+      .filter(
+        t => t.attributeId === SYSTEM_IDS.TYPES && t.value.value === SYSTEM_IDS.RELATION_TYPE && t.isDeleted === true
+      )
+      .map(t => t.entityId);
+
+    const deletedRelationIds = new Set(...locallyDeletedRelations);
+    const remoteRelationsThatWerentDeleted = initialRelations
+      // Only return relations coming from the entity page id which haven't been deleted locally
+      .filter(r => !deletedRelationIds.has(r.id) && r.fromEntity.id === entityPageId);
+
+    const remoteRelationsThatWerentDeletedIds = new Set(remoteRelationsThatWerentDeleted.map(r => r.id));
+
+    const localTriplesForActiveRemoteRelations = localTriples.filter(t =>
+      remoteRelationsThatWerentDeletedIds.has(EntityId(t.entityId))
+    );
+
+    const activeRemoteRelations = remoteRelationsThatWerentDeleted.map((r): SimpleRelation => {
+      return {
+        relationId: r.id,
+        typeOfId: TypeId(r.typeOf.id),
+        index: r.index,
+        fromEntityId: r.fromEntity.id,
+        toEntityId: r.toEntity.id,
+      };
+    });
+
+    // @TODO: Merge the above triples into the remote relations
+    // @TODO: Return both the remote relations and the local relations
+
+    // Get all relations where the fromEntityId is the same as the entityPageId
+    // We now have all local triples for any relation pointing from the entityPageId
+
+    return [...locallyCreatedRelations, ...activeRemoteRelations];
+  });
+};
 
 const createMergedBlockRelationsAtom = (
   initialRelations: Relation[],
@@ -46,28 +149,31 @@ const createMergedBlockRelationsAtom = (
   spaceId: string
 ) => {
   return atom(get => {
+    const relationsForEntityId = get(createRelationsForEntityAtom(entityPageId, initialRelations));
+
+    /************************************** */
+    // Merging blocks is a different process from merging relations. We can compose merging relations
+    // and merging blocks together with two different functions.
+    /************************************** */
     const blocksByBlockId = initialBlocks.reduce((acc, block) => {
       acc.set(block.id, block);
       return acc;
     }, new Map<string, Entity>());
 
     // 1. Group the RelationWithBlock entities with their block
-    const relationsWithBlocks = initialRelations
+    const relationsWithBlocks = relationsForEntityId
       .map(r => {
-        const block = blocksByBlockId.get(r.toEntity.id);
+        const block = blocksByBlockId.get(r.toEntityId);
 
         if (!block) {
           return null;
         }
 
         return {
-          typeOf: {
-            id: TypeId(r.typeOf.id),
-            name: r.typeOf.name,
-          },
+          typeOfId: r.typeOfId,
           index: r.index,
           block,
-          relationId: r.id,
+          relationId: r.relationId,
         };
       })
       .filter(b => b !== null);
