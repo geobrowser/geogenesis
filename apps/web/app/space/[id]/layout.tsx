@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
+import { EntityId } from '~/core/io/schema';
+import { fetchEntity } from '~/core/io/subgraph';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { EditorProvider } from '~/core/state/editor-store';
@@ -253,10 +255,8 @@ export default async function Layout({ children, params }: Props) {
         <EditorProvider
           id={props.id}
           spaceId={props.spaceId}
-          initialBlockIdsTriple={props.blockIdsTriple}
-          initialBlockTriples={props.blockTriples}
-          initialBlockCollectionItems={props.blockCollectionItems}
-          initialBlockCollectionItemTriples={props.blockCollectionItemTriples}
+          initialBlockRelations={props.blockRelations}
+          initialBlocks={props.blocks}
         >
           <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
           <EntityPageContentContainer>
@@ -313,6 +313,12 @@ const getData = async (spaceId: string) => {
 
   const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
 
+  const blockIds = entity?.relationsOut
+    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    ?.map(r => r.toEntity.id);
+
+  const blocks = (await Promise.all((blockIds ?? []).map(block => fetchEntity({ id: block })))).filter(b => b !== null);
+
   return {
     triples: entity?.triples ?? [],
     id: entity.id,
@@ -320,11 +326,8 @@ const getData = async (spaceId: string) => {
     description: Entities.description(entity?.triples ?? []),
     spaceId,
 
-    // For entity page editor
-    blockIdsTriple: null,
-    blockTriples: [],
-    blockCollectionItems: [],
-    blockCollectionItemTriples: [],
+    blockRelations: entity.relationsOut,
+    blocks,
 
     space,
   };

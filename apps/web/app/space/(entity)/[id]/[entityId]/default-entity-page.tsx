@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
+import { EntityId, TypeId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
@@ -61,10 +62,8 @@ export default async function DefaultEntityPage({
       <EditorProvider
         id={props.id}
         spaceId={props.spaceId}
-        initialBlockIdsTriple={props.blockIdsTriple}
-        initialBlockTriples={props.blockTriples}
-        initialBlockCollectionItems={props.blockCollectionItems}
-        initialBlockCollectionItemTriples={props.blockCollectionItemTriples}
+        initialBlocks={props.blocks}
+        initialBlockRelations={props.blockRelations}
       >
         <MoveEntityProvider>
           {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
@@ -119,25 +118,14 @@ const getData = async (spaceId: string, entityId: string) => {
   const serverAvatarUrl = Entities.avatar(entity?.triples);
   const serverCoverUrl = Entities.cover(entity?.triples);
 
-  const blockRelations = entity?.relationsOut.filter(r => r.typeOf.id === SYSTEM_IDS.BLOCKS);
+  // @TODO: Abstract
+  const blockIds = entity?.relationsOut
+    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    ?.map(r => r.toEntity.id);
 
-  // @TODO: What is this supposed to be type wise?
-  const blockCollectionItems: { id: string; entity: { id: string } }[] = [];
-
-  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
-
-  const [blockTriples, collectionItemTriples] = await Promise.all([
-    Promise.all(
-      blockIds.map(blockId => {
-        return cachedFetchEntity(blockId);
-      })
-    ),
-    Promise.all(
-      blockCollectionItems.map(item => {
-        return cachedFetchEntity(item.id);
-      })
-    ),
-  ]);
+  const blocks = (await Promise.all((blockIds ?? []).map(block => Subgraph.fetchEntity({ id: block })))).filter(
+    b => b !== null
+  );
 
   return {
     triples: entity?.triples ?? [],
@@ -151,10 +139,7 @@ const getData = async (spaceId: string, entityId: string) => {
     types: entity?.types ?? [],
 
     // For entity page editor
-    blockIdsTriple: null,
-    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
-    blockCollectionItems: [],
-    // blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
-    blockCollectionItemTriples: [],
+    blockRelations: entity?.relationsOut ?? [],
+    blocks,
   };
 };

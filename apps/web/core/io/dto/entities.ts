@@ -17,6 +17,7 @@ export type Entity = {
 };
 
 export type Relation = {
+  id: EntityId;
   index: string;
   typeOf: {
     id: EntityId;
@@ -29,10 +30,7 @@ export type Relation = {
   toEntity: {
     id: EntityId;
     name: string | null;
-    types: {
-      id: TypeId;
-      name: string | null;
-    }[];
+    types: SubstreamType[];
 
     // The "Renderable Type" for an entity provides a hint to the consumer
     // of the entity to _what_ the entity is so they know how they should
@@ -73,6 +71,7 @@ export function EntityDto(entity: SubstreamEntity): Entity {
           id: t.toEntity.id,
           name: t.toEntity.name,
           types: toEntityTypes,
+          triples: toEntityTriples,
 
           // The "Renderable Type" for an entity provides a hint to the consumer
           // of the entity to _what_ the entity is so they know how they should

@@ -16,7 +16,7 @@ interface Props {
 }
 
 export async function ProfileEntityServerContainer({ params }: Props) {
-  const entityId = decodeURIComponent(params.entityId);
+  const entityId = params.entityId;
 
   const [person, profile] = await Promise.all([
     Subgraph.fetchEntity({ id: entityId }),

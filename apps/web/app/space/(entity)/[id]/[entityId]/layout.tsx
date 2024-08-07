@@ -4,8 +4,9 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
-import { Entity } from '~/core/io/dto/entities';
+import { Entity, Relation } from '~/core/io/dto/entities';
 import { EntityId, TypeId } from '~/core/io/schema';
+import { fetchEntity } from '~/core/io/subgraph';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -84,10 +85,8 @@ export default async function ProfileLayout({ children, params }: Props) {
         <EditorProvider
           id={profile.id}
           spaceId={params.id}
-          initialBlockIdsTriple={profile.blockIdsTriple}
-          initialBlockTriples={profile.blockTriples}
-          initialBlockCollectionItems={profile.blockCollectionItems}
-          initialBlockCollectionItemTriples={profile.blockCollectionItemTriples}
+          initialBlocks={profile.blocks}
+          initialBlockRelations={profile.blockRelations}
         >
           <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
           <EntityPageContentContainer>
@@ -127,10 +126,8 @@ async function getProfilePage(entityId: string): Promise<
   Entity & {
     avatarUrl: string | null;
     coverUrl: string | null;
-    blockTriples: Triple[];
-    blockIdsTriple: Triple | null;
-    blockCollectionItems: CollectionItem[];
-    blockCollectionItemTriples: Triple[];
+    blocks: Entity[];
+    blockRelations: Relation[];
   }
 > {
   const person = await cachedFetchEntity(entityId);
@@ -146,44 +143,25 @@ async function getProfilePage(entityId: string): Promise<
       triples: [],
       types: [],
       description: null,
-      blockTriples: [],
-      blockIdsTriple: null,
-      blockCollectionItems: [],
-      blockCollectionItemTriples: [],
       relationsOut: [],
+      blocks: [],
+      blockRelations: [],
     };
   }
 
-  // @TODO(relations): fix
-  // const blockIdsTriple =
-  //   person?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
+  const blockIds = person?.relationsOut
+    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    ?.map(r => r.toEntity.id);
 
-  // const blockCollectionItems =
-  //   blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
-
-  // const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
-
-  // const [blockTriples, collectionItemTriples] = await Promise.all([
-  //   Promise.all(
-  //     blockIds.map(blockId => {
-  //       return cachedFetchEntity(blockId);
-  //     })
-  //   ),
-  //   Promise.all(
-  //     blockCollectionItems.map(item => {
-  //       return cachedFetchEntity(item.id);
-  //     })
-  //   ),
-  // ]);
+  const blocks = (await Promise.all((blockIds ?? []).map(block => fetchEntity({ id: block })))).filter(b => b !== null);
 
   return {
     ...person,
     avatarUrl: Entities.avatar(person.triples),
     coverUrl: Entities.cover(person.triples),
-    blockIdsTriple: null,
-    blockTriples: [],
-    blockCollectionItems: [],
-    blockCollectionItemTriples: [],
+
     relationsOut: [],
+    blockRelations: person.relationsOut,
+    blocks,
   };
 }

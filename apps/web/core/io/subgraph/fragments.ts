@@ -61,6 +61,7 @@ export const tripleFragment = `
  * The to entity also includes any triples that could be used to represent an image entity.
  */
 export const relationFragment = `
+  id
   index
   typeOf {
     id
@@ -74,7 +75,6 @@ export const relationFragment = `
     id
     name
     ${entityTypesFragment}
-    # We also need the relations for the To entity
     triples {
       nodes {
         ${tripleFragment}

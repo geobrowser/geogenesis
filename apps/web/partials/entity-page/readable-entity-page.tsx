@@ -77,7 +77,11 @@ function EntityTriples({ entityId, triples }: { entityId: string; triples: Props
 }
 
 function EntityRelations({ relations }: { relations: Relation[] }) {
-  const groupedRelations = groupBy(relations, r => r.typeOf.id);
+  const groupedRelations = groupBy(
+    relations,
+    // relations.filter(r => r.typeOf.id !== SYSTEM_IDS.BLOCKS), // We don't show blocks in the relations section
+    r => r.typeOf.id
+  );
 
   const relationNamesById = relations.reduce((map, relation) => {
     map.set(relation.typeOf.id, relation.typeOf.name);
@@ -98,8 +102,6 @@ function EntityRelations({ relations }: { relations: Relation[] }) {
             </Link>
             <div className="flex flex-wrap gap-2">
               {relations.map(r => {
-                console.log('r', r);
-
                 // @TODO: The type of the relation might be an image
                 if (r.toEntity.types.map(t => t.id).includes(TypeId(SYSTEM_IDS.IMAGE))) {
                   return <div>Hello world</div>;

@@ -97,7 +97,7 @@ export type Triple = {
   isDeleted?: boolean;
 };
 
-export type RenderableEntityType = 'IMAGE' | 'DEFAULT';
+export type RenderableEntityType = 'IMAGE' | 'DEFAULT' | 'BLOCK'; // specific block types?
 
 export type ReviewState =
   | 'idle'
