@@ -123,17 +123,32 @@ const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Re
     );
 
     const activeRemoteRelations = remoteRelationsThatWerentDeleted.map((r): SimpleRelation => {
+      const maybeLocalTypeOfTriple = localTriplesForActiveRemoteRelations.find(
+        t => t.attributeId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE && t.entityId === r.id
+      );
+
+      const maybeLocalIndexTriple = localTriplesForActiveRemoteRelations.find(
+        t => t.attributeId === SYSTEM_IDS.RELATION_INDEX && t.entityId === r.id
+      );
+
+      const maybeLocalFromTriple = localTriplesForActiveRemoteRelations.find(
+        t => t.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE && t.entityId === r.id
+      );
+
+      const maybeLocalToTriple = localTriplesForActiveRemoteRelations.find(
+        t => t.attributeId === SYSTEM_IDS.RELATION_TO_ATTRIBUTE && t.entityId === r.id
+      );
+
       return {
         relationId: r.id,
-        typeOfId: TypeId(r.typeOf.id),
-        index: r.index,
-        fromEntityId: r.fromEntity.id,
-        toEntityId: r.toEntity.id,
+        typeOfId: maybeLocalTypeOfTriple ? TypeId(maybeLocalTypeOfTriple.value.value) : TypeId(r.typeOf.id),
+        index: maybeLocalIndexTriple ? maybeLocalIndexTriple.value.value : r.index,
+        fromEntityId: maybeLocalFromTriple ? EntityId(maybeLocalFromTriple.value.value) : r.fromEntity.id,
+        toEntityId: maybeLocalToTriple ? EntityId(maybeLocalToTriple.value.value) : r.toEntity.id,
       };
     });
 
     // @TODO: Merge the above triples into the remote relations
-    // @TODO: Return both the remote relations and the local relations
 
     // Get all relations where the fromEntityId is the same as the entityPageId
     // We now have all local triples for any relation pointing from the entityPageId
