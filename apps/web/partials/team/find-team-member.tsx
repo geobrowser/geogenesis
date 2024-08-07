@@ -11,6 +11,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useToast } from '~/core/hooks/use-toast';
 import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/io/dto/entities';
+import { TypeId } from '~/core/io/schema';
 import { Services } from '~/core/services';
 import { Entities } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
@@ -187,7 +188,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
       ]);
 
       if (person) {
-        if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
+        if (types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
           const avatar = Entities.avatar(person?.triples);
           setAvatar(avatar);
           setName(Entities.name(person?.triples ?? []));
