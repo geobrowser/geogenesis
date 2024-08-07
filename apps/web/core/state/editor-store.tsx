@@ -39,16 +39,6 @@ interface RelationWithBlock {
   block: Entity;
 }
 
-// A simple relation is the bare-bones metadata we need to merge remote and local
-// relations.
-interface SimpleRelation {
-  relationId: EntityId;
-  typeOfId: TypeId;
-  index: string;
-  fromEntityId: EntityId;
-  toEntityId: EntityId;
-}
-
 const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Relation[]) => {
   return atom(get => {
     const localTriples = get(localTriplesAtom);
@@ -71,7 +61,7 @@ const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Re
     );
 
     const locallyCreatedRelations = Object.entries(locallyCreatedRelationTriplesByRelationId)
-      .map(([relationId, relationTriples]): SimpleRelation | null => {
+      .map(([relationId, relationTriples]): Relation | null => {
         const typeOfTriple = relationTriples.find(t => t.attributeId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
         const indexTriple = relationTriples.find(t => t.attributeId === SYSTEM_IDS.RELATION_INDEX);
         const fromEntityTriple = relationTriples.find(t => t.attributeId === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
@@ -82,16 +72,24 @@ const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Re
         }
 
         return {
-          typeOfId: TypeId(typeOfTriple.value.value),
+          typeOf: { id: EntityId(typeOfTriple.value.value), name: null },
           index: indexTriple.value.value,
-          relationId: EntityId(relationId),
-          fromEntityId: EntityId(fromEntityTriple.value.value),
-          toEntityId: EntityId(toEntityTriple.value.value),
+          id: EntityId(relationId),
+          fromEntity: {
+            id: EntityId(fromEntityTriple.value.value),
+            name: fromEntityTriple.value.type === 'ENTITY' ? fromEntityTriple.value.name : null,
+          },
+          toEntity: {
+            id: EntityId(toEntityTriple.value.value),
+            name: toEntityTriple.value.type === 'ENTITY' ? toEntityTriple.value.name : null,
+            renderableType: 'DEFAULT',
+            value: toEntityTriple.value.type === 'ENTITY' ? toEntityTriple.value.name : null,
+          },
         };
       })
       .filter(r => r !== null)
       // Only return relations coming from the entity page id
-      .filter(r => r.fromEntityId === entityPageId);
+      .filter(r => r.fromEntity.id === entityPageId);
     /***********************************************************************************************/
 
     /***********************************************************************************************
@@ -122,7 +120,7 @@ const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Re
       remoteRelationsThatWerentDeletedIds.has(EntityId(t.entityId))
     );
 
-    const activeRemoteRelations = remoteRelationsThatWerentDeleted.map((r): SimpleRelation => {
+    const activeRemoteRelations = remoteRelationsThatWerentDeleted.map((r): Relation => {
       const maybeLocalTypeOfTriple = localTriplesForActiveRemoteRelations.find(
         t => t.attributeId === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE && t.entityId === r.id
       );
@@ -140,11 +138,38 @@ const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Re
       );
 
       return {
-        relationId: r.id,
-        typeOfId: maybeLocalTypeOfTriple ? TypeId(maybeLocalTypeOfTriple.value.value) : TypeId(r.typeOf.id),
+        id: r.id,
+        typeOf: {
+          id: maybeLocalTypeOfTriple ? EntityId(maybeLocalTypeOfTriple.value.value) : EntityId(r.typeOf.id),
+          name: maybeLocalTypeOfTriple
+            ? maybeLocalTypeOfTriple.value.type === 'ENTITY'
+              ? maybeLocalTypeOfTriple.value.name
+              : r.typeOf.name
+            : r.typeOf.name,
+        },
         index: maybeLocalIndexTriple ? maybeLocalIndexTriple.value.value : r.index,
-        fromEntityId: maybeLocalFromTriple ? EntityId(maybeLocalFromTriple.value.value) : r.fromEntity.id,
-        toEntityId: maybeLocalToTriple ? EntityId(maybeLocalToTriple.value.value) : r.toEntity.id,
+        fromEntity: {
+          id: maybeLocalFromTriple ? EntityId(maybeLocalFromTriple.value.value) : r.fromEntity.id,
+          name: maybeLocalFromTriple
+            ? maybeLocalFromTriple.value.type === 'ENTITY'
+              ? maybeLocalFromTriple.value.name
+              : r.typeOf.name
+            : r.typeOf.name,
+        },
+        toEntity: {
+          id: maybeLocalToTriple ? EntityId(maybeLocalToTriple.value.value) : r.fromEntity.id,
+          renderableType: 'DEFAULT',
+          value: maybeLocalToTriple
+            ? maybeLocalToTriple.value.type === 'ENTITY'
+              ? maybeLocalToTriple.value.name
+              : r.typeOf.name
+            : r.typeOf.name,
+          name: maybeLocalToTriple
+            ? maybeLocalToTriple.value.type === 'ENTITY'
+              ? maybeLocalToTriple.value.name
+              : r.typeOf.name
+            : r.typeOf.name,
+        },
       };
     });
 
@@ -173,17 +198,17 @@ const createMergedBlockRelationsAtom = (
     // 1. Group the RelationWithBlock entities with their block
     const relationsWithBlocks = relationsForEntityId
       .map(r => {
-        const block = blocksByBlockId.get(r.toEntityId);
+        const block = blocksByBlockId.get(r.toEntity.id);
 
         if (!block) {
           return null;
         }
 
         return {
-          typeOfId: r.typeOfId,
+          typeOfId: TypeId(r.typeOf.id),
           index: r.index,
           block,
-          relationId: r.relationId,
+          relationId: r.id,
         };
       })
       .filter(b => b !== null);
