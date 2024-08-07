@@ -148,11 +148,6 @@ const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Re
       };
     });
 
-    // @TODO: Merge the above triples into the remote relations
-
-    // Get all relations where the fromEntityId is the same as the entityPageId
-    // We now have all local triples for any relation pointing from the entityPageId
-
     return [...locallyCreatedRelations, ...activeRemoteRelations];
   });
 };
