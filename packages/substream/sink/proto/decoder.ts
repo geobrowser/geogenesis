@@ -132,31 +132,6 @@ function decodeImportEdit(data: Buffer): Effect.Effect<ParsedImportEdit | null> 
           o => o.type === 'SET_TRIPLE' && (o.triple as unknown as any)?.value?.type !== 'FILTER_ME_OUT'
         );
 
-        // const hasEmptyValueOps = parseResult.data.ops.filter(
-        //   o =>
-        //     o.type === 'SET_TRIPLE' &&
-        //     // @ts-expect-error
-        //     o.triple.value &&
-        //     o.triple.attribute === 'c1f4cb6fece44c3ca447ab005b756972' &&
-        //     // @ts-expect-error
-        //     o.triple?.value?.value === ''
-        // );
-
-        // if (hasEmptyValueOps.length > 0) {
-        //   console.log('to type ops', {
-        //     ops: JSON.stringify(hasEmptyValueOps, null, 2),
-        //     editId: edit.id,
-        //     editName: edit.name,
-        //   });
-        // }
-
-        // console.log(
-        //   'ops with thing',
-        //   parseResult.data.ops.filter(
-        //     o => o.type === 'SET_TRIPLE' && o.triple.attribute === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE
-        //   )
-        // );
-
         parseResult.data.ops = validOps;
 
         return parseResult.data;

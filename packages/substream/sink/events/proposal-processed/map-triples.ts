@@ -18,13 +18,6 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
   return squashedOps.map((op): OpWithCreatedBy => {
     const triple = getTripleFromOp(op, edit.spaceId, block);
 
-    if (
-      triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE &&
-      triple.entity_value_id === SYSTEM_IDS.SCHEMA_TYPE
-    ) {
-      console.log('found relation type attribute with value of Type', triple);
-    }
-
     if (!triple.value_type) {
       console.log('invalid triple', {
         triple,
