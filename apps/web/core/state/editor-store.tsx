@@ -372,7 +372,7 @@ export function useEditorStore() {
   // Helper function to create or update the block IDs on an entity
   // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
   // @TODO(relations): fix
-  const upsertBlocksTriple = React.useCallback(
+  const upsertBlocksRelations = React.useCallback(
     async (newBlockIds: string[]) => {
       const prevBlockIds = blockIds;
 
@@ -607,8 +607,8 @@ export function useEditorStore() {
   // @TODO: We should instead only execute functions for each block type, instead of
   // executing _every_ function for every block type.
   const updateEditorBlocks = React.useCallback(
-    (editor: Editor) => {
-      const { content = [] } = editor.getJSON();
+    (getContent: Editor['getJSON']) => {
+      const { content = [] } = getContent();
 
       const populatedContent = content.filter(node => {
         const isNonParagraph = node.type !== 'paragraph';
@@ -623,13 +623,19 @@ export function useEditorStore() {
       });
 
       const newBlockIds = populatedContent.map(node => getNodeId(node));
-      upsertBlocksTriple(newBlockIds);
+      upsertBlocksRelations(newBlockIds);
 
+      // @TODO: Handle each type here instead of calling every function and returning early
+      // if the type is invalid
       populatedContent.forEach(node => {
         createTableBlockMetadata(node);
+
+        // @TODO: Block type triple should be a relation?
         createBlockTypeTriple(node);
         upsertBlockNameTriple(node);
         upsertBlockMarkdownTriple(node);
+
+        // @TODO: Block image triple should be a relation?
         createBlockImageTriple(node);
       });
     },
@@ -637,7 +643,7 @@ export function useEditorStore() {
       createBlockImageTriple,
       createBlockTypeTriple,
       createTableBlockMetadata,
-      upsertBlocksTriple,
+      upsertBlocksRelations,
       upsertBlockMarkdownTriple,
       upsertBlockNameTriple,
     ]

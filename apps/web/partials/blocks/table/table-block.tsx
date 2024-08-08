@@ -63,13 +63,12 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     name: Entities.name(column.triples),
   }));
 
-  // @TODO: Collections
   const shownColumnTriples = [
     ...(blockEntity?.triples ?? []).filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS),
   ];
 
   const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.value) ?? []), SYSTEM_IDS.NAME];
-  const { placeholderText, placeholderImage } = getPlaceholders(blockEntity);
+  // const { placeholderText, placeholderImage } = getPlaceholders(blockEntity);
   const viewTriple = (blockEntity?.triples ?? []).find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
   /**
