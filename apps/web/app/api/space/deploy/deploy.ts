@@ -9,7 +9,7 @@ import {
 import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
-import { Op, SYSTEM_IDS, VotingMode, createImageEntityOps } from '@geogenesis/sdk';
+import { Op, SYSTEM_IDS, VotingMode, createImageEntityOps, createRelationship } from '@geogenesis/sdk';
 import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
@@ -163,8 +163,8 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
   if (type === 'default' || type === 'personal') {
     ops.push(
       Ops.create({
-        entityId: newEntityId,
-        attributeId: SYSTEM_IDS.NAME,
+        entity: newEntityId,
+        attribute: SYSTEM_IDS.NAME,
         value: {
           type: 'TEXT',
           value: spaceName,
@@ -173,17 +173,14 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
     );
 
     ops.push(
-      Ops.create({
-        entityId: newEntityId,
-        attributeId: SYSTEM_IDS.TYPES,
-        value: {
-          type: 'ENTITY',
-          value: SYSTEM_IDS.SPACE_CONFIGURATION,
-        },
+      ...createRelationship({
+        fromId: newEntityId,
+        toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+        relationTypeId: SYSTEM_IDS.SPACE_CONFIGURATION,
       })
     );
 
-    // @TODO: Do we add the Person type? That would mean this has to be a collection
+    // @TODO: Do we add the Person type? That would mean this has to be a relation
   }
 
   // @TODO: Clone entity for the other governance types
@@ -210,8 +207,8 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
     // Creates the triple pointing to the image entity
     ops.push(
       Ops.create({
-        entityId: newEntityId,
-        attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+        entity: newEntityId,
+        attribute: SYSTEM_IDS.AVATAR_ATTRIBUTE,
         value: {
           type: 'ENTITY',
           value: typeOp.triple.entity,

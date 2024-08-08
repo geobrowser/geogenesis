@@ -3,7 +3,6 @@ import { createGeoId } from '../id';
 import { SYSTEM_IDS } from '../system-ids';
 
 interface CreateCollectionItemArgs {
-  spaceId: string; // 0x...
   fromId: string; // uuid
   toId: string; // uuid
   relationTypeId: string; // uuid
