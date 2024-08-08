@@ -206,13 +206,10 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
 
     // Creates the triple pointing to the image entity
     ops.push(
-      Ops.create({
-        entity: newEntityId,
-        attribute: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-        value: {
-          type: 'ENTITY',
-          value: typeOp.triple.entity,
-        },
+      ...createRelationship({
+        fromId: newEntityId,
+        toId: typeOp.triple.entity, // Set the avatar relation to point to the entity id of the new entity
+        relationTypeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
       })
     );
   }
