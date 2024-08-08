@@ -23,8 +23,6 @@ import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
 
-import { cachedFetchEntity } from './cached-fetch-entity';
-
 interface Props {
   params: { id: string; entityId: string };
   searchParams: {

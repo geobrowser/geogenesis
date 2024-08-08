@@ -6,7 +6,6 @@ import * as React from 'react';
 import { Subgraph } from '~/core/io';
 import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
-import { fetchEntity } from '~/core/io/subgraph';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
 import { EditorProvider } from '~/core/state/editor-store';
