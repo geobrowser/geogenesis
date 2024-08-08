@@ -33,7 +33,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
-  const entityId = decodeURIComponent(params.entityId);
+  const entityId = params.entityId;
 
   const entity = await cachedFetchEntity(entityId);
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);

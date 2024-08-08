@@ -80,7 +80,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
   const send = useEditEvents({
     context: {
-      entityId: decodeURIComponent(id),
+      entityId: id,
       spaceId,
       entityName: name,
     },
