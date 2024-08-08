@@ -151,6 +151,7 @@ export function useEntityTable() {
       // Merge all local and server triples
       const mergedTriples = Triples.merge(allActions, relationTypeEntities);
 
+      // @TODO(relations)
       const relationTypes = mergedTriples.filter(
         t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'ENTITY'
       );

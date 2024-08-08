@@ -98,7 +98,7 @@ export function useEntityPageStore() {
   /*
   In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to
   persist the Attribute field. Filtering out those entities here.
-  // @TODO: typeTriple singular
+  // @TODO(relations)
   */
   const typeTriples = React.useMemo(() => {
     return triples.filter(

@@ -44,6 +44,7 @@ function types(triples: ITriple[], currentSpace?: string): SubstreamType[] {
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
   const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
 
+  // @TODO(relations): Getting the types should work with relations
   return Object.entries(groupedTypeTriples)
     .flatMap(([, triples]) => {
       if (triples.length === 1) {
@@ -234,6 +235,7 @@ export function cover(triples: ITriple[] | undefined): string | null {
 export const getParentEntityId = (triples: ITriple[] = []) => {
   const parentEntityTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY);
 
+  // @TODO(relations)? Or are we using the normal entity value here since this is a block?
   const parentEntityId = parentEntityTriple?.value.type === 'ENTITY' ? parentEntityTriple.value.value : null;
 
   return parentEntityId;

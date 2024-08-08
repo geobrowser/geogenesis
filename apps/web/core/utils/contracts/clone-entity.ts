@@ -68,6 +68,8 @@ export const cloneEntity = async (options: Options) => {
     }
   });
 
+  // @TODO(relations)
+  // Clon relations and blocks
   // const { blockCollectionItems, blockIdsTriple } = getCollectionItemsFromBlocksTriple(oldEntity);
 
   // if (blockIdsTriple) {

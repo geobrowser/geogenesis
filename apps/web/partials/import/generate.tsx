@@ -128,6 +128,7 @@ export const Generate = ({ spaceId }: GenerateProps) => {
     const generateActions = async () => {
       const attributes = Object.keys(entityAttributes);
 
+      // @TODO(relations)
       const relationAttributes = Object.values(entityAttributes).filter(({ type }) => type === 'ENTITY');
       const relatedEntityIdsSet: Set<string> = new Set();
 
