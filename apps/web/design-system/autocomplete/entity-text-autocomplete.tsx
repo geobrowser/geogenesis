@@ -10,7 +10,6 @@ import { useRef } from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
@@ -55,8 +54,8 @@ export function EntityTextAutocomplete({
   const itemIdsSet = new Set(alreadySelectedIds);
   const { spaces } = useSpaces();
 
-  const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
-  const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
+  // const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
+  // const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
@@ -97,25 +96,26 @@ export function EntityTextAutocomplete({
       });
     }
 
-    if (relationValueTypesForAttribute) {
-      relationValueTypesForAttribute.forEach(type => {
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
-            entityName: query,
-            attributeName: 'Types',
-            value: {
-              type: 'ENTITY',
-              value: type.typeId,
-              name: type.typeName,
-            },
-          },
-          spaceId
-        );
-      });
-    }
+    // @TODO(relations): Fix – Types are relations and not triples now.
+    // if (relationValueTypesForAttribute) {
+    //   relationValueTypesForAttribute.forEach(type => {
+    //     upsert(
+    //       {
+    //         type: 'SET_TRIPLE',
+    //         entityId: newEntityId,
+    //         attributeId: SYSTEM_IDS.TYPES,
+    //         entityName: query,
+    //         attributeName: 'Types',
+    //         value: {
+    //           type: 'ENTITY',
+    //           value: type.typeId,
+    //           name: type.typeName,
+    //         },
+    //       },
+    //       spaceId
+    //     );
+    //   });
+    // }
 
     onDone({ id: newEntityId, name: query });
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);

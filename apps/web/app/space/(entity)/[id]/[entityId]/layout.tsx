@@ -80,7 +80,12 @@ export default async function ProfileLayout({ children, params }: Props) {
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider id={entityId} spaceId={params.id} initialTriples={profile.triples}>
+      <EntityStoreProvider
+        id={entityId}
+        spaceId={params.id}
+        initialTriples={profile.triples}
+        initialRelations={profile.relationsOut}
+      >
         <EditorProvider
           id={profile.id}
           spaceId={params.id}

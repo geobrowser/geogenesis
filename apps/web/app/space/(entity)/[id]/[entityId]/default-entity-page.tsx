@@ -57,7 +57,12 @@ export default async function DefaultEntityPage({
   const attributes = JSON.parse(decodeURI(encodedAttributes));
 
   return (
-    <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
+    <EntityStoreProvider
+      id={props.id}
+      spaceId={props.spaceId}
+      initialTriples={props.triples}
+      initialRelations={props.relationsOut}
+    >
       <EditorProvider
         id={props.id}
         spaceId={props.spaceId}

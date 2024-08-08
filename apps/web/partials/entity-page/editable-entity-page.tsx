@@ -22,8 +22,6 @@ import { DeletableChipButton } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
-import { CogSmall } from '~/design-system/icons/cog-small';
-import { Collection } from '~/design-system/icons/collection';
 import { Create } from '~/design-system/icons/create';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
@@ -32,11 +30,9 @@ import { Text as TextIcon } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
 import { Url } from '~/design-system/icons/url';
 import { SelectEntity } from '~/design-system/select-entity';
-import { SelectEntityDialog } from '~/design-system/select-entity-dialog';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
-import { AttributeConfigurationMenu } from './attribute-configuration-menu';
 import { sortEntityPageTriples } from './entity-page-utils';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
@@ -54,13 +50,7 @@ type AttributeId = string;
 type AttributeValue = string;
 
 export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, attributes }: Props) {
-  const {
-    triples: localTriples,
-    schemaTriples,
-    hideSchema,
-    hiddenSchemaIds,
-    attributeRelationTypes,
-  } = useEntityPageStore();
+  const { triples: localTriples, schemaTriples, hideSchema, hiddenSchemaIds } = useEntityPageStore();
 
   const { remove, upsert, upsertMany } = useActionsStore();
 
@@ -209,7 +199,6 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
             send={send}
             hideSchema={hideSchema}
             hiddenSchemaIds={hiddenSchemaIds}
-            allowedTypes={attributeRelationTypes}
             spaceId={spaceId}
           />
         </div>
@@ -231,7 +220,6 @@ function EntityAttributes({
   send,
   hideSchema,
   hiddenSchemaIds,
-  allowedTypes,
   spaceId,
 }: {
   entityId: string;
@@ -241,7 +229,6 @@ function EntityAttributes({
   name: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
-  allowedTypes: RelationValueTypesByAttributeId;
   spaceId: string;
 }) {
   /**
@@ -513,8 +500,6 @@ function EntityAttributes({
         );
       case 'ENTITY':
         if (isEmptyEntity) {
-          const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : undefined;
-
           return (
             <div data-testid={triple.placeholder ? 'placeholder-select-entity' : 'select-entity'} className="w-full">
               <SelectEntity
@@ -524,7 +509,6 @@ function EntityAttributes({
                     addEntityValue(attributeId, result);
                   }
                 }}
-                allowedTypes={relationTypes}
                 wrapperClassName="contents"
                 inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
                 resultsClassName="absolute z-[1000]"
@@ -593,7 +577,6 @@ function EntityAttributes({
         const isEmptyEntity = triple.value.type === 'ENTITY' && !triple.value.value;
         const attributeName = triple.attributeName;
         const isPlaceholder = triple.placeholder;
-        const relationTypes = allowedTypes[attributeId]?.length > 0 ? allowedTypes[attributeId] : [];
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
@@ -603,7 +586,6 @@ function EntityAttributes({
                 placeholder="Add attribute..."
                 onDone={result => addAttribute(result, triple)}
                 alreadySelectedIds={tripleAttributeIds}
-                allowedTypes={relationTypes}
                 attributeId={attributeId}
               />
             ) : (
@@ -615,13 +597,13 @@ function EntityAttributes({
             <div className="flex flex-wrap items-center gap-1">
               {tripleToEditableField(attributeId, triple, isEmptyEntity)}
               <div className="absolute right-0 top-6 flex items-center gap-1">
-                {isEntity ? (
+                {/* {isEntity ? (
                   <AttributeConfigurationMenu
                     trigger={<SquareButton icon={<CogSmall />} />}
                     attributeId={attributeId}
                     attributeName={attributeName}
                   />
-                ) : null}
+                ) : null} */}
                 {!isPlaceholder && (
                   <>
                     <TripleTypeDropdown

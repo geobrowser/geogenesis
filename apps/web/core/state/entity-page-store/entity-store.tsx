@@ -4,17 +4,16 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
-import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
-import { useMergedData } from '~/core/hooks/use-merged-data';
+import { useRelations } from '~/core/merged/relations';
 import { useTriples } from '~/core/merged/triples';
-import { Triple as ITriple, ValueTypeId } from '~/core/types';
+import { Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 
 import { activeTriplesForEntityIdSelector } from '../actions-store/actions-store';
 import { useEntityStoreInstance } from './entity-store-provider';
 
-export const createInitialSchemaTriples = (spaceId: string, entityId: string): ITriple[] => {
+export const createInitialSchemaTriples = (spaceId: string, entityId: string): Triple[] => {
   const nameTriple = Triples.withId({
     space: spaceId,
     entityId,
@@ -70,13 +69,10 @@ export const createInitialSchemaTriples = (spaceId: string, entityId: string): I
   return [nameTriple, descriptionTriple, typeTriple];
 };
 
-const DEFAULT_PAGE_SIZE = 100;
+// const DEFAULT_PAGE_SIZE = 100;
 
 export function useEntityPageStore() {
-  const { spaceId, id, initialTriples } = useEntityStoreInstance();
-  const merged = useMergedData();
-
-  const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: id });
+  const { spaceId, id, initialTriples, initialRelations } = useEntityStoreInstance();
 
   const [hiddenSchemaIds, setHiddenSchemaIds] = React.useState<string[]>([]);
   const [schemaTriples, setSchemaTriples] = React.useState(createInitialSchemaTriples(spaceId, id));
@@ -91,17 +87,27 @@ export function useEntityPageStore() {
     )
   );
 
+  const relations = useRelations(
+    React.useMemo(
+      () => ({
+        mergeWith: initialRelations,
+        selector: r => r.fromEntity.id === id,
+      }),
+      [initialRelations, id]
+    )
+  );
+
   const name = React.useMemo(() => {
     return Entities.name(triples) ?? '';
   }, [triples]);
 
   /*
-  In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to
-  persist the Attribute field. Filtering out those entities here.
-  // @TODO(relations)
-  */
+   * In the edit-events reducer, deleting the last entity of a triple will create a mock entity with no value to
+   * persist the Attribute field. Filtering out those entities here.
+   */
   const typeTriples = React.useMemo(() => {
     return triples.filter(
+      // @TODO(relations): fix
       triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.type === 'ENTITY' && triple.value.value !== ''
     );
   }, [triples]);
@@ -205,6 +211,7 @@ export function useEntityPageStore() {
 
   return {
     triples,
+    relations,
     typeTriples,
 
     name,
@@ -214,7 +221,5 @@ export function useEntityPageStore() {
     schemaTriples,
     hideSchema,
     hiddenSchemaIds,
-
-    attributeRelationTypes,
   };
 }

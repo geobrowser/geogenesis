@@ -27,6 +27,8 @@ interface Props {
   trigger: React.ReactNode;
 }
 
+// @TODO(relations): Right now this configuration menu is disabled in favor of a future
+// configuration flow oriented around relations instead of entity values.
 export function AttributeConfigurationMenu({ trigger, attributeId, attributeName }: Props) {
   const [open, setOpen] = React.useState(false);
 

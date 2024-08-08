@@ -64,6 +64,8 @@ export function useConfiguredAttributeRelationTypes({
     queryFn: () =>
       // 1. Fetch all the triples for the entity
       // 2. Filter out the triples that are not relation value types
+      // @TODO(relations): The configured value types are relations and not triples. IMO configuration
+      // should happen from a relation entity and not any entity that has that relation type.
       subgraph.fetchTriples({
         query: '',
         skip: 0,

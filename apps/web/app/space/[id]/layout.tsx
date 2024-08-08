@@ -251,7 +251,12 @@ export default async function Layout({ children, params }: Props) {
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
+      <EntityStoreProvider
+        id={props.id}
+        spaceId={props.spaceId}
+        initialTriples={props.triples}
+        initialRelations={props.relationsOut}
+      >
         <EditorProvider
           id={props.id}
           spaceId={props.spaceId}
@@ -311,8 +316,6 @@ const getData = async (spaceId: string) => {
     redirect(`/space/${spaceId}/entities`);
   }
 
-  const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
-
   const blockIds = entity?.relationsOut
     .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
     ?.map(r => r.toEntity.id);
@@ -320,10 +323,11 @@ const getData = async (spaceId: string) => {
   const blocks = blockIds ? await fetchBlocks(blockIds) : [];
 
   return {
-    triples: entity?.triples ?? [],
+    triples: entity.triples,
+    relationsOut: entity.relationsOut,
     id: entity.id,
-    name: entity?.name ?? spaceName ?? '',
-    description: Entities.description(entity?.triples ?? []),
+    name: entity.name,
+    description: Entities.description(entity.triples),
     spaceId,
 
     blockRelations: entity.relationsOut,

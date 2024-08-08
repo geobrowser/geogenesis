@@ -52,8 +52,6 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 import { TextButton } from '~/design-system/text-button';
 
-import { AttributeConfigurationMenu } from '~/partials/entity-page/attribute-configuration-menu';
-
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
 import { editingColumnsAtom } from '~/atoms';
 
@@ -653,13 +651,13 @@ function SchemaAttributes() {
                 defaultValue={attributeEntity.name ?? ''}
                 onBlur={e => onChangeAttributeName(e.currentTarget.value, attributeEntity, nameTripleForAttribute)}
               />
-              {valueTypeId === SYSTEM_IDS.RELATION && (
+              {/* {valueTypeId === SYSTEM_IDS.RELATION && (
                 <AttributeConfigurationMenu
                   trigger={<Cog />}
                   attributeId={attributeEntity.id}
                   attributeName={attributeEntity.name}
                 />
-              )}
+              )} */}
               <AttributeRowContextMenu
                 onRemoveAttribute={() => onRemoveAttribute(attributeEntity, nameTripleForAttribute)}
               />
