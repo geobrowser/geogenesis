@@ -1,13 +1,14 @@
 'use client';
 
 import BulletList from '@tiptap/extension-bullet-list';
+import Document from '@tiptap/extension-document';
 import Gapcursor from '@tiptap/extension-gapcursor';
 import HardBreak from '@tiptap/extension-hard-break';
 import Image from '@tiptap/extension-image';
 import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
+import Text from '@tiptap/extension-text';
 import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
 import cx from 'classnames';
 
 import * as React from 'react';
@@ -35,15 +36,19 @@ interface Props {
 }
 
 export const tiptapExtensions = [
-  StarterKit.configure({
-    paragraph: false,
-    heading: false,
-    code: false,
-    hardBreak: false,
-    gapcursor: false,
-    bulletList: false,
-    listItem: false,
-  }),
+  Document,
+  Text,
+  // StarterKit.configure({
+  //   // We're probably only using the Document and Text from the starterkit. Might
+  //   // save us bytes to use it directly instead of through the kit.
+  //   paragraph: false,
+  //   heading: false,
+  //   code: false,
+  //   hardBreak: false,
+  //   gapcursor: false,
+  //   bulletList: false,
+  //   listItem: false,
+  // }),
   ParagraphNode,
   HeadingNode,
   ConfiguredCommandExtension,
