@@ -4,7 +4,8 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
-import { EntityId, TypeId } from '~/core/io/schema';
+import { fetchBlocks } from '~/core/io/fetch-blocks';
+import { EntityId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
@@ -118,14 +119,11 @@ const getData = async (spaceId: string, entityId: string) => {
   const serverAvatarUrl = Entities.avatar(entity?.triples);
   const serverCoverUrl = Entities.cover(entity?.triples);
 
-  // @TODO: Abstract
   const blockIds = entity?.relationsOut
     .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
     ?.map(r => r.toEntity.id);
 
-  const blocks = (await Promise.all((blockIds ?? []).map(block => Subgraph.fetchEntity({ id: block })))).filter(
-    b => b !== null
-  );
+  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
 
   return {
     triples: entity?.triples ?? [],

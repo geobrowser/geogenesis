@@ -416,8 +416,6 @@ export function useEditorStore() {
             relationTypeId: SYSTEM_IDS.BLOCKS,
             fromId: entityId,
             toId: addedBlock,
-            // @TODO: index (what does this TODO mean???)
-            spaceId,
           });
 
           upsert(

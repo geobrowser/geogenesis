@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
+import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
@@ -317,7 +318,7 @@ const getData = async (spaceId: string) => {
     .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
     ?.map(r => r.toEntity.id);
 
-  const blocks = (await Promise.all((blockIds ?? []).map(block => fetchEntity({ id: block })))).filter(b => b !== null);
+  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
 
   return {
     triples: entity?.triples ?? [],
