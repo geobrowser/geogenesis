@@ -6,7 +6,7 @@ import { Relation } from '~/core/io/dto/entities';
 import { TypeId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple } from '~/core/types';
-import { NavUtils, groupBy } from '~/core/utils/utils';
+import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
 
 import { LinkableChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
@@ -104,7 +104,12 @@ function EntityRelations({ relations }: { relations: Relation[] }) {
               {relations.map(r => {
                 // @TODO: The type of the relation might be an image
                 if (r.toEntity.renderableType === 'IMAGE') {
-                  return <div>Hello world</div>;
+                  return (
+                    <ImageZoom
+                      key={`image-${relationId}-${r.toEntity.value}`}
+                      imageSrc={getImagePath(r.toEntity.value ?? '')}
+                    />
+                  );
                 }
 
                 return (
@@ -126,7 +131,6 @@ function EntityRelations({ relations }: { relations: Relation[] }) {
 
 const Triple = ({ triple }: { triple: ITriple }) => {
   if (!triple.value) {
-    console.log('triple', triple);
     return null;
   }
 

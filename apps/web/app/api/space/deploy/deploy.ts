@@ -176,7 +176,7 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
       ...createRelationship({
         fromId: newEntityId,
         toId: SYSTEM_IDS.SPACE_CONFIGURATION,
-        relationTypeId: SYSTEM_IDS.SPACE_CONFIGURATION,
+        relationTypeId: SYSTEM_IDS.TYPES,
       })
     );
 

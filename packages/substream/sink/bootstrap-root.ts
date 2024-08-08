@@ -234,7 +234,6 @@ const makeTypeRelations = () => {
       relationTypeId: SYSTEM_IDS.TYPES,
       fromId: typeEntityId,
       toId: SYSTEM_IDS.SCHEMA_TYPE,
-      spaceId: SYSTEM_IDS.ROOT_SPACE_ID,
     }).map(op =>
       getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, {
         blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
@@ -269,7 +268,6 @@ const makeTypeRelations = () => {
         relationTypeId: SYSTEM_IDS.ATTRIBUTES,
         fromId: typeId,
         toId: attributeId,
-        spaceId: SYSTEM_IDS.ROOT_SPACE_ID,
       }).map(op =>
         getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, {
           blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
