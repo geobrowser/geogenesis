@@ -28,7 +28,7 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
 
   const isEditing = useUserIsEditing(spaceId);
   const { remove } = useActionsStore();
-  const { triples, schemaTriples } = useEntityPageStore();
+  const { triples } = useEntityPageStore();
 
   const onCopyId = async () => {
     try {
@@ -41,8 +41,6 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
 
   const onDelete = () => {
     triples.forEach(t => remove(t, t.space));
-    schemaTriples.forEach(t => remove(t, t.space));
-
     onMenuOpenChange(false);
   };
 

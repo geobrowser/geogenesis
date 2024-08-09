@@ -12,7 +12,7 @@ import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
-import { useActionsStore } from '../hooks/use-actions-store';
+import { useWriteOps } from '../database/write';
 import { Images } from '../utils/images';
 
 export type EditEvent =
@@ -168,9 +168,9 @@ export type EditEvent =
     };
 
 interface EditApi {
-  upsertMany: ReturnType<typeof useActionsStore>['upsertMany'];
-  upsert: ReturnType<typeof useActionsStore>['upsert'];
-  remove: ReturnType<typeof useActionsStore>['remove'];
+  upsertMany: ReturnType<typeof useWriteOps>['upsertMany'];
+  upsert: ReturnType<typeof useWriteOps>['upsert'];
+  remove: ReturnType<typeof useWriteOps>['remove'];
 }
 
 interface ListenerConfig {
@@ -191,7 +191,6 @@ const listener =
 
         return upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: name,
             attributeId: SYSTEM_IDS.NAME,
@@ -206,7 +205,6 @@ const listener =
 
         return upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: context.entityId,
             attributeId: SYSTEM_IDS.DESCRIPTION,
             attributeName: SYSTEM_IDS.DESCRIPTION,
@@ -224,7 +222,6 @@ const listener =
           {
             ...Triples.empty(context.spaceId, context.entityId),
             entityName: context.entityName,
-            type: 'SET_TRIPLE',
           },
           context.spaceId
         );
@@ -236,7 +233,6 @@ const listener =
         upsert(
           {
             ...valueTypeTriple,
-            type: 'SET_TRIPLE',
             value: {
               type: 'ENTITY',
               value: valueType,
@@ -271,7 +267,6 @@ const listener =
             upsert(
               {
                 ...firstTriple,
-                type: 'SET_TRIPLE',
                 value: { type: 'TEXT', value: migratedName },
               },
               context.spaceId
@@ -288,7 +283,6 @@ const listener =
           {
             ...triple,
             value,
-            type: 'SET_TRIPLE',
           },
           context.spaceId
         );
@@ -308,7 +302,6 @@ const listener =
           if (isLastEntity) {
             upsert(
               {
-                type: 'SET_TRIPLE',
                 entityId: triple.entityId,
                 entityName: triple.entityName,
                 attributeId: triple.attributeId,
@@ -343,7 +336,6 @@ const listener =
             entityName: context.entityName,
             attributeId: newAttribute.id,
             attributeName: newAttribute.name,
-            type: 'SET_TRIPLE',
             value: existingTriple ? existingTriple.value : oldTriple.value,
           },
           context.spaceId
@@ -363,7 +355,6 @@ const listener =
           return upsert(
             {
               ...existingTriple,
-              type: 'SET_TRIPLE',
               value: {
                 type: 'ENTITY',
                 value: linkedEntity.id,
@@ -378,7 +369,6 @@ const listener =
 
         return upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: entityName,
             attributeId: attribute.id,
@@ -399,7 +389,6 @@ const listener =
 
         return upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
             attributeId,
@@ -419,7 +408,6 @@ const listener =
 
         return upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
             attributeId,
@@ -439,7 +427,6 @@ const listener =
 
         return upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
             attributeId,
@@ -462,22 +449,14 @@ const listener =
           spaceId: context.spaceId,
         });
 
-        return upsertMany([
-          // Create the image entity
-          {
-            op: { ...typeTriple, type: 'SET_TRIPLE' },
-            spaceId: context.spaceId,
-          },
-          {
-            op: { ...urlTriple, type: 'SET_TRIPLE' },
-            spaceId: context.spaceId,
-          },
+        return upsertMany(
+          [
+            // Create the image entity
+            typeTriple,
+            urlTriple,
 
-          // Set the image entity reference on the current entity
-          {
-            spaceId: context.spaceId,
-            op: {
-              type: 'SET_TRIPLE',
+            // Set the image entity reference on the current entity
+            {
               entityId: context.entityId,
               entityName: context.entityName,
               attributeId,
@@ -488,14 +467,14 @@ const listener =
                 image: urlTriple.value.value,
               },
             },
-          },
-        ]);
+          ],
+          context.spaceId
+        );
       }
       case 'CREATE_ENTITY_TRIPLE': {
         const { attributeId, attributeName } = event.payload;
         return upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
             attributeId,
@@ -514,7 +493,6 @@ const listener =
 
         return upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: context.entityId,
             entityName: context.entityName,
             attributeId,
@@ -565,10 +543,10 @@ const listener =
           value: { value: SYSTEM_IDS.TEXT, type: 'ENTITY', name: 'Text' },
         });
 
-        upsert({ ...newAttributeNameTriple, type: 'SET_TRIPLE' }, context.spaceId);
-        upsert({ ...newAttributeTriple, type: 'SET_TRIPLE' }, context.spaceId);
-        upsert({ ...newValueTypeTriple, type: 'SET_TRIPLE' }, context.spaceId);
-        return upsert({ ...newTypeTriple, type: 'SET_TRIPLE' }, context.spaceId);
+        return upsertMany(
+          [newAttributeNameTriple, newAttributeTriple, newValueTypeTriple, newTypeTriple],
+          context.spaceId
+        );
       }
       case 'UPSERT_TRIPLE_VALUE': {
         const { value, triple } = event.payload;
@@ -576,7 +554,6 @@ const listener =
         return upsert(
           {
             ...triple,
-            type: 'SET_TRIPLE',
             value,
           },
           context.spaceId
@@ -594,7 +571,6 @@ const listener =
         return upsert(
           {
             ...triple,
-            type: 'SET_TRIPLE',
             value: {
               type: 'IMAGE',
               value: createGeoId(),

@@ -23,6 +23,6 @@ export function useRelations(args: UseRelationsArgs) {
   return useAtomValue(React.useMemo(() => makeLocalActionsAtomWithSelector(args), [args]));
 }
 
-export function getTriples(args: UseRelationsArgs) {
+export function getRelations(args: UseRelationsArgs) {
   return store.get(makeLocalActionsAtomWithSelector(args));
 }
