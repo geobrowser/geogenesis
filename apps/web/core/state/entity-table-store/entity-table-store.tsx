@@ -16,7 +16,6 @@ import { AppEntityValue, Column, GeoType, Triple as TripleType, ValueType as Tri
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triples } from '~/core/utils/triples';
 
-import { useLocalStore } from '../local-store';
 import { useEntityTableStoreInstance } from './entity-table-store-provider';
 
 export const DEFAULT_PAGE_SIZE = 10;
@@ -35,7 +34,6 @@ export interface TableBlockFilter {
 export function useEntityTable() {
   const { subgraph } = Services.useServices();
   const { space, initialSelectedType, spaceId } = useEntityTableStoreInstance();
-  const { triples } = useLocalStore();
   const merged = useMergedData();
   const { allActions, upsert } = useActionsStore();
 
@@ -176,8 +174,9 @@ export function useEntityTable() {
   });
 
   const unpublishedColumns = React.useMemo(() => {
-    return EntityTable.columnsFromLocalChanges(triples, [], selectedType?.entityId);
-  }, [selectedType?.entityId, triples]);
+    // @TODO(relations)
+    return EntityTable.columnsFromLocalChanges([], [], selectedType?.entityId);
+  }, [selectedType?.entityId]);
 
   const setPage = React.useCallback(
     (page: number | 'next' | 'previous') => {

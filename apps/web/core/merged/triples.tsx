@@ -19,7 +19,8 @@ const makeLocalActionsAtomWithSelector = ({ selector, mergeWith = [] }: UseTripl
       return isDeletedSelector(t) && (selector ? selector(t) : true);
     });
 
-    return Triples.merge(localTriples, mergeWith);
+    const merged = Triples.merge(localTriples, mergeWith);
+    return Triples.withLocalNames(merged, localTriples);
   });
 };
 

@@ -2,13 +2,13 @@ import { A, G, pipe } from '@mobily/ts-belt';
 import { QueryClient } from '@tanstack/react-query';
 
 import { Subgraph } from '~/core/io';
-import { useLocalStore } from '~/core/state/local-store';
 import { Column, Triple as ITriple, OmitStrict, Row, Value } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triples } from '~/core/utils/triples';
 
 import { TableBlockSdk } from '../blocks-sdk';
+import { mergeEntityAsync } from '../database/entities';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { fetchColumns } from '../io/fetch-columns';
 import { fetchRows } from '../io/fetch-rows';
@@ -16,7 +16,6 @@ import { EntityId } from '../io/schema';
 
 interface MergedDataSourceOptions {
   store: ReturnType<typeof useActionsStore>;
-  localStore: ReturnType<typeof useLocalStore>;
   subgraph: Subgraph.ISubgraph;
   cache: QueryClient;
 }
@@ -52,12 +51,10 @@ interface IMergedDataSource
 export class Merged implements IMergedDataSource {
   private cache: QueryClient;
   private store: ReturnType<typeof useActionsStore>;
-  private localStore: ReturnType<typeof useLocalStore>;
   private subgraph: Subgraph.ISubgraph;
 
-  constructor({ store, localStore, subgraph, cache }: MergedDataSourceOptions) {
+  constructor({ store, subgraph, cache }: MergedDataSourceOptions) {
     this.store = store;
-    this.localStore = localStore;
     this.subgraph = subgraph;
     this.cache = cache;
   }
@@ -188,7 +185,7 @@ export class Merged implements IMergedDataSource {
   columns = async (options: Parameters<typeof fetchColumns>[0]) => {
     const serverColumns = await fetchColumns(options);
 
-    return EntityTable.columnsFromLocalChanges(this.localStore.triples, serverColumns, options.params.typeIds?.[0]);
+    return EntityTable.columnsFromLocalChanges(this.store.allActions, serverColumns, options.params.typeIds?.[0]);
   };
 
   rows = async (options: Parameters<typeof fetchRows>[0], columns: Column[], selectedTypeEntityId?: string) => {
@@ -213,11 +210,11 @@ export class Merged implements IMergedDataSource {
      * version of the name triple, so we need to fetch it along with any other triples the table
      * needs to render the columnSchema.
      */
-    const changedEntitiesIdsFromAnotherType = pipe(
-      this.localStore.entities,
-      A.filter(e => e.types.some(t => t.id === selectedTypeEntityId)),
-      A.map(t => t.id)
-    );
+    const allEntityIds = this.store.allActions.map(a => a.entityId);
+    const localMergedEntities = await Promise.all(allEntityIds.map(id => mergeEntityAsync(EntityId(id))));
+    const changedEntitiesIdsFromAnotherType = localMergedEntities
+      .filter(e => e.types.some(t => t.id === selectedTypeEntityId))
+      .map(e => e.id);
 
     // Fetch any entities that exist already remotely that have been changed locally
     // and have the selected type to make sure we have all of the triples necessary
