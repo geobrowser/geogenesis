@@ -28,6 +28,7 @@ interface IMergedDataSource
     | 'fetchEntity'
     | 'fetchProposals'
     | 'fetchTableRowEntities'
+    | 'fetchEntities'
     | 'fetchSpace'
     | 'fetchSpaces'
     | 'fetchProfile'
@@ -106,39 +107,6 @@ export class Merged implements IMergedDataSource {
     }
 
     return locallyFilteredTriples;
-  };
-
-  fetchEntities = async (options: Parameters<Subgraph.ISubgraph['fetchEntities']>[0]) => {
-    const networkEntities = await this.subgraph.fetchEntities(options);
-
-    // @TODO: Do local actions need to have filters applied to them? Right now we aren't doing
-    // this in our app code for local entities. This might mean that we render local entities that
-    // don't map to the selected filter.
-    const localEntities = pipe(
-      this.store.actions,
-      actions => Entities.mergeActionsWithEntities(actions, networkEntities),
-      A.filter(e => {
-        if (!G.isString(e.name)) {
-          return false;
-        }
-
-        // If the entity does not have the selected types don't return it.
-        if (options.typeIds && options.typeIds.length > 0) {
-          if (!e.types.some(t => options.typeIds?.includes(t.id))) return false;
-        }
-
-        const lowerName = e.name.toLowerCase();
-        const lowerQuery = options.query ? options.query.toLowerCase() : '';
-        return lowerName.startsWith(lowerQuery) || lowerName.includes(lowerQuery);
-      })
-    );
-
-    // We want to favor the local version of an entity if it exists on the network already.
-    const localEntityIds = new Set(localEntities.map(e => e.id));
-
-    // This will put the local entities first, and then the network entities that don't exist locally.
-    // This might not be the ideal UX.
-    return [...localEntities, ...networkEntities.filter(e => !localEntityIds.has(e.id))];
   };
 
   columns = async (options: Parameters<typeof fetchColumns>[0]) => {

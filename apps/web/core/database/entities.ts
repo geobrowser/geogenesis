@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { Entity, Relation } from '../io/dto/entities';
 import { EntityId, TypeId } from '../io/schema';
-import { fetchEntity } from '../io/subgraph';
+import { fetchEntities, fetchEntity } from '../io/subgraph';
 import { getRelations, useRelations } from '../merged/relations';
 import { getTriples, useTriples } from '../merged/triples';
 import { queryClient } from '../query-client';
@@ -157,10 +157,32 @@ export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> 
   return mergeEntity({ id, mergeWith: cachedEntity });
 }
 
-export async function mergeEntitiesAsync(ids: EntityId[]): Promise<EntityWithSchema[]> {
-  // @TODO: Fetch entities by ids
-  const cachedEntities = await Promise.all(ids.map(id => mergeEntityAsync(id)));
-  return cachedEntities.filter(e => e !== null);
+export async function mergeEntitiesAsync(args: Parameters<typeof fetchEntities>[0]): Promise<EntityWithSchema[]> {
+  const cachedEntities = await queryClient.fetchQuery({
+    queryKey: ['entities-for-merging', args],
+    queryFn: ({ signal }) => fetchEntities({ ...args, signal }),
+    staleTime: Infinity,
+  });
+
+  console.log('cachedEntities', cachedEntities);
+
+  const mergedEntities = cachedEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
+  return mergedEntities;
+
+  return mergedEntities.filter(e => {
+    if (e.name === null) {
+      return false;
+    }
+
+    // If the entity does not have the selected types don't return it.
+    if (args.typeIds && args.typeIds.length > 0) {
+      if (!e.types.some(t => args.typeIds?.includes(t.id))) return false;
+    }
+
+    const lowerName = e.name.toLowerCase();
+    const lowerQuery = args.query ? args.query.toLowerCase() : '';
+    return lowerName.startsWith(lowerQuery) || lowerName.includes(lowerQuery);
+  });
 }
 
 /**

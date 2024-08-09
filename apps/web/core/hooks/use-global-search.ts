@@ -9,10 +9,10 @@ import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 
+import { mergeEntitiesAsync } from '../database/entities';
 import { useMergedData } from './use-merged-data';
 
 export function useGlobalSearch() {
-  const merged = useMergedData();
   const [query, setQuery] = React.useState('');
 
   const { data: results, isLoading } = useQuery({
@@ -23,7 +23,7 @@ export function useGlobalSearch() {
       const fetchEntitiesEffect = Effect.either(
         Effect.tryPromise({
           try: () =>
-            merged.fetchEntities({
+            mergeEntitiesAsync({
               query,
               signal,
               first: 10,

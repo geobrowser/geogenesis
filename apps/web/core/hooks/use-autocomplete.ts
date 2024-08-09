@@ -9,6 +9,7 @@ import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 
+import { mergeEntitiesAsync } from '../database/entities';
 import { FilterState } from '../types';
 import { useMergedData } from './use-merged-data';
 
@@ -30,7 +31,7 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
       const fetchEntitiesEffect = Effect.either(
         Effect.tryPromise({
           try: () =>
-            merged.fetchEntities({
+            mergeEntitiesAsync({
               query,
               signal,
               filter: filter ?? [],
