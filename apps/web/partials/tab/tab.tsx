@@ -34,7 +34,7 @@ export const Tab = async (props: Props & { slug: string }) => {
 
     const newSearchParams = {
       typeId: SYSTEM_IDS.PAGE_TYPE,
-      filters: encodeURI(JSON.stringify([[SYSTEM_IDS.PAGE_TYPE_TYPE, pageTypeId]])),
+      filters: JSON.stringify([[SYSTEM_IDS.PAGE_TYPE_TYPE, pageTypeId]]),
     };
 
     return (

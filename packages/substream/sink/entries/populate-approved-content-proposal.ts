@@ -113,9 +113,9 @@ export function populateApprovedContentProposal(
        * for a given entity, so we could write the same ops multiple times if there are multiple
        * proposedVersions that change the same entity.
        */
-      const opsWithCreatedById = proposedVersions.map((pv): SchemaTripleEdit => {
+      const editsWithCreatedById = proposedVersions.map((pv): SchemaTripleEdit => {
         // Safe to cast with ! since we know that we set this in the mapping earlier in this function
-        const ops = opsByProposalId.get(pv.proposal_id)!.filter(o => o.payload.entityId === pv.entity_id);
+        const ops = opsByProposalId.get(pv.proposal_id)!.filter(o => o.triple.entity === pv.entity_id);
 
         return {
           proposalId: pv.proposal_id,
@@ -125,15 +125,26 @@ export function populateApprovedContentProposal(
         };
       });
 
-      const schemaTriples = opsWithCreatedById.map(o => mapSchemaTriples(o, block)).flat();
+      // @TODO: Filter out invalid invalid individual triples. We want to filter the triples
+      // out instead of just erroring during write since there may be some triples that are
+      // required in order to write a higher-order data structure to a database table, e.g.,
+      // Relations. If we don't filter then it will look like we have all the valid data for
+      // one of the data structures when we actually don't.
+      const schemaTriples = editsWithCreatedById.map(o => mapSchemaTriples(o, block)).flat();
 
-      yield* awaited(
-        populateTriples({
-          schemaTriples: schemaTriples,
-          block,
-          versions,
-        })
+      const res = yield* awaited(
+        Effect.either(
+          populateTriples({
+            schemaTriples: schemaTriples,
+            block,
+            versions,
+          })
+        )
       );
+
+      if (Either.isLeft(res)) {
+        console.log('populateTriples error', res.left);
+      }
     }
   });
 }

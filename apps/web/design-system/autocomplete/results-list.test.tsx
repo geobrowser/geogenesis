@@ -2,8 +2,8 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import { Space } from '~/core/io/dto/spaces';
 import { Providers } from '~/core/providers';
-import { Space } from '~/core/types';
 
 import { ResultContent } from './results-list';
 

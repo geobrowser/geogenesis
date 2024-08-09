@@ -1,20 +1,11 @@
--- 
--- Create Indexes for Speedy Querying
--- 
-
-
-
 CREATE INDEX idx_entity_attribute ON public.triples(entity_id, attribute_id);
-
 CREATE INDEX idx_entity_attribute_value_id ON public.triples(entity_id, attribute_id, entity_value_id);
-
 CREATE INDEX idx_entity_value_id ON public.triples(entity_value_id);
-
 CREATE INDEX idx_triple_space ON public.triples(space_id);
-
 CREATE INDEX idx_space_editors ON public.space_editors(account_id, space_id);
 CREATE INDEX idx_space_members ON public.space_members(account_id, space_id);
 CREATE INDEX space_metadata ON public.spaces_metadata(entity_id, space_id);
+CREATE INDEX entity_space ON public.entity_spaces(entity_id, space_id);
 
 CREATE INDEX triple_entity_id
     on triples (entity_id);
@@ -46,8 +37,8 @@ CREATE INDEX onchain_profile_space_id
 CREATE INDEX proposed_versions_ops
     on ops (proposed_version_id);
 
-CREATE INDEX collection_item_collections
-    on collection_items (collection_id);
+CREATE INDEX relations_to_entity_id
+    on relations (to_entity_id);
 
-CREATE INDEX collection_item_entities
-    on collection_items (entity_id);
+CREATE INDEX relations_from_entity_id
+    on relations (from_entity_id);

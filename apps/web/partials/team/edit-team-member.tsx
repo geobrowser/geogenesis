@@ -617,6 +617,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 };
 
 const getInitialRoleName = (role: TripleType): string => {
+  // @TODO(relations)
   if (role.value.type === 'ENTITY') {
     return role.value.name ?? 'No entity name';
   } else {

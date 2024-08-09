@@ -1,6 +1,6 @@
 import { ProposalStatus } from '@geogenesis/sdk';
 
-import { Vote } from '~/core/types';
+import { SubstreamVote } from '~/core/io/schema';
 import { getNoVotePercentage, getYesVotePercentage } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -10,10 +10,10 @@ import { TickSmall } from '~/design-system/icons/tick-small';
 interface Props {
   votes: {
     totalCount: number;
-    votes: Vote[];
+    votes: SubstreamVote[];
   };
 
-  userVote?: Vote['vote'];
+  userVote?: SubstreamVote['vote'];
   user?: {
     address?: string;
     avatarUrl: string | null;

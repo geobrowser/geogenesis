@@ -1,7 +1,7 @@
-import { EntitySearchResult } from '~/core/types';
+import { SubstreamType } from '~/core/io/schema';
 
 interface Props {
-  type: EntitySearchResult;
+  type: SubstreamType;
 }
 
 export function EntityPageTypeChip({ type }: Props) {

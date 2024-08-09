@@ -134,6 +134,7 @@ const getData = async (spaceId: string) => {
     spaceId,
     spaceTypes: space?.spaceConfig?.types ?? [],
     subspaces: [],
+    relationsOut: entity?.relationsOut ?? [],
   };
 };
 

@@ -74,49 +74,9 @@ export function getFetchIpfsContentEffect(
         )
       );
 
-      // @HACK: May 09, 2024: We're currently using Edge & Node's IPFS cluster. They are
-      // in the process of a migration where some data in not available on every node. Try
-      // two nodes until we are on our own IPFS infra.
       if (Either.isLeft(mainGatewayResponse)) {
-        const secondaryIpfsFetchEffect = Effect.tryPromise({
-          try: async () => {
-            const parsedCid = uri.replace('ipfs://', '');
-            const url = `https://api.thegraph.com/ipfs/api/v0/cat?arg=${parsedCid}`;
-
-            return await fetch(url, {
-              headers: {
-                'Content-Type': 'application/octet-stream',
-              },
-            });
-          },
-          catch: error => {
-            return new FailedFetchingIpfsContentError(`Failed fetching IPFS content from uri ${uri}. ${String(error)}`);
-          },
-        });
-
-        const secondaryGatewayResponse = yield* unwrap(
-          // Attempt to fetch with jittered exponential backoff for 30 seconds before failing
-          Effect.retry(
-            secondaryIpfsFetchEffect.pipe(Effect.timeout(Duration.seconds(30))),
-            Schedule.exponential(100).pipe(
-              Schedule.jittered,
-              Schedule.compose(Schedule.elapsed),
-              // Retry for 1 minute.
-              Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(30)))
-            )
-          )
-        );
-
-        return yield* unwrap(
-          Effect.tryPromise({
-            try: async () => {
-              const buffer = await secondaryGatewayResponse.arrayBuffer();
-              return Buffer.from(buffer);
-            },
-            catch: error =>
-              new UnableToParseJsonError(`Unable to parse JSON when reading content from uri ${uri}. ${String(error)}`),
-          })
-        );
+        yield* unwrap(Effect.fail(new FailedFetchingIpfsContentError(`Unable to fetch IPFS content from uri ${uri}`)));
+        return null;
       }
 
       const response = mainGatewayResponse.right;

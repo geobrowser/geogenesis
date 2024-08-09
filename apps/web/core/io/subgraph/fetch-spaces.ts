@@ -1,14 +1,14 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Space } from '~/core/types';
 
+import { Space, SpaceDto } from '../dto/spaces';
+import { SubstreamSpace } from '../schema';
 import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
-import { getSpaceConfigFromMetadata } from './network-local-mapping';
-import { NetworkSpaceResult } from './types';
 
 const getFetchSpacesQuery = () => `query {
   spaces {
@@ -20,7 +20,7 @@ const getFetchSpacesQuery = () => `query {
 
 interface NetworkResult {
   spaces: {
-    nodes: NetworkSpaceResult[];
+    nodes: SubstreamSpace[];
   };
 }
 
@@ -76,25 +76,21 @@ export async function fetchSpaces(): Promise<Space[]> {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const spaces = result.spaces.nodes.map((space): Space => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.spacesMetadata.nodes[0]?.entity);
+  const spaces = result.spaces.nodes
+    .map(space => {
+      const decodedSpace = Schema.decodeEither(SubstreamSpace)(space);
 
-    return {
-      id: space.id,
-      type: space.type,
-      isRootSpace: space.isRootSpace,
-      editors: space.spaceEditors.nodes.map(account => account.accountId),
-      members: space.spaceMembers.nodes.map(account => account.accountId),
-      spaceConfig: spaceConfigWithImage,
-      createdAtBlock: space.createdAtBlock,
-
-      daoAddress: space.daoAddress,
-      mainVotingPluginAddress: space.mainVotingPluginAddress,
-      memberAccessPluginAddress: space.memberAccessPluginAddress,
-      personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
-      spacePluginAddress: space.spacePluginAddress,
-    };
-  });
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Unable to decode space: ${String(error)}`);
+          return null;
+        },
+        onRight: space => {
+          return SpaceDto(space);
+        },
+      });
+    })
+    .filter(space => space !== null);
 
   // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
   // the query level when we index the space config entity as part of a Space.

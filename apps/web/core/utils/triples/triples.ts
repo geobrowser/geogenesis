@@ -53,11 +53,6 @@ export function emptyValue(type: TripleValueType): Value {
       value: '',
       name: null,
     } as AppEntityValue,
-    COLLECTION: {
-      value: '',
-      items: [],
-      type: 'COLLECTION',
-    },
     NUMBER: {
       type: 'NUMBER',
       value: '',
@@ -71,8 +66,8 @@ export function emptyValue(type: TripleValueType): Value {
       type: 'TIME',
       value: '',
     },
-    URL: {
-      type: 'URL',
+    URI: {
+      type: 'URI',
       value: '',
     },
     CHECKBOX: {
@@ -140,38 +135,6 @@ export function merge(local: Triple[], remote: Triple[]): Triple[] {
   return triples;
 }
 
-export function collectionItemsFromTriples(triples: Record<string, Triple[]>): CollectionItem[] {
-  const items = Object.entries(triples).map(([collectionItemId, items]): CollectionItem | null => {
-    const index = items.find(i => Boolean(Collections.itemIndexValue(i)))?.value.value;
-    const collectionId = items.find(i => Boolean(Collections.itemCollectionIdValue(i)))?.value.value;
-    const entityIdTriple = items.find(i => Boolean(Collections.itemEntityIdValue(i)));
-    const entityId = entityIdTriple?.value.value;
-
-    if (!(index && collectionId && entityId)) {
-      return null;
-    }
-
-    return {
-      id: collectionItemId,
-      collectionId,
-      entity: {
-        id: entityId,
-        name: entityIdTriple?.value.type === 'ENTITY' ? entityIdTriple?.value.name : null,
-        // @TODO(local-first): The entity may not exist locally in which case this will be empty
-        types: Entities.types(triples[entityId] ?? []).map(t => t.id),
-      },
-      index,
-      value: {
-        type: 'ENTITY',
-        // @TODO(local-first): We may not have the name locally in which case the value will be null
-        value: entityIdTriple?.value.type === 'ENTITY' ? entityIdTriple?.value.name : null,
-      },
-    };
-  });
-
-  return items.flatMap(i => (i ? [i] : []));
-}
-
 /**
  * This function applies locally changed entity names to all triples being rendered.
  */
@@ -216,8 +179,7 @@ export const getValue = (triple: Triple): string | null => {
     case 'ENTITY':
     case 'IMAGE':
     case 'TIME':
-    case 'URL':
-    case 'COLLECTION':
+    case 'URI':
       return triple.value.value;
     case 'IMAGE':
       return triple.value.image;
@@ -238,9 +200,9 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
     if (t.isDeleted) {
       return {
         type: 'DELETE_TRIPLE',
-        payload: {
-          entityId: t.entityId,
-          attributeId: t.attributeId,
+        triple: {
+          entity: t.entityId,
+          attribute: t.attributeId,
         },
       };
     }
@@ -252,9 +214,9 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
     if (t.value.type === 'IMAGE') {
       return {
         type: 'SET_TRIPLE',
-        payload: {
-          entityId: t.entityId,
-          attributeId: t.attributeId,
+        triple: {
+          entity: t.entityId,
+          attribute: t.attributeId,
           value: {
             type: 'ENTITY',
             value: t.value.value,
@@ -265,9 +227,9 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
 
     return {
       type: 'SET_TRIPLE',
-      payload: {
-        entityId: t.entityId,
-        attributeId: t.attributeId,
+      triple: {
+        entity: t.entityId,
+        attribute: t.attributeId,
         value: {
           type: t.value.type,
           value: t.value.value,

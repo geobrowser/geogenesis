@@ -6,7 +6,7 @@ import { useState } from 'react';
 
 import { useBulkPublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import type { Space } from '~/core/types';
+import { Space } from '~/core/io/dto/spaces';
 import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
 

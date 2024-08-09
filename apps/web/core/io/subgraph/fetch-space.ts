@@ -1,14 +1,14 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Space } from '~/core/types';
 
+import { Space, SpaceDto } from '../dto/spaces';
+import { SubstreamSpace } from '../schema';
 import { spaceFragment } from './fragments';
 import { graphql } from './graphql';
-import { getSpaceConfigFromMetadata } from './network-local-mapping';
-import { NetworkSpaceResult } from './types';
 
 const getFetchSpaceQuery = (id: string) => `query {
   space(id: "${id}") {
@@ -21,7 +21,7 @@ export interface FetchSpaceOptions {
 }
 
 type NetworkResult = {
-  space: NetworkSpaceResult | null;
+  space: SubstreamSpace | null;
 };
 
 export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | null> {
@@ -81,24 +81,21 @@ export async function fetchSpace(options: FetchSpaceOptions): Promise<Space | nu
   }
 
   const networkSpace = result.space;
-  const spaceConfigWithImage = getSpaceConfigFromMetadata(
-    networkSpace.id,
-    networkSpace.spacesMetadata.nodes[0]?.entity
-  );
+  const spaceOrError = Schema.decodeEither(SubstreamSpace)(networkSpace);
 
-  return {
-    id: networkSpace.id,
-    type: networkSpace.type,
-    isRootSpace: networkSpace.isRootSpace,
-    editors: networkSpace.spaceEditors.nodes.map(account => account.accountId),
-    members: networkSpace.spaceMembers.nodes.map(account => account.accountId),
-    spaceConfig: spaceConfigWithImage,
-    createdAtBlock: networkSpace.createdAtBlock,
+  const decodedSpace = Either.match(spaceOrError, {
+    onLeft: error => {
+      console.error(`Unable to decode space ${networkSpace.id} with error ${error}`);
+      return null;
+    },
+    onRight: space => {
+      return space;
+    },
+  });
 
-    daoAddress: networkSpace.daoAddress,
-    mainVotingPluginAddress: networkSpace.mainVotingPluginAddress,
-    memberAccessPluginAddress: networkSpace.memberAccessPluginAddress,
-    personalSpaceAdminPluginAddress: networkSpace.personalSpaceAdminPluginAddress,
-    spacePluginAddress: networkSpace.spacePluginAddress,
-  };
+  if (decodedSpace === null) {
+    return null;
+  }
+
+  return SpaceDto(decodedSpace);
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';
 import { encodeFunctionData, isAddress } from 'viem';

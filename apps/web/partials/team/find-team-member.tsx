@@ -10,8 +10,9 @@ import type { ChangeEvent } from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useToast } from '~/core/hooks/use-toast';
 import { Subgraph } from '~/core/io';
+import { Entity } from '~/core/io/dto/entities';
+import { TypeId } from '~/core/io/schema';
 import { Services } from '~/core/services';
-import { Entity as EntityType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
 import { Values } from '~/core/utils/value';
@@ -59,7 +60,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
 
   const [entityId, setEntityId] = useState<string>('');
 
-  const [person, setPerson] = useState<EntityType | null>(null);
+  const [person, setPerson] = useState<Entity | null>(null);
   const [linkedName, setLinkedName] = useState<string | null>(null);
   const [linkedAvatar, setLinkedAvatar] = useState<string | null>(null);
   const [hasFoundPerson, setHasFoundPerson] = useState<boolean>(false);
@@ -187,7 +188,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
       ]);
 
       if (person) {
-        if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
+        if (types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
           const avatar = Entities.avatar(person?.triples);
           setAvatar(avatar);
           setName(Entities.name(person?.triples ?? []));

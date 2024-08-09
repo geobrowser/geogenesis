@@ -7,10 +7,11 @@ import { useState } from 'react';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { Entity } from '~/core/io/dto/entities';
 import { useEditable } from '~/core/state/editable-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 import { useTypesStore } from '~/core/state/types-store/types-store';
-import { Entity, GeoType } from '~/core/types';
+import { GeoType } from '~/core/types';
 
 import { ResultContent, ResultItem, ResultsList } from '~/design-system/autocomplete/results-list';
 import { Input } from '~/design-system/input';

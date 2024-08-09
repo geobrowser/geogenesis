@@ -1,21 +1,20 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '../environment';
+import { slog } from '../utils/utils';
+import { SubstreamEntityTypes, SubstreamType } from './schema';
+import { entityTypesFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
 
 function getFetchEntityTypeQuery(id: string) {
   return `query {
     entity(id: "${id}") {
-      types {
-        nodes {
-          id
-        }
-      }
+      ${entityTypesFragment}
     }
-  }
-  `;
+  }`;
 }
 
 interface FetchEntityTypeOptions {
@@ -23,7 +22,7 @@ interface FetchEntityTypeOptions {
 }
 
 interface NetworkResult {
-  entity: { types: { nodes: { id: string }[] } } | null;
+  entity: { entityTypes: { nodes: { type: SubstreamType }[] } } | null;
 }
 
 export async function fetchEntityType(options: FetchEntityTypeOptions) {
@@ -49,18 +48,42 @@ export async function fetchEntityType(options: FetchEntityTypeOptions) {
             error.message
           );
 
-          return [];
+          return {
+            entity: null,
+          };
 
         default:
           console.error(`${error._tag}: Unable to fetch entity type, queryId: ${queryId}`);
 
-          return [];
+          return {
+            entity: null,
+          };
       }
     }
 
-    if (!resultOrError.right.entity) return [];
-    return resultOrError.right.entity.types.nodes.map(node => node.id);
+    return resultOrError.right;
   });
 
-  return await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+
+  if (!result) {
+    return [];
+  }
+
+  if (!result.entity) {
+    return [];
+  }
+
+  const decodeEntityTypes = Schema.decodeEither(SubstreamEntityTypes)(result.entity.entityTypes);
+
+  if (Either.isLeft(decodeEntityTypes)) {
+    slog({
+      message: `Unable to decode entity types for entity ${options.id}`,
+      requestId: queryId,
+      level: 'error',
+    });
+    return [];
+  }
+
+  return decodeEntityTypes.right.nodes.map(node => node.type.id);
 }

@@ -9,7 +9,7 @@ import {
 import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
-import { Op, SYSTEM_IDS, VotingMode, createImageEntityOps } from '@geogenesis/sdk';
+import { Op, SYSTEM_IDS, VotingMode, createImageEntityOps, createRelationship } from '@geogenesis/sdk';
 import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
@@ -21,7 +21,7 @@ import { Environment } from '~/core/environment';
 import { IpfsUploadError } from '~/core/errors';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { OmitStrict, SpaceGovernanceType, SpaceType } from '~/core/types';
+import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
 import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
 import { Ops } from '~/core/utils/ops';
@@ -163,8 +163,8 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
   if (type === 'default' || type === 'personal') {
     ops.push(
       Ops.create({
-        entityId: newEntityId,
-        attributeId: SYSTEM_IDS.NAME,
+        entity: newEntityId,
+        attribute: SYSTEM_IDS.NAME,
         value: {
           type: 'TEXT',
           value: spaceName,
@@ -173,17 +173,14 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
     );
 
     ops.push(
-      Ops.create({
-        entityId: newEntityId,
-        attributeId: SYSTEM_IDS.TYPES,
-        value: {
-          type: 'ENTITY',
-          value: SYSTEM_IDS.SPACE_CONFIGURATION,
-        },
+      ...createRelationship({
+        fromId: newEntityId,
+        toId: SYSTEM_IDS.SPACE_CONFIGURATION,
+        relationTypeId: SYSTEM_IDS.TYPES,
       })
     );
 
-    // @TODO: Do we add the Person type? That would mean this has to be a collection
+    // @TODO: Do we add the Person type? That would mean this has to be a relation
   }
 
   // @TODO: Clone entity for the other governance types
@@ -209,13 +206,10 @@ async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: Depl
 
     // Creates the triple pointing to the image entity
     ops.push(
-      Ops.create({
-        entityId: newEntityId,
-        attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-        value: {
-          type: 'ENTITY',
-          value: typeOp.payload.entityId,
-        },
+      ...createRelationship({
+        fromId: newEntityId,
+        toId: typeOp.triple.entity, // Set the avatar relation to point to the entity id of the new entity
+        relationTypeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
       })
     );
   }

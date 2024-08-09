@@ -1,3 +1,4 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
@@ -5,9 +6,10 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
 
+import { TripleDto } from '../dto';
+import { SubstreamTriple } from '../schema';
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamTriple, fromNetworkTriples } from './network-local-mapping';
 
 interface GetFetchTriplesQueryOptions {
   where: string;
@@ -107,5 +109,22 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  return fromNetworkTriples(result.triples.nodes);
+
+  const decodedTriples = result.triples.nodes
+    .map(t => {
+      const decodedSpace = Schema.decodeEither(SubstreamTriple)(t);
+
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Unable to decode triple ${t} with error ${error}`);
+          return null;
+        },
+        onRight: triple => {
+          return triple;
+        },
+      });
+    })
+    .filter(t => t !== null);
+
+  return decodedTriples.map(TripleDto);
 }

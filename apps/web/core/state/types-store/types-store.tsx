@@ -6,13 +6,14 @@ import { A, pipe } from '@mobily/ts-belt';
 import * as React from 'react';
 
 import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { GeoType, Space, Triple as TripleType } from '~/core/types';
+import { Space } from '~/core/io/dto/spaces';
+import { GeoType, Triple as ITriple } from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 
 import { useLocalStore } from '../local-store';
 
 interface TypesStoreProviderState {
-  initialTypes: TripleType[];
+  initialTypes: ITriple[];
   space: Space | null;
 }
 
@@ -58,6 +59,7 @@ export function useTypesStore(): {
     const spaceConfigId = space.spaceConfig?.id;
 
     if (!spaceConfigId) {
+      // @TODO(relations)
       const localSpaceConfigId = triplesFromSpaceActions.find(
         t => t.value.type === 'ENTITY' && t.value.value === SYSTEM_IDS.SPACE_CONFIGURATION
       )?.entityId;
@@ -103,6 +105,7 @@ export function useTypesStore(): {
   const types: GeoType[] = React.useMemo(() => {
     if (!space) return [];
 
+    // @TODO(relations)
     const globalActions = actions[space.id] || [];
     const localActions = globalActions.filter(a => {
       return a.attributeId === SYSTEM_IDS.TYPES && a.value.value === SYSTEM_IDS.SCHEMA_TYPE && !a.isDeleted;

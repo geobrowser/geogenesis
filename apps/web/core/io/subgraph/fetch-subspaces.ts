@@ -1,13 +1,15 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { OmitStrict, Space, SpaceGovernanceType } from '~/core/types';
+import { SpaceGovernanceType } from '~/core/types';
 
+import { Subspace, SubspaceDto } from '../dto/subspaces';
+import { SubstreamEntity, SubstreamSubspace } from '../schema';
 import { entityFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 const getFetchSpacesQuery = (spaceId: string) => `query {
   spaceSubspaces(filter: { parentSpaceId: { equalTo: "${spaceId}" } }) {
@@ -36,22 +38,6 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
     }
   }
 }`;
-
-export type Subspace = OmitStrict<
-  Space,
-  | 'members'
-  | 'createdAtBlock'
-  | 'editors'
-  | 'isRootSpace'
-  | 'mainVotingPluginAddress'
-  | 'memberAccessPluginAddress'
-  | 'personalSpaceAdminPluginAddress'
-  | 'spacePluginAddress'
-  | 'type'
-> & {
-  totalMembers: number;
-  totalEditors: number;
-};
 
 interface NetworkResult {
   spaceSubspaces: {
@@ -120,20 +106,27 @@ export async function fetchSubspacesBySpaceId(spaceId: string) {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const spaces = result.spaceSubspaces.nodes.map((space): Subspace => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(
-      space.subspace.id,
-      space.subspace.spacesMetadata.nodes[0]?.entity
-    );
+  const spaces = result.spaceSubspaces.nodes
+    .map((space): Subspace | null => {
+      const decodedSpace = Schema.decodeEither(SubstreamSubspace)(space.subspace);
 
-    return {
-      id: space.subspace.id,
-      daoAddress: space.subspace.daoAddress,
-      totalEditors: space.subspace.spaceEditors.totalCount,
-      totalMembers: space.subspace.spaceMembers.totalCount,
-      spaceConfig: spaceConfigWithImage,
-    };
-  });
+      const result = Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Encountered error decoding subspace for space with id ${spaceId} – error: ${error}`);
+          return null;
+        },
+        onRight: space => {
+          return space;
+        },
+      });
+
+      if (result === null) {
+        return null;
+      }
+
+      return SubspaceDto(result);
+    })
+    .filter(s => s !== null);
 
   // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
   // the query level when we index the space config entity as part of a Space.

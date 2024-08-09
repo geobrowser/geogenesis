@@ -1,6 +1,6 @@
 'use client';
 
-import type { Space } from '~/core/types';
+import { Space } from '~/core/io/dto/spaces';
 
 import { Generate } from './generate';
 import { Publish } from './publish';

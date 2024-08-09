@@ -6,10 +6,10 @@ describe('tripleFromOp', () => {
   it('should return a schema triple from a SET_TRIPLE op', () => {
     const triple = getTripleFromOp(
       {
-        opType: 'SET_TRIPLE',
-        payload: {
-          attributeId: 'attribute-id',
-          entityId: 'entity-id',
+        type: 'SET_TRIPLE',
+        triple: {
+          attribute: 'attribute-id',
+          entity: 'entity-id',
           value: {
             type: 'TEXT',
             value: 'test value',
@@ -42,10 +42,10 @@ describe('tripleFromOp', () => {
   it('should return a schema triple from a DELETE_TRIPLE op', () => {
     const triple = getTripleFromOp(
       {
-        opType: 'DELETE_TRIPLE',
-        payload: {
-          attributeId: 'attribute-id',
-          entityId: 'entity-id',
+        type: 'DELETE_TRIPLE',
+        triple: {
+          attribute: 'attribute-id',
+          entity: 'entity-id',
           value: {},
         },
       },

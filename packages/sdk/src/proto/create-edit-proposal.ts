@@ -1,6 +1,6 @@
 import type { Op } from '../..'
 import { createGeoId } from '../id'
-import { ActionType, Edit, OpType, Payload, Op as OpBinary } from './gen/src/proto/ipfs_pb';
+import { ActionType, Edit, OpType, Triple, Op as OpBinary } from './gen/src/proto/ipfs_pb';
 
 interface CreateEditProposalArgs {
   name: string;
@@ -18,8 +18,8 @@ export function createEditProposal(
     name,
     ops: ops.map(o => {
       return new OpBinary({
-        opType: o.type === 'SET_TRIPLE' ? OpType.SET_TRIPLE : OpType.DELETE_TRIPLE,
-        payload: Payload.fromJson(o.payload) // janky but works
+        type: o.type === 'SET_TRIPLE' ? OpType.SET_TRIPLE : OpType.DELETE_TRIPLE,
+        triple: Triple.fromJson(o.triple) // janky but works
       })
     }),
     authors: [author],

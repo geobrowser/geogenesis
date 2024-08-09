@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { describe, expect, it } from 'vitest';
 
-import { Action as ActionType, Triple as TripleType } from '~/core/types';
+import { Triple as TripleType } from '~/core/types';
 
 import { empty, withId, withLocalNames } from './triples';
 
@@ -13,8 +13,7 @@ describe('Triple helpers', () => {
       attributeId: 'attributeId',
       attributeName: 'banana',
       value: {
-        id: 'valueId',
-        type: 'string',
+        type: 'TEXT',
         value: 'banana',
       },
       space: 'spaceId',
@@ -38,8 +37,7 @@ describe('Triple helpers', () => {
       attributeId: 'attributeId',
       attributeName: 'banana',
       value: {
-        id: 'valueId',
-        type: 'string',
+        type: 'TEXT',
         value: 'banana',
       },
       space: 'spaceId',

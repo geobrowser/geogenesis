@@ -12,6 +12,7 @@ import { TableBlockSdk } from '../blocks-sdk';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { fetchColumns } from '../io/fetch-columns';
 import { fetchRows } from '../io/fetch-rows';
+import { EntityId } from '../io/schema';
 
 interface MergedDataSourceOptions {
   store: ReturnType<typeof useActionsStore>;
@@ -24,11 +25,9 @@ interface IMergedDataSource
   extends OmitStrict<
     Subgraph.ISubgraph,
     // These data models don't have local equivalents, so we don't need merging logic for them.
-    | 'fetchProposedVersion'
     | 'fetchProposal'
     | 'fetchProposals'
     | 'fetchTableRowEntities'
-    | 'fetchProposedVersions'
     | 'fetchSpace'
     | 'fetchSpaces'
     | 'fetchProfile'
@@ -285,7 +284,7 @@ export class Merged implements IMergedDataSource {
 
     // Filter out any server row triples that have been changed locally
     const filteredServerRows = serverEntityTriples.filter(
-      sr => !localEntitiesIds.has(sr.entityId) && !serverEntitiesChangedLocallyIds.has(sr.entityId)
+      sr => !localEntitiesIds.has(EntityId(sr.entityId)) && !serverEntitiesChangedLocallyIds.has(EntityId(sr.entityId))
     );
 
     const entities = Entities.entitiesFromTriples([

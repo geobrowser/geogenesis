@@ -1,21 +1,15 @@
+import { Schema } from '@effect/schema';
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { SpaceConfigEntity } from '~/core/types';
 
+import { SearchResult, SearchResultDto } from '../dto/search';
+import { SubstreamSearchResult } from '../schema';
 import { resultEntityFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntityWithSpaceMetadata, getSpaceConfigFromMetadata } from './network-local-mapping';
-
-export type Result = {
-  id: string;
-  name: string | null;
-  nameTripleSpaces: Array<string>;
-  spaces: Array<SpaceConfigEntity>;
-};
 
 function getFetchResultsQuery(
   query: string | undefined,
@@ -62,10 +56,10 @@ export interface FetchResultsOptions {
 }
 
 interface NetworkResult {
-  entities: { nodes: SubstreamEntityWithSpaceMetadata[] };
+  entities: { nodes: SubstreamSearchResult[] };
 }
 
-export async function fetchResults(options: FetchResultsOptions): Promise<Result[]> {
+export async function fetchResults(options: FetchResultsOptions): Promise<SearchResult[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
@@ -123,33 +117,24 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Result
 
   const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const sortedResults = sortSearchResultsByRelevance(entities.nodes);
+  const decodedResults = entities.nodes
+    .map(result => {
+      const decodedResult = Schema.decodeEither(SubstreamSearchResult)(result);
 
-  return sortedResults.map(result => {
-    const triples = result.triples.nodes;
+      return Either.match(decodedResult, {
+        onLeft: error => {
+          console.error(`Unable to decode search result: ${String(error)}`);
+          return null;
+        },
+        onRight: result => {
+          return result;
+        },
+      });
+    })
+    .filter(s => s !== null);
 
-    // If there is no latest version just return an empty entity.
-    if (triples.length === 0) {
-      return {
-        id: result.id,
-        name: result.name,
-        nameTripleSpaces: [],
-        spaces: [],
-      };
-    }
-
-    const nameTripleSpaces = triples.map(triple => triple.space.id);
-    const spaces = triples.flatMap(triple =>
-      getSpaceConfigFromMetadata(triple.space.id, triple.space.spacesMetadata.nodes[0]?.entity)
-    );
-
-    return {
-      id: result.id,
-      name: result.name,
-      nameTripleSpaces,
-      spaces,
-    };
-  });
+  const sortedResults = sortSearchResultsByRelevance(decodedResults);
+  return sortedResults.map(SearchResultDto);
 }
 
 const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
@@ -168,6 +153,6 @@ const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
   return a.length - b.length;
 };
 
-function sortSearchResultsByRelevance(startEntities: SubstreamEntityWithSpaceMetadata[]) {
+function sortSearchResultsByRelevance(startEntities: SubstreamSearchResult[]) {
   return startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
 }

@@ -2,15 +2,12 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { Proposal, SpaceWithMetadata } from '~/core/types';
-
-import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Environment } from '../environment';
-import { Entities } from '../utils/entity';
+import { ProposalWithoutVoters, ProposalWithoutVotersDto } from './dto/proposals';
+import { type SubstreamProposal } from './schema';
 import { fetchProfilesByAddresses } from './subgraph/fetch-profiles-by-ids';
-import { entityFragment, spaceMetadataFragment } from './subgraph/fragments';
+import { spaceMetadataFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './subgraph/network-local-mapping';
 
 const getFetchUserProposalsQuery = (createdBy: string, skip: number, spaceId?: string) => {
   const filter = [
@@ -76,7 +73,7 @@ export async function fetchProposalsByUser({
   spaceId,
   signal,
   page = 0,
-}: FetchUserProposalsOptions): Promise<Proposal[]> {
+}: FetchUserProposalsOptions): Promise<ProposalWithoutVoters[]> {
   const queryId = uuid();
   const offset = page * 5;
 
@@ -132,39 +129,6 @@ export async function fetchProposalsByUser({
 
   return proposals.map(p => {
     const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
-
-    const profile = maybeProfile ?? {
-      id: p.createdBy.id,
-      name: null,
-      avatarUrl: null,
-      coverUrl: null,
-      address: p.createdBy.id as `0x${string}`,
-      profileLink: null,
-    };
-
-    const spaceConfig = p.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
-    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
-
-    const spaceWithMetadata: SpaceWithMetadata = {
-      id: p.space.id,
-      name: spaceConfig?.name ?? null,
-      image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-    };
-
-    return {
-      ...p,
-      name: p.name,
-      description: p.description,
-      space: spaceWithMetadata,
-      createdBy: profile,
-      proposedVersions: p.proposedVersions.nodes.map(v => {
-        return {
-          ...v,
-          space: spaceWithMetadata,
-          createdBy: profile,
-          // actions: fromNetworkOps(v.actions.nodes),
-        };
-      }),
-    };
+    return ProposalWithoutVotersDto(p, maybeProfile);
   });
 }

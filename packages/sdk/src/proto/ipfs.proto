@@ -10,19 +10,6 @@ message IpfsMetadata {
   string name = 4;
 }
 
-enum ActionType {
-  UNKNOWN = 0;
-  ADD_EDIT = 1;
-  IMPORT_SPACE = 2;
-  ADD_SUBSPACE = 3;
-  REMOVE_SUBSPACE = 4;
-  ADD_EDITOR = 5;
-  REMOVE_EDITOR = 6;
-  ADD_MEMBER = 7;
-  REMOVE_MEMBER = 8;
-  IMPORT_EDIT = 9;
-}
-
 message Edit {
   ActionType type = 1;
   string version = 2;
@@ -32,14 +19,28 @@ message Edit {
   repeated string authors = 6;
 }
 
-message Op {
-  OpType opType = 1;
-  Payload payload = 2;
+message ImportEdit {
+  ActionType type = 1;
+  string version = 2;
+  string id = 3;
+  string name = 4;
+  repeated Op ops = 5;
+  repeated string authors = 6;
+  string createdBy = 7;
+  string createdAt = 8;
+  string blockHash = 9;
+  string blockNumber = 10;
+  string transactionHash = 11;
 }
 
-message Payload {
-  bytes entityId = 1;
-  bytes attributeId = 2;
+message Op {
+  OpType type = 1;
+  Triple triple = 2;
+}
+
+message Triple {
+  string entity = 1;
+  string attribute = 2;
   Value value = 3;
 }
 
@@ -55,15 +56,14 @@ enum OpType {
 }
 
 enum ValueType {
-  NULL = 0;
+  UNKNOWN = 0;
   TEXT = 1;
   NUMBER = 2;
   ENTITY = 3;
-  COLLECTION = 4;
+  URI = 4;
   CHECKBOX = 5;
-  URL = 6;
-  TIME = 7;
-  GEO_LOCATION = 8;
+  TIME = 6;
+  GEO_LOCATION = 7;
 }
 
 message Membership {
@@ -82,25 +82,27 @@ message Subspace {
   string subspace = 5;
 }
 
-message ImportEdit {
-  ActionType type = 1;
-  string version = 2;
-  string id = 3;
-  string name = 4;
-  repeated Op ops = 5;
-  repeated string authors = 6;
-  string createdBy = 7;
-  string createdAt = 8;
-  string blockHash = 9;
-  string blockNumber = 10;
-  string transactionHash = 11;
+enum ActionType {
+  EMPTY = 0;
+  ADD_EDIT = 1;
+  IMPORT_SPACE = 2;
+  ADD_SUBSPACE = 3;
+  REMOVE_SUBSPACE = 4;
+  ADD_EDITOR = 5;
+  REMOVE_EDITOR = 6;
+  ADD_MEMBER = 7;
+  REMOVE_MEMBER = 8;
 }
 
-// https://gateway.lighthouse.storage/ipfs/bafkreic5vxtnkgpkf54zo3jubf7fadegfwuui6nmonf6rze235ddxgl6we
 message Import {
   ActionType type = 1;
   string version = 2;
   string previousNetwork = 3;
   string previousContractAddress = 4;
   repeated string edits = 5;
+}
+
+message Options {
+  string format = 1;
+  string crop = 2;
 }

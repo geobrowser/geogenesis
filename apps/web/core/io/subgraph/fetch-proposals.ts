@@ -1,16 +1,15 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Proposal, SpaceWithMetadata } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 
+import { ProposalWithoutVoters, ProposalWithoutVotersDto } from '../dto/proposals';
+import { SubstreamProposal } from '../schema';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
 import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './network-local-mapping';
 
 const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: number) => `query {
   proposals(first: ${first}, filter: {spaceId: {equalTo: ${JSON.stringify(
@@ -81,7 +80,7 @@ export async function fetchProposals({
   signal,
   page = 0,
   first = 5,
-}: FetchProposalsOptions): Promise<Proposal[]> {
+}: FetchProposalsOptions): Promise<ProposalWithoutVoters[]> {
   const queryId = uuid();
   const offset = page * first;
 
@@ -135,42 +134,24 @@ export async function fetchProposals({
   const proposals = result.proposals.nodes;
   const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdBy.id));
 
-  return proposals.map(p => {
+  const decodedProposals = proposals
+    .map(p => {
+      const proposalOrError = Schema.decodeEither(SubstreamProposal)(p);
+
+      return Either.match(proposalOrError, {
+        onLeft: error => {
+          console.error(`Unable to decode proposal ${p.id} with error ${error}`);
+          return null;
+        },
+        onRight: proposal => {
+          return proposal;
+        },
+      });
+    })
+    .filter(p => p !== null);
+
+  return decodedProposals.map(p => {
     const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
-
-    const profile = maybeProfile ?? {
-      id: p.createdBy.id,
-      name: null,
-      avatarUrl: null,
-      coverUrl: null,
-      address: p.createdBy.id as `0x${string}`,
-      profileLink: null,
-    };
-
-    const spaceConfig = p.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
-    const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
-
-    const spaceWithMetadata: SpaceWithMetadata = {
-      id: p.space.id,
-      name: spaceConfig?.name ?? null,
-      image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-    };
-
-    return {
-      ...p,
-      name: p.name,
-      description: p.description,
-      space: spaceWithMetadata,
-      // If the Wallet -> Profile doesn't mapping doesn't exist we use the Wallet address.
-      createdBy: profile,
-      proposedVersions: p.proposedVersions.nodes.map(v => {
-        return {
-          ...v,
-          space: spaceWithMetadata,
-          createdBy: profile,
-          // actions: fromNetworkOps(v.actions.nodes),
-        };
-      }),
-    };
+    return ProposalWithoutVotersDto(p, maybeProfile);
   });
 }

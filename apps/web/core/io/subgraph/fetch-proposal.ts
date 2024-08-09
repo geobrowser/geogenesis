@@ -1,17 +1,16 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Proposal, SpaceWithMetadata } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 
+import { Proposal, ProposalDto } from '../dto/proposals';
+import { SubstreamProposal } from '../schema';
 import { fetchProfile } from './fetch-profile';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { spaceMetadataFragment, tripleFragment } from './fragments';
+import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, SubstreamProposal, fromNetworkTriples } from './network-local-mapping';
 
 export const getFetchProposalQuery = (id: string) => `query {
   proposal(id: ${JSON.stringify(id)}) {
@@ -131,49 +130,21 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.account.id)),
   ]);
 
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
-  const spaceConfigTriples = fromNetworkTriples(spaceConfig?.triples.nodes ?? []);
+  const proposalOrError = Schema.decodeEither(SubstreamProposal)(proposal);
 
-  const spaceWithMetadata: SpaceWithMetadata = {
-    id: proposal.space.id,
-    name: spaceConfig?.name ?? null,
-    image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-  };
-
-  return {
-    ...proposal,
-    space: spaceWithMetadata,
-    createdBy: profile,
-    proposalVotes: {
-      totalCount: proposal.proposalVotes.totalCount,
-      nodes: proposal.proposalVotes.nodes.map(v => {
-        const maybeProfile = voterProfiles.find(voter => v.account.id === voter.address);
-
-        const voter = maybeProfile
-          ? maybeProfile
-          : {
-              id: v.account.id,
-              address: v.account.id as `0x${string}`,
-              name: null,
-              avatarUrl: null,
-              coverUrl: null,
-              profileLink: null,
-            };
-
-        return {
-          ...v,
-          vote: v.vote,
-          voter,
-        };
-      }),
+  const decodedProposal = Either.match(proposalOrError, {
+    onLeft: error => {
+      console.error(`Unable to decode proposal ${proposal.id} with error ${error}`);
+      return null;
     },
-    proposedVersions: proposal.proposedVersions.nodes.map(v => {
-      return {
-        ...v,
-        createdBy: profile,
-        space: spaceWithMetadata,
-        // actions: fromNetworkOps(v.actions.nodes),
-      };
-    }),
-  };
+    onRight: proposal => {
+      return proposal;
+    },
+  });
+
+  if (decodedProposal === null) {
+    return null;
+  }
+
+  return ProposalDto(proposal, profile, voterProfiles);
 }

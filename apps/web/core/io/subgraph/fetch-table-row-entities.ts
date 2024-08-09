@@ -1,14 +1,14 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity as IEntity } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 
-import { tripleFragment } from './fragments';
+import { Entity, EntityDto } from '../dto/entities';
+import { SubstreamEntity } from '../schema';
+import { entityFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 // this differs from the fetchEntities method in that we pass in a custom graphql string that represents
 // the set of custom Table filters set on the table. These filters have small differences from the other
@@ -20,13 +20,7 @@ function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
   return `query {
     entities(filter: ${filter} first: ${first} offset: ${skip} orderBy: UPDATED_AT_DESC) {
       nodes {
-        id
-        name
-        triples(filter: { isStale: { equalTo: false } }) {
-          nodes {
-            ${tripleFragment}
-          }
-        }
+        ${entityFragment}
       }
     }
   }`;
@@ -44,7 +38,7 @@ interface NetworkResult {
   entities: { nodes: SubstreamEntity[] };
 }
 
-export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<IEntity[]> {
+export async function fetchTableRowEntities(options: FetchTableRowEntitiesOptions): Promise<Entity[]> {
   const queryId = uuid();
 
   const graphqlFetchEffect = graphql<NetworkResult>({
@@ -96,30 +90,21 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
 
   const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  return entities.nodes.map(result => {
-    const networkTriples = result.triples.nodes;
+  const decodedEntities = entities.nodes
+    .map(e => {
+      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
 
-    // If there is no latest version just return an empty entity.
-    if (networkTriples.length === 0) {
-      return {
-        id: result.id,
-        name: result.name,
-        description: null,
-        types: [],
-        triples: [],
-      };
-    }
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Unable to decode entity ${e.id} with error ${error}`);
+          return null;
+        },
+        onRight: entity => {
+          return entity;
+        },
+      });
+    })
+    .filter(e => e !== null);
 
-    const triples = fromNetworkTriples(networkTriples);
-    const nameTriples = Entities.nameTriples(triples);
-
-    return {
-      id: result.id,
-      name: result.name,
-      description: Entities.description(triples),
-      nameTripleSpaces: nameTriples.map(t => t.space),
-      types: Entities.types(triples),
-      triples,
-    };
-  });
+  return decodedEntities.map(EntityDto);
 }

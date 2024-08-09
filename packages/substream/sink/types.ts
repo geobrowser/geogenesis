@@ -14,7 +14,7 @@ export interface GeoBlock extends BlockEvent {
   network: string;
 }
 
-export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';
+export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URI' | 'TIME' | 'GEO_LOCATION';
 
 // We hardcode our Op type instead of deriving it from the Zod types.
 // This is due to zod having issues generating disciminate types from
@@ -25,10 +25,10 @@ export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX'
 // trust that it is constructed into the correct ormat once it's decoded.
 export type Op =
   | {
-      opType: 'SET_TRIPLE';
-      payload: {
-        entityId: string;
-        attributeId: string;
+      type: 'SET_TRIPLE';
+      triple: {
+        entity: string;
+        attribute: string;
         value: {
           type: ValueType;
           value: string;
@@ -36,10 +36,10 @@ export type Op =
       };
     }
   | {
-      opType: 'DELETE_TRIPLE';
-      payload: {
-        entityId: string;
-        attributeId: string;
+      type: 'DELETE_TRIPLE';
+      triple: {
+        entity: string;
+        attribute: string;
         value: Record<string, never>;
       };
     };

@@ -1,21 +1,9 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
-import { useDiff } from '~/core/state/diff-store';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { EntitySearchResult } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
+import { SubstreamType } from '~/core/io/schema';
 
-import { SmallButton } from '~/design-system/button';
-import { Dots } from '~/design-system/dots';
-
-import { HistoryEmpty } from '../history/history-empty';
-import { HistoryItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 import { EntityPageTypeChip } from './entity-page-type-chip';
@@ -23,7 +11,7 @@ import { EntityPageTypeChip } from './entity-page-type-chip';
 interface EntityPageMetadataHeaderProps {
   id: string;
   spaceId: string;
-  types: Array<EntitySearchResult>;
+  types: Array<SubstreamType>;
 }
 
 export function EntityPageMetadataHeader({ id, spaceId, types: serverTypes }: EntityPageMetadataHeaderProps) {

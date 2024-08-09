@@ -13,7 +13,7 @@ import { useAragon } from '~/core/hooks/use-aragon';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SpaceGovernanceType } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, toTitleCase } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -194,13 +194,13 @@ export default function ImportSpace() {
       <Spacer height={20} />
       <div className="flex items-center gap-2">
         <Dropdown
-          trigger={<p>{type}</p>}
+          trigger={<p>{toTitleCase(type)}</p>}
           options={[
             {
-              label: 'Governance',
+              label: 'Public',
               onClick: () => setSelectedSpaceType('PUBLIC'),
               disabled: false,
-              value: 'governance',
+              value: 'public',
             },
             {
               label: 'Personal',

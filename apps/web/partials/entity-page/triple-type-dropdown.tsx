@@ -10,7 +10,6 @@ import { useState } from 'react';
 import { ValueType as TripleValueType } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
-import { Collection } from '~/design-system/icons/collection';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
@@ -23,11 +22,10 @@ const MotionContent = motion(DropdownPrimitive.Content);
 const icons: Record<TripleValueType, React.FunctionComponent<{ color?: ColorName }>> = {
   TIME: Date,
   ENTITY: Relation,
-  COLLECTION: Collection,
   TEXT: Text,
   NUMBER: Text,
   IMAGE: Image,
-  URL: Url,
+  URI: Url,
   CHECKBOX: Relation,
 };
 

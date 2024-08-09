@@ -1,14 +1,9 @@
-import { Op, SYSTEM_IDS, createCollection, createCollectionItem } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
-import { getBlocksCollectionData, getCollectionItemsFromBlocksTriple } from '~/core/io/subgraph/network-local-mapping';
-import { Entity as EntityType, Triple as TripleType, Value as ValueType } from '~/core/types';
+import { Triple as TripleType } from '~/core/types';
 import { Triples } from '~/core/utils/triples';
-import { Values } from '~/core/utils/value';
-
-import { Collections } from '../collections';
-import { groupBy } from '../utils';
 
 type Options = {
   oldEntityId: string;
@@ -73,133 +68,135 @@ export const cloneEntity = async (options: Options) => {
     }
   });
 
-  const { blockCollectionItems, blockIdsTriple } = getCollectionItemsFromBlocksTriple(oldEntity);
+  // @TODO(relations)
+  // Clon relations and blocks
+  // const { blockCollectionItems, blockIdsTriple } = getCollectionItemsFromBlocksTriple(oldEntity);
 
-  if (blockIdsTriple) {
-    const blockIds = blockCollectionItems.map(b => b.entity.id);
+  // if (blockIdsTriple) {
+  //   const blockIds = blockCollectionItems.map(b => b.entity.id);
 
-    const newBlockIds = blockIds.map(() => {
-      const newBlockId = ID.createEntityId();
-      return newBlockId;
-    });
+  //   const newBlockIds = blockIds.map(() => {
+  //     const newBlockId = ID.createEntityId();
+  //     return newBlockId;
+  //   });
 
-    // 1. Create collection
-    const collectionOp = createCollection();
+  //   // 1. Create collection
+  //   const collectionOp = createCollection();
 
-    // Create the collection entity by adding the collection type
-    newTriples.push({
-      space: spaceId,
-      attributeId: collectionOp.payload.attributeId,
-      entityId: collectionOp.payload.entityId,
-      entityName: null,
-      attributeName: 'Types',
-      value: {
-        // @TODO(migration): This might be a collection in the future which
-        // would create a recursive collection creation loop
-        type: 'ENTITY',
-        value: collectionOp.payload.value.value,
-        name: 'Collection',
-      },
-    });
+  //   // Create the collection entity by adding the collection type
+  //   newTriples.push({
+  //     space: spaceId,
+  //     attributeId: collectionOp.triple.attribute,
+  //     entityId: collectionOp.triple.entity,
+  //     entityName: null,
+  //     attributeName: 'Types',
+  //     value: {
+  //       // @TODO(migration): This might be a collection in the future which
+  //       // would create a recursive collection creation loop
+  //       type: 'ENTITY',
+  //       value: collectionOp.triple.value.value,
+  //       name: 'Collection',
+  //     },
+  //   });
 
-    // 2. Create collection item for each block
-    const collectionItemsTriples = newBlockIds
-      .map(id =>
-        Collections.createCollectionItemTriples({
-          collectionId: collectionOp.payload.entityId,
-          entityId: id,
-          spaceId,
-        })
-      )
-      .flat();
+  //   // 2. Create collection item for each block
+  //   const collectionItemsTriples = newBlockIds
+  //     .map(id =>
+  //       Collections.createCollectionItemTriples({
+  //         collectionId: collectionOp.triple.entity,
+  //         entityId: id,
+  //         spaceId,
+  //       })
+  //     )
+  //     .flat();
 
-    newTriples.push(...collectionItemsTriples);
+  //   newTriples.push(...collectionItemsTriples);
 
-    const newBlockIdsTriple = Triples.withId({
-      attributeId: SYSTEM_IDS.BLOCKS,
-      attributeName: 'Blocks',
-      space: spaceId,
-      entityId: newEntityId,
-      entityName: newEntityName,
-      value: {
-        type: 'COLLECTION',
-        value: collectionOp.payload.entityId,
-        items: Collections.itemFromTriples(groupBy(collectionItemsTriples, c => c.entityId)),
-      },
-    });
+  //   const newBlockIdsTriple = Triples.withId({
+  //     attributeId: SYSTEM_IDS.BLOCKS,
+  //     attributeName: 'Blocks',
+  //     space: spaceId,
+  //     entityId: newEntityId,
+  //     entityName: newEntityName,
+  //     value: {
+  //       type: 'COLLECTION',
+  //       value: collectionOp.triple.entity,
+  //       items: Collections.itemFromTriples(groupBy(collectionItemsTriples, c => c.entityId)),
+  //     },
+  //   });
 
-    newTriples.push(newBlockIdsTriple);
+  //   newTriples.push(newBlockIdsTriple);
 
-    const blockEntities = await Promise.all(
-      blockIds.map((blockId: string) => {
-        return Subgraph.fetchEntity({ id: blockId });
-      })
-    );
+  //   const blockEntities = await Promise.all(
+  //     blockIds.map((blockId: string) => {
+  //       return Subgraph.fetchEntity({ id: blockId });
+  //     })
+  //   );
 
-    const newBlockTriples: Array<TripleType> = [];
+  //   const newBlockTriples: Array<TripleType> = [];
 
-    blockEntities.forEach((blockEntity: EntityType | null, index: number) => {
-      if (!blockEntity) return;
+  //   blockEntities.forEach((blockEntity: EntityType | null, index: number) => {
+  //     if (!blockEntity) return;
 
-      blockEntity.triples.forEach((triple: TripleType) => {
-        if (triple.attributeId === SYSTEM_IDS.PARENT_ENTITY) {
-          newBlockTriples.push(
-            Triples.withId({
-              ...triple,
-              space: spaceId,
-              entityId: newBlockIds[index],
-              value: {
-                type: 'ENTITY',
-                name: newEntityName,
-                value: newEntityId,
-              },
-            })
-          );
-        } else if (triple.attributeId === SYSTEM_IDS.FILTER && triple.value.type === 'TEXT') {
-          let newValue = triple.value.value;
+  //     blockEntity.triples.forEach((triple: TripleType) => {
+  //       if (triple.attributeId === SYSTEM_IDS.PARENT_ENTITY) {
+  //         newBlockTriples.push(
+  //           Triples.withId({
+  //             ...triple,
+  //             space: spaceId,
+  //             entityId: newBlockIds[index],
+  //             value: {
+  //               type: 'ENTITY',
+  //               name: newEntityName,
+  //               value: newEntityId,
+  //             },
+  //           })
+  //         );
+  //       } else if (triple.attributeId === SYSTEM_IDS.FILTER && triple.value.type === 'TEXT') {
+  //         let newValue = triple.value.value;
 
-          const spaceRegex = /entityOf_\s*:\s*{\s*space\s*:\s*"([^"]*)"\s*}/;
-          const spaceMatch = triple.value.value.match(spaceRegex);
-          const spaceValue = spaceMatch ? spaceMatch[1] : null;
+  //         const spaceRegex = /entityOf_\s*:\s*{\s*space\s*:\s*"([^"]*)"\s*}/;
+  //         const spaceMatch = triple.value.value.match(spaceRegex);
+  //         const spaceValue = spaceMatch ? spaceMatch[1] : null;
 
-          if (spaceValue) {
-            newValue = triple.value.value.replaceAll(spaceValue, spaceId);
-          }
+  //         if (spaceValue) {
+  //           newValue = triple.value.value.replaceAll(spaceValue, spaceId);
+  //         }
 
-          newBlockTriples.push(
-            Triples.withId({
-              ...triple,
-              space: spaceId,
-              entityId: newBlockIds[index],
-              value: {
-                type: 'TEXT',
-                value: newValue,
-              },
-            })
-          );
-        } else if (triple.value.type === 'ENTITY') {
-          newBlockTriples.push(
-            Triples.withId({
-              ...triple,
-              space: spaceId,
-              entityId: newBlockIds[index],
-            })
-          );
-        } else {
-          newBlockTriples.push(
-            Triples.withId({
-              ...triple,
-              space: spaceId,
-              entityId: newBlockIds[index],
-              value: triple.value,
-            })
-          );
-        }
-      });
-    });
+  //         newBlockTriples.push(
+  //           Triples.withId({
+  //             ...triple,
+  //             space: spaceId,
+  //             entityId: newBlockIds[index],
+  //             value: {
+  //               type: 'TEXT',
+  //               value: newValue,
+  //             },
+  //           })
+  //         );
+  //       } else if (triple.value.type === 'ENTITY') {
+  //         newBlockTriples.push(
+  //           Triples.withId({
+  //             ...triple,
+  //             space: spaceId,
+  //             entityId: newBlockIds[index],
+  //           })
+  //         );
+  //       } else {
+  //         newBlockTriples.push(
+  //           Triples.withId({
+  //             ...triple,
+  //             space: spaceId,
+  //             entityId: newBlockIds[index],
+  //             value: triple.value,
+  //           })
+  //         );
+  //       }
+  //     });
+  //   });
 
-    newTriples.push(...newBlockTriples);
-  }
+  // newTriples.push(...newBlockTriples);
+  // }
 
   return newTriples;
 };

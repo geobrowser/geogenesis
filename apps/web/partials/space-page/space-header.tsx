@@ -95,7 +95,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
                     setSelectedProposal(p.id);
                     setIsCompareOpen(true);
                   }}
-                  changeCount={p.proposedVersions.reduce<AppOp[]>((acc, version) => acc.concat(version.ops), []).length}
+                  changeCount={0}
                   createdAt={p.createdAt}
                   createdBy={p.createdBy}
                   name={p.name}

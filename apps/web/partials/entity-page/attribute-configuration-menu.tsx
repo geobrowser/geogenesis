@@ -11,8 +11,8 @@ import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { Entity, OmitStrict, RelationValueType } from '~/core/types';
-import { Triples } from '~/core/utils/triples';
+import { Entity } from '~/core/io/dto/entities';
+import { OmitStrict, RelationValueType } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent } from '~/design-system/autocomplete/results-list';
@@ -27,6 +27,8 @@ interface Props {
   trigger: React.ReactNode;
 }
 
+// @TODO(relations): Right now this configuration menu is disabled in favor of a future
+// configuration flow oriented around relations instead of entity values.
 export function AttributeConfigurationMenu({ trigger, attributeId, attributeName }: Props) {
   const [open, setOpen] = React.useState(false);
 

@@ -11,11 +11,10 @@ export const getValue = (op: AppOp, fallback: boolean | string = false): string 
 
   switch (op.value.type) {
     case 'ENTITY':
-    case 'COLLECTION':
     case 'TEXT':
     case 'NUMBER':
     case 'TIME':
-    case 'URL':
+    case 'URI':
       value = op.value.value;
       break;
     case 'IMAGE':

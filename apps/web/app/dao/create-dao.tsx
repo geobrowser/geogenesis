@@ -41,9 +41,9 @@ export function CreateDao({ type }: Prtypes) {
       ops: [
         {
           type: 'SET_TRIPLE',
-          payload: {
-            entityId,
-            attributeId: SYSTEM_IDS.NAME,
+          triple: {
+            entity: entityId,
+            attribute: SYSTEM_IDS.NAME,
             value: {
               type: 'TEXT',
               value: 'Governance v3 test space',
@@ -52,9 +52,9 @@ export function CreateDao({ type }: Prtypes) {
         },
         {
           type: 'SET_TRIPLE',
-          payload: {
-            entityId,
-            attributeId: SYSTEM_IDS.TYPES,
+          triple: {
+            entity: entityId,
+            attribute: SYSTEM_IDS.TYPES,
             value: {
               type: 'ENTITY',
               value: SYSTEM_IDS.SPACE_CONFIGURATION,

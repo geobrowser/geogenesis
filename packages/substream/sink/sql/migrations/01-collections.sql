@@ -38,7 +38,4 @@ END;
 $$ LANGUAGE plpgsql STRICT STABLE;
 
 ALTER TABLE
-    public.collections DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.collection_items DISABLE TRIGGER ALL;
+    public.relations DISABLE TRIGGER ALL;

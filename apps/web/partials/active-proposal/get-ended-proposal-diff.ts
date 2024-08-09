@@ -1,14 +1,12 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { PROPOSAL_DURATION } from '~/core/constants';
 import { Subgraph } from '~/core/io';
+import { Proposal } from '~/core/io/dto/proposals';
 import { fetchProposal } from '~/core/io/subgraph';
-import { EntityId, Proposal, Version } from '~/core/types';
+import { EntityId } from '~/core/types';
 import { Triple as TripleType } from '~/core/types';
-import { BlockChange, BlockValueType, Changeset } from '~/core/utils/change/change';
-import { Entities } from '~/core/utils/entity';
+import { BlockValueType, Changeset } from '~/core/utils/change/change';
 import { Triples } from '~/core/utils/triples';
-import { Values } from '~/core/utils/value';
 
 export async function getEndedProposalDiff(
   selectedProposal: Proposal,
