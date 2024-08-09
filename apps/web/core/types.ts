@@ -87,7 +87,6 @@ export type Triple = {
 
   // We have a set of application-specific metadata that we attach to each local version of a triple.
   id?: string; // `${spaceId}:${entityId}:${attributeId}`
-  placeholder?: boolean;
   // We keep published triples optimistically in the store. It can take a while for the blockchain
   // to process our transaction, then a few seconds for the subgraph to pick it up and index it.
   // We keep the published triples so we can continue to render them locally while the backend

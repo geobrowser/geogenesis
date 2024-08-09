@@ -94,7 +94,6 @@ export const upsertMany = (ops: { op: StoreOp; spaceId: string }[]) => {
       hasBeenPublished: false,
       isDeleted: false,
       timestamp: Triples.timestamp(),
-      placeholder: false,
     };
 
     if (op.type === 'DELETE_TRIPLE') {

@@ -11,7 +11,7 @@ export const makeStubTriple = (name: string, entityId?: string): Triple => {
     id: name,
     entityId: entityId ?? name,
     entityName: name,
-    attributeId: 'name',
+    attributeId: SYSTEM_IDS.NAME,
     attributeName: 'Name',
     value: {
       type: 'TEXT',
