@@ -4,13 +4,10 @@ import React, { useTransition } from 'react';
 
 import { useActionsStore } from '../hooks/use-actions-store';
 import { useMergedData } from '../hooks/use-merged-data';
-import { ID } from '../id';
 import { createTripleId } from '../id/create-id';
-import { Merged } from '../merged';
 import {
   AppOp,
   Triple as ITriple,
-  SetTripleAppOp,
   ValueType as TripleValueType,
   TripleWithDateValue,
   TripleWithStringValue,
@@ -50,7 +47,6 @@ interface MigrateHubConfig {
     remove: ReturnType<typeof useActionsStore>['remove'];
   };
   queryClient: QueryClient;
-  merged: Merged;
 }
 
 export interface IMigrateHub {
@@ -78,17 +74,19 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
           // more than 1000 entries we need to paginate until the end. We don't know
           // the number of entries ahead of time with graph-node, unfortunately.
           while (!isRemainingTriples) {
-            const triplesChunk = await config.merged.fetchTriples({
-              query: '',
-              first: FIRST,
-              skip: page * FIRST,
-              filter: [
-                {
-                  field: 'linked-to',
-                  value: entityId,
-                },
-              ],
-            });
+            // @TODO(use merged API)
+            // const triplesChunk = await config.merged.fetchTriples({
+            //   query: '',
+            //   first: FIRST,
+            //   skip: page * FIRST,
+            //   filter: [
+            //     {
+            //       field: 'linked-to',
+            //       value: entityId,
+            //     },
+            //   ],
+            // });
+            const triplesChunk: ITriple[] = [];
 
             // graph-node allows you to page past the last entry. Doing so will return an empty array.
             // We can use this to determine if we have reached the end of the triples. This will result
@@ -133,17 +131,19 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
           // more than 1000 entries we need to paginate until the end. We don't know
           // the number of entries ahead of time with graph-node, unfortunately.
           while (!isRemainingTriples) {
-            const triplesChunk = await config.merged.fetchTriples({
-              query: '',
-              first: FIRST,
-              skip: page * FIRST,
-              filter: [
-                {
-                  field: 'attribute-id',
-                  value: attributeId,
-                },
-              ],
-            });
+            // @TODO(use merged API)
+            // const triplesChunk = await config.merged.fetchTriples({
+            //   query: '',
+            //   first: FIRST,
+            //   skip: page * FIRST,
+            //   filter: [
+            //     {
+            //       field: 'attribute-id',
+            //       value: attributeId,
+            //     },
+            //   ],
+            // });
+            const triplesChunk: ITriple[] = [];
 
             // graph-node allows you to page past the last entry. Doing so will return an empty array.
             // We can use this to determine if we have reached the end of the triples. This will result
@@ -299,7 +299,6 @@ function migrateHub(config: MigrateHubConfig): IMigrateHub {
 export function useMigrateHub() {
   const { upsert, remove, addActionsToSpaces } = useActionsStore();
   const queryClient = useQueryClient();
-  const merged = useMergedData();
 
   const [, startTransition] = useTransition();
 
@@ -309,10 +308,9 @@ export function useMigrateHub() {
         upsert,
         remove,
       },
-      merged,
       queryClient,
     });
-  }, [remove, queryClient, merged]);
+  }, [remove, queryClient]);
 
   const dispatch = React.useCallback(
     async (action: MigrateAction) => {
@@ -335,87 +333,3 @@ export function useMigrateHub() {
     dispatch,
   };
 }
-
-// @TODO: For now we don't need a library for handling traversing the graph.
-// Eventually we will for more complex garbage-collecting of data in Geo, like
-// cascading deletes after deleting an entity.
-// class Graph {
-//   adjacencyList: Map<number, number[]>;
-//   visited: Set<number>;
-//   private queryClient: MigrateHubConfig['queryClient'];
-//   private merged: MigrateHubConfig['merged'];
-//   private appConfig: MigrateHubConfig['appConfig'];
-
-//   constructor(config: OmitStrict<MigrateHubConfig, 'actionsApi'>) {
-//     this.adjacencyList = new Map();
-//     this.visited = new Set();
-//     this.queryClient = config.queryClient;
-//     this.merged = config.merged;
-//     this.appConfig = config.appConfig;
-//   }
-
-/**
- * We need to recursively delete all downstream triples (edges) for any entity (node)
- * that as a result of being deleting the original node.
- *
- * Deleting an entity should delete all triples (edges) that reference this entity.
- * If the delete triples are the last triple in the entity (node), we should also
- * delete references to that entity.
- */
-// async generateDownstreamReferencesToEntity(entityId: string): Promise<Triple[]> {
-// @TODO: For now we only delete triples one-level deep. Eventually we may want to
-// handle cascading deletes if the triples deleted are the last triples in the entity.
-//
-// In that model we will need to track visited entities to avoid cycles in the graph.
-// const descendants = new Set<Triple>();
-// const visited = new Set<string>();
-
-// const dfs = async (entityId: string) => {
-// visited.add(entityId);
-
-// for (const neighbor of neighbors) {
-// See @TODO above
-// if (visited.has(neighbor.id)) continue;
-
-// See @TODO above
-// if (!visited.has(neighbor.id)) {
-// descendants.add(neighbor);
-
-// See @TODO above
-// dfs(neighbor.entityId);
-// }
-// }
-// };
-
-// See @TODO above
-// await dfs(entityId);
-
-//   const neighbors = await this.fetchNeighbors(entityId);
-
-//   console.log('state', {
-//     neighbors,
-//   });
-
-//   return Array.from(neighbors);
-// }
-
-//   async fetchReferencedByTriples(entityId: string) {
-//     // Fetches edges for the given node at entityId
-//     return await this.queryClient.fetchQuery({
-//       queryKey: ['migrate-triples-referencing-entity', entityId],
-//       queryFn: () =>
-//         this.merged.fetchTriples({
-//           query: '',
-//           first: 1000,
-//           skip: 0,
-//           endpoint: this.appConfig.subgraph,
-//           filter: [
-//             {
-//               field: 'linked-to',
-//               value: entityId,
-//             },
-//           ],
-//         }),
-//     });
-//   }
-// }

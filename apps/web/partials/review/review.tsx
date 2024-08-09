@@ -131,9 +131,8 @@ const ReviewChanges = () => {
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
-  const { actionsFromSpace, clear } = useActionsStore(activeSpace);
+  const { actionsFromSpace: triples, clear } = useActionsStore(activeSpace);
   const { makeProposal } = usePublish();
-  const triples = Triples.squash(actionsFromSpace);
   const [data, isLoading] = useChanges(triples, activeSpace);
 
   const handlePublish = useCallback(async () => {
@@ -147,14 +146,14 @@ const ReviewChanges = () => {
     // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
     await makeProposal({
-      triples: actionsFromSpace,
+      triples: triples,
       spaceId: activeSpace,
       name: proposalName,
       onSuccess: () => {
         clearProposalName();
       },
     });
-  }, [activeSpace, proposalName, proposals, makeProposal, actionsFromSpace]);
+  }, [activeSpace, proposalName, proposals, makeProposal, triples]);
 
   if (isLoading || !data || isSpacesLoading) {
     return null;

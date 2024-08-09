@@ -1,15 +1,18 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
+import { dedupeWith } from 'effect/Array';
 
 import * as React from 'react';
 
 import { TableBlockSdk } from '../blocks-sdk';
+import { mergeEntityAsync } from '../database/entities';
 import { useActionsStore } from '../hooks/use-actions-store';
 import { useMergedData } from '../hooks/use-merged-data';
 import { Entity } from '../io/dto/entities';
 import { FetchRowsOptions } from '../io/fetch-rows';
+import { EntityId } from '../io/schema';
 import { Services } from '../services';
-import { AppEntityValue, Column, GeoType, ValueType as TripleValueType } from '../types';
+import { AppEntityValue, GeoType, ValueType as TripleValueType } from '../types';
 import { Entities } from '../utils/entity';
 import { Triples } from '../utils/triples';
 import { getImagePath } from '../utils/utils';
@@ -59,7 +62,7 @@ export function useTableBlock() {
   const { data: blockEntity, isLoading } = useQuery({
     // Refetch the entity if there have been local changes
     queryKey: ['table-block-entity', entityId, actionsForEntityIdWithoutName],
-    queryFn: ({ signal }) => merged.fetchEntity({ id: entityId, signal }),
+    queryFn: () => mergeEntityAsync(EntityId(entityId)),
   });
 
   // We track the name triple separately from the normal `blockEntities.triples`
@@ -101,7 +104,7 @@ export function useTableBlock() {
     queryFn: async () => {
       const filterState = TableBlockSdk.createFiltersFromGraphQLString(
         filterString,
-        async id => await merged.fetchEntity({ id })
+        async id => await mergeEntityAsync(EntityId(id))
       );
 
       return filterState;
@@ -133,12 +136,7 @@ export function useTableBlock() {
         signal,
       });
 
-      const dedupedColumns = columns.reduce((acc, column) => {
-        if (acc.find(c => c.id === column.id)) return acc;
-        return [...acc, column];
-      }, [] as Column[]);
-
-      return dedupedColumns;
+      return dedupeWith(columns, (a, b) => a.id === b.id);
     },
   });
 
@@ -184,7 +182,7 @@ export function useTableBlock() {
 
       // Make sure we merge any unpublished entities
       const maybeRelationAttributeTypes = await Promise.all(
-        columns.map(t => t.id).map(attributeId => merged.fetchEntity({ id: attributeId }))
+        columns.map(t => t.id).map(attributeId => mergeEntityAsync(EntityId(attributeId)))
       );
 
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));

@@ -48,6 +48,10 @@ export function useEntity(id: EntityId, initialData: { triples: Triple[]; relati
     return Entities.name(triples);
   }, [triples]);
 
+  const nameTripleSpaces = React.useMemo(() => {
+    return triples.filter(t => t.attributeId === SYSTEM_IDS.NAME).map(t => t.space);
+  }, [triples]);
+
   const description = React.useMemo(() => {
     return Entities.description(triples);
   }, [triples]);
@@ -67,6 +71,7 @@ export function useEntity(id: EntityId, initialData: { triples: Triple[]; relati
   return {
     id,
     name,
+    nameTripleSpaces,
     description,
     // @TODO: Types
     // @TODO: Spaces with metadata
@@ -74,7 +79,6 @@ export function useEntity(id: EntityId, initialData: { triples: Triple[]; relati
     triples,
     relationsOut: relations,
     types,
-    nameTripleSpaces: [],
   };
 }
 
@@ -92,7 +96,7 @@ interface MergeEntityArgs {
  * This is different from the mergeEntityAsync which expects that it will
  * handle fetching the remote entity itself.
  */
-export function mergeEntity({ id, mergeWith }: MergeEntityArgs) {
+export function mergeEntity({ id, mergeWith }: MergeEntityArgs): EntityWithSchema {
   const mergedTriples = getTriples({
     mergeWith: mergeWith?.triples,
     selector: t => t.entityId === id,
@@ -110,17 +114,19 @@ export function mergeEntity({ id, mergeWith }: MergeEntityArgs) {
   const types = readTypes(mergedTriples, mergedRelations);
 
   return {
-    id,
+    id: EntityId(id),
     name,
+    nameTripleSpaces: mergedTriples.filter(t => t.attributeId === SYSTEM_IDS.NAME).map(t => t.space),
     description,
     types,
+    triples: mergedTriples,
+    relationsOut: mergedRelations,
     // @TODO: Spaces with metadata
     // @TODO: Schema? Adding schema here might result in infinite queries since we
     // if we called getEntity from within getEntity it would query infinitlely deep
     // until we hit some defined base-case. We could specify a max depth for the
     // recursion so we only return the closest schema and not the whole chain.
-    triples: mergedTriples,
-    relationsOut: mergedRelations,
+    schema: [],
   };
 }
 
@@ -141,14 +147,20 @@ export function mergeEntity({ id, mergeWith }: MergeEntityArgs) {
  *    We can handle this using `mergeEntity` after fetching the remote entities. The
  *    main thing to solve there is filtering any entities that only exist locally.
  */
-export async function mergeEntityAsync(id: EntityId) {
+export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> {
   const cachedEntity = await await queryClient.fetchQuery({
     queryKey: ['entity-for-merging', id],
-    queryFn: () => fetchEntity({ id }),
+    queryFn: ({ signal }) => fetchEntity({ id, signal }),
     staleTime: Infinity,
   });
 
   return mergeEntity({ id, mergeWith: cachedEntity });
+}
+
+export async function mergeEntitiesAsync(ids: EntityId[]): Promise<EntityWithSchema[]> {
+  // @TODO: Fetch entities by ids
+  const cachedEntities = await Promise.all(ids.map(id => mergeEntityAsync(id)));
+  return cachedEntities.filter(e => e !== null);
 }
 
 /**
@@ -159,7 +171,7 @@ export async function mergeEntityAsync(id: EntityId) {
  *
  * We expect that attributes are only defined via relations, not triples.
  */
-async function getSchemaFromTypeIds(typesIds: string[]) {
+export async function getSchemaFromTypeIds(typesIds: string[]) {
   const schemaEntities = await Promise.all(
     typesIds.map(typeId => {
       // These are all cached in a network cache if they've been fetched before.

@@ -9,7 +9,6 @@ import * as React from 'react';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
-import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Entity } from '~/core/io/dto/entities';
 import { OmitStrict, RelationValueType } from '~/core/types';
@@ -32,8 +31,6 @@ interface Props {
 export function AttributeConfigurationMenu({ trigger, attributeId, attributeName }: Props) {
   const [open, setOpen] = React.useState(false);
 
-  const merged = useMergedData();
-
   // To add the relation value type triple to the correct space we need to fetch
   // the attribute and read the space off one of the triples.
   //
@@ -41,18 +38,7 @@ export function AttributeConfigurationMenu({ trigger, attributeId, attributeName
   // API to fetch both local and remote data.
   const { data: tripleForAttributeId } = useQuery({
     queryKey: ['attribute-search', attributeId],
-    queryFn: () =>
-      merged.fetchTriples({
-        query: '',
-        first: 1,
-        skip: 0,
-        filter: [
-          {
-            field: 'entity-id',
-            value: attributeId,
-          },
-        ],
-      }),
+    queryFn: () => [],
   });
 
   const attributeSpaceId = tripleForAttributeId?.[0]?.space;

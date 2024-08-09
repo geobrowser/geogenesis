@@ -2,10 +2,6 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { AppOp } from '~/core/types';
 
-export function forEntityId(ops: AppOp[], entityId: string) {
-  return ops.filter(a => a.entityId === entityId);
-}
-
 export const getValue = (op: AppOp, fallback: boolean | string = false): string => {
   let value: string | null = '';
 
@@ -38,10 +34,6 @@ export const getName = (op: AppOp) => {
     default:
       return null;
   }
-};
-
-export const getId = (op: AppOp) => {
-  return op.id;
 };
 
 export const getBlockType = (action: AppOp) => {

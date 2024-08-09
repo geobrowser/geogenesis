@@ -4,19 +4,8 @@ import { A, pipe } from '@mobily/ts-belt';
 
 import { ID } from '~/core/id';
 import { getAppTripleId } from '~/core/id/create-id';
-import {
-  AppEntityValue,
-  CollectionItem,
-  OmitStrict,
-  Triple,
-  ValueType as TripleValueType,
-  Value,
-  ValueTypeId,
-} from '~/core/types';
+import { AppEntityValue, OmitStrict, Triple, ValueType as TripleValueType, Value, ValueTypeId } from '~/core/types';
 import { valueTypes } from '~/core/value-types';
-
-import { Collections } from '../collections';
-import { Entities } from '../entity';
 
 export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {
@@ -27,19 +16,6 @@ export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
 
 export function timestamp() {
   return new Date().toISOString();
-}
-
-export function emptyPlaceholder(
-  spaceId: string,
-  entityId: string,
-  valueTypeId: ValueTypeId = SYSTEM_IDS.TEXT
-): Triple {
-  const type = valueTypes[valueTypeId] ?? 'string';
-
-  return {
-    ...empty(spaceId, entityId, type),
-    placeholder: true,
-  };
 }
 
 export function emptyValue(type: TripleValueType): Value {
@@ -95,22 +71,6 @@ export function empty(spaceId: string, entityId: string, type: TripleValueType =
     ...emptyTriple,
     id: ID.createTripleId(emptyTriple),
   };
-}
-
-/**
- * This functions acts as documentation to denote why we don't change the id of a triple
- * locally when changes are made.
- *
- * Right now if you change the contents of a triple locally -- e.g., you change the Attribute
- * or the Value of a relation -- we don't update the Triple ID locally. This is to make it easy to
- * track how triples have changed locally over time for use in change counts, diffing, and
- * squashing local actions before publishing them.
- *
- * Whenever the triple gets published to the network, the subgraph will correctly handle updating
- * the old triple with the new triple.
- */
-export function ensureStableId<T extends Triple>(triple: T): T {
-  return triple;
 }
 
 /**
@@ -187,10 +147,6 @@ export const getValue = (triple: Triple): string | null => {
       throw new Error('checkbox not supported');
   }
 };
-
-export function squash(triples: Triple[]): Triple[] {
-  return triples;
-}
 
 export function prepareTriplesForPublishing(triples: Triple[], spaceId: string): Op[] {
   const triplesToPublish = triples.filter(

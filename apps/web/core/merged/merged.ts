@@ -25,6 +25,7 @@ interface IMergedDataSource
     Subgraph.ISubgraph,
     // These data models don't have local equivalents, so we don't need merging logic for them.
     | 'fetchProposal'
+    | 'fetchEntity'
     | 'fetchProposals'
     | 'fetchTableRowEntities'
     | 'fetchSpace'
@@ -140,48 +141,6 @@ export class Merged implements IMergedDataSource {
     return [...localEntities, ...networkEntities.filter(e => !localEntityIds.has(e.id))];
   };
 
-  /**
-   * Merge the local version of an entity with the network version of an entity if they exist.
-   * This is necessary because the local version of an entity might have actions that haven't been
-   * published yet.
-   *
-   * States:
-   * * Local entity exists, network entity exists: Merge the local entity with the network entity
-   * * Local entity exists, network entity doesn't exist: Return the local entity
-   * * Local entity doesn't exist, network entity exists: Return the network entity
-   * * Local entity doesn't exist, network entity doesn't exist: Return null
-   *
-   */
-  fetchEntity = async (options: Parameters<Subgraph.ISubgraph['fetchEntity']>[0]) => {
-    try {
-      const maybeNetworkEntity = await this.cache.fetchQuery({
-        queryFn: () => this.subgraph.fetchEntity({ id: options.id }),
-        queryKey: ['merged-fetch-entity', options.id],
-      });
-
-      const localTriplesForEntityId = this.store.allActions.filter(a => a.entityId === options.id);
-
-      if (localTriplesForEntityId.length === 0) return maybeNetworkEntity;
-
-      // If not networkEntity we need to just return the local entity
-      if (!maybeNetworkEntity) {
-        return Entities.fromTriples(this.store.allActions, options.id);
-      }
-
-      // If the network entity exists, we need to merge the local actions with the network entity.
-      const entity = Entities.mergeActionsWithEntity(this.store.allActions, maybeNetworkEntity);
-
-      if (!entity) {
-        return null;
-      }
-
-      return entity;
-    } catch (e) {
-      console.error('Could not merge local entity with network entity', e);
-      return null;
-    }
-  };
-
   columns = async (options: Parameters<typeof fetchColumns>[0]) => {
     const serverColumns = await fetchColumns(options);
 
@@ -193,7 +152,7 @@ export class Merged implements IMergedDataSource {
 
     const filterState = await TableBlockSdk.createFiltersFromGraphQLString(
       options.params.filter ?? '',
-      async id => await this.fetchEntity({ id })
+      async id => await mergeEntityAsync(EntityId(id))
     );
 
     /**

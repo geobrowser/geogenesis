@@ -7,9 +7,11 @@ import { atom, useAtom } from 'jotai';
 import * as React from 'react';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
+import { mergeEntityAsync } from '~/core/database/entities';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { FetchRowsOptions } from '~/core/io/fetch-rows';
+import { EntityId } from '~/core/io/schema';
 import { Services } from '~/core/services';
 import { createForeignType as insertForeignType, createType as insertType } from '~/core/type/create-type';
 import { AppEntityValue, Column, GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
@@ -141,7 +143,7 @@ export function useEntityTable() {
 
       // Make sure we merge any unpublished entities
       const maybeRelationAttributeTypes = await Promise.all(
-        columns.map(t => t.id).map(attributeId => merged.fetchEntity({ id: attributeId }))
+        columns.map(t => t.id).map(attributeId => mergeEntityAsync(EntityId(attributeId)))
       );
 
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));

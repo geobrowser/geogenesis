@@ -13,9 +13,9 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 
+import { getSchemaFromTypeIds, mergeEntityAsync } from '~/core/database/entities';
 import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useMergedData } from '~/core/hooks/use-merged-data';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Entity } from '~/core/io/dto/entities';
@@ -72,7 +72,6 @@ function useOptimisticAttributes({
   spaceId: string;
 }) {
   const [optimisticAttributes, setOptimisticAttributes] = useAtom(optimisticAttributesAtom);
-  const merged = useMergedData();
   const { upsert, remove } = useActionsStore();
   const migrateHub = useMigrateHub();
 
@@ -196,29 +195,11 @@ function useOptimisticAttributes({
   const { data } = useSuspenseQuery({
     queryKey: ['table-block-type-schema-configuration-attributes-list', entityId],
     queryFn: async () => {
-      // Fetch the triples representing the Attributes for the type
-      const attributeTriples = await merged.fetchTriples({
-        query: '',
-        first: 100,
-        skip: 0,
-        filter: [
-          {
-            field: 'entity-id',
-            value: entityId,
-          },
-          {
-            field: 'attribute-id',
-            value: SYSTEM_IDS.ATTRIBUTES,
-          },
-        ],
-      });
+      const attributes = await getSchemaFromTypeIds([entityId]);
 
       // Fetch the the entities for each of the Attribute in the type
-      const maybeAttributeEntities = await Promise.all(
-        attributeTriples.map(t => merged.fetchEntity({ id: t.value.value }))
-      );
-
-      return maybeAttributeEntities.filter(Entities.isNonNull);
+      const maybeAttributeEntities = await Promise.all(attributes.map(t => mergeEntityAsync(t.id)));
+      return maybeAttributeEntities.filter(e => e !== null);
     },
   });
 

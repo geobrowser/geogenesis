@@ -2,7 +2,7 @@ import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
 
 import { Triple } from '~/core/types';
 
-export function itemIndexValue(triple?: Triple): string | null {
+export function indexValue(triple?: Triple): string | null {
   if (!triple) {
     return null;
   }
@@ -12,7 +12,7 @@ export function itemIndexValue(triple?: Triple): string | null {
   return isIndexTriple ? triple.value.value : null;
 }
 
-export function itemCollectionIdValue(triple?: Triple): string | null {
+export function fromValue(triple?: Triple): string | null {
   if (!triple) {
     return null;
   }
@@ -23,7 +23,7 @@ export function itemCollectionIdValue(triple?: Triple): string | null {
   return isCollectionIdValue ? triple.value.value : null;
 }
 
-export function itemEntityIdValue(triple?: Triple): string | null {
+export function toValue(triple?: Triple): string | null {
   if (!triple) {
     return null;
   }
