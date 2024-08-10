@@ -25,6 +25,8 @@ export function useEntityPageStore() {
     [hiddenSchemaIds]
   );
 
+  console.log('name', name);
+
   return {
     triples,
     relations: relationsOut,

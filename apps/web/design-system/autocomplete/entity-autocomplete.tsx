@@ -8,7 +8,7 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
@@ -57,7 +57,7 @@ interface Props {
 
 export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes, spaceId, attributeId }: Props) {
   const [, setToast] = useToast();
-  const { upsert } = useActionsStore();
+  const { upsert } = useWriteOps();
   const autocomplete = useAutocomplete({
     allowedTypes: allowedTypes?.map(type => type.typeId),
   });
@@ -88,7 +88,6 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
     // Create new entity with name and types
     upsert(
       {
-        type: 'SET_TRIPLE',
         entityId: newEntityId,
         attributeId: SYSTEM_IDS.NAME,
         entityName: autocomplete.query,
@@ -105,7 +104,6 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
       allowedTypes.forEach(type => {
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: autocomplete.query,

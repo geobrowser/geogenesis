@@ -1,12 +1,11 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
 
 import * as React from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
 import { useSpaces } from '~/core/hooks/use-spaces';
@@ -36,18 +35,16 @@ export function AttributeConfigurationMenu({ trigger, attributeId, attributeName
   //
   // The attribute being fetched might only exist locally so we need to use the merged
   // API to fetch both local and remote data.
-  const { data: tripleForAttributeId } = useQuery({
-    queryKey: ['attribute-search', attributeId],
-    queryFn: () => [],
-  });
-
-  const attributeSpaceId = tripleForAttributeId?.[0]?.space;
+  // const { data: tripleForAttributeId } = useQuery({
+  //   queryKey: ['attribute-search', attributeId],
+  //   queryFn: () => [],
+  // });
 
   return (
     <Menu open={open} onOpenChange={setOpen} trigger={trigger}>
       <div className="flex flex-col gap-2 bg-white">
         <h1 className="px-2 pt-2 text-metadataMedium">Add relation types (optional)</h1>
-        <AttributeSearch attributeId={attributeId} attributeName={attributeName} attributeSpaceId={attributeSpaceId} />
+        <AttributeSearch attributeId={attributeId} attributeName={attributeName} attributeSpaceId={''} />
       </div>
     </Menu>
   );
@@ -62,7 +59,7 @@ function AttributeSearch({
     allowedTypes: [SYSTEM_IDS.SCHEMA_TYPE],
   });
 
-  const { upsert, remove } = useActionsStore();
+  const { upsert, remove } = useWriteOps();
   const { spaces } = useSpaces();
 
   const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId });
@@ -75,7 +72,6 @@ function AttributeSearch({
 
     upsert(
       {
-        type: 'SET_TRIPLE',
         entityId: attributeId,
         attributeId: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
         attributeName: 'Relation Value Types',

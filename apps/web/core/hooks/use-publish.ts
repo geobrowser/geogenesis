@@ -6,14 +6,15 @@ import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
+import { useWriteOps } from '../database/write';
 import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';
+import { getTriples, useTriples } from '../merged/triples';
 import { useStatusBar } from '../state/status-bar-store';
 import { Triple as ITriple, ReviewState, SpaceGovernanceType } from '../types';
 import { Triples } from '../utils/triples';
 import { sleepWithCallback } from '../utils/utils';
-import { useActionsStore } from './use-actions-store';
 import { useSmartAccount } from './use-smart-account';
 
 interface MakeProposalOptions {
@@ -25,7 +26,7 @@ interface MakeProposalOptions {
 }
 
 export function usePublish() {
-  const { restore, actions: actionsBySpace } = useActionsStore();
+  const { restore } = useWriteOps();
   const smartAccount = useSmartAccount();
   const { dispatch } = useStatusBar();
 
@@ -82,13 +83,11 @@ export function usePublish() {
         // since we need to update the entire state of the space with the published actions and the
         // unpublished actions being merged together.
         // If the actionsBySpace[spaceId] is empty, then we return an empty array
-        const nonPublishedActions = actionsBySpace[spaceId]
-          ? actionsBySpace[spaceId].filter(a => {
-              return !triplesBeingPublished.has(a.id);
-            })
-          : [];
+        const nonPublishedOps = getTriples({
+          selector: t => t.space === spaceId && !triplesBeingPublished.has(t.id),
+        });
 
-        const publishedActions = triplesToPublish.map(action => ({
+        const publishedOps = triplesToPublish.map(action => ({
           ...action,
           // We keep published actions in memory to keep the UI optimistic. This is mostly done
           // because there is a period between publishing actions and the subgraph finishing indexing
@@ -99,10 +98,27 @@ export function usePublish() {
 
         // Update the actionsBySpace for the current space to set the published actions
         // as hasBeenPublished and merge with the existing actions in the space.
-        restore({
-          ...actionsBySpace,
-          [spaceId]: [...publishedActions, ...nonPublishedActions],
-        });
+        // @TODO(database): Need to correctly map the space for each op
+        restore([
+          ...publishedOps.map(t => {
+            return {
+              op: {
+                ...t,
+                type: t.isDeleted ? ('DELETE_TRIPLE' as const) : ('SET_TRIPLE' as const),
+              },
+              spaceId: t.space,
+            };
+          }),
+          ...nonPublishedOps.map(t => {
+            return {
+              op: {
+                ...t,
+                type: t.isDeleted ? ('DELETE_TRIPLE' as const) : ('SET_TRIPLE' as const),
+              },
+              spaceId: t.space,
+            };
+          }),
+        ]);
       });
 
       const result = await Effect.runPromise(Effect.either(publish));
@@ -130,7 +146,7 @@ export function usePublish() {
         onSuccess?.();
       }, 3000);
     },
-    [restore, actionsBySpace, smartAccount, dispatch]
+    [restore, smartAccount, dispatch]
   );
 
   return {

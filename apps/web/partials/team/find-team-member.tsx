@@ -7,7 +7,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useCallback, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useToast } from '~/core/hooks/use-toast';
 import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/io/dto/entities';
@@ -68,7 +68,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
   const [, setToast] = useToast();
-  const { upsertMany } = useActionsStore();
+  const { upsertMany } = useWriteOps();
 
   const handleAddLinkedTeamMember = () => {
     if (!person || !name || !role) return;
@@ -80,18 +80,14 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     if (linkedName !== name) {
       // Add name attribute
       triplesToWrite.push({
-        op: {
-          type: 'SET_TRIPLE',
-          entityId: linkedEntityId,
-          entityName: name,
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          value: {
-            type: 'TEXT',
-            value: name,
-          },
+        entityId: linkedEntityId,
+        entityName: name,
+        attributeId: SYSTEM_IDS.NAME,
+        attributeName: 'Name',
+        value: {
+          type: 'TEXT',
+          value: name,
         },
-        spaceId,
       });
     }
 
@@ -103,51 +99,37 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
       });
 
       // Create the image entity
-      triplesToWrite.push({
-        op: { ...typeTriple, type: 'SET_TRIPLE' },
-        spaceId,
-      });
-      triplesToWrite.push({
-        op: { ...urlTriple, type: 'SET_TRIPLE' },
-        spaceId,
-      });
+      triplesToWrite.push(typeTriple);
+      triplesToWrite.push(urlTriple);
 
       // Set the image entity reference on the current entity
       triplesToWrite.push({
-        spaceId,
-        op: {
-          type: 'SET_TRIPLE',
-          entityId: linkedEntityId,
-          entityName: name,
-          attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-          attributeName: 'Avatar',
-          value: {
-            type: 'IMAGE',
-            value: typeTriple.entityId,
-            image: Values.toImageValue(avatar),
-          },
+        entityId: linkedEntityId,
+        entityName: name,
+        attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+        attributeName: 'Avatar',
+        value: {
+          type: 'IMAGE',
+          value: typeTriple.entityId,
+          image: Values.toImageValue(avatar),
         },
       });
     }
 
     // Add role attribute
     triplesToWrite.push({
-      op: {
-        type: 'SET_TRIPLE',
-        entityId: linkedEntityId,
-        entityName: name,
-        attributeId: SYSTEM_IDS.ROLE_ATTRIBUTE,
-        attributeName: 'Role',
-        value: {
-          type: 'ENTITY',
-          value: role.id,
-          name: role.name,
-        },
+      entityId: linkedEntityId,
+      entityName: name,
+      attributeId: SYSTEM_IDS.ROLE_ATTRIBUTE,
+      attributeName: 'Role',
+      value: {
+        type: 'ENTITY',
+        value: role.id,
+        name: role.name,
       },
-      spaceId,
     });
 
-    upsertMany(triplesToWrite);
+    upsertMany(triplesToWrite, spaceId);
 
     setHasAddedTeamMember(true);
     setToast(<TeamMemberCreatedToast name={name} entityId={linkedEntityId} spaceId={spaceId} linked={true} />);

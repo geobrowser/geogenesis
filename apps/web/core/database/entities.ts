@@ -10,17 +10,18 @@ import { fetchEntities, fetchEntity } from '../io/subgraph';
 import { getRelations, useRelations } from '../merged/relations';
 import { getTriples, useTriples } from '../merged/triples';
 import { queryClient } from '../query-client';
-import { activeTriplesForEntityIdSelector } from '../state/actions-store/actions-store';
 import { Triple, TripleWithEntityValue } from '../types';
 import { Entities } from '../utils/entity';
+import { activeTriplesForEntityIdSelector } from './selectors';
 
 type EntityWithSchema = Entity & { schema: { id: EntityId; name: string | null }[] };
 
-export function useEntity(id: EntityId, initialData: { triples: Triple[]; relations: Relation[] }): EntityWithSchema {
+export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relations: Relation[] }): EntityWithSchema {
   const { initialTriples, initialRelations } = React.useMemo(() => {
     return {
-      initialTriples: initialData.triples,
-      initialRelations: initialData.relations,
+      initialTriples: initialData?.triples ?? [],
+      initialRelations: initialData?.relations ?? [],
+      relations,
     };
   }, [initialData]);
 
@@ -164,10 +165,7 @@ export async function mergeEntitiesAsync(args: Parameters<typeof fetchEntities>[
     staleTime: Infinity,
   });
 
-  console.log('cachedEntities', cachedEntities);
-
   const mergedEntities = cachedEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
-  return mergedEntities;
 
   return mergedEntities.filter(e => {
     if (e.name === null) {

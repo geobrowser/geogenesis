@@ -265,7 +265,7 @@ export default async function Layout({ children, params }: Props) {
         >
           <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
           <EntityPageContentContainer>
-            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+            <EditableHeading spaceId={props.spaceId} entityId={props.id} />
             <SpacePageMetadataHeader
               typeNames={typeNames}
               spaceId={props.spaceId}

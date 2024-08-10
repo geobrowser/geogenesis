@@ -3,7 +3,6 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { memo } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Cell, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -20,9 +19,6 @@ interface Props {
   cell: Cell;
   space: string;
   triples: Triple[];
-  upsert: ReturnType<typeof useActionsStore>['upsert'];
-  upsertMany: ReturnType<typeof useActionsStore>['upsertMany'];
-  remove: ReturnType<typeof useActionsStore>['remove'];
   valueType: string;
   columnName: string;
   columnRelationTypes?: { typeId: string; typeName: string | null }[];
@@ -32,9 +28,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   cell,
   space,
   triples,
-  upsert,
-  upsertMany,
-  remove,
   columnName,
   valueType,
   columnRelationTypes,
@@ -44,11 +37,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       entityId: cell.entityId,
       spaceId: space,
       entityName: Entities.name(triples) ?? '',
-    },
-    api: {
-      upsert,
-      upsertMany,
-      remove,
     },
   });
 

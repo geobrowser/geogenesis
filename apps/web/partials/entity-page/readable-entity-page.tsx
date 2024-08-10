@@ -1,9 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import Link from 'next/link';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Relation } from '~/core/io/dto/entities';
-import { TypeId } from '~/core/io/schema';
+import { useTriples } from '~/core/merged/triples';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple } from '~/core/types';
 import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
@@ -23,12 +22,15 @@ interface Props {
 }
 
 export function ReadableEntityPage({ triples: serverTriples, relations, id }: Props) {
-  const { actionsFromSpace } = useActionsStore();
+  const triplesFromSpace = useTriples({
+    selector: t => t.space === id,
+  });
+
   const { triples: localTriples } = useEntityPageStore();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
+  const triples = localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
 
   const sortedTriples = sortEntityPageTriples(triples, []);
 

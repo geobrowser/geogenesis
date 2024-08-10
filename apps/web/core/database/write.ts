@@ -1,10 +1,10 @@
 import { atom } from 'jotai';
 
 import { getAppTripleId } from '../id/create-id';
-import { StoredTriple } from '../state/actions-store/types';
 import { store } from '../state/jotai-store';
 import { DeleteTripleAppOp, OmitStrict, SetTripleAppOp } from '../types';
 import { Triples } from '../utils/triples';
+import { StoredTriple } from './types';
 
 export const localOpsAtom = atom<StoredTriple[]>([]);
 
@@ -42,6 +42,45 @@ export const remove = (op: OmitStrict<DeleteStoreOp, 'type'>, spaceId: string) =
       spaceId,
     },
   ]);
+};
+
+export const restore = (ops: { op: StoreOp; spaceId: string }[]) => {
+  const triplesToWrite: StoredTriple[] = [];
+
+  for (const { op, spaceId } of ops) {
+    const triple: StoredTriple = {
+      id: getAppTripleId(op, spaceId),
+      entityId: op.entityId,
+      attributeId: op.attributeId,
+      // How do we make this work well with local image triples? We want
+      // to store just the image itself to make rendering images easy,
+      // but that's not actually how we publish the images. Maybe we
+      // need to update it on Triple.prepareForPublishing...?
+      value:
+        op.type === 'SET_TRIPLE'
+          ? op.value
+          : // We don't set value as null so just use placeholder value
+            {
+              type: 'TEXT',
+              value: '',
+            },
+
+      entityName: op.type === 'SET_TRIPLE' ? op.entityName : null,
+      attributeName: op.type === 'SET_TRIPLE' ? op.attributeName : null,
+      space: spaceId,
+      hasBeenPublished: false,
+      isDeleted: false,
+      timestamp: Triples.timestamp(),
+    };
+
+    if (op.type === 'DELETE_TRIPLE') {
+      triple.isDeleted = true;
+    }
+
+    triplesToWrite.push(triple);
+  }
+
+  store.set(localOpsAtom, triplesToWrite);
 };
 
 const writeMany = (ops: { op: StoreOp; spaceId: string }[]) => {
@@ -105,5 +144,6 @@ export function useWriteOps() {
     upsert,
     upsertMany,
     remove,
+    restore,
   };
 }

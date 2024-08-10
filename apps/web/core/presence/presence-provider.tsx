@@ -6,9 +6,8 @@ import { ErrorBoundary } from 'react-error-boundary';
 import * as React from 'react';
 import { useEffect } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-
 import { useSmartAccount } from '../hooks/use-smart-account';
+import { useTriples } from '../merged/triples';
 import { client } from './entity-presence-client';
 
 export const EntityPresenceContext = createRoomContext<{
@@ -82,10 +81,12 @@ interface HasEntityChangesProps extends Props {
   address: `0x${string}` | undefined;
 }
 
-function HasEntityChanges({ entityId, spaceId, children, address }: HasEntityChangesProps) {
-  const { actionsFromSpace } = useActionsStore(spaceId);
+function HasEntityChanges({ entityId, children, address }: HasEntityChangesProps) {
+  const triples = useTriples({
+    selector: t => t.entityId === entityId,
+  });
   const updateMyPresence = EntityPresenceContext.useUpdateMyPresence();
-  const hasChangesToEntity = actionsFromSpace.filter(a => a.entityId === entityId).length > 0;
+  const hasChangesToEntity = triples.length > 0;
 
   useEffect(() => {
     updateMyPresence({ address, hasChangesToEntity });

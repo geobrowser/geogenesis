@@ -8,7 +8,7 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useRef } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useToast } from '~/core/hooks/use-toast';
@@ -46,7 +46,7 @@ export function EntityTextAutocomplete({
   className = '',
 }: Props) {
   const [, setToast] = useToast();
-  const { upsert } = useActionsStore();
+  const { upsert } = useWriteOps();
   const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
     allowedTypes: allowedTypes?.map(type => type.typeId),
   });
@@ -63,7 +63,6 @@ export function EntityTextAutocomplete({
     // Create new entity with name and types
     upsert(
       {
-        type: 'SET_TRIPLE',
         entityId: newEntityId,
         attributeId: SYSTEM_IDS.NAME,
         entityName: query,
@@ -80,7 +79,6 @@ export function EntityTextAutocomplete({
       allowedTypes.forEach(type => {
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: query,

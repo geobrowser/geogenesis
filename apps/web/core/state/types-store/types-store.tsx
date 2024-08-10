@@ -5,13 +5,13 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as React from 'react';
 
 import { useEntity } from '~/core/database/entities';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Space } from '~/core/io/dto/spaces';
 import { EntityId } from '~/core/io/schema';
+import { useTriples } from '~/core/merged/triples';
 import { GeoType, Triple as ITriple } from '~/core/types';
-import { Triples } from '~/core/utils/triples';
 
 interface TypesStoreProviderState {
+  // @TODO(relations) initial types should be relations and not triples
   initialTypes: ITriple[];
   space: Space | null;
 }
@@ -53,7 +53,11 @@ export function useTypesStore(): {
     triples: space?.spaceConfig.triples ?? [],
   });
 
-  const { actions } = useActionsStore();
+  // @TODO(relations)
+  const types = useTriples({
+    mergeWith: initialTypes,
+    selector: t => t.attributeId === SYSTEM_IDS.TYPES && t.value.value === SYSTEM_IDS.SCHEMA_TYPE,
+  });
 
   const localForeignTypes: GeoType[] = React.useMemo(() => {
     if (!space) return [];
@@ -68,19 +72,6 @@ export function useTypesStore(): {
         };
       });
   }, [space, relationsOut]);
-
-  const types: GeoType[] = React.useMemo(() => {
-    if (!space) return [];
-
-    // @TODO(relations)
-    const globalActions = actions[space.id] || [];
-    const localActions = globalActions.filter(a => {
-      return a.attributeId === SYSTEM_IDS.TYPES && a.value.value === SYSTEM_IDS.SCHEMA_TYPE && !a.isDeleted;
-    });
-
-    const triplesFromActions = Triples.merge(localActions, initialTypes);
-    return [...Triples.withLocalNames(globalActions, triplesFromActions), ...localForeignTypes];
-  }, [localForeignTypes, initialTypes, space, actions]);
 
   return {
     types,

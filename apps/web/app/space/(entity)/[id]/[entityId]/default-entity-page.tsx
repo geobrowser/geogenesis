@@ -72,9 +72,7 @@ export default async function DefaultEntityPage({
         <MoveEntityProvider>
           {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
           <EntityPageContentContainer>
-            {showHeading && (
-              <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
-            )}
+            {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
             {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />}
             {showSpacer && <Spacer height={40} />}
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />

@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { A, pipe } from '@mobily/ts-belt';
 import {
   ColumnDef,
   createColumnHelper,
@@ -20,14 +19,13 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
+import { getTriples } from '~/core/merged/triples';
 import { useEditable } from '~/core/state/editable-store';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
-import { Cell, Column, Row, ValueTypeId } from '~/core/types';
+import { Cell, Column, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { EntityCell } from '~/core/utils/entity-table/entity-table';
-import { Triples } from '~/core/utils/triples';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -84,10 +82,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { upsert, remove, actions, upsertMany } = useActionsStore();
-
-    // We know that cell is rendered as a React component by react-table
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     const { columns, columnRelationTypes } = useTableBlock();
 
     const cellData = getValue<Cell | undefined>();
@@ -97,18 +91,16 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const valueType = columnValueType(cellData.columnId, columns);
 
-    const cellTriples = pipe(
-      actions[space] ?? [],
-      // @TODO(migration): Each cell only has one triple for a given (S,E,A)
-      actions => Triples.merge(actions, cellData.triples),
-      A.filter(triple => {
+    const cellTriples = getTriples({
+      mergeWith: cellData.triples,
+      selector: triple => {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;
         const isCurrentValueType = triple.value.type === valueTypes[valueType];
 
         return isRowCell && isColCell && isCurrentValueType;
-      })
-    );
+      },
+    });
 
     if (isEditMode) {
       return (
@@ -121,9 +113,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           key={Entities.name(cellTriples)}
           triples={cellTriples}
           cell={cellData}
-          upsert={upsert}
-          upsertMany={upsertMany}
-          remove={remove}
           space={space}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}

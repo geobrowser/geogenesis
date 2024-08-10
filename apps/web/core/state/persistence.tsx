@@ -2,10 +2,10 @@
 
 import * as React from 'react';
 
+import { db } from '../database/indexeddb';
 import { Action } from '../utils/action';
 import { Triples } from '../utils/triples';
 import { localTriplesAtom } from './actions-store/actions-store';
-import { db } from './actions-store/indexeddb';
 import { store } from './jotai-store';
 
 export const Persistence = () => {

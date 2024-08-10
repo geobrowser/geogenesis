@@ -6,8 +6,8 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { useToast } from '~/core/hooks/use-toast';
+import { useTriples } from '~/core/merged/triples';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
@@ -24,22 +24,30 @@ export const FlowBar = () => {
   const [toast] = useToast();
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
-  const { allActions, allSpacesWithActions } = useActionsStore();
 
-  const actionsCount = allActions.length;
+  const triples = useTriples({
+    selector: t => t.hasBeenPublished === false,
+  });
+
+  const opsCount = triples.length;
 
   const entitiesCount = pipe(
-    allActions,
-    A.groupBy(action => action.entityId),
+    triples,
+    A.groupBy(t => t.entityId),
     D.keys,
     A.length
   );
 
-  const spacesCount = allSpacesWithActions.length;
+  const spacesCount = pipe(
+    triples,
+    A.groupBy(t => t.space),
+    D.keys,
+    keys => new Set(keys).size
+  );
 
   // Don't show the flow bar if there are no actions, if the user is not in edit mode, if there is a toast,
   // or if the status bar is rendering in place.
-  const hideFlowbar = actionsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
+  const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
 
   return (
     <AnimatePresence>
@@ -56,14 +64,14 @@ export const FlowBar = () => {
               className="pointer-events-auto inline-flex items-center gap-4 rounded-lg bg-white p-2 pl-3 shadow-card"
             >
               <div className="inline-flex items-center font-medium">
-                <span>{pluralize('edit', actionsCount, true)}</span>
+                <span>{pluralize('edit', opsCount, true)}</span>
                 <hr className="mx-2 inline-block h-4 w-px border-none bg-grey-03" />
                 <span>
                   {pluralize('entity', entitiesCount, true)} in {pluralize('space', spacesCount, true)}
                 </span>
               </div>
               <Button onClick={() => setIsReviewOpen(true)} variant="primary">
-                Review {pluralize('edit', actionsCount, false)}
+                Review {pluralize('edit', opsCount, false)}
               </Button>
             </motion.div>
           </div>

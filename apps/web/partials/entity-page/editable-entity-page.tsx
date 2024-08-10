@@ -7,9 +7,9 @@ import { useEffect, useState } from 'react';
 
 import { useWriteOps } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Entity, Relation } from '~/core/io/dto/entities';
-import { EntityId, SubstreamType } from '~/core/io/schema';
+import { EntityId } from '~/core/io/schema';
+import { useTriples } from '~/core/merged/triples';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple } from '~/core/types';
@@ -56,7 +56,9 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
   const { remove, upsert, upsertMany } = useWriteOps();
 
-  const { actionsFromSpace } = useActionsStore(spaceId);
+  const triplesFromSpace = useTriples({
+    selector: t => t.space === spaceId,
+  });
   const { subgraph, config } = Services.useServices();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
@@ -65,7 +67,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
   // There may be some deleted triples locally. We check the actions to make sure that there are
   // actually 0 actions in the case that there are 0 local triples as the local triples here
   // are only the ones where `isDeleted` is false.
-  const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
+  const triples = localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
 
   const send = useEditEvents({
     context: {

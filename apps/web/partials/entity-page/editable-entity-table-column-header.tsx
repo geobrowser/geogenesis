@@ -1,15 +1,13 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { A, pipe } from '@mobily/ts-belt';
 
 import { memo, useState } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useTriples } from '~/core/merged/triples';
 import { Column } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { Triples } from '~/core/utils/triples';
 import { valueTypes } from '~/core/value-types';
 
 import { Date } from '~/design-system/icons/date';
@@ -38,17 +36,14 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
   unpublishedColumns,
 }: Props) {
-  const { actionsFromSpace, upsert, remove, upsertMany } = useActionsStore(spaceId);
+  const localTriples = useTriples({
+    mergeWith: column.triples,
+    selector: t => t.entityId === column.id,
+  });
 
-  const localTriples = pipe(
-    Triples.merge(actionsFromSpace, column.triples),
-    A.filter(t => t.entityId === column.id)
-  );
-
-  const localCellTriples = pipe(
-    Triples.merge(actionsFromSpace, []),
-    A.filter(triple => triple.attributeId === column.id)
-  );
+  const localCellTriples = useTriples({
+    selector: t => t.attributeId === column.id,
+  });
 
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
@@ -59,11 +54,6 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
       entityId,
       spaceId: spaceId ?? '',
       entityName: Entities.name(localTriples) ?? '',
-    },
-    api: {
-      upsert,
-      upsertMany,
-      remove,
     },
   });
 

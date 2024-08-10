@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { ValueType as TripleValueType } from '~/core/types';
 
-import { useActionsStore } from '../hooks/use-actions-store';
+import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 
 export function upsertName({
@@ -15,12 +15,11 @@ export function upsertName({
   entityId: string;
   spaceId: string;
   api: {
-    upsert: ReturnType<typeof useActionsStore>['upsert'];
+    upsert: ReturnType<typeof useWriteOps>['upsert'];
   };
 }) {
   return api.upsert(
     {
-      type: 'SET_TRIPLE',
       attributeId: SYSTEM_IDS.NAME,
       entityId: entityId,
       entityName: newName,

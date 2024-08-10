@@ -14,12 +14,12 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/io/dto/entities';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
+import { useTriples } from '~/core/merged/triples';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
@@ -28,7 +28,6 @@ import type { Triple } from '~/core/types';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entities } from '~/core/utils/entity';
-import { Triples } from '~/core/utils/triples';
 import { GeoDate, getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -67,8 +66,11 @@ type EntityId = string;
 
 const ReviewChanges = () => {
   const { state } = useStatusBar();
-  const { allSpacesWithActions } = useActionsStore();
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
+
+  const allSpacesWithActions = useTriples({
+    selector: t => t.hasBeenPublished === false,
+  }).map(t => t.space);
 
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', allSpacesWithActions],
@@ -131,9 +133,12 @@ const ReviewChanges = () => {
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
-  const { actionsFromSpace: triples, clear } = useActionsStore(activeSpace);
+  const triplesFromSpace = useTriples({
+    selector: t => t.space === activeSpace,
+  });
+
   const { makeProposal } = usePublish();
-  const [data, isLoading] = useChanges(triples, activeSpace);
+  const [data, isLoading] = useChanges(triplesFromSpace, activeSpace);
 
   const handlePublish = useCallback(async () => {
     if (!activeSpace) return;
@@ -146,14 +151,14 @@ const ReviewChanges = () => {
     // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
     await makeProposal({
-      triples: triples,
+      triples: triplesFromSpace,
       spaceId: activeSpace,
       name: proposalName,
       onSuccess: () => {
         clearProposalName();
       },
     });
-  }, [activeSpace, proposalName, proposals, makeProposal, triples]);
+  }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace]);
 
   if (isLoading || !data || isSpacesLoading) {
     return null;
@@ -229,7 +234,13 @@ const ReviewChanges = () => {
                 />
               </div>
               <div>
-                <SmallButton onClick={() => clear(activeSpace)}>Delete all</SmallButton>
+                <SmallButton
+                  onClick={() => {
+                    // @TODO(database)
+                  }}
+                >
+                  Delete all
+                </SmallButton>
               </div>
             </div>
             <div className="flex flex-col">
@@ -331,11 +342,9 @@ const ChangedEntity = ({
 }: ChangedEntityProps) => {
   const { name, blocks = {}, attributes = {}, actions = [] } = change;
 
-  const { deleteActionsFromSpace } = useActionsStore();
-
   const handleDeleteActions = useCallback(() => {
-    deleteActionsFromSpace(spaceId, actions);
-  }, [spaceId, actions, deleteActionsFromSpace]);
+    // @TODO(database)
+  }, []);
 
   const blockIds = Object.keys(blocks);
   const attributeIds = Object.keys(attributes);
@@ -590,11 +599,9 @@ const ChangedAttribute = ({
 }: ChangedAttributeProps) => {
   const { actions = [] } = attribute;
 
-  const { deleteActionsFromSpace } = useActionsStore(spaceId);
-
   const handleDeleteActions = useCallback(() => {
-    deleteActionsFromSpace(spaceId, actions);
-  }, [spaceId, actions, deleteActionsFromSpace]);
+    // @TODO(database)
+  }, []);
 
   // Don't show page blocks
   if (attributeId === SYSTEM_IDS.BLOCKS) return null;

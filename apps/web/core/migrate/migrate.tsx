@@ -2,8 +2,7 @@ import { QueryClient, useQueryClient } from '@tanstack/react-query';
 
 import React, { useTransition } from 'react';
 
-import { useActionsStore } from '../hooks/use-actions-store';
-import { useMergedData } from '../hooks/use-merged-data';
+import { useWriteOps } from '../database/write';
 import { createTripleId } from '../id/create-id';
 import {
   AppOp,
@@ -43,8 +42,8 @@ type MigrateOp = AppOp & {
 
 interface MigrateHubConfig {
   actionsApi: {
-    upsert: ReturnType<typeof useActionsStore>['upsert'];
-    remove: ReturnType<typeof useActionsStore>['remove'];
+    upsert: ReturnType<typeof useWriteOps>['upsert'];
+    remove: ReturnType<typeof useWriteOps>['remove'];
   };
   queryClient: QueryClient;
 }
@@ -297,7 +296,7 @@ function migrateHub(config: MigrateHubConfig): IMigrateHub {
 }
 
 export function useMigrateHub() {
-  const { upsert, remove, addActionsToSpaces } = useActionsStore();
+  const { upsert, remove, upsertMany } = useWriteOps();
   const queryClient = useQueryClient();
 
   const [, startTransition] = useTransition();
@@ -322,11 +321,13 @@ export function useMigrateHub() {
       }
 
       startTransition(() => {
-        addActionsToSpaces(actionsToBatch);
+        Object.entries(actionsToBatch).forEach(([space, actions]) => {
+          upsertMany(actions, space);
+        });
       });
     },
 
-    [hub, addActionsToSpaces]
+    [hub]
   );
 
   return {

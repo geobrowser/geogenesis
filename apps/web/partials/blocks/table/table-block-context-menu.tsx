@@ -14,7 +14,7 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 
 import { getSchemaFromTypeIds, mergeEntityAsync } from '~/core/database/entities';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -22,7 +22,6 @@ import { Entity } from '~/core/io/dto/entities';
 import { useMigrateHub } from '~/core/migrate/migrate';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Triple as ITriple, ValueTypeId } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
@@ -72,13 +71,12 @@ function useOptimisticAttributes({
   spaceId: string;
 }) {
   const [optimisticAttributes, setOptimisticAttributes] = useAtom(optimisticAttributesAtom);
-  const { upsert, remove } = useActionsStore();
+  const { upsert, remove } = useWriteOps();
   const migrateHub = useMigrateHub();
 
   const onAddAttribute = (attribute: Entity) => {
     upsert(
       {
-        type: 'SET_TRIPLE',
         entityId: entityId,
         entityName: attribute.name,
         attributeId: SYSTEM_IDS.ATTRIBUTES,
@@ -188,7 +186,7 @@ function useOptimisticAttributes({
       });
 
       // Create a new Value Type triple with the new value type
-      upsert({ ...newTriple, type: 'SET_TRIPLE' }, newTriple.space);
+      upsert(newTriple, newTriple.space);
     }
   };
 
@@ -404,7 +402,7 @@ const ToggleColumn = ({
   entityId,
   entityName,
 }: ToggleColumnProps) => {
-  const { upsert, remove } = useActionsStore(space);
+  const { upsert, remove } = useWriteOps();
 
   const { id, name } = column;
   const isShown = shownColumnIds.includes(column.id);
@@ -416,7 +414,6 @@ const ToggleColumn = ({
     if (!isShown) {
       upsert(
         {
-          type: 'SET_TRIPLE',
           entityId,
           entityName,
           attributeId,
@@ -574,7 +571,7 @@ function AddAttribute() {
 
 function SchemaAttributes() {
   const { type } = useTableBlock();
-  const { upsert } = useActionsStore();
+  const { upsert } = useWriteOps();
 
   const {
     optimisticAttributes: attributes,
@@ -598,7 +595,6 @@ function SchemaAttributes() {
     upsert(
       {
         ...oldNameTriple,
-        type: 'SET_TRIPLE',
         entityName: newName,
         value: {
           type: 'TEXT',

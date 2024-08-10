@@ -6,7 +6,7 @@ import { createGeoId } from '@geogenesis/sdk';
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { Value as IValue, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
+import { Value as IValue, OmitStrict, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
@@ -583,10 +583,19 @@ const listener =
     }
   };
 
-export function useEditEvents(config: ListenerConfig) {
+export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
+  const { upsert, remove, upsertMany } = useWriteOps();
+
   // TODO: Only create config when content changes
   const send = useMemo(() => {
-    return listener(config);
+    return listener({
+      ...config,
+      api: {
+        upsert,
+        remove,
+        upsertMany,
+      },
+    });
   }, [config]);
 
   return send;

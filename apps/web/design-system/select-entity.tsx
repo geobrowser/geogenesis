@@ -5,7 +5,7 @@ import pluralize from 'pluralize';
 
 import { useRef, useState } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useOnClickOutside } from '~/core/hooks/use-on-click-outside';
 import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
@@ -56,7 +56,7 @@ export const SelectEntity = ({
   };
 
   const [, setToast] = useToast();
-  const { upsert } = useActionsStore();
+  const { upsert } = useWriteOps();
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
@@ -64,7 +64,6 @@ export const SelectEntity = ({
     // Create new entity with name and types
     upsert(
       {
-        type: 'SET_TRIPLE',
         entityId: newEntityId,
         attributeId: SYSTEM_IDS.NAME,
         entityName: query,
@@ -81,7 +80,6 @@ export const SelectEntity = ({
       allowedTypes.forEach(type => {
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: query,

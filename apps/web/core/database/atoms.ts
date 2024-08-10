@@ -1,15 +1,25 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { atom } from 'jotai';
 
+import { localOpsAtom } from '~/core/database/write';
 import { Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
+import { Triple } from '~/core/types';
+import { Triples } from '~/core/utils/triples';
 import { groupBy } from '~/core/utils/utils';
 
-import { localTriplesAtom } from './actions-store';
+import { activeTriplesForEntityIdSelector } from './selectors';
+
+export const createTriplesForEntityAtom = (initialTriples: Triple[], entityId: string) => {
+  return atom(get => {
+    const triplesForEntityId = get(localOpsAtom).filter(activeTriplesForEntityIdSelector(entityId));
+    return Triples.merge(triplesForEntityId, initialTriples);
+  });
+};
 
 export const createRelationsAtom = (initialRelations: Relation[]) => {
   return atom(get => {
-    const localTriples = get(localTriplesAtom);
+    const localTriples = get(localOpsAtom);
 
     /***********************************************************************************************
      * Map all triples for locally created relations to SimpleRelation for the given entity page id
@@ -147,7 +157,7 @@ export const createRelationsAtom = (initialRelations: Relation[]) => {
 
 export const createRelationsForEntityAtom = (entityPageId: string, initialRelations: Relation[]) => {
   return atom(get => {
-    const localTriples = get(localTriplesAtom);
+    const localTriples = get(localOpsAtom);
 
     /***********************************************************************************************
      * Map all triples for locally created relations to SimpleRelation for the given entity page id

@@ -9,13 +9,11 @@ import { Triples } from '~/core/utils/triples';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { mergeEntityAsync } from '../database/entities';
-import { useActionsStore } from '../hooks/use-actions-store';
 import { fetchColumns } from '../io/fetch-columns';
 import { fetchRows } from '../io/fetch-rows';
 import { EntityId } from '../io/schema';
 
 interface MergedDataSourceOptions {
-  store: ReturnType<typeof useActionsStore>;
   subgraph: Subgraph.ISubgraph;
   cache: QueryClient;
 }
@@ -55,8 +53,7 @@ export class Merged implements IMergedDataSource {
   private store: ReturnType<typeof useActionsStore>;
   private subgraph: Subgraph.ISubgraph;
 
-  constructor({ store, subgraph, cache }: MergedDataSourceOptions) {
-    this.store = store;
+  constructor({ subgraph, cache }: MergedDataSourceOptions) {
     this.subgraph = subgraph;
     this.cache = cache;
   }

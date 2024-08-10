@@ -8,7 +8,7 @@ import * as React from 'react';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { mergeEntityAsync } from '~/core/database/entities';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { FetchRowsOptions } from '~/core/io/fetch-rows';
 import { EntityId } from '~/core/io/schema';
@@ -37,7 +37,7 @@ export function useEntityTable() {
   const { subgraph } = Services.useServices();
   const { space, initialSelectedType, spaceId } = useEntityTableStoreInstance();
   const merged = useMergedData();
-  const { allActions, upsert } = useActionsStore();
+  const { upsert } = useWriteOps();
 
   const [query, setQuery] = useAtom(queryAtom);
   const [pageNumber, setPageNumber] = useAtom(pageNumberAtom);
@@ -133,6 +133,7 @@ export function useEntityTable() {
     },
   });
 
+  // @TODO(database)
   const { data: columnRelationTypes } = useQuery({
     queryKey: ['table-block-column-relation-types', columns, allActions],
     queryFn: async () => {

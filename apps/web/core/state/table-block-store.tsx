@@ -5,12 +5,13 @@ import { dedupeWith } from 'effect/Array';
 import * as React from 'react';
 
 import { TableBlockSdk } from '../blocks-sdk';
-import { mergeEntityAsync } from '../database/entities';
-import { useActionsStore } from '../hooks/use-actions-store';
+import { mergeEntityAsync, useEntity } from '../database/entities';
+import { useWriteOps } from '../database/write';
 import { useMergedData } from '../hooks/use-merged-data';
 import { Entity } from '../io/dto/entities';
 import { FetchRowsOptions } from '../io/fetch-rows';
 import { EntityId } from '../io/schema';
+import { useTriples } from '../merged/triples';
 import { Services } from '../services';
 import { AppEntityValue, GeoType, ValueType as TripleValueType } from '../types';
 import { Entities } from '../utils/entity';
@@ -33,54 +34,9 @@ export function useTableBlock() {
   const { subgraph } = Services.useServices();
 
   const merged = useMergedData();
-  const { allActions, upsert } = useActionsStore();
+  const { upsert } = useWriteOps();
 
-  // We need to track local changes to the entity and re-fetch it when
-  // any changes occur. We re-fetch instead of deriving the new entity
-  // since not all of the triples for an entity will be part of the
-  // actions store.
-  //
-  // Typicall the block will re-render if changes are made to _any_
-  // triple on the block entity. This works mostly as intended except
-  // when making changes to the name triple.
-  //
-  // We track the actions minus the name triple so we can avoid re-fetching
-  // the entire block entity again when the name changes as changes to
-  // the name triple should not affect any of the data fetching.
-  const actionsForEntityId = React.useMemo(() => {
-    return allActions.filter(t => t.entityId === entityId);
-  }, [allActions, entityId]);
-
-  const actionsForEntityIdWithoutName = React.useMemo(() => {
-    return actionsForEntityId.filter(a => a.attributeId !== SYSTEM_IDS.NAME);
-  }, [actionsForEntityId]);
-
-  // We only re-fetch the block entity when actions besides changes
-  // to the name triple happen. This is so we can avoid re-fetching
-  // when we change the name triple as it shouldn't affect any of
-  // the data fetching.
-  const { data: blockEntity, isLoading } = useQuery({
-    // Refetch the entity if there have been local changes
-    queryKey: ['table-block-entity', entityId, actionsForEntityIdWithoutName],
-    queryFn: () => mergeEntityAsync(EntityId(entityId)),
-  });
-
-  // We track the name triple separately from the normal `blockEntities.triples`
-  // flow so we can avoid re-rendering the block when the name changes.
-  // 1. Get the initial version of the name triple if it exists. This triple can
-  //    either be local or remote as we merge the local and remote triples when
-  //    fetching the blockEntity.
-  // 2. Since we only merge the local and remote triples when non-name triples
-  //    have changed, we need to merge these with the local actions to get any
-  //    up-to-date version of the name triple.
-  // 3. fromActions takes _all_ the actions on the entity, so we need to filter
-  //    again for the name triple. We could do this up-front as well, but the
-  //    current implementation fewer data structures.
-  const nameTriple = React.useMemo(() => {
-    const maybeNameTriple = blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
-    const mergedTriples = Triples.merge(actionsForEntityId, maybeNameTriple ? [maybeNameTriple] : []);
-    return mergedTriples.find(t => t.attributeId === SYSTEM_IDS.NAME) ?? null;
-  }, [blockEntity?.triples, actionsForEntityId]);
+  const blockEntity = useEntity(EntityId(entityId));
 
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
@@ -172,6 +128,7 @@ export function useTableBlock() {
     },
   });
 
+  // @TODO(database)
   const { data: columnRelationTypes } = useQuery({
     queryKey: ['table-block-column-relation-types', columns, allActions],
     queryFn: async () => {
@@ -241,11 +198,10 @@ export function useTableBlock() {
       const newFiltersString =
         newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, selectedType.entityId);
 
-      const entityName = Entities.name(nameTriple ? [nameTriple] : []) ?? '';
+      const entityName = blockEntity.name ?? '';
 
       return upsert(
         {
-          type: 'SET_TRIPLE',
           attributeId: SYSTEM_IDS.FILTER,
           attributeName: 'Filter',
           entityId,
@@ -258,7 +214,7 @@ export function useTableBlock() {
         spaceId
       );
     },
-    [upsert, entityId, filterTriple, nameTriple, selectedType.entityId, spaceId]
+    [upsert, entityId, filterTriple, selectedType.entityId, spaceId]
   );
 
   const setName = React.useCallback(
@@ -270,7 +226,7 @@ export function useTableBlock() {
         api: { upsert },
       });
     },
-    [upsert, entityId, nameTriple, spaceId]
+    [upsert, entityId, spaceId]
   );
 
   const view = getView(blockEntity);
@@ -295,10 +251,9 @@ export function useTableBlock() {
     entityId,
     spaceId,
 
-    isLoading: isLoadingColumns || isLoadingRows || isLoadingFilterState || isLoading,
+    isLoading: isLoadingColumns || isLoadingRows || isLoadingFilterState,
 
-    nameTriple,
-    name: Values.stringValue(nameTriple ?? undefined),
+    name: blockEntity.name,
     setName,
     view,
     placeholder,

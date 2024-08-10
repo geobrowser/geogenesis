@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { A, pipe } from '@mobily/ts-belt';
 import {
   ColumnDef,
   createColumnHelper,
@@ -16,13 +15,12 @@ import { cx } from 'class-variance-authority';
 import { useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { getTriples } from '~/core/merged/triples';
 import { useEditable } from '~/core/state/editable-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store/entity-table-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 import { Cell, Column, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { Triples } from '~/core/utils/triples';
 import { NavUtils } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -78,31 +76,25 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { upsert, remove, actions, upsertMany } = useActionsStore();
-
-    // We know that cell is rendered as a React component by react-table
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     const { columns, columnRelationTypes } = useEntityTable();
 
     const cellData = getValue<Cell | undefined>();
     const isEditMode = isEditor && editable;
-    const isPlaceholderCell = cellData?.triples[0]?.placeholder;
 
     if (!cellData) return null;
 
     const valueType = columnValueType(cellData.columnId, columns);
 
-    const cellTriples = pipe(
-      actions[space],
-      actions => Triples.merge(actions, cellData.triples),
-      A.filter(triple => {
+    const cellTriples = getTriples({
+      mergeWith: cellData.triples,
+      selector: triple => {
         const isRowCell = triple.entityId === cellData.entityId;
         const isColCell = triple.attributeId === cellData.columnId;
         const isCurrentValueType = triple.value.type === valueTypes[valueType];
 
         return isRowCell && isColCell && isCurrentValueType;
-      })
-    );
+      },
+    });
 
     if (isEditMode) {
       return (
@@ -115,16 +107,13 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           key={Entities.name(cellTriples)}
           triples={cellTriples}
           cell={cellData}
-          upsert={upsert}
-          remove={remove}
-          upsertMany={upsertMany}
           space={space}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}
           columnRelationTypes={columnRelationTypes[cellData.columnId]}
         />
       );
-    } else if (cellData && !isPlaceholderCell) {
+    } else if (cellData) {
       return (
         <EntityTableCell
           key={Entities.name(cellData.triples)}
