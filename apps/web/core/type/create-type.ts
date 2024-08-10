@@ -23,6 +23,7 @@ export function createForeignType(
       value: { type: 'TEXT', value: 'Space Configuration' },
     });
 
+    // @TODO(relations)
     const spaceConfigTypeTriple = Triples.withId({
       space: spaceId,
       entityId: newSpaceConfigId,
@@ -36,6 +37,7 @@ export function createForeignType(
     upsert(spaceConfigTypeTriple, spaceId);
   }
 
+  // @TODO(relations)
   const spaceConfigForeignTypeTriple = Triples.withId({
     space: spaceId,
     entityId: newSpaceConfigId,
@@ -45,7 +47,7 @@ export function createForeignType(
     value: { value: foreignType.entityId, type: 'ENTITY', name: foreignType.entityName },
   });
 
-  upsert(.spaceConfigForeignTypeTriple, spaceId);
+  upsert(spaceConfigForeignTypeTriple, spaceId);
 }
 
 export function createType(entityName: string, spaceId: string, upsert: ReturnType<typeof useWriteOps>['upsert']) {
@@ -59,6 +61,8 @@ export function createType(entityName: string, spaceId: string, upsert: ReturnTy
     attributeName: 'Name',
     value: { type: 'TEXT', value: entityName },
   });
+
+  // @TODO(relations)
   const typeTriple = Triples.withId({
     space: spaceId,
     entityId,
