@@ -12,7 +12,6 @@ import { Environment } from '~/core/environment';
 import { useAddSubspace } from '~/core/hooks/use-add-subspace';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useRemoveSubspace } from '~/core/hooks/use-remove-subspace';
-import { SpaceDto } from '~/core/io/dto/spaces';
 import { Subspace, SubspaceDto } from '~/core/io/dto/subspaces';
 import { SubstreamSubspace } from '~/core/io/schema';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';

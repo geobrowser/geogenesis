@@ -1,5 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-
 export const imageValueTypeTripleFragment = `
     attributeId
     textValue

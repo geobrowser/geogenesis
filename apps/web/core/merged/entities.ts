@@ -3,15 +3,15 @@ import { atom, useAtomValue } from 'jotai';
 import * as React from 'react';
 
 import { createRelationsAtom } from '../database/atoms';
-import { Relation } from '../io/dto/entities';
+import { Entity } from '../io/dto/entities';
 import { store } from '../state/jotai-store';
 
-interface UseRelationsArgs {
-  mergeWith?: Relation[];
-  selector?: (t: Relation) => boolean;
+interface UseEntitiesArgs {
+  mergeWith?: Entity[];
+  selector?: (t: Entity) => boolean;
 }
 
-const makeLocalActionsAtomWithSelector = ({ selector, mergeWith = [] }: UseRelationsArgs) => {
+const makeLocalActionsAtomWithSelector = ({ selector, mergeWith = [] }: UseEntitiesArgs) => {
   return atom(get => {
     return get(createRelationsAtom(mergeWith)).filter(r => {
       return selector ? selector(r) : true;
@@ -19,10 +19,10 @@ const makeLocalActionsAtomWithSelector = ({ selector, mergeWith = [] }: UseRelat
   });
 };
 
-export function useRelations(args: UseRelationsArgs) {
+export function useEntities(args: UseEntitiesArgs) {
   return useAtomValue(React.useMemo(() => makeLocalActionsAtomWithSelector(args), [args]));
 }
 
-export function getRelations(args: UseRelationsArgs) {
+export function getEntities(args: UseEntitiesArgs) {
   return store.get(makeLocalActionsAtomWithSelector(args));
 }

@@ -28,6 +28,7 @@ export function useSearch({ allowedTypes }: SearchOptions = {}) {
       const fetchResultsEffect = Effect.either(
         Effect.tryPromise({
           try: async () =>
+            // @TODO(database): merged
             await subgraph.fetchResults({
               query,
               signal,

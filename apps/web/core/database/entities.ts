@@ -6,22 +6,21 @@ import * as React from 'react';
 
 import { Entity, Relation } from '../io/dto/entities';
 import { EntityId, TypeId } from '../io/schema';
-import { fetchEntities, fetchEntity } from '../io/subgraph';
+import { fetchEntity } from '../io/subgraph';
 import { getRelations, useRelations } from '../merged/relations';
 import { getTriples, useTriples } from '../merged/triples';
 import { queryClient } from '../query-client';
-import { Triple, TripleWithEntityValue } from '../types';
+import { Triple, TripleWithEntityValue, Value } from '../types';
 import { Entities } from '../utils/entity';
 import { activeTriplesForEntityIdSelector } from './selectors';
 
-type EntityWithSchema = Entity & { schema: { id: EntityId; name: string | null }[] };
+export type EntityWithSchema = Entity & { schema: { id: EntityId; name: string | null }[] };
 
 export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relations: Relation[] }): EntityWithSchema {
   const { initialTriples, initialRelations } = React.useMemo(() => {
     return {
       initialTriples: initialData?.triples ?? [],
       initialRelations: initialData?.relations ?? [],
-      relations,
     };
   }, [initialData]);
 
@@ -86,7 +85,6 @@ export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relat
 interface MergeEntityArgs {
   id: string;
   mergeWith: Entity | null;
-  selector?: (entity: Entity) => boolean;
 }
 
 /**
@@ -144,9 +142,6 @@ export function mergeEntity({ id, mergeWith }: MergeEntityArgs): EntityWithSchem
  *
  * @TODO:
  * Fetch by space id so we can scope the triples and relations to a specific space.
- * Fetch many entities at once, for example when searching or rendering a data list.
- *    We can handle this using `mergeEntity` after fetching the remote entities. The
- *    main thing to solve there is filtering any entities that only exist locally.
  */
 export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> {
   const cachedEntity = await await queryClient.fetchQuery({
@@ -156,31 +151,6 @@ export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> 
   });
 
   return mergeEntity({ id, mergeWith: cachedEntity });
-}
-
-export async function mergeEntitiesAsync(args: Parameters<typeof fetchEntities>[0]): Promise<EntityWithSchema[]> {
-  const cachedEntities = await queryClient.fetchQuery({
-    queryKey: ['entities-for-merging', args],
-    queryFn: ({ signal }) => fetchEntities({ ...args, signal }),
-    staleTime: Infinity,
-  });
-
-  const mergedEntities = cachedEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
-
-  return mergedEntities.filter(e => {
-    if (e.name === null) {
-      return false;
-    }
-
-    // If the entity does not have the selected types don't return it.
-    if (args.typeIds && args.typeIds.length > 0) {
-      if (!e.types.some(t => args.typeIds?.includes(t.id))) return false;
-    }
-
-    const lowerName = e.name.toLowerCase();
-    const lowerQuery = args.query ? args.query.toLowerCase() : '';
-    return lowerName.startsWith(lowerQuery) || lowerName.includes(lowerQuery);
-  });
 }
 
 /**

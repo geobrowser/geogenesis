@@ -8,6 +8,7 @@ import * as React from 'react';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { mergeEntityAsync } from '~/core/database/entities';
+import { MergeTableEntitiesArgs, mergeTableEntities } from '~/core/database/table';
 import { useWriteOps } from '~/core/database/write';
 import { useMergedData } from '~/core/hooks/use-merged-data';
 import { FetchRowsOptions } from '~/core/io/fetch-rows';
@@ -102,12 +103,11 @@ export function useEntityTable() {
 
   const { data: rows, isLoading: isLoadingRows } = useQuery({
     queryKey: ['table-block-rows', columns, selectedType?.entityId, pageNumber, filterString],
-    queryFn: async ({ signal }) => {
-      if (!columns) return [];
+    queryFn: async () => {
+      if (!columns || !selectedType) return [];
 
-      const params: FetchRowsOptions['params'] = {
+      const params: MergeTableEntitiesArgs['options'] = {
         filter: filterString,
-        typeIds: selectedType ? [selectedType.entityId] : [],
         first: DEFAULT_PAGE_SIZE + 1,
         skip: pageNumber * DEFAULT_PAGE_SIZE,
       };
@@ -115,21 +115,13 @@ export function useEntityTable() {
       /**
        * Aggregate data for the rows from local and server entities.
        */
-      const { rows } = await merged.rows(
-        {
-          signal,
-          params,
-          api: {
-            fetchTableRowEntities: subgraph.fetchTableRowEntities,
-          },
-        },
-        columns,
-        selectedType?.entityId
-      );
+      const entities = await mergeTableEntities({
+        options: params,
+        selectedTypeId: EntityId(selectedType.entityId),
+      });
 
       hydrated.current = true;
-
-      return rows;
+      return EntityTable.fromColumnsAndRows(entities, columns).rows;
     },
   });
 

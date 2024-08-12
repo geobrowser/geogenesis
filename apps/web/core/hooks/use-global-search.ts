@@ -10,7 +10,6 @@ import * as React from 'react';
 import { Subgraph } from '~/core/io';
 
 import { mergeEntitiesAsync } from '../database/entities';
-import { useMergedData } from './use-merged-data';
 
 export function useGlobalSearch() {
   const [query, setQuery] = React.useState('');
@@ -24,10 +23,12 @@ export function useGlobalSearch() {
         Effect.tryPromise({
           try: () =>
             mergeEntitiesAsync({
-              query,
-              signal,
-              first: 10,
-              filter: [],
+              options: {
+                query,
+                signal,
+                first: 10,
+                filter: [],
+              },
             }),
           catch: () => new Subgraph.Errors.AbortError(),
         })

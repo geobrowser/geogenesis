@@ -6,15 +6,15 @@ import * as React from 'react';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { mergeEntityAsync, useEntity } from '../database/entities';
+import { MergeTableEntitiesArgs, mergeTableEntities } from '../database/table';
 import { useWriteOps } from '../database/write';
 import { useMergedData } from '../hooks/use-merged-data';
 import { Entity } from '../io/dto/entities';
 import { FetchRowsOptions } from '../io/fetch-rows';
 import { EntityId } from '../io/schema';
-import { useTriples } from '../merged/triples';
 import { Services } from '../services';
 import { AppEntityValue, GeoType, ValueType as TripleValueType } from '../types';
-import { Entities } from '../utils/entity';
+import { EntityTable } from '../utils/entity-table';
 import { Triples } from '../utils/triples';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
@@ -98,12 +98,12 @@ export function useTableBlock() {
 
   const { data: rows, isLoading: isLoadingRows } = useQuery({
     queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterState],
-    queryFn: async ({ signal }) => {
+    queryFn: async () => {
       if (!columns) return [];
 
       const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
 
-      const params: FetchRowsOptions['params'] = {
+      const params: MergeTableEntitiesArgs['options'] = {
         filter: filterString,
         first: PAGE_SIZE + 1,
         skip: pageNumber * PAGE_SIZE,
@@ -112,19 +112,12 @@ export function useTableBlock() {
       /**
        * Aggregate data for the rows from local and server entities.
        */
-      const { rows } = await merged.rows(
-        {
-          signal,
-          params,
-          api: {
-            fetchTableRowEntities: subgraph.fetchTableRowEntities,
-          },
-        },
-        columns,
-        selectedType.entityId
-      );
+      const entities = await mergeTableEntities({
+        options: params,
+        selectedTypeId: EntityId(selectedType.entityId),
+      });
 
-      return rows;
+      return EntityTable.fromColumnsAndRows(entities, columns).rows;
     },
   });
 

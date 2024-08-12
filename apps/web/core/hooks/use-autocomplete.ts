@@ -14,17 +14,16 @@ import { FilterState } from '../types';
 import { useMergedData } from './use-merged-data';
 
 interface AutocompleteOptions {
-  filter?: FilterState;
   allowedTypes?: string[];
 }
 
-export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = {}) {
+export function useAutocomplete({ allowedTypes }: AutocompleteOptions = {}) {
   const merged = useMergedData();
 
   const [query, setQuery] = React.useState('');
 
   const { data: results, isLoading } = useQuery({
-    queryKey: ['autocomplete', query, filter, allowedTypes],
+    queryKey: ['autocomplete', query, allowedTypes],
     queryFn: async ({ signal }) => {
       if (query.length === 0) return [];
 
@@ -34,7 +33,6 @@ export function useAutocomplete({ allowedTypes, filter }: AutocompleteOptions = 
             mergeEntitiesAsync({
               query,
               signal,
-              filter: filter ?? [],
               typeIds: allowedTypes,
               first: 10,
             }),

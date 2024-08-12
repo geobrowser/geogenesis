@@ -14,7 +14,7 @@ import { tiptapExtensions } from '~/partials/editor/editor';
 import { htmlToPlainText } from '~/partials/editor/editor-utils';
 
 import { TableBlockSdk } from '../blocks-sdk';
-import { createRelationsForEntityAtom } from '../database/create-relations-for-entity-atom';
+import { createRelationsForEntityAtom } from '../database/atoms';
 import { remove, upsert } from '../database/write';
 import { Entity, Relation } from '../io/dto/entities';
 import { EntityId, TypeId } from '../io/schema';

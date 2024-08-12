@@ -28,14 +28,7 @@ type TypeDialogMode = 'current-space' | 'foreign-space';
 
 export function TypeDialog({ handleSelect, spaceId }: Props) {
   const autocomplete = useAutocomplete({
-    filter: [
-      { field: 'attribute-id', value: SYSTEM_IDS.TYPES },
-      { field: 'not-space-id', value: spaceId },
-      {
-        field: 'linked-to',
-        value: SYSTEM_IDS.SCHEMA_TYPE,
-      },
-    ],
+    allowedTypes: [SYSTEM_IDS.SCHEMA_TYPE],
   });
   const { types } = useTypesStore();
   const entityTableStore = useEntityTable();
