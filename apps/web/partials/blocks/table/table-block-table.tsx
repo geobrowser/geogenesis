@@ -23,7 +23,7 @@ import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
-import { Cell, Column, Row, ValueTypeId } from '~/core/types';
+import { Cell, Column, Row } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { EntityCell } from '~/core/utils/entity-table/entity-table';
 import { Triples } from '~/core/utils/triples';
@@ -219,7 +219,7 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownColumnIds, 
               <thead>
                 {table.getHeaderGroups().map(headerGroup => (
                   <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header, index: number) => {
+                    {headerGroup.headers.map(header => {
                       const isShown = shownColumnIds.includes(header.id);
                       const headerClassNames = isShown
                         ? null
@@ -252,7 +252,7 @@ export const TableBlockTable = ({ rows, space, typeId, columns, shownColumnIds, 
 
                   return (
                     <tr key={entityId ?? index} className="hover:bg-bg">
-                      {cells.map((cell, index: number) => {
+                      {cells.map(cell => {
                         const cellId = `${row.original.id}-${cell.column.id}`;
                         const firstTriple = cell.getValue<Cell>()?.triples[0];
                         const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';

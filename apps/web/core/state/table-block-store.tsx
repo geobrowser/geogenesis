@@ -23,6 +23,10 @@ export interface TableBlockFilter {
   valueName: string | null;
 }
 
+type SpaceId = string;
+
+export type Source = 'collection' | 'geo' | Array<SpaceId>;
+
 export function useTableBlock() {
   const { entityId, selectedType, spaceId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
@@ -277,8 +281,23 @@ export function useTableBlock() {
   const view = getView(blockEntity);
   const placeholder = getPlaceholder(blockEntity, view);
 
+  let source: Source = 'geo';
+
+  // required to coerce returned source type to `Source`
+  // @TODO replace with proper logic for collection blocks
+  const isCollection = false;
+  if (isCollection) {
+    source = 'collection';
+  }
+
+  if (filterState && filterState.find(filter => filter.columnId === SYSTEM_IDS.SPACE)) {
+    source = filterState.filter(filter => filter.columnId === SYSTEM_IDS.SPACE).map(filter => filter.value);
+  }
+
   return {
     blockEntity,
+    source,
+
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
     columns: columns ?? [],
 
