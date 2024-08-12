@@ -7,14 +7,12 @@ import { atom, useAtom } from 'jotai';
 import * as React from 'react';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
-import { mergeEntityAsync } from '~/core/database/entities';
 import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '~/core/database/table';
 import { useWriteOps } from '~/core/database/write';
 import { EntityId } from '~/core/io/schema';
 import { createForeignType as insertForeignType, createType as insertType } from '~/core/type/create-type';
-import { AppEntityValue, GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
+import { GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
-import { Triples } from '~/core/utils/triples';
 
 import { useEntityTableStoreInstance } from './entity-table-store-provider';
 
@@ -96,48 +94,12 @@ export function useEntityTable() {
     },
   });
 
-  // @TODO(database)
   const { data: columnRelationTypes } = useQuery({
-    // @ts-expect-error @TODO(database)
-    queryKey: ['table-block-column-relation-types', columns, allActions],
+    queryKey: ['table-block-column-relation-types', columns],
     queryFn: async () => {
       if (!columns) return {};
-      // 1. Fetch all attributes that are entity values
-      // 2. Filter attributes that have the relation type attribute
-      // 3. Return the type id and name of the relation type
-
-      // Make sure we merge any unpublished entities
-      const maybeRelationAttributeTypes = await Promise.all(
-        columns.map(t => t.id).map(attributeId => mergeEntityAsync(EntityId(attributeId)))
-      );
-
-      const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
-
-      // Merge all local and server triples
-      // @ts-expect-error @TODO(database)
-      const mergedTriples = Triples.merge(allActions, relationTypeEntities);
-
-      // @TODO(relations)
-      const relationTypes = mergedTriples.filter(
-        t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'ENTITY'
-      );
-
-      return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
-        (acc, relationType) => {
-          if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
-
-          acc[relationType.entityId].push({
-            typeId: relationType.value.value,
-
-            // We can safely cast here because we filter for entity type values above.
-            typeName: (relationType.value as AppEntityValue).name,
-            spaceId: relationType.space,
-          });
-
-          return acc;
-        },
-        {}
-      );
+      // @TODO(database)
+      return {};
     },
   });
 

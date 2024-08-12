@@ -9,10 +9,8 @@ import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '../dat
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
-import { Services } from '../services';
-import { AppEntityValue, GeoType, ValueType as TripleValueType } from '../types';
+import { GeoType, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
-import { Triples } from '../utils/triples';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
 
@@ -95,45 +93,11 @@ export function useTableBlock() {
   });
 
   const { data: columnRelationTypes } = useQuery({
-    // @ts-expect-error @TODO(database)
-    queryKey: ['table-block-column-relation-types', columns, allActions],
+    queryKey: ['table-block-column-relation-types', columns],
     queryFn: async () => {
       if (!columns) return {};
-      // 1. Fetch all attributes that are entity values
-      // 2. Filter attributes that have the relation type attribute
-      // 3. Return the type id and name of the relation type
-
-      // Make sure we merge any unpublished entities
-      const maybeRelationAttributeTypes = await Promise.all(
-        columns.map(t => t.id).map(attributeId => mergeEntityAsync(EntityId(attributeId)))
-      );
-
-      const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
-
-      // Merge all local and server triples
-      // @ts-expect-error @TODO(database)
-      const mergedTriples = Triples.merge(allActions, relationTypeEntities);
-
-      const relationTypes = mergedTriples.filter(
-        t => t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE && t.value.type === 'ENTITY'
-      );
-
-      return relationTypes.reduce<Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>>(
-        (acc, relationType) => {
-          if (!acc[relationType.entityId]) acc[relationType.entityId] = [];
-
-          acc[relationType.entityId].push({
-            typeId: relationType.value.value,
-
-            // We can safely cast here because we filter for entity type values above.
-            typeName: (relationType.value as AppEntityValue).name,
-            spaceId: relationType.space,
-          });
-
-          return acc;
-        },
-        {}
-      );
+      // @TODO(database)
+      return {};
     },
   });
 
