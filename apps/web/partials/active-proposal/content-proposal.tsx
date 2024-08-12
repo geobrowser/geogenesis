@@ -10,7 +10,7 @@ import * as React from 'react';
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { Proposal } from '~/core/io/dto/proposals';
 import { fetchColumns } from '~/core/io/fetch-columns';
-import { fetchEntity, fetchTriples } from '~/core/io/subgraph';
+import { fetchEntity } from '~/core/io/subgraph';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import { AttributeId, EntityId, SpaceId } from '~/core/types';
 import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
