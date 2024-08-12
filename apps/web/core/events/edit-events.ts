@@ -97,7 +97,6 @@ export type EditEvent =
   | {
       type: 'ADD_PAGE_ENTITY_VALUE';
       payload: {
-        shouldConvertToCollection: boolean;
         existingTriple: TripleType;
         attribute: {
           id: string;
@@ -344,7 +343,7 @@ const listener =
         break;
       }
       case 'ADD_PAGE_ENTITY_VALUE': {
-        const { existingTriple, attribute, linkedEntity, entityName, shouldConvertToCollection } = event.payload;
+        const { existingTriple, attribute, linkedEntity, entityName } = event.payload;
 
         // @TODO: Handle converting a new entity value triple to a collection
 

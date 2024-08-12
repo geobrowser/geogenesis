@@ -7,12 +7,12 @@ import * as React from 'react';
 import { Entity, Relation } from '../io/dto/entities';
 import { EntityId, TypeId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
-import { getRelations, useRelations } from '../merged/relations';
-import { getTriples, useTriples } from '../merged/triples';
 import { queryClient } from '../query-client';
 import { Triple, TripleWithEntityValue, Value } from '../types';
 import { Entities } from '../utils/entity';
+import { getRelations, useRelations } from './relations';
 import { activeTriplesForEntityIdSelector } from './selectors';
+import { getTriples, useTriples } from './triples';
 
 export type EntityWithSchema = Entity & { schema: { id: EntityId; name: string | null }[] };
 
@@ -179,6 +179,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]) {
     return attributeRelations.map(a => ({
       id: a.toEntity.id,
       name: a.toEntity.name,
+      triples: a.toEntity.triples,
     }));
   });
 
@@ -193,14 +194,17 @@ export async function getSchemaFromTypeIds(typesIds: string[]) {
       {
         id: EntityId(SYSTEM_IDS.NAME),
         name: 'Name',
+        triples: [],
       },
       {
         id: EntityId(SYSTEM_IDS.DESCRIPTION),
         name: 'Description',
+        triples: [],
       },
       {
         id: EntityId(SYSTEM_IDS.TYPES),
         name: 'Types',
+        triples: [],
         // @TODO: Should specify that this attribute is a relation. We probably want
         // a want to distinguish  between the schema value type so we can render it
         // in the UI differently.

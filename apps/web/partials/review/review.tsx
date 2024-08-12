@@ -14,12 +14,12 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useTriples } from '~/core/database/triples';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/io/dto/entities';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
-import { useTriples } from '~/core/merged/triples';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
@@ -1055,11 +1055,7 @@ const useFilters = (rawFilter: string) => {
 const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph) => {
   const filters = await createFiltersFromGraphQLString(rawFilter, async id => await subgraph.fetchEntity({ id }));
   const serverColumns = await fetchColumns({
-    params: { skip: 0, first: 0, filter: '' },
-    api: {
-      fetchEntity: subgraph.fetchEntity,
-      fetchTriples: subgraph.fetchTriples,
-    },
+    typeIds: [],
   });
   const filtersWithColumnName = filters.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME) {

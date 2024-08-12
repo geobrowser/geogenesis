@@ -2,7 +2,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { pipe } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
 
-import { useTriples } from '../merged/triples';
+import { useTriples } from '../database/triples';
 import { Services } from '../services';
 import { Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
 import { Triples } from '../utils/triples';

@@ -62,6 +62,9 @@ export const createRelationsAtom = (initialRelations: Relation[]) => {
             name: toEntityTriple.value.type === 'ENTITY' ? toEntityTriple.value.name : null,
             renderableType: 'DEFAULT',
             value: toEntityTriple.value.type === 'ENTITY' ? toEntityTriple.value.name : null,
+
+            // @TODO(database): Not sure if this is correct
+            triples: localTriples.filter(t => t.entityId === toEntityTriple.value.value),
           },
         };
       })
@@ -147,6 +150,9 @@ export const createRelationsAtom = (initialRelations: Relation[]) => {
               ? maybeLocalToTriple.value.name
               : r.toEntity.name
             : r.toEntity.name,
+
+          // @TODO(database): Not sure if this is correct
+          triples: localTriples.filter(t => t.entityId === r.toEntity.id),
         },
       };
     });
@@ -200,6 +206,7 @@ export const createRelationsForEntityAtom = (entityPageId: string, initialRelati
             name: toEntityTriple.value.type === 'ENTITY' ? toEntityTriple.value.name : null,
             renderableType: 'DEFAULT',
             value: toEntityTriple.value.type === 'ENTITY' ? toEntityTriple.value.name : null,
+            triples: localTriples.filter(t => t.entityId === toEntityTriple.value.value),
           },
         };
       })
@@ -285,6 +292,7 @@ export const createRelationsForEntityAtom = (entityPageId: string, initialRelati
               ? maybeLocalToTriple.value.name
               : r.toEntity.name
             : r.toEntity.name,
+          triples: localTriples.filter(t => t.entityId === r.id),
         },
       };
     });

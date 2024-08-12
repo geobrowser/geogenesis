@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { useWriteOps } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -15,18 +14,12 @@ import { Truncate } from '~/design-system/truncate';
 export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   const { name } = useEntityPageStore();
   const isEditing = useUserIsEditing(spaceId);
-  const { upsert, remove, upsertMany } = useWriteOps();
 
   const send = useEditEvents({
     context: {
       entityId,
       spaceId,
       entityName: name ?? '',
-    },
-    api: {
-      upsertMany,
-      upsert,
-      remove,
     },
   });
 

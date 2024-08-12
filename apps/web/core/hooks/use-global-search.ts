@@ -9,7 +9,7 @@ import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 
-import { mergeEntitiesAsync } from '../database/entities';
+import { Entity } from '../io/dto/entities';
 
 export function useGlobalSearch() {
   const [query, setQuery] = React.useState('');
@@ -19,35 +19,37 @@ export function useGlobalSearch() {
     queryFn: async ({ signal }) => {
       if (query.length === 0) return [];
 
-      const fetchEntitiesEffect = Effect.either(
-        Effect.tryPromise({
-          try: () =>
-            mergeEntitiesAsync({
-              options: {
-                query,
-                signal,
-                first: 10,
-                filter: [],
-              },
-            }),
-          catch: () => new Subgraph.Errors.AbortError(),
-        })
-      );
+      return [] as Entity[];
 
-      const resultOrError = await Effect.runPromise(fetchEntitiesEffect);
+      // const fetchEntitiesEffect = Effect.either(
+      //   Effect.tryPromise({
+      //     try: () =>
+      //       mergeEntitiesAsync({
+      //         options: {
+      //           query,
+      //           signal,
+      //           first: 10,
+      //           filter: [],
+      //         },
+      //       }),
+      //     catch: () => new Subgraph.Errors.AbortError(),
+      //   })
+      // );
 
-      if (Either.isLeft(resultOrError)) {
-        const error = resultOrError.left;
+      // const resultOrError = await Effect.runPromise(fetchEntitiesEffect);
 
-        switch (error._tag) {
-          case 'AbortError':
-            return [];
-          default:
-            throw error;
-        }
-      }
+      // if (Either.isLeft(resultOrError)) {
+      //   const error = resultOrError.left;
 
-      return resultOrError.right;
+      //   switch (error._tag) {
+      //     case 'AbortError':
+      //       return [];
+      //     default:
+      //       throw error;
+      //   }
+      // }
+
+      // return resultOrError.right;
     },
     staleTime: 10,
   });

@@ -18,9 +18,9 @@ import Link from 'next/link';
 import * as React from 'react';
 import { useState } from 'react';
 
+import { getTriples } from '~/core/database/triples';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
-import { getTriples } from '~/core/merged/triples';
 import { useEditable } from '~/core/state/editable-store';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Column, Row } from '~/core/types';

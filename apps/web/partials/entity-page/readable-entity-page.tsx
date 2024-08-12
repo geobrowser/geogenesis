@@ -1,8 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import Link from 'next/link';
 
+import { useTriples } from '~/core/database/triples';
 import { Relation } from '~/core/io/dto/entities';
-import { useTriples } from '~/core/merged/triples';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple as ITriple } from '~/core/types';
 import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';

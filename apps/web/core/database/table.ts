@@ -1,12 +1,14 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { dedupeWith } from 'effect/Array';
 
 import { TableBlockSdk } from '../blocks-sdk';
+import { fetchColumns } from '../io/fetch-columns';
 import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
-import { getRelations } from '../merged/relations';
 import { queryClient } from '../query-client';
 import { Value } from '../types';
 import { EntityWithSchema, mergeEntity, mergeEntityAsync } from './entities';
+import { getRelations } from './relations';
 
 export interface MergeTableEntitiesArgs {
   options: {
@@ -93,6 +95,25 @@ export async function mergeTableEntities({ options, selectedTypeId }: MergeTable
 
     return true;
   });
+}
+
+export async function mergeColumns(typeId: EntityId) {
+  const cachedColumns = await queryClient.fetchQuery({
+    queryKey: ['table-columns-for-merging', typeId],
+    queryFn: () => fetchColumns({ typeIds: [typeId] }),
+  });
+
+  const localAttributesForSelectedType = getRelations({
+    selector: r => r.typeOf.id === SYSTEM_IDS.ATTRIBUTES && r.fromEntity.id === typeId,
+  }).map(r => {
+    return {
+      id: r.toEntity.id,
+      name: r.toEntity.name,
+      triples: r.toEntity.triples,
+    };
+  });
+
+  return dedupeWith([...cachedColumns, ...localAttributesForSelectedType], (a, b) => a.id === b.id);
 }
 
 function filterValue(value: Value, valueToFilter: string) {

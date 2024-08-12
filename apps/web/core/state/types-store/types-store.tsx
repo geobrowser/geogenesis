@@ -5,9 +5,9 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as React from 'react';
 
 import { useEntity } from '~/core/database/entities';
+import { useTriples } from '~/core/database/triples';
 import { Space } from '~/core/io/dto/spaces';
 import { EntityId } from '~/core/io/schema';
-import { useTriples } from '~/core/merged/triples';
 import { GeoType, Triple as ITriple } from '~/core/types';
 
 interface TypesStoreProviderState {

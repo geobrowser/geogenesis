@@ -1,16 +1,13 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
-import { dedupeWith } from 'effect/Array';
 
 import * as React from 'react';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { mergeEntityAsync, useEntity } from '../database/entities';
-import { MergeTableEntitiesArgs, mergeTableEntities } from '../database/table';
+import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '../database/table';
 import { useWriteOps } from '../database/write';
-import { useMergedData } from '../hooks/use-merged-data';
 import { Entity } from '../io/dto/entities';
-import { FetchRowsOptions } from '../io/fetch-rows';
 import { EntityId } from '../io/schema';
 import { Services } from '../services';
 import { AppEntityValue, GeoType, ValueType as TripleValueType } from '../types';
@@ -31,9 +28,7 @@ export interface TableBlockFilter {
 export function useTableBlock() {
   const { entityId, selectedType, spaceId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
-  const { subgraph } = Services.useServices();
 
-  const merged = useMergedData();
   const { upsert } = useWriteOps();
 
   const blockEntity = useEntity(EntityId(entityId));
@@ -68,31 +63,9 @@ export function useTableBlock() {
   });
 
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
-    // @TODO: ShownColumns changes should trigger a refetch
-    queryKey: ['table-block-columns', filterState, selectedType.entityId, entityId],
-    queryFn: async ({ signal }) => {
-      const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
-
-      const params: FetchRowsOptions['params'] = {
-        filter: filterString,
-        typeIds: [selectedType.entityId],
-        first: PAGE_SIZE + 1,
-        skip: pageNumber * PAGE_SIZE,
-      };
-
-      /**
-       * Aggregate columns from local and server columns.
-       */
-      const columns = await merged.columns({
-        api: {
-          fetchEntity: subgraph.fetchEntity,
-          fetchTriples: subgraph.fetchTriples,
-        },
-        params,
-        signal,
-      });
-
-      return dedupeWith(columns, (a, b) => a.id === b.id);
+    queryKey: ['table-block-columns', selectedType.entityId],
+    queryFn: async () => {
+      return await mergeColumns(EntityId(selectedType.entityId));
     },
   });
 
@@ -121,8 +94,8 @@ export function useTableBlock() {
     },
   });
 
-  // @TODO(database)
   const { data: columnRelationTypes } = useQuery({
+    // @ts-expect-error @TODO(database)
     queryKey: ['table-block-column-relation-types', columns, allActions],
     queryFn: async () => {
       if (!columns) return {};
@@ -138,6 +111,7 @@ export function useTableBlock() {
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
       // Merge all local and server triples
+      // @ts-expect-error @TODO(database)
       const mergedTriples = Triples.merge(allActions, relationTypeEntities);
 
       const relationTypes = mergedTriples.filter(

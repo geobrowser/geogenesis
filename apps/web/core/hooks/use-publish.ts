@@ -6,11 +6,11 @@ import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
+import { getTriples, useTriples } from '../database/triples';
 import { useWriteOps } from '../database/write';
 import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';
-import { getTriples, useTriples } from '../merged/triples';
 import { useStatusBar } from '../state/status-bar-store';
 import { Triple as ITriple, ReviewState, SpaceGovernanceType } from '../types';
 import { Triples } from '../utils/triples';

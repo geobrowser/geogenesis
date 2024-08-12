@@ -572,11 +572,7 @@ const TableFilter = ({ filter }: TableFilterProps) => {
 const getFilters = async (rawFilter: string) => {
   const filters = await createFiltersFromGraphQLString(rawFilter, async id => await fetchEntity({ id }));
   const serverColumns = await fetchColumns({
-    params: { skip: 0, first: 0, filter: '' },
-    api: {
-      fetchEntity: fetchEntity,
-      fetchTriples: fetchTriples,
-    },
+    typeIds: [],
   });
   const filtersWithColumnName = filters.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME) {

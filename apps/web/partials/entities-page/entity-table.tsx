@@ -14,8 +14,8 @@ import { cx } from 'class-variance-authority';
 
 import { useState } from 'react';
 
+import { getTriples } from '~/core/database/triples';
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { getTriples } from '~/core/merged/triples';
 import { useEditable } from '~/core/state/editable-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store/entity-table-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';

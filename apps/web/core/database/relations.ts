@@ -2,9 +2,9 @@ import { atom, useAtomValue } from 'jotai';
 
 import * as React from 'react';
 
-import { createRelationsAtom } from '../database/atoms';
 import { Relation } from '../io/dto/entities';
 import { store } from '../state/jotai-store';
+import { createRelationsAtom } from './atoms';
 
 interface UseRelationsArgs {
   mergeWith?: Relation[];

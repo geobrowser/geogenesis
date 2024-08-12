@@ -5,11 +5,11 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 
+import { useTriples } from '~/core/database/triples';
 import { useWriteOps } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
 import { Entity, Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
-import { useTriples } from '~/core/merged/triples';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple } from '~/core/types';
@@ -54,7 +54,7 @@ type AttributeValue = string;
 export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, attributes }: Props) {
   const { triples: localTriples, schema, hideSchema, hiddenSchemaIds, name } = useEntityPageStore();
 
-  const { remove, upsert, upsertMany } = useWriteOps();
+  const { upsertMany } = useWriteOps();
 
   const triplesFromSpace = useTriples({
     selector: t => t.space === spaceId,
@@ -74,11 +74,6 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
       entityId: id,
       spaceId,
       entityName: name ?? '',
-    },
-    api: {
-      upsert,
-      remove,
-      upsertMany,
     },
   });
 
@@ -328,7 +323,6 @@ function EntityAttributes({
     }
   ) => {
     const existingTriple = groupedTriplesByAttributeId[attributeId];
-    // If it's an empty triple value
     send({
       type: 'ADD_PAGE_ENTITY_VALUE',
       payload: {

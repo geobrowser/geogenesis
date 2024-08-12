@@ -6,8 +6,8 @@ import { ErrorBoundary } from 'react-error-boundary';
 import * as React from 'react';
 import { useEffect } from 'react';
 
+import { useTriples } from '../database/triples';
 import { useSmartAccount } from '../hooks/use-smart-account';
-import { useTriples } from '../merged/triples';
 import { client } from './entity-presence-client';
 
 export const EntityPresenceContext = createRoomContext<{

@@ -4,8 +4,8 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { memo, useState } from 'react';
 
+import { useTriples } from '~/core/database/triples';
 import { useEditEvents } from '~/core/events/edit-events';
-import { useTriples } from '~/core/merged/triples';
 import { Column } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { valueTypes } from '~/core/value-types';

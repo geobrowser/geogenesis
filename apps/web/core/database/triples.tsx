@@ -2,12 +2,12 @@ import { atom, useAtomValue } from 'jotai';
 
 import * as React from 'react';
 
-import { isDeletedSelector } from '../database/selectors';
-import { StoredTriple } from '../database/types';
-import { localOpsAtom } from '../database/write';
 import { store } from '../state/jotai-store';
 import { Triple as ITriple } from '../types';
 import { Triples } from '../utils/triples';
+import { isDeletedSelector } from './selectors';
+import { StoredTriple } from './types';
+import { localOpsAtom } from './write';
 
 interface UseTriplesArgs {
   mergeWith?: ITriple[];

@@ -45,26 +45,3 @@ export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
     rows: aggregatedRows,
   };
 }
-
-// @TODO(relations)
-export function columnsFromLocalChanges(
-  localTriples: ITriple[] | undefined,
-  columns: Column[],
-  selectedTypeId?: string
-): Column[] {
-  if (!localTriples) return columns;
-
-  // Only show the column if it is an attribute of the selected type
-  const triplesThatAreAttributes = localTriples.filter(
-    triple => triple.attributeId === SYSTEM_IDS.ATTRIBUTES && triple.entityId === selectedTypeId
-  );
-
-  const newColumns: Column[] = triplesThatAreAttributes.map(triple => ({
-    id: triple.value.value,
-    triples: localTriples.filter(t => {
-      return t.entityId === triple.value.value;
-    }),
-  }));
-
-  return [...columns, ...newColumns];
-}

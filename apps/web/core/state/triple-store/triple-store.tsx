@@ -5,7 +5,7 @@ import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useTriples as useMergedTriples } from '~/core/merged/triples';
+import { useTriples as useMergedTriples } from '~/core/database/triples';
 import { Services } from '~/core/services';
 import { FilterState, Triple as TripleType } from '~/core/types';
 import { Triples } from '~/core/utils/triples';

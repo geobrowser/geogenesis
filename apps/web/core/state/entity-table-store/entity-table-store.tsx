@@ -8,14 +8,11 @@ import * as React from 'react';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { mergeEntityAsync } from '~/core/database/entities';
-import { MergeTableEntitiesArgs, mergeTableEntities } from '~/core/database/table';
+import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '~/core/database/table';
 import { useWriteOps } from '~/core/database/write';
-import { useMergedData } from '~/core/hooks/use-merged-data';
-import { FetchRowsOptions } from '~/core/io/fetch-rows';
 import { EntityId } from '~/core/io/schema';
-import { Services } from '~/core/services';
 import { createForeignType as insertForeignType, createType as insertType } from '~/core/type/create-type';
-import { AppEntityValue, Column, GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
+import { AppEntityValue, GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
 import { Triples } from '~/core/utils/triples';
 
@@ -35,9 +32,7 @@ export interface TableBlockFilter {
 }
 
 export function useEntityTable() {
-  const { subgraph } = Services.useServices();
   const { space, initialSelectedType, spaceId } = useEntityTableStoreInstance();
-  const merged = useMergedData();
   const { upsert } = useWriteOps();
 
   const [query, setQuery] = useAtom(queryAtom);
@@ -70,34 +65,10 @@ export function useEntityTable() {
   );
 
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
-    // @TODO: ShownColumns changes should trigger a refetch
-    queryKey: ['entity-table-columns', selectedType?.entityId, filterString],
-    queryFn: async ({ signal }) => {
-      const params: FetchRowsOptions['params'] = {
-        filter: filterString,
-        typeIds: selectedType ? [selectedType.entityId] : [],
-        first: DEFAULT_PAGE_SIZE + 1,
-        skip: pageNumber * DEFAULT_PAGE_SIZE,
-      };
-
-      /**
-       * Aggregate columns from local and server columns.
-       */
-      const columns = await merged.columns({
-        api: {
-          fetchEntity: subgraph.fetchEntity,
-          fetchTriples: subgraph.fetchTriples,
-        },
-        params,
-        signal,
-      });
-
-      const dedupedColumns = columns.reduce((acc, column) => {
-        if (acc.find(c => c.id === column.id)) return acc;
-        return [...acc, column];
-      }, [] as Column[]);
-
-      return dedupedColumns;
+    queryKey: ['table-block-columns', selectedType?.entityId],
+    queryFn: async () => {
+      if (!selectedType) return [];
+      return await mergeColumns(EntityId(selectedType.entityId));
     },
   });
 
@@ -127,6 +98,7 @@ export function useEntityTable() {
 
   // @TODO(database)
   const { data: columnRelationTypes } = useQuery({
+    // @ts-expect-error @TODO(database)
     queryKey: ['table-block-column-relation-types', columns, allActions],
     queryFn: async () => {
       if (!columns) return {};
@@ -142,6 +114,7 @@ export function useEntityTable() {
       const relationTypeEntities = maybeRelationAttributeTypes.flatMap(a => (a ? a.triples : []));
 
       // Merge all local and server triples
+      // @ts-expect-error @TODO(database)
       const mergedTriples = Triples.merge(allActions, relationTypeEntities);
 
       // @TODO(relations)
@@ -167,11 +140,6 @@ export function useEntityTable() {
       );
     },
   });
-
-  const unpublishedColumns = React.useMemo(() => {
-    // @TODO(relations)
-    return EntityTable.columnsFromLocalChanges([], [], selectedType?.entityId);
-  }, [selectedType?.entityId]);
 
   const setPage = React.useCallback(
     (page: number | 'next' | 'previous') => {
@@ -207,7 +175,7 @@ export function useEntityTable() {
 
     rows: rows?.slice(0, DEFAULT_PAGE_SIZE) ?? [],
     columns: columns ?? [],
-    unpublishedColumns,
+    unpublishedColumns: [],
     columnRelationTypes: columnRelationTypes ?? {},
 
     pageNumber,

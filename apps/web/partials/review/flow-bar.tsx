@@ -6,8 +6,8 @@ import pluralize from 'pluralize';
 
 import * as React from 'react';
 
+import { useTriples } from '~/core/database/triples';
 import { useToast } from '~/core/hooks/use-toast';
-import { useTriples } from '~/core/merged/triples';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';

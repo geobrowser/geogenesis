@@ -9,17 +9,13 @@ import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
 
-import { mergeEntitiesAsync } from '../database/entities';
-import { FilterState } from '../types';
-import { useMergedData } from './use-merged-data';
+import { Entity } from '../io/dto/entities';
 
 interface AutocompleteOptions {
   allowedTypes?: string[];
 }
 
 export function useAutocomplete({ allowedTypes }: AutocompleteOptions = {}) {
-  const merged = useMergedData();
-
   const [query, setQuery] = React.useState('');
 
   const { data: results, isLoading } = useQuery({
@@ -27,36 +23,38 @@ export function useAutocomplete({ allowedTypes }: AutocompleteOptions = {}) {
     queryFn: async ({ signal }) => {
       if (query.length === 0) return [];
 
-      const fetchEntitiesEffect = Effect.either(
-        Effect.tryPromise({
-          try: () =>
-            mergeEntitiesAsync({
-              query,
-              signal,
-              typeIds: allowedTypes,
-              first: 10,
-            }),
-          catch: () => {
-            return new Subgraph.Errors.AbortError();
-          },
-        })
-      );
+      return [] as Entity[];
 
-      const resultOrError = await Effect.runPromise(fetchEntitiesEffect);
+      // const fetchEntitiesEffect = Effect.either(
+      //   Effect.tryPromise({
+      //     try: () =>
+      //       mergeEntitiesAsync({
+      //         query,
+      //         signal,
+      //         typeIds: allowedTypes,
+      //         first: 10,
+      //       }),
+      //     catch: () => {
+      //       return new Subgraph.Errors.AbortError();
+      //     },
+      //   })
+      // );
 
-      if (Either.isLeft(resultOrError)) {
-        const error = resultOrError.left;
+      // const resultOrError = await Effect.runPromise(fetchEntitiesEffect);
 
-        switch (error._tag) {
-          case 'AbortError':
-            return [];
-          default:
-            console.error('useAutocomplete error:', String(error));
-            throw error;
-        }
-      }
+      // if (Either.isLeft(resultOrError)) {
+      //   const error = resultOrError.left;
 
-      return resultOrError.right;
+      //   switch (error._tag) {
+      //     case 'AbortError':
+      //       return [];
+      //     default:
+      //       console.error('useAutocomplete error:', String(error));
+      //       throw error;
+      //   }
+      // }
+
+      // return resultOrError.right;
     },
     staleTime: 10,
   });
