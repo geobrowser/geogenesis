@@ -54,10 +54,14 @@ export function useTypesStore(): {
   });
 
   // @TODO(relations)
-  const types = useTriples({
-    mergeWith: initialTypes,
-    selector: t => t.attributeId === SYSTEM_IDS.TYPES && t.value.value === SYSTEM_IDS.SCHEMA_TYPE,
-  });
+  const types = useTriples(
+    React.useMemo(() => {
+      return {
+        mergeWith: initialTypes,
+        selector: t => t.attributeId === SYSTEM_IDS.TYPES && t.value.value === SYSTEM_IDS.SCHEMA_TYPE,
+      };
+    }, [initialTypes])
+  );
 
   const localForeignTypes: GeoType[] = React.useMemo(() => {
     if (!space) return [];

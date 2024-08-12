@@ -2,6 +2,7 @@
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
+import * as React from 'react';
 import { memo, useState } from 'react';
 
 import { useTriples } from '~/core/database/triples';
@@ -36,14 +37,22 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
   unpublishedColumns,
 }: Props) {
-  const localTriples = useTriples({
-    mergeWith: column.triples,
-    selector: t => t.entityId === column.id,
-  });
+  const localTriples = useTriples(
+    React.useMemo(() => {
+      return {
+        mergeWith: column.triples,
+        selector: t => t.entityId === column.id,
+      };
+    }, [column.triples, column.id])
+  );
 
-  const localCellTriples = useTriples({
-    selector: t => t.attributeId === column.id,
-  });
+  const localCellTriples = useTriples(
+    React.useMemo(() => {
+      return {
+        selector: t => t.attributeId === column.id,
+      };
+    }, [column.id])
+  );
 
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.

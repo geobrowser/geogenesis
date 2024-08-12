@@ -25,9 +25,7 @@ export const FlowBar = () => {
   const { editable } = useEditable();
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
-  const triples = useTriples({
-    selector: t => t.hasBeenPublished === false,
-  });
+  const triples = useTriples(React.useMemo(() => ({ selector: t => t.hasBeenPublished === false }), []));
 
   const opsCount = triples.length;
 

@@ -1,6 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import Link from 'next/link';
 
+import * as React from 'react';
+
 import { useTriples } from '~/core/database/triples';
 import { Relation } from '~/core/io/dto/entities';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
@@ -22,9 +24,11 @@ interface Props {
 }
 
 export function ReadableEntityPage({ triples: serverTriples, relations, id }: Props) {
-  const triplesFromSpace = useTriples({
-    selector: t => t.space === id,
-  });
+  const triplesFromSpace = useTriples(
+    React.useMemo(() => {
+      return { selector: t => t.space === id };
+    }, [id])
+  );
 
   const { triples: localTriples } = useEntityPageStore();
 

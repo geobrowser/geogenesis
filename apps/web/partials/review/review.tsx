@@ -133,9 +133,13 @@ const ReviewChanges = () => {
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
-  const triplesFromSpace = useTriples({
-    selector: t => t.space === activeSpace,
-  });
+  const triplesFromSpace = useTriples(
+    React.useMemo(() => {
+      return {
+        selector: t => t.space === activeSpace,
+      };
+    }, [activeSpace])
+  );
 
   const { makeProposal } = usePublish();
   const [data, isLoading] = useChanges(triplesFromSpace, activeSpace);

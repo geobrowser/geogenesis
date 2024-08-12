@@ -82,9 +82,8 @@ interface HasEntityChangesProps extends Props {
 }
 
 function HasEntityChanges({ entityId, children, address }: HasEntityChangesProps) {
-  const triples = useTriples({
-    selector: t => t.entityId === entityId,
-  });
+  const triples = useTriples(React.useMemo(() => ({ selector: t => t.entityId === entityId }), [entityId]));
+
   const updateMyPresence = EntityPresenceContext.useUpdateMyPresence();
   const hasChangesToEntity = triples.length > 0;
 

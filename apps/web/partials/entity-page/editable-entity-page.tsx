@@ -56,9 +56,13 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
   const { upsertMany } = useWriteOps();
 
-  const triplesFromSpace = useTriples({
-    selector: t => t.space === spaceId,
-  });
+  const triplesFromSpace = useTriples(
+    React.useMemo(() => {
+      return {
+        selector: t => t.space === spaceId,
+      };
+    }, [spaceId])
+  );
   const { subgraph, config } = Services.useServices();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating

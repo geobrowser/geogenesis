@@ -10,7 +10,7 @@ import { useEntityStoreInstance } from './entity-store-provider';
 export function useEntityPageStore() {
   const { spaceId, id, initialTriples, initialRelations } = useEntityStoreInstance();
   const { name, triples, relationsOut, schema } = useEntity(
-    React.useMemo(() => EntityId(id), [id]),
+    React.useMemo(() => id, [id]),
     React.useMemo(() => ({ triples: initialTriples, relations: initialRelations }), [initialTriples, initialRelations])
   );
 
@@ -24,8 +24,6 @@ export function useEntityPageStore() {
     },
     [hiddenSchemaIds]
   );
-
-  console.log('name', name);
 
   return {
     triples,
