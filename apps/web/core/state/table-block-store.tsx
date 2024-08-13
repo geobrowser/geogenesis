@@ -30,21 +30,7 @@ export function useTableBlock() {
 
   const { upsert } = useWriteOps();
 
-  const { data: remoteEntity } = useQuery({
-    queryKey: ['table-block-remote-entity', entityId],
-    queryFn: () => fetchEntity({ id: entityId }),
-    staleTime: Infinity,
-  });
-
-  const blockEntity = useEntity(
-    React.useMemo(() => EntityId(entityId), [entityId]),
-    React.useMemo(() => {
-      return {
-        triples: remoteEntity?.triples ?? [],
-        relations: remoteEntity?.relationsOut ?? [],
-      };
-    }, [remoteEntity])
-  );
+  const blockEntity = useEntity(React.useMemo(() => EntityId(entityId), [entityId]));
 
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;

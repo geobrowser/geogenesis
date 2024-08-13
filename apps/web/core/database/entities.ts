@@ -17,30 +17,42 @@ import { getTriples, useTriples } from './triples';
 export type EntityWithSchema = Entity & { schema: { id: EntityId; name: string | null }[] };
 
 export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relations: Relation[] }): EntityWithSchema {
-  const { initialTriples, initialRelations } = React.useMemo(() => {
-    return {
-      initialTriples: initialData?.triples ?? [],
-      initialRelations: initialData?.relations ?? [],
-    };
-  }, [initialData]);
+  // If the caller passes in a set of data we use that for merging. If not,
+  // we fetch the entity from the server and merge it with the local state.
+  const { data: initialOrRemoteEntity } = useQuery({
+    queryKey: ['entity-for-merging', id, initialData],
+    queryFn: async ({ signal }) => {
+      if (initialData) {
+        return initialData;
+      }
+
+      const entity = await fetchEntity({ id, signal });
+
+      return {
+        triples: entity?.triples ?? [],
+        relations: entity?.relationsOut ?? [],
+      };
+    },
+    staleTime: Infinity,
+  });
 
   const triples = useTriples(
     React.useMemo(
       () => ({
-        mergeWith: initialTriples,
+        mergeWith: initialOrRemoteEntity?.triples,
         selector: activeTriplesForEntityIdSelector(id),
       }),
-      [initialTriples, id]
+      [initialOrRemoteEntity?.triples, id]
     )
   );
 
   const relations = useRelations(
     React.useMemo(
       () => ({
-        mergeWith: initialRelations,
+        mergeWith: initialOrRemoteEntity?.relations,
         selector: r => r.fromEntity.id === id,
       }),
-      [initialRelations, id]
+      [initialOrRemoteEntity?.relations, id]
     )
   );
 
