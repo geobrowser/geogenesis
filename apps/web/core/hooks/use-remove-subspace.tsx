@@ -48,12 +48,6 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
         return null;
       }
 
-      const proposal = createSubspaceProposal({
-        name: 'Remove subspace',
-        type: 'REMOVE_SUBSPACE',
-        spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
-      });
-
       const writeTxEffect = Effect.gen(function* () {
         if (space.type === 'PUBLIC') {
           const proposal = createSubspaceProposal({

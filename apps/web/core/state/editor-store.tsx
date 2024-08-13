@@ -1,13 +1,12 @@
 'use client';
 
-import { SYSTEM_IDS, createCollection, createCollectionItem, reorderCollectionItem } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createRelationship, reorderCollectionItem } from '@geogenesis/sdk';
 import { A } from '@mobily/ts-belt';
 import { Editor } from '@tiptap/core';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateHTML, generateJSON } from '@tiptap/react';
 import { atom, useAtomValue } from 'jotai';
 import pluralize from 'pluralize';
-import Showdown from 'showdown';
 
 import * as React from 'react';
 
@@ -15,108 +14,75 @@ import { tiptapExtensions } from '~/partials/editor/editor';
 import { htmlToPlainText } from '~/partials/editor/editor-utils';
 
 import { TableBlockSdk } from '../blocks-sdk';
+import { createRelationsForEntityAtom } from '../database/atoms';
+import { remove, upsert } from '../database/write';
+import { Entity, Relation } from '../io/dto/entities';
+import { EntityId, TypeId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
-import { CollectionItem, AppEntityValue as EntityValue, Triple as ITriple, OmitStrict } from '../types';
-import { Collections } from '../utils/collections';
-import { Triples } from '../utils/triples';
-import { getImagePath, groupBy } from '../utils/utils';
+import { CollectionItem, AppEntityValue as EntityValue, OmitStrict } from '../types';
+import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
-import { activeTriplesForEntityIdSelector, localTriplesAtom, remove, upsert } from './actions-store/actions-store';
-
-const markdownConverter = new Showdown.Converter();
 
 // We don't care about the value of the collection item in the block editor or
 // any of the entity properties except the id.
-interface BlockCollectionItem extends OmitStrict<CollectionItem, 'value' | 'entity'> {
+// @TODO(relations): Use a relation
+interface BlockRelation extends OmitStrict<CollectionItem, 'value' | 'entity'> {
   entityId: string;
 }
 
-const createBlocksCollectionIdAtom = (initialBlocksIdsTriple: ITriple | null, entityId: string) => {
+interface RelationWithBlock {
+  relationId: EntityId;
+  typeOfId: TypeId;
+  index: string;
+  block: Entity;
+}
+
+const createMergedBlockRelationsAtom = (
+  initialRelations: Relation[],
+  initialBlocks: Entity[],
+  entityPageId: string
+) => {
   return atom(get => {
-    const triplesForEntityId = get(localTriplesAtom).filter(activeTriplesForEntityIdSelector(entityId));
-    const entityChanges = Triples.merge(triplesForEntityId, initialBlocksIdsTriple ? [initialBlocksIdsTriple] : []);
-    const blocksIdTriple: ITriple | undefined = entityChanges.find(t => t.attributeId === SYSTEM_IDS.BLOCKS);
-    const triple = blocksIdTriple ?? initialBlocksIdsTriple;
+    const relationsForEntityId = get(createRelationsForEntityAtom(entityPageId, initialRelations));
 
-    if (triple?.value.type !== 'COLLECTION') {
-      return null;
-    }
+    /************************************** */
+    // Merging blocks is a different process from merging relations. We can compose merging relations
+    // and merging blocks together with two different functions.
+    /************************************** */
 
-    // Favor the local version of the blockIdsTriple's collection value id if it exists
-    return triple?.value.value ?? null;
-  });
-};
+    // @TODO: Get local blocks
+    const blocksByBlockId = initialBlocks.reduce((acc, block) => {
+      acc.set(block.id, block);
+      return acc;
+    }, new Map<string, Entity>());
 
-const createCollectionItemsAtom = (initialBlockCollectionItemTriples: ITriple[], blocksCollectionId: string | null) => {
-  return atom(get => {
-    if (!blocksCollectionId) {
-      return [];
-    }
+    // 1. Group the RelationWithBlock entities with their block
+    const relationsWithBlocks = relationsForEntityId
+      .map(r => {
+        const block = blocksByBlockId.get(r.toEntity.id);
 
-    const localTriples = get(localTriplesAtom);
-
-    const collectionItemEntityIdsForCollectionId = Triples.merge(
-      localTriples.filter(
-        a =>
-          a.attributeId === SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE &&
-          a.value.value === blocksCollectionId &&
-          a.isDeleted === false
-      ),
-      initialBlockCollectionItemTriples
-    ).map(t => t.entityId);
-
-    // Gather all of the triples for each collection item associated with the block list's
-    // collection entity id. We use this below to create the data structure representing
-    // the collection item itself.
-    const allTriplesForCollectionItems = Triples.merge(
-      localTriples.filter(t => collectionItemEntityIdsForCollectionId.includes(t.entityId)),
-      initialBlockCollectionItemTriples
-    );
-
-    const collectionItemTriplesByCollectionItemId = groupBy(allTriplesForCollectionItems, c => c.entityId);
-
-    // @TODO: Abstract this
-    // Map all of the triples for each collection item into a CollectionItem data structure.
-    // If not all of the elements of the collection item exist we don't create the item.
-    const items = Object.entries(collectionItemTriplesByCollectionItemId).map(
-      ([collectionItemId, items]): BlockCollectionItem | null => {
-        const index = items.find(i => Boolean(Collections.itemIndexValue(i)))?.value.value;
-        const collectionId = items.find(i => Boolean(Collections.itemCollectionIdValue(i)))?.value.value;
-        const entityId = items.find(i => Boolean(Collections.itemEntityIdValue(i)))?.value.value;
-
-        if (!(index && collectionId && entityId)) {
+        if (!block) {
           return null;
         }
 
         return {
-          id: collectionItemId,
-          collectionId,
-          entityId: entityId,
-          index,
+          typeOfId: TypeId(r.typeOf.id),
+          index: r.index,
+          block,
+          relationId: r.id,
         };
+      })
+      .filter(b => b !== null);
+
+    return relationsWithBlocks.sort((a, z) => {
+      if (a.index < z.index) {
+        return -1;
       }
-    );
-
-    return items
-      .flatMap(i => (i ? [i] : []))
-      .sort((a, z) => {
-        if (a.index < z.index) {
-          return -1;
-        }
-        if (a.index > z.index) {
-          return 1;
-        }
-        return 0;
-      });
-  });
-};
-
-const createBlockTriplesAtom = (initialBlockTriples: ITriple[], blockIds: string[]) => {
-  return atom(get => {
-    const localTriplesForBlockIds = get(localTriplesAtom).filter(
-      t => blockIds.includes(t.entityId) && t.isDeleted === false
-    );
-    return Triples.merge(localTriplesForBlockIds, initialBlockTriples);
+      if (a.index > z.index) {
+        return 1;
+      }
+      return 0;
+    });
   });
 };
 
@@ -131,78 +97,60 @@ const createBlockTriplesAtom = (initialBlockTriples: ITriple[], blockIds: string
  *    markdown content, image src, table configuration, etc.
  */
 export function useEditorStore() {
-  const {
-    id: entityId,
-    spaceId,
-    initialBlockIdsTriple,
-    initialBlockTriples,
-    initialBlockCollectionItemTriples,
-  } = useEditorInstance();
+  const { id: entityId, spaceId, initialBlockRelations, initialBlocks } = useEditorInstance();
 
-  const blocksCollectionId = useAtomValue(
+  const relations: RelationWithBlock[] = useAtomValue(
     React.useMemo(
-      () => createBlocksCollectionIdAtom(initialBlockIdsTriple, entityId),
-      [initialBlockIdsTriple, entityId]
-    )
-  );
-
-  const collectionItems = useAtomValue(
-    React.useMemo(
-      () => createCollectionItemsAtom(initialBlockCollectionItemTriples, blocksCollectionId),
-      [initialBlockCollectionItemTriples, blocksCollectionId]
+      () => createMergedBlockRelationsAtom(initialBlockRelations, initialBlocks, entityId),
+      [initialBlockRelations, entityId, initialBlocks]
     )
   );
 
   const blockIds = React.useMemo(() => {
-    return collectionItems.map(ci => ci.entityId);
-  }, [collectionItems]);
-
-  const blockTriples = useAtomValue(
-    React.useMemo(() => createBlockTriplesAtom(initialBlockTriples, blockIds), [initialBlockTriples, blockIds])
-  );
+    return relations.map(b => b.block.id);
+  }, [relations]);
 
   // Transforms our block triples back into a TipTap-friendly JSON format
   const editorJson = React.useMemo(() => {
     const json = {
       type: 'doc',
       content: blockIds.map(blockId => {
+        const relationForBlockId = relations.find(r => r.block.id === blockId);
+        const blockTriples = relationForBlockId?.block.triples ?? [];
+
         const markdownTriple = blockTriples.find(
           triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT
         );
-        const rowTypeTriple = blockTriples.find(
-          triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.ROW_TYPE
-        );
 
-        const imageTriple = blockTriples.find(
-          triple => triple.entityId === blockId && triple.attributeId === SYSTEM_IDS.IMAGE_ATTRIBUTE
-        );
+        const toEntity = relationForBlockId?.block;
+        const value = getBlockValueForBlockType(toEntity);
 
-        if (imageTriple) {
+        if (value?.type === 'IMAGE') {
           return {
             type: 'image',
             attrs: {
               spaceId,
               id: blockId,
-              src: imageTriple.value.type === 'IMAGE' ? getImagePath(imageTriple.value.image) ?? '' : '',
+              src: getImagePath(value.value),
               alt: '',
               title: '',
             },
           };
         }
 
-        if (rowTypeTriple) {
+        if (value?.type === 'DATA') {
           return {
             type: 'tableNode',
             attrs: {
               spaceId,
               id: blockId,
-              typeId: rowTypeTriple.value.value,
-              typeName: Values.nameOfEntityValue(rowTypeTriple),
+              typeId: value.value,
+              typeName: value.name,
             },
           };
         }
 
-        const html = markdownTriple ? markdownConverter.makeHtml(Values.stringValue(markdownTriple) || '') : '';
+        const html = markdownTriple ? markdownToHtml(Values.stringValue(markdownTriple) || '') : '';
         /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
         const isSSR = typeof window === 'undefined';
         const json = isSSR ? generateServerJSON(html, tiptapExtensions) : generateJSON(html, tiptapExtensions);
@@ -231,13 +179,15 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockIds, blockTriples, spaceId]);
+  }, [blockIds, spaceId, relations]);
 
   const getBlockTriple = React.useCallback(
     ({ entityId, attributeId }: { entityId: string; attributeId: string }) => {
-      return blockTriples.find(t => t.entityId === entityId && t.attributeId === attributeId);
+      return relations
+        .flatMap(r => r.block.triples)
+        .find(t => t.entityId === entityId && t.attributeId === attributeId);
     },
-    [blockTriples]
+    [relations]
   );
 
   // Helper function for creating a new block of type TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
@@ -254,7 +204,6 @@ export function useEditorStore() {
       if (!existingBlockTriple) {
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: blockEntityId,
             entityName: entityName,
             attributeId: SYSTEM_IDS.TYPES,
@@ -265,7 +214,7 @@ export function useEditorStore() {
         );
       }
     },
-    [upsert, getBlockTriple, spaceId]
+    [getBlockTriple, spaceId]
   );
 
   // Helper function for upserting a new block name triple for TABLE_BLOCK, TEXT_BLOCK, or IMAGE_BLOCK
@@ -276,7 +225,6 @@ export function useEditorStore() {
 
       upsert(
         {
-          type: 'SET_TRIPLE',
           entityId: blockEntityId,
           entityName: entityName,
           attributeId: SYSTEM_IDS.NAME,
@@ -286,7 +234,7 @@ export function useEditorStore() {
         spaceId
       );
     },
-    [upsert, getBlockTriple, spaceId]
+    [spaceId]
   );
 
   // Helper function for upserting a new block markdown content triple for TEXT_BLOCKs only
@@ -302,19 +250,20 @@ export function useEditorStore() {
       }
 
       const nodeHTML = textNodeHTML(node);
+      console.log('nodeHTML', nodeHTML);
 
       const entityName = getNodeName(node);
-      let markdown = markdownConverter.makeMarkdown(nodeHTML);
+      let markdown = htmlToMarkdown(nodeHTML);
 
       //  Overrides Showdown's unwanted "consecutive list" behavior found in
       //  `src/subParsers/makeMarkdown/list.js`
       if (isList) {
+        // @TODO: Do we need this with our custom parser?
         markdown = markdown.replaceAll('\n<!-- -->\n', '');
       }
 
       upsert(
         {
-          type: 'SET_TRIPLE',
           entityId: blockEntityId,
           entityName: entityName,
           attributeId: SYSTEM_IDS.MARKDOWN_CONTENT,
@@ -324,7 +273,7 @@ export function useEditorStore() {
         spaceId
       );
     },
-    [upsert, getBlockTriple]
+    [spaceId]
   );
 
   // Helper function for creating a new row type triple for TABLE_BLOCKs only
@@ -344,7 +293,6 @@ export function useEditorStore() {
       if (!existingRowTypeTriple) {
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: blockEntityId,
             entityName: getNodeName(node),
             attributeId: SYSTEM_IDS.ROW_TYPE,
@@ -363,7 +311,6 @@ export function useEditorStore() {
         if (!existingFilterTriple) {
           upsert(
             {
-              type: 'SET_TRIPLE',
               entityId: blockEntityId,
               entityName: getNodeName(node),
               attributeId: SYSTEM_IDS.FILTER,
@@ -387,55 +334,48 @@ export function useEditorStore() {
         }
       }
     },
-    [upsert, getBlockTriple, spaceId]
+    [spaceId, getBlockTriple]
   );
 
   // Helper function for creating a new block image triple for IMAGE_BLOCKs only
-  const createBlockImageTriple = React.useCallback(
-    (node: JSONContent) => {
-      const blockEntityId = getNodeId(node);
-      const isImageNode = node.type === 'image';
+  const createBlockImageTriple = React.useCallback((node: JSONContent) => {
+    // const blockEntityId = getNodeId(node);
+    const isImageNode = node.type === 'image';
 
-      if (!isImageNode || !node.attrs?.src) {
-        return null;
-      }
+    if (!isImageNode || !node.attrs?.src) {
+      return null;
+    }
 
-      const { src, id } = node.attrs;
+    // const { src, id } = node.attrs;
 
-      upsert(
-        {
-          type: 'SET_TRIPLE',
-          entityId: blockEntityId,
-          entityName: getNodeName(node),
-          attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
-          attributeName: 'Image',
-          value: { type: 'IMAGE', value: id, image: Values.toImageValue(src) },
-        },
-        spaceId
-      );
-    },
-    [upsert, spaceId]
-  );
+    // @TODO(relations): This should be a relation pointing to the image entity
+    // upsert(
+    //   {
+    //     entityId: blockEntityId,
+    //     entityName: getNodeName(node),
+    //     attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
+    //     attributeName: 'Image',
+    //     value: { type: 'IMAGE', value: id, image: Values.toImageValue(src) },
+    //   },
+    //   spaceId
+    // );
+  }, []);
 
   // Helper function to create or update the block IDs on an entity
   // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
-  const upsertBlocksTriple = React.useCallback(
+  // @TODO(relations): fix
+  const upsertBlocksRelations = React.useCallback(
     async (newBlockIds: string[]) => {
-      const existingBlocksCollectionId = blocksCollectionId;
       const prevBlockIds = blockIds;
 
       // Returns the blockIds that exist in prevBlockIds, but do not exist in newBlockIds
       const removedBlockIds = A.difference(prevBlockIds, newBlockIds);
       const addedBlockIds = A.difference(newBlockIds, prevBlockIds);
-      const collectionId = existingBlocksCollectionId
-        ? existingBlocksCollectionId
-        : createCollection().payload.entityId;
 
-      if (!existingBlocksCollectionId && newBlockIds.length > 0) {
+      if (newBlockIds.length > 0) {
         upsert(
           {
-            type: 'SET_TRIPLE',
-            entityId: collectionId,
+            entityId: entityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: null,
             attributeName: null,
@@ -448,238 +388,212 @@ export function useEditorStore() {
           spaceId
         );
 
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            entityId: entityId,
-            // entityName: name,
-            entityName: '@TODO: Replace',
-            attributeId: SYSTEM_IDS.BLOCKS,
-            attributeName: 'Blocks',
-            value: {
-              type: 'COLLECTION',
-              value: collectionId,
-              // @TODO: What do we put here? We aren't using it in the UI anywhere
-              // so maybe we can just leave it empty since we don't actually render
-              // the blocks list in the triples list.
-              items: [],
+        /**
+         * @TODO: Rethink the best way to structure state of the edit in the Geo state
+         * vs. the Editor state.
+         */
+        // We store the new collection items being created so we can check if the new
+        // ordering for a block is dependent on other blocks being created at the same time.
+        //
+        // @TODO: Ideally this isn't needed as ordering should be updated as the users are making
+        // changes, but right now that would require updating the actions store for every keystroke
+        // which could cause performance problems in the app. We need more granular reactive state
+        // from our store to prevent potentially re-rendering _everything_ that depends on the store
+        // when changes are made anywhere.
+        const newCollectionItems: BlockRelation[] = [];
+
+        for (const addedBlock of addedBlockIds) {
+          const [typeOp, collectionOp, entityOp, indexOp] = createRelationship({
+            relationTypeId: SYSTEM_IDS.BLOCKS,
+            fromId: entityId,
+            toId: addedBlock,
+          });
+
+          upsert(
+            {
+              attributeName: 'Types',
+              entityName: null,
+              attributeId: typeOp.triple.attribute,
+              entityId: typeOp.triple.entity,
+              value: {
+                type: 'ENTITY',
+                name: 'Collection Item',
+                value: typeOp.triple.value.value,
+              },
             },
-          },
-          spaceId
-        );
-      }
+            spaceId
+          );
 
-      /**
-       * @TODO: Rethink the best way to structure state of the edit in the Geo state
-       * vs. the Editor state.
-       */
-      // We store the new collection items being created so we can check if the new
-      // ordering for a block is dependent on other blocks being created at the same time.
-      //
-      // @TODO: Ideally this isn't needed as ordering should be updated as the users are making
-      // changes, but right now that would require updating the actions store for every keystroke
-      // which could cause performance problems in the app. We need more granular reactive state
-      // from our store to prevent potentially re-rendering _everything_ that depends on the store
-      // when changes are made anywhere.
-      const newCollectionItems: BlockCollectionItem[] = [];
+          upsert(
+            {
+              attributeName: 'Collection reference',
+              entityName: null,
+              attributeId: collectionOp.triple.attribute,
+              entityId: collectionOp.triple.entity,
+              value: {
+                type: 'ENTITY',
+                name: null,
+                value: collectionOp.triple.value.value,
+              },
+            },
+            spaceId
+          );
 
-      for (const addedBlock of addedBlockIds) {
-        const [typeOp, collectionOp, entityOp, indexOp] = createCollectionItem({
-          collectionId,
-          entityId: addedBlock,
-          // @TODO: index (what does this TODO mean???)
-          spaceId,
+          upsert(
+            {
+              attributeName: 'Entity reference',
+              entityName: null,
+              attributeId: entityOp.triple.attribute,
+              entityId: entityOp.triple.entity,
+              value: {
+                type: 'ENTITY',
+                name: null,
+                value: entityOp.triple.value.value,
+              },
+            },
+            spaceId
+          );
+
+          const position = newBlockIds.indexOf(addedBlock);
+          // @TODO: noUncheckedIndexAccess
+          const beforeBlockIndex = newBlockIds[position - 1] as string | undefined;
+          const afterBlockIndex = newBlockIds[position + 1] as string | undefined;
+
+          // Check both the existing collection items and any that are created as part of this
+          // same update tick. This is necessary as right now we don't update the Geo state
+          // until the user blurs the editor. See the comment earlier in this function.
+          const beforeCollectionItemIndex =
+            relations.find(c => c.block.id === beforeBlockIndex)?.index ??
+            newCollectionItems.find(c => c.entityId === beforeBlockIndex)?.index;
+          const afterCollectionItemIndex =
+            relations.find(c => c.block.id === afterBlockIndex)?.index ??
+            newCollectionItems.find(c => c.entityId === afterBlockIndex)?.index;
+
+          const newTripleOrdering = reorderCollectionItem({
+            collectionItemId: indexOp.triple.entity,
+            beforeIndex: beforeCollectionItemIndex,
+            afterIndex: afterCollectionItemIndex,
+          });
+
+          upsert(
+            {
+              attributeName: 'Index',
+              entityName: null,
+              attributeId: indexOp.triple.attribute,
+              entityId: indexOp.triple.entity,
+              value: {
+                type: 'TEXT',
+                value: newTripleOrdering.triple.value.value,
+              },
+            },
+            spaceId
+          );
+
+          newCollectionItems.push({
+            collectionId: entityId,
+            entityId: entityOp.triple.value.value, // The id of the block the item points to
+            id: entityOp.triple.entity, // The id of the collection item itself
+            index: newTripleOrdering.triple.value.value,
+          });
+        }
+
+        // If a block is deleted we want to make sure that we delete the block entity as well.
+        // The block entity might exist remotely, so we need to fetch all the triple associated
+        // with that block entity in order to delete them all.
+        //
+        // Additionally,there may be local triples associated with the block entity that we need
+        // to delete.
+        if (!removedBlockIds) return;
+
+        const removedCollectionItems = relations.filter(c => removedBlockIds.includes(c.block.id));
+
+        // Delete all collection items referencing the removed blocks
+        removedCollectionItems.forEach(c => {
+          remove(
+            {
+              attributeId: SYSTEM_IDS.TYPES,
+              entityId: c.relationId,
+            },
+            spaceId
+          );
+
+          remove(
+            {
+              attributeId: SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
+              entityId: c.relationId,
+            },
+            spaceId
+          );
+
+          remove(
+            {
+              attributeId: SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
+              entityId: c.relationId,
+            },
+            spaceId
+          );
+
+          remove(
+            {
+              attributeId: SYSTEM_IDS.RELATION_INDEX,
+              entityId: c.relationId,
+            },
+            spaceId
+          );
         });
 
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            attributeName: 'Types',
-            entityName: null,
-            attributeId: typeOp.payload.attributeId,
-            entityId: typeOp.payload.entityId,
-            value: {
-              type: 'ENTITY',
-              name: 'Collection Item',
-              value: typeOp.payload.value.value,
-            },
-          },
-          spaceId
+        // Fetch all the subgraph data for all the deleted block entities.
+        const maybeRemoteBlocks = await Promise.all(
+          // @TODO: Can use a single fetchEntities with id_in
+          removedBlockIds.map(async blockId => fetchEntity({ id: blockId }))
         );
+        const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
 
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            attributeName: 'Collection reference',
-            entityName: null,
-            attributeId: collectionOp.payload.attributeId,
-            entityId: collectionOp.payload.entityId,
-            value: {
-              type: 'ENTITY',
-              name: null,
-              value: collectionOp.payload.value.value,
-            },
-          },
-          spaceId
-        );
-
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            attributeName: 'Entity reference',
-            entityName: null,
-            attributeId: entityOp.payload.attributeId,
-            entityId: entityOp.payload.entityId,
-            value: {
-              type: 'ENTITY',
-              name: null,
-              value: entityOp.payload.value.value,
-            },
-          },
-          spaceId
-        );
-
-        const position = newBlockIds.indexOf(addedBlock);
-        // @TODO: noUncheckedIndexAccess
-        const beforeBlockIndex = newBlockIds[position - 1] as string | undefined;
-        const afterBlockIndex = newBlockIds[position + 1] as string | undefined;
-
-        // Check both the existing collection items and any that are created as part of this
-        // same update tick. This is necessary as right now we don't update the Geo state
-        // until the user blurs the editor. See the comment earlier in this function.
-        const beforeCollectionItemIndex =
-          collectionItems.find(c => c.entityId === beforeBlockIndex)?.index ??
-          newCollectionItems.find(c => c.entityId === beforeBlockIndex)?.index;
-        const afterCollectionItemIndex =
-          collectionItems.find(c => c.entityId === afterBlockIndex)?.index ??
-          newCollectionItems.find(c => c.entityId === afterBlockIndex)?.index;
-
-        const newTripleOrdering = reorderCollectionItem({
-          collectionItemId: indexOp.payload.entityId,
-          beforeIndex: beforeCollectionItemIndex,
-          afterIndex: afterCollectionItemIndex,
+        // To delete an entity we delete all of its triples
+        remoteBlocks.forEach(block => {
+          block.triples.forEach(t => remove(t, spaceId));
         });
 
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            attributeName: 'Index',
-            entityName: null,
-            attributeId: indexOp.payload.attributeId,
-            entityId: indexOp.payload.entityId,
-            value: {
-              type: 'TEXT',
-              value: newTripleOrdering.payload.value.value,
+        // Delete any local triples associated with the deleted block entities
+        // @TODO: Put back
+        // const localTriplesForDeletedBlocks = pipe(
+        //   allTriples,
+        //   actions => Triple.merge(actions, []),
+        //   triples => triples.filter(t => removedBlockIds.includes(t.entityId))
+        // );
+
+        // localTriplesForDeletedBlocks.forEach(t => remove(t, spaceId));
+
+        // We delete the existingBlockTriple if the page content is completely empty
+        if (newBlockIds.length === 0) {
+          remove(
+            {
+              attributeId: SYSTEM_IDS.BLOCKS,
+              entityId,
             },
-          },
-          spaceId
-        );
+            spaceId
+          );
 
-        newCollectionItems.push({
-          collectionId,
-          entityId: entityOp.payload.value.value, // The id of the block the item points to
-          id: entityOp.payload.entityId, // The id of the collection item itself
-          index: newTripleOrdering.payload.value.value,
-        });
-      }
-
-      // If a block is deleted we want to make sure that we delete the block entity as well.
-      // The block entity might exist remotely, so we need to fetch all the triple associated
-      // with that block entity in order to delete them all.
-      //
-      // Additionally,there may be local triples associated with the block entity that we need
-      // to delete.
-      if (!removedBlockIds) return;
-
-      const removedCollectionItems = collectionItems.filter(c => removedBlockIds.includes(c.entityId));
-
-      // Delete all collection items referencing the removed blocks
-      removedCollectionItems.forEach(c => {
-        remove(
-          {
-            attributeId: SYSTEM_IDS.TYPES,
-            entityId: c.id,
-          },
-          spaceId
-        );
-
-        remove(
-          {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_COLLECTION_ID_REFERENCE_ATTRIBUTE,
-            entityId: c.id,
-          },
-          spaceId
-        );
-
-        remove(
-          {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_ENTITY_REFERENCE,
-            entityId: c.id,
-          },
-          spaceId
-        );
-
-        remove(
-          {
-            attributeId: SYSTEM_IDS.COLLECTION_ITEM_INDEX,
-            entityId: c.id,
-          },
-          spaceId
-        );
-      });
-
-      // Fetch all the subgraph data for all the deleted block entities.
-      const maybeRemoteBlocks = await Promise.all(
-        // @TODO: Can use a single fetchEntities with id_in
-        removedBlockIds.map(async blockId => fetchEntity({ id: blockId }))
-      );
-      const remoteBlocks = maybeRemoteBlocks.flatMap(block => (block ? [block] : []));
-
-      // To delete an entity we delete all of its triples
-      remoteBlocks.forEach(block => {
-        block.triples.forEach(t => remove(t, spaceId));
-      });
-
-      // Delete any local triples associated with the deleted block entities
-      // @TODO: Put back
-      // const localTriplesForDeletedBlocks = pipe(
-      //   allTriples,
-      //   actions => Triple.merge(actions, []),
-      //   triples => triples.filter(t => removedBlockIds.includes(t.entityId))
-      // );
-
-      // localTriplesForDeletedBlocks.forEach(t => remove(t, spaceId));
-
-      // We delete the existingBlockTriple if the page content is completely empty
-      if (newBlockIds.length === 0) {
-        remove(
-          {
-            attributeId: SYSTEM_IDS.BLOCKS,
-            entityId,
-          },
-          spaceId
-        );
-
-        // Delete the collection
-        remove(
-          {
-            attributeId: SYSTEM_IDS.TYPES,
-            entityId: collectionId,
-          },
-          spaceId
-        );
+          // Delete the collection
+          remove(
+            {
+              attributeId: SYSTEM_IDS.TYPES,
+              entityId: entityId,
+            },
+            spaceId
+          );
+        }
       }
     },
-    // [allTriples, blockIds, blocksCollectionId, upsert, entityId, name, remove, subgraph, spaceId, collectionItems]
-    [blockIds, blocksCollectionId, upsert, entityId, remove, spaceId, collectionItems]
+    [blockIds, entityId, spaceId, relations]
   );
 
   // Iterate over the content's of a TipTap editor to create or update triple blocks
   // @TODO: We should instead only execute functions for each block type, instead of
   // executing _every_ function for every block type.
   const updateEditorBlocks = React.useCallback(
-    (editor: Editor) => {
-      const { content = [] } = editor.getJSON();
+    (getContent: Editor['getJSON']) => {
+      const { content = [] } = getContent();
 
       const populatedContent = content.filter(node => {
         const isNonParagraph = node.type !== 'paragraph';
@@ -694,13 +608,19 @@ export function useEditorStore() {
       });
 
       const newBlockIds = populatedContent.map(node => getNodeId(node));
-      upsertBlocksTriple(newBlockIds);
+      upsertBlocksRelations(newBlockIds);
 
+      // @TODO: Handle each type here instead of calling every function and returning early
+      // if the type is invalid
       populatedContent.forEach(node => {
         createTableBlockMetadata(node);
+
+        // @TODO: Block type triple should be a relation?
         createBlockTypeTriple(node);
         upsertBlockNameTriple(node);
         upsertBlockMarkdownTriple(node);
+
+        // @TODO: Block image triple should be a relation?
         createBlockImageTriple(node);
       });
     },
@@ -708,7 +628,7 @@ export function useEditorStore() {
       createBlockImageTriple,
       createBlockTypeTriple,
       createTableBlockMetadata,
-      upsertBlocksTriple,
+      upsertBlocksRelations,
       upsertBlockMarkdownTriple,
       upsertBlockNameTriple,
     ]
@@ -716,11 +636,48 @@ export function useEditorStore() {
 
   return {
     blockIds,
-    collectionId: blocksCollectionId,
-    collectionItems,
+    collectionItems: relations,
     editorJson,
     updateEditorBlocks,
   };
+}
+
+function getBlockValueForBlockType(
+  block?: Entity
+): { type: 'IMAGE' | 'TEXT' | 'DATA'; value: string; name: string | null } | null {
+  if (!block) {
+    return null;
+  }
+
+  const blockTypes = block.types.map(t => t.id);
+
+  const isTextBlock = blockTypes?.includes(TypeId(SYSTEM_IDS.TEXT_BLOCK));
+  const isTableBlock = blockTypes?.includes(TypeId(SYSTEM_IDS.TABLE_BLOCK));
+  const isImageBlock = blockTypes?.includes(TypeId(SYSTEM_IDS.IMAGE_BLOCK));
+
+  if (isTextBlock) {
+    const value = block.triples.find(t => t.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT)?.value.value;
+
+    return value
+      ? {
+          type: 'TEXT',
+          value: value ?? '',
+          name: null,
+        }
+      : null;
+  }
+
+  if (isTableBlock) {
+    const rowType = block.relationsOut.find(r => r.typeOf.id === EntityId(SYSTEM_IDS.ROW_TYPE));
+    return rowType ? { type: 'DATA', value: rowType.toEntity.id, name: rowType.toEntity.name } : null;
+  }
+
+  if (isImageBlock) {
+    const value = block.relationsOut.find(r => r.typeOf.id === EntityId(SYSTEM_IDS.IMAGE_ATTRIBUTE))?.toEntity.id;
+    return value ? { type: 'IMAGE', value, name: null } : null;
+  }
+
+  return null;
 }
 
 /* Helper function for transforming a single node of TipTap's JSONContent structure into HTML */
@@ -762,32 +719,20 @@ const EditorContext = React.createContext<OmitStrict<Props, 'children'> | null>(
 interface Props {
   id: string;
   spaceId: string;
-  initialBlockIdsTriple: ITriple | null;
-  initialBlockTriples: ITriple[];
-  initialBlockCollectionItems: CollectionItem[];
-  initialBlockCollectionItemTriples: ITriple[];
+  initialBlocks: Entity[];
+  initialBlockRelations: Relation[];
   children: React.ReactNode;
 }
 
-export const EditorProvider = ({
-  id,
-  spaceId,
-  initialBlockIdsTriple,
-  initialBlockTriples,
-  initialBlockCollectionItems,
-  initialBlockCollectionItemTriples,
-  children,
-}: Props) => {
+export const EditorProvider = ({ id, spaceId, initialBlocks, initialBlockRelations, children }: Props) => {
   const value = React.useMemo(() => {
     return {
       id,
       spaceId,
-      initialBlockIdsTriple,
-      initialBlockTriples,
-      initialBlockCollectionItems,
-      initialBlockCollectionItemTriples,
+      initialBlockRelations,
+      initialBlocks,
     };
-  }, [id, spaceId, initialBlockIdsTriple, initialBlockTriples]);
+  }, [id, spaceId, initialBlockRelations, initialBlocks]);
 
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
 };
@@ -800,4 +745,110 @@ export function useEditorInstance() {
   }
 
   return value;
+}
+
+function htmlToMarkdown(html: string) {
+  let md = html;
+
+  // Convert headings
+  md = md.replace(/<h1>(.*?)<\/h1>/gi, '# $1\n');
+  md = md.replace(/<h2>(.*?)<\/h2>/gi, '## $1\n');
+  md = md.replace(/<h3>(.*?)<\/h3>/gi, '### $1\n');
+  md = md.replace(/<h4>(.*?)<\/h4>/gi, '#### $1\n');
+  md = md.replace(/<h5>(.*?)<\/h5>/gi, '##### $1\n');
+  md = md.replace(/<h6>(.*?)<\/h6>/gi, '###### $1\n');
+
+  // Convert paragraphs
+  md = md.replace(/<p>(.*?)<\/p>/gi, '$1\n\n');
+
+  // Convert bold
+  md = md.replace(/<strong>(.*?)<\/strong>/gi, '**$1**');
+
+  // Convert italic
+  md = md.replace(/<em>(.*?)<\/em>/gi, '*$1*');
+
+  // Convert links
+  // We don't support links atm
+  // md = md.replace(/<a href="(.*?)">(.*?)<\/a>/gi, '[$2]($1)');
+
+  // Convert unordered lists
+  md = md.replace(/<ul>(.*?)<\/ul>/gis, match => {
+    return match.replace(/<li>(.*?)<\/li>/gi, '- $1\n');
+  });
+
+  // Convert ordered lists
+  md = md.replace(/<ol>(.*?)<\/ol>/gis, match => {
+    let counter = 1;
+    return match.replace(/<li>(.*?)<\/li>/gi, () => `${counter++}. $1\n`);
+  });
+
+  // Convert blockquotes
+  // We don't support blockquotes atm
+  // md = md.replace(/<blockquote>(.*?)<\/blockquote>/gi, '> $1\n');
+
+  // Convert code blocks
+  // We don't support code blocks atm
+  // md = md.replace(/<pre><code>(.*?)<\/code><\/pre>/gi, '```\n$1\n```\n');
+
+  // Convert inline code
+  // We don't support inline code atm
+  // md = md.replace(/<code>(.*?)<\/code>/gi, '`$1`');
+
+  // Remove remaining tags
+  md = md.replace(/<[^>]*>/g, '');
+
+  // Decode HTML entities
+  md = md.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+  return md.trim();
+}
+
+function markdownToHtml(markdown: string) {
+  let html = markdown;
+
+  // Convert headings
+  html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+  html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+  html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+  html = html.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
+  html = html.replace(/^##### (.*$)/gim, '<h5>$1</h5>');
+  html = html.replace(/^###### (.*$)/gim, '<h6>$1</h6>');
+
+  // Convert paragraphs
+  html = html.replace(/^\s*(\n)?(.+)/gim, function (m) {
+    // eslint-disable-next-line no-useless-escape
+    return /\<(\/)?(h\d|ul|ol|li|blockquote|pre|img)/.test(m) ? m : '<p>' + m + '</p>';
+  });
+
+  // Convert bold
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+  // Convert italic
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+  // Convert links
+  html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
+
+  // Convert unordered lists
+  html = html.replace(/^\s*(-|\*)\s(.*)$/gim, '<ul>\n<li>$2</li>\n</ul>');
+  html = html.replace(/<\/ul>\s*<ul>/g, '');
+
+  // Convert ordered lists
+  html = html.replace(/^\s*(\d+\.)\s(.*)$/gim, '<ol>\n<li>$2</li>\n</ol>');
+  html = html.replace(/<\/ol>\s*<ol>/g, '');
+
+  // Convert blockquotes
+  // eslint-disable-next-line no-useless-escape
+  html = html.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
+
+  // Convert code blocks
+  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+
+  // Convert inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Convert line breaks
+  html = html.replace(/\n/g, '<br>');
+
+  return html.trim();
 }

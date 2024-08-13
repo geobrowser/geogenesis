@@ -16,7 +16,7 @@ interface Props {
 }
 
 export async function ProfileEntityServerContainer({ params }: Props) {
-  const entityId = decodeURIComponent(params.entityId);
+  const entityId = params.entityId;
 
   const [person, profile] = await Promise.all([
     Subgraph.fetchEntity({ id: entityId }),
@@ -25,7 +25,15 @@ export async function ProfileEntityServerContainer({ params }: Props) {
 
   // @TODO: Real error handling
   if (!person) {
-    return <ProfilePageComponent id={params.entityId} triples={[]} spaceId={params.id} referencedByComponent={null} />;
+    return (
+      <ProfilePageComponent
+        id={params.entityId}
+        triples={[]}
+        spaceId={params.id}
+        relationsOut={[]}
+        referencedByComponent={null}
+      />
+    );
   }
 
   // Redirect from space configuration page to space page. An entity might be a Person _and_ a Space.
@@ -57,6 +65,7 @@ export async function ProfileEntityServerContainer({ params }: Props) {
       id={params.entityId}
       triples={person.triples}
       spaceId={params.id}
+      relationsOut={person.relationsOut}
       referencedByComponent={
         /* 
           Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to

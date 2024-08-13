@@ -1,9 +1,10 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 
 import * as React from 'react';
 
-import { Entity, Space } from '~/core/types';
+import { Entity } from '~/core/io/dto/entities';
+import { SearchResult } from '~/core/io/dto/search';
+import { Space } from '~/core/io/dto/spaces';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
@@ -37,17 +38,15 @@ export const ResultItem = ({ existsOnEntity = false, className = '', ...rest }: 
 
 interface Props {
   onClick: () => void;
-  result: Entity;
+  result: SearchResult;
   alreadySelected?: boolean;
-  spaces: Space[];
   withDescription?: boolean;
 }
 
-export function ResultContent({ onClick, result, alreadySelected, spaces, withDescription = true }: Props) {
-  const space = spaces.find(space => space.id === result.nameTripleSpaces?.[0] ?? '');
-
-  const spaceName = space?.spaceConfig?.name ?? space?.id ?? '';
-  const spaceImg = space?.spaceConfig?.image ?? null;
+export function ResultContent({ onClick, result, alreadySelected, withDescription = true }: Props) {
+  const space = result.spaces?.[0];
+  const spaceName = space?.name ?? space?.id ?? '';
+  const spaceImg = space?.image ?? null;
 
   const showBreadcrumbs = spaceName || result.types.length > 0;
   const showBreadcrumbChevron = spaceName && result.types.length > 0;

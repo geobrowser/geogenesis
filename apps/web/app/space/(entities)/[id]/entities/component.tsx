@@ -1,7 +1,8 @@
+import { Space } from '~/core/io/dto/spaces';
 import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
 import { EntityTableStoreProvider } from '~/core/state/entity-table-store/entity-table-store-provider';
 import { TypesStoreProvider } from '~/core/state/types-store/types-store';
-import { Column, Row, Space, Triple } from '~/core/types';
+import { Column, Row, Triple } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
 

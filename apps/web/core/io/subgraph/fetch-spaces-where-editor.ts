@@ -1,28 +1,27 @@
+import { Schema } from '@effect/schema';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
-import { Space, SpaceConfigEntity } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 
-import { entityFragment, spacePluginsFragment } from './fragments';
+import { SpaceMetadataDto } from '../dto';
+import { SpaceConfigEntity } from '../dto/spaces';
+import { SpaceId, SubstreamEntity } from '../schema';
+import { entityFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples, getSpaceConfigFromMetadata } from './network-local-mapping';
 
 const getFetchSpacesWhereEditorQuery = (address: string) => `query {
   spaces(filter: { spaceEditors: { some: { accountId: { equalTo: "${address}" } } } }) {
     nodes {
-      nodes {
-        id
-        spacesMetadata {
-          nodes {
-            entity {
-              ${entityFragment}
-            }
+      id
+      spacesMetadata {
+        nodes {
+          entity {
+            ${entityFragment}
           }
         }
+      }
     }
   }
 }`;
@@ -36,7 +35,7 @@ interface NetworkResult {
   };
 }
 
-export async function fetchSpacesWhereEditor(address: string) {
+export async function fetchSpacesWhereEditor(address: string): Promise<SpaceWhereEditor[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
@@ -88,16 +87,46 @@ export async function fetchSpacesWhereEditor(address: string) {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const spaces = result.spaces.nodes.map(space => {
-    const spaceConfigWithImage = getSpaceConfigFromMetadata(space.id, space.spacesMetadata.nodes[0]?.entity);
+  const spaces = result.spaces.nodes
+    .map(space => {
+      const decodedSpace = Schema.decodeEither(SpaceWhereEditorSchema)(space);
 
-    return {
-      id: space.id,
-      spaceConfig: spaceConfigWithImage,
-    };
-  });
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Encountered error decoding space where editor. spaceId: ${space.id} error: ${error}`);
+          return null;
+        },
+        onRight: space => {
+          return SpaceWhereEditorDto(space);
+        },
+      });
+    })
+    .filter(s => s !== null);
 
   // Only return spaces that have a spaceConfig. We'll eventually be able to do this at
   // the query level when we index the space config entity as part of a Space.
   return spaces.flatMap(s => (s.spaceConfig ? [s] : []));
+}
+
+const SpaceWhereEditorSchema = Schema.Struct({
+  id: Schema.String.pipe(Schema.length(32), Schema.fromBrand(SpaceId)),
+  spacesMetadata: Schema.Struct({
+    nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
+  }),
+});
+
+type SpaceWhereEditorSchema = Schema.Schema.Type<typeof SpaceWhereEditorSchema>;
+
+type SpaceWhereEditor = {
+  id: SpaceId;
+  spaceConfig: SpaceConfigEntity;
+};
+
+function SpaceWhereEditorDto(space: SpaceWhereEditorSchema) {
+  const spaceConfigWithImage = SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.entity);
+
+  return {
+    id: space.id,
+    spaceConfig: spaceConfigWithImage,
+  };
 }

@@ -19,7 +19,6 @@ import {
 } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { SmallButton } from '~/design-system/button';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { Skeleton } from '~/design-system/skeleton';
@@ -158,7 +157,7 @@ type PendingMembershipProposalProps = {
 async function PendingMembershipProposal({ proposal }: PendingMembershipProposalProps) {
   const [proposedMember, space] = await Promise.all([
     fetchProposedMemberForProposal(proposal.id),
-    cachedFetchSpace(proposal.space.spaceId),
+    cachedFetchSpace(proposal.space.id),
   ]);
 
   if (!proposedMember || !space) {
@@ -220,7 +219,7 @@ async function PendingMembershipProposal({ proposal }: PendingMembershipProposal
 }
 
 async function PendingContentProposal({ proposal, user }: PendingMembershipProposalProps) {
-  const space = await cachedFetchSpace(proposal.space.spaceId);
+  const space = await cachedFetchSpace(proposal.space.id);
 
   if (!space) {
     // @TODO: Should never happen but we should error handle

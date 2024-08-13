@@ -4,9 +4,10 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
+import { fetchBlocks } from '~/core/io/fetch-blocks';
+import { EntityId } from '~/core/io/schema';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
-import { getBlocksCollectionData } from '~/core/io/subgraph/network-local-mapping';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -250,18 +251,21 @@ export default async function Layout({ children, params }: Props) {
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
+      <EntityStoreProvider
+        id={props.id}
+        spaceId={props.spaceId}
+        initialTriples={props.triples}
+        initialRelations={props.relationsOut}
+      >
         <EditorProvider
           id={props.id}
           spaceId={props.spaceId}
-          initialBlockIdsTriple={props.blockIdsTriple}
-          initialBlockTriples={props.blockTriples}
-          initialBlockCollectionItems={props.blockCollectionItems}
-          initialBlockCollectionItemTriples={props.blockCollectionItemTriples}
+          initialBlockRelations={props.blockRelations}
+          initialBlocks={props.blocks}
         >
           <EntityPageCover avatarUrl={null} coverUrl={coverUrl} />
           <EntityPageContentContainer>
-            <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
+            <EditableHeading spaceId={props.spaceId} entityId={props.id} />
             <SpacePageMetadataHeader
               typeNames={typeNames}
               spaceId={props.spaceId}
@@ -312,25 +316,22 @@ const getData = async (spaceId: string) => {
     redirect(`/space/${spaceId}/entities`);
   }
 
-  const spaceName = space?.spaceConfig?.name ? space.spaceConfig?.name : space?.id ?? '';
+  const blockIds = entity?.relationsOut
+    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    ?.map(r => r.toEntity.id);
 
-  const blockIdsTriple =
-    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
-
-  const { blockTriples, collectionItemTriples, blockCollectionItems } = await getBlocksCollectionData(entity);
+  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
 
   return {
-    triples: entity?.triples ?? [],
+    triples: entity.triples,
+    relationsOut: entity.relationsOut,
     id: entity.id,
-    name: entity?.name ?? spaceName ?? '',
-    description: Entities.description(entity?.triples ?? []),
+    name: entity.name,
+    description: Entities.description(entity.triples),
     spaceId,
 
-    // For entity page editor
-    blockIdsTriple,
-    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
-    blockCollectionItems,
-    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
+    blockRelations: entity.relationsOut,
+    blocks,
 
     space,
   };

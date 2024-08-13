@@ -40,12 +40,11 @@ CREATE TABLE public.spaces (
 );
 
 CREATE TABLE public.entity_types (
-    id serial PRIMARY KEY,
+    PRIMARY KEY (entity_id, type_id),
     entity_id text NOT NULL REFERENCES public.entities(id),
     type_id text NOT NULL REFERENCES public.entities(id),
     created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    CONSTRAINT geo_entity_types_unique_entity_type_pair UNIQUE (entity_id, type_id)
+    created_at_block integer NOT NULL
 );
 
 CREATE TABLE public.onchain_profiles (
@@ -71,17 +70,13 @@ CREATE TABLE public.log_entries (
     json text
 );
 
-CREATE TABLE public.collections (
+CREATE TABLE public.relations (
     id text PRIMARY KEY NOT NULL,
-    entity_id text REFERENCES public.entities(id) NOT NULL
-);
-
-CREATE TABLE public.collection_items (
-    id text PRIMARY KEY NOT NULL,
-    collection_item_entity_id text REFERENCES public.entities(id) NOT NULL,
-    index text,
-    collection_id text REFERENCES public.collections(id) NOT NULL,
-    entity_id text REFERENCES public.entities(id) NOT NULL
+    type_of_id text REFERENCES public.entities(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
+    to_entity_id text REFERENCES public.entities(id) NOT NULL, -- the entity the relation is pointing to
+    index text, -- the fractional index of the relation relative to other relations of the same type
+    from_entity_id text REFERENCES public.entities(id) NOT NULL, -- the entity the relation is pointing from
+    entity_id text REFERENCES public.entities(id) NOT NULL -- the entity id of the relation entity itself
 );
 
 CREATE TYPE public.proposal_type as ENUM ('ADD_EDIT', 'ADD_SUBSPACE', 'REMOVE_SUBSPACE', 'ADD_EDITOR', 'REMOVE_EDITOR', 'ADD_MEMBER', 'REMOVE_MEMBER');
@@ -141,7 +136,7 @@ CREATE TABLE public.space_subspaces (
     CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
-CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URL', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
+CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URI', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
 
 CREATE TABLE public.triples (
     PRIMARY KEY (space_id, entity_id, attribute_id),
@@ -152,7 +147,6 @@ CREATE TABLE public.triples (
     number_value text,
     text_value text,
     entity_value_id text REFERENCES public.entities(id),
-    collection_value_id text REFERENCES public.collections(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     is_stale boolean NOT NULL
@@ -248,6 +242,12 @@ CREATE TABLE public.geo_blocks (
     hash text NOT NULL,
     number text NOT NULL,
     timestamp text NOT NULL
+);
+
+CREATE TABLE public.entity_spaces (
+    PRIMARY KEY (entity_id, space_id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
 -- CREATE TABLE public.triple_versions (

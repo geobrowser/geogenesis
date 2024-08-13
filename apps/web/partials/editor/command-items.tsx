@@ -112,10 +112,6 @@ export const commandItems: CommandSuggestionItem[] = [
         if (!e?.target?.files?.[0]) return;
         const file = e.target.files[0];
 
-        // It doesn't really matter which configuration we use here since all IPFS
-        // nodes are essentially production.
-        const config = Environment.getConfig();
-
         const src = await IpfsClient.uploadFile(file);
         editor.chain().focus().deleteRange(range).setImage({ src }).run();
       };

@@ -4,13 +4,13 @@ import { notFound } from 'next/navigation';
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subgraph } from '~/core/io';
+import { Space } from '~/core/io/dto/spaces';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { FetchRowsOptions, fetchRows } from '~/core/io/fetch-rows';
 import { fetchForeignTypeTriples, fetchSpaceTypeTriples } from '~/core/io/fetch-types';
 import { Params } from '~/core/params';
 import { InitialEntityTableStoreParams } from '~/core/state/entity-table-store/entity-table-store-params';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/triple-store/constants';
-import { Space } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
 
 import { Component } from './component';
@@ -90,11 +90,7 @@ const getData = async ({
   };
 
   const serverColumns = await fetchColumns({
-    params: fetchParams,
-    api: {
-      fetchTriples: Subgraph.fetchTriples,
-      fetchEntity: Subgraph.fetchEntity,
-    },
+    typeIds: typeId ? [typeId] : [],
   });
 
   const serverRows = await fetchRows({

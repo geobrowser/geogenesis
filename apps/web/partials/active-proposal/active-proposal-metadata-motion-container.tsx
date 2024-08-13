@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+
 import { ResizableContainer } from '~/design-system/resizable-container';
 
 export function MetadataMotionContainer({ children }: { children: React.ReactNode }) {

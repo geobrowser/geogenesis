@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { useActionsStore } from '../hooks/use-actions-store';
+import { useWriteOps } from '../database/write';
 import { ID } from '../id';
 import { Triple as ITriple } from '../types';
 import { Triples } from '../utils/triples';
@@ -9,7 +9,7 @@ export function createForeignType(
   foreignType: ITriple,
   spaceId: string,
   spaceConfigId: string | null,
-  upsert: ReturnType<typeof useActionsStore>['upsert']
+  upsert: ReturnType<typeof useWriteOps>['upsert']
 ) {
   const newSpaceConfigId = spaceConfigId || ID.createEntityId();
 
@@ -23,6 +23,7 @@ export function createForeignType(
       value: { type: 'TEXT', value: 'Space Configuration' },
     });
 
+    // @TODO(relations)
     const spaceConfigTypeTriple = Triples.withId({
       space: spaceId,
       entityId: newSpaceConfigId,
@@ -32,10 +33,11 @@ export function createForeignType(
       value: { value: SYSTEM_IDS.SPACE_CONFIGURATION, type: 'ENTITY', name: 'Space Configuration' },
     });
 
-    upsert({ ...spaceConfigNameTriple, type: 'SET_TRIPLE' }, spaceId);
-    upsert({ ...spaceConfigTypeTriple, type: 'SET_TRIPLE' }, spaceId);
+    upsert(spaceConfigNameTriple, spaceId);
+    upsert(spaceConfigTypeTriple, spaceId);
   }
 
+  // @TODO(relations)
   const spaceConfigForeignTypeTriple = Triples.withId({
     space: spaceId,
     entityId: newSpaceConfigId,
@@ -45,10 +47,10 @@ export function createForeignType(
     value: { value: foreignType.entityId, type: 'ENTITY', name: foreignType.entityName },
   });
 
-  upsert({ ...spaceConfigForeignTypeTriple, type: 'SET_TRIPLE' }, spaceId);
+  upsert(spaceConfigForeignTypeTriple, spaceId);
 }
 
-export function createType(entityName: string, spaceId: string, upsert: ReturnType<typeof useActionsStore>['upsert']) {
+export function createType(entityName: string, spaceId: string, upsert: ReturnType<typeof useWriteOps>['upsert']) {
   const entityId = ID.createEntityId();
 
   const nameTriple = Triples.withId({
@@ -59,6 +61,8 @@ export function createType(entityName: string, spaceId: string, upsert: ReturnTy
     attributeName: 'Name',
     value: { type: 'TEXT', value: entityName },
   });
+
+  // @TODO(relations)
   const typeTriple = Triples.withId({
     space: spaceId,
     entityId,
@@ -72,8 +76,8 @@ export function createType(entityName: string, spaceId: string, upsert: ReturnTy
     },
   });
 
-  upsert({ ...nameTriple, type: 'SET_TRIPLE' }, spaceId);
-  upsert({ ...typeTriple, type: 'SET_TRIPLE' }, spaceId);
+  upsert(nameTriple, spaceId);
+  upsert(typeTriple, spaceId);
 
   // We return the triple to use at any callsites
   return typeTriple;

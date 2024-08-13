@@ -4,10 +4,8 @@ import Image from 'next/legacy/image';
 import { Suspense } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Subgraph } from '~/core/io';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
-import { AppOp, TripleWithEntityValue } from '~/core/types';
-import { Action } from '~/core/utils/action';
+import { TripleWithEntityValue } from '~/core/types';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -71,12 +69,12 @@ async function ActivityList({ searchParams, entityId }: Props) {
           const spaceImage = space.image ?? PLACEHOLDER_SPACE_IMAGE;
 
           const lastEditedDate = GeoDate.fromGeoTime(p.createdAt);
-          const proposalChangeCount = p.proposedVersions.reduce<AppOp[]>(
-            (acc, version) => acc.concat(version.ops),
-            []
-          ).length;
+          // const proposalChangeCount = p.proposedVersions.reduce<AppOp[]>(
+          //   (acc, version) => acc.concat(version.ops),
+          //   []
+          // ).length;
 
-          const proposedEntitiesCount = p.proposedVersions.length;
+          // const proposedEntitiesCount = p.proposedVersions.length;
 
           // e.g. Mar 12, 2023
           const formattedLastEditedDate = new Date(lastEditedDate).toLocaleDateString(undefined, {
@@ -105,7 +103,7 @@ async function ActivityList({ searchParams, entityId }: Props) {
               </div>
 
               <p className="pl-6 text-breadcrumb">
-                {proposalChangeCount} edits on {proposedEntitiesCount} pages in {spaceName}
+                {0} edits on {0} pages in {spaceName}
               </p>
             </div>
           );

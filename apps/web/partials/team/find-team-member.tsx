@@ -7,11 +7,12 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useCallback, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useToast } from '~/core/hooks/use-toast';
 import { Subgraph } from '~/core/io';
+import { Entity } from '~/core/io/dto/entities';
+import { TypeId } from '~/core/io/schema';
 import { Services } from '~/core/services';
-import { Entity as EntityType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Images } from '~/core/utils/images';
 import { Values } from '~/core/utils/value';
@@ -59,7 +60,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
 
   const [entityId, setEntityId] = useState<string>('');
 
-  const [person, setPerson] = useState<EntityType | null>(null);
+  const [person, setPerson] = useState<Entity | null>(null);
   const [linkedName, setLinkedName] = useState<string | null>(null);
   const [linkedAvatar, setLinkedAvatar] = useState<string | null>(null);
   const [hasFoundPerson, setHasFoundPerson] = useState<boolean>(false);
@@ -67,7 +68,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
   const [, setToast] = useToast();
-  const { upsertMany } = useActionsStore();
+  const { upsertMany } = useWriteOps();
 
   const handleAddLinkedTeamMember = () => {
     if (!person || !name || !role) return;
@@ -79,18 +80,14 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
     if (linkedName !== name) {
       // Add name attribute
       triplesToWrite.push({
-        op: {
-          type: 'SET_TRIPLE',
-          entityId: linkedEntityId,
-          entityName: name,
-          attributeId: SYSTEM_IDS.NAME,
-          attributeName: 'Name',
-          value: {
-            type: 'TEXT',
-            value: name,
-          },
+        entityId: linkedEntityId,
+        entityName: name,
+        attributeId: SYSTEM_IDS.NAME,
+        attributeName: 'Name',
+        value: {
+          type: 'TEXT',
+          value: name,
         },
-        spaceId,
       });
     }
 
@@ -102,51 +99,38 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
       });
 
       // Create the image entity
-      triplesToWrite.push({
-        op: { ...typeTriple, type: 'SET_TRIPLE' },
-        spaceId,
-      });
-      triplesToWrite.push({
-        op: { ...urlTriple, type: 'SET_TRIPLE' },
-        spaceId,
-      });
+      triplesToWrite.push(typeTriple);
+      triplesToWrite.push(urlTriple);
 
+      // @TODO(relations): Add image support
       // Set the image entity reference on the current entity
-      triplesToWrite.push({
-        spaceId,
-        op: {
-          type: 'SET_TRIPLE',
-          entityId: linkedEntityId,
-          entityName: name,
-          attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-          attributeName: 'Avatar',
-          value: {
-            type: 'IMAGE',
-            value: typeTriple.entityId,
-            image: Values.toImageValue(avatar),
-          },
-        },
-      });
+      // triplesToWrite.push({
+      //   entityId: linkedEntityId,
+      //   entityName: name,
+      //   attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+      //   attributeName: 'Avatar',
+      //   value: {
+      //     type: 'IMAGE',
+      //     value: typeTriple.entityId,
+      //     image: Values.toImageValue(avatar),
+      //   },
+      // });
     }
 
     // Add role attribute
     triplesToWrite.push({
-      op: {
-        type: 'SET_TRIPLE',
-        entityId: linkedEntityId,
-        entityName: name,
-        attributeId: SYSTEM_IDS.ROLE_ATTRIBUTE,
-        attributeName: 'Role',
-        value: {
-          type: 'ENTITY',
-          value: role.id,
-          name: role.name,
-        },
+      entityId: linkedEntityId,
+      entityName: name,
+      attributeId: SYSTEM_IDS.ROLE_ATTRIBUTE,
+      attributeName: 'Role',
+      value: {
+        type: 'ENTITY',
+        value: role.id,
+        name: role.name,
       },
-      spaceId,
     });
 
-    upsertMany(triplesToWrite);
+    upsertMany(triplesToWrite, spaceId);
 
     setHasAddedTeamMember(true);
     setToast(<TeamMemberCreatedToast name={name} entityId={linkedEntityId} spaceId={spaceId} linked={true} />);
@@ -187,7 +171,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
       ]);
 
       if (person) {
-        if (types.includes(SYSTEM_IDS.PERSON_TYPE)) {
+        if (types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
           const avatar = Entities.avatar(person?.triples);
           setAvatar(avatar);
           setName(Entities.name(person?.triples ?? []));
@@ -342,8 +326,8 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
                     placeholder="Find or create role..."
                     onDone={handleChangeRole}
                     alreadySelectedIds={[]}
-                    allowedTypes={[{ typeId: '9c1922f1-d7a2-47d1-841d-234cb2f56991', typeName: 'Role' }]}
-                    attributeId="9c1922f1-d7a2-47d1-841d-234cb2f56991"
+                    filterByTypes={[{ typeId: SYSTEM_IDS.ROLE_ATTRIBUTE, typeName: 'Role' }]}
+                    attributeId={SYSTEM_IDS.ROLE_ATTRIBUTE}
                     className="!h-auto !font-medium"
                   />
                 ) : (

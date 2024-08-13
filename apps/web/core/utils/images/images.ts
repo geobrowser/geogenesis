@@ -27,7 +27,7 @@ type CreateImageTriplesReturnType = [
     attributeId: typeof SYSTEM_IDS.IMAGE_URL_ATTRIBUTE;
     attributeName: 'Image URL';
     value: {
-      type: 'URL';
+      type: 'URI';
       value: string;
     };
   },
@@ -43,25 +43,25 @@ export function createImageEntityTriples({
   return [
     {
       space: spaceId,
-      entityId: typeOp.payload.entityId,
+      entityId: typeOp.triple.entity,
       entityName: null,
-      attributeId: typeOp.payload.attributeId,
+      attributeId: typeOp.triple.attribute,
       attributeName: 'Types',
       value: {
         type: 'ENTITY',
-        value: typeOp.payload.value.value,
+        value: typeOp.triple.value.value,
         name: null,
       },
     },
     {
       space: spaceId,
-      entityId: urlOp.payload.entityId,
+      entityId: urlOp.triple.entity,
       entityName: null,
-      attributeId: urlOp.payload.attributeId,
+      attributeId: urlOp.triple.attribute,
       attributeName: 'Image URL',
       value: {
-        type: 'URL',
-        value: typeOp.payload.value.value,
+        type: 'URI',
+        value: Values.toImageValue(urlOp.triple.value.value),
       },
     },
   ];

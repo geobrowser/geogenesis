@@ -10,12 +10,13 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { SpaceMetadataDto } from '~/core/io/dto';
+import { Space } from '~/core/io/dto/spaces';
+import { SubstreamSpace } from '~/core/io/schema';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
-import type { NetworkSpaceResult } from '~/core/io/subgraph/types';
 import { useTableBlock } from '~/core/state/table-block-store';
-import type { OmitStrict, Space } from '~/core/types';
+import type { OmitStrict } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -117,9 +118,7 @@ type SpacesMenuProps = {
 type ReducedSpace = OmitStrict<
   Space,
   | 'members'
-  | 'createdAtBlock'
   | 'editors'
-  | 'isRootSpace'
   | 'mainVotingPluginAddress'
   | 'memberAccessPluginAddress'
   | 'personalSpaceAdminPluginAddress'
@@ -225,7 +224,7 @@ const spacesQuery = (name: string) => `
 
 interface NetworkResult {
   spaces: {
-    nodes: (Pick<NetworkSpaceResult, 'spacesMetadata' | 'id' | 'daoAddress'> & {
+    nodes: (Pick<SubstreamSpace, 'spacesMetadata' | 'id' | 'daoAddress'> & {
       spaceMembers: { totalCount: number };
       spaceEditors: { totalCount: number };
     })[];
@@ -298,7 +297,7 @@ function useSpacesQuery() {
     return {
       id: s.id,
       daoAddress: s.daoAddress,
-      spaceConfig: getSpaceConfigFromMetadata(s.id, s.spacesMetadata.nodes[0].entity),
+      spaceConfig: SpaceMetadataDto(s.id, s.spacesMetadata.nodes[0].entity),
       totalMembers: s?.spaceMembers.totalCount ?? 0,
       totalEditors: s?.spaceEditors.totalCount ?? 0,
     };

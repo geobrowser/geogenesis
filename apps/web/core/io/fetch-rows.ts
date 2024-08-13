@@ -4,10 +4,7 @@ export interface FetchRowsOptions {
   api: {
     fetchTableRowEntities: Subgraph.ISubgraph['fetchTableRowEntities'];
   };
-  params: Subgraph.FetchTableRowEntitiesOptions & {
-    skip: number;
-    first: number;
-  };
+  params: Subgraph.FetchTableRowEntitiesOptions;
   signal?: AbortController['signal'];
 }
 

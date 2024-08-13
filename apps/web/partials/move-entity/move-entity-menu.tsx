@@ -7,7 +7,6 @@ import * as React from 'react';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useMoveEntity } from '~/core/state/move-entity-store';
-import { Space } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
@@ -26,10 +25,10 @@ export function MoveEntityMenu({ entityId, spaceId }: Props) {
   const { setIsMoveReviewOpen, setSpaceIdTo, setSpaceIdFrom, setEntityId } = useMoveEntity();
 
   // filter out the current space, Root space, and ones user is not an editor in
-  const spacesForMove = spaces.filter(space => space.id !== spaceId && space.isRootSpace !== true);
+  const spacesForMove = spaces.filter(space => space.id !== spaceId);
 
   // check if the spaces name is not undefined and then sort alphabetically:
-  const sortedSpacesForMove = spacesForMove.sort((spaceA: Space, spaceB: Space) => {
+  const sortedSpacesForMove = spacesForMove.sort((spaceA, spaceB) => {
     const nameA = spaceA.spaceConfig?.name ?? spaceA.id;
     const nameB = spaceB.spaceConfig?.name ?? spaceB.id;
 

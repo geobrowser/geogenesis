@@ -25,7 +25,7 @@ interface Props {
 
 export function ServicesProvider({ children }: Props) {
   const services = useMemo((): Services => {
-    let config = Environment.getConfig();
+    const config = Environment.getConfig();
 
     return {
       ipfs: {

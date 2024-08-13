@@ -25,17 +25,13 @@ export function stringValue(triple?: Triple) {
 export function urlValue(triple?: Triple) {
   if (!triple) return null;
 
-  return triple.value.type === 'URL' ? triple.value.value : null;
+  return triple.value.type === 'URI' ? triple.value.value : null;
 }
 
 export function timeValue(triple?: Triple) {
   if (!triple) return null;
 
   return triple.value.type === 'TIME' ? triple.value.value : null;
-}
-
-export function imageValue(triple: Triple) {
-  return triple.value.type === 'IMAGE' ? triple.value.image : null;
 }
 
 // Get the image triple value from an image path
@@ -54,39 +50,11 @@ export function toImageValue(rawValue: string) {
   }
 }
 
+// @TODO(relations)
 export function isRelationValueType(t: Triple): t is Triple & { value: AppEntityValue } {
   return t.value.type === 'ENTITY' && t.attributeId === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE;
 }
 
 export function isRelationValue(t: Triple): t is Triple & { value: AppEntityValue } {
   return t.value.type === 'ENTITY';
-}
-
-export function idsForEntityorCollectionItems(t: Triple) {
-  let typeTripleContents: string[] = [];
-
-  if (t.value.type === 'COLLECTION') {
-    typeTripleContents = t.value.items.map(i => i.entity.id);
-  }
-
-  if (t.value.type === 'ENTITY') {
-    typeTripleContents = [t.value.value];
-  }
-
-  return typeTripleContents;
-}
-
-export function entitiesForEntityOrCollectionItems(t: Triple) {
-  if (t.value.type === 'ENTITY') {
-    return [{ id: t.value.value, name: t.value.name }];
-  }
-
-  if (t.value.type === 'COLLECTION') {
-    return t.value.items.map(i => ({
-      id: i.entity.id,
-      name: i.entity.name,
-    }));
-  }
-
-  return null;
 }

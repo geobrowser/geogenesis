@@ -6,8 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import * as React from 'react';
 import { useEffect, useRef } from 'react';
 
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSearch } from '~/core/hooks/use-search';
 
 import { Dots } from '~/design-system/dots';
 import { ResizableContainer } from '~/design-system/resizable-container';
@@ -18,18 +17,13 @@ interface Props {
   placeholder?: string;
   onDone: (result: { id: string; name: string | null }) => void;
   itemIds: string[];
-  allowedTypes?: { typeId: string; typeName: string | null }[];
-  spaceId: string;
   className?: string;
 }
 
 export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, className = '' }: Props) {
-  const { query, onQueryChange, isLoading, results } = useAutocomplete({
-    allowedTypes: [],
-  });
+  const { query, onQueryChange, isLoading, results } = useSearch();
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(itemIds);
-  const { spaces } = useSpaces();
 
   useEffect(() => {
     const handleQueryChange = (e: MouseEvent) => {
@@ -73,7 +67,6 @@ export function EntitySearchAutocomplete({ placeholder, itemIds, onDone, classNa
                       onDone(result);
                       onQueryChange('');
                     }}
-                    spaces={spaces}
                     alreadySelected={itemIdsSet.has(result.id)}
                     result={result}
                   />

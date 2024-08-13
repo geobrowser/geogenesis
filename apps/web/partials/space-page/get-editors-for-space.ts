@@ -1,7 +1,6 @@
 import { cache } from 'react';
 
 import { fetchProfile } from '~/core/io/subgraph';
-import { fetchProfileViaWalletsTripleAddress } from '~/core/io/subgraph/fetch-profile-via-wallets-triple';
 import { OmitStrict, Profile } from '~/core/types';
 
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';

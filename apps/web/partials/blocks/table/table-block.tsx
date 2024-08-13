@@ -62,12 +62,14 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     name: Entities.name(column.triples),
   }));
 
-  // @TODO: Collections
-  const shownColumnTriples = [
-    ...(blockEntity?.triples ?? []).filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS),
+  const shownColumnRelations = [
+    ...(blockEntity?.relationsOut ?? []).filter(relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS),
   ];
 
-  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.value) ?? []), SYSTEM_IDS.NAME];
+  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME];
+
+  // @TODO(relations): This should live on the relation pointing to the block and not the block itself. It is
+  // also a relation and not a triple.
   const viewTriple = (blockEntity?.triples ?? []).find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
   /**
@@ -148,7 +150,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           <DataBlockViewMenu activeView={view} viewTriple={viewTriple} isLoading={isLoading} />
           <TableBlockContextMenu
             allColumns={allColumns}
-            shownColumnTriples={shownColumnTriples}
+            shownColumnRelations={shownColumnRelations}
             shownColumnIds={shownColumnIds}
           />
           {isEditing && (

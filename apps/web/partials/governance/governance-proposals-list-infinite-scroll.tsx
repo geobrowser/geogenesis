@@ -16,12 +16,15 @@ export function GovernanceProposalsListInfiniteScroll({ spaceId, page = 0 }: Pro
   const [loadMoreNodes, setLoadMoreNodes] = React.useState<React.JSX.Element[]>([]);
   const [currentPage, setCurrentPage] = React.useState(page);
 
-  const loadMore = React.useCallback(async (abortController?: AbortController) => {
-    const [node, next] = await loadMoreProposalsAction(spaceId, currentPage);
-    if (abortController?.signal.aborted) return;
-    setLoadMoreNodes(prev => [...prev, node]);
-    setCurrentPage(next);
-  }, []);
+  const loadMore = React.useCallback(
+    async (abortController?: AbortController) => {
+      const [node, next] = await loadMoreProposalsAction(spaceId, currentPage);
+      if (abortController?.signal.aborted) return;
+      setLoadMoreNodes(prev => [...prev, node]);
+      setCurrentPage(next);
+    },
+    [currentPage, spaceId]
+  );
 
   React.useEffect(() => {
     const signal = new AbortController();
@@ -44,7 +47,7 @@ export function GovernanceProposalsListInfiniteScroll({ spaceId, page = 0 }: Pro
         observer.unobserve(element);
       }
     };
-  }, [loadMore, ref.current]);
+  }, [loadMore]);
 
   return (
     <div>

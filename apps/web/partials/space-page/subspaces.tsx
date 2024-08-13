@@ -4,10 +4,9 @@ import Image from 'next/legacy/image';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Subspace } from '~/core/io/subgraph/fetch-subspaces';
+import { Subspace } from '~/core/io/dto/subspaces';
 import { getImagePath } from '~/core/utils/utils';
 
-// import { Member } from '~/design-system/icons/member';
 import { Slider } from '~/design-system/slider';
 import { Spacer } from '~/design-system/spacer';
 

@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
+import { fetchBlocks } from '~/core/io/fetch-blocks';
+import { EntityId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
@@ -20,8 +22,6 @@ import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-met
 import { EntityReferencedByServerContainer } from '~/partials/entity-page/entity-page-referenced-by-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
-
-import { cachedFetchEntity } from './cached-fetch-entity';
 
 interface Props {
   params: { id: string; entityId: string };
@@ -45,12 +45,11 @@ export default async function DefaultEntityPage({
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
-  const decodedId = decodeURIComponent(params.entityId);
-  const props = await getData(params.id, decodedId);
+  const props = await getData(params.id, params.entityId);
 
   const avatarUrl = Entities.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entities.cover(props.triples) ?? props.serverCoverUrl;
-  const types = Entities.types(props.triples);
+  const types = props.types;
 
   const typeId = searchParams.typeId ?? null;
 
@@ -58,21 +57,22 @@ export default async function DefaultEntityPage({
   const attributes = JSON.parse(decodeURI(encodedAttributes));
 
   return (
-    <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialTriples={props.triples}>
+    <EntityStoreProvider
+      id={props.id}
+      spaceId={props.spaceId}
+      initialTriples={props.triples}
+      initialRelations={props.relationsOut}
+    >
       <EditorProvider
         id={props.id}
         spaceId={props.spaceId}
-        initialBlockIdsTriple={props.blockIdsTriple}
-        initialBlockTriples={props.blockTriples}
-        initialBlockCollectionItems={props.blockCollectionItems}
-        initialBlockCollectionItemTriples={props.blockCollectionItemTriples}
+        initialBlocks={props.blocks}
+        initialBlockRelations={props.blockRelations}
       >
         <MoveEntityProvider>
           {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
           <EntityPageContentContainer>
-            {showHeading && (
-              <EditableHeading spaceId={props.spaceId} entityId={props.id} name={props.name} triples={props.triples} />
-            )}
+            {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
             {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />}
             {showSpacer && <Spacer height={40} />}
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
@@ -120,26 +120,11 @@ const getData = async (spaceId: string, entityId: string) => {
   const serverAvatarUrl = Entities.avatar(entity?.triples);
   const serverCoverUrl = Entities.cover(entity?.triples);
 
-  const blockIdsTriple =
-    entity?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
+  const blockIds = entity?.relationsOut
+    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    ?.map(r => r.toEntity.id);
 
-  const blockCollectionItems =
-    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
-
-  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
-
-  const [blockTriples, collectionItemTriples] = await Promise.all([
-    Promise.all(
-      blockIds.map(blockId => {
-        return cachedFetchEntity(blockId);
-      })
-    ),
-    Promise.all(
-      blockCollectionItems.map(item => {
-        return cachedFetchEntity(item.id);
-      })
-    ),
-  ]);
+  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
 
   return {
     triples: entity?.triples ?? [],
@@ -149,11 +134,11 @@ const getData = async (spaceId: string, entityId: string) => {
     spaceId,
     serverAvatarUrl,
     serverCoverUrl,
+    relationsOut: entity?.relationsOut ?? [],
+    types: entity?.types ?? [],
 
     // For entity page editor
-    blockIdsTriple,
-    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
-    blockCollectionItems,
-    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
+    blockRelations: entity?.relationsOut ?? [],
+    blocks,
   };
 };

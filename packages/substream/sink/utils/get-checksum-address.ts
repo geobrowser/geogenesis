@@ -9,9 +9,6 @@ import { getAddress } from 'viem';
  * with how addresses are represented on Polygonscan.
  */
 export function getChecksumAddress(address: string): `0x${string}` {
-  if (address === '17d180a8427549d89d835671c0f105b3') {
-    console.log('found it', address);
-  }
   /**
    * Using the polygon chain id (137) seems to checksum the address
    * differently than what you get on polygonscan. If we don't specify

@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Column, Entity as IEntity, Triple as ITriple, Row } from '~/core/types';
+import { Entity } from '~/core/io/dto/entities';
+import { Column, Triple as ITriple, Row } from '~/core/types';
 
 import { Entities } from '../entity';
 
@@ -13,7 +14,7 @@ export type EntityCell = {
   image?: string | null;
 };
 
-export function fromColumnsAndRows(entities: IEntity[], columns: Column[]) {
+export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
   /* Finally, we can build our initialRows */
   const aggregatedRows = entities.map(({ triples, id }) => {
     return columns.reduce((acc, column) => {
@@ -43,26 +44,4 @@ export function fromColumnsAndRows(entities: IEntity[], columns: Column[]) {
   return {
     rows: aggregatedRows,
   };
-}
-
-export function columnsFromLocalChanges(
-  localTriples: ITriple[] | undefined,
-  columns: Column[],
-  selectedTypeId?: string
-): Column[] {
-  if (!localTriples) return columns;
-
-  // Only show the column if it is an attribute of the selected type
-  const triplesThatAreAttributes = localTriples.filter(
-    triple => triple.attributeId === SYSTEM_IDS.ATTRIBUTES && triple.entityId === selectedTypeId
-  );
-
-  const newColumns: Column[] = triplesThatAreAttributes.map(triple => ({
-    id: triple.value.value,
-    triples: localTriples.filter(t => {
-      return t.entityId === triple.value.value;
-    }),
-  }));
-
-  return [...columns, ...newColumns];
 }

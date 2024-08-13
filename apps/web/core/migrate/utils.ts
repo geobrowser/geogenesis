@@ -2,7 +2,6 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 
 import { TripleWithDateValue, TripleWithStringValue, TripleWithUrlValue } from '../types';
-import { Triples } from '../utils/triples';
 import { GeoDate } from '../utils/utils';
 
 dayjs.extend(utc);
@@ -26,27 +25,27 @@ export function migrateStringTripleToDateTriple(triple: TripleWithStringValue): 
     minute: '0',
   });
 
-  return Triples.ensureStableId({
+  return {
     ...triple,
     value: {
       ...triple.value,
       type: 'TIME',
       value: dateValue,
     },
-  });
+  };
 }
 
 export function migrateDateTripleToStringTriple(triple: TripleWithDateValue): TripleWithStringValue {
   const { day, month, year } = GeoDate.fromISOStringUTC(triple.value.value);
 
-  return Triples.ensureStableId({
+  return {
     ...triple,
     value: {
       ...triple.value,
       type: 'TEXT',
       value: `${month}/${day}/${year}`,
     },
-  });
+  };
 }
 
 export function migrateStringTripleToUrlTriple(triple: TripleWithStringValue): TripleWithUrlValue | null {
@@ -56,23 +55,23 @@ export function migrateStringTripleToUrlTriple(triple: TripleWithStringValue): T
     return null;
   }
 
-  return Triples.ensureStableId({
+  return {
     ...triple,
     value: {
       ...triple.value,
-      type: 'URL',
+      type: 'URI',
       value: triple.value.value,
     },
-  });
+  };
 }
 
 export function migrateUrlTripleToStringTriple(triple: TripleWithUrlValue): TripleWithStringValue {
-  return Triples.ensureStableId({
+  return {
     ...triple,
     value: {
       ...triple.value,
       type: 'TEXT',
       value: triple.value.value,
     },
-  });
+  };
 }

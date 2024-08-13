@@ -1,11 +1,12 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { A, D, pipe } from '@mobily/ts-belt';
 
-import { EntitySearchResult, Entity as IEntity, Triple as ITriple, ValueTypeId } from '~/core/types';
+import { Entity } from '~/core/io/dto/entities';
+import { EntityId, SubstreamType, TypeId } from '~/core/io/schema';
+import { Triple as ITriple, ValueTypeId } from '~/core/types';
 
 import { Triples } from '../triples';
 import { groupBy } from '../utils';
-import { Values } from '../value';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -38,15 +39,16 @@ export function descriptionTriple(triples: ITriple[]): ITriple | undefined {
  * there are Triples from multiple Spaces and they are Types, and they have the same name, we will
  * only show the Type from the current space.
  */
-export function types(triples: ITriple[], currentSpace?: string): EntitySearchResult[] {
+function types(triples: ITriple[], currentSpace?: string): SubstreamType[] {
   const typeTriples = triples.filter(triple => triple.attributeId === SYSTEM_IDS.TYPES);
   const groupedTypeTriples = groupBy(typeTriples, t => t.attributeId);
 
+  // @TODO(relations): Getting the types should work with relations
   return Object.entries(groupedTypeTriples)
     .flatMap(([, triples]) => {
       if (triples.length === 1) {
         return triples.flatMap(triple =>
-          triple.value.type === 'ENTITY' ? { id: triple.value.value, name: triple.value.name } : []
+          triple.value.type === 'ENTITY' ? { id: TypeId(triple.value.value), name: triple.value.name } : []
         );
       }
 
@@ -57,19 +59,19 @@ export function types(triples: ITriple[], currentSpace?: string): EntitySearchRe
         return triples
           .filter(triple => triple.space === currentSpace)
           .flatMap(triple =>
-            triple.value.type === 'ENTITY' ? { id: triple.value.value, name: triple.value.name } : []
+            triple.value.type === 'ENTITY' ? { id: TypeId(triple.value.value), name: triple.value.name } : []
           );
       }
 
       if (triples.length > 1) {
         return triples.flatMap(triple =>
-          triple.value.type === 'ENTITY' ? { id: triple.value.value, name: triple.value.name } : []
+          triple.value.type === 'ENTITY' ? { id: TypeId(triple.value.value), name: triple.value.name } : []
         );
       }
 
-      return [];
+      return null;
     })
-    .flatMap(type => (type ? type : []));
+    .filter(type => type !== null);
 }
 
 /**
@@ -102,7 +104,7 @@ export function valueTypeId(triples: ITriple[]): ValueTypeId | null {
 /**
  * This function takes an array of triples and maps them to an array of Entity types.
  */
-export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
+export function entitiesFromTriples(triples: ITriple[]): Entity[] {
   return pipe(
     triples,
     // ts-belt returns readonly arrays from groupBy, so we use our own
@@ -114,12 +116,17 @@ export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
       const tripleForName = nameTriple(triples);
 
       return {
-        id: entityId,
+        id: EntityId(entityId),
         name: name(triples),
         description: description(triples),
         nameTripleSpaces: nameTriples(triples).map(triple => triple.space),
-        types: types(triples, tripleForName?.space),
+        types: types(triples, tripleForName?.space).map(t => ({
+          ...t,
+          id: TypeId(t.id),
+        })),
         triples,
+        // @TODO(realtions): fix
+        relationsOut: [],
       };
     })
   );
@@ -130,7 +137,7 @@ export function entitiesFromTriples(triples: ITriple[]): IEntity[] {
  * if you have a collection of Entities from the network and want to display any updates
  * that were made to them during local editing.
  */
-export function mergeActionsWithEntities(actions: Record<string, ITriple[]>, networkEntities: IEntity[]): IEntity[] {
+export function mergeActionsWithEntities(actions: Record<string, ITriple[]>, networkEntities: Entity[]): Entity[] {
   return pipe(
     actions,
     D.values,
@@ -151,7 +158,7 @@ export function mergeActionsWithEntities(actions: Record<string, ITriple[]>, net
   );
 }
 
-export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEntity: IEntity): IEntity {
+export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEntity: Entity): Entity {
   const triplesForEntity = pipe(
     allTriplesInStore.filter(t => t.entityId === networkEntity.id),
     actions => Triples.merge(actions, networkEntity.triples),
@@ -163,12 +170,18 @@ export function mergeActionsWithEntity(allTriplesInStore: ITriple[], networkEnti
     name: name(triplesForEntity),
     description: description(triplesForEntity),
     nameTripleSpaces: nameTriples(triplesForEntity).map(triple => triple.space),
-    types: types(triplesForEntity, triplesForEntity[0]?.space),
+    types: types(triplesForEntity, triplesForEntity[0]?.space).map(t => ({
+      ...t,
+      id: TypeId(t.id),
+    })),
     triples: triplesForEntity,
+
+    // @TODO(realtions): fix
+    relationsOut: [],
   };
 }
 
-export function fromTriples(allTriplesInStore: ITriple[], entityId: string): IEntity {
+export function fromTriples(allTriplesInStore: ITriple[], entityId: string): Entity {
   const triplesForEntity = Triples.merge(
     allTriplesInStore.filter(t => t.entityId === entityId),
     []
@@ -177,12 +190,17 @@ export function fromTriples(allTriplesInStore: ITriple[], entityId: string): IEn
   const triplesForEntityWithLocalNames = Triples.withLocalNames(allTriplesInStore, triplesForEntity);
 
   return {
-    id: entityId,
+    id: EntityId(entityId),
     name: name(triplesForEntityWithLocalNames),
     description: description(triplesForEntityWithLocalNames),
     nameTripleSpaces: nameTriples(triplesForEntityWithLocalNames).map(triple => triple.space),
-    types: types(triplesForEntityWithLocalNames, triplesForEntityWithLocalNames[0]?.space),
+    types: types(triplesForEntityWithLocalNames, triplesForEntityWithLocalNames[0]?.space).map(t => ({
+      ...t,
+      id: TypeId(t.id),
+    })),
     triples: triplesForEntityWithLocalNames,
+    // @TODO(realtions): fix
+    relationsOut: [],
   };
 }
 
@@ -191,11 +209,8 @@ export function fromTriples(allTriplesInStore: ITriple[], entityId: string): IEn
  */
 export function avatar(triples: ITriple[] | undefined): string | null {
   if (!triples) return null;
-
-  const avatarTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
-  const avatarUrl = avatarTriple !== undefined ? Values.imageValue(avatarTriple) : null;
-
-  return avatarUrl;
+  // @TODO(relations): This should be a relation pointing to the image entity
+  return null;
 }
 
 /**
@@ -203,11 +218,8 @@ export function avatar(triples: ITriple[] | undefined): string | null {
  */
 export function cover(triples: ITriple[] | undefined): string | null {
   if (!triples) return null;
-
-  const coverTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE);
-  const coverUrl = coverTriple !== undefined ? Values.imageValue(coverTriple) : null;
-
-  return coverUrl;
+  // @TODO(relations): This should be a relation pointing to the image entity
+  return null;
 }
 
 /**
@@ -216,9 +228,10 @@ export function cover(triples: ITriple[] | undefined): string | null {
 export const getParentEntityId = (triples: ITriple[] = []) => {
   const parentEntityTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.PARENT_ENTITY);
 
+  // @TODO(relations)? Or are we using the normal entity value here since this is a block?
   const parentEntityId = parentEntityTriple?.value.type === 'ENTITY' ? parentEntityTriple.value.value : null;
 
   return parentEntityId;
 };
 
-export const isNonNull = (entity: IEntity | null): entity is IEntity => entity !== null;
+export const isNonNull = (entity: Entity | null): entity is Entity => entity !== null;

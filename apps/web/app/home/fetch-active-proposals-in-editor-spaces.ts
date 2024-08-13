@@ -1,23 +1,19 @@
+import { Schema } from '@effect/schema';
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { ProposalDto } from '~/core/io/dto/proposals';
+import { SubstreamProposal } from '~/core/io/schema';
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamProposal, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
-import { OmitStrict, Vote } from '~/core/types';
 
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
 
 interface NetworkResult {
   proposals: {
     totalCount: number;
-    nodes: OmitStrict<
-      SubstreamProposal & {
-        userVotes: { nodes: Vote[] };
-      },
-      'proposedVersions'
-    >[];
+    nodes: SubstreamProposal[];
   };
 }
 
@@ -109,17 +105,6 @@ export async function getActiveProposalsForSpacesWhereEditor(
             }
           }
         }
-  
-        userVotes: proposalVotes(
-          filter: {
-            accountId: { equalTo: "${address ?? ''}" }
-          }
-        ) {
-          nodes {
-            vote
-            accountId
-          }
-        }
       }
     }
   }`;
@@ -156,24 +141,29 @@ export async function getActiveProposalsForSpacesWhereEditor(
 
   return {
     totalCount: result.proposals.totalCount,
-    proposals: proposals.map(p => {
-      const spaceConfigWithImage = getSpaceConfigFromMetadata(p.space.id, p.space.spacesMetadata.nodes[0].entity);
-      const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
+    proposals: proposals
+      .map(p => {
+        const decodedProposal = Schema.decodeEither(SubstreamProposal)(p);
+        const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
 
-      const profile = maybeProfile ?? {
-        id: p.createdBy.id,
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: p.createdBy.id as `0x${string}`,
-        profileLink: null,
-      };
+        const proposal = Either.match(decodedProposal, {
+          onLeft: error => {
+            console.error(
+              `Encountered error decoding active proposal for editor space with id ${p.space.id} – error: ${error}`
+            );
+            return null;
+          },
+          onRight: space => {
+            return space;
+          },
+        });
 
-      return {
-        ...p,
-        createdBy: profile,
-        space: spaceConfigWithImage,
-      };
-    }),
+        if (proposal === null) {
+          return null;
+        }
+
+        return ProposalDto(proposal, maybeProfile, []);
+      })
+      .filter(p => p !== null),
   };
 }

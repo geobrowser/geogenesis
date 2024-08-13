@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import * as React from 'react';
 import { useCallback } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useTableBlock } from '~/core/state/table-block-store';
 import type { DataBlockView } from '~/core/state/table-block-store';
@@ -109,7 +109,7 @@ type ToggleViewProps = {
 };
 
 const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriple, isLoading }: ToggleViewProps) => {
-  const { upsert, remove } = useActionsStore(space);
+  const { upsert, remove } = useWriteOps();
 
   const isActive = !isLoading && activeView === view.value;
 
@@ -124,7 +124,6 @@ const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriple,
 
       upsert(
         {
-          type: 'SET_TRIPLE',
           attributeId,
           attributeName,
           entityId,
