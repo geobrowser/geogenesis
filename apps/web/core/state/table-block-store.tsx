@@ -9,10 +9,8 @@ import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '../dat
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
-import { fetchEntity } from '../io/subgraph';
 import { GeoType, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
-import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
 
 export const PAGE_SIZE = 9;
@@ -146,7 +144,7 @@ export function useTableBlock() {
         spaceId
       );
     },
-    [upsert, entityId, filterTriple, selectedType.entityId, spaceId]
+    [upsert, entityId, selectedType.entityId, spaceId, blockEntity.name]
   );
 
   const setName = React.useCallback(
@@ -221,7 +219,7 @@ const getView = (blockEntity: Entity | null | undefined): DataBlockView => {
 
 const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockView) => {
   let text = DEFAULT_PLACEHOLDERS[view].text;
-  let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
+  // let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
 
   if (blockEntity) {
     const placeholderTextTriple = blockEntity.triples.find(
@@ -232,16 +230,18 @@ const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockV
       text = placeholderTextTriple.value.value;
     }
 
-    const placeholderImageTriple = blockEntity.triples.find(
-      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
-    );
+    // @TODO(relations): This should be a relation pointing to the image entity
+    // const placeholderImageTriple = blockEntity.triples.find(
+    //   triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
+    // );
 
-    if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
-      image = getImagePath(placeholderImageTriple.value.value);
-    }
+    // if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
+    //   image = getImagePath(placeholderImageTriple.value.value);
+    // }
   }
 
-  return { text, image };
+  // @TODO(relations): This should be a relation pointing to the image entity
+  return { text, image: '' };
 };
 
 const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string }> = {

@@ -61,7 +61,7 @@ export function createImageEntityTriples({
       attributeName: 'Image URL',
       value: {
         type: 'URI',
-        value: typeOp.triple.value.value,
+        value: Values.toImageValue(urlOp.triple.value.value),
       },
     },
   ];

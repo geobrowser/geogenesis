@@ -739,40 +739,41 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'IMAGE': {
-      return (
-        <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div>
-              {typeof before !== 'object' && (
-                <span className="inline-block rounded-lg bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-              <SquareButton
-                onClick={handleDeleteActions}
-                icon={<Trash />}
-                className="opacity-0 group-hover:opacity-100"
-              />
-              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
-            </div>
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div>
-              {typeof after !== 'object' && (
-                <span className="inline-block rounded-lg bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
+    // @TODO(relations): Add image support
+    // case 'IMAGE': {
+    //   return (
+    //     <div key={attributeId} className="-mt-px flex gap-8">
+    //       <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+    //         <div className="text-bodySemibold capitalize">{name}</div>
+    //         <div>
+    //           {typeof before !== 'object' && (
+    //             <span className="inline-block rounded-lg bg-errorTertiary p-1">
+    //               <img src={getImagePath(before)} className="rounded-lg" />
+    //             </span>
+    //           )}
+    //         </div>
+    //       </div>
+    //       <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+    //         <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+    //           <SquareButton
+    //             onClick={handleDeleteActions}
+    //             icon={<Trash />}
+    //             className="opacity-0 group-hover:opacity-100"
+    //           />
+    //           <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
+    //         </div>
+    //         <div className="text-bodySemibold capitalize">{name}</div>
+    //         <div>
+    //           {typeof after !== 'object' && (
+    //             <span className="inline-block rounded-lg bg-successTertiary p-1">
+    //               <img src={getImagePath(after)} className="rounded-lg" />
+    //             </span>
+    //           )}
+    //         </div>
+    //       </div>
+    //     </div>
+    //   );
+    // }
     case 'TIME': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">

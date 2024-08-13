@@ -147,8 +147,6 @@ const Triple = ({ triple }: { triple: ITriple }) => {
           {triple.value.value}
         </Text>
       );
-    case 'IMAGE':
-      return <ImageZoom key={`image-${triple.attributeId}-${triple.value.value}`} imageSrc={triple.value.image} />;
     case 'TIME':
       return <DateField isEditing={false} value={triple.value.value} />;
     case 'URI':

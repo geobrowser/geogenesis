@@ -2,7 +2,6 @@
 // import { Subgraph } from '~/core/io/';
 // import { fetchVersion } from '~/core/io/subgraph/fetch-version';
 // import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
-import { Subgraph } from '~/core/io';
 import type { ValueType as TripleValueType } from '~/core/types';
 
 // import { Entities } from '~/core/utils/entity';

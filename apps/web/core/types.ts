@@ -3,56 +3,25 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type ValueType =
-  | 'TEXT'
-  | 'NUMBER'
-  | 'ENTITY'
-  | 'CHECKBOX'
-  | 'URI'
-  // | GEO_LOCATION
-  | 'TIME'
-  // IMAGE is only a value type in the web app. It's modeled as an Entity on the server,
-  // but we create a "helper" value type to map the contents of the image to a more
-  // ergnomic way of rendering it.
-  //
-  // At publish time we map the image value type back to an entity.
-  | 'IMAGE';
+export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'URI' | 'TIME';
+// | GEO_LOCATION
+// | 'CHECKBOX'
 
 export type AppValue = {
   type: 'TEXT' | 'NUMBER' | 'URI' | 'TIME';
   value: string;
 };
 
+// We store unique metadata on an ENTITY value type so we map it
+// to a separate data structure. Only entities with type "Relation"
+// should be using triples with entity values.
 export type AppEntityValue = {
   type: 'ENTITY';
   value: string;
   name: string | null;
-
-  // Time to link
-  // upsert: entity value type, in the value you just add the space the user selected
-  space?: string;
 };
 
-// Images are stored as an entity instead of the actual image resource uri.
-// This is so we can add additional metadata about the image to the entity
-// representing the image, e.g., image type, dimensions, etc.
-//
-// In the app we want to be able to easily render the actual image contents
-// so we store it as `.image` on the value itself. At publish time this
-// helper property is ignored in favor of just the entity's id which is
-// stored in the `value` property.
-export type AppImageValue = {
-  type: 'IMAGE';
-  value: string; // id of the entity that stores the image source
-  image: string; // the image source itself
-};
-
-export type AppCheckboxValue = {
-  type: 'CHECKBOX';
-  value: string; // @TODO: Really it's a boolean
-};
-
-export type Value = AppEntityValue | AppCheckboxValue | AppImageValue | AppValue;
+export type Value = AppEntityValue | AppValue;
 
 export type SetTripleAppOp = {
   type: 'SET_TRIPLE';
@@ -127,7 +96,6 @@ export type FilterState = FilterClause[];
 export type ValueTypeId =
   | typeof SYSTEM_IDS.TEXT
   | typeof SYSTEM_IDS.RELATION
-  | typeof SYSTEM_IDS.IMAGE
   | typeof SYSTEM_IDS.DATE
   | typeof SYSTEM_IDS.WEB_URL;
 

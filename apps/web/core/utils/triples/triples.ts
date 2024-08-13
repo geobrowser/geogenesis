@@ -1,11 +1,9 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Op } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
 
 import { ID } from '~/core/id';
 import { getAppTripleId } from '~/core/id/create-id';
-import { AppEntityValue, OmitStrict, Triple, ValueType as TripleValueType, Value, ValueTypeId } from '~/core/types';
-import { valueTypes } from '~/core/value-types';
+import { AppEntityValue, OmitStrict, Triple, ValueType as TripleValueType, Value } from '~/core/types';
 
 export function withId(triple: OmitStrict<Triple, 'id'>): Triple {
   return {
@@ -33,21 +31,12 @@ export function emptyValue(type: TripleValueType): Value {
       type: 'NUMBER',
       value: '',
     },
-    IMAGE: {
-      type: 'IMAGE',
-      value: '',
-      image: '',
-    },
     TIME: {
       type: 'TIME',
       value: '',
     },
     URI: {
       type: 'URI',
-      value: '',
-    },
-    CHECKBOX: {
-      type: 'CHECKBOX',
       value: '',
     },
   };
@@ -137,14 +126,9 @@ export const getValue = (triple: Triple): string | null => {
     case 'NUMBER':
     case 'TEXT':
     case 'ENTITY':
-    case 'IMAGE':
     case 'TIME':
     case 'URI':
       return triple.value.value;
-    case 'IMAGE':
-      return triple.value.image;
-    case 'CHECKBOX':
-      throw new Error('checkbox not supported');
   }
 };
 
@@ -159,24 +143,6 @@ export function prepareTriplesForPublishing(triples: Triple[], spaceId: string):
         triple: {
           entity: t.entityId,
           attribute: t.attributeId,
-        },
-      };
-    }
-
-    // We store image entities as an `IMAGE` value type in the app to make
-    // rendering them more ergonomic. Before publishing we need to map this
-    // representation back to the protocol's expectation representation for
-    // images which is an `ENTITY` value type.
-    if (t.value.type === 'IMAGE') {
-      return {
-        type: 'SET_TRIPLE',
-        triple: {
-          entity: t.entityId,
-          attribute: t.attributeId,
-          value: {
-            type: 'ENTITY',
-            value: t.value.value,
-          },
         },
       };
     }

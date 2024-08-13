@@ -5,7 +5,6 @@ import { NavUtils, groupBy } from '~/core/utils/utils';
 
 import { LinkableChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Text } from '~/design-system/text';
 
@@ -45,8 +44,6 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
             {triple.value.value}
           </Text>
         );
-      case 'IMAGE':
-        return <ImageZoom key={`image-${triple.attributeId}-${triple.id}`} imageSrc={triple.value.image} />;
       case 'TIME':
         return <DateField isEditing={false} value={triple.value.value} />;
       case 'URI':

@@ -11,10 +11,9 @@ import * as React from 'react';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { Entity } from '~/core/io/dto/entities';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -258,32 +257,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     </div>
   );
 });
-
-const getPlaceholders = (blockEntity: Entity | null | undefined) => {
-  // @TODO add defaults for list/gallery views
-  let placeholderText = 'Add an entity';
-  let placeholderImage = getImagePath('ipfs://QmfC4DoT7uVNoFRbP6DBYn9T79gpLXw2Uv6qJ2G8wmqT1d');
-
-  if (blockEntity) {
-    const placeholderTextTriple = blockEntity.triples.find(
-      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
-    );
-
-    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
-      placeholderText = placeholderTextTriple.value.value;
-    }
-
-    const placeholderImageTriple = blockEntity.triples.find(
-      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
-    );
-
-    if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
-      placeholderImage = getImagePath(placeholderImageTriple.value.value);
-    }
-  }
-
-  return { placeholderText, placeholderImage };
-};
 
 const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
 

@@ -102,18 +102,19 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
       triplesToWrite.push(typeTriple);
       triplesToWrite.push(urlTriple);
 
+      // @TODO(relations): Add image support
       // Set the image entity reference on the current entity
-      triplesToWrite.push({
-        entityId: linkedEntityId,
-        entityName: name,
-        attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-        attributeName: 'Avatar',
-        value: {
-          type: 'IMAGE',
-          value: typeTriple.entityId,
-          image: Values.toImageValue(avatar),
-        },
-      });
+      // triplesToWrite.push({
+      //   entityId: linkedEntityId,
+      //   entityName: name,
+      //   attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+      //   attributeName: 'Avatar',
+      //   value: {
+      //     type: 'IMAGE',
+      //     value: typeTriple.entityId,
+      //     image: Values.toImageValue(avatar),
+      //   },
+      // });
     }
 
     // Add role attribute

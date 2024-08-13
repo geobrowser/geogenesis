@@ -5,7 +5,6 @@ import { fetchOnchainProfileByEntityId } from '~/core/io/fetch-onchain-profile-b
 import type { Triple as TripleType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { Triples } from '~/core/utils/triples';
-import { Values } from '~/core/utils/value';
 
 import { TeamMembers } from '~/partials/team/team-members';
 
@@ -122,14 +121,14 @@ const getTeamMembers = async (spaceId: string) => {
         }
       }
 
+      // @TODO(relations): This should be a relation pointing to the image entity
       const avatarTriple = avatarTriples.find(avatarTriple => avatarTriple.entityId === entityId);
 
       if (avatarTriple) {
-        const avatar = Values.imageValue(avatarTriple);
-
-        if (avatar) {
-          teamMembers[teamMemberIndex].avatar = avatar;
-        }
+        // const avatar = Values.imageValue(avatarTriple);
+        // if (avatar) {
+        //   teamMembers[teamMemberIndex].avatar = avatar;
+        // }
       } else {
         const avatar = Entities.avatar(entity.triples);
 

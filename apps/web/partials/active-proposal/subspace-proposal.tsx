@@ -6,7 +6,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubspaceDto } from '~/core/io/dto/subspaces';
-import { SubstreamEntity, SubstreamSubspace } from '~/core/io/schema';
+import { SubstreamSubspace } from '~/core/io/schema';
 import { fetchSpace } from '~/core/io/subgraph';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';

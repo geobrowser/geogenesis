@@ -29,27 +29,19 @@ import { valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { ResultContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
-import { Date } from '~/design-system/icons/date';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { FilteredTableView } from '~/design-system/icons/filtered-table-view';
-import { Image as ImageIcon } from '~/design-system/icons/image';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
-import { Relation as RelationIcon } from '~/design-system/icons/relation';
-import { Text } from '~/design-system/icons/text';
-import { Trash } from '~/design-system/icons/trash';
-import { Url } from '~/design-system/icons/url';
 import { Input } from '~/design-system/input';
-import { Menu, MenuItem } from '~/design-system/menu';
+import { MenuItem } from '~/design-system/menu';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Skeleton } from '~/design-system/skeleton';
-import { Spacer } from '~/design-system/spacer';
 import { TextButton } from '~/design-system/text-button';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
@@ -173,12 +165,13 @@ function useOptimisticAttributes({
         },
       });
 
-      const updatedTriples = [
-        ...attribute.triples.filter(t => {
-          return t.attributeId !== SYSTEM_IDS.VALUE_TYPE;
-        }),
-        newTriple,
-      ];
+      // @TODO(relations): Update the attribute in-place in the optimistic state
+      // const updatedTriples = [
+      //   ...attribute.triples.filter(t => {
+      //     return t.attributeId !== SYSTEM_IDS.VALUE_TYPE;
+      //   }),
+      //   newTriple,
+      // ];
 
       // Update the attribute in-place in the optimistic state
       onUpdateAttribute({
@@ -410,7 +403,7 @@ const ToggleColumn = ({
   entityId,
   entityName,
 }: ToggleColumnProps) => {
-  const { upsert, remove } = useWriteOps();
+  const { upsert } = useWriteOps();
 
   const { id, name } = column;
   const isShown = shownColumnIds.includes(column.id);
@@ -441,7 +434,7 @@ const ToggleColumn = ({
         // remove(shownColumnRelation, space);
       }
     }
-  }, [upsert, entityId, entityName, id, isShown, name, remove, shownColumnRelation, space]);
+  }, [upsert, entityId, entityName, id, isShown, name, shownColumnRelation, space]);
 
   return (
     <MenuItem>
@@ -578,39 +571,39 @@ function AddAttribute() {
 
 function SchemaAttributes() {
   const { type } = useTableBlock();
-  const { upsert } = useWriteOps();
 
   const {
     optimisticAttributes: attributes,
-    onRemoveAttribute,
-    onChangeAttributeValueType,
+    // onRemoveAttribute,
+    // onChangeAttributeValueType,
   } = useOptimisticAttributes({
     entityId: type.entityId,
     entityName: type.entityName,
     spaceId: type.space,
   });
 
-  const onChangeAttributeName = (newName: string, attribute: Entity, oldNameTriple?: ITriple) => {
-    // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
-    const attributeSpace = attribute.nameTripleSpaces?.[0];
+  // @TODO(relations)
+  // const onChangeAttributeName = (newName: string, attribute: Entity, oldNameTriple?: ITriple) => {
+  //   // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
+  //   const attributeSpace = attribute.nameTripleSpaces?.[0];
 
-    if (!attributeSpace || !oldNameTriple) {
-      console.error("The entity doesn't have a name triple space");
-      return;
-    }
+  //   if (!attributeSpace || !oldNameTriple) {
+  //     console.error("The entity doesn't have a name triple space");
+  //     return;
+  //   }
 
-    upsert(
-      {
-        ...oldNameTriple,
-        entityName: newName,
-        value: {
-          type: 'TEXT',
-          value: newName,
-        },
-      },
-      attributeSpace
-    );
-  };
+  //   upsert(
+  //     {
+  //       ...oldNameTriple,
+  //       entityName: newName,
+  //       value: {
+  //         type: 'TEXT',
+  //         value: newName,
+  //       },
+  //     },
+  //     attributeSpace
+  //   );
+  // };
 
   return (
     <div className="flex flex-col gap-1">
@@ -655,130 +648,118 @@ function SchemaAttributes() {
   );
 }
 
-function AttributeRowContextMenu({ onRemoveAttribute }: { onRemoveAttribute: () => void }) {
-  const [isOpen, setIsOpen] = React.useState(false);
+// function AttributeRowContextMenu({ onRemoveAttribute }: { onRemoveAttribute: () => void }) {
+//   const [isOpen, setIsOpen] = React.useState(false);
 
-  return (
-    <Menu
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      trigger={<Context color="grey-04" />}
-      className="max-w-[180px] bg-white"
-    >
-      <MenuItem>
-        <button onClick={onRemoveAttribute} className="inline-flex w-full items-center justify-between gap-2 px-3 py-2">
-          <Trash /> <span>Remove attribute</span>
-        </button>
-      </MenuItem>
-    </Menu>
-  );
-}
+//   return (
+//     <Menu
+//       open={isOpen}
+//       onOpenChange={setIsOpen}
+//       trigger={<Context color="grey-04" />}
+//       className="max-w-[180px] bg-white"
+//     >
+//       <MenuItem>
+//         <button onClick={onRemoveAttribute} className="inline-flex w-full items-center justify-between gap-2 px-3 py-2">
+//           <Trash /> <span>Remove attribute</span>
+//         </button>
+//       </MenuItem>
+//     </Menu>
+//   );
+// }
 
-function AttributeValueTypeDropdown({
-  valueTypeId,
-  onChange,
-}: {
-  valueTypeId?: ValueTypeId;
-  onChange: (valueTypeId: ValueTypeId) => void;
-}) {
-  const [isOpen, setIsOpen] = React.useState(false);
+// function AttributeValueTypeDropdown({
+//   valueTypeId,
+//   onChange,
+// }: {
+//   valueTypeId?: ValueTypeId;
+//   onChange: (valueTypeId: ValueTypeId) => void;
+// }) {
+//   const [isOpen, setIsOpen] = React.useState(false);
 
-  const options = [
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <Text color="grey-04" />
-          <p>Text</p>
-        </div>
-      ),
-      value: SYSTEM_IDS.TEXT,
-      onClick: () => onChange(SYSTEM_IDS.TEXT),
-    },
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <RelationIcon color="grey-04" />
-          <p>Relation</p>
-        </div>
-      ),
-      value: SYSTEM_IDS.RELATION,
-      onClick: () => onChange(SYSTEM_IDS.RELATION),
-    },
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <ImageIcon color="grey-04" />
-          <p>Image</p>
-        </div>
-      ),
-      value: SYSTEM_IDS.IMAGE,
-      onClick: () => onChange(SYSTEM_IDS.IMAGE),
-    },
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <Date color="grey-04" />
-          <p>Date</p>
-        </div>
-      ),
-      value: SYSTEM_IDS.DATE,
-      onClick: () => onChange(SYSTEM_IDS.DATE),
-    },
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <Url color="grey-04" />
-          <p>Web URL</p>
-        </div>
-      ),
-      value: SYSTEM_IDS.WEB_URL,
-      onClick: () => onChange(SYSTEM_IDS.WEB_URL),
-    },
-  ];
+//   const options = [
+//     {
+//       label: (
+//         <div className="flex items-center gap-2">
+//           <Text color="grey-04" />
+//           <p>Text</p>
+//         </div>
+//       ),
+//       value: SYSTEM_IDS.TEXT,
+//       onClick: () => onChange(SYSTEM_IDS.TEXT),
+//     },
+//     {
+//       label: (
+//         <div className="flex items-center gap-2">
+//           <RelationIcon color="grey-04" />
+//           <p>Relation</p>
+//         </div>
+//       ),
+//       value: SYSTEM_IDS.RELATION,
+//       onClick: () => onChange(SYSTEM_IDS.RELATION),
+//     },
+//     {
+//       label: (
+//         <div className="flex items-center gap-2">
+//           <Date color="grey-04" />
+//           <p>Date</p>
+//         </div>
+//       ),
+//       value: SYSTEM_IDS.DATE,
+//       onClick: () => onChange(SYSTEM_IDS.DATE),
+//     },
+//     {
+//       label: (
+//         <div className="flex items-center gap-2">
+//           <Url color="grey-04" />
+//           <p>Web URL</p>
+//         </div>
+//       ),
+//       value: SYSTEM_IDS.WEB_URL,
+//       onClick: () => onChange(SYSTEM_IDS.WEB_URL),
+//     },
+//   ];
 
-  return (
-    <Menu
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      trigger={
-        <button className="shadow-button">
-          <div className=" flex flex-grow items-center justify-between whitespace-nowrap rounded bg-white px-3 py-2 text-button text-text shadow-inner-grey-02 hover:shadow-inner-text focus:shadow-inner-lg-text [&[data-placeholder]]:text-text">
-            <ActiveTypeIcon valueTypeId={valueTypeId} />
-            <Spacer width={8} />
-            <ChevronDownSmall color="ctaPrimary" />
-          </div>
-        </button>
-      }
-      align="start"
-      className="z-10 max-w-[160px] bg-white"
-    >
-      {options.map(option => (
-        <MenuItem key={option.value}>
-          <button onClick={option.onClick} className="flex w-full items-center justify-between gap-2 px-3 py-2">
-            {option.label}
-          </button>
-        </MenuItem>
-      ))}
-    </Menu>
-  );
-}
+//   return (
+//     <Menu
+//       open={isOpen}
+//       onOpenChange={setIsOpen}
+//       trigger={
+//         <button className="shadow-button">
+//           <div className=" flex flex-grow items-center justify-between whitespace-nowrap rounded bg-white px-3 py-2 text-button text-text shadow-inner-grey-02 hover:shadow-inner-text focus:shadow-inner-lg-text [&[data-placeholder]]:text-text">
+//             <ActiveTypeIcon valueTypeId={valueTypeId} />
+//             <Spacer width={8} />
+//             <ChevronDownSmall color="ctaPrimary" />
+//           </div>
+//         </button>
+//       }
+//       align="start"
+//       className="z-10 max-w-[160px] bg-white"
+//     >
+//       {options.map(option => (
+//         <MenuItem key={option.value}>
+//           <button onClick={option.onClick} className="flex w-full items-center justify-between gap-2 px-3 py-2">
+//             {option.label}
+//           </button>
+//         </MenuItem>
+//       ))}
+//     </Menu>
+//   );
+// }
 
-function ActiveTypeIcon({ valueTypeId }: { valueTypeId?: ValueTypeId }) {
-  switch (valueTypeId) {
-    case SYSTEM_IDS.TEXT:
-      return <Text color="grey-04" />;
-    case SYSTEM_IDS.RELATION:
-      return <RelationIcon color="grey-04" />;
-    case SYSTEM_IDS.DATE:
-      return <Date color="grey-04" />;
-    case SYSTEM_IDS.IMAGE:
-      return <ImageIcon color="grey-04" />;
-    case SYSTEM_IDS.WEB_URL:
-      return <Url color="grey-04" />;
-    default:
-      // We default to the Text type if an attribute has not set an explicit relation value
-      // type. Ideally we force users to explicitly set a type when creating an attribute,
-      // but for now we do not.
-      return <Text color="grey-04" />;
-  }
-}
+// function ActiveTypeIcon({ valueTypeId }: { valueTypeId?: ValueTypeId }) {
+//   switch (valueTypeId) {
+//     case SYSTEM_IDS.TEXT:
+//       return <Text color="grey-04" />;
+//     case SYSTEM_IDS.RELATION:
+//       return <RelationIcon color="grey-04" />;
+//     case SYSTEM_IDS.DATE:
+//       return <Date color="grey-04" />;
+//     case SYSTEM_IDS.WEB_URL:
+//       return <Url color="grey-04" />;
+//     default:
+//       // We default to the Text type if an attribute has not set an explicit relation value
+//       // type. Ideally we force users to explicitly set a type when creating an attribute,
+//       // but for now we do not.
+//       return <Text color="grey-04" />;
+//   }
+// }

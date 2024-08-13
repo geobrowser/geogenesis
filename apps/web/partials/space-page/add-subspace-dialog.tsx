@@ -217,7 +217,7 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
               // from the height and flow of the dialog component
               className="fixed z-[102] mt-1 max-h-[243px] w-[460px] divide-y divide-grey-02 overflow-hidden overflow-y-auto rounded-lg border border-grey-02 bg-white"
             >
-              {queriedSpaces?.map(s => <SpaceQueryResult subspace={s} spaceId={spaceId} />)}
+              {queriedSpaces?.map(s => <SpaceQueryResult key={s.daoAddress} subspace={s} spaceId={spaceId} />)}
             </motion.div>
           )}
         </div>
@@ -270,7 +270,9 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
 
           <Divider type="horizontal" />
 
-          {subspaces?.map(s => <CurrentSubspace subspace={s} spaceId={spaceId} spaceType={spaceType} />)}
+          {subspaces?.map(s => (
+            <CurrentSubspace key={s.daoAddress} subspace={s} spaceId={spaceId} spaceType={spaceType} />
+          ))}
         </div>
       )}
     </div>

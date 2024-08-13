@@ -2,8 +2,6 @@ import { Effect } from 'effect';
 
 import { IpfsUploadError } from '~/core/errors';
 
-import { Environment } from '../environment';
-
 /**
  * This class provides a simple namespace for interacting with the API routes
  * used for uploading binary or files to IPFS. All IPFS interactions are done

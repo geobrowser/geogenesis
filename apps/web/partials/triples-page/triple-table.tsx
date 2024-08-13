@@ -14,7 +14,6 @@ import { Triple, Value } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { LinkableChip } from '~/design-system/chip';
-import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { TableCell } from '~/design-system/table/cell';
 import { CellContent } from '~/design-system/table/cell-content';
 import { EmptyTableText, Table, TableHeader, TableRow } from '~/design-system/table/styles';
@@ -77,10 +76,6 @@ const defaultColumn: Partial<ColumnDef<Triple>> = {
 
         if (value.type === 'ENTITY') {
           return <LinkableChip href={NavUtils.toEntity(space, value.value)}>{value.name ?? value.value}</LinkableChip>;
-        }
-
-        if (value.type === 'IMAGE') {
-          return <ImageZoom imageSrc={value.image} variant="avatar" />;
         }
 
         return <CellContent isExpanded={table.options?.meta?.expandedCells[cellId]} value={value.value} />;

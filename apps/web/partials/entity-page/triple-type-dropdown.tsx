@@ -11,7 +11,6 @@ import { ValueType as TripleValueType } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
 import { Date } from '~/design-system/icons/date';
-import { Image } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
@@ -24,9 +23,7 @@ const icons: Record<TripleValueType, React.FunctionComponent<{ color?: ColorName
   ENTITY: Relation,
   TEXT: Text,
   NUMBER: Text,
-  IMAGE: Image,
   URI: Url,
-  CHECKBOX: Relation,
 };
 
 interface Props {

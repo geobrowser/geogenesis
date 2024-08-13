@@ -13,11 +13,6 @@ export const getValue = (op: AppOp, fallback: boolean | string = false): string 
     case 'URI':
       value = op.value.value;
       break;
-    case 'IMAGE':
-      value = op.value.image;
-      break;
-    case 'CHECKBOX':
-      throw new Error('checkbox value not supported');
   }
 
   return fallback !== false ? value ?? fallback : value;

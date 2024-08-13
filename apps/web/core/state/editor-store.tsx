@@ -102,7 +102,7 @@ export function useEditorStore() {
   const relations: RelationWithBlock[] = useAtomValue(
     React.useMemo(
       () => createMergedBlockRelationsAtom(initialBlockRelations, initialBlocks, entityId),
-      [initialBlockRelations, entityId, initialBlocks, spaceId]
+      [initialBlockRelations, entityId, initialBlocks]
     )
   );
 
@@ -338,30 +338,28 @@ export function useEditorStore() {
   );
 
   // Helper function for creating a new block image triple for IMAGE_BLOCKs only
-  const createBlockImageTriple = React.useCallback(
-    (node: JSONContent) => {
-      const blockEntityId = getNodeId(node);
-      const isImageNode = node.type === 'image';
+  const createBlockImageTriple = React.useCallback((node: JSONContent) => {
+    // const blockEntityId = getNodeId(node);
+    const isImageNode = node.type === 'image';
 
-      if (!isImageNode || !node.attrs?.src) {
-        return null;
-      }
+    if (!isImageNode || !node.attrs?.src) {
+      return null;
+    }
 
-      const { src, id } = node.attrs;
+    // const { src, id } = node.attrs;
 
-      upsert(
-        {
-          entityId: blockEntityId,
-          entityName: getNodeName(node),
-          attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
-          attributeName: 'Image',
-          value: { type: 'IMAGE', value: id, image: Values.toImageValue(src) },
-        },
-        spaceId
-      );
-    },
-    [spaceId]
-  );
+    // @TODO(relations): This should be a relation pointing to the image entity
+    // upsert(
+    //   {
+    //     entityId: blockEntityId,
+    //     entityName: getNodeName(node),
+    //     attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
+    //     attributeName: 'Image',
+    //     value: { type: 'IMAGE', value: id, image: Values.toImageValue(src) },
+    //   },
+    //   spaceId
+    // );
+  }, []);
 
   // Helper function to create or update the block IDs on an entity
   // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
@@ -818,6 +816,7 @@ function markdownToHtml(markdown: string) {
 
   // Convert paragraphs
   html = html.replace(/^\s*(\n)?(.+)/gim, function (m) {
+    // eslint-disable-next-line no-useless-escape
     return /\<(\/)?(h\d|ul|ol|li|blockquote|pre|img)/.test(m) ? m : '<p>' + m + '</p>';
   });
 
@@ -839,6 +838,7 @@ function markdownToHtml(markdown: string) {
   html = html.replace(/<\/ol>\s*<ol>/g, '');
 
   // Convert blockquotes
+  // eslint-disable-next-line no-useless-escape
   html = html.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
 
   // Convert code blocks

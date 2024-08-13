@@ -8,7 +8,7 @@ import { Entity, Relation } from '../io/dto/entities';
 import { EntityId, TypeId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
 import { queryClient } from '../query-client';
-import { Triple, TripleWithEntityValue, Value } from '../types';
+import { Triple, TripleWithEntityValue } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
 import { activeTriplesForEntityIdSelector } from './selectors';

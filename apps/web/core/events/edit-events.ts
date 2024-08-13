@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { createGeoId } from '@geogenesis/sdk';
 
 import { useMemo } from 'react';
 
@@ -13,7 +12,6 @@ import { Values } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { useWriteOps } from '../database/write';
-import { Images } from '../utils/images';
 
 export type EditEvent =
   | {
@@ -439,36 +437,38 @@ const listener =
         );
       }
       case 'CREATE_IMAGE_TRIPLE_FROM_PLACEHOLDER': {
-        const { imageSrc, attributeId, attributeName } = event.payload;
+        // @TODO(relations): This should be a relation pointing to the image entity
+        // const { imageSrc, attributeId, attributeName } = event.payload;
 
-        if (!imageSrc) return;
+        // if (!imageSrc) return;
 
-        const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-          imageSource: Values.toImageValue(imageSrc),
-          spaceId: context.spaceId,
-        });
+        // const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+        //   imageSource: Values.toImageValue(imageSrc),
+        //   spaceId: context.spaceId,
+        // });
 
-        return upsertMany(
-          [
-            // Create the image entity
-            typeTriple,
-            urlTriple,
+        // return upsertMany(
+        //   [
+        //     // Create the image entity
+        //     typeTriple,
+        //     urlTriple,
 
-            // Set the image entity reference on the current entity
-            {
-              entityId: context.entityId,
-              entityName: context.entityName,
-              attributeId,
-              attributeName,
-              value: {
-                type: 'IMAGE',
-                value: typeTriple.entityId,
-                image: urlTriple.value.value,
-              },
-            },
-          ],
-          context.spaceId
-        );
+        //     // Set the image entity reference on the current entity
+        //     {
+        //       entityId: context.entityId,
+        //       entityName: context.entityName,
+        //       attributeId,
+        //       attributeName,
+        //       value: {
+        //         type: 'IMAGE',
+        //         value: typeTriple.entityId,
+        //         image: urlTriple.value.value,
+        //       },
+        //     },
+        //   ],
+        //   context.spaceId
+        // );
+        break;
       }
       case 'CREATE_ENTITY_TRIPLE': {
         const { attributeId, attributeName } = event.payload;
@@ -564,20 +564,20 @@ const listener =
         return remove(triple, context.spaceId);
       }
       case 'UPLOAD_IMAGE': {
-        const { imageSrc, triple } = event.payload;
-
-        // @TODO: Also create the entity that stores the image
-        return upsert(
-          {
-            ...triple,
-            value: {
-              type: 'IMAGE',
-              value: createGeoId(),
-              image: Values.toImageValue(imageSrc),
-            },
-          },
-          context.spaceId
-        );
+        // const { imageSrc, triple } = event.payload;
+        // @TODO(relations): This should be a relation pointing to the image entity
+        // return upsert(
+        //   {
+        //     ...triple,
+        //     value: {
+        //       type: 'ENTITY',
+        //       value: Values.toImageValue(imageSrc),
+        //       name: null,
+        //     },
+        //   },
+        //   context.spaceId
+        // );
+        break;
       }
     }
   };
@@ -595,7 +595,7 @@ export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
         upsertMany,
       },
     });
-  }, [config]);
+  }, [config, remove, upsert, upsertMany]);
 
   return send;
 }

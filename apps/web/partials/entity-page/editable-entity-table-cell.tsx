@@ -12,7 +12,7 @@ import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-au
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { DeletableChipButton } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { TableImageField, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 
 interface Props {
@@ -51,7 +51,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
   const isRelationValueTypeColumn = valueType === SYSTEM_IDS.RELATION;
   const isTextValueTypeColumn = valueType === SYSTEM_IDS.TEXT;
-  const isImageValueTypeColumn = valueType === SYSTEM_IDS.IMAGE;
+  // const isImageValueTypeColumn = valueType === SYSTEM_IDS.IMAGE;
   const isDateValueTypeColumn = valueType === SYSTEM_IDS.DATE;
   const isUrlValueTypeColumn = valueType === SYSTEM_IDS.WEB_URL;
   const isEmptyCell = triples.length === 0;
@@ -115,36 +115,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         attributeId,
         attributeName: columnName,
         value,
-      },
-    });
-  };
-
-  const uploadImage = (triple: Triple, imageSrc: string) => {
-    send({
-      type: 'UPLOAD_IMAGE',
-      payload: {
-        triple,
-        imageSrc,
-      },
-    });
-  };
-
-  const createImageWithValue = (imageSrc: string) => {
-    send({
-      type: 'CREATE_IMAGE_TRIPLE_FROM_PLACEHOLDER',
-      payload: {
-        imageSrc,
-        attributeId,
-        attributeName: columnName,
-      },
-    });
-  };
-
-  const deleteImage = (triple: Triple) => {
-    send({
-      type: 'DELETE_IMAGE_TRIPLE',
-      payload: {
-        triple,
       },
     });
   };
@@ -249,7 +219,8 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         />
       )}
 
-      {isImageValueTypeColumn && (
+      {/* @TODO(relations): Add image support */}
+      {/* {isImageValueTypeColumn && (
         <TableImageField
           imageSrc={Values.imageValue(firstTriple) || ''}
           variant="table-cell"
@@ -260,7 +231,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             deleteImage(firstTriple);
           }}
         />
-      )}
+      )} */}
 
       {isDateValueTypeColumn && (
         <DateField

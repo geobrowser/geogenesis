@@ -150,34 +150,35 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'IMAGE': {
-      return (
-        <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div>
-              {/* @TODO: When can this be object? */}
-              {typeof before !== 'object' && (
-                <span className="inline-block rounded-lg bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div>
-              {/* @TODO: When can this be object? */}
-              {typeof after !== 'object' && (
-                <span className="inline-block rounded-lg bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
+    // @TODO(relations): Add image support
+    // case 'IMAGE': {
+    //   return (
+    //     <div key={attributeId} className="-mt-px flex gap-8">
+    //       <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+    //         <div className="text-bodySemibold capitalize">{name}</div>
+    //         <div>
+    //           {/* @TODO: When can this be object? */}
+    //           {typeof before !== 'object' && (
+    //             <span className="inline-block rounded-lg bg-errorTertiary p-1">
+    //               <img src={getImagePath(before)} className="rounded-lg" />
+    //             </span>
+    //           )}
+    //         </div>
+    //       </div>
+    //       <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+    //         <div className="text-bodySemibold capitalize">{name}</div>
+    //         <div>
+    //           {/* @TODO: When can this be object? */}
+    //           {typeof after !== 'object' && (
+    //             <span className="inline-block rounded-lg bg-successTertiary p-1">
+    //               <img src={getImagePath(after)} className="rounded-lg" />
+    //             </span>
+    //           )}
+    //         </div>
+    //       </div>
+    //     </div>
+    //   );
+    // }
     case 'TIME': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">

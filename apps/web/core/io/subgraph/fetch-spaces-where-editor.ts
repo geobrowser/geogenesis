@@ -7,8 +7,8 @@ import { Environment } from '~/core/environment';
 
 import { SpaceMetadataDto } from '../dto';
 import { SpaceConfigEntity } from '../dto/spaces';
-import { SpaceId, SubstreamEntity, SubstreamSpace } from '../schema';
-import { entityFragment, spacePluginsFragment } from './fragments';
+import { SpaceId, SubstreamEntity } from '../schema';
+import { entityFragment } from './fragments';
 import { graphql } from './graphql';
 
 const getFetchSpacesWhereEditorQuery = (address: string) => `query {

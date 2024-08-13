@@ -6,7 +6,7 @@ import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
-import { getTriples, useTriples } from '../database/triples';
+import { getTriples } from '../database/triples';
 import { useWriteOps } from '../database/write';
 import { TransactionWriteFailedError } from '../errors';
 import { IpfsEffectClient } from '../io/ipfs-client';

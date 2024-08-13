@@ -3,7 +3,7 @@ import { Value } from '../types';
 import { Entities } from '../utils/entity';
 import { EntityDto } from './dto/entities';
 import { SpaceConfigEntity } from './dto/spaces';
-import { EntityId, SubstreamEntity, SubstreamTriple, SubstreamType, TypeId } from './schema';
+import { EntityId, SubstreamEntity, SubstreamTriple } from './schema';
 
 function extractValue(networkTriple: SubstreamTriple): Value {
   switch (networkTriple.valueType) {

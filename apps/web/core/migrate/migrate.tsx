@@ -65,7 +65,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
         queryFn: async () => {
           const triplesReferencingEntity: ITriple[] = [];
 
-          const FIRST = 1000;
+          // const FIRST = 1000;
           let page = 0;
           let isRemainingTriples = false;
 
@@ -122,7 +122,7 @@ async function migrate(action: MigrateAction, config: MigrateHubConfig): Promise
         queryFn: async () => {
           const triplesReferencingEntity: ITriple[] = [];
 
-          const FIRST = 1000;
+          // const FIRST = 1000;
           let page = 0;
           let isRemainingTriples = false;
 
@@ -309,7 +309,7 @@ export function useMigrateHub() {
       },
       queryClient,
     });
-  }, [remove, queryClient]);
+  }, [remove, queryClient, upsert]);
 
   const dispatch = React.useCallback(
     async (action: MigrateAction) => {
@@ -327,7 +327,7 @@ export function useMigrateHub() {
       });
     },
 
-    [hub]
+    [hub, upsertMany]
   );
 
   return {

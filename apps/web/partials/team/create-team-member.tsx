@@ -74,7 +74,7 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
     // Add avatar attribute
     if (avatar) {
       const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-        imageSource: Values.toImageValue(avatar),
+        imageSource: avatar,
         spaceId,
       });
 
@@ -83,17 +83,18 @@ export const CreateTeamMember = ({ spaceId }: CreateTeamMemberProps) => {
       triplesToWrite.push(urlTriple);
 
       // Set the image entity reference on the current entity
-      triplesToWrite.push({
-        entityId: newEntityId,
-        entityName: name,
-        attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-        attributeName: 'Avatar',
-        value: {
-          type: 'IMAGE',
-          value: typeTriple.entityId,
-          image: Values.toImageValue(avatar),
-        },
-      });
+      // @TODO(relations): Add image support
+      // triplesToWrite.push({
+      //   entityId: newEntityId,
+      //   entityName: name,
+      //   attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+      //   attributeName: 'Avatar',
+      //   value: {
+      //     type: 'IMAGE',
+      //     value: typeTriple.entityId,
+      //     image: Values.toImageValue(avatar),
+      //   },
+      // });
     }
 
     // Add role attribute

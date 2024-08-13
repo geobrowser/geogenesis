@@ -12,7 +12,6 @@ import { Entities } from '~/core/utils/entity';
 import { valueTypes } from '~/core/value-types';
 
 import { Date } from '~/design-system/icons/date';
-import { Image } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
 import { Text as TextIcon } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
@@ -69,7 +68,6 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 ? column.triples : localTriples;
-  const nameTriple = Entities.nameTriple(triples);
   const valueTypeTriple = Entities.valueTypeTriple(triples);
 
   const valueType = Entities.valueTypeId(triples) ?? SYSTEM_IDS.TEXT;
@@ -126,18 +124,6 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
               ),
               value: 'ENTITY',
               onClick: () => onChangeTripleType(SYSTEM_IDS.RELATION),
-              disabled: false,
-            },
-            {
-              label: (
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <Image />
-                  <Spacer width={8} />
-                  Image
-                </div>
-              ),
-              value: 'IMAGE',
-              onClick: () => onChangeTripleType(SYSTEM_IDS.IMAGE),
               disabled: false,
             },
             {

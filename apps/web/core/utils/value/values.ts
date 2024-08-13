@@ -34,10 +34,6 @@ export function timeValue(triple?: Triple) {
   return triple.value.type === 'TIME' ? triple.value.value : null;
 }
 
-export function imageValue(triple: Triple) {
-  return triple.value.type === 'IMAGE' ? triple.value.image : null;
-}
-
 // Get the image triple value from an image path
 // this converts the raw image string from ipfs.uploadFile into the appropriate
 // format for storing in the triple

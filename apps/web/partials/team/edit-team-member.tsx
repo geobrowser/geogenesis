@@ -118,29 +118,29 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
           upsertMany([typeTriple, urlTriple], spaceId);
         }
       } else if (hasAvatar) {
-        const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-          imageSource: Values.toImageValue(avatar),
-          spaceId,
-        });
-
-        upsertMany(
-          [
-            typeTriple,
-            urlTriple,
-            {
-              entityId: entityId,
-              entityName: name,
-              attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-              attributeName: 'Avatar',
-              value: {
-                type: 'IMAGE',
-                value: typeTriple.entityId,
-                image: urlTriple.value.value,
-              },
-            },
-          ],
-          spaceId
-        );
+        // @TODO(relations): Add image support
+        // const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+        //   imageSource: Values.toImageValue(avatar),
+        //   spaceId,
+        // });
+        // upsertMany(
+        //   [
+        //     typeTriple,
+        //     urlTriple,
+        //     {
+        //       entityId: entityId,
+        //       entityName: name,
+        //       attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+        //       attributeName: 'Avatar',
+        //       value: {
+        //         type: 'IMAGE',
+        //         value: typeTriple.entityId,
+        //         image: urlTriple.value.value,
+        //       },
+        //     },
+        //   ],
+        //   spaceId
+        // );
       }
     }
 
@@ -315,29 +315,29 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     // Add avatar (if person has an avatar and its not already in space triples)
     if (!avatarSpaceTriple && teamMember.avatar) {
-      const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-        imageSource: Values.toImageValue(teamMember.avatar),
-        spaceId,
-      });
-
-      upsertMany(
-        [
-          typeTriple,
-          urlTriple,
-          {
-            entityId: newEntityId,
-            entityName: name,
-            attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-            attributeName: 'Avatar',
-            value: {
-              type: 'IMAGE',
-              value: typeTriple.entityId,
-              image: urlTriple.value.value,
-            },
-          },
-        ],
-        spaceId
-      );
+      // @TODO(relations): Add image support
+      // const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+      //   imageSource: Values.toImageValue(teamMember.avatar),
+      //   spaceId,
+      // });
+      // upsertMany(
+      //   [
+      //     typeTriple,
+      //     urlTriple,
+      //     {
+      //       entityId: newEntityId,
+      //       entityName: name,
+      //       attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+      //       attributeName: 'Avatar',
+      //       value: {
+      //         type: 'IMAGE',
+      //         value: typeTriple.entityId,
+      //         image: urlTriple.value.value,
+      //       },
+      //     },
+      //   ],
+      //   spaceId
+      // );
     }
 
     // Add person type

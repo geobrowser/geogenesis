@@ -143,6 +143,7 @@ interface Props {
   placeholder: { text: string; image: string };
 }
 
+// eslint-disable-next-line react/display-name
 export const TableBlockTable = React.memo(
   ({ rows, space, typeId, columns, shownColumnIds, placeholder, view }: Props) => {
     const isEditingColumns = useAtomValue(editingColumnsAtom);
@@ -210,7 +211,7 @@ export const TableBlockTable = React.memo(
                 <thead>
                   {table.getHeaderGroups().map(headerGroup => (
                     <tr key={headerGroup.id}>
-                      {headerGroup.headers.map((header, index: number) => {
+                      {headerGroup.headers.map(header => {
                         const isShown = shownColumnIds.includes(header.id);
                         const headerClassNames = isShown
                           ? null
@@ -243,7 +244,7 @@ export const TableBlockTable = React.memo(
 
                     return (
                       <tr key={entityId ?? index} className="hover:bg-bg">
-                        {cells.map((cell, index: number) => {
+                        {cells.map(cell => {
                           const cellId = `${row.original.id}-${cell.column.id}`;
                           const firstTriple = cell.getValue<Cell>()?.triples[0];
                           const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';

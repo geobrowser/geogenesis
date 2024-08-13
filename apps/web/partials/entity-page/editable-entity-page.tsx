@@ -13,7 +13,7 @@ import { EntityId } from '~/core/io/schema';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple } from '~/core/types';
-import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
+import { Triple as ITriple, ValueType as TripleValueType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -22,11 +22,10 @@ import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text
 import { SquareButton } from '~/design-system/button';
 import { DeletableChipButton } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { Date } from '~/design-system/icons/date';
-import { Image } from '~/design-system/icons/image';
 import { Relation as RelationIcon } from '~/design-system/icons/relation';
 import { Text as TextIcon } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
@@ -379,24 +378,24 @@ function EntityAttributes({
     });
   };
 
-  const uploadImage = (triple: ITriple, imageSrc: string) => {
-    send({
-      type: 'UPLOAD_IMAGE',
-      payload: {
-        triple,
-        imageSrc,
-      },
-    });
-  };
+  // const uploadImage = (triple: ITriple, imageSrc: string) => {
+  //   send({
+  //     type: 'UPLOAD_IMAGE',
+  //     payload: {
+  //       triple,
+  //       imageSrc,
+  //     },
+  //   });
+  // };
 
-  const deleteImageTriple = (triple: ITriple) => {
-    send({
-      type: 'DELETE_IMAGE_TRIPLE',
-      payload: {
-        triple,
-      },
-    });
-  };
+  // const deleteImageTriple = (triple: ITriple) => {
+  //   send({
+  //     type: 'DELETE_IMAGE_TRIPLE',
+  //     payload: {
+  //       triple,
+  //     },
+  //   });
+  // };
 
   const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     send({
@@ -429,20 +428,6 @@ function EntityAttributes({
             value={triple.value.value}
             onChange={e => {
               updateTextValue(triple, e.target.value);
-            }}
-          />
-        );
-      case 'IMAGE':
-        return (
-          <PageImageField
-            key={triple.attributeId}
-            variant="avatar"
-            imageSrc={triple.value.image}
-            onImageChange={imageSrc => {
-              uploadImage(triple, imageSrc);
-            }}
-            onImageRemove={() => {
-              deleteImageTriple(triple);
             }}
           />
         );
@@ -593,18 +578,19 @@ function EntityAttributes({
                       onClick: () => onChangeTriple('ENTITY', triple),
                       disabled: false,
                     },
-                    {
-                      label: (
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <Image />
-                          <Spacer width={8} />
-                          Image
-                        </div>
-                      ),
-                      value: 'IMAGE',
-                      onClick: () => onChangeTriple('IMAGE', triple),
-                      disabled: false,
-                    },
+                    // @TODO(relations): Add image support
+                    // {
+                    //   label: (
+                    //     <div style={{ display: 'flex', alignItems: 'center' }}>
+                    //       <Image />
+                    //       <Spacer width={8} />
+                    //       Image
+                    //     </div>
+                    //   ),
+                    //   value: 'IMAGE',
+                    //   onClick: () => onChangeTriple('IMAGE', triple),
+                    //   disabled: false,
+                    // },
                     {
                       label: (
                         <div style={{ display: 'flex', alignItems: 'center' }}>
