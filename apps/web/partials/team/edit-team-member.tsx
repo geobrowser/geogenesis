@@ -448,8 +448,8 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
                 placeholder="Find or create role..."
                 onDone={handleChangeRole}
                 alreadySelectedIds={[]}
-                allowedTypes={[{ typeId: '9c1922f1-d7a2-47d1-841d-234cb2f56991', typeName: 'Role' }]}
-                attributeId="9c1922f1-d7a2-47d1-841d-234cb2f56991"
+                filterByTypes={[{ typeId: SYSTEM_IDS.ROLE_ATTRIBUTE, typeName: 'Role' }]}
+                attributeId={SYSTEM_IDS.ROLE_ATTRIBUTE}
                 className="!h-auto !font-medium"
               />
             ) : (

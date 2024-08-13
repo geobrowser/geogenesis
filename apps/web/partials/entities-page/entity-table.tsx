@@ -110,7 +110,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           space={space}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}
-          columnRelationTypes={columnRelationTypes[cellData.columnId]}
+          // columnRelationTypes={columnRelationTypes[cellData.columnId]}
+          // @TODO: relations
+          columnRelationTypes={[]}
         />
       );
     } else if (cellData) {

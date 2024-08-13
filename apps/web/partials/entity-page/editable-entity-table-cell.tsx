@@ -231,7 +231,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
           alreadySelectedIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.value)}
-          allowedTypes={typesToFilter}
+          filterByTypes={typesToFilter}
           attributeId={attributeId}
           containerClassName="!z-20"
         />
