@@ -116,9 +116,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   return (
     <div>
       <div className="mb-2 flex h-8 items-center justify-between">
-        <div className="flex grow items-center gap-2">
-          <TableBlockEditableTitle spaceId={spaceId} />
-        </div>
+        <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
           <AnimatePresence initial={false} mode="wait">
             {filterState.length > 0 ? (
@@ -155,7 +153,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             shownColumnRelations={shownColumnRelations}
             shownColumnIds={shownColumnIds}
           />
-
           {isEditing && (
             <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, attributes)}>
               <Create />
@@ -181,19 +178,21 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             >
               <TableBlockEditableFilters />
 
-              {filtersWithColumnName.map((f, index) => (
-                <TableBlockFilterPill
-                  key={`${f.columnId}-${f.value}`}
-                  filter={f}
-                  onDelete={() => {
-                    const newFilterState = produce(filterState, draft => {
-                      draft.splice(index, 1);
-                    });
+              {filtersWithColumnName.map((f, index) => {
+                return (
+                  <TableBlockFilterPill
+                    key={`${f.columnId}-${f.value}`}
+                    filter={f}
+                    onDelete={() => {
+                      const newFilterState = produce(filterState, draft => {
+                        draft.splice(index, 1);
+                      });
 
-                    setFilterState(newFilterState);
-                  }}
-                />
-              ))}
+                      setFilterState(newFilterState);
+                    }}
+                  />
+                );
+              })}
             </motion.div>
           </motion.div>
         </AnimatePresence>

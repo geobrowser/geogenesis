@@ -141,11 +141,7 @@ const ToggleView = ({ space, entityId, entityName, activeView, view, viewTriple,
 
   return (
     <MenuItem active={isActive}>
-      <button
-        onClick={onToggleView}
-        className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
-        disabled={isActive}
-      >
+      <button onClick={onToggleView} className="flex w-full items-center justify-between gap-2" disabled={isActive}>
         <div className="inline-flex items-center gap-2">
           <ViewIcon view={view.value} color="text" />
           <span>{view.name}</span>
