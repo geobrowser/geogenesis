@@ -23,6 +23,21 @@ export interface TableBlockFilter {
   valueName: string | null;
 }
 
+type SpaceId = string;
+
+type SingleSource = {
+  type: 'collection' | 'geo';
+  value: string;
+};
+
+// @TODO add support for `collections` with multiple `collectionId`s
+type MultipleSources = {
+  type: 'spaces';
+  value: Array<SpaceId>;
+};
+
+type Source = SingleSource | MultipleSources;
+
 export function useTableBlock() {
   const { entityId, selectedType, spaceId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
@@ -277,8 +292,34 @@ export function useTableBlock() {
   const view = getView(blockEntity);
   const placeholder = getPlaceholder(blockEntity, view);
 
+  let source: Source = {
+    type: 'geo',
+    value: '',
+  };
+
+  // required to coerce returned source type to `Source`
+  // @TODO replace with proper logic for collection blocks
+  const isCollection = false;
+  if (isCollection) {
+    source = {
+      type: 'collection',
+      value: 'MOCK_COLLECTION_ID',
+    };
+  }
+
+  if (filterState && filterState.find(filter => filter.columnId === SYSTEM_IDS.SPACE)) {
+    const spaces = filterState.filter(filter => filter.columnId === SYSTEM_IDS.SPACE).map(filter => filter.value);
+
+    source = {
+      type: 'spaces',
+      value: spaces,
+    };
+  }
+
   return {
     blockEntity,
+    source,
+
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
     columns: columns ?? [],
 

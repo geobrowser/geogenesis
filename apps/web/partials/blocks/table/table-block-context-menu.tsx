@@ -51,6 +51,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 import { TextButton } from '~/design-system/text-button';
 
+import { DataBlockSourceMenu } from '~/partials/blocks/table/data-block-source-menu';
 import { AttributeConfigurationMenu } from '~/partials/entity-page/attribute-configuration-menu';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
@@ -251,6 +252,7 @@ type TableBlockContextMenuProps = {
 export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownColumnIds }: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { type, spaceId, entityId, name } = useTableBlock();
+  const [isEditingDataSource, setIsEditingDataSource] = React.useState(false);
   const [isEditingColumns, setIsEditingColumns] = useAtom(editingColumnsAtom);
 
   const isEditing = useUserIsEditing(spaceId);
@@ -266,6 +268,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
     try {
       await navigator.clipboard.writeText(entityId);
       setIsMenuOpen(false);
+      setIsEditingDataSource(false);
       setIsEditingColumns(false);
     } catch (err) {
       console.error('Failed to copy table block entity ID for: ', entityId);
@@ -275,6 +278,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
   const onOpenChange = () => {
     if (isMenuOpen) {
       setIsMenuOpen(false);
+      setIsEditingDataSource(false);
       setIsEditingColumns(false);
     } else {
       setIsMenuOpen(true);
@@ -282,6 +286,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
   };
 
   const spaceImage = space?.spaceConfig?.image ?? null;
+  const isInitialState = !isEditingDataSource && !isEditingColumns;
 
   return (
     <Dropdown.Root open={isMenuOpen} onOpenChange={onOpenChange}>
@@ -299,14 +304,15 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
           className="z-100 block !w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           align="end"
         >
-          {!isEditingColumns && (
+          {isInitialState && (
             <>
               {isEditing && (
                 <>
-                  <MenuItem
-                  // @TODO add onclick beahvior for menu
-                  >
-                    <button className="flex w-full items-center justify-between gap-2">
+                  <MenuItem>
+                    <button
+                      onClick={() => setIsEditingDataSource(true)}
+                      className="flex w-full items-center justify-between gap-2"
+                    >
                       <span>Change data source</span>
                       <ChevronRight />
                     </button>
@@ -370,12 +376,13 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
               )}
             </>
           )}
+          {isEditingDataSource && <DataBlockSourceMenu onBack={() => setIsEditingDataSource(false)} />}
           {isEditingColumns && (
             <>
               <MenuItem className="border-b border-grey-02">
                 <button
                   onClick={() => setIsEditingColumns(false)}
-                  className="flex w-full items-center gap-2 p-2 text-smallButton"
+                  className="flex w-full items-center gap-2 text-smallButton"
                 >
                   <LeftArrowLong />
                   <span>Back</span>
