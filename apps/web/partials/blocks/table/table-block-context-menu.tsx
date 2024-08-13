@@ -18,7 +18,7 @@ import { useWriteOps } from '~/core/database/write';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { Entity } from '~/core/io/dto/entities';
+import { Entity, Relation } from '~/core/io/dto/entities';
 import { SearchResult } from '~/core/io/dto/search';
 import { useMigrateHub } from '~/core/migrate/migrate';
 import { useTableBlock } from '~/core/state/table-block-store';
@@ -41,7 +41,7 @@ import { EyeHide } from '~/design-system/icons/eye-hide';
 import { FilteredTableView } from '~/design-system/icons/filtered-table-view';
 import { Image as ImageIcon } from '~/design-system/icons/image';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
-import { Relation } from '~/design-system/icons/relation';
+import { Relation as RelationIcon } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
 import { Url } from '~/design-system/icons/url';
@@ -226,11 +226,15 @@ type Column = {
 
 type TableBlockContextMenuProps = {
   allColumns: Array<Column>;
-  shownColumnTriples: Array<ITriple>;
+  shownColumnRelations: Array<Relation>;
   shownColumnIds: Array<string>;
 };
 
-export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownColumnIds }: TableBlockContextMenuProps) {
+export function TableBlockContextMenu({
+  allColumns,
+  shownColumnRelations,
+  shownColumnIds,
+}: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { type, spaceId, entityId, name } = useTableBlock();
   const [isEditingColumns, setIsEditingColumns] = useAtom(editingColumnsAtom);
@@ -367,14 +371,14 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
                 // do not show name column
                 if (index === 0) return null;
 
-                const shownColumnTriple = shownColumnTriples.find(triple => triple.value.value === column.id) ?? null;
+                const shownColumnRelation = shownColumnRelations.find(r => r.toEntity.id === column.id) ?? null;
 
                 return (
                   <ToggleColumn
                     key={column.id}
                     column={column}
                     shownColumnIds={shownColumnIds}
-                    shownColumnTriple={shownColumnTriple}
+                    shownColumnRelation={shownColumnRelation}
                     space={spaceId}
                     entityId={entityId}
                     entityName={name ?? null}
@@ -392,7 +396,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
 type ToggleColumnProps = {
   column: Column;
   shownColumnIds: Array<string>;
-  shownColumnTriple: ITriple | null;
+  shownColumnRelation: Relation | null;
   space: string;
   entityId: string;
   entityName: string | null;
@@ -401,7 +405,7 @@ type ToggleColumnProps = {
 const ToggleColumn = ({
   column,
   shownColumnIds,
-  shownColumnTriple,
+  shownColumnRelation,
   space,
   entityId,
   entityName,
@@ -431,11 +435,12 @@ const ToggleColumn = ({
         space
       );
     } else {
-      if (shownColumnTriple) {
-        remove(shownColumnTriple, space);
+      if (shownColumnRelation) {
+        // @TODO(relations): remove all triples
+        // remove(shownColumnRelation, space);
       }
     }
-  }, [upsert, entityId, entityName, id, isShown, name, remove, shownColumnTriple, space]);
+  }, [upsert, entityId, entityName, id, isShown, name, remove, shownColumnRelation, space]);
 
   return (
     <MenuItem>
@@ -691,7 +696,7 @@ function AttributeValueTypeDropdown({
     {
       label: (
         <div className="flex items-center gap-2">
-          <Relation color="grey-04" />
+          <RelationIcon color="grey-04" />
           <p>Relation</p>
         </div>
       ),
@@ -762,7 +767,7 @@ function ActiveTypeIcon({ valueTypeId }: { valueTypeId?: ValueTypeId }) {
     case SYSTEM_IDS.TEXT:
       return <Text color="grey-04" />;
     case SYSTEM_IDS.RELATION:
-      return <Relation color="grey-04" />;
+      return <RelationIcon color="grey-04" />;
     case SYSTEM_IDS.DATE:
       return <Date color="grey-04" />;
     case SYSTEM_IDS.IMAGE:
