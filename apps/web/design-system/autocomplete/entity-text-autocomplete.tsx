@@ -8,10 +8,8 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useRef } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useWriteOps } from '~/core/database/write';
+import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 
@@ -27,7 +25,7 @@ interface Props {
   placeholder?: string;
   onDone: (result: { id: string; name: string | null; nameTripleSpace?: string }) => void;
   alreadySelectedIds: string[];
-  allowedTypes?: { typeId: string; typeName: string | null }[];
+  filterByTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
   attributeId?: string;
   wrapperClassName?: string;
@@ -39,7 +37,7 @@ export function EntityTextAutocomplete({
   placeholder,
   alreadySelectedIds,
   onDone,
-  allowedTypes,
+  filterByTypes,
   spaceId,
   attributeId,
   wrapperClassName = '',
@@ -47,16 +45,15 @@ export function EntityTextAutocomplete({
   className = '',
 }: Props) {
   const [, setToast] = useToast();
-  const { upsert } = useActionsStore();
-  const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
-    allowedTypes: allowedTypes?.map(type => type.typeId),
+  const { upsert } = useWriteOps();
+  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+    filterByTypes: filterByTypes?.map(type => type.typeId),
   });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(alreadySelectedIds);
-  const { spaces } = useSpaces();
 
-  const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
-  const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
+  // const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
+  // const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
 
   const onCreateNewEntity = () => {
     const newEntityId = ID.createEntityId();
@@ -64,7 +61,6 @@ export function EntityTextAutocomplete({
     // Create new entity with name and types
     upsert(
       {
-        type: 'SET_TRIPLE',
         entityId: newEntityId,
         attributeId: SYSTEM_IDS.NAME,
         entityName: query,
@@ -77,11 +73,10 @@ export function EntityTextAutocomplete({
       spaceId
     );
 
-    if (allowedTypes) {
-      allowedTypes.forEach(type => {
+    if (filterByTypes) {
+      filterByTypes.forEach(type => {
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: newEntityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: query,
@@ -97,25 +92,26 @@ export function EntityTextAutocomplete({
       });
     }
 
-    if (relationValueTypesForAttribute) {
-      relationValueTypesForAttribute.forEach(type => {
-        upsert(
-          {
-            type: 'SET_TRIPLE',
-            entityId: newEntityId,
-            attributeId: SYSTEM_IDS.TYPES,
-            entityName: query,
-            attributeName: 'Types',
-            value: {
-              type: 'ENTITY',
-              value: type.typeId,
-              name: type.typeName,
-            },
-          },
-          spaceId
-        );
-      });
-    }
+    // @TODO(relations): Fix – Types are relations and not triples now.
+    // if (relationValueTypesForAttribute) {
+    //   relationValueTypesForAttribute.forEach(type => {
+    //     upsert(
+    //       {
+    //         type: 'SET_TRIPLE',
+    //         entityId: newEntityId,
+    //         attributeId: SYSTEM_IDS.TYPES,
+    //         entityName: query,
+    //         attributeName: 'Types',
+    //         value: {
+    //           type: 'ENTITY',
+    //           value: type.typeId,
+    //           name: type.typeName,
+    //         },
+    //       },
+    //       spaceId
+    //     );
+    //   });
+    // }
 
     onDone({ id: newEntityId, name: query });
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
@@ -154,7 +150,6 @@ export function EntityTextAutocomplete({
                   <ResultContent
                     key={result.id}
                     onClick={() => onDone(result)}
-                    spaces={spaces}
                     alreadySelected={itemIdsSet.has(result.id)}
                     result={result}
                   />

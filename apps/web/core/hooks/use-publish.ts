@@ -6,15 +6,15 @@ import { encodeFunctionData, stringToHex } from 'viem';
 
 import * as React from 'react';
 
+import { getTriples } from '../database/triples';
+import { useWriteOps } from '../database/write';
 import { TransactionWriteFailedError } from '../errors';
-import { IStorageClient, uploadBinary } from '../io/storage/storage';
+import { IpfsEffectClient } from '../io/ipfs-client';
 import { fetchSpace } from '../io/subgraph';
-import { Services } from '../services';
 import { useStatusBar } from '../state/status-bar-store';
 import { Triple as ITriple, ReviewState, SpaceGovernanceType } from '../types';
 import { Triples } from '../utils/triples';
 import { sleepWithCallback } from '../utils/utils';
-import { useActionsStore } from './use-actions-store';
 import { useSmartAccount } from './use-smart-account';
 
 interface MakeProposalOptions {
@@ -26,8 +26,7 @@ interface MakeProposalOptions {
 }
 
 export function usePublish() {
-  const { storageClient } = Services.useServices();
-  const { restore, actions: actionsBySpace } = useActionsStore();
+  const { restore } = useWriteOps();
   const smartAccount = useSmartAccount();
   const { dispatch } = useStatusBar();
 
@@ -58,7 +57,6 @@ export function usePublish() {
 
         yield* makeProposal({
           name,
-          storage: storageClient,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -85,13 +83,11 @@ export function usePublish() {
         // since we need to update the entire state of the space with the published actions and the
         // unpublished actions being merged together.
         // If the actionsBySpace[spaceId] is empty, then we return an empty array
-        const nonPublishedActions = actionsBySpace[spaceId]
-          ? actionsBySpace[spaceId].filter(a => {
-              return !triplesBeingPublished.has(a.id);
-            })
-          : [];
+        const nonPublishedOps = getTriples({
+          selector: t => t.space === spaceId && !triplesBeingPublished.has(t.id),
+        });
 
-        const publishedActions = triplesToPublish.map(action => ({
+        const publishedOps = triplesToPublish.map(action => ({
           ...action,
           // We keep published actions in memory to keep the UI optimistic. This is mostly done
           // because there is a period between publishing actions and the subgraph finishing indexing
@@ -102,10 +98,27 @@ export function usePublish() {
 
         // Update the actionsBySpace for the current space to set the published actions
         // as hasBeenPublished and merge with the existing actions in the space.
-        restore({
-          ...actionsBySpace,
-          [spaceId]: [...publishedActions, ...nonPublishedActions],
-        });
+        // @TODO(database): Need to correctly map the space for each op
+        restore([
+          ...publishedOps.map(t => {
+            return {
+              op: {
+                ...t,
+                type: t.isDeleted ? ('DELETE_TRIPLE' as const) : ('SET_TRIPLE' as const),
+              },
+              spaceId: t.space,
+            };
+          }),
+          ...nonPublishedOps.map(t => {
+            return {
+              op: {
+                ...t,
+                type: t.isDeleted ? ('DELETE_TRIPLE' as const) : ('SET_TRIPLE' as const),
+              },
+              spaceId: t.space,
+            };
+          }),
+        ]);
       });
 
       const result = await Effect.runPromise(Effect.either(publish));
@@ -133,7 +146,7 @@ export function usePublish() {
         onSuccess?.();
       }, 3000);
     },
-    [storageClient, restore, actionsBySpace, smartAccount, dispatch]
+    [restore, smartAccount, dispatch]
   );
 
   return {
@@ -142,7 +155,6 @@ export function usePublish() {
 }
 
 export function useBulkPublish() {
-  const { storageClient } = Services.useServices();
   const smartAccount = useSmartAccount();
   const { dispatch } = useStatusBar();
 
@@ -167,7 +179,6 @@ export function useBulkPublish() {
 
         yield* makeProposal({
           name,
-          storage: storageClient,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -208,7 +219,7 @@ export function useBulkPublish() {
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
     },
-    [storageClient, smartAccount, dispatch]
+    [smartAccount, dispatch]
   );
 
   return {
@@ -219,7 +230,6 @@ export function useBulkPublish() {
 interface MakeProposalArgs {
   name: string;
   ops: Op[];
-  storage: IStorageClient;
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>>;
   space: {
     id: string;
@@ -231,11 +241,8 @@ interface MakeProposalArgs {
   onChangePublishState: (newState: ReviewState) => void;
 }
 
-// @TODO: depending on the type of space we need to call different functions
-// If it's a public space we call proposeEdits, if it's a personal space we
-// call submitEdits
 function makeProposal(args: MakeProposalArgs) {
-  const { name, ops, smartAccount, space, storage, onChangePublishState } = args;
+  const { name, ops, smartAccount, space, onChangePublishState } = args;
 
   const proposal = createEditProposal({ name, ops, author: smartAccount.account.address });
 
@@ -251,7 +258,7 @@ function makeProposal(args: MakeProposalArgs) {
     }
 
     onChangePublishState('publishing-ipfs');
-    const cid = yield* uploadBinary(proposal, storage);
+    const cid = yield* IpfsEffectClient.upload(proposal);
     onChangePublishState('publishing-contract');
 
     const callData = getCalldataForSpaceGovernanceType({

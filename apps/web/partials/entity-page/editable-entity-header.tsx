@@ -3,50 +3,23 @@
 import * as React from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useEditable } from '~/core/state/editable-store';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Triple } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
-export function EditableHeading({
-  spaceId,
-  entityId,
-  name: serverName,
-  triples: serverTriples,
-}: {
-  spaceId: string;
-  entityId: string;
-  name: string | null;
-  triples: Triple[];
-}) {
-  const { triples: localTriples } = useEntityPageStore();
-  const { editable } = useEditable();
-  const { isEditor } = useAccessControl(spaceId);
-  const { actionsFromSpace, upsert, remove, upsertMany } = useActionsStore(spaceId);
-
-  const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
-
-  const isEditing = editable && isEditor;
-
-  const name = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverName : Entities.name(triples) ?? '';
+export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
+  const { name } = useEntityPageStore();
+  const isEditing = useUserIsEditing(spaceId);
 
   const send = useEditEvents({
     context: {
       entityId,
       spaceId,
       entityName: name ?? '',
-    },
-    api: {
-      upsertMany,
-      upsert,
-      remove,
     },
   });
 

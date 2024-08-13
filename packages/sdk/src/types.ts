@@ -1,6 +1,4 @@
-import type { CreateTripleAction, DeleteTripleAction } from '../legacy';
-
-export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URL' | 'TIME' | 'GEO_LOCATION';
+export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'COLLECTION' | 'CHECKBOX' | 'URI' | 'TIME' | 'GEO_LOCATION';
 
 export type Value = {
   type: ValueType;
@@ -12,9 +10,9 @@ export type Value = {
  */
 export type SetTripleOp = {
   type: 'SET_TRIPLE';
-  payload: {
-    entityId: string;
-    attributeId: string;
+  triple: {
+    entity: string;
+    attribute: string;
     value: Value;
   };
 };
@@ -24,19 +22,14 @@ export type SetTripleOp = {
  */
 export type DeleteTripleOp = {
   type: 'DELETE_TRIPLE';
-  payload: {
-    entityId: string;
-    attributeId: string;
+  triple: {
+    entity: string;
+    attribute: string;
     // Delete operations don't need a value since there can only be one (spaceId, entityId, attributeId) tuple combination
   };
 };
 
 export type Op = SetTripleOp | DeleteTripleOp;
-
-/**
- * @deprecated Use operations instead of actions
- */
-export type Action = CreateTripleAction | DeleteTripleAction;
 
 export type EditProposalMetadata = {
   type: 'ADD_EDIT';

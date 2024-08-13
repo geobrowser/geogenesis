@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import { useWalletClient } from 'wagmi';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { MigrateAction, useMigrateHub } from '~/core/migrate/migrate';
 import { Services } from '~/core/services';
@@ -46,6 +46,7 @@ type MigrateHubType = {
 };
 
 function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }) {
+  const { upsert, remove } = useWriteOps();
   const { setIsMergeReviewOpen, entityIdOne, entityIdTwo } = useMergeEntity();
 
   const { subgraph } = Services.useServices();
@@ -62,7 +63,6 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
   }
 
   const { triples: entityOneTriples } = useEntityPageStore(); // triples from entity page
-  const { upsert, remove } = useActionsStore();
 
   //  triples from subgraph for second entity -  @TODO merge with local data since there could be changes
   const entityTwoTriples = useEntityById(entityIdTwo);
@@ -99,7 +99,6 @@ function MergeEntityReviewChanges({ migrateHub }: { migrateHub: MigrateHubType }
         upsert(
           {
             ...t,
-            type: 'SET_TRIPLE',
             entityId: mergedEntityId,
           },
           t.space

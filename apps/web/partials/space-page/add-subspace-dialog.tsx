@@ -1,5 +1,6 @@
 'use client';
 
+import { Schema } from '@effect/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { motion } from 'framer-motion';
@@ -11,11 +12,10 @@ import { Environment } from '~/core/environment';
 import { useAddSubspace } from '~/core/hooks/use-add-subspace';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useRemoveSubspace } from '~/core/hooks/use-remove-subspace';
-import { Subspace } from '~/core/io/subgraph/fetch-subspaces';
+import { Subspace, SubspaceDto } from '~/core/io/dto/subspaces';
+import { SubstreamSubspace } from '~/core/io/schema';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
-import { NetworkSpaceResult } from '~/core/io/subgraph/types';
 import { SpaceGovernanceType } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -85,10 +85,7 @@ const subspacesQuery = (name: string, notIn: string[]) => `
 
 interface NetworkResult {
   spaces: {
-    nodes: (Pick<NetworkSpaceResult, 'spacesMetadata' | 'id' | 'daoAddress'> & {
-      spaceMembers: { totalCount: number };
-      spaceEditors: { totalCount: number };
-    })[];
+    nodes: SubstreamSubspace[];
   };
 }
 
@@ -162,15 +159,23 @@ function useSubspacesQuery({
     };
   }
 
-  const spaces = data?.spaces?.nodes.map(s => {
-    return {
-      id: s.id,
-      daoAddress: s.daoAddress,
-      spaceConfig: getSpaceConfigFromMetadata(s.id, s.spacesMetadata.nodes[0].entity),
-      totalMembers: s?.spaceMembers.totalCount ?? 0,
-      totalEditors: s?.spaceEditors.totalCount ?? 0,
-    };
-  });
+  const spaces = data?.spaces?.nodes
+    .map(s => {
+      const spaceOrError = Schema.decodeEither(SubstreamSubspace)(s);
+
+      const decodedSpace = Either.match(spaceOrError, {
+        onRight: s => s,
+        onLeft: e => {
+          console.error('Could not fetch subspaces by name in add-subspace dialog', e);
+          return null;
+        },
+      });
+
+      if (!decodedSpace) return null;
+
+      return SubspaceDto(decodedSpace);
+    })
+    .filter(s => s !== null);
 
   return {
     query,
@@ -212,7 +217,7 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
               // from the height and flow of the dialog component
               className="fixed z-[102] mt-1 max-h-[243px] w-[460px] divide-y divide-grey-02 overflow-hidden overflow-y-auto rounded-lg border border-grey-02 bg-white"
             >
-              {queriedSpaces?.map(s => <SpaceQueryResult subspace={s} spaceId={spaceId} />)}
+              {queriedSpaces?.map(s => <SpaceQueryResult key={s.daoAddress} subspace={s} spaceId={spaceId} />)}
             </motion.div>
           )}
         </div>
@@ -265,7 +270,9 @@ function Content({ spaceId, subspaces, inflightSubspaces, spaceType }: ContentPr
 
           <Divider type="horizontal" />
 
-          {subspaces?.map(s => <CurrentSubspace subspace={s} spaceId={spaceId} spaceType={spaceType} />)}
+          {subspaces?.map(s => (
+            <CurrentSubspace key={s.daoAddress} subspace={s} spaceId={spaceId} spaceType={spaceType} />
+          ))}
         </div>
       )}
     </div>

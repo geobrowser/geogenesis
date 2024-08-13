@@ -2,8 +2,7 @@
 
 import * as React from 'react';
 
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSearch } from '~/core/hooks/use-search';
 import { useMergeEntity } from '~/core/state/merge-entity-store';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -16,9 +15,7 @@ interface Props {
 
 export function MergeEntityMenu({ entityId }: Props) {
   const { setIsMergeReviewOpen, setEntityIdOne, setEntityIdTwo } = useMergeEntity();
-
-  const autocomplete = useAutocomplete();
-  const { spaces } = useSpaces();
+  const autocomplete = useSearch();
 
   const filteredResults = autocomplete.results.filter(result => result.id !== entityId);
 
@@ -39,7 +36,6 @@ export function MergeEntityMenu({ entityId }: Props) {
               }}
               key={result.id}
               result={result}
-              spaces={spaces}
             />
           ))}
         </ResultsList>

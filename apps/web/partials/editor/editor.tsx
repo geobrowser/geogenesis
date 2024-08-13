@@ -1,14 +1,14 @@
 'use client';
 
 import BulletList from '@tiptap/extension-bullet-list';
+import Document from '@tiptap/extension-document';
 import Gapcursor from '@tiptap/extension-gapcursor';
 import HardBreak from '@tiptap/extension-hard-break';
 import Image from '@tiptap/extension-image';
 import ListItem from '@tiptap/extension-list-item';
 import Placeholder from '@tiptap/extension-placeholder';
+import Text from '@tiptap/extension-text';
 import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
-// import {FloatingMenu } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
 import cx from 'classnames';
 
 import * as React from 'react';
@@ -16,8 +16,6 @@ import * as React from 'react';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor-store';
 
-// import { SquareButton } from '~/design-system/button';
-// import { Plus } from '~/design-system/icons/plus';
 import { Spacer } from '~/design-system/spacer';
 
 import { NoContent } from '../space-tabs/no-content';
@@ -38,11 +36,19 @@ interface Props {
 }
 
 export const tiptapExtensions = [
-  StarterKit.configure({
-    paragraph: false,
-    heading: false,
-    code: false,
-  }),
+  Document,
+  Text,
+  // StarterKit.configure({
+  //   // We're probably only using the Document and Text from the starterkit. Might
+  //   // save us bytes to use it directly instead of through the kit.
+  //   paragraph: false,
+  //   heading: false,
+  //   code: false,
+  //   hardBreak: false,
+  //   gapcursor: false,
+  //   bulletList: false,
+  //   listItem: false,
+  // }),
   ParagraphNode,
   HeadingNode,
   ConfiguredCommandExtension,
@@ -99,16 +105,19 @@ export const Editor = React.memo(function Editor({
     },
   });
 
+  const onBlur = React.useCallback(
+    (params: { editor: TiptapEditor }) => {
+      // Responsible for converting all editor blocks to triples
+      // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
+      updateEditorBlocks(params.editor.getJSON);
+      setHasUpdatedEditorJson(true);
+    },
+    [updateEditorBlocks]
+  );
+
   // Running onBlur directly through the hook executes it twice for some reason.
   // Doing it imperatively here correctly only executes once.
   React.useEffect(() => {
-    function onBlur(params: { editor: TiptapEditor }) {
-      // Responsible for converting all editor blocks to triples
-      // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
-      updateEditorBlocks(params.editor);
-      setHasUpdatedEditorJson(true);
-    }
-
     // Tiptap doesn't export the needed type APIs for us to be able to make this typesafe
     editor?.on('blur', onBlur as unknown as any);
 
@@ -116,7 +125,7 @@ export const Editor = React.memo(function Editor({
       // Tiptap doesn't export the needed type APIs for us to be able to make this typesafe
       editor?.off('blur', onBlur as unknown as any);
     };
-  }, [editor, updateEditorBlocks]);
+  }, [onBlur, editor]);
 
   React.useEffect(() => {
     // We only update the editor with editorJson up until the first time we have made local edits.
@@ -166,16 +175,10 @@ export const Editor = React.memo(function Editor({
     );
   }
 
-  // const openCommandMenu = () => editor?.chain().focus().insertContent('/').run();
-
   return (
     <div className={cx(editable ? 'editable' : 'not-editable')}>
       {!editor ? <ServerContent content={editorJson.content} /> : <EditorContent editor={editor} />}
-      {/* <FloatingMenu editor={editor}>
-        <div className="absolute -left-12 -top-3">
-          <SquareButton onClick={openCommandMenu} icon={<Plus />} />
-        </div>
-      </FloatingMenu> */}
+
       {shouldHandleOwnSpacing && <Spacer height={60} />}
     </div>
   );

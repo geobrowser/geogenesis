@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData } from 'viem';
 
-import { Vote } from '../types';
+import { SubstreamVote } from '../io/schema';
 import { useSmartAccountTransaction } from './use-smart-account-transaction';
 
 interface Args {
@@ -18,7 +18,7 @@ export function useVote({ address, onchainProposalId }: Args) {
   });
 
   const { mutate, status } = useMutation({
-    mutationFn: async (option: Vote['vote']) => {
+    mutationFn: async (option: SubstreamVote['vote']) => {
       const txEffect = await tx(
         encodeFunctionData({
           abi: MainVotingAbi,

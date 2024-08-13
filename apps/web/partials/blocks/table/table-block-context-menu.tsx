@@ -12,47 +12,39 @@ import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
-import { useCallback } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useMergedData } from '~/core/hooks/use-merged-data';
+import { getSchemaFromTypeIds, mergeEntityAsync } from '~/core/database/entities';
+import { useWriteOps } from '~/core/database/write';
+import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { Entity, Relation } from '~/core/io/dto/entities';
+import { SearchResult } from '~/core/io/dto/search';
 import { useMigrateHub } from '~/core/migrate/migrate';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Entity as IEntity, Triple as ITriple, ValueTypeId } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
+import { Triple as ITriple, ValueTypeId } from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { ResultContent } from '~/design-system/autocomplete/results-list';
 import { Dots } from '~/design-system/dots';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
-import { Date } from '~/design-system/icons/date';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { FilteredTableView } from '~/design-system/icons/filtered-table-view';
-import { Image as ImageIcon } from '~/design-system/icons/image';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
-import { Relation } from '~/design-system/icons/relation';
-import { Text } from '~/design-system/icons/text';
-import { Trash } from '~/design-system/icons/trash';
-import { Url } from '~/design-system/icons/url';
 import { Input } from '~/design-system/input';
-import { Menu, MenuItem } from '~/design-system/menu';
+import { MenuItem } from '~/design-system/menu';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Skeleton } from '~/design-system/skeleton';
-import { Spacer } from '~/design-system/spacer';
 import { TextButton } from '~/design-system/text-button';
 
-import { AttributeConfigurationMenu } from '~/partials/entity-page/attribute-configuration-menu';
+import { DataBlockSourceMenu } from '~/partials/blocks/table/data-block-source-menu';
 
 import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
 import { editingColumnsAtom } from '~/atoms';
@@ -62,7 +54,7 @@ const MotionContent = motion(Dropdown.Content);
 // We keep track of the attributes in local state in order to quickly render
 // the changes the user has made to the schema. Otherwise there will be loading
 // states for several actions which will make the UI feel slow.
-const optimisticAttributesAtom = atom<IEntity[]>([]);
+const optimisticAttributesAtom = atom<SearchResult[]>([]);
 
 function useOptimisticAttributes({
   entityId,
@@ -74,14 +66,12 @@ function useOptimisticAttributes({
   spaceId: string;
 }) {
   const [optimisticAttributes, setOptimisticAttributes] = useAtom(optimisticAttributesAtom);
-  const merged = useMergedData();
-  const { upsert, remove } = useActionsStore();
+  const { upsert, remove } = useWriteOps();
   const migrateHub = useMigrateHub();
 
-  const onAddAttribute = (attribute: IEntity) => {
+  const onAddAttribute = (attribute: SearchResult) => {
     upsert(
       {
-        type: 'SET_TRIPLE',
         entityId: entityId,
         entityName: attribute.name,
         attributeId: SYSTEM_IDS.ATTRIBUTES,
@@ -98,7 +88,7 @@ function useOptimisticAttributes({
     setOptimisticAttributes([...optimisticAttributes, attribute]);
   };
 
-  const onUpdateAttribute = (attribute: IEntity) => {
+  const onUpdateAttribute = (attribute: SearchResult) => {
     const remappedOptimisticAttributes = optimisticAttributes.map(a => {
       if (a.id === attribute.id) {
         return attribute;
@@ -110,7 +100,7 @@ function useOptimisticAttributes({
     setOptimisticAttributes(remappedOptimisticAttributes);
   };
 
-  const onRemoveAttribute = (attribute: IEntity, nameTriple?: ITriple) => {
+  const onRemoveAttribute = (attribute: Entity, nameTriple?: ITriple) => {
     if (!nameTriple) {
       return;
     }
@@ -134,7 +124,7 @@ function useOptimisticAttributes({
     setOptimisticAttributes(optimisticAttributes.filter(a => a.id !== attribute.id));
   };
 
-  const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: IEntity) => {
+  const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: Entity) => {
     const attributeValueTypeTriple = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE);
     // This _should_ only be one space, but there may be a situation now where it's multiple spaces. Need to monitor this.
     const attributeSpace = attribute.nameTripleSpaces?.[0];
@@ -177,56 +167,42 @@ function useOptimisticAttributes({
         },
       });
 
-      const updatedTriples = [
-        ...attribute.triples.filter(t => {
-          return t.attributeId !== SYSTEM_IDS.VALUE_TYPE;
-        }),
-        newTriple,
-      ];
+      // @TODO(relations): Update the attribute in-place in the optimistic state
+      // const updatedTriples = [
+      //   ...attribute.triples.filter(t => {
+      //     return t.attributeId !== SYSTEM_IDS.VALUE_TYPE;
+      //   }),
+      //   newTriple,
+      // ];
 
       // Update the attribute in-place in the optimistic state
       onUpdateAttribute({
         ...attribute,
-        triples: updatedTriples,
+        // @TODO(database)
+        spaces: [],
+        // triples: updatedTriples,
       });
 
       // Create a new Value Type triple with the new value type
-      upsert({ ...newTriple, type: 'SET_TRIPLE' }, newTriple.space);
+      upsert(newTriple, newTriple.space);
     }
   };
 
   const { data } = useSuspenseQuery({
     queryKey: ['table-block-type-schema-configuration-attributes-list', entityId],
     queryFn: async () => {
-      // Fetch the triples representing the Attributes for the type
-      const attributeTriples = await merged.fetchTriples({
-        query: '',
-        first: 100,
-        skip: 0,
-        filter: [
-          {
-            field: 'entity-id',
-            value: entityId,
-          },
-          {
-            field: 'attribute-id',
-            value: SYSTEM_IDS.ATTRIBUTES,
-          },
-        ],
-      });
+      const attributes = await getSchemaFromTypeIds([entityId]);
 
       // Fetch the the entities for each of the Attribute in the type
-      const maybeAttributeEntities = await Promise.all(
-        attributeTriples.map(t => merged.fetchEntity({ id: t.value.value }))
-      );
-
-      return maybeAttributeEntities.filter(Entities.isNonNull);
+      const maybeAttributeEntities = await Promise.all(attributes.map(t => mergeEntityAsync(t.id)));
+      return maybeAttributeEntities.filter(e => e !== null);
     },
   });
 
   // Update the modal state with the initial data for the attributes. We update this modal state optimistically
   // when users add or remove attributes.
   React.useEffect(() => {
+    // @ts-expect-error @TODO(database)
     setOptimisticAttributes(data ?? []);
   }, [data, setOptimisticAttributes]);
 
@@ -245,13 +221,18 @@ type Column = {
 
 type TableBlockContextMenuProps = {
   allColumns: Array<Column>;
-  shownColumnTriples: Array<ITriple>;
+  shownColumnRelations: Array<Relation>;
   shownColumnIds: Array<string>;
 };
 
-export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownColumnIds }: TableBlockContextMenuProps) {
+export function TableBlockContextMenu({
+  allColumns,
+  shownColumnRelations,
+  shownColumnIds,
+}: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { type, spaceId, entityId, name } = useTableBlock();
+  const [isEditingDataSource, setIsEditingDataSource] = React.useState(false);
   const [isEditingColumns, setIsEditingColumns] = useAtom(editingColumnsAtom);
 
   const isEditing = useUserIsEditing(spaceId);
@@ -263,10 +244,11 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
   const { spaces } = useSpaces();
   const space = spaces.find(s => s.id === type.space);
 
-  const onCopyViewId = async () => {
+  const onCopyBlockId = async () => {
     try {
       await navigator.clipboard.writeText(entityId);
       setIsMenuOpen(false);
+      setIsEditingDataSource(false);
       setIsEditingColumns(false);
     } catch (err) {
       console.error('Failed to copy table block entity ID for: ', entityId);
@@ -276,6 +258,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
   const onOpenChange = () => {
     if (isMenuOpen) {
       setIsMenuOpen(false);
+      setIsEditingDataSource(false);
       setIsEditingColumns(false);
     } else {
       setIsMenuOpen(true);
@@ -283,6 +266,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
   };
 
   const spaceImage = space?.spaceConfig?.image ?? null;
+  const isInitialState = !isEditingDataSource && !isEditingColumns;
 
   return (
     <Dropdown.Root open={isMenuOpen} onOpenChange={onOpenChange}>
@@ -300,30 +284,33 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
           className="z-100 block !w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           align="end"
         >
-          {!isEditingColumns ? (
+          {isInitialState && (
             <>
-              <MenuItem>
-                <button onClick={onCopyViewId} className="flex w-full items-center justify-between gap-2 px-3 py-2.5">
-                  <span>Copy view ID</span>
-                  <Copy />
-                </button>
-              </MenuItem>
-              <MenuItem>
-                <Link
-                  href={NavUtils.toEntity(spaceId, entityId)}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
-                >
-                  <span>View config</span>
-                  <Cog />
-                </Link>
-              </MenuItem>
               {isEditing && (
                 <>
+                  <MenuItem>
+                    <button
+                      onClick={() => setIsEditingDataSource(true)}
+                      className="flex w-full items-center justify-between gap-2"
+                    >
+                      <span>Change data source</span>
+                      <ChevronRight />
+                    </button>
+                  </MenuItem>
+                  <MenuItem>
+                    <button
+                      onClick={() => setIsEditingColumns(true)}
+                      className="flex w-full items-center justify-between gap-2"
+                    >
+                      <span>Edit columns</span>
+                      <ChevronRight />
+                    </button>
+                  </MenuItem>
                   <TableBlockSchemaConfigurationDialog
                     trigger={
                       <MenuItem>
-                        <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-                          <span className="text-button">Edit type</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-button">Edit types</span>
                           <FilteredTableView />
                         </div>
                       </MenuItem>
@@ -351,23 +338,31 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
                     }
                   />
                   <MenuItem>
-                    <button
-                      onClick={() => setIsEditingColumns(true)}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5"
+                    <Link
+                      href={NavUtils.toEntity(spaceId, entityId)}
+                      className="flex w-full items-center justify-between gap-2"
                     >
-                      <span>Edit columns</span>
-                      <ChevronRight />
+                      <span>View config</span>
+                      <Cog />
+                    </Link>
+                  </MenuItem>
+                  <MenuItem>
+                    <button onClick={onCopyBlockId} className="flex w-full items-center justify-between gap-2">
+                      <span>Copy block ID</span>
+                      <Copy />
                     </button>
                   </MenuItem>
                 </>
               )}
             </>
-          ) : (
+          )}
+          {isEditingDataSource && <DataBlockSourceMenu onBack={() => setIsEditingDataSource(false)} />}
+          {isEditingColumns && (
             <>
               <MenuItem className="border-b border-grey-02">
                 <button
                   onClick={() => setIsEditingColumns(false)}
-                  className="flex w-full items-center gap-2 p-2 text-smallButton"
+                  className="flex w-full items-center gap-2 text-smallButton"
                 >
                   <LeftArrowLong />
                   <span>Back</span>
@@ -377,14 +372,14 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
                 // do not show name column
                 if (index === 0) return null;
 
-                const shownColumnTriple = shownColumnTriples.find(triple => triple.value.value === column.id) ?? null;
+                const shownColumnRelation = shownColumnRelations.find(r => r.toEntity.id === column.id) ?? null;
 
                 return (
                   <ToggleColumn
                     key={column.id}
                     column={column}
                     shownColumnIds={shownColumnIds}
-                    shownColumnTriple={shownColumnTriple}
+                    shownColumnRelation={shownColumnRelation}
                     space={spaceId}
                     entityId={entityId}
                     entityName={name ?? null}
@@ -402,7 +397,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
 type ToggleColumnProps = {
   column: Column;
   shownColumnIds: Array<string>;
-  shownColumnTriple: ITriple | null;
+  shownColumnRelation: Relation | null;
   space: string;
   entityId: string;
   entityName: string | null;
@@ -411,12 +406,12 @@ type ToggleColumnProps = {
 const ToggleColumn = ({
   column,
   shownColumnIds,
-  shownColumnTriple,
+  shownColumnRelation,
   space,
   entityId,
   entityName,
 }: ToggleColumnProps) => {
-  const { upsert, remove } = useActionsStore(space);
+  const { upsert } = useWriteOps();
 
   const { id, name } = column;
   const isShown = shownColumnIds.includes(column.id);
@@ -426,9 +421,9 @@ const ToggleColumn = ({
     const attributeName = 'Shown Columns';
 
     if (!isShown) {
+      // @TODO(relations): create relation
       upsert(
         {
-          type: 'SET_TRIPLE',
           entityId,
           entityName,
           attributeId,
@@ -442,17 +437,18 @@ const ToggleColumn = ({
         space
       );
     } else {
-      if (shownColumnTriple) {
-        remove(shownColumnTriple, space);
+      if (shownColumnRelation) {
+        // @TODO(relations): remove all triples
+        // remove(shownColumnRelation, space);
       }
     }
-  }, [upsert, entityId, entityName, id, isShown, name, remove, shownColumnTriple, space]);
+  }, [upsert, entityId, entityName, id, isShown, name, shownColumnRelation, space]);
 
   return (
     <MenuItem>
       <button
         onClick={onToggleColumn}
-        className={cx('flex w-full items-center justify-between gap-2 px-3 py-2.5', !isShown && 'text-grey-03')}
+        className={cx('flex w-full items-center justify-between gap-2', !isShown && 'text-grey-03')}
       >
         <span>{column.name}</span>
         {isShown ? <Eye /> : <EyeHide />}
@@ -494,11 +490,9 @@ const resultsListActionBarStyles = cva(
 function AddAttribute() {
   const { type } = useTableBlock();
 
-  const autocomplete = useAutocomplete({
-    allowedTypes: [SYSTEM_IDS.ATTRIBUTE],
+  const autocomplete = useSearch({
+    filterByTypes: [SYSTEM_IDS.ATTRIBUTE],
   });
-
-  const { spaces } = useSpaces();
 
   const { optimisticAttributes, onAddAttribute } = useOptimisticAttributes({
     entityId: type.entityId,
@@ -506,7 +500,7 @@ function AddAttribute() {
     spaceId: type.space,
   });
 
-  const onSelect = (result: IEntity) => {
+  const onSelect = (result: SearchResult) => {
     autocomplete.onQueryChange('');
     onAddAttribute(result);
   };
@@ -538,7 +532,6 @@ function AddAttribute() {
                       onClick={() => onSelect(result)}
                       alreadySelected={optimisticAttributes.map(a => a.id).includes(result.id)}
                       result={result}
-                      spaces={spaces}
                     />
                   </motion.li>
                 ))}
@@ -586,206 +579,195 @@ function AddAttribute() {
 
 function SchemaAttributes() {
   const { type } = useTableBlock();
-  const { upsert } = useActionsStore();
 
   const {
     optimisticAttributes: attributes,
-    onRemoveAttribute,
-    onChangeAttributeValueType,
+    // onRemoveAttribute,
+    // onChangeAttributeValueType,
   } = useOptimisticAttributes({
     entityId: type.entityId,
     entityName: type.entityName,
     spaceId: type.space,
   });
 
-  const onChangeAttributeName = (newName: string, attribute: IEntity, oldNameTriple?: ITriple) => {
-    // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
-    const attributeSpace = attribute.nameTripleSpaces?.[0];
+  // @TODO(relations)
+  // const onChangeAttributeName = (newName: string, attribute: Entity, oldNameTriple?: ITriple) => {
+  //   // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
+  //   const attributeSpace = attribute.nameTripleSpaces?.[0];
 
-    if (!attributeSpace || !oldNameTriple) {
-      console.error("The entity doesn't have a name triple space");
-      return;
-    }
+  //   if (!attributeSpace || !oldNameTriple) {
+  //     console.error("The entity doesn't have a name triple space");
+  //     return;
+  //   }
 
-    upsert(
-      {
-        ...oldNameTriple,
-        type: 'SET_TRIPLE',
-        entityName: newName,
-        value: {
-          type: 'TEXT',
-          value: newName,
-        },
-      },
-      attributeSpace
-    );
-  };
+  //   upsert(
+  //     {
+  //       ...oldNameTriple,
+  //       entityName: newName,
+  //       value: {
+  //         type: 'TEXT',
+  //         value: newName,
+  //       },
+  //     },
+  //     attributeSpace
+  //   );
+  // };
 
   return (
     <div className="flex flex-col gap-1">
       <h3 className="text-bodySemibold">Attributes</h3>
       <div className="flex flex-col gap-2">
-        {attributes?.map(attributeEntity => {
-          const valueTypeId: ValueTypeId | undefined = attributeEntity.triples.find(
-            t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
-          )?.value.value as ValueTypeId;
+        {attributes?.map(() => {
+          // @TODO(relations)
+          return null;
+          // const valueTypeId: ValueTypeId | undefined = attributeEntity.triples.find(
+          //   t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
+          // )?.value.value as ValueTypeId;
 
-          const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
+          // const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
 
-          return (
-            <div key={attributeEntity.id} className="flex items-center gap-4">
-              {/* <div className="rounded bg-grey-01 px-5 py-2.5"> */}
-              <AttributeValueTypeDropdown
-                valueTypeId={valueTypeId}
-                onChange={valueTypeId => onChangeAttributeValueType(valueTypeId, attributeEntity)}
-              />
-              {/* </div> */}
-              <Input
-                defaultValue={attributeEntity.name ?? ''}
-                onBlur={e => onChangeAttributeName(e.currentTarget.value, attributeEntity, nameTripleForAttribute)}
-              />
-              {valueTypeId === SYSTEM_IDS.RELATION && (
-                <AttributeConfigurationMenu
-                  trigger={<Cog />}
-                  attributeId={attributeEntity.id}
-                  attributeName={attributeEntity.name}
-                />
-              )}
-              <AttributeRowContextMenu
-                onRemoveAttribute={() => onRemoveAttribute(attributeEntity, nameTripleForAttribute)}
-              />
-            </div>
-          );
+          // return (
+          //   <div key={attributeEntity.id} className="flex items-center gap-4">
+          //     {/* <div className="rounded bg-grey-01 px-5 py-2.5"> */}
+          //     <AttributeValueTypeDropdown
+          //       valueTypeId={valueTypeId}
+          //       onChange={valueTypeId => onChangeAttributeValueType(valueTypeId, attributeEntity)}
+          //     />
+          //     {/* </div> */}
+          //     <Input
+          //       defaultValue={attributeEntity.name ?? ''}
+          //       onBlur={e => onChangeAttributeName(e.currentTarget.value, attributeEntity, nameTripleForAttribute)}
+          //     />
+          //     {/* {valueTypeId === SYSTEM_IDS.RELATION && (
+          //       <AttributeConfigurationMenu
+          //         trigger={<Cog />}
+          //         attributeId={attributeEntity.id}
+          //         attributeName={attributeEntity.name}
+          //       />
+          //     )} */}
+          //     <AttributeRowContextMenu
+          //       onRemoveAttribute={() => onRemoveAttribute(attributeEntity, nameTripleForAttribute)}
+          //     />
+          //   </div>
+          // );
         })}
       </div>
     </div>
   );
 }
 
-function AttributeRowContextMenu({ onRemoveAttribute }: { onRemoveAttribute: () => void }) {
-  const [isOpen, setIsOpen] = React.useState(false);
+// function AttributeRowContextMenu({ onRemoveAttribute }: { onRemoveAttribute: () => void }) {
+//   const [isOpen, setIsOpen] = React.useState(false);
 
-  return (
-    <Menu
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      trigger={<Context color="grey-04" />}
-      className="max-w-[180px] bg-white"
-    >
-      <MenuItem>
-        <button onClick={onRemoveAttribute} className="inline-flex w-full items-center justify-between gap-2 px-3 py-2">
-          <Trash /> <span>Remove attribute</span>
-        </button>
-      </MenuItem>
-    </Menu>
-  );
-}
+//   return (
+//     <Menu
+//       open={isOpen}
+//       onOpenChange={setIsOpen}
+//       trigger={<Context color="grey-04" />}
+//       className="max-w-[180px] bg-white"
+//     >
+//       <MenuItem>
+//         <button onClick={onRemoveAttribute} className="inline-flex w-full items-center justify-between gap-2 px-3 py-2">
+//           <Trash /> <span>Remove attribute</span>
+//         </button>
+//       </MenuItem>
+//     </Menu>
+//   );
+// }
 
-function AttributeValueTypeDropdown({
-  valueTypeId,
-  onChange,
-}: {
-  valueTypeId?: ValueTypeId;
-  onChange: (valueTypeId: ValueTypeId) => void;
-}) {
-  const [isOpen, setIsOpen] = React.useState(false);
+// function AttributeValueTypeDropdown({
+//   valueTypeId,
+//   onChange,
+// }: {
+//   valueTypeId?: ValueTypeId;
+//   onChange: (valueTypeId: ValueTypeId) => void;
+// }) {
+//   const [isOpen, setIsOpen] = React.useState(false);
 
-  const options = [
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <Text color="grey-04" />
-          <p>Text</p>
-        </div>
-      ),
-      value: SYSTEM_IDS.TEXT,
-      onClick: () => onChange(SYSTEM_IDS.TEXT),
-    },
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <Relation color="grey-04" />
-          <p>Relation</p>
-        </div>
-      ),
-      value: SYSTEM_IDS.RELATION,
-      onClick: () => onChange(SYSTEM_IDS.RELATION),
-    },
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <ImageIcon color="grey-04" />
-          <p>Image</p>
-        </div>
-      ),
-      value: SYSTEM_IDS.IMAGE,
-      onClick: () => onChange(SYSTEM_IDS.IMAGE),
-    },
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <Date color="grey-04" />
-          <p>Date</p>
-        </div>
-      ),
-      value: SYSTEM_IDS.DATE,
-      onClick: () => onChange(SYSTEM_IDS.DATE),
-    },
-    {
-      label: (
-        <div className="flex items-center gap-2">
-          <Url color="grey-04" />
-          <p>Web URL</p>
-        </div>
-      ),
-      value: SYSTEM_IDS.WEB_URL,
-      onClick: () => onChange(SYSTEM_IDS.WEB_URL),
-    },
-  ];
+//   const options = [
+//     {
+//       label: (
+//         <div className="flex items-center gap-2">
+//           <Text color="grey-04" />
+//           <p>Text</p>
+//         </div>
+//       ),
+//       value: SYSTEM_IDS.TEXT,
+//       onClick: () => onChange(SYSTEM_IDS.TEXT),
+//     },
+//     {
+//       label: (
+//         <div className="flex items-center gap-2">
+//           <RelationIcon color="grey-04" />
+//           <p>Relation</p>
+//         </div>
+//       ),
+//       value: SYSTEM_IDS.RELATION,
+//       onClick: () => onChange(SYSTEM_IDS.RELATION),
+//     },
+//     {
+//       label: (
+//         <div className="flex items-center gap-2">
+//           <Date color="grey-04" />
+//           <p>Date</p>
+//         </div>
+//       ),
+//       value: SYSTEM_IDS.DATE,
+//       onClick: () => onChange(SYSTEM_IDS.DATE),
+//     },
+//     {
+//       label: (
+//         <div className="flex items-center gap-2">
+//           <Url color="grey-04" />
+//           <p>Web URL</p>
+//         </div>
+//       ),
+//       value: SYSTEM_IDS.WEB_URL,
+//       onClick: () => onChange(SYSTEM_IDS.WEB_URL),
+//     },
+//   ];
 
-  return (
-    <Menu
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      trigger={
-        <button className="shadow-button">
-          <div className=" flex flex-grow items-center justify-between whitespace-nowrap rounded bg-white px-3 py-2 text-button text-text shadow-inner-grey-02 hover:shadow-inner-text focus:shadow-inner-lg-text [&[data-placeholder]]:text-text">
-            <ActiveTypeIcon valueTypeId={valueTypeId} />
-            <Spacer width={8} />
-            <ChevronDownSmall color="ctaPrimary" />
-          </div>
-        </button>
-      }
-      align="start"
-      className="z-10 max-w-[160px] bg-white"
-    >
-      {options.map(option => (
-        <MenuItem key={option.value}>
-          <button onClick={option.onClick} className="flex w-full items-center justify-between gap-2 px-3 py-2">
-            {option.label}
-          </button>
-        </MenuItem>
-      ))}
-    </Menu>
-  );
-}
+//   return (
+//     <Menu
+//       open={isOpen}
+//       onOpenChange={setIsOpen}
+//       trigger={
+//         <button className="shadow-button">
+//           <div className=" flex flex-grow items-center justify-between whitespace-nowrap rounded bg-white px-3 py-2 text-button text-text shadow-inner-grey-02 hover:shadow-inner-text focus:shadow-inner-lg-text [&[data-placeholder]]:text-text">
+//             <ActiveTypeIcon valueTypeId={valueTypeId} />
+//             <Spacer width={8} />
+//             <ChevronDownSmall color="ctaPrimary" />
+//           </div>
+//         </button>
+//       }
+//       align="start"
+//       className="z-10 max-w-[160px] bg-white"
+//     >
+//       {options.map(option => (
+//         <MenuItem key={option.value}>
+//           <button onClick={option.onClick} className="flex w-full items-center justify-between gap-2 px-3 py-2">
+//             {option.label}
+//           </button>
+//         </MenuItem>
+//       ))}
+//     </Menu>
+//   );
+// }
 
-function ActiveTypeIcon({ valueTypeId }: { valueTypeId?: ValueTypeId }) {
-  switch (valueTypeId) {
-    case SYSTEM_IDS.TEXT:
-      return <Text color="grey-04" />;
-    case SYSTEM_IDS.RELATION:
-      return <Relation color="grey-04" />;
-    case SYSTEM_IDS.DATE:
-      return <Date color="grey-04" />;
-    case SYSTEM_IDS.IMAGE:
-      return <ImageIcon color="grey-04" />;
-    case SYSTEM_IDS.WEB_URL:
-      return <Url color="grey-04" />;
-    default:
-      // We default to the Text type if an attribute has not set an explicit relation value
-      // type. Ideally we force users to explicitly set a type when creating an attribute,
-      // but for now we do not.
-      return <Text color="grey-04" />;
-  }
-}
+// function ActiveTypeIcon({ valueTypeId }: { valueTypeId?: ValueTypeId }) {
+//   switch (valueTypeId) {
+//     case SYSTEM_IDS.TEXT:
+//       return <Text color="grey-04" />;
+//     case SYSTEM_IDS.RELATION:
+//       return <RelationIcon color="grey-04" />;
+//     case SYSTEM_IDS.DATE:
+//       return <Date color="grey-04" />;
+//     case SYSTEM_IDS.WEB_URL:
+//       return <Url color="grey-04" />;
+//     default:
+//       // We default to the Text type if an attribute has not set an explicit relation value
+//       // type. Ideally we force users to explicitly set a type when creating an attribute,
+//       // but for now we do not.
+//       return <Text color="grey-04" />;
+//   }
+// }

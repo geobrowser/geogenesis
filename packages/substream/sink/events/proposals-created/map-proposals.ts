@@ -263,7 +263,7 @@ function mapEditProposalToSchema(
     //   return actionsToWrite.push(mappedAction);
     // });
 
-    const uniqueEntityIds = new Set(p.ops.map(action => action.payload.entityId));
+    const uniqueEntityIds = new Set(p.ops.map(action => action.triple.entity));
 
     [...uniqueEntityIds.values()].forEach(entityId => {
       const mappedProposedVersion: S.proposed_versions.Insertable = {

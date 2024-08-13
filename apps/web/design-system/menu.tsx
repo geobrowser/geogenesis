@@ -86,10 +86,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
     return (
       <Link
         href={href}
-        className={cx(
-          'group relative flex w-full items-center bg-white px-3 py-[10px] text-button text-text',
-          className
-        )}
+        className={cx('group relative flex w-full items-center bg-white px-3 py-2.5 text-button text-text', className)}
         {...rest}
       >
         <div
@@ -114,7 +111,7 @@ export function MenuItem({ className = '', active = false, children, href, ...re
           active ? 'bg-grey-01' : 'transition-colors duration-75 group-hover:bg-grey-01'
         )}
       />
-      <div className="relative z-10">{children}</div>
+      <div className="relative z-10 w-full">{children}</div>
     </button>
   );
 }

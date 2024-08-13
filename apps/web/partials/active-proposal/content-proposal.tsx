@@ -8,13 +8,14 @@ import type { Change as Difference } from 'diff';
 import * as React from 'react';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
+import { Proposal } from '~/core/io/dto/proposals';
 import { fetchColumns } from '~/core/io/fetch-columns';
-import { fetchEntity, fetchTriples } from '~/core/io/subgraph';
+import { fetchEntity } from '~/core/io/subgraph';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import { AttributeId, EntityId, Proposal, SpaceId, Vote } from '~/core/types';
+import { AttributeId, EntityId, SpaceId } from '~/core/types';
 import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entities } from '~/core/utils/entity';
-import { getImagePath, getIsProposalEnded } from '~/core/utils/utils';
+import { getImagePath } from '~/core/utils/utils';
 
 import { colors } from '~/design-system/theme/colors';
 
@@ -149,34 +150,35 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'IMAGE': {
-      return (
-        <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div>
-              {/* @TODO: When can this be object? */}
-              {typeof before !== 'object' && (
-                <span className="inline-block rounded-lg bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div>
-              {/* @TODO: When can this be object? */}
-              {typeof after !== 'object' && (
-                <span className="inline-block rounded-lg bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
+    // @TODO(relations): Add image support
+    // case 'IMAGE': {
+    //   return (
+    //     <div key={attributeId} className="-mt-px flex gap-8">
+    //       <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+    //         <div className="text-bodySemibold capitalize">{name}</div>
+    //         <div>
+    //           {/* @TODO: When can this be object? */}
+    //           {typeof before !== 'object' && (
+    //             <span className="inline-block rounded-lg bg-errorTertiary p-1">
+    //               <img src={getImagePath(before)} className="rounded-lg" />
+    //             </span>
+    //           )}
+    //         </div>
+    //       </div>
+    //       <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+    //         <div className="text-bodySemibold capitalize">{name}</div>
+    //         <div>
+    //           {/* @TODO: When can this be object? */}
+    //           {typeof after !== 'object' && (
+    //             <span className="inline-block rounded-lg bg-successTertiary p-1">
+    //               <img src={getImagePath(after)} className="rounded-lg" />
+    //             </span>
+    //           )}
+    //         </div>
+    //       </div>
+    //     </div>
+    //   );
+    // }
     case 'TIME': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
@@ -195,7 +197,7 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'URL': {
+    case 'URI': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
@@ -571,11 +573,7 @@ const TableFilter = ({ filter }: TableFilterProps) => {
 const getFilters = async (rawFilter: string) => {
   const filters = await createFiltersFromGraphQLString(rawFilter, async id => await fetchEntity({ id }));
   const serverColumns = await fetchColumns({
-    params: { skip: 0, first: 0, filter: '' },
-    api: {
-      fetchEntity: fetchEntity,
-      fetchTriples: fetchTriples,
-    },
+    typeIds: [],
   });
   const filtersWithColumnName = filters.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME) {

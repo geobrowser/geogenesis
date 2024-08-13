@@ -14,20 +14,20 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useTriples } from '~/core/database/triples';
 import { usePublish } from '~/core/hooks/use-publish';
 import { Subgraph } from '~/core/io';
+import { Entity } from '~/core/io/dto/entities';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Entity as EntityType, Space, Triple as TripleType } from '~/core/types';
+import type { Triple } from '~/core/types';
 import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entities } from '~/core/utils/entity';
-import { Triples } from '~/core/utils/triples';
 import { GeoDate, getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -66,16 +66,17 @@ type EntityId = string;
 
 const ReviewChanges = () => {
   const { state } = useStatusBar();
-  const { allSpacesWithActions } = useActionsStore();
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
+
+  const allSpacesWithActions = useTriples({
+    selector: t => t.hasBeenPublished === false,
+  }).map(t => t.space);
 
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', allSpacesWithActions],
     queryFn: async () => {
       const maybeSpaces = await fetchSpacesById(allSpacesWithActions);
-      const spaces = maybeSpaces.filter(
-        (s): s is Space & { spaceConfig: EntityType } => s !== null && s.spaceConfig !== null
-      );
+      const spaces = maybeSpaces.filter(s => s !== null && s.spaceConfig !== null);
 
       const spacesMap = new Map<string, { id: string; name: string | null; image: string | null }>();
 
@@ -132,10 +133,16 @@ const ReviewChanges = () => {
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
-  const { actionsFromSpace, clear } = useActionsStore(activeSpace);
+  const triplesFromSpace = useTriples(
+    React.useMemo(() => {
+      return {
+        selector: t => t.space === activeSpace,
+      };
+    }, [activeSpace])
+  );
+
   const { makeProposal } = usePublish();
-  const triples = Triples.squash(actionsFromSpace);
-  const [data, isLoading] = useChanges(triples, activeSpace);
+  const [data, isLoading] = useChanges(triplesFromSpace, activeSpace);
 
   const handlePublish = useCallback(async () => {
     if (!activeSpace) return;
@@ -148,14 +155,14 @@ const ReviewChanges = () => {
     // const [actionsToPublish] = Action.splitActions(actionsFromSpace, unstagedChanges);
 
     await makeProposal({
-      triples: actionsFromSpace,
+      triples: triplesFromSpace,
       spaceId: activeSpace,
       name: proposalName,
       onSuccess: () => {
         clearProposalName();
       },
     });
-  }, [activeSpace, proposalName, proposals, makeProposal, actionsFromSpace]);
+  }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace]);
 
   if (isLoading || !data || isSpacesLoading) {
     return null;
@@ -231,7 +238,13 @@ const ReviewChanges = () => {
                 />
               </div>
               <div>
-                <SmallButton onClick={() => clear(activeSpace)}>Delete all</SmallButton>
+                <SmallButton
+                  onClick={() => {
+                    // @TODO(database)
+                  }}
+                >
+                  Delete all
+                </SmallButton>
               </div>
             </div>
             <div className="flex flex-col">
@@ -257,7 +270,7 @@ const ReviewChanges = () => {
                   spaceId={activeSpace}
                   change={changes[entityId] as Changeset}
                   entityId={entityId}
-                  entity={entities[entityId] as EntityType}
+                  entity={entities[entityId] as Entity}
                   unstagedChanges={unstagedChanges}
                   setUnstagedChanges={setUnstagedChanges}
                 />
@@ -318,7 +331,7 @@ type ChangedEntityProps = {
   spaceId: SpaceId;
   change: Changeset;
   entityId: EntityId;
-  entity: EntityType;
+  entity: Entity;
   unstagedChanges: Record<string, Record<string, boolean>>;
   setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
@@ -333,11 +346,9 @@ const ChangedEntity = ({
 }: ChangedEntityProps) => {
   const { name, blocks = {}, attributes = {}, actions = [] } = change;
 
-  const { deleteActionsFromSpace } = useActionsStore();
-
   const handleDeleteActions = useCallback(() => {
-    deleteActionsFromSpace(spaceId, actions);
-  }, [spaceId, actions, deleteActionsFromSpace]);
+    // @TODO(database)
+  }, []);
 
   const blockIds = Object.keys(blocks);
   const attributeIds = Object.keys(attributes);
@@ -576,7 +587,7 @@ type ChangedAttributeProps = {
   attributeId: AttributeId;
   attribute: AttributeChange;
   entityId: EntityId;
-  entity: EntityType;
+  entity: Entity;
   unstagedChanges: Record<string, Record<string, boolean>>;
   setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
@@ -592,11 +603,9 @@ const ChangedAttribute = ({
 }: ChangedAttributeProps) => {
   const { actions = [] } = attribute;
 
-  const { deleteActionsFromSpace } = useActionsStore(spaceId);
-
   const handleDeleteActions = useCallback(() => {
-    deleteActionsFromSpace(spaceId, actions);
-  }, [spaceId, actions, deleteActionsFromSpace]);
+    // @TODO(database)
+  }, []);
 
   // Don't show page blocks
   if (attributeId === SYSTEM_IDS.BLOCKS) return null;
@@ -730,40 +739,41 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'IMAGE': {
-      return (
-        <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div>
-              {typeof before !== 'object' && (
-                <span className="inline-block rounded-lg bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-              <SquareButton
-                onClick={handleDeleteActions}
-                icon={<Trash />}
-                className="opacity-0 group-hover:opacity-100"
-              />
-              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
-            </div>
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div>
-              {typeof after !== 'object' && (
-                <span className="inline-block rounded-lg bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
+    // @TODO(relations): Add image support
+    // case 'IMAGE': {
+    //   return (
+    //     <div key={attributeId} className="-mt-px flex gap-8">
+    //       <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+    //         <div className="text-bodySemibold capitalize">{name}</div>
+    //         <div>
+    //           {typeof before !== 'object' && (
+    //             <span className="inline-block rounded-lg bg-errorTertiary p-1">
+    //               <img src={getImagePath(before)} className="rounded-lg" />
+    //             </span>
+    //           )}
+    //         </div>
+    //       </div>
+    //       <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+    //         <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+    //           <SquareButton
+    //             onClick={handleDeleteActions}
+    //             icon={<Trash />}
+    //             className="opacity-0 group-hover:opacity-100"
+    //           />
+    //           <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
+    //         </div>
+    //         <div className="text-bodySemibold capitalize">{name}</div>
+    //         <div>
+    //           {typeof after !== 'object' && (
+    //             <span className="inline-block rounded-lg bg-successTertiary p-1">
+    //               <img src={getImagePath(after)} className="rounded-lg" />
+    //             </span>
+    //           )}
+    //         </div>
+    //       </div>
+    //     </div>
+    //   );
+    // }
     case 'TIME': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
@@ -790,7 +800,7 @@ const ChangedAttribute = ({
         </div>
       );
     }
-    case 'URL': {
+    case 'URI': {
       const checkedBefore = typeof before === 'string' ? before : '';
       const checkedAfter = typeof after === 'string' ? after : '';
       const differences = diffWords(checkedBefore, checkedAfter);
@@ -925,14 +935,15 @@ const labelClassNames = `text-footnote text-grey-04`;
 
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
-export const useChanges = (triples: Array<TripleType> = [], spaceId: string) => {
-  const { subgraph } = Services.useServices();
-  const { data, isLoading } = useQuery({
-    queryKey: ['changes', spaceId, triples],
-    queryFn: async () => Change.fromTriples(Triples.squash(triples), subgraph),
-  });
-
-  return [data, isLoading] as const;
+export const useChanges = (triples: Array<Triple> = [], spaceId: string) => {
+  // @TODO: fix
+  // const { subgraph } = Services.useServices();
+  // const { data, isLoading } = useQuery({
+  //   queryKey: ['changes', spaceId, triples],
+  //   queryFn: async () => Change.fromTriples(Triples.squash(triples), subgraph),
+  // });
+  // return [data, isLoading] as const;
+  return [null, false] as const;
 };
 
 type ChipProps = {
@@ -1049,11 +1060,7 @@ const useFilters = (rawFilter: string) => {
 const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph) => {
   const filters = await createFiltersFromGraphQLString(rawFilter, async id => await subgraph.fetchEntity({ id }));
   const serverColumns = await fetchColumns({
-    params: { skip: 0, first: 0, filter: '' },
-    api: {
-      fetchEntity: subgraph.fetchEntity,
-      fetchTriples: subgraph.fetchTriples,
-    },
+    typeIds: [],
   });
   const filtersWithColumnName = filters.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME) {

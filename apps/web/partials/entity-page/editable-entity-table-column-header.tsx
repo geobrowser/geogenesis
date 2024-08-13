@@ -1,19 +1,17 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { A, pipe } from '@mobily/ts-belt';
 
+import * as React from 'react';
 import { memo, useState } from 'react';
 
+import { useTriples } from '~/core/database/triples';
 import { useEditEvents } from '~/core/events/edit-events';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Column } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { Triples } from '~/core/utils/triples';
 import { valueTypes } from '~/core/value-types';
 
 import { Date } from '~/design-system/icons/date';
-import { Image } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
 import { Text as TextIcon } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
@@ -38,16 +36,21 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
   unpublishedColumns,
 }: Props) {
-  const { actionsFromSpace, upsert, remove, upsertMany } = useActionsStore(spaceId);
-
-  const localTriples = pipe(
-    Triples.merge(actionsFromSpace, column.triples),
-    A.filter(t => t.entityId === column.id)
+  const localTriples = useTriples(
+    React.useMemo(() => {
+      return {
+        mergeWith: column.triples,
+        selector: t => t.entityId === column.id,
+      };
+    }, [column.triples, column.id])
   );
 
-  const localCellTriples = pipe(
-    Triples.merge(actionsFromSpace, []),
-    A.filter(triple => triple.attributeId === column.id)
+  const localCellTriples = useTriples(
+    React.useMemo(() => {
+      return {
+        selector: t => t.attributeId === column.id,
+      };
+    }, [column.id])
   );
 
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
@@ -60,17 +63,11 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
       spaceId: spaceId ?? '',
       entityName: Entities.name(localTriples) ?? '',
     },
-    api: {
-      upsert,
-      upsertMany,
-      remove,
-    },
   });
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 ? column.triples : localTriples;
-  const nameTriple = Entities.nameTriple(triples);
   const valueTypeTriple = Entities.valueTypeTriple(triples);
 
   const valueType = Entities.valueTypeId(triples) ?? SYSTEM_IDS.TEXT;
@@ -132,18 +129,6 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
             {
               label: (
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <Image />
-                  <Spacer width={8} />
-                  Image
-                </div>
-              ),
-              value: 'IMAGE',
-              onClick: () => onChangeTripleType(SYSTEM_IDS.IMAGE),
-              disabled: false,
-            },
-            {
-              label: (
-                <div style={{ display: 'flex', alignItems: 'center' }}>
                   <Date />
                   <Spacer width={8} />
                   Date
@@ -161,7 +146,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
                   Web URL
                 </div>
               ),
-              value: 'URL',
+              value: 'URI',
               onClick: () => onChangeTripleType(SYSTEM_IDS.WEB_URL),
               disabled: false,
             },

@@ -4,11 +4,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
 
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { Space } from '~/core/io/dto/spaces';
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
-import { Entity, Space, ValueType as TripleValueType } from '~/core/types';
+import { ValueType as TripleValueType } from '~/core/types';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
@@ -249,7 +250,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                       />
                     ) : options.find(o => o.columnId === state.selectedColumn)?.valueType === 'ENTITY' ? (
                       <TableBlockEntityFilterInput
-                        typeIdToFilter={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
+                        filterByTypes={columnRelationTypes[state.selectedColumn]?.map(t => t.typeId)}
                         selectedValue={getFilterValueName(state.value) ?? ''}
                         onSelect={onSelectEntityValue}
                       />
@@ -273,14 +274,13 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
 }
 
 interface TableBlockEntityFilterInputProps {
-  onSelect: (result: Entity) => void;
+  onSelect: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
-  typeIdToFilter?: string[];
+  filterByTypes?: string[];
 }
 
-function TableBlockEntityFilterInput({ onSelect, selectedValue, typeIdToFilter }: TableBlockEntityFilterInputProps) {
-  const autocomplete = useAutocomplete(typeIdToFilter ? { allowedTypes: typeIdToFilter } : undefined);
-  const { spaces } = useSpaces();
+function TableBlockEntityFilterInput({ onSelect, selectedValue, filterByTypes }: TableBlockEntityFilterInputProps) {
+  const autocomplete = useSearch(filterByTypes ? { filterByTypes } : undefined);
 
   return (
     <div className="relative w-full">
@@ -305,7 +305,6 @@ function TableBlockEntityFilterInput({ onSelect, selectedValue, typeIdToFilter }
                       autocomplete.onQueryChange('');
                       onSelect(result);
                     }}
-                    spaces={spaces}
                     alreadySelected={false}
                     result={result}
                   />

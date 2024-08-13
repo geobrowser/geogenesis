@@ -1,15 +1,16 @@
+import { Schema } from '@effect/schema';
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
-import { Entity as EntityType, FilterField, FilterState } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
+import { FilterField, FilterState } from '~/core/types';
 
+import { Entity, EntityDto } from '../dto/entities';
+import { SubstreamEntity } from '../schema';
 import { entityFragment } from './fragments';
 import { graphql } from './graphql';
-import { SubstreamEntity, fromNetworkTriples } from './network-local-mapping';
 
 function getFetchEntitiesQuery(
   query: string | undefined,
@@ -60,7 +61,7 @@ interface NetworkResult {
   entities: { nodes: SubstreamEntity[] };
 }
 
-export async function fetchEntities(options: FetchEntitiesOptions): Promise<EntityType[]> {
+export async function fetchEntities(options: FetchEntitiesOptions): Promise<Entity[]> {
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
@@ -131,37 +132,26 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
     return resultOrError.right;
   });
 
-  const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
+  const { entities: unknownEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const sortedResults = sortSearchResultsByRelevance(entities.nodes);
+  const entities = unknownEntities.nodes
+    .map(e => {
+      const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
 
-  return sortedResults.map(result => {
-    const networkTriples = result.triples.nodes;
+      return Either.match(decodedSpace, {
+        onLeft: error => {
+          console.error(`Unable to decode entity ${e.id} with error ${error}`);
+          return null;
+        },
+        onRight: entity => {
+          return entity;
+        },
+      });
+    })
+    .filter(e => e !== null);
 
-    // If there is no latest version just return an empty entity.
-    if (networkTriples.length === 0) {
-      return {
-        id: result.id,
-        name: result.name,
-        description: null,
-        nameTripleSpaces: [],
-        types: [],
-        triples: [],
-      };
-    }
-
-    const triples = fromNetworkTriples(networkTriples);
-    const nameTriples = Entities.nameTriples(triples);
-
-    return {
-      id: result.id,
-      name: result.name,
-      description: Entities.description(triples),
-      nameTripleSpaces: nameTriples.map(t => t.space),
-      types: result.types.nodes,
-      triples,
-    };
-  });
+  const sortedResults = sortSearchResultsByRelevance(entities);
+  return sortedResults.map(EntityDto);
 }
 
 const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {

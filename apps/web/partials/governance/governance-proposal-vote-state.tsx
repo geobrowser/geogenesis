@@ -1,6 +1,4 @@
-import { ProposalStatus } from '@geogenesis/sdk';
-
-import { Vote } from '~/core/types';
+import { SubstreamVote } from '~/core/io/schema';
 import { getNoVotePercentage, getYesVotePercentage } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -10,10 +8,10 @@ import { TickSmall } from '~/design-system/icons/tick-small';
 interface Props {
   votes: {
     totalCount: number;
-    votes: Vote[];
+    votes: SubstreamVote[];
   };
 
-  userVote?: Vote['vote'];
+  userVote?: SubstreamVote['vote'];
   user?: {
     address?: string;
     avatarUrl: string | null;
@@ -59,26 +57,3 @@ export function GovernanceProposalVoteState({ votes, user, userVote }: Props) {
     </>
   );
 }
-
-type StatusBadgeProps = {
-  status: ProposalStatus;
-};
-
-const StatusBadge = ({ status }: StatusBadgeProps) => {
-  switch (status) {
-    case 'ACCEPTED':
-      return (
-        <div className="gap-1.5 rounded-sm bg-green/10 px-1.5 py-1 text-smallButton text-xs font-medium leading-none tracking-[-0.17px] text-green">
-          You accepted this
-        </div>
-      );
-    case 'REJECTED':
-      return (
-        <div className="gap-1.5 rounded-sm bg-red-01/10 px-1.5 py-1 text-smallButton text-xs font-medium leading-none tracking-[-0.17px] text-red-01">
-          You rejected this
-        </div>
-      );
-    default:
-      return <></>;
-  }
-};

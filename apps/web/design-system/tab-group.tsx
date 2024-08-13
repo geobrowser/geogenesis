@@ -51,10 +51,9 @@ const tabStyles = cva('relative inline-flex items-center gap-1.5 text-quoteMediu
 });
 
 function Tab({ href, label, badge, disabled, hidden }: TabProps) {
-  const decodedHref = decodeURIComponent(href);
   const isHydrated = useHydrated();
   const path = usePathname();
-  const active = decodeURIComponent(path ?? '') === decodedHref;
+  const active = path === href;
   const { editable } = useEditable();
 
   if (!editable && hidden) {

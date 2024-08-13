@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MockNetworkData } from '~/core/io';
 
+import { EntityId } from '../io/schema';
 import {
   createFiltersFromGraphQLString,
   createGraphQLStringFromFilters,
@@ -122,11 +123,13 @@ describe('TableBlock SDK', () => {
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", stringValue_starts_with_nocase: "Value 1"}}`,
       async () => {
         return {
-          id: 'type',
+          id: EntityId('type'),
           triples: [MockNetworkData.makeStubTriple('Types')],
           name: 'Types',
           description: '',
           types: [],
+          nameTripleSpaces: [],
+          relationsOut: [],
         };
       }
     );
@@ -144,11 +147,13 @@ describe('TableBlock SDK', () => {
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", entityValue: "id 1"}}`,
       async () => {
         return {
-          id: 'id 1',
+          id: EntityId('id 1'),
           triples: [MockNetworkData.makeStubTriple('Types')],
           name: 'Entity Name',
           description: '',
           types: [],
+          nameTripleSpaces: [],
+          relationsOut: [],
         };
       }
     );
@@ -159,11 +164,13 @@ describe('TableBlock SDK', () => {
       `{typeIds_contains_nocase: ["type-id"], name_starts_with_nocase: "id 1"}`,
       async () => {
         return {
-          id: 'type',
+          id: EntityId('type'),
           triples: [MockNetworkData.makeStubTriple('Name')],
           name: 'Name',
           description: '',
           types: [],
+          nameTripleSpaces: [],
+          relationsOut: [],
         };
       }
     );
@@ -181,11 +188,13 @@ describe('TableBlock SDK', () => {
       `{and: [{typeIds_contains_nocase: ["type-id"]}, {entityOf_: {attribute: "type", stringValue_starts_with_nocase: "Value 1"}}, {entityOf_: {attribute: "type", entityValue: "id 1"}}, {name_starts_with_nocase: "id 1"}]}`,
       async () => {
         return {
-          id: 'id 1',
+          id: EntityId('id 1'),
           triples: [MockNetworkData.makeStubTriple('Types')],
           name: 'Entity Name',
           description: '',
           types: [],
+          nameTripleSpaces: [],
+          relationsOut: [],
         };
       }
     );
@@ -215,11 +224,13 @@ describe('TableBlock SDK', () => {
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {space: "0x0000000000000000000000000000000000000000"}}`,
       async () => {
         return {
-          id: 'id 1',
+          id: EntityId('id 1'),
           triples: [MockNetworkData.makeStubTriple('Types')],
           name: 'Entity Name',
           description: '',
           types: [],
+          nameTripleSpaces: [],
+          relationsOut: [],
         };
       }
     );

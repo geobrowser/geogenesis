@@ -1,13 +1,15 @@
+import { Schema } from '@effect/schema';
 import { Effect, Either } from 'effect';
 import Image from 'next/legacy/image';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Environment } from '~/core/environment';
+import { Proposal } from '~/core/io/dto/proposals';
+import { SubspaceDto } from '~/core/io/dto/subspaces';
+import { SubstreamSubspace } from '~/core/io/schema';
 import { fetchSpace } from '~/core/io/subgraph';
-import { entityFragment, spaceMetadataFragment } from '~/core/io/subgraph/fragments';
+import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamEntity, getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
-import { Proposal } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { AddTo } from '~/design-system/icons/add-to';
@@ -94,11 +96,11 @@ export async function SubspaceProposal({ proposal }: Props) {
               <div className="flex items-center gap-2">
                 <div className="flex h-6 items-center gap-1 rounded-sm bg-divider px-1.5 text-breadcrumb text-text">
                   <EditSmall color="grey-04" />
-                  {subspace?.editorsCount}
+                  {subspace?.totalEditors}
                 </div>
                 <div className="flex h-6 items-center gap-1 rounded-sm bg-divider px-1.5 text-breadcrumb text-text">
                   <Member color="grey-04" />
-                  {subspace?.membersCount}
+                  {subspace?.totalMembers}
                 </div>
               </div>
             </div>
@@ -117,11 +119,13 @@ const getSubspaceInProposalQuery = (proposalId: string) => `query {
     nodes {
       spaceBySubspace {
         id
-
+        daoAddress
         spaceEditors {
           totalCount
         }
-
+        spaceMembers {
+          totalCount
+        }
         spacesMetadata {
           nodes {
             entity {
@@ -137,15 +141,7 @@ const getSubspaceInProposalQuery = (proposalId: string) => `query {
 interface NetworkResult {
   proposedSubspaces: {
     nodes: {
-      spaceBySubspace: {
-        id: string;
-
-        spaceEditors: {
-          totalCount: number;
-        };
-
-        metadata: { nodes: SubstreamEntity[] };
-      };
+      spaceBySubspace: SubstreamSubspace;
     }[];
   };
 }
@@ -210,12 +206,22 @@ async function fetchProposedSubspace(proposalId: string, spaceId: string) {
 
   // There should only be one proposed space in a single proposal
   const proposedSpace = proposedSubspaces[0].spaceBySubspace;
-  const spaceConfigWithImage = getSpaceConfigFromMetadata(proposedSpace.id, proposedSpace.metadata.nodes[0]);
 
-  return {
-    id: proposedSpace.id,
-    membersCount: proposedSpace.spaceEditors.totalCount,
-    editorsCount: proposedSpace.spaceEditors.totalCount,
-    spaceConfig: spaceConfigWithImage,
-  };
+  const spaceOrError = Schema.decodeEither(SubstreamSubspace)(proposedSpace);
+
+  const decodedSpace = Either.match(spaceOrError, {
+    onLeft: error => {
+      console.error(`Encountered error decoding proposed subspace for space with id ${spaceId} – error: ${error}`);
+      return null;
+    },
+    onRight: space => {
+      return space;
+    },
+  });
+
+  if (decodedSpace === null) {
+    return null;
+  }
+
+  return SubspaceDto(decodedSpace);
 }

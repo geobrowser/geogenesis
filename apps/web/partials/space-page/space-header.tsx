@@ -11,7 +11,6 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
-import { AppOp } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -95,7 +94,7 @@ export function SpaceHeader({ spaceId, spaceImage, spaceName = ZERO_WIDTH_SPACE 
                     setSelectedProposal(p.id);
                     setIsCompareOpen(true);
                   }}
-                  changeCount={p.proposedVersions.reduce<AppOp[]>((acc, version) => acc.concat(version.ops), []).length}
+                  changeCount={0}
                   createdAt={p.createdAt}
                   createdBy={p.createdBy}
                   name={p.name}

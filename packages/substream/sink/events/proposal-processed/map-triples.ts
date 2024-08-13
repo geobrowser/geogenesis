@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import { getTripleFromOp } from '../get-triple-from-op';
@@ -11,9 +12,10 @@ export interface OpWithCreatedBy {
 
 export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string; proposalId: string };
 
-// @TODO: Do we squash actions in the new data model?
 export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
-  return edit.ops.map((op): OpWithCreatedBy => {
+  const squashedOps = squashOps(edit.ops, edit.spaceId);
+
+  return squashedOps.map((op): OpWithCreatedBy => {
     const triple = getTripleFromOp(op, edit.spaceId, block);
 
     if (!triple.value_type) {
@@ -26,8 +28,19 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
 
     return {
       createdById: edit.createdById,
-      op: op.opType,
+      op: op.type,
       triple,
     };
   });
+}
+
+function squashOps(ops: Op[], spaceId: string): Op[] {
+  // We take the last op for each (S,E,A) tuple
+  const squashedOps = ops.reduce((acc, op) => {
+    const idForOp = `${spaceId}:${op.triple.entity}:${op.triple.attribute}`;
+    acc.set(idForOp, op);
+    return acc;
+  }, new Map<string, Op>());
+
+  return [...squashedOps.values()];
 }

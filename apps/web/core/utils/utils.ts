@@ -2,8 +2,10 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 import { getAddress } from 'viem';
 
 import { ALL_PUBLIC_SPACES, IPFS_GATEWAY_READ_PATH } from '~/core/constants';
-import { Entity as IEntity, OmitStrict, Proposal, Vote } from '~/core/types';
 
+import { Entity } from '../io/dto/entities';
+import { Proposal } from '../io/dto/proposals';
+import { SubstreamVote } from '../io/schema';
 import { Entities } from './entity';
 
 export function intersperse<T>(elements: T[], separator: T | (({ index }: { index: number }) => T)): T[] {
@@ -24,41 +26,39 @@ export const NavUtils = {
     attributes?: Array<[string, string]> | null
   ) => {
     if (typeId && attributes && attributes?.length > 0) {
-      return decodeURIComponent(
-        `/space/${spaceId}/${newEntityId}?typeId=${typeId}&attributes=${encodeURI(JSON.stringify(attributes))}`
-      );
+      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}&attributes=${encodeURI(JSON.stringify(attributes))}`;
     }
 
     if (typeId) {
-      return decodeURIComponent(`/space/${spaceId}/${newEntityId}?typeId=${typeId}`);
+      return `/space/${spaceId}/${newEntityId}?typeId=${typeId}`;
     }
 
     if (attributes && attributes.length > 0) {
       return decodeURIComponent(`/space/${spaceId}/${newEntityId}?attributes=${encodeURI(JSON.stringify(attributes))}`);
     }
 
-    return decodeURIComponent(`/space/${spaceId}/${newEntityId}`);
+    return `/space/${spaceId}/${newEntityId}`;
   },
   toSpaceProfileActivity: (spaceId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
-      return decodeURIComponent(`/space/${spaceId}/activity?spaceId=${spaceIdParam}`);
+      return `/space/${spaceId}/activity?spaceId=${spaceIdParam}`;
     }
 
-    return decodeURIComponent(`/space/${spaceId}/activity`);
+    return `/space/${spaceId}/activity`;
   },
   toProfileActivity: (spaceId: string, entityId: string, spaceIdParam?: string) => {
     if (spaceIdParam) {
-      return decodeURIComponent(`/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`);
+      return `/space/${spaceId}/${entityId}/activity?spaceId=${spaceIdParam}`;
     }
 
-    return decodeURIComponent(`/space/${spaceId}/${entityId}/activity`);
+    return `/space/${spaceId}/${entityId}/activity`;
   },
 };
 
 export function groupBy<T, U extends PropertyKey>(values: T[], projection: (value: T) => U) {
   const result: { [key in PropertyKey]: T[] } = {};
 
-  values.forEach(value => {
+  for (let value of values) {
     const key = projection(value);
 
     if (key in result) {
@@ -66,9 +66,20 @@ export function groupBy<T, U extends PropertyKey>(values: T[], projection: (valu
     } else {
       result[key] = [value];
     }
-  });
+  }
 
   return result;
+}
+
+export function uniqueBy<T, U extends PropertyKey>(values: T[], projection: (value: T) => U) {
+  return values.reduce<Record<U, T>>(
+    (acc, value) => {
+      const key = projection(value);
+      acc[key] = value;
+      return acc;
+    },
+    {} as Record<U, T>
+  );
 }
 
 export function partition<T>(array: T[], predicate: (value: T) => boolean): [T[], T[]] {
@@ -183,7 +194,7 @@ export const getOpenGraphImageUrl = (value: string) => {
   return null;
 };
 
-export const getOpenGraphMetadataForEntity = (entity: IEntity | null) => {
+export const getOpenGraphMetadataForEntity = (entity: Entity | null) => {
   const entityName = entity?.name ?? null;
   const serverAvatarUrl = Entities.avatar(entity?.triples) ?? null;
   const serverCoverUrl = Entities.cover(entity?.triples);
@@ -273,10 +284,6 @@ export function slog({
   );
 }
 
-export function getGeoPersonIdFromOnchainId(address: `0x${string}`, onchainId: string) {
-  return `${address}–${onchainId}`;
-}
-
 export const sleep = (delay: number) => new Promise(resolve => setTimeout(resolve, delay));
 
 export function isPermissionlessSpace(spaceId: string) {
@@ -292,16 +299,13 @@ export function getIsProposalEnded(status: Proposal['status'], endTime: number) 
   return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
 }
 
-export function getIsProposalExecutable(
-  proposal: OmitStrict<Proposal, 'proposedVersions'>,
-  yesVotesPercentage: number
-) {
+export function getIsProposalExecutable(proposal: Proposal, yesVotesPercentage: number) {
   return (
     getIsProposalEnded(proposal.status, proposal.endTime) && yesVotesPercentage > 50 && proposal.status !== 'ACCEPTED'
   );
 }
 
-export function getYesVotePercentage(votes: Vote[], votesCount: number) {
+export function getYesVotePercentage(votes: SubstreamVote[], votesCount: number) {
   if (votesCount === 0) {
     return 0;
   }
@@ -309,7 +313,7 @@ export function getYesVotePercentage(votes: Vote[], votesCount: number) {
   return Math.floor((votes.filter(v => v.vote === 'ACCEPT').length / votesCount) * 100);
 }
 
-export function getNoVotePercentage(votes: Vote[], votesCount: number) {
+export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) {
   if (votesCount === 0) {
     return 0;
   }
@@ -317,7 +321,7 @@ export function getNoVotePercentage(votes: Vote[], votesCount: number) {
   return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
 }
 
-export function getUserVote(votes: Vote[], address: string) {
+export function getUserVote(votes: SubstreamVote[], address: string) {
   return votes.find(v => v.account.id === getAddress(address));
 }
 

@@ -3,10 +3,7 @@
 import { useLogin, useLogout, usePrivy, useWallets } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi';
 import { useSetAtom } from 'jotai';
-import { ENTRYPOINT_ADDRESS_V07 } from 'permissionless';
-import { signerToSafeSmartAccount } from 'permissionless/accounts';
 import { createPublicClient, http } from 'viem';
-import { toAccount } from 'viem/accounts';
 
 import * as React from 'react';
 
@@ -14,16 +11,8 @@ import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors'
 
 import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
-import { Wallet } from '~/design-system/icons/wallet';
 
-import {
-  accountTypeAtom,
-  avatarAtom,
-  nameAtom,
-  profileIdAtom,
-  spaceAddressAtom,
-  stepAtom,
-} from '~/partials/onboarding/dialog';
+import { accountTypeAtom, avatarAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
 import { Cookie } from '../cookie';
 import { CONDUIT_TESTNET } from './conduit-chain';
@@ -119,12 +108,17 @@ export function GeoConnectButton() {
   const { user } = usePrivy();
   const { wallets } = useWallets();
 
+  const setAccountType = useSetAtom(accountTypeAtom);
+  const setName = useSetAtom(nameAtom);
+  const setAvatar = useSetAtom(avatarAtom);
+  const setSpaceId = useSetAtom(spaceIdAtom);
+  const setStep = useSetAtom(stepAtom);
+
   const resetOnboarding = () => {
     setAccountType(null);
     setName('');
     setAvatar('');
-    setSpaceAddress('');
-    setProfileId('');
+    setSpaceId('');
     setStep('start');
   };
 
@@ -158,17 +152,10 @@ export function GeoConnectButton() {
     },
   });
 
-  const setAccountType = useSetAtom(accountTypeAtom);
-  const setName = useSetAtom(nameAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceAddress = useSetAtom(spaceAddressAtom);
-  const setProfileId = useSetAtom(profileIdAtom);
-  const setStep = useSetAtom(stepAtom);
-
   if (!user) {
     return (
-      <Button onClick={onLogin} variant="secondary">
-        <Wallet />
+      <Button onClick={onLogin}>
+        {/* <Wallet color="white" /> */}
         Sign in
       </Button>
     );

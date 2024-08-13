@@ -4,10 +4,12 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
+import { Entity, Relation } from '~/core/io/dto/entities';
+import { fetchBlocks } from '~/core/io/fetch-blocks';
+import { EntityId, TypeId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor-store';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
-import { CollectionItem, Entity as IEntity, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
@@ -31,7 +33,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const spaceId = params.id;
-  const entityId = decodeURIComponent(params.entityId);
+  const entityId = params.entityId;
 
   const entity = await cachedFetchEntity(entityId);
   const { entityName, description, openGraphImageUrl } = getOpenGraphMetadataForEntity(entity);
@@ -66,35 +68,33 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProfileLayout({ children, params }: Props) {
-  const decodedId = decodeURIComponent(params.entityId);
+  const entityId = params.entityId;
 
-  const types = await cachedFetchEntityType(decodedId);
+  const types = await cachedFetchEntityType(entityId);
 
-  if (!types.includes(SYSTEM_IDS.PERSON_TYPE)) {
+  if (!types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
     return <TypesStoreServerContainer spaceId={params.id}>{children}</TypesStoreServerContainer>;
   }
 
-  const profile = await getProfilePage(decodedId);
+  const profile = await getProfilePage(entityId);
 
   return (
     <TypesStoreServerContainer spaceId={params.id}>
-      <EntityStoreProvider id={decodedId} spaceId={params.id} initialTriples={profile.triples}>
+      <EntityStoreProvider
+        id={entityId}
+        spaceId={params.id}
+        initialTriples={profile.triples}
+        initialRelations={profile.relationsOut}
+      >
         <EditorProvider
           id={profile.id}
           spaceId={params.id}
-          initialBlockIdsTriple={profile.blockIdsTriple}
-          initialBlockTriples={profile.blockTriples}
-          initialBlockCollectionItems={profile.blockCollectionItems}
-          initialBlockCollectionItemTriples={profile.blockCollectionItemTriples}
+          initialBlocks={profile.blocks}
+          initialBlockRelations={profile.blockRelations}
         >
           <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
           <EntityPageContentContainer>
-            <EditableHeading
-              spaceId={params.id}
-              entityId={decodedId}
-              name={profile.name ?? decodedId}
-              triples={profile.triples}
-            />
+            <EditableHeading spaceId={params.id} entityId={entityId} />
             <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
 
             <Spacer height={40} />
@@ -102,8 +102,8 @@ export default async function ProfileLayout({ children, params }: Props) {
               tabs={TABS.map(label => {
                 const href =
                   label === 'Overview'
-                    ? decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}`)
-                    : decodeURIComponent(`${NavUtils.toEntity(params.id, decodedId)}/${label.toLowerCase()}`);
+                    ? `${NavUtils.toEntity(params.id, entityId)}`
+                    : `${NavUtils.toEntity(params.id, entityId)}/${label.toLowerCase()}`;
                 return {
                   href,
                   label,
@@ -122,13 +122,11 @@ export default async function ProfileLayout({ children, params }: Props) {
 }
 
 async function getProfilePage(entityId: string): Promise<
-  IEntity & {
+  Entity & {
     avatarUrl: string | null;
     coverUrl: string | null;
-    blockTriples: Triple[];
-    blockIdsTriple: Triple | null;
-    blockCollectionItems: CollectionItem[];
-    blockCollectionItemTriples: Triple[];
+    blocks: Entity[];
+    blockRelations: Relation[];
   }
 > {
   const person = await cachedFetchEntity(entityId);
@@ -136,48 +134,33 @@ async function getProfilePage(entityId: string): Promise<
   // @TODO: Real error handling
   if (!person) {
     return {
-      id: entityId,
+      id: EntityId(entityId),
       name: null,
+      nameTripleSpaces: [],
       avatarUrl: null,
       coverUrl: null,
       triples: [],
       types: [],
       description: null,
-      blockTriples: [],
-      blockIdsTriple: null,
-      blockCollectionItems: [],
-      blockCollectionItemTriples: [],
+      relationsOut: [],
+      blocks: [],
+      blockRelations: [],
     };
   }
 
-  const blockIdsTriple =
-    person?.triples.find(t => t.attributeId === SYSTEM_IDS.BLOCKS && t.value.type === 'COLLECTION') || null;
+  const blockIds = person?.relationsOut
+    .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
+    ?.map(r => r.toEntity.id);
 
-  const blockCollectionItems =
-    blockIdsTriple && blockIdsTriple.value.type === 'COLLECTION' ? blockIdsTriple.value.items : [];
-
-  const blockIds: string[] = blockCollectionItems.map(item => item.entity.id);
-
-  const [blockTriples, collectionItemTriples] = await Promise.all([
-    Promise.all(
-      blockIds.map(blockId => {
-        return cachedFetchEntity(blockId);
-      })
-    ),
-    Promise.all(
-      blockCollectionItems.map(item => {
-        return cachedFetchEntity(item.id);
-      })
-    ),
-  ]);
+  const blocks = blockIds ? await fetchBlocks(blockIds) : [];
 
   return {
     ...person,
     avatarUrl: Entities.avatar(person.triples),
     coverUrl: Entities.cover(person.triples),
-    blockIdsTriple,
-    blockTriples: blockTriples.flatMap(entity => entity?.triples ?? []),
-    blockCollectionItems,
-    blockCollectionItemTriples: collectionItemTriples.flatMap(entity => entity?.triples ?? []),
+
+    relationsOut: [],
+    blockRelations: person.relationsOut,
+    blocks,
   };
 }

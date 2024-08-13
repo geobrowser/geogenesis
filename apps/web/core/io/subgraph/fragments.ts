@@ -4,6 +4,33 @@ export const imageValueTypeTripleFragment = `
     valueType
 `;
 
+/**
+ * `
+ *  entity {
+ *    id
+ *    name
+ *    entityTypes {
+ *      nodes {
+ *        type {
+ *          id
+ *          name
+ *        }
+ *      }
+ *    }
+ *  }
+ * `
+ */
+export const entityTypesFragment = `
+  entityTypes {
+    nodes {
+      type {
+        id
+        name
+      }
+    }
+  }
+`;
+
 export const tripleFragment = `
   attribute {
     id
@@ -16,42 +43,10 @@ export const tripleFragment = `
   }
   entityValue {
     id
-    types {
-      nodes {
-        id
-      }
-    }
     name
-    triples {
-      nodes {
-        ${imageValueTypeTripleFragment}
-      }
-    }
+    ${entityTypesFragment}
   }
   numberValue
-  collectionValue {
-    id
-    collectionItems {
-      nodes {
-        index
-        collectionItemEntityId
-        entity {
-          id
-          name
-          types {
-            nodes {
-              id
-            }
-          }
-          triples {
-            nodes {
-              ${imageValueTypeTripleFragment}
-            }
-          }
-        }
-      }
-    }
-  }
   textValue
   valueType
   space {
@@ -59,77 +54,30 @@ export const tripleFragment = `
   }
 `;
 
-export const resultTripleFragment = `
-  attribute {
+/**
+ * The relations fragment fetches the type of the relation and the from and to entities.
+ * The to entity also includes any triples that could be used to represent an image entity.
+ */
+export const relationFragment = `
+  id
+  index
+  typeOf {
     id
     name
   }
-  entityId
-  entity {
+  fromEntity {
     id
     name
   }
-  entityValue {
+  toEntity {
     id
-    types {
-      nodes {
-        id
-      }
-    }
     name
+    ${entityTypesFragment}
     triples {
       nodes {
-        ${imageValueTypeTripleFragment}
+        ${tripleFragment}
       }
     }
-  }
-  numberValue
-  collectionValue {
-    id
-    collectionItems {
-      nodes {
-        index
-        collectionItemEntityId
-        entity {
-          id
-          name
-          types {
-            nodes {
-              id
-            }
-          }
-          triples {
-            nodes {
-              ${imageValueTypeTripleFragment}
-            }
-          }
-        }
-      }
-    }
-  }
-  textValue
-  valueType
-  space {
-    id
-      spacesMetadata {
-        nodes {
-          entity {
-            id
-            name
-            types {
-              nodes {
-                id
-                name
-              }
-            }
-            triples {
-              nodes {
-                ${tripleFragment}
-              }
-            }
-          }
-        }
-      }
   }
 `;
 
@@ -144,25 +92,16 @@ export const spacePluginsFragment = `
 export const entityFragment = `
   id
   name
-  types {
+  description
+  ${entityTypesFragment}
+  relationsByFromEntityId {
     nodes {
-      id
-      name
+      ${relationFragment}
     }
   }
-  triples(filter: {isStale: {equalTo: false}}) {
+  triples {
     nodes {
       ${tripleFragment}
-    }
-  }
-`;
-
-export const resultEntityFragment = `
-  id
-  name
-  triples(filter: { attributeId: { equalTo: "a126ca530c8e48d5b88882c734c38935" } }) {
-    nodes {
-      ${resultTripleFragment}
     }
   }
 `;
@@ -201,6 +140,20 @@ export const spaceFragment = `
     nodes {
       entity {
         ${entityFragment}
+      }
+    }
+  }
+`;
+
+export const resultEntityFragment = `
+  id
+  name
+  description
+  ${entityTypesFragment}
+  entitySpaces {
+    nodes {
+      space {
+        ${spaceFragment}
       }
     }
   }

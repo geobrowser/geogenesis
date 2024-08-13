@@ -1,19 +1,17 @@
 import { Op, Value } from '@geogenesis/sdk';
 
-import { Triple } from '~/core/types';
-
 interface CreateArgs {
-  entityId: string;
-  attributeId: string;
+  entity: string;
+  attribute: string;
   value: Value;
 }
 
-export function create({ entityId, attributeId, value }: CreateArgs): Op {
+export function create({ entity, attribute, value }: CreateArgs): Op {
   return {
     type: 'SET_TRIPLE',
-    payload: {
-      attributeId,
-      entityId,
+    triple: {
+      attribute,
+      entity,
       value,
     },
   };

@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
@@ -13,9 +12,8 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Entity as EntityType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
@@ -64,13 +62,14 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     name: Entities.name(column.triples),
   }));
 
-  // @TODO: Collections
-  const shownColumnTriples = [
-    ...(blockEntity?.triples ?? []).filter(triple => triple.attributeId === SYSTEM_IDS.SHOWN_COLUMNS),
+  const shownColumnRelations = [
+    ...(blockEntity?.relationsOut ?? []).filter(relation => relation.typeOf.id === SYSTEM_IDS.SHOWN_COLUMNS),
   ];
 
-  const shownColumnIds = [...(shownColumnTriples.flatMap(item => item.value.value) ?? []), SYSTEM_IDS.NAME];
-  const { placeholderText, placeholderImage } = getPlaceholders(blockEntity);
+  const shownColumnIds = [...(shownColumnRelations.map(item => item.toEntity.id) ?? []), SYSTEM_IDS.NAME];
+
+  // @TODO(relations): This should live on the relation pointing to the block and not the block itself. It is
+  // also a relation and not a triple.
   const viewTriple = (blockEntity?.triples ?? []).find(triple => triple.attributeId === SYSTEM_IDS.VIEW_ATTRIBUTE);
 
   /**
@@ -117,9 +116,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   return (
     <div>
       <div className="mb-2 flex h-8 items-center justify-between">
-        <div className="flex grow items-center gap-2">
-          <TableBlockEditableTitle spaceId={spaceId} />
-        </div>
+        <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
           <AnimatePresence initial={false} mode="wait">
             {filterState.length > 0 ? (
@@ -153,10 +150,9 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           <DataBlockViewMenu activeView={view} viewTriple={viewTriple} isLoading={isLoading} />
           <TableBlockContextMenu
             allColumns={allColumns}
-            shownColumnTriples={shownColumnTriples}
+            shownColumnRelations={shownColumnRelations}
             shownColumnIds={shownColumnIds}
           />
-
           {isEditing && (
             <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, attributes)}>
               <Create />
@@ -182,19 +178,21 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             >
               <TableBlockEditableFilters />
 
-              {filtersWithColumnName.map((f, index) => (
-                <TableBlockFilterPill
-                  key={`${f.columnId}-${f.value}`}
-                  filter={f}
-                  onDelete={() => {
-                    const newFilterState = produce(filterState, draft => {
-                      draft.splice(index, 1);
-                    });
+              {filtersWithColumnName.map((f, index) => {
+                return (
+                  <TableBlockFilterPill
+                    key={`${f.columnId}-${f.value}`}
+                    filter={f}
+                    onDelete={() => {
+                      const newFilterState = produce(filterState, draft => {
+                        draft.splice(index, 1);
+                      });
 
-                    setFilterState(newFilterState);
-                  }}
-                />
-              ))}
+                      setFilterState(newFilterState);
+                    }}
+                  />
+                );
+              })}
             </motion.div>
           </motion.div>
         </AnimatePresence>
@@ -258,32 +256,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     </div>
   );
 });
-
-const getPlaceholders = (blockEntity: EntityType | null | undefined) => {
-  // @TODO add defaults for list/gallery views
-  let placeholderText = 'Add an entity';
-  let placeholderImage = getImagePath('ipfs://QmfC4DoT7uVNoFRbP6DBYn9T79gpLXw2Uv6qJ2G8wmqT1d');
-
-  if (blockEntity) {
-    const placeholderTextTriple = blockEntity.triples.find(
-      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_TEXT
-    );
-
-    if (placeholderTextTriple && placeholderTextTriple.value.type === 'TEXT') {
-      placeholderText = placeholderTextTriple.value.value;
-    }
-
-    const placeholderImageTriple = blockEntity.triples.find(
-      triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
-    );
-
-    if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
-      placeholderImage = getImagePath(placeholderImageTriple.value.value);
-    }
-  }
-
-  return { placeholderText, placeholderImage };
-};
 
 const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 784 / 3;
 

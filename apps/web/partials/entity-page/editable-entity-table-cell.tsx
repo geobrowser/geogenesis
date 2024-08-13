@@ -3,8 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { memo } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
-import { Cell, EntitySearchResult, Triple, TripleWithCollectionValue } from '~/core/types';
+import { Cell, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
@@ -13,16 +12,13 @@ import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-au
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { DeletableChipButton } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { TableImageField, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 
 interface Props {
   cell: Cell;
   space: string;
   triples: Triple[];
-  upsert: ReturnType<typeof useActionsStore>['upsert'];
-  upsertMany: ReturnType<typeof useActionsStore>['upsertMany'];
-  remove: ReturnType<typeof useActionsStore>['remove'];
   valueType: string;
   columnName: string;
   columnRelationTypes?: { typeId: string; typeName: string | null }[];
@@ -32,9 +28,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   cell,
   space,
   triples,
-  upsert,
-  upsertMany,
-  remove,
   columnName,
   valueType,
   columnRelationTypes,
@@ -44,11 +37,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       entityId: cell.entityId,
       spaceId: space,
       entityName: Entities.name(triples) ?? '',
-    },
-    api: {
-      upsert,
-      upsertMany,
-      remove,
     },
   });
 
@@ -61,17 +49,15 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   // might be multiple triples if we don't filter by the space.
   const firstTriple = triples[0];
   const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
-  const isCollectionValueTypeColumn = valueType === SYSTEM_IDS.COLLECTION_VALUE_TYPE;
   const isRelationValueTypeColumn = valueType === SYSTEM_IDS.RELATION;
   const isTextValueTypeColumn = valueType === SYSTEM_IDS.TEXT;
-  const isImageValueTypeColumn = valueType === SYSTEM_IDS.IMAGE;
+  // const isImageValueTypeColumn = valueType === SYSTEM_IDS.IMAGE;
   const isDateValueTypeColumn = valueType === SYSTEM_IDS.DATE;
   const isUrlValueTypeColumn = valueType === SYSTEM_IDS.WEB_URL;
   const isEmptyCell = triples.length === 0;
 
   const isEmptyRelation = isRelationValueTypeColumn && isEmptyCell;
   const isPopulatedRelation = isRelationValueTypeColumn && !isEmptyCell;
-  const isPopulatedCollection = isCollectionValueTypeColumn && !isEmptyCell;
 
   const typesToFilter = columnRelationTypes
     ? columnRelationTypes.length > 0
@@ -84,27 +70,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       type: 'DELETE_ENTITY',
       payload: {
         triple,
-      },
-    });
-  };
-
-  const createCollectionItem = (collectionId: string, entity: EntitySearchResult, collectionTriple: Triple) => {
-    send({
-      type: 'CREATE_COLLECTION_ITEM',
-      payload: {
-        entity,
-        collectionId,
-        collectionTriple: collectionTriple as TripleWithCollectionValue,
-      },
-    });
-  };
-
-  const deleteCollectionItem = (collectionItemId: string, collectionTriple: Triple) => {
-    send({
-      type: 'DELETE_COLLECTION_ITEM',
-      payload: {
-        collectionItemId,
-        collectionTriple: collectionTriple as TripleWithCollectionValue,
       },
     });
   };
@@ -154,36 +119,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     });
   };
 
-  const uploadImage = (triple: Triple, imageSrc: string) => {
-    send({
-      type: 'UPLOAD_IMAGE',
-      payload: {
-        triple,
-        imageSrc,
-      },
-    });
-  };
-
-  const createImageWithValue = (imageSrc: string) => {
-    send({
-      type: 'CREATE_IMAGE_TRIPLE_FROM_PLACEHOLDER',
-      payload: {
-        imageSrc,
-        attributeId,
-        attributeName: columnName,
-      },
-    });
-  };
-
-  const deleteImage = (triple: Triple) => {
-    send({
-      type: 'DELETE_IMAGE_TRIPLE',
-      payload: {
-        triple,
-      },
-    });
-  };
-
   const updateStringTripleValue = (triple: Triple, value: string) => {
     send({
       type: 'UPSERT_TRIPLE_VALUE',
@@ -203,7 +138,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       payload: {
         triple,
         value: {
-          type: 'URL',
+          type: 'URI',
           value,
         },
       },
@@ -235,30 +170,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   return (
     <div className="flex w-full flex-wrap gap-2">
-      {isPopulatedCollection && triples[0].value.type === 'COLLECTION' && (
-        <>
-          {triples[0].value.items.map(item => (
-            <div key={`entity-${item.id}`}>
-              <DeletableChipButton
-                href={NavUtils.toEntity(triples[0].space, item.entity.id)}
-                onClick={() => deleteCollectionItem(item.id, triples[0])}
-              >
-                {item.value.value ?? item.entity.id}
-              </DeletableChipButton>
-            </div>
-          ))}
-
-          <EntityAutocompleteDialog
-            onDone={entity => createCollectionItem(triples[0].entityId, entity, triples[0])}
-            entityValueIds={entityValueTriples
-              .filter(triple => triple.attributeId === attributeId)
-              .map(triple => triple.value.value)}
-            allowedTypes={typesToFilter}
-            spaceId={space}
-            attributeId={attributeId}
-          />
-        </>
-      )}
       {isPopulatedRelation && (
         <>
           {triples.map(triple => (
@@ -274,10 +185,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
           <EntityAutocompleteDialog
             onDone={entity => createEntityTripleWithValue(attributeId, entity)}
-            entityValueIds={entityValueTriples
+            selectedIds={entityValueTriples
               .filter(triple => triple.attributeId === attributeId)
               .map(triple => triple.value.value)}
-            allowedTypes={typesToFilter}
+            filterByTypes={typesToFilter}
             spaceId={space}
             attributeId={attributeId}
           />
@@ -290,7 +201,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
           alreadySelectedIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.value)}
-          allowedTypes={typesToFilter}
+          filterByTypes={typesToFilter}
           attributeId={attributeId}
           containerClassName="!z-20"
         />
@@ -308,7 +219,8 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         />
       )}
 
-      {isImageValueTypeColumn && (
+      {/* @TODO(relations): Add image support */}
+      {/* {isImageValueTypeColumn && (
         <TableImageField
           imageSrc={Values.imageValue(firstTriple) || ''}
           variant="table-cell"
@@ -319,7 +231,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             deleteImage(firstTriple);
           }}
         />
-      )}
+      )} */}
 
       {isDateValueTypeColumn && (
         <DateField

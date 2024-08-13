@@ -12,26 +12,27 @@ import { Subgraph } from '~/core/io';
 import { Services } from '../services';
 
 interface SearchOptions {
-  allowedTypes?: string[];
+  filterByTypes?: string[];
 }
 
-export function useSearch({ allowedTypes }: SearchOptions = {}) {
+export function useSearch({ filterByTypes }: SearchOptions = {}) {
   const { subgraph } = Services.useServices();
 
   const [query, setQuery] = React.useState('');
 
   const { data: results, isLoading } = useQuery({
-    queryKey: ['search', query, allowedTypes],
+    queryKey: ['search', query, filterByTypes],
     queryFn: async ({ signal }) => {
       if (query.length === 0) return [];
 
       const fetchResultsEffect = Effect.either(
         Effect.tryPromise({
           try: async () =>
+            // @TODO(database): merged
             await subgraph.fetchResults({
               query,
               signal,
-              typeIds: allowedTypes,
+              typeIds: filterByTypes,
               first: 10,
             }),
           catch: () => {

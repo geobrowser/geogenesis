@@ -1,3 +1,4 @@
+import { Schema } from '@effect/schema';
 import { Effect, Either } from 'effect';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
@@ -6,11 +7,11 @@ import React from 'react';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
+import { ProposalStatus, ProposalType, SubstreamProposal, SubstreamVote } from '~/core/io/schema';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchProfilesByAddresses } from '~/core/io/subgraph/fetch-profiles-by-ids';
 import { graphql } from '~/core/io/subgraph/graphql';
-import { SubstreamProposal } from '~/core/io/subgraph/network-local-mapping';
-import { OmitStrict, Vote } from '~/core/types';
+import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -30,10 +31,10 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
   ]);
 
   const userVotesByProposalId = proposals.reduce((acc, p) => {
-    if (p.userVotes.nodes.length === 0) return acc;
+    if (p.userVotes.length === 0) return acc;
 
-    return acc.set(p.id, p.userVotes.nodes[0].vote);
-  }, new Map<string, Vote['vote']>());
+    return acc.set(p.id, p.userVotes[0].vote);
+  }, new Map<string, SubstreamVote['vote']>());
 
   return (
     <div className="flex flex-col divide-y divide-grey-01">
@@ -58,7 +59,7 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
                 <GovernanceProposalVoteState
                   votes={{
                     totalCount: p.proposalVotes.totalCount,
-                    votes: p.proposalVotes.nodes,
+                    votes: p.proposalVotes.votes,
                   }}
                   userVote={userVotesByProposalId.get(p.id)}
                   user={
@@ -86,16 +87,61 @@ export async function GovernanceProposalsList({ spaceId, page }: Props) {
   );
 }
 
-export interface FetchProposalsOptions {
+export interface FetchActiveProposalsOptions {
   spaceId: string;
-  signal?: AbortController['signal'];
   page?: number;
   first?: number;
 }
 
+const SubstreamActiveProposal = Schema.extend(
+  SubstreamProposal.omit('space'),
+  Schema.Struct({ userVotes: Schema.Struct({ nodes: Schema.Array(SubstreamVote) }) })
+);
+
+type SubstreamActiveProposal = Schema.Schema.Type<typeof SubstreamActiveProposal>;
+
 interface NetworkResult {
   proposals: {
-    nodes: OmitStrict<SubstreamProposal & { userVotes: { nodes: Vote[] } }, 'proposedVersions' | 'space'>[];
+    nodes: SubstreamActiveProposal[];
+  };
+}
+
+type ActiveProposal = {
+  id: string;
+  name: string | null;
+  type: ProposalType;
+  onchainProposalId: string;
+  createdBy: Profile;
+  createdAt: number;
+  createdAtBlock: string;
+  startTime: number;
+  endTime: number;
+  status: ProposalStatus;
+  proposalVotes: {
+    totalCount: number;
+    votes: SubstreamVote[];
+  };
+  userVotes: SubstreamVote[];
+};
+
+function ActiveProposalsDto(activeProposal: SubstreamActiveProposal, maybeProfile?: Profile): ActiveProposal {
+  const profile = maybeProfile ?? {
+    id: activeProposal.createdBy.id,
+    name: null,
+    avatarUrl: null,
+    coverUrl: null,
+    address: activeProposal.createdBy.id as `0x${string}`,
+    profileLink: null,
+  };
+
+  return {
+    ...activeProposal,
+    createdBy: profile,
+    userVotes: activeProposal.userVotes.nodes.map(v => v), // remove readonly
+    proposalVotes: {
+      totalCount: activeProposal.proposalVotes.totalCount,
+      votes: activeProposal.proposalVotes.nodes.map(v => v), // remove readonly
+    },
   };
 }
 
@@ -220,18 +266,6 @@ async function fetchActiveProposals({
   return proposals.map(p => {
     const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
 
-    const profile = maybeProfile ?? {
-      id: p.createdBy.id,
-      name: null,
-      avatarUrl: null,
-      coverUrl: null,
-      address: p.createdBy.id as `0x${string}`,
-      profileLink: null,
-    };
-
-    return {
-      ...p,
-      createdBy: profile,
-    };
+    return ActiveProposalsDto(p, maybeProfile);
   });
 }

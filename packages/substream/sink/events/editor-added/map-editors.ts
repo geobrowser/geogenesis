@@ -14,11 +14,17 @@ export function mapEditors(editorAdded: EditorAdded[], block: BlockEvent) {
     for (const editor of editorAdded) {
       // @TODO: effect.all
       const maybeSpaceIdForVotingPlugin = yield* unwrap(
-        Effect.promise(() => Spaces.findForVotingPlugin(editor.mainVotingPluginAddress))
+        Effect.tryPromise({
+          try: () => Spaces.findForVotingPlugin(editor.mainVotingPluginAddress),
+          catch: () => new Error(),
+        })
       );
 
       const maybeSpaceIdForPersonalPlugin = yield* unwrap(
-        Effect.promise(() => Spaces.findForPersonalPlugin(editor.mainVotingPluginAddress))
+        Effect.tryPromise({
+          try: () => Spaces.findForPersonalPlugin(editor.mainVotingPluginAddress),
+          catch: () => new Error(),
+        })
       );
 
       if (!maybeSpaceIdForVotingPlugin && !maybeSpaceIdForPersonalPlugin) {

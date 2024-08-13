@@ -2,11 +2,11 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { pipe } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
 
+import { useTriples } from '../database/triples';
 import { Services } from '../services';
 import { Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
 import { Triples } from '../utils/triples';
 import { Values } from '../utils/value';
-import { useActionsStore } from './use-actions-store';
 
 /**
  * This function takes triples from the server for the relation value types and merges them with any locally
@@ -53,7 +53,7 @@ export function useConfiguredAttributeRelationTypes({
   entityId: string;
 }): RelationValueTypesByAttributeId {
   const { subgraph } = Services.useServices();
-  const { allActions } = useActionsStore();
+  const triples = useTriples();
 
   const {
     data: serverAttributeRelationTypes,
@@ -64,6 +64,8 @@ export function useConfiguredAttributeRelationTypes({
     queryFn: () =>
       // 1. Fetch all the triples for the entity
       // 2. Filter out the triples that are not relation value types
+      // @TODO(relations): The configured value types are relations and not triples. IMO configuration
+      // should happen from a relation entity and not any entity that has that relation type.
       subgraph.fetchTriples({
         query: '',
         skip: 0,
@@ -88,7 +90,7 @@ export function useConfiguredAttributeRelationTypes({
   // We need to merge any local actions for the attribute relation types with the server attribute relation types.
   // Additionally we map to the data structure the UI expects to consume.
   return mapMergedTriplesToRelationValueTypes(
-    allActions,
+    triples,
     // Flatten all the triples for each entity into a single array (there shouldn't be duplicates)
     serverAttributeRelationTypes
   );

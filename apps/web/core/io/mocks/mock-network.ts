@@ -1,13 +1,17 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Space, Triple, TripleWithDateValue, TripleWithStringValue, TripleWithUrlValue, Value } from '~/core/types';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { Triple, TripleWithDateValue, TripleWithStringValue, TripleWithUrlValue, Value } from '~/core/types';
+
+import { Space } from '../dto/spaces';
+import { Address, EntityId, SpaceId } from '../schema';
 
 export const makeStubTriple = (name: string, entityId?: string): Triple => {
   return {
     id: name,
     entityId: entityId ?? name,
     entityName: name,
-    attributeId: 'name',
+    attributeId: SYSTEM_IDS.NAME,
     attributeName: 'Name',
     value: {
       type: 'TEXT',
@@ -120,7 +124,7 @@ export const makeStubTripleWithUrlValue = (value: string): TripleWithUrlValue =>
     attributeId: `attributeId~${value}`,
     attributeName: `attributeName~${value}`,
     value: {
-      type: 'URL',
+      type: 'URI',
       value,
     },
     space: `space~${value}`,
@@ -129,17 +133,25 @@ export const makeStubTripleWithUrlValue = (value: string): TripleWithUrlValue =>
 
 export const makeStubSpace = (spaceId: string): Space => {
   return {
-    id: spaceId,
+    id: SpaceId(spaceId),
     type: 'PUBLIC',
-    isRootSpace: false,
     editors: [],
     members: [],
-    spaceConfig: null,
-    createdAtBlock: '36472399',
-    daoAddress: '',
+    spaceConfig: {
+      id: EntityId(''),
+      spaceId: spaceId,
+      name: null,
+      description: null,
+      image: PLACEHOLDER_SPACE_IMAGE,
+      triples: [],
+      types: [],
+      nameTripleSpaces: [],
+      relationsOut: [],
+    },
+    daoAddress: Address(''),
     mainVotingPluginAddress: null,
-    memberAccessPluginAddress: '',
-    spacePluginAddress: '',
-    personalSpaceAdminPluginAddress: '',
+    memberAccessPluginAddress: null,
+    spacePluginAddress: Address(''),
+    personalSpaceAdminPluginAddress: null,
   };
 };

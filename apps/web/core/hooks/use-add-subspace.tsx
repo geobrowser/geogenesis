@@ -8,9 +8,9 @@ import { useRouter } from 'next/navigation';
 import { encodeFunctionData, stringToHex } from 'viem';
 
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { uploadBinary } from '~/core/io/storage/storage';
 import { fetchSpace } from '~/core/io/subgraph';
-import { Services } from '~/core/services';
+
+import { IpfsEffectClient } from '../io/ipfs-client';
 
 interface AddSubspaceArgs {
   spaceId: string;
@@ -18,7 +18,6 @@ interface AddSubspaceArgs {
 }
 
 export function useAddSubspace(args: AddSubspaceArgs) {
-  const { storageClient } = Services.useServices();
   const router = useRouter();
 
   // @TODO(performance): We can pass the space down from the layout as well to avoid
@@ -57,7 +56,7 @@ export function useAddSubspace(args: AddSubspaceArgs) {
             spaceAddress: subspaceAddress as `0x${string}`, // Some governance space
           });
 
-          const cid = yield* uploadBinary(proposal, storageClient);
+          const cid = yield* IpfsEffectClient.upload(proposal);
 
           const calldata = getCalldataForGovernanceType({
             type: space.type,
