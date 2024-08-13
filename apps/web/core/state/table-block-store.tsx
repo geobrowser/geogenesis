@@ -9,6 +9,7 @@ import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '../dat
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
+import { fetchEntity } from '../io/subgraph';
 import { GeoType, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { getImagePath } from '../utils/utils';
@@ -29,7 +30,21 @@ export function useTableBlock() {
 
   const { upsert } = useWriteOps();
 
-  const blockEntity = useEntity(EntityId(entityId));
+  const { data: remoteEntity } = useQuery({
+    queryKey: ['table-block-remote-entity', entityId],
+    queryFn: () => fetchEntity({ id: entityId }),
+    staleTime: Infinity,
+  });
+
+  const blockEntity = useEntity(
+    React.useMemo(() => EntityId(entityId), [entityId]),
+    React.useMemo(() => {
+      return {
+        triples: remoteEntity?.triples ?? [],
+        relations: remoteEntity?.relationsOut ?? [],
+      };
+    }, [remoteEntity])
+  );
 
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
@@ -97,7 +112,7 @@ export function useTableBlock() {
     queryFn: async () => {
       if (!columns) return {};
       // @TODO(database)
-      return {};
+      return {} as Record<string, { typeId: string; typeName: string | null; spaceId: string }[]>;
     },
   });
 
