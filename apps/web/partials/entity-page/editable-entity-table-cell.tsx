@@ -3,7 +3,6 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { memo } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Cell, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -13,16 +12,13 @@ import { EntityAutocompleteDialog } from '~/design-system/autocomplete/entity-au
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { DeletableChipButton } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { TableImageField, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { TableStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 
 interface Props {
   cell: Cell;
   space: string;
   triples: Triple[];
-  upsert: ReturnType<typeof useActionsStore>['upsert'];
-  upsertMany: ReturnType<typeof useActionsStore>['upsertMany'];
-  remove: ReturnType<typeof useActionsStore>['remove'];
   valueType: string;
   columnName: string;
   columnRelationTypes?: { typeId: string; typeName: string | null }[];
@@ -32,9 +28,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   cell,
   space,
   triples,
-  upsert,
-  upsertMany,
-  remove,
   columnName,
   valueType,
   columnRelationTypes,
@@ -44,11 +37,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       entityId: cell.entityId,
       spaceId: space,
       entityName: Entities.name(triples) ?? '',
-    },
-    api: {
-      upsert,
-      upsertMany,
-      remove,
     },
   });
 
@@ -63,7 +51,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
   const isRelationValueTypeColumn = valueType === SYSTEM_IDS.RELATION;
   const isTextValueTypeColumn = valueType === SYSTEM_IDS.TEXT;
-  const isImageValueTypeColumn = valueType === SYSTEM_IDS.IMAGE;
+  // const isImageValueTypeColumn = valueType === SYSTEM_IDS.IMAGE;
   const isDateValueTypeColumn = valueType === SYSTEM_IDS.DATE;
   const isUrlValueTypeColumn = valueType === SYSTEM_IDS.WEB_URL;
   const isEmptyCell = triples.length === 0;
@@ -127,36 +115,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         attributeId,
         attributeName: columnName,
         value,
-      },
-    });
-  };
-
-  const uploadImage = (triple: Triple, imageSrc: string) => {
-    send({
-      type: 'UPLOAD_IMAGE',
-      payload: {
-        triple,
-        imageSrc,
-      },
-    });
-  };
-
-  const createImageWithValue = (imageSrc: string) => {
-    send({
-      type: 'CREATE_IMAGE_TRIPLE_FROM_PLACEHOLDER',
-      payload: {
-        imageSrc,
-        attributeId,
-        attributeName: columnName,
-      },
-    });
-  };
-
-  const deleteImage = (triple: Triple) => {
-    send({
-      type: 'DELETE_IMAGE_TRIPLE',
-      payload: {
-        triple,
       },
     });
   };
@@ -227,10 +185,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
           <EntityAutocompleteDialog
             onDone={entity => createEntityTripleWithValue(attributeId, entity)}
-            entityValueIds={entityValueTriples
+            selectedIds={entityValueTriples
               .filter(triple => triple.attributeId === attributeId)
               .map(triple => triple.value.value)}
-            allowedTypes={typesToFilter}
+            filterByTypes={typesToFilter}
             spaceId={space}
             attributeId={attributeId}
           />
@@ -243,7 +201,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           placeholder="Add value..."
           onDone={result => createEntityTripleWithValue(attributeId, result)}
           alreadySelectedIds={entityValueTriples.filter(t => t.attributeId === attributeId).map(t => t.value.value)}
-          allowedTypes={typesToFilter}
+          filterByTypes={typesToFilter}
           attributeId={attributeId}
           containerClassName="!z-20"
         />
@@ -261,7 +219,8 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
         />
       )}
 
-      {isImageValueTypeColumn && (
+      {/* @TODO(relations): Add image support */}
+      {/* {isImageValueTypeColumn && (
         <TableImageField
           imageSrc={Values.imageValue(firstTriple) || ''}
           variant="table-cell"
@@ -272,7 +231,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             deleteImage(firstTriple);
           }}
         />
-      )}
+      )} */}
 
       {isDateValueTypeColumn && (
         <DateField

@@ -5,10 +5,9 @@ import { atom, useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useTriples as useMergedTriples } from '~/core/database/triples';
 import { Services } from '~/core/services';
 import { FilterState, Triple as TripleType } from '~/core/types';
-import { Triples } from '~/core/utils/triples';
 
 import { DEFAULT_PAGE_SIZE } from './constants';
 import { useTripleStoreInstance } from './triple-store-provider';
@@ -30,7 +29,6 @@ const filterStateAtom = atom<FilterState>([]);
 export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number } = {}) {
   const { subgraph } = Services.useServices();
   const { initialParams, space } = useTripleStoreInstance();
-  const { actions } = useActionsStore();
   const hydrated = React.useRef(false);
 
   const [query, setQuery] = useAtom(queryAtom);
@@ -73,14 +71,11 @@ export function useTriples({ pageSize = DEFAULT_PAGE_SIZE }: { pageSize?: number
     },
   });
 
-  const triples = React.useMemo(() => {
-    const networkTriples = networkData?.triples ?? [];
-    const localActions = actions[space] ?? [];
-
-    // We want to merge any local actions with the network triples
-    const updatedTriples = Triples.merge(localActions, networkTriples);
-    return Triples.withLocalNames(localActions, updatedTriples);
-  }, [actions, networkData, space]);
+  const triples = useMergedTriples({
+    mergeWith: networkData?.triples ?? [],
+    // @TODO: Map to filter state
+    selector: t => t.space === space,
+  });
 
   const setNextPage = React.useCallback(() => {
     setPageNumber(prev => prev + 1);

@@ -7,7 +7,6 @@ import { Triple as ITriple, ValueTypeId } from '~/core/types';
 
 import { Triples } from '../triples';
 import { groupBy } from '../utils';
-import { Values } from '../value';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -210,11 +209,8 @@ export function fromTriples(allTriplesInStore: ITriple[], entityId: string): Ent
  */
 export function avatar(triples: ITriple[] | undefined): string | null {
   if (!triples) return null;
-
-  const avatarTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.AVATAR_ATTRIBUTE);
-  const avatarUrl = avatarTriple !== undefined ? Values.imageValue(avatarTriple) : null;
-
-  return avatarUrl;
+  // @TODO(relations): This should be a relation pointing to the image entity
+  return null;
 }
 
 /**
@@ -222,11 +218,8 @@ export function avatar(triples: ITriple[] | undefined): string | null {
  */
 export function cover(triples: ITriple[] | undefined): string | null {
   if (!triples) return null;
-
-  const coverTriple = triples.find(triple => triple.attributeId === SYSTEM_IDS.COVER_ATTRIBUTE);
-  const coverUrl = coverTriple !== undefined ? Values.imageValue(coverTriple) : null;
-
-  return coverUrl;
+  // @TODO(relations): This should be a relation pointing to the image entity
+  return null;
 }
 
 /**

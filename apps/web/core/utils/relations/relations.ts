@@ -2,7 +2,7 @@ import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
 
 import { Triple } from '~/core/types';
 
-export function itemIndexValue(triple?: Triple): string | null {
+export function indexValue(triple?: Triple): string | null {
   if (!triple) {
     return null;
   }
@@ -12,7 +12,7 @@ export function itemIndexValue(triple?: Triple): string | null {
   return isIndexTriple ? triple.value.value : null;
 }
 
-export function itemCollectionIdValue(triple?: Triple): string | null {
+export function fromValue(triple?: Triple): string | null {
   if (!triple) {
     return null;
   }
@@ -23,7 +23,7 @@ export function itemCollectionIdValue(triple?: Triple): string | null {
   return isCollectionIdValue ? triple.value.value : null;
 }
 
-export function itemEntityIdValue(triple?: Triple): string | null {
+export function toValue(triple?: Triple): string | null {
   if (!triple) {
     return null;
   }
@@ -43,7 +43,7 @@ interface OpsToTriplesArgs {
 export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
   const { fromId, toId, spaceId, typeId } = args;
 
-  const [typeOp, collectionRefOp, entityRefOp, indexOp] = createRelationship({
+  const [typeOp, fromOp, toOp, indexOp] = createRelationship({
     fromId,
     toId,
     relationTypeId: typeId,
@@ -58,32 +58,32 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityName: null,
       value: {
         type: 'ENTITY',
-        name: 'Collection Item',
+        name: 'Relation',
         value: typeOp.triple.value.value,
       },
     },
     {
       space: spaceId,
-      attributeId: collectionRefOp.triple.attribute,
-      attributeName: 'Collection Reference',
-      entityId: collectionRefOp.triple.entity,
+      attributeId: fromOp.triple.attribute,
+      attributeName: 'From Entity',
+      entityId: fromOp.triple.entity,
       entityName: null,
       value: {
         type: 'ENTITY',
         name: null,
-        value: collectionRefOp.triple.value.value,
+        value: fromOp.triple.value.value,
       },
     },
     {
       space: spaceId,
-      attributeId: entityRefOp.triple.attribute,
-      attributeName: 'Collection Reference',
-      entityId: entityRefOp.triple.entity,
+      attributeId: toOp.triple.attribute,
+      attributeName: 'To Entity',
+      entityId: toOp.triple.entity,
       entityName: null,
       value: {
         type: 'ENTITY',
         name: null,
-        value: entityRefOp.triple.value.value,
+        value: toOp.triple.value.value,
       },
     },
     {

@@ -6,7 +6,6 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { LinkableChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CellContent } from '~/design-system/table/cell-content';
 
@@ -36,10 +35,6 @@ export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => 
               {value.name ?? value.value}
             </LinkableChip>
           );
-        }
-
-        if (value.type === 'IMAGE') {
-          return <ImageZoom key={value.value} imageSrc={value.image} variant="table-cell" />;
         }
 
         if (value.type === 'URI') {

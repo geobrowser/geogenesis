@@ -11,31 +11,14 @@ import { SubstreamSearchResult } from '../schema';
 import { resultEntityFragment } from './fragments';
 import { graphql } from './graphql';
 
-function getFetchResultsQuery(
-  query: string | undefined,
-  entityOfWhere: string,
-  typeIds?: string[],
-  first = 100,
-  skip = 0
-) {
+function getFetchResultsQuery(query: string | undefined, typeIds?: string[], first = 100, skip = 0) {
   const typeIdsString =
     typeIds && typeIds.length > 0
       ? `entityTypes: { some: { typeId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } }`
       : // Filter out block entities by default
         `entityTypes: { every: { typeId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.TABLE_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.INDEXED_SPACE}"] } } }`;
 
-  const constructedWhere =
-    entityOfWhere !== ''
-      ? `{ name: { startsWithInsensitive: ${JSON.stringify(query)} }
-        triples: {
-          some: {
-            ${entityOfWhere}
-            isStale: { equalTo: false }
-          }
-        }
-        ${typeIdsString}
-      }`
-      : `{name: {startsWithInsensitive: ${JSON.stringify(query)}} ${typeIdsString} }`;
+  const constructedWhere = `{name: {startsWithInsensitive: ${JSON.stringify(query)}} ${typeIdsString} }`;
 
   return `query {
     entities(filter: ${constructedWhere} first: ${first} offset: ${skip} orderBy: NAME_ASC) {
@@ -49,7 +32,6 @@ function getFetchResultsQuery(
 export interface FetchResultsOptions {
   query?: string;
   typeIds?: string[];
-  spaceId?: string;
   first?: number;
   skip?: number;
   signal?: AbortController['signal'];
@@ -63,13 +45,9 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
   const queryId = uuid();
   const endpoint = Environment.getConfig().api;
 
-  const entityOfWhere = [options.spaceId && `spaceId: { equalTo: ${JSON.stringify(options.spaceId)} }`]
-    .filter(Boolean)
-    .join(' ');
-
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: getFetchResultsQuery(options.query ?? '', entityOfWhere, options.typeIds, options.first, options.skip),
+    query: getFetchResultsQuery(options.query ?? '', options.typeIds, options.first, options.skip),
     signal: options?.signal,
   });
 
@@ -89,7 +67,6 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
           console.error(
             `Encountered runtime graphql error in fetchResults. queryId: ${queryId} ryString: ${getFetchResultsQuery(
               options.query,
-              entityOfWhere,
               options.typeIds,
               options.first,
               options.skip
@@ -133,26 +110,5 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
     })
     .filter(s => s !== null);
 
-  const sortedResults = sortSearchResultsByRelevance(decodedResults);
-  return sortedResults.map(SearchResultDto);
-}
-
-const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
-  if (a === null && b === null) {
-    return 0;
-  }
-  if (a === null) {
-    return 1;
-  }
-  if (b === null) {
-    return -1;
-  }
-  if (a.length === b.length) {
-    return a.localeCompare(b);
-  }
-  return a.length - b.length;
-};
-
-function sortSearchResultsByRelevance(startEntities: SubstreamSearchResult[]) {
-  return startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
+  return decodedResults.map(SearchResultDto);
 }

@@ -71,6 +71,17 @@ export function groupBy<T, U extends PropertyKey>(values: T[], projection: (valu
   return result;
 }
 
+export function uniqueBy<T, U extends PropertyKey>(values: T[], projection: (value: T) => U) {
+  return values.reduce<Record<U, T>>(
+    (acc, value) => {
+      const key = projection(value);
+      acc[key] = value;
+      return acc;
+    },
+    {} as Record<U, T>
+  );
+}
+
 export function partition<T>(array: T[], predicate: (value: T) => boolean): [T[], T[]] {
   return array.reduce<[T[], T[]]>(
     ([pass, fail], item) => {

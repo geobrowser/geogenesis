@@ -1,5 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-
 export const imageValueTypeTripleFragment = `
     attributeId
     textValue
@@ -152,8 +150,11 @@ export const resultEntityFragment = `
   name
   description
   ${entityTypesFragment}
-  entitySpacs {
-  nodes {
-    ${spaceFragment}
+  entitySpaces {
+    nodes {
+      space {
+        ${spaceFragment}
+      }
+    }
   }
 `;

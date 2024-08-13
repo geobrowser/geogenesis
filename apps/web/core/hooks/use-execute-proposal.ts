@@ -1,6 +1,6 @@
 import { MainVotingAbi } from '@geogenesis/sdk/abis';
 import { useMutation } from '@tanstack/react-query';
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 import { encodeFunctionData } from 'viem';
 
 import { useSmartAccountTransaction } from './use-smart-account-transaction';

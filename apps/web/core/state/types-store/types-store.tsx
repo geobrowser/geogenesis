@@ -1,18 +1,17 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { A, pipe } from '@mobily/ts-belt';
 
 import * as React from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useEntity } from '~/core/database/entities';
+import { useTriples } from '~/core/database/triples';
 import { Space } from '~/core/io/dto/spaces';
+import { EntityId } from '~/core/io/schema';
 import { GeoType, Triple as ITriple } from '~/core/types';
-import { Triples } from '~/core/utils/triples';
-
-import { useLocalStore } from '../local-store';
 
 interface TypesStoreProviderState {
+  // @TODO(relations) initial types should be relations and not triples
   initialTypes: ITriple[];
   space: Space | null;
 }
@@ -49,71 +48,34 @@ export function useTypesStore(): {
   localForeignTypes: GeoType[];
 } {
   const { initialTypes, space } = useTypesStoreInstance();
-  const { actions } = useActionsStore();
-  const { triples } = useLocalStore();
+  const { relationsOut } = useEntity(space?.spaceConfig.id ?? EntityId(''), {
+    relations: space?.spaceConfig.relationsOut ?? [],
+    triples: space?.spaceConfig.triples ?? [],
+  });
+
+  // @TODO(relations)
+  const types = useTriples(
+    React.useMemo(() => {
+      return {
+        mergeWith: initialTypes,
+        selector: t => t.attributeId === SYSTEM_IDS.TYPES && t.value.value === SYSTEM_IDS.SCHEMA_TYPE,
+      };
+    }, [initialTypes])
+  );
 
   const localForeignTypes: GeoType[] = React.useMemo(() => {
     if (!space) return [];
 
-    const triplesFromSpaceActions = triples.filter(t => t.space === space.id);
-    const spaceConfigId = space.spaceConfig?.id;
-
-    if (!spaceConfigId) {
-      // @TODO(relations)
-      const localSpaceConfigId = triplesFromSpaceActions.find(
-        t => t.value.type === 'ENTITY' && t.value.value === SYSTEM_IDS.SPACE_CONFIGURATION
-      )?.entityId;
-
-      const localForeignTriples = pipe(
-        triples,
-        A.filter(t => t.entityId === localSpaceConfigId),
-        A.filter(t => t.attributeId === SYSTEM_IDS.FOREIGN_TYPES),
-        // HACK: Right now the type-dialog is the only place consuming this.types$. It only
-        // uses the entityId and entityName, so we filter out the rest of the data. This
-        // makes it so we don't have to query the network or check local actions for the
-        // entity whose entityId === t.value.id
-        A.map(t => ({
-          id: t.id,
-          entityId: t.value.type === 'ENTITY' ? t.value.value : '',
-          entityName: t.value.type === 'ENTITY' ? (t.value.name ? t.value.name : '') : '', // lol
-          space: t.space,
-        }))
-      );
-
-      return localForeignTriples;
-    }
-
-    const localForeignTypes = pipe(
-      triples,
-      A.filter(t => t.entityId === spaceConfigId),
-      A.filter(t => t.attributeId === SYSTEM_IDS.FOREIGN_TYPES),
-      // HACK: Right now the type-dialog is the only place consuming this.types$. It only
-      // uses the entityId and entityName, so we filter out the rest of the data. This
-      // makes it so we don't have to query the network or check local actions for the
-      // entity whose entityId === t.value.id
-      A.map(t => ({
-        id: t.id,
-        entityId: t.value.type === 'ENTITY' ? t.value.value : '',
-        entityName: t.value.type === 'ENTITY' ? (t.value.name ? t.value.name : '') : '', // lol
-        space: t.space,
-      }))
-    );
-
-    return localForeignTypes;
-  }, [space, triples]);
-
-  const types: GeoType[] = React.useMemo(() => {
-    if (!space) return [];
-
-    // @TODO(relations)
-    const globalActions = actions[space.id] || [];
-    const localActions = globalActions.filter(a => {
-      return a.attributeId === SYSTEM_IDS.TYPES && a.value.value === SYSTEM_IDS.SCHEMA_TYPE && !a.isDeleted;
-    });
-
-    const triplesFromActions = Triples.merge(localActions, initialTypes);
-    return [...Triples.withLocalNames(globalActions, triplesFromActions), ...localForeignTypes];
-  }, [localForeignTypes, initialTypes, space, actions]);
+    return relationsOut
+      .filter(r => r.typeOf.id === SYSTEM_IDS.FOREIGN_TYPES)
+      .map(r => {
+        return {
+          entityId: r.toEntity.id,
+          entityName: r.toEntity.name,
+          space: space.id,
+        };
+      });
+  }, [space, relationsOut]);
 
   return {
     types,

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 
@@ -27,8 +27,8 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
   const [isMergeEntityMenuOpen, onMergeEntityMenuOpenChange] = React.useState(false);
 
   const isEditing = useUserIsEditing(spaceId);
-  const { remove } = useActionsStore();
-  const { triples, schemaTriples } = useEntityPageStore();
+  const { triples } = useEntityPageStore();
+  const { remove } = useWriteOps();
 
   const onCopyId = async () => {
     try {
@@ -41,8 +41,6 @@ export function EntityPageContextMenu({ entityId, spaceId }: Props) {
 
   const onDelete = () => {
     triples.forEach(t => remove(t, t.space));
-    schemaTriples.forEach(t => remove(t, t.space));
-
     onMenuOpenChange(false);
   };
 

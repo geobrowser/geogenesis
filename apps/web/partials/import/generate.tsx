@@ -326,7 +326,6 @@ export const Generate = ({ spaceId }: GenerateProps) => {
                 </>
               ) : (
                 <EntitySearchAutocomplete
-                  spaceId={spaceId}
                   placeholder="Select entity type..."
                   onDone={result => {
                     setEntityType(result as Entity);

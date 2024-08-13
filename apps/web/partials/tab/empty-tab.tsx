@@ -1,7 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 

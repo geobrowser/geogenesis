@@ -1,7 +1,7 @@
 import { SpaceGovernanceType } from '~/core/types';
 
 import { SpaceMetadataDto } from '../dto';
-import { Address, type Address as IAddress, SpaceId, SubstreamEntity, SubstreamSpace } from '../schema';
+import { Address, type Address as IAddress, SpaceId, SubstreamSpace } from '../schema';
 import { Entity } from './entities';
 
 export type Space = {

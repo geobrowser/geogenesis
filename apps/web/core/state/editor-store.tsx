@@ -14,14 +14,14 @@ import { tiptapExtensions } from '~/partials/editor/editor';
 import { htmlToPlainText } from '~/partials/editor/editor-utils';
 
 import { TableBlockSdk } from '../blocks-sdk';
+import { createRelationsForEntityAtom } from '../database/atoms';
+import { remove, upsert } from '../database/write';
 import { Entity, Relation } from '../io/dto/entities';
 import { EntityId, TypeId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
 import { CollectionItem, AppEntityValue as EntityValue, OmitStrict } from '../types';
 import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
-import { remove, upsert } from './actions-store/actions-store';
-import { createRelationsForEntityAtom } from './actions-store/create-relations-for-entity-atom';
 
 // We don't care about the value of the collection item in the block editor or
 // any of the entity properties except the id.
@@ -102,7 +102,7 @@ export function useEditorStore() {
   const relations: RelationWithBlock[] = useAtomValue(
     React.useMemo(
       () => createMergedBlockRelationsAtom(initialBlockRelations, initialBlocks, entityId),
-      [initialBlockRelations, entityId, initialBlocks, spaceId]
+      [initialBlockRelations, entityId, initialBlocks]
     )
   );
 
@@ -204,7 +204,6 @@ export function useEditorStore() {
       if (!existingBlockTriple) {
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: blockEntityId,
             entityName: entityName,
             attributeId: SYSTEM_IDS.TYPES,
@@ -226,7 +225,6 @@ export function useEditorStore() {
 
       upsert(
         {
-          type: 'SET_TRIPLE',
           entityId: blockEntityId,
           entityName: entityName,
           attributeId: SYSTEM_IDS.NAME,
@@ -266,7 +264,6 @@ export function useEditorStore() {
 
       upsert(
         {
-          type: 'SET_TRIPLE',
           entityId: blockEntityId,
           entityName: entityName,
           attributeId: SYSTEM_IDS.MARKDOWN_CONTENT,
@@ -296,7 +293,6 @@ export function useEditorStore() {
       if (!existingRowTypeTriple) {
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: blockEntityId,
             entityName: getNodeName(node),
             attributeId: SYSTEM_IDS.ROW_TYPE,
@@ -315,7 +311,6 @@ export function useEditorStore() {
         if (!existingFilterTriple) {
           upsert(
             {
-              type: 'SET_TRIPLE',
               entityId: blockEntityId,
               entityName: getNodeName(node),
               attributeId: SYSTEM_IDS.FILTER,
@@ -343,31 +338,28 @@ export function useEditorStore() {
   );
 
   // Helper function for creating a new block image triple for IMAGE_BLOCKs only
-  const createBlockImageTriple = React.useCallback(
-    (node: JSONContent) => {
-      const blockEntityId = getNodeId(node);
-      const isImageNode = node.type === 'image';
+  const createBlockImageTriple = React.useCallback((node: JSONContent) => {
+    // const blockEntityId = getNodeId(node);
+    const isImageNode = node.type === 'image';
 
-      if (!isImageNode || !node.attrs?.src) {
-        return null;
-      }
+    if (!isImageNode || !node.attrs?.src) {
+      return null;
+    }
 
-      const { src, id } = node.attrs;
+    // const { src, id } = node.attrs;
 
-      upsert(
-        {
-          type: 'SET_TRIPLE',
-          entityId: blockEntityId,
-          entityName: getNodeName(node),
-          attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
-          attributeName: 'Image',
-          value: { type: 'IMAGE', value: id, image: Values.toImageValue(src) },
-        },
-        spaceId
-      );
-    },
-    [spaceId]
-  );
+    // @TODO(relations): This should be a relation pointing to the image entity
+    // upsert(
+    //   {
+    //     entityId: blockEntityId,
+    //     entityName: getNodeName(node),
+    //     attributeId: SYSTEM_IDS.IMAGE_ATTRIBUTE,
+    //     attributeName: 'Image',
+    //     value: { type: 'IMAGE', value: id, image: Values.toImageValue(src) },
+    //   },
+    //   spaceId
+    // );
+  }, []);
 
   // Helper function to create or update the block IDs on an entity
   // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
@@ -383,7 +375,6 @@ export function useEditorStore() {
       if (newBlockIds.length > 0) {
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: entityId,
             attributeId: SYSTEM_IDS.TYPES,
             entityName: null,
@@ -420,7 +411,6 @@ export function useEditorStore() {
 
           upsert(
             {
-              type: 'SET_TRIPLE',
               attributeName: 'Types',
               entityName: null,
               attributeId: typeOp.triple.attribute,
@@ -436,7 +426,6 @@ export function useEditorStore() {
 
           upsert(
             {
-              type: 'SET_TRIPLE',
               attributeName: 'Collection reference',
               entityName: null,
               attributeId: collectionOp.triple.attribute,
@@ -452,7 +441,6 @@ export function useEditorStore() {
 
           upsert(
             {
-              type: 'SET_TRIPLE',
               attributeName: 'Entity reference',
               entityName: null,
               attributeId: entityOp.triple.attribute,
@@ -489,7 +477,6 @@ export function useEditorStore() {
 
           upsert(
             {
-              type: 'SET_TRIPLE',
               attributeName: 'Index',
               entityName: null,
               attributeId: indexOp.triple.attribute,
@@ -829,6 +816,7 @@ function markdownToHtml(markdown: string) {
 
   // Convert paragraphs
   html = html.replace(/^\s*(\n)?(.+)/gim, function (m) {
+    // eslint-disable-next-line no-useless-escape
     return /\<(\/)?(h\d|ul|ol|li|blockquote|pre|img)/.test(m) ? m : '<p>' + m + '</p>';
   });
 
@@ -850,6 +838,7 @@ function markdownToHtml(markdown: string) {
   html = html.replace(/<\/ol>\s*<ol>/g, '');
 
   // Convert blockquotes
+  // eslint-disable-next-line no-useless-escape
   html = html.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
 
   // Convert code blocks

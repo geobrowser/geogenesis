@@ -125,7 +125,7 @@ export const Editor = React.memo(function Editor({
       // Tiptap doesn't export the needed type APIs for us to be able to make this typesafe
       editor?.off('blur', onBlur as unknown as any);
     };
-  }, [onBlur]);
+  }, [onBlur, editor]);
 
   React.useEffect(() => {
     // We only update the editor with editorJson up until the first time we have made local edits.

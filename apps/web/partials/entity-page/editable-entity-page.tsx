@@ -5,13 +5,15 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 
+import { useTriples } from '~/core/database/triples';
+import { useWriteOps } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { Entity, Relation } from '~/core/io/dto/entities';
+import { EntityId } from '~/core/io/schema';
 import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { Triple } from '~/core/types';
-import { Triple as ITriple, RelationValueTypesByAttributeId, ValueType as TripleValueType } from '~/core/types';
+import { Triple as ITriple, ValueType as TripleValueType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
@@ -20,11 +22,10 @@ import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text
 import { SquareButton } from '~/design-system/button';
 import { DeletableChipButton } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { PageImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { Date } from '~/design-system/icons/date';
-import { Image } from '~/design-system/icons/image';
 import { Relation as RelationIcon } from '~/design-system/icons/relation';
 import { Text as TextIcon } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
@@ -50,11 +51,17 @@ type AttributeId = string;
 type AttributeValue = string;
 
 export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, attributes }: Props) {
-  const { triples: localTriples, schemaTriples, hideSchema, hiddenSchemaIds } = useEntityPageStore();
+  const { triples: localTriples, schema, hideSchema, hiddenSchemaIds, name } = useEntityPageStore();
 
-  const { remove, upsert, upsertMany } = useActionsStore();
+  const { upsertMany } = useWriteOps();
 
-  const { actionsFromSpace } = useActionsStore(spaceId);
+  const triplesFromSpace = useTriples(
+    React.useMemo(() => {
+      return {
+        selector: t => t.space === spaceId,
+      };
+    }, [spaceId])
+  );
   const { subgraph, config } = Services.useServices();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
@@ -63,21 +70,13 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
   // There may be some deleted triples locally. We check the actions to make sure that there are
   // actually 0 actions in the case that there are 0 local triples as the local triples here
   // are only the ones where `isDeleted` is false.
-  const triples = localTriples.length === 0 && actionsFromSpace.length === 0 ? serverTriples : localTriples;
-
-  // Always default to the local state for the name
-  const name = Entities.name(triples) ?? '';
+  const triples = localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
 
   const send = useEditEvents({
     context: {
       entityId: id,
       spaceId,
-      entityName: name,
-    },
-    api: {
-      upsert,
-      remove,
-      upsertMany,
+      entityName: name ?? '',
     },
   });
 
@@ -90,6 +89,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     if (hasSetType) return;
 
     const setTypeTriple = async () => {
+      // @TODO: Abstract to a hook and with useSearchParams instad of passing down the params
       if (typeId) {
         const typeEntity = await subgraph.fetchEntity({ id: typeId ?? '' });
 
@@ -114,19 +114,12 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
             if (templateEntity) {
               const newTriples = await cloneEntity({
                 oldEntityId: templateEntity.id,
-                entityName: name,
+                entityName: name ?? '',
                 entityId: id,
                 spaceId,
               });
 
-              upsertMany(
-                newTriples.map(t => {
-                  return {
-                    op: { ...t, type: 'SET_TRIPLE' },
-                    spaceId: spaceId,
-                  };
-                })
-              );
+              upsertMany(newTriples, spaceId);
             }
           }
         }
@@ -194,8 +187,8 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
           <EntityAttributes
             entityId={id}
             triples={triples}
-            schemaTriples={schemaTriples}
-            name={name}
+            schema={schema}
+            name={name ?? ''}
             send={send}
             hideSchema={hideSchema}
             hiddenSchemaIds={hiddenSchemaIds}
@@ -215,7 +208,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 function EntityAttributes({
   entityId,
   triples,
-  schemaTriples = [],
+  schema,
   name,
   send,
   hideSchema,
@@ -224,13 +217,32 @@ function EntityAttributes({
 }: {
   entityId: string;
   triples: ITriple[];
-  schemaTriples: ITriple[];
+  schema: { id: EntityId; name: string | null }[];
   send: ReturnType<typeof useEditEvents>;
   name: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
   spaceId: string;
 }) {
+  // Make some fake triples derived from the schema. We later hide and show these depending
+  // on if the entity has filled these fields or not.
+  // @TODO(relations): Should work for relations too
+  // @TODO: Default schema triples for name and description if they don't already exist in
+  // the list. This could maybe be done from the local database by automatically adding
+  // name and description to the schema.
+  const schemaTriples: ITriple[] = schema.map(s => ({
+    attributeId: SYSTEM_IDS.TYPES,
+    entityId,
+    entityName: name,
+    space: spaceId,
+    attributeName: 'Types',
+    value: {
+      type: 'ENTITY',
+      value: s.id,
+      name: s.name,
+    },
+  }));
+
   /**
    * All the things this component is doing
    * 1. Aggregating all of the entity value ids for every entity triple
@@ -313,56 +325,16 @@ function EntityAttributes({
       space?: string;
     }
   ) => {
-    // @TODO add space for linked entities
-
     const existingTriple = groupedTriplesByAttributeId[attributeId];
-    // If it's an empty triple value
     send({
       type: 'ADD_PAGE_ENTITY_VALUE',
       payload: {
-        // If we have an existing triple for this attributeId and it's not
-        // a placeholder then we know that we're adding another entity value
-        // resulting in MANY cardinality as a collection.
-        shouldConvertToCollection: existingTriple.placeholder === false,
         existingTriple: existingTriple,
         attribute: {
           id: attributeId,
         },
         linkedEntity,
         entityName: name,
-      },
-    });
-  };
-
-  const createStringTripleFromPlaceholder = (triple: ITriple, value: string) => {
-    send({
-      type: 'CREATE_TEXT_TRIPLE_FROM_PLACEHOLDER',
-      payload: {
-        attributeId: triple.attributeId,
-        attributeName: triple.attributeName ?? null,
-        value,
-      },
-    });
-  };
-
-  const createUrlTripleFromPlaceholder = (triple: ITriple, value: string) => {
-    send({
-      type: 'CREATE_URL_TRIPLE_FROM_PLACEHOLDER',
-      payload: {
-        attributeId: triple.attributeId,
-        attributeName: triple.attributeName ?? null,
-        value,
-      },
-    });
-  };
-
-  const createDateTripleFromPlaceholder = (triple: ITriple, value: string) => {
-    send({
-      type: 'CREATE_TIME_TRIPLE_FROM_PLACEHOLDER',
-      payload: {
-        attributeId: triple.attributeId,
-        attributeName: triple.attributeName ?? null,
-        value,
       },
     });
   };
@@ -406,24 +378,24 @@ function EntityAttributes({
     });
   };
 
-  const uploadImage = (triple: ITriple, imageSrc: string) => {
-    send({
-      type: 'UPLOAD_IMAGE',
-      payload: {
-        triple,
-        imageSrc,
-      },
-    });
-  };
+  // const uploadImage = (triple: ITriple, imageSrc: string) => {
+  //   send({
+  //     type: 'UPLOAD_IMAGE',
+  //     payload: {
+  //       triple,
+  //       imageSrc,
+  //     },
+  //   });
+  // };
 
-  const deleteImageTriple = (triple: ITriple) => {
-    send({
-      type: 'DELETE_IMAGE_TRIPLE',
-      payload: {
-        triple,
-      },
-    });
-  };
+  // const deleteImageTriple = (triple: ITriple) => {
+  //   send({
+  //     type: 'DELETE_IMAGE_TRIPLE',
+  //     payload: {
+  //       triple,
+  //     },
+  //   });
+  // };
 
   const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     send({
@@ -452,39 +424,17 @@ function EntityAttributes({
             key={triple.attributeId}
             variant="body"
             placeholder="Add value..."
-            aria-label={triple.placeholder ? 'placeholder-text-field' : 'text-field'}
-            value={triple.placeholder ? '' : triple.value.value}
+            aria-label="text-field"
+            value={triple.value.value}
             onChange={e => {
-              triple.placeholder
-                ? createStringTripleFromPlaceholder(triple, e.target.value)
-                : updateTextValue(triple, e.target.value);
-            }}
-          />
-        );
-      case 'IMAGE':
-        return (
-          <PageImageField
-            key={triple.attributeId}
-            variant="avatar"
-            imageSrc={triple.value.image}
-            onImageChange={imageSrc => {
-              uploadImage(triple, imageSrc);
-            }}
-            onImageRemove={() => {
-              deleteImageTriple(triple);
+              updateTextValue(triple, e.target.value);
             }}
           />
         );
       case 'NUMBER':
         return null;
       case 'TIME':
-        return (
-          <DateField
-            isEditing
-            value={triple.value.value}
-            onBlur={v => (triple.placeholder ? createDateTripleFromPlaceholder(triple, v) : updateDateValue(triple, v))}
-          />
-        );
+        return <DateField isEditing value={triple.value.value} onBlur={v => updateDateValue(triple, v)} />;
       case 'URI':
         return (
           <WebUrlField
@@ -492,16 +442,14 @@ function EntityAttributes({
             placeholder="Add value..."
             value={triple.value.value}
             onBlur={e => {
-              triple.placeholder
-                ? createUrlTripleFromPlaceholder(triple, e.target.value)
-                : updateUrlValue(triple, e.target.value);
+              updateUrlValue(triple, e.target.value);
             }}
           />
         );
       case 'ENTITY':
         if (isEmptyEntity) {
           return (
-            <div data-testid={triple.placeholder ? 'placeholder-select-entity' : 'select-entity'} className="w-full">
+            <div data-testid="select-entity" className="w-full">
               <SelectEntity
                 spaceId={spaceId}
                 onDone={result => {
@@ -576,7 +524,6 @@ function EntityAttributes({
 
         const isEmptyEntity = triple.value.type === 'ENTITY' && !triple.value.value;
         const attributeName = triple.attributeName;
-        const isPlaceholder = triple.placeholder;
 
         return (
           <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
@@ -604,87 +551,81 @@ function EntityAttributes({
                     attributeName={attributeName}
                   />
                 ) : null} */}
-                {!isPlaceholder && (
-                  <>
-                    <TripleTypeDropdown
-                      value={tripleType}
-                      options={[
-                        {
-                          label: (
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <TextIcon />
-                              <Spacer width={8} />
-                              Text
-                            </div>
-                          ),
-                          value: 'TEXT',
-                          onClick: () => onChangeTriple('TEXT', triple),
-                          disabled: false,
-                        },
-                        {
-                          label: (
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <RelationIcon />
-                              <Spacer width={8} />
-                              Entity
-                            </div>
-                          ),
-                          value: 'ENTITY',
-                          onClick: () => onChangeTriple('ENTITY', triple),
-                          disabled: false,
-                        },
-                        {
-                          label: (
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <Image />
-                              <Spacer width={8} />
-                              Image
-                            </div>
-                          ),
-                          value: 'IMAGE',
-                          onClick: () => onChangeTriple('IMAGE', triple),
-                          disabled: false,
-                        },
-                        {
-                          label: (
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <Date />
-                              <Spacer width={8} />
-                              Date
-                            </div>
-                          ),
-                          value: 'TIME',
-                          onClick: () => onChangeTriple('TIME', triple),
-                          disabled: false,
-                        },
-                        {
-                          label: (
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <Url />
-                              <Spacer width={8} />
-                              Web URL
-                            </div>
-                          ),
-                          value: 'URI',
-                          onClick: () => onChangeTriple('URI', triple),
-                          disabled: false,
-                        },
-                      ]}
-                    />
-                  </>
-                )}
+                <TripleTypeDropdown
+                  value={tripleType}
+                  options={[
+                    {
+                      label: (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <TextIcon />
+                          <Spacer width={8} />
+                          Text
+                        </div>
+                      ),
+                      value: 'TEXT',
+                      onClick: () => onChangeTriple('TEXT', triple),
+                      disabled: false,
+                    },
+                    {
+                      label: (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <RelationIcon />
+                          <Spacer width={8} />
+                          Entity
+                        </div>
+                      ),
+                      value: 'ENTITY',
+                      onClick: () => onChangeTriple('ENTITY', triple),
+                      disabled: false,
+                    },
+                    // @TODO(relations): Add image support
+                    // {
+                    //   label: (
+                    //     <div style={{ display: 'flex', alignItems: 'center' }}>
+                    //       <Image />
+                    //       <Spacer width={8} />
+                    //       Image
+                    //     </div>
+                    //   ),
+                    //   value: 'IMAGE',
+                    //   onClick: () => onChangeTriple('IMAGE', triple),
+                    //   disabled: false,
+                    // },
+                    {
+                      label: (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <Date />
+                          <Spacer width={8} />
+                          Date
+                        </div>
+                      ),
+                      value: 'TIME',
+                      onClick: () => onChangeTriple('TIME', triple),
+                      disabled: false,
+                    },
+                    {
+                      label: (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <Url />
+                          <Spacer width={8} />
+                          Web URL
+                        </div>
+                      ),
+                      value: 'URI',
+                      onClick: () => onChangeTriple('URI', triple),
+                      disabled: false,
+                    },
+                  ]}
+                />
                 <SquareButton
                   icon={<Trash />}
-                  onClick={
-                    isPlaceholder
-                      ? () => hideSchema(attributeId)
-                      : () => {
-                          hideSchema(attributeId);
-                          send({ type: 'REMOVE_TRIPLE', payload: { triple } });
-                        }
-                  }
+                  onClick={() => {
+                    hideSchema(attributeId);
+                    send({ type: 'REMOVE_TRIPLE', payload: { triple } });
+                  }}
                 />
               </div>
+              {/* @TODO: Placeholders shouldn't be a 'placeholder' triple and just be a special field */}
             </div>
           </div>
         );

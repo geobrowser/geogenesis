@@ -3,8 +3,8 @@ import { atom, useAtomValue } from 'jotai';
 import * as React from 'react';
 
 import { Relation } from '../io/dto/entities';
-import { createRelationsAtom } from '../state/actions-store/create-relations-for-entity-atom';
 import { store } from '../state/jotai-store';
+import { createRelationsAtom } from './atoms';
 
 interface UseRelationsArgs {
   mergeWith?: Relation[];
@@ -23,6 +23,6 @@ export function useRelations(args: UseRelationsArgs) {
   return useAtomValue(React.useMemo(() => makeLocalActionsAtomWithSelector(args), [args]));
 }
 
-export function getTriples(args: UseRelationsArgs) {
+export function getRelations(args: UseRelationsArgs) {
   return store.get(makeLocalActionsAtomWithSelector(args));
 }

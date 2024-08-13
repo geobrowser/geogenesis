@@ -90,11 +90,7 @@ const getData = async ({
   };
 
   const serverColumns = await fetchColumns({
-    params: fetchParams,
-    api: {
-      fetchTriples: Subgraph.fetchTriples,
-      fetchEntity: Subgraph.fetchEntity,
-    },
+    typeIds: typeId ? [typeId] : [],
   });
 
   const serverRows = await fetchRows({

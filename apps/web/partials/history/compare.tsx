@@ -11,13 +11,11 @@ import type { Change as Difference } from 'diff';
 import * as React from 'react';
 
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
-import { Environment } from '~/core/environment';
 import { Subgraph } from '~/core/io';
 import { fetchColumns } from '~/core/io/fetch-columns';
 import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import { Change } from '~/core/utils/change';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
@@ -683,34 +681,35 @@ const ChangedAttribute = ({ attributeId, attribute }: ChangedAttributeProps) => 
         </div>
       );
     }
-    case 'IMAGE': {
-      return (
-        <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div>
-              {/* @TODO: When can this be object? */}
-              {typeof before !== 'object' && (
-                <span className="inline-block rounded-lg bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div>
-              {/* @TODO: When can this be object? */}
-              {typeof after !== 'object' && (
-                <span className="inline-block rounded-lg bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
+    // @TODO(relations): Add image support
+    // case 'IMAGE': {
+    //   return (
+    //     <div key={attributeId} className="-mt-px flex gap-8">
+    //       <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+    //         <div className="text-bodySemibold capitalize">{name}</div>
+    //         <div>
+    //           {/* @TODO: When can this be object? */}
+    //           {typeof before !== 'object' && (
+    //             <span className="inline-block rounded-lg bg-errorTertiary p-1">
+    //               <img src={getImagePath(before)} className="rounded-lg" />
+    //             </span>
+    //           )}
+    //         </div>
+    //       </div>
+    //       <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+    //         <div className="text-bodySemibold capitalize">{name}</div>
+    //         <div>
+    //           {/* @TODO: When can this be object? */}
+    //           {typeof after !== 'object' && (
+    //             <span className="inline-block rounded-lg bg-successTertiary p-1">
+    //               <img src={getImagePath(after)} className="rounded-lg" />
+    //             </span>
+    //           )}
+    //         </div>
+    //       </div>
+    //     </div>
+    //   );
+    // }
     case 'TIME': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
@@ -894,23 +893,20 @@ const TableFilter = ({ filter }: TableFilterProps) => {
 };
 
 const useFilters = (rawFilter: string) => {
-  const { subgraph, config } = Services.useServices();
+  const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${rawFilter}`],
-    queryFn: () => getFilters(rawFilter, subgraph, config),
+    queryFn: () => getFilters(rawFilter, subgraph),
   });
 
   return [data, isLoading] as const;
 };
 
-const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph, config: Environment.AppConfig) => {
+const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph) => {
   const filters = await createFiltersFromGraphQLString(rawFilter, async id => await subgraph.fetchEntity({ id }));
+  // @TODO: Why are we fetching these?
   const serverColumns = await fetchColumns({
-    params: { skip: 0, first: 0, filter: '' },
-    api: {
-      fetchEntity: subgraph.fetchEntity,
-      fetchTriples: subgraph.fetchTriples,
-    },
+    typeIds: [],
   });
   const filtersWithColumnName = filters.map(f => {
     if (f.columnId === SYSTEM_IDS.NAME) {

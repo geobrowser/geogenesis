@@ -13,7 +13,6 @@ import { useGeoAccount } from '~/core/hooks/use-geo-account';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useEditable } from '~/core/state/editable-store';
-import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';

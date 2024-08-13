@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 
-import { useActionsStore } from '~/core/hooks/use-actions-store';
+import { useWriteOps } from '~/core/database/write';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 import { Services } from '~/core/services';
@@ -66,7 +66,7 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
 
-  const { upsert, remove, upsertMany } = useActionsStore();
+  const { upsert, remove, upsertMany } = useWriteOps();
 
   useEffect(() => {
     if (avatar !== teamMember.avatar || name !== teamMember.name || roleEntityId !== initialRoleEntityId) {
@@ -115,60 +115,32 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
             spaceId,
           });
 
-          upsertMany([
-            {
-              op: { ...typeTriple, type: 'SET_TRIPLE' },
-              spaceId,
-            },
-            {
-              op: { ...urlTriple, type: 'SET_TRIPLE' },
-              spaceId,
-            },
-            {
-              op: {
-                ...spaceAvatar,
-                type: 'SET_TRIPLE',
-                value: {
-                  type: 'IMAGE',
-                  value: typeTriple.entityId,
-                  image: urlTriple.value.value,
-                },
-              },
-              spaceId,
-            },
-          ]);
+          upsertMany([typeTriple, urlTriple], spaceId);
         }
       } else if (hasAvatar) {
-        const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-          imageSource: Values.toImageValue(avatar),
-          spaceId,
-        });
-
-        upsertMany([
-          {
-            op: { ...typeTriple, type: 'SET_TRIPLE' },
-            spaceId,
-          },
-          {
-            op: { ...urlTriple, type: 'SET_TRIPLE' },
-            spaceId,
-          },
-          {
-            op: {
-              type: 'SET_TRIPLE',
-              entityId: entityId,
-              entityName: name,
-              attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-              attributeName: 'Avatar',
-              value: {
-                type: 'IMAGE',
-                value: typeTriple.entityId,
-                image: urlTriple.value.value,
-              },
-            },
-            spaceId,
-          },
-        ]);
+        // @TODO(relations): Add image support
+        // const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+        //   imageSource: Values.toImageValue(avatar),
+        //   spaceId,
+        // });
+        // upsertMany(
+        //   [
+        //     typeTriple,
+        //     urlTriple,
+        //     {
+        //       entityId: entityId,
+        //       entityName: name,
+        //       attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+        //       attributeName: 'Avatar',
+        //       value: {
+        //         type: 'IMAGE',
+        //         value: typeTriple.entityId,
+        //         image: urlTriple.value.value,
+        //       },
+        //     },
+        //   ],
+        //   spaceId
+        // );
       }
     }
 
@@ -187,7 +159,6 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
           remove(spaceName, spaceId);
           upsert(
             {
-              type: 'SET_TRIPLE',
               ...spaceName,
               value: {
                 type: 'TEXT',
@@ -200,7 +171,6 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
       } else {
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId,
             entityName: name,
             attributeId: SYSTEM_IDS.NAME,
@@ -226,7 +196,6 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
       remove(spaceRole, spaceId);
       upsert(
         {
-          type: 'SET_TRIPLE',
           ...spaceRole,
           value: {
             type: 'ENTITY',
@@ -285,7 +254,6 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
         remove(triple, spaceId);
         upsert(
           {
-            type: 'SET_TRIPLE',
             entityId: entityId,
             entityName: triple.entityName,
             attributeId: triple.attributeId,
@@ -314,7 +282,6 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
       remove(triple, spaceId);
       upsert(
         {
-          type: 'SET_TRIPLE',
           entityId: newEntityId,
           entityName: triple.entityName,
           attributeId: triple.attributeId,
@@ -331,7 +298,6 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
     if (!nameSpaceTriple) {
       upsert(
         {
-          type: 'SET_TRIPLE',
           entityId: newEntityId,
           entityName: teamMember.name,
           attributeId: SYSTEM_IDS.NAME,
@@ -349,42 +315,34 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
 
     // Add avatar (if person has an avatar and its not already in space triples)
     if (!avatarSpaceTriple && teamMember.avatar) {
-      const [typeTriple, urlTriple] = Images.createImageEntityTriples({
-        imageSource: Values.toImageValue(teamMember.avatar),
-        spaceId,
-      });
-
-      upsertMany([
-        {
-          op: { ...typeTriple, type: 'SET_TRIPLE' },
-          spaceId,
-        },
-        {
-          op: { ...urlTriple, type: 'SET_TRIPLE' },
-          spaceId,
-        },
-        {
-          op: {
-            type: 'SET_TRIPLE',
-            entityId: newEntityId,
-            entityName: name,
-            attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-            attributeName: 'Avatar',
-            value: {
-              type: 'IMAGE',
-              value: typeTriple.entityId,
-              image: urlTriple.value.value,
-            },
-          },
-          spaceId,
-        },
-      ]);
+      // @TODO(relations): Add image support
+      // const [typeTriple, urlTriple] = Images.createImageEntityTriples({
+      //   imageSource: Values.toImageValue(teamMember.avatar),
+      //   spaceId,
+      // });
+      // upsertMany(
+      //   [
+      //     typeTriple,
+      //     urlTriple,
+      //     {
+      //       entityId: newEntityId,
+      //       entityName: name,
+      //       attributeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
+      //       attributeName: 'Avatar',
+      //       value: {
+      //         type: 'IMAGE',
+      //         value: typeTriple.entityId,
+      //         image: urlTriple.value.value,
+      //       },
+      //     },
+      //   ],
+      //   spaceId
+      // );
     }
 
     // Add person type
     upsert(
       {
-        type: 'SET_TRIPLE',
         entityId: newEntityId,
         attributeId: SYSTEM_IDS.TYPES,
         entityName: teamMember.name,
@@ -490,8 +448,8 @@ export const EditTeamMember = ({ teamMember, spaceId }: EditTeamMemberProps) => 
                 placeholder="Find or create role..."
                 onDone={handleChangeRole}
                 alreadySelectedIds={[]}
-                allowedTypes={[{ typeId: '9c1922f1-d7a2-47d1-841d-234cb2f56991', typeName: 'Role' }]}
-                attributeId="9c1922f1-d7a2-47d1-841d-234cb2f56991"
+                filterByTypes={[{ typeId: SYSTEM_IDS.ROLE_ATTRIBUTE, typeName: 'Role' }]}
+                attributeId={SYSTEM_IDS.ROLE_ATTRIBUTE}
                 className="!h-auto !font-medium"
               />
             ) : (

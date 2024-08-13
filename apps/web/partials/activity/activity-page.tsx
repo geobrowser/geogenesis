@@ -5,7 +5,7 @@ import { Suspense } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
-import { AppOp, TripleWithEntityValue } from '~/core/types';
+import { TripleWithEntityValue } from '~/core/types';
 import { GeoDate, formatShortAddress, getImagePath } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';

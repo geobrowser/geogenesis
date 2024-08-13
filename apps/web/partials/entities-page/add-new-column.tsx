@@ -2,7 +2,6 @@ import * as React from 'react';
 import { memo } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { useActionsStore } from '~/core/hooks/use-actions-store';
 import { GeoType } from '~/core/types';
 
 import { Plus } from '~/design-system/icons/plus';
@@ -13,18 +12,11 @@ interface Props {
 }
 
 export const AddNewColumn = memo(function AddNewColumn({ selectedType, space }: Props) {
-  const { upsert, remove, upsertMany } = useActionsStore();
-
   const send = useEditEvents({
     context: {
       entityId: selectedType.entityId,
       spaceId: space,
       entityName: selectedType.entityName || '',
-    },
-    api: {
-      upsert,
-      upsertMany,
-      remove,
     },
   });
 
