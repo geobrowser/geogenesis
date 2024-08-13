@@ -6,8 +6,8 @@ import { Command } from 'cmdk';
 import * as React from 'react';
 
 import { useWriteOps } from '~/core/database/write';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
 import { useConfiguredAttributeRelationTypes } from '~/core/hooks/use-configured-attribute-relation-types';
+import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { Entity } from '~/core/io/dto/entities';
 import { OmitStrict, RelationValueType } from '~/core/types';
@@ -55,19 +55,18 @@ function AttributeSearch({
   attributeName,
   attributeSpaceId,
 }: OmitStrict<Props, 'trigger'> & { attributeSpaceId?: string }) {
-  const autocomplete = useAutocomplete({
-    allowedTypes: [SYSTEM_IDS.SCHEMA_TYPE],
+  const autocomplete = useSearch({
+    filterByTypes: [SYSTEM_IDS.SCHEMA_TYPE],
   });
 
   const { upsert, remove } = useWriteOps();
-  const { spaces } = useSpaces();
 
   const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId });
 
   const relationValueTypesForAttribute = attributeRelationTypes[attributeId] ?? [];
   const alreadySelectedTypes = relationValueTypesForAttribute.map(st => st.typeId);
 
-  const onSelect = async (result: Entity) => {
+  const onSelect = async (result: { id: string; name: string | null }) => {
     if (!attributeSpaceId) return;
 
     upsert(
@@ -122,7 +121,6 @@ function AttributeSearch({
               alreadySelected={alreadySelectedTypes.includes(result.id)}
               withDescription={false}
               result={result}
-              spaces={spaces}
               onClick={() => onSelect(result)}
             />
           </Command.Item>

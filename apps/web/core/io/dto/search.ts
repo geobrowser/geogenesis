@@ -11,8 +11,8 @@ export type SearchResult = {
 };
 
 export function SearchResultDto(result: SubstreamSearchResult): SearchResult {
-  const spaces = result.entitySpaces.nodes.flatMap(space =>
-    SpaceMetadataDto(space.id, space.spacesMetadata.nodes[0]?.entity)
+  const spaces = result.entitySpaces.nodes.flatMap(result =>
+    SpaceMetadataDto(result.space.id, result.space.spacesMetadata.nodes[0]?.entity)
   );
 
   return {

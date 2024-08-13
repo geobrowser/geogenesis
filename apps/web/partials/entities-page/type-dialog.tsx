@@ -5,9 +5,8 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useState } from 'react';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { Entity } from '~/core/io/dto/entities';
+import { useSearch } from '~/core/hooks/use-search';
+import { SearchResult } from '~/core/io/dto/search';
 import { useEditable } from '~/core/state/editable-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 import { useTypesStore } from '~/core/state/types-store/types-store';
@@ -27,14 +26,13 @@ interface Props {
 type TypeDialogMode = 'current-space' | 'foreign-space';
 
 export function TypeDialog({ handleSelect, spaceId }: Props) {
-  const autocomplete = useAutocomplete({
-    allowedTypes: [SYSTEM_IDS.SCHEMA_TYPE],
+  const autocomplete = useSearch({
+    filterByTypes: [SYSTEM_IDS.SCHEMA_TYPE],
   });
   const { types } = useTypesStore();
   const entityTableStore = useEntityTable();
   const { isEditor } = useAccessControl(spaceId);
   const { editable } = useEditable();
-  const { spaces } = useSpaces();
 
   const [entityName, setEntityName] = useState('');
   const [mode, setMode] = useState<TypeDialogMode>('current-space');
@@ -55,16 +53,18 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
     }
   };
 
-  const createForeignType = (typeEntity: Entity) => {
-    const foreignTypeTriple = typeEntity.triples.find(
-      triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.value === SYSTEM_IDS.SCHEMA_TYPE
-    );
+  const createForeignType = (typeEntity: SearchResult) => {
+    // @TODO: Fix
+    return;
+    // const foreignTypeTriple = typeEntity.triples.find(
+    //   triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.value === SYSTEM_IDS.SCHEMA_TYPE
+    // );
 
-    if (!foreignTypeTriple) return;
+    // if (!foreignTypeTriple) return;
 
-    entityTableStore.createForeignType(foreignTypeTriple);
-    setEntityName('');
-    handleSelect(foreignTypeTriple);
+    // entityTableStore.createForeignType(foreignTypeTriple);
+    // setEntityName('');
+    // handleSelect(foreignTypeTriple);
   };
 
   const createType = () => {
@@ -78,17 +78,11 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
 
   const spaceTypeIds = types.map(type => type.entityId);
 
-  // Prevent non-types or current space types from showing up in the autocomplete results
-  const filteredAutocompleteResults = autocomplete.results.filter(result => {
-    const typeIds = result.triples.map(triple => triple.value.value);
-    return !spaceTypeIds.includes(result.id) && typeIds.includes(SYSTEM_IDS.SCHEMA_TYPE);
-  });
-
-  const resultCount = mode === 'current-space' ? filteredTypes.length : filteredAutocompleteResults.length;
+  const resultCount = mode === 'current-space' ? filteredTypes.length : autocomplete.results.length;
 
   const noResultsFound =
     (mode === 'current-space' && filteredTypes.length === 0) ||
-    (mode === 'foreign-space' && filteredAutocompleteResults.length === 0);
+    (mode === 'foreign-space' && autocomplete.results.length === 0);
 
   return (
     <div>
@@ -106,7 +100,7 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
                 {type.entityName}
               </ResultItem>
             ))
-          : filteredAutocompleteResults.map(result => (
+          : autocomplete.results.map(result => (
               <ResultContent
                 key={result.id}
                 onClick={() => {
@@ -114,7 +108,6 @@ export function TypeDialog({ handleSelect, spaceId }: Props) {
                 }}
                 alreadySelected={filteredTypes.some(type => type.entityId === result.id)}
                 result={result}
-                spaces={spaces}
               />
             ))}
       </ResultsList>

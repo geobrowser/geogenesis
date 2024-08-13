@@ -150,8 +150,11 @@ export const resultEntityFragment = `
   name
   description
   ${entityTypesFragment}
-  entitySpacs {
-  nodes {
-    ${spaceFragment}
+  entitySpaces {
+    nodes {
+      space {
+        ${spaceFragment}
+      }
+    }
   }
 `;

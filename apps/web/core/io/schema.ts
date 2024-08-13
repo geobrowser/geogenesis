@@ -251,7 +251,7 @@ export const SubstreamSearchResult = Schema.extend(
   SubstreamEntity.pick('id', 'name', 'entityTypes', 'description'),
   Schema.Struct({
     entitySpaces: Schema.Struct({
-      nodes: Schema.Array(SubstreamSpace),
+      nodes: Schema.Array(Schema.Struct({ space: SubstreamSpace })),
     }),
   })
 );

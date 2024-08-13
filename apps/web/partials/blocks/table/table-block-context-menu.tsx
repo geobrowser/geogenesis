@@ -15,10 +15,11 @@ import * as React from 'react';
 
 import { getSchemaFromTypeIds, mergeEntityAsync } from '~/core/database/entities';
 import { useWriteOps } from '~/core/database/write';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
+import { useSearch } from '~/core/hooks/use-search';
 import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { Entity } from '~/core/io/dto/entities';
+import { SearchResult } from '~/core/io/dto/search';
 import { useMigrateHub } from '~/core/migrate/migrate';
 import { useTableBlock } from '~/core/state/table-block-store';
 import { Triple as ITriple, ValueTypeId } from '~/core/types';
@@ -59,7 +60,7 @@ const MotionContent = motion(Dropdown.Content);
 // We keep track of the attributes in local state in order to quickly render
 // the changes the user has made to the schema. Otherwise there will be loading
 // states for several actions which will make the UI feel slow.
-const optimisticAttributesAtom = atom<Entity[]>([]);
+const optimisticAttributesAtom = atom<SearchResult[]>([]);
 
 function useOptimisticAttributes({
   entityId,
@@ -74,7 +75,7 @@ function useOptimisticAttributes({
   const { upsert, remove } = useWriteOps();
   const migrateHub = useMigrateHub();
 
-  const onAddAttribute = (attribute: Entity) => {
+  const onAddAttribute = (attribute: SearchResult) => {
     upsert(
       {
         entityId: entityId,
@@ -93,7 +94,7 @@ function useOptimisticAttributes({
     setOptimisticAttributes([...optimisticAttributes, attribute]);
   };
 
-  const onUpdateAttribute = (attribute: Entity) => {
+  const onUpdateAttribute = (attribute: SearchResult) => {
     const remappedOptimisticAttributes = optimisticAttributes.map(a => {
       if (a.id === attribute.id) {
         return attribute;
@@ -182,7 +183,9 @@ function useOptimisticAttributes({
       // Update the attribute in-place in the optimistic state
       onUpdateAttribute({
         ...attribute,
-        triples: updatedTriples,
+        // @TODO(database)
+        spaces: [],
+        // triples: updatedTriples,
       });
 
       // Create a new Value Type triple with the new value type
@@ -204,6 +207,7 @@ function useOptimisticAttributes({
   // Update the modal state with the initial data for the attributes. We update this modal state optimistically
   // when users add or remove attributes.
   React.useEffect(() => {
+    // @ts-expect-error @TODO(database)
     setOptimisticAttributes(data ?? []);
   }, [data, setOptimisticAttributes]);
 
@@ -479,11 +483,9 @@ const resultsListActionBarStyles = cva(
 function AddAttribute() {
   const { type } = useTableBlock();
 
-  const autocomplete = useAutocomplete({
-    allowedTypes: [SYSTEM_IDS.ATTRIBUTE],
+  const autocomplete = useSearch({
+    filterByTypes: [SYSTEM_IDS.ATTRIBUTE],
   });
-
-  const { spaces } = useSpaces();
 
   const { optimisticAttributes, onAddAttribute } = useOptimisticAttributes({
     entityId: type.entityId,
@@ -491,7 +493,7 @@ function AddAttribute() {
     spaceId: type.space,
   });
 
-  const onSelect = (result: Entity) => {
+  const onSelect = (result: SearchResult) => {
     autocomplete.onQueryChange('');
     onAddAttribute(result);
   };
@@ -523,7 +525,6 @@ function AddAttribute() {
                       onClick={() => onSelect(result)}
                       alreadySelected={optimisticAttributes.map(a => a.id).includes(result.id)}
                       result={result}
-                      spaces={spaces}
                     />
                   </motion.li>
                 ))}
@@ -609,37 +610,39 @@ function SchemaAttributes() {
     <div className="flex flex-col gap-1">
       <h3 className="text-bodySemibold">Attributes</h3>
       <div className="flex flex-col gap-2">
-        {attributes?.map(attributeEntity => {
-          const valueTypeId: ValueTypeId | undefined = attributeEntity.triples.find(
-            t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
-          )?.value.value as ValueTypeId;
+        {attributes?.map(() => {
+          // @TODO(relations)
+          return null;
+          // const valueTypeId: ValueTypeId | undefined = attributeEntity.triples.find(
+          //   t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
+          // )?.value.value as ValueTypeId;
 
-          const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
+          // const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
 
-          return (
-            <div key={attributeEntity.id} className="flex items-center gap-4">
-              {/* <div className="rounded bg-grey-01 px-5 py-2.5"> */}
-              <AttributeValueTypeDropdown
-                valueTypeId={valueTypeId}
-                onChange={valueTypeId => onChangeAttributeValueType(valueTypeId, attributeEntity)}
-              />
-              {/* </div> */}
-              <Input
-                defaultValue={attributeEntity.name ?? ''}
-                onBlur={e => onChangeAttributeName(e.currentTarget.value, attributeEntity, nameTripleForAttribute)}
-              />
-              {/* {valueTypeId === SYSTEM_IDS.RELATION && (
-                <AttributeConfigurationMenu
-                  trigger={<Cog />}
-                  attributeId={attributeEntity.id}
-                  attributeName={attributeEntity.name}
-                />
-              )} */}
-              <AttributeRowContextMenu
-                onRemoveAttribute={() => onRemoveAttribute(attributeEntity, nameTripleForAttribute)}
-              />
-            </div>
-          );
+          // return (
+          //   <div key={attributeEntity.id} className="flex items-center gap-4">
+          //     {/* <div className="rounded bg-grey-01 px-5 py-2.5"> */}
+          //     <AttributeValueTypeDropdown
+          //       valueTypeId={valueTypeId}
+          //       onChange={valueTypeId => onChangeAttributeValueType(valueTypeId, attributeEntity)}
+          //     />
+          //     {/* </div> */}
+          //     <Input
+          //       defaultValue={attributeEntity.name ?? ''}
+          //       onBlur={e => onChangeAttributeName(e.currentTarget.value, attributeEntity, nameTripleForAttribute)}
+          //     />
+          //     {/* {valueTypeId === SYSTEM_IDS.RELATION && (
+          //       <AttributeConfigurationMenu
+          //         trigger={<Cog />}
+          //         attributeId={attributeEntity.id}
+          //         attributeName={attributeEntity.name}
+          //       />
+          //     )} */}
+          //     <AttributeRowContextMenu
+          //       onRemoveAttribute={() => onRemoveAttribute(attributeEntity, nameTripleForAttribute)}
+          //     />
+          //   </div>
+          // );
         })}
       </div>
     </div>

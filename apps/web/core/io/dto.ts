@@ -34,7 +34,7 @@ export function TripleDto(triple: SubstreamTriple) {
   };
 }
 
-export function SpaceMetadataDto(spaceId: string, metadata: SubstreamEntity | undefined | null) {
+export function SpaceMetadataDto(spaceId: string, metadata: SubstreamEntity | undefined | null): SpaceConfigEntity {
   const spaceConfigTriples = (metadata?.triples.nodes ?? []).map(TripleDto);
 
   const spaceConfigWithImage: SpaceConfigEntity = metadata

@@ -237,7 +237,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]) {
  * The triples and relations here should already be merged with the entity's
  * local and remote state.
  */
-function readTypes(triples: Triple[], relations: Relation[]): { id: TypeId; name: string | null }[] {
+export function readTypes(triples: Triple[], relations: Relation[]): { id: TypeId; name: string | null }[] {
   const typesViaTriples = triples
     .filter(
       triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.type === 'ENTITY' && triple.value.value !== ''

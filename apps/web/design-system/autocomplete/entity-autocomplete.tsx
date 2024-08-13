@@ -9,8 +9,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { useWriteOps } from '~/core/database/write';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 
@@ -48,22 +47,21 @@ const StyledContent = (props: ContentProps) => {
 const MotionContent = motion(StyledContent);
 
 interface Props {
-  entityValueIds: string[];
+  selectedIds: string[];
   onDone: (result: { id: string; name: string | null }) => void;
-  allowedTypes?: { typeId: string; typeName: string | null }[];
+  filterByTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
   attributeId?: string;
 }
 
-export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes, spaceId, attributeId }: Props) {
+export function EntityAutocompleteDialog({ onDone, selectedIds, filterByTypes, spaceId, attributeId }: Props) {
   const [, setToast] = useToast();
   const { upsert } = useWriteOps();
-  const autocomplete = useAutocomplete({
-    allowedTypes: allowedTypes?.map(type => type.typeId),
+  const autocomplete = useSearch({
+    filterByTypes: filterByTypes?.map(type => type.typeId),
   });
-  const entityItemIdsSet = new Set(entityValueIds);
+  const selectedIdsSet = new Set(selectedIds);
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const { spaces } = useSpaces();
 
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
@@ -100,8 +98,8 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
       spaceId
     );
 
-    if (allowedTypes) {
-      allowedTypes.forEach(type => {
+    if (filterByTypes) {
+      filterByTypes.forEach(type => {
         upsert(
           {
             entityId: newEntityId,
@@ -206,9 +204,8 @@ export function EntityAutocompleteDialog({ onDone, entityValueIds, allowedTypes,
                       <ResultContent
                         key={result.id}
                         onClick={() => onDone(result)}
-                        alreadySelected={entityItemIdsSet.has(result.id)}
+                        alreadySelected={selectedIdsSet.has(result.id)}
                         result={result}
-                        spaces={spaces}
                       />
                     </motion.div>
                   ))}

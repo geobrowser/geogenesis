@@ -5,9 +5,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { useGlobalSearch } from '~/core/hooks/use-global-search';
-import { useSpaces } from '~/core/hooks/use-spaces';
-import { Entity } from '~/core/io/dto/entities';
+import { useSearch } from '~/core/hooks/use-search';
+import { SearchResult } from '~/core/io/dto/search';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
@@ -23,22 +22,21 @@ interface Props {
 }
 
 export function Dialog({ onDone, open, onOpenChange }: Props) {
-  const autocomplete = useGlobalSearch();
+  const autocomplete = useSearch();
   const router = useRouter();
-  const { spaces } = useSpaces();
 
   if (!open) return null;
 
   const separatedResults = autocomplete.results.reduce((acc, result) => {
-    for (const spaceId of result.nameTripleSpaces ?? []) {
+    for (const space of result.spaces ?? []) {
       acc.push({
         ...result,
-        nameTripleSpaces: [spaceId],
+        spaces: [space],
       });
     }
 
     return acc;
-  }, [] as Entity[]);
+  }, [] as SearchResult[]);
 
   return (
     <Command.Dialog open={open} onOpenChange={onOpenChange} label="Entity search">
@@ -91,11 +89,11 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
                   key={result.id}
                 >
                   {/* It's safe to cast nameTripleSpace since we only render entities that have a name triple */}
-                  <Link href={NavUtils.toEntity(result.nameTripleSpaces![0], result.id)} onClick={() => onDone()}>
+                  <Link href={NavUtils.toEntity(result.spaces![0].id, result.id)} onClick={() => onDone()}>
                     <Command.Item
                       className="transition-colors duration-75 aria-selected:bg-grey-01"
                       onSelect={() => {
-                        router.push(NavUtils.toEntity(result.nameTripleSpaces![0], result.id));
+                        router.push(NavUtils.toEntity(result.spaces![0].id, result.id));
                         onDone();
                       }}
                     >
@@ -105,7 +103,6 @@ export function Dialog({ onDone, open, onOpenChange }: Props) {
                           // have the keyboard navigation work as expected with the cmdk lib.
                         }}
                         result={result}
-                        spaces={spaces}
                       />
                     </Command.Item>
                   </Link>

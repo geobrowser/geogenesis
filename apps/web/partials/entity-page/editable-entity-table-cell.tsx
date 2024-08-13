@@ -215,10 +215,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
           <EntityAutocompleteDialog
             onDone={entity => createEntityTripleWithValue(attributeId, entity)}
-            entityValueIds={entityValueTriples
+            selectedIds={entityValueTriples
               .filter(triple => triple.attributeId === attributeId)
               .map(triple => triple.value.value)}
-            allowedTypes={typesToFilter}
+            filterByTypes={typesToFilter}
             spaceId={space}
             attributeId={attributeId}
           />

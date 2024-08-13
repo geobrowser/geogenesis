@@ -48,7 +48,7 @@ export const SelectEntity = ({
   const [result, setResult] = useState<SearchResult | null>(null);
 
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
-    allowedTypes: allowedTypes?.map(type => type.typeId),
+    filterByTypes: allowedTypes?.map(type => type.typeId),
   });
 
   const handleShowIds = () => {

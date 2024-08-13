@@ -9,8 +9,7 @@ import * as React from 'react';
 import { useRef } from 'react';
 
 import { useWriteOps } from '~/core/database/write';
-import { useAutocomplete } from '~/core/hooks/use-autocomplete';
-import { useSpaces } from '~/core/hooks/use-spaces';
+import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 
@@ -26,7 +25,7 @@ interface Props {
   placeholder?: string;
   onDone: (result: { id: string; name: string | null; nameTripleSpace?: string }) => void;
   alreadySelectedIds: string[];
-  allowedTypes?: { typeId: string; typeName: string | null }[];
+  filterByTypes?: { typeId: string; typeName: string | null }[];
   spaceId: string;
   attributeId?: string;
   wrapperClassName?: string;
@@ -38,7 +37,7 @@ export function EntityTextAutocomplete({
   placeholder,
   alreadySelectedIds,
   onDone,
-  allowedTypes,
+  filterByTypes,
   spaceId,
   attributeId,
   wrapperClassName = '',
@@ -47,12 +46,11 @@ export function EntityTextAutocomplete({
 }: Props) {
   const [, setToast] = useToast();
   const { upsert } = useWriteOps();
-  const { query, onQueryChange, isLoading, isEmpty, results } = useAutocomplete({
-    allowedTypes: allowedTypes?.map(type => type.typeId),
+  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+    filterByTypes: filterByTypes?.map(type => type.typeId),
   });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemIdsSet = new Set(alreadySelectedIds);
-  const { spaces } = useSpaces();
 
   // const attributeRelationTypes = useConfiguredAttributeRelationTypes({ entityId: attributeId ?? '' });
   // const relationValueTypesForAttribute = attributeId ? attributeRelationTypes[attributeId] ?? [] : [];
@@ -75,8 +73,8 @@ export function EntityTextAutocomplete({
       spaceId
     );
 
-    if (allowedTypes) {
-      allowedTypes.forEach(type => {
+    if (filterByTypes) {
+      filterByTypes.forEach(type => {
         upsert(
           {
             entityId: newEntityId,
@@ -152,7 +150,6 @@ export function EntityTextAutocomplete({
                   <ResultContent
                     key={result.id}
                     onClick={() => onDone(result)}
-                    spaces={spaces}
                     alreadySelected={itemIdsSet.has(result.id)}
                     result={result}
                   />
