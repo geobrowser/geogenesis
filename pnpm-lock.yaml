@@ -108,7 +108,6 @@ importers:
       ethers: ^5.0.0
       fake-indexeddb: ^4.0.2
       framer-motion: ^10.15.2
-      fuse.js: ^7.0.0
       immer: ^9.0.16
       jotai: ^2.5.1
       jotai-scope: ^0.4.1
@@ -195,7 +194,6 @@ importers:
       effect: 3.2.3
       ethers: 5.7.2
       framer-motion: 10.15.2_biqbaboplfbrettd7655fr4n2y
-      fuse.js: 7.0.0
       immer: 9.0.16
       jotai: 2.5.1_o5ysialsahsznabqayk7pree4e
       jotai-scope: 0.4.1_jotai@2.5.1+react@18.2.0
@@ -9895,11 +9893,6 @@ packages:
   /functions-have-names/1.2.3:
     resolution: {integrity: sha512-xckBUXyTIqT97tq2x2AMb+g163b5JFysYk0x4qxNFwbfQkmNZoiRHb6sPzI9/QV33WeuvVYBUIiD4NzNIyqaRQ==}
     dev: true
-
-  /fuse.js/7.0.0:
-    resolution: {integrity: sha512-14F4hBIxqKvD4Zz/XjDc3y94mNZN6pRv3U13Udo0lNLCWRBUsrMv2xwcF/y/Z5sV6+FQW+/ow68cHpm4sunt8Q==}
-    engines: {node: '>=10'}
-    dev: false
 
   /futoin-hkdf/1.5.3:
     resolution: {integrity: sha512-SewY5KdMpaoCeh7jachEWFsh1nNlaDjNHZXWqL5IGwtpEYHTgkr2+AMCgNwKWkcc0wpSYrZfR7he4WdmHFtDxQ==}

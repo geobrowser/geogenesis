@@ -286,7 +286,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
   };
 
   const spaceImage = space?.spaceConfig?.image ?? null;
-  const isInitial = !isEditingDataSource && !isEditingColumns;
+  const isInitialState = !isEditingDataSource && !isEditingColumns;
 
   return (
     <Dropdown.Root open={isMenuOpen} onOpenChange={onOpenChange}>
@@ -304,7 +304,7 @@ export function TableBlockContextMenu({ allColumns, shownColumnTriples, shownCol
           className="z-100 block !w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           align="end"
         >
-          {isInitial && (
+          {isInitialState && (
             <>
               {isEditing && (
                 <>

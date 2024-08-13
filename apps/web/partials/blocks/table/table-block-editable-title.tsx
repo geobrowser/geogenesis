@@ -11,20 +11,19 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const userCanEdit = useUserIsEditing(spaceId);
 
   const { name, setName, source } = useTableBlock();
-  const sourceIsSpaces = Array.isArray(source);
 
-  const hasOverflow = sourceIsSpaces ? source.length > 3 : false;
-  const renderedSpaces = sourceIsSpaces ? (hasOverflow ? source.slice(0, 2) : source) : [];
+  const hasOverflow = source.type === 'spaces' ? source.value.length > 3 : false;
+  const renderedSpaces = source.type === 'spaces' ? (hasOverflow ? source.value.slice(0, 2) : source.value) : [];
 
   return (
     <div className="flex items-center gap-2">
-      {source === 'geo' && (
+      {source.type === 'geo' && (
         <img
           src={getImagePath(PLACEHOLDER_SPACE_IMAGE)}
           className="flex !size-[16px] flex-shrink-0 overflow-clip !rounded-sm border border-white object-cover"
         />
       )}
-      {sourceIsSpaces && (
+      {source.type === 'spaces' && (
         <div className="group relative z-100 flex h-full">
           {renderedSpaces.map(spaceId => {
             const selectedSpace = spaces.find(space => space.id === spaceId);
@@ -43,13 +42,13 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
             <div className="relative z-10 -ml-1.5 inline-flex items-center justify-center overflow-clip rounded border-2 border-white bg-white first:-ml-0">
               <div className="bg-gradient-purple !size-[16px] !rounded-sm" />
               <div className="absolute inset-0 z-10 flex h-full w-full items-center justify-center">
-                <span className="text-footnoteMedium text-text">+{source.length - 2}</span>
+                <span className="text-footnoteMedium text-text">+{source.value.length - 2}</span>
               </div>
             </div>
           )}
           <div className="absolute right-0 top-0 z-100 size-0">
             <div className="pointer-events-none absolute -top-3 left-2 z-100 flex w-60 flex-col gap-1 overflow-auto rounded-lg border border-divider bg-white p-3 opacity-0 shadow-card group-hover:pointer-events-auto group-hover:opacity-100">
-              {source.map(spaceId => {
+              {source.value.map(spaceId => {
                 const space = spaces.find(space => space.id === spaceId);
 
                 if (!space) return null;

@@ -1,14 +1,21 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import Fuse from 'fuse.js';
+import { useQuery } from '@tanstack/react-query';
+import { Effect, Either } from 'effect';
 
 import { useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { Environment } from '~/core/environment';
+import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
+import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
+import { graphql } from '~/core/io/subgraph/graphql';
+import { getSpaceConfigFromMetadata } from '~/core/io/subgraph/network-local-mapping';
+import type { NetworkSpaceResult } from '~/core/io/subgraph/types';
 import { useTableBlock } from '~/core/state/table-block-store';
-import type { Space } from '~/core/types';
+import type { OmitStrict, Space } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -33,7 +40,6 @@ export const DataBlockSourceMenu = ({
   const [view, setView] = useState<View>('initial');
   const { spaces } = useSpaces();
   const { filterState, setFilterState, source } = useTableBlock();
-  const sourceIsSpaces = Array.isArray(source);
 
   return (
     <>
@@ -45,20 +51,20 @@ export const DataBlockSourceMenu = ({
               <span className="text-smallButton text-grey-04">Back</span>
             </button>
           </div>
-          <MenuItem active={source === 'collection'}>
+          <MenuItem active={source.type === 'collection'}>
             <button onClick={() => null} className="flex w-full items-center justify-between gap-2">
               <span className="text-button text-text">{collectionName || 'New collection'}</span>
-              {source === 'collection' && <Check />}
+              {source.type === 'collection' && <Check />}
             </button>
           </MenuItem>
-          <MenuItem active={sourceIsSpaces}>
+          <MenuItem active={source.type === 'spaces'}>
             <button onClick={() => setView('spaces')} className="flex w-full items-center justify-between gap-2">
               <div>
                 <div className="text-button text-text">Spaces</div>
-                {sourceIsSpaces && source.length > 0 && (
+                {source.type === 'spaces' && source.value.length > 0 && (
                   <div className="mt-1.5 flex items-center gap-1">
                     <div className="inline-flex">
-                      {source.map(spaceId => {
+                      {source.value.map(spaceId => {
                         const selectedSpace = spaces.find(space => space.id === spaceId);
 
                         if (!selectedSpace) return null;
@@ -73,14 +79,14 @@ export const DataBlockSourceMenu = ({
                         );
                       })}
                     </div>
-                    <div className="text-footnoteMedium text-grey-04">{source.length} selected</div>
+                    <div className="text-footnoteMedium text-grey-04">{source.value.length} selected</div>
                   </div>
                 )}
               </div>
               <ChevronRight />
             </button>
           </MenuItem>
-          <MenuItem active={source === 'geo'}>
+          <MenuItem active={source.type === 'geo'}>
             <button
               onClick={() => {
                 const newFilterState = filterState.filter(filter => filter.columnId !== SYSTEM_IDS.SPACE);
@@ -90,7 +96,7 @@ export const DataBlockSourceMenu = ({
             >
               <div className="flex w-full justify-between gap-2">
                 <div className="text-button text-text">All of Geo</div>
-                {source === 'geo' && <Check />}
+                {source.type === 'geo' && <Check />}
               </div>
               <div className="mt-0.5 text-footnote text-grey-04">
                 Fields limited to Name, Description, Types, Cover and Avatar
@@ -104,33 +110,36 @@ export const DataBlockSourceMenu = ({
   );
 };
 
-const options = {
-  keys: ['spaceConfig.name'],
-  ignoreLocation: true,
-};
-
 type SpacesMenuProps = {
   onBack: () => void;
 };
 
+type ReducedSpace = OmitStrict<
+  Space,
+  | 'members'
+  | 'createdAtBlock'
+  | 'editors'
+  | 'isRootSpace'
+  | 'mainVotingPluginAddress'
+  | 'memberAccessPluginAddress'
+  | 'personalSpaceAdminPluginAddress'
+  | 'spacePluginAddress'
+  | 'type'
+>;
+
 export const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
-  const [query, setQuery] = useState<string>('');
+  const { query, setQuery, spaces: queriedSpaces } = useSpacesQuery();
   const { filterState, setFilterState } = useTableBlock();
 
-  const { spaces } = useSpaces();
-  const searchableSpaces = spaces.filter(space => space.type === 'PUBLIC' && !!space?.spaceConfig?.name);
-
-  const fuse = new Fuse(searchableSpaces, options);
-  const results = fuse.search(query);
-  const renderedSpaces = query.length > 0 ? results.map(space => space.item) : spaces;
-
-  const handleToggleSpace = (space: Space) => {
+  const handleToggleSpace = (space: ReducedSpace) => {
     if (filterState.find(filter => filter.columnId === SYSTEM_IDS.SPACE && filter.value === space.id)) {
       const newFilterState = filterState.filter(filter => filter.value !== space.id);
       setFilterState(newFilterState);
     } else {
       const newFilterState = [
-        ...filterState,
+        // temporarily restricted to one space
+        // @TODO remove array filter to support multiple spaces
+        ...filterState.filter(filter => filter.columnId !== SYSTEM_IDS.SPACE),
         {
           valueType: valueTypes[SYSTEM_IDS.TEXT],
           columnId: SYSTEM_IDS.SPACE,
@@ -138,6 +147,7 @@ export const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
           valueName: null,
         },
       ];
+
       setFilterState(newFilterState);
     }
   };
@@ -154,7 +164,7 @@ export const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
         <Input withSearchIcon placeholder="Search..." value={query} onChange={event => setQuery(event.target.value)} />
       </div>
       <div className="max-h-[273px] w-full overflow-y-auto">
-        {renderedSpaces.map(space => {
+        {queriedSpaces.map(space => {
           const active = !!filterState.find(
             filter => filter.columnId === SYSTEM_IDS.SPACE && filter.value === space.id
           );
@@ -185,3 +195,118 @@ export const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
     </>
   );
 };
+
+const spacesQuery = (name: string) => `
+  {
+    spaces(
+      filter: { spacesMetadata: { some: { entity: { name: { includesInsensitive: "${name}" } } } } }
+      first: 10
+    ) {
+      nodes {
+        id
+        daoAddress
+        spaceMembers {
+          totalCount
+        }
+        spaceEditors {
+          totalCount
+        }
+        spacesMetadata {
+          nodes {
+            entity {
+              ${spaceMetadataFragment}
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+interface NetworkResult {
+  spaces: {
+    nodes: (Pick<NetworkSpaceResult, 'spacesMetadata' | 'id' | 'daoAddress'> & {
+      spaceMembers: { totalCount: number };
+      spaceEditors: { totalCount: number };
+    })[];
+  };
+}
+
+function useSpacesQuery() {
+  const [query, setQuery] = useState('');
+  const debouncedQuery = useDebouncedValue(query, 200);
+
+  const { data } = useQuery({
+    queryKey: ['spaces-by-name', debouncedQuery],
+    queryFn: async ({ signal }) => {
+      const queryEffect = graphql<NetworkResult>({
+        query: spacesQuery(query),
+        endpoint: Environment.getConfig().api,
+        signal,
+      });
+
+      const resultOrError = await Effect.runPromise(Effect.either(queryEffect));
+
+      if (Either.isLeft(resultOrError)) {
+        const error = resultOrError.left;
+
+        switch (error._tag) {
+          case 'AbortError':
+            // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
+            // the caller to consume the error channel as an effect. We throw here the typical JS
+            // way so we don't infect more of the codebase with the effect runtime.
+            throw error;
+          case 'GraphqlRuntimeError':
+            console.error(
+              `Encountered runtime graphql error in spaces-by-name.
+
+              queryString: ${spacesQuery(query)}
+              `,
+              error.message
+            );
+
+            return {
+              spaces: {
+                nodes: [],
+              },
+            };
+
+          default:
+            console.error(`${error._tag}: Unable to fetch spaces in spaces-by-name`);
+
+            return {
+              spaces: {
+                nodes: [],
+              },
+            };
+        }
+      }
+
+      return resultOrError.right;
+    },
+  });
+
+  if (!data) {
+    return {
+      query,
+      setQuery,
+      spaces: [],
+    };
+  }
+
+  const spaces = data?.spaces?.nodes.map(s => {
+    return {
+      id: s.id,
+      daoAddress: s.daoAddress,
+      spaceConfig: getSpaceConfigFromMetadata(s.id, s.spacesMetadata.nodes[0].entity),
+      totalMembers: s?.spaceMembers.totalCount ?? 0,
+      totalEditors: s?.spaceEditors.totalCount ?? 0,
+    };
+  });
+
+  return {
+    query,
+    setQuery,
+    spaces,
+  };
+}
