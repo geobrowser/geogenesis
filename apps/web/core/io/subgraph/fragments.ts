@@ -109,7 +109,14 @@ export const entityFragment = `
 export const spaceMetadataFragment = `
   id
   name
-  triples(filter: {isStale: {equalTo: false}}) {
+  description
+  ${entityTypesFragment}
+  relationsByFromEntityId {
+    nodes {
+      ${relationFragment}
+    }
+  }
+  triples {
     nodes {
       ${tripleFragment}
     }

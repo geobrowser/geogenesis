@@ -1,22 +1,14 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { useQuery } from '@tanstack/react-query';
-import { Effect, Either } from 'effect';
 
 import { useState } from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Environment } from '~/core/environment';
-import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useSpaces } from '~/core/hooks/use-spaces';
-import { SpaceMetadataDto } from '~/core/io/dto';
-import { Space } from '~/core/io/dto/spaces';
-import { SubstreamSpace } from '~/core/io/schema';
-import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
-import { graphql } from '~/core/io/subgraph/graphql';
+import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
+import { SpaceConfigEntity } from '~/core/io/dto/spaces';
 import { useTableBlock } from '~/core/state/table-block-store';
-import type { OmitStrict } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -115,24 +107,13 @@ type SpacesMenuProps = {
   onBack: () => void;
 };
 
-type ReducedSpace = OmitStrict<
-  Space,
-  | 'members'
-  | 'editors'
-  | 'mainVotingPluginAddress'
-  | 'memberAccessPluginAddress'
-  | 'personalSpaceAdminPluginAddress'
-  | 'spacePluginAddress'
-  | 'type'
->;
-
 export const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
   const { query, setQuery, spaces: queriedSpaces } = useSpacesQuery();
   const { filterState, setFilterState } = useTableBlock();
 
-  const handleToggleSpace = (space: ReducedSpace) => {
-    if (filterState.find(filter => filter.columnId === SYSTEM_IDS.SPACE && filter.value === space.id)) {
-      const newFilterState = filterState.filter(filter => filter.value !== space.id);
+  const handleToggleSpace = (spaceConfig: SpaceConfigEntity) => {
+    if (filterState.find(filter => filter.columnId === SYSTEM_IDS.SPACE && filter.value === spaceConfig.spaceId)) {
+      const newFilterState = filterState.filter(filter => filter.value !== spaceConfig.spaceId);
       setFilterState(newFilterState);
     } else {
       const newFilterState = [
@@ -142,7 +123,7 @@ export const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
         {
           valueType: valueTypes[SYSTEM_IDS.TEXT],
           columnId: SYSTEM_IDS.SPACE,
-          value: space.id,
+          value: spaceConfig.spaceId,
           valueName: null,
         },
       ];
@@ -173,11 +154,11 @@ export const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
               <div className="flex items-center gap-2">
                 <div className="flex-shrink-0">
                   <img
-                    src={getImagePath(space.spaceConfig?.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
+                    src={getImagePath(space.image ?? '') ?? PLACEHOLDER_SPACE_IMAGE}
                     className="h-[12px] w-[12px] rounded-sm"
                   />
                 </div>
-                <div className="flex-grow truncate text-button text-text">{space.spaceConfig?.name}</div>
+                <div className="flex-grow truncate text-button text-text">{space.name}</div>
                 {active && (
                   <div className="relative text-grey-04">
                     <Check />
@@ -194,118 +175,3 @@ export const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
     </>
   );
 };
-
-const spacesQuery = (name: string) => `
-  {
-    spaces(
-      filter: { spacesMetadata: { some: { entity: { name: { includesInsensitive: "${name}" } } } } }
-      first: 10
-    ) {
-      nodes {
-        id
-        daoAddress
-        spaceMembers {
-          totalCount
-        }
-        spaceEditors {
-          totalCount
-        }
-        spacesMetadata {
-          nodes {
-            entity {
-              ${spaceMetadataFragment}
-            }
-          }
-        }
-      }
-    }
-  }
-`;
-
-interface NetworkResult {
-  spaces: {
-    nodes: (Pick<SubstreamSpace, 'spacesMetadata' | 'id' | 'daoAddress'> & {
-      spaceMembers: { totalCount: number };
-      spaceEditors: { totalCount: number };
-    })[];
-  };
-}
-
-function useSpacesQuery() {
-  const [query, setQuery] = useState('');
-  const debouncedQuery = useDebouncedValue(query, 200);
-
-  const { data } = useQuery({
-    queryKey: ['spaces-by-name', debouncedQuery],
-    queryFn: async ({ signal }) => {
-      const queryEffect = graphql<NetworkResult>({
-        query: spacesQuery(query),
-        endpoint: Environment.getConfig().api,
-        signal,
-      });
-
-      const resultOrError = await Effect.runPromise(Effect.either(queryEffect));
-
-      if (Either.isLeft(resultOrError)) {
-        const error = resultOrError.left;
-
-        switch (error._tag) {
-          case 'AbortError':
-            // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-            // the caller to consume the error channel as an effect. We throw here the typical JS
-            // way so we don't infect more of the codebase with the effect runtime.
-            throw error;
-          case 'GraphqlRuntimeError':
-            console.error(
-              `Encountered runtime graphql error in spaces-by-name.
-
-              queryString: ${spacesQuery(query)}
-              `,
-              error.message
-            );
-
-            return {
-              spaces: {
-                nodes: [],
-              },
-            };
-
-          default:
-            console.error(`${error._tag}: Unable to fetch spaces in spaces-by-name`);
-
-            return {
-              spaces: {
-                nodes: [],
-              },
-            };
-        }
-      }
-
-      return resultOrError.right;
-    },
-  });
-
-  if (!data) {
-    return {
-      query,
-      setQuery,
-      spaces: [],
-    };
-  }
-
-  const spaces = data?.spaces?.nodes.map(s => {
-    return {
-      id: s.id,
-      daoAddress: s.daoAddress,
-      spaceConfig: SpaceMetadataDto(s.id, s.spacesMetadata.nodes[0].entity),
-      totalMembers: s?.spaceMembers.totalCount ?? 0,
-      totalEditors: s?.spaceEditors.totalCount ?? 0,
-    };
-  });
-
-  return {
-    query,
-    setQuery,
-    spaces,
-  };
-}
