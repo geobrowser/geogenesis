@@ -219,6 +219,15 @@ export const SubstreamSpace = Schema.extend(
 
 export type SubstreamSpace = Schema.Schema.Type<typeof SubstreamSpace>;
 
+export const SubstreamSpaceEntityConfig = Schema.Struct({
+  id: Schema.String.pipe(Schema.fromBrand(SpaceId)),
+  spacesMetadata: Schema.Struct({
+    nodes: Schema.Array(Schema.Struct({ entity: SubstreamEntity })),
+  }),
+});
+
+export type SubstreamSpaceConfigEntityConfig = Schema.Schema.Type<typeof SubstreamSpaceEntityConfig>;
+
 // Subspaces are currently only used in the app as a subset of all the properties
 // available on a space, which is why they are a special type.
 //
