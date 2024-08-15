@@ -6,11 +6,12 @@ import * as React from 'react';
 import { TableBlockSdk } from '../blocks-sdk';
 import { mergeEntityAsync, useEntity } from '../database/entities';
 import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '../database/table';
-import { useWriteOps } from '../database/write';
+import { upsertMany, useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { GeoType, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
+import { createRelationshipTriples } from '../utils/relations/relations';
 import { Values } from '../utils/value';
 
 export const PAGE_SIZE = 9;

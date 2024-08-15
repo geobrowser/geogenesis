@@ -67,6 +67,52 @@ export type Triple = {
 
 export type RenderableEntityType = 'IMAGE' | 'DEFAULT' | 'BLOCK'; // specific block types?
 
+// Renderable fields are a special data model to represent us rendering both
+// triples and relations in the same way. This is used across tables and entity
+// pages in places where we want to render triples and relations together.
+// Editing these values mostly works the same way as ops, so we need the same
+// properties that ops mostly do in order to upsert or remove the renderable
+// fields.
+export type NativeRenderableDataField = {
+  type: AppValue['type'];
+  entityId: string;
+  entityName: string | null;
+  attributeId: string;
+  attributeName: string | null;
+  spaceId: string;
+  value: string;
+};
+
+// Entity renderable fields should only exist on Relations pages
+export type EntityRenderableData = {
+  type: 'ENTITY';
+  entityId: string;
+  entityName: string | null;
+  attributeId: string;
+  attributeName: string | null;
+  spaceId: string;
+  value: {
+    value: string;
+    name: string | null;
+  };
+};
+
+export type RelationRenderableData = {
+  type: 'RELATION';
+  entityId: string;
+  entityName: string | null;
+  attributeId: string;
+  attributeName: string | null;
+  spaceId: string;
+  relationId: string;
+  renderableType: RenderableEntityType;
+  valueName: string | null; // name of the entity
+  value: string;
+};
+
+export type TripleRenderableData = NativeRenderableDataField | EntityRenderableData;
+export type RenderableData = TripleRenderableData | RelationRenderableData;
+
 export type ReviewState =
   | 'idle'
   | 'reviewing'
