@@ -71,35 +71,6 @@ const linkableRelationChipStyles = cva(
   }
 );
 
-type RelationChipHoverActions =
-  | { type: 'RELATION_HOVER' }
-  | { type: 'RELATION_LEAVE' }
-  | { type: 'DELETE_HOVER' }
-  | { type: 'DELETE_LEAVE' };
-
-type RelationChipHoverState = {
-  isRelationHovered: boolean;
-  isDeleteHovered: boolean;
-};
-
-function relationChipHoverReducer(
-  state: RelationChipHoverState,
-  action: RelationChipHoverActions
-): RelationChipHoverState {
-  switch (action.type) {
-    case 'RELATION_HOVER':
-      return { ...state, isRelationHovered: true };
-    case 'RELATION_LEAVE':
-      return { ...state, isRelationHovered: false };
-    case 'DELETE_HOVER':
-      return { ...state, isDeleteHovered: true };
-    case 'DELETE_LEAVE':
-      return { ...state, isDeleteHovered: false };
-    default:
-      return state;
-  }
-}
-
 const relationChipDeleteIconStyles = cva('stroke-current p-1', {
   variants: {
     isDeleteHovered: {
@@ -154,17 +125,15 @@ const relationChipPopoverTriggerStyles = cva('px-1.5 focus-within:bg-text hover:
 
 export function LinkableRelationChip({ entityHref, relationHref, children }: LinkableRelationChipProps) {
   const isEditing = useUserIsEditing();
-  const [state, dispatch] = React.useReducer(relationChipHoverReducer, {
-    isRelationHovered: false,
-    isDeleteHovered: false,
-  });
+  const [isRelationHovered, setIsRelationHovered] = useState(false);
+  const [isDeleteHovered, setIsDeleteHovered] = useState(false);
 
   return (
     <div
       className={linkableRelationChipStyles({
         shouldClamp: typeof children === 'string' && children.length >= 42,
-        isRelationHovered: state.isRelationHovered,
-        isDeleteHovered: state.isDeleteHovered,
+        isRelationHovered,
+        isDeleteHovered,
       })}
     >
       <div className="flex items-center">
@@ -175,8 +144,8 @@ export function LinkableRelationChip({ entityHref, relationHref, children }: Lin
             <Tooltip.Trigger asChild>
               <button
                 className={relationChipPopoverTriggerStyles({
-                  isDeleteHovered: state.isDeleteHovered,
-                  isRelationHovered: state.isRelationHovered,
+                  isDeleteHovered,
+                  isRelationHovered,
                 })}
               >
                 <RelationDots />
@@ -186,22 +155,22 @@ export function LinkableRelationChip({ entityHref, relationHref, children }: Lin
               <Tooltip.Content
                 sideOffset={2}
                 className={relationChipPopoverStyles({
-                  isDeleteHovered: state.isDeleteHovered,
-                  isRelationHovered: state.isRelationHovered,
+                  isDeleteHovered,
+                  isRelationHovered,
                 })}
               >
                 <Link
                   href={relationHref}
-                  onMouseEnter={() => dispatch({ type: 'RELATION_HOVER' })}
-                  onMouseLeave={() => dispatch({ type: 'RELATION_LEAVE' })}
-                  className={relationChipRelationIconStyles({ isRelationHovered: state.isRelationHovered })}
+                  onMouseEnter={() => setIsRelationHovered(true)}
+                  onMouseLeave={() => setIsRelationHovered(false)}
+                  className={relationChipRelationIconStyles({ isRelationHovered })}
                 >
-                  <RelationLinkSmall fill={state.isRelationHovered ? 'ctaPrimary' : undefined} />
+                  <RelationLinkSmall fill={isRelationHovered ? 'ctaPrimary' : undefined} />
                 </Link>
                 <div
-                  className={relationChipDeleteIconStyles({ isDeleteHovered: state.isDeleteHovered })}
-                  onMouseEnter={() => dispatch({ type: 'DELETE_HOVER' })}
-                  onMouseLeave={() => dispatch({ type: 'DELETE_LEAVE' })}
+                  className={relationChipDeleteIconStyles({ isDeleteHovered })}
+                  onMouseEnter={() => setIsDeleteHovered(true)}
+                  onMouseLeave={() => setIsDeleteHovered(false)}
                 >
                   <CheckCloseSmall />
                 </div>
