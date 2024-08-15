@@ -1,13 +1,17 @@
 'use client';
 
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { cva } from 'class-variance-authority';
 import Link from 'next/link';
 
 import * as React from 'react';
 import { useState } from 'react';
 
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 
+import { MemberTiny } from './icons/member-tiny';
 import { ColorName, colors } from './theme/colors';
 
 interface LinkableChipProps {
@@ -16,7 +20,7 @@ interface LinkableChipProps {
 }
 
 const linkableChipStyles = cva(
-  'inline-flex min-h-[1.5rem] items-center break-words rounded border border-grey-02 bg-white px-1.5 py-1 text-left text-metadataMedium !font-normal !leading-[1.125rem] hover:cursor-pointer hover:bg-ctaTertiary hover:text-ctaPrimary hover:shadow-ctaPrimary focus:cursor-pointer focus:bg-ctaTertiary focus:text-ctaPrimary focus:shadow-inner-lg focus:shadow-ctaPrimary',
+  'inline-flex min-h-[1.5rem] items-center break-words rounded border border-grey-02 bg-white py-1 pl-1.5 text-left text-metadataMedium !font-normal !leading-[1.125rem] hover:cursor-pointer hover:border-text hover:bg-ctaTertiary hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
       shouldClamp: {
@@ -41,16 +45,32 @@ export function LinkableChip({ href, children }: LinkableChipProps) {
 }
 
 export function LinkableRelationChip({ href, children }: LinkableChipProps) {
+  const isEditing = useUserIsEditing();
+
   return (
-    <Link
-      href={href}
-      className={linkableChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 })}
-    >
-      <span className="flex items-center gap-1">
-        {children}
-        <RelationDots color="grey-03" />
-      </span>
-    </Link>
+    <div className={linkableChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 })}>
+      <div className="flex items-center gap-1">
+        <Link href={href}>{children}</Link>
+        <Tooltip.Provider delayDuration={0}>
+          <Tooltip.Root>
+            <Tooltip.Trigger asChild>
+              <button className="pl-1 pr-1.5 hover:stroke-text">
+                <RelationDots color="grey-03" />
+              </button>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content
+                sideOffset={2}
+                className="flex items-center gap-2 rounded-[7px] border border-grey-04 bg-white px-1 py-2"
+              >
+                <MemberTiny />
+                <MemberTiny />
+              </Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        </Tooltip.Provider>
+      </div>
+    </div>
   );
 }
 
