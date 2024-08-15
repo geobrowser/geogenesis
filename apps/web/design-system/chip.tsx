@@ -56,37 +56,155 @@ const linkableRelationChipStyles = cva(
       shouldClamp: {
         true: 'line-clamp-2',
       },
+      isRelationHovered: {
+        true: 'border-ctaPrimary text-ctaPrimary',
+      },
+      isDeleteHovered: {
+        true: 'border-red-01 text-red-01',
+      },
     },
     defaultVariants: {
       shouldClamp: false,
+      isRelationHovered: false,
+      isDeleteHovered: false,
     },
   }
 );
 
+type RelationChipHoverActions =
+  | { type: 'RELATION_HOVER' }
+  | { type: 'RELATION_LEAVE' }
+  | { type: 'DELETE_HOVER' }
+  | { type: 'DELETE_LEAVE' };
+
+type RelationChipHoverState = {
+  isRelationHovered: boolean;
+  isDeleteHovered: boolean;
+};
+
+function relationChipHoverReducer(
+  state: RelationChipHoverState,
+  action: RelationChipHoverActions
+): RelationChipHoverState {
+  switch (action.type) {
+    case 'RELATION_HOVER':
+      return { ...state, isRelationHovered: true };
+    case 'RELATION_LEAVE':
+      return { ...state, isRelationHovered: false };
+    case 'DELETE_HOVER':
+      return { ...state, isDeleteHovered: true };
+    case 'DELETE_LEAVE':
+      return { ...state, isDeleteHovered: false };
+    default:
+      return state;
+  }
+}
+
+const relationChipDeleteIconStyles = cva('stroke-current p-1', {
+  variants: {
+    isDeleteHovered: {
+      true: 'stroke-red-01',
+    },
+  },
+  defaultVariants: {
+    isDeleteHovered: false,
+  },
+});
+
+const relationChipRelationIconStyles = cva('stroke-current p-1', {
+  variants: {
+    isRelationHovered: {
+      true: 'stroke-ctaPrimary',
+    },
+  },
+  defaultVariants: {
+    isRelationHovered: false,
+  },
+});
+
+const relationChipPopoverStyles = cva('flex items-center rounded-[7px] border border-grey-04 bg-white', {
+  variants: {
+    isDeleteHovered: {
+      true: 'border-red-01 text-red-01',
+    },
+    isRelationHovered: {
+      true: 'border-ctaPrimary text-ctaPrimary',
+    },
+  },
+  defaultVariants: {
+    isDeleteHovered: false,
+    isRelationHovered: false,
+  },
+});
+
+const relationChipPopoverTriggerStyles = cva('px-1.5 focus-within:bg-text hover:stroke-text', {
+  variants: {
+    isDeleteHovered: {
+      true: 'stroke-red-01',
+    },
+    isRelationHovered: {
+      true: 'stroke-ctaPrimary',
+    },
+  },
+  defaultVariants: {
+    isDeleteHovered: false,
+    isRelationHovered: false,
+  },
+});
+
 export function LinkableRelationChip({ entityHref, relationHref, children }: LinkableRelationChipProps) {
   const isEditing = useUserIsEditing();
+  const [state, dispatch] = React.useReducer(relationChipHoverReducer, {
+    isRelationHovered: false,
+    isDeleteHovered: false,
+  });
 
   return (
-    <div className={linkableRelationChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 })}>
+    <div
+      className={linkableRelationChipStyles({
+        shouldClamp: typeof children === 'string' && children.length >= 42,
+        isRelationHovered: state.isRelationHovered,
+        isDeleteHovered: state.isDeleteHovered,
+      })}
+    >
       <div className="flex items-center">
         <Link href={entityHref}>{children}</Link>
 
         <Tooltip.Provider delayDuration={0}>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
-              <button className="stroke-grey-03 px-1.5 hover:stroke-text">
+              <button
+                className={relationChipPopoverTriggerStyles({
+                  isDeleteHovered: state.isDeleteHovered,
+                  isRelationHovered: state.isRelationHovered,
+                })}
+              >
                 <RelationDots />
               </button>
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Content
                 sideOffset={2}
-                className="flex items-center gap-2 rounded-[7px] border border-grey-04 bg-white p-1"
+                className={relationChipPopoverStyles({
+                  isDeleteHovered: state.isDeleteHovered,
+                  isRelationHovered: state.isRelationHovered,
+                })}
               >
-                <Link href={relationHref}>
-                  <RelationLinkSmall />
+                <Link
+                  href={relationHref}
+                  onMouseEnter={() => dispatch({ type: 'RELATION_HOVER' })}
+                  onMouseLeave={() => dispatch({ type: 'RELATION_LEAVE' })}
+                  className={relationChipRelationIconStyles({ isRelationHovered: state.isRelationHovered })}
+                >
+                  <RelationLinkSmall fill={state.isRelationHovered ? 'ctaPrimary' : undefined} />
                 </Link>
-                <CheckCloseSmall />
+                <div
+                  className={relationChipDeleteIconStyles({ isDeleteHovered: state.isDeleteHovered })}
+                  onMouseEnter={() => dispatch({ type: 'DELETE_HOVER' })}
+                  onMouseLeave={() => dispatch({ type: 'DELETE_LEAVE' })}
+                >
+                  <CheckCloseSmall />
+                </div>
               </Tooltip.Content>
             </Tooltip.Portal>
           </Tooltip.Root>
@@ -143,6 +261,7 @@ export function DeletableChipButton({ onClick, children, href }: ChipButtonProps
 
 interface RelationDotsProps {
   color?: ColorName;
+  fill?: ColorName;
 }
 
 function RelationDots({ color }: RelationDotsProps) {
@@ -156,14 +275,15 @@ function RelationDots({ color }: RelationDotsProps) {
   );
 }
 
-function RelationLinkSmall({ color }: RelationDotsProps) {
+function RelationLinkSmall({ color, fill }: RelationDotsProps) {
   const themeColor = color ? colors.light[color] : 'currentColor';
+  const fillColor = fill ? colors.light[fill] : 'white';
 
   return (
     <svg width="12" height="6" viewBox="0 0 12 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="8.99988" cy="3" r="2" transform="rotate(-180 8.99988 3)" stroke={themeColor} />
+      <circle cx="8.99988" cy="3" r="2" transform="rotate(-180 8.99988 3)" stroke={themeColor} fill={fillColor} />
       <rect x="7.49988" y="3.5" width="2.99993" height="1" transform="rotate(-180 7.49988 3.5)" fill={themeColor} />
-      <circle cx="3" cy="3" r="2" transform="rotate(-180 3 3)" stroke={themeColor} />
+      <circle cx="3" cy="3" r="2" transform="rotate(-180 3 3)" stroke={themeColor} fill={fillColor} />
     </svg>
   );
 }
