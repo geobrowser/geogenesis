@@ -11,7 +11,6 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 
-import { MemberTiny } from './icons/member-tiny';
 import { ColorName, colors } from './theme/colors';
 
 interface LinkableChipProps {
@@ -20,7 +19,7 @@ interface LinkableChipProps {
 }
 
 const linkableChipStyles = cva(
-  'inline-flex min-h-[1.5rem] items-center break-words rounded border border-grey-02 bg-white py-1 pl-1.5 text-left text-metadataMedium !font-normal !leading-[1.125rem] hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  'inline-flex min-h-[1.5rem] items-center break-words rounded border border-grey-02 bg-white px-1.5 py-1 text-left text-metadataMedium !font-normal !leading-[1.125rem] hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
       shouldClamp: {
@@ -44,13 +43,34 @@ export function LinkableChip({ href, children }: LinkableChipProps) {
   );
 }
 
-export function LinkableRelationChip({ href, children }: LinkableChipProps) {
+interface LinkableRelationChipProps {
+  entityHref: string;
+  relationHref: string;
+  children: React.ReactNode;
+}
+
+const linkableRelationChipStyles = cva(
+  'inline-flex min-h-[1.5rem] items-center break-words rounded border border-grey-02 bg-white py-1 pl-1.5 text-left text-metadataMedium !font-normal !leading-[1.125rem] hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  {
+    variants: {
+      shouldClamp: {
+        true: 'line-clamp-2',
+      },
+    },
+    defaultVariants: {
+      shouldClamp: false,
+    },
+  }
+);
+
+export function LinkableRelationChip({ entityHref, relationHref, children }: LinkableRelationChipProps) {
   const isEditing = useUserIsEditing();
 
   return (
-    <div className={linkableChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 })}>
+    <div className={linkableRelationChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 })}>
       <div className="flex items-center">
-        <Link href={href}>{children}</Link>
+        <Link href={entityHref}>{children}</Link>
+
         <Tooltip.Provider delayDuration={0}>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
@@ -63,7 +83,9 @@ export function LinkableRelationChip({ href, children }: LinkableChipProps) {
                 sideOffset={2}
                 className="flex items-center gap-2 rounded-[7px] border border-grey-04 bg-white p-1"
               >
-                <RelationLinkSmall />
+                <Link href={relationHref}>
+                  <RelationLinkSmall />
+                </Link>
                 <CheckCloseSmall />
               </Tooltip.Content>
             </Tooltip.Portal>

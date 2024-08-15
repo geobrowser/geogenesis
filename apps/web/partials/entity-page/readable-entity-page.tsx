@@ -135,8 +135,10 @@ function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) 
 
             return (
               <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
-                {/* @TODO: The link should go to the correct space */}
-                <LinkableRelationChip href={NavUtils.toEntity(spaceId, relationValue ?? '')}>
+                <LinkableRelationChip
+                  entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
+                  relationHref={NavUtils.toEntity(spaceId, relationId)}
+                >
                   {relationName ?? relationId}
                 </LinkableRelationChip>
               </div>
