@@ -38,7 +38,9 @@ export type Relation = {
     renderableType: RenderableEntityType;
 
     // The value of the To entity depends on the type of the To entity. e.g.,
-    // if the entity is an image, the value is the URL of the image.
+    // if the entity is an image, the value is the URL of the image. If it's
+    // a regular entity, the valu is the ID. It's a bit duplicative, but will
+    // make more sense when we add support for other entity types.
     value: string | null;
   };
 };
@@ -65,6 +67,8 @@ export function EntityDto(entity: SubstreamEntity): Entity {
       const imageEntityUrlValue =
         toEntityTriples.find(t => t.attributeId === SYSTEM_IDS.IMAGE_URL_ATTRIBUTE)?.value.value ?? null;
 
+      const renderableType = getRenderableEntityType(toEntityTypes);
+
       return {
         ...t,
         toEntity: {
@@ -75,9 +79,9 @@ export function EntityDto(entity: SubstreamEntity): Entity {
           // The "Renderable Type" for an entity provides a hint to the consumer
           // of the entity to _what_ the entity is so they know how they should
           // render it depending on their use case.
-          renderableType: getRenderableEntityType(toEntityTypes),
-          // Right now we only support images as the value of the To entity.
-          value: imageEntityUrlValue ?? null,
+          renderableType: renderableType,
+          // Right now we only support images and entity ids as the value of the To entity.
+          value: renderableType === 'IMAGE' ? imageEntityUrlValue : t.toEntity.id,
         },
       };
     }),

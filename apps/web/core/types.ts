@@ -107,7 +107,7 @@ export type RelationRenderableData = {
   relationId: string;
   renderableType: RenderableEntityType;
   valueName: string | null; // name of the entity
-  value: string;
+  value: string | null;
 };
 
 export type TripleRenderableData = NativeRenderableDataField | EntityRenderableData;

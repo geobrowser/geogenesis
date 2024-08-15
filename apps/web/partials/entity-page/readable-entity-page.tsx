@@ -50,21 +50,16 @@ export function ReadableEntityPage({ triples: serverTriples, relations, id, spac
   );
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <h3 className="text-smallTitle">Triples</h3>
-        <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
-          {Object.entries(renderables).map(([attributeId, renderable]) => {
-            const isRelation = renderable[0].type === 'RELATION';
+    <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
+      {Object.entries(renderables).map(([attributeId, renderable]) => {
+        const isRelation = renderable[0].type === 'RELATION';
 
-            if (isRelation) {
-              return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableData[]} />;
-            }
+        if (isRelation) {
+          return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableData[]} />;
+        }
 
-            return <TriplesGroup key={attributeId} entityId={id} triples={renderable as TripleRenderableData[]} />;
-          })}
-        </div>
-      </div>
+        return <TriplesGroup key={attributeId} entityId={id} triples={renderable as TripleRenderableData[]} />;
+      })}
     </div>
   );
 }
@@ -115,13 +110,12 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
 function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) {
   const attributeId = relations[0].attributeId;
   const attributeName = relations[0].attributeName;
-  const relationId = relations[0].relationId;
+  const spaceId = relations[0].spaceId;
 
   return (
     <>
       <div key={`${attributeId}-${attributeName}`} className="break-words">
-        {/* @TODO(relations): Space Id should just be the current space */}
-        <Link href={NavUtils.toEntity('ab7d4b9e02f840dab9746d352acb0ac6', relationId)}>
+        <Link href={NavUtils.toEntity(spaceId, attributeId)}>
           <Text as="p" variant="bodySemibold">
             {attributeName ?? attributeId}
           </Text>
@@ -133,15 +127,16 @@ function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) 
             const renderableType = r.renderableType;
             const relationValue = r.value;
 
-            // @TODO: The type of the relation might be an image
             if (renderableType === 'IMAGE') {
-              return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue)} />;
+              return (
+                <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue ?? '')} />
+              );
             }
 
             return (
               <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
                 {/* @TODO: The link should go to the correct space */}
-                <LinkableChip href={NavUtils.toEntity('ab7d4b9e02f840dab9746d352acb0ac6', relationId)}>
+                <LinkableChip href={NavUtils.toEntity(spaceId, relationValue ?? '')}>
                   {relationName ?? relationId}
                 </LinkableChip>
               </div>
