@@ -10,7 +10,7 @@ import { RelationRenderableData, Triple, TripleRenderableData } from '~/core/typ
 import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
 
-import { LinkableChip } from '~/design-system/chip';
+import { LinkableChip, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
@@ -136,9 +136,9 @@ function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) 
             return (
               <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
                 {/* @TODO: The link should go to the correct space */}
-                <LinkableChip href={NavUtils.toEntity(spaceId, relationValue ?? '')}>
+                <LinkableRelationChip href={NavUtils.toEntity(spaceId, relationValue ?? '')}>
                   {relationName ?? relationId}
-                </LinkableChip>
+                </LinkableRelationChip>
               </div>
             );
           })}

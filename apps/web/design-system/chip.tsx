@@ -8,6 +8,8 @@ import { useState } from 'react';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 
+import { ColorName, colors } from './theme/colors';
+
 interface LinkableChipProps {
   href: string;
   children: React.ReactNode;
@@ -34,6 +36,20 @@ export function LinkableChip({ href, children }: LinkableChipProps) {
       className={linkableChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 })}
     >
       <span>{children}</span>
+    </Link>
+  );
+}
+
+export function LinkableRelationChip({ href, children }: LinkableChipProps) {
+  return (
+    <Link
+      href={href}
+      className={linkableChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 })}
+    >
+      <span className="flex items-center gap-1">
+        {children}
+        <RelationDots color="grey-03" />
+      </span>
     </Link>
   );
 }
@@ -80,5 +96,20 @@ export function DeletableChipButton({ onClick, children, href }: ChipButtonProps
         <CheckCloseSmall />
       </button>
     </div>
+  );
+}
+
+interface RelationDotsProps {
+  color?: ColorName;
+}
+
+function RelationDots({ color }: RelationDotsProps) {
+  const themeColor = color ? colors.light[color] : 'currentColor';
+
+  return (
+    <svg width="2" height="6" viewBox="0 0 2 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="1" cy="1" r="1" fill={themeColor} />
+      <circle cx="1" cy="5" r="1" fill={themeColor} />
+    </svg>
   );
 }
