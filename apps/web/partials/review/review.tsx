@@ -68,9 +68,13 @@ const ReviewChanges = () => {
   const { state } = useStatusBar();
   const { setIsReviewOpen, activeSpace, setActiveSpace } = useDiff();
 
-  const allSpacesWithActions = useTriples({
-    selector: t => t.hasBeenPublished === false,
-  }).map(t => t.space);
+  const allSpacesWithActions = useTriples(
+    React.useMemo(() => {
+      return {
+        selector: t => t.hasBeenPublished === false,
+      };
+    }, [])
+  ).map(t => t.space);
 
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
     queryKey: ['spaces-in-review', allSpacesWithActions],
@@ -165,6 +169,7 @@ const ReviewChanges = () => {
   }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace]);
 
   if (isLoading || !data || isSpacesLoading) {
+    console.log('loading', isLoading, data, isSpacesLoading);
     return null;
   }
 
@@ -943,7 +948,7 @@ export const useChanges = (triples: Array<Triple> = [], spaceId: string) => {
   //   queryFn: async () => Change.fromTriples(Triples.squash(triples), subgraph),
   // });
   // return [data, isLoading] as const;
-  return [null, false] as const;
+  return React.useMemo(() => [{ changes: {}, entities: {} }, false] as const, []);
 };
 
 type ChipProps = {
