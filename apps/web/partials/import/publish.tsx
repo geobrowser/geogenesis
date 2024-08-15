@@ -163,9 +163,10 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
             </div>
             <div className="relative">
               <div className="flex flex-col gap-16 divide-y divide-grey-02">
-                {exampleEntityIds.map((entityId: string) => (
+                {/* @TODO: diffs not implemented */}
+                {/* {exampleEntityIds.map((entityId: string) => (
                   <NewEntity key={entityId} change={changes[entityId]} />
-                ))}
+                ))} */}
               </div>
               <div className="absolute bottom-0 left-0 right-0 z-10 h-1/2 bg-gradient-to-b from-transparent via-bg/75 to-bg"></div>
               <div className="absolute bottom-16 left-0 right-0 z-20">
