@@ -46,6 +46,7 @@ export function LinkableChip({ href, children }: LinkableChipProps) {
 interface LinkableRelationChipProps {
   entityHref: string;
   relationHref: string;
+  onDelete?: () => void;
   children: React.ReactNode;
 }
 
@@ -123,7 +124,7 @@ const relationChipPopoverTriggerStyles = cva('px-1.5 focus-within:bg-text hover:
   },
 });
 
-export function LinkableRelationChip({ entityHref, relationHref, children }: LinkableRelationChipProps) {
+export function LinkableRelationChip({ entityHref, relationHref, children, onDelete }: LinkableRelationChipProps) {
   const isEditing = useUserIsEditing();
   const [isRelationHovered, setIsRelationHovered] = useState(false);
   const [isDeleteHovered, setIsDeleteHovered] = useState(false);
@@ -167,13 +168,16 @@ export function LinkableRelationChip({ entityHref, relationHref, children }: Lin
                 >
                   <RelationLinkSmall fill={isRelationHovered ? 'ctaPrimary' : undefined} />
                 </Link>
-                <div
-                  className={relationChipDeleteIconStyles({ isDeleteHovered })}
-                  onMouseEnter={() => setIsDeleteHovered(true)}
-                  onMouseLeave={() => setIsDeleteHovered(false)}
-                >
-                  <CheckCloseSmall />
-                </div>
+                {isEditing && (
+                  <button
+                    onClick={onDelete}
+                    className={relationChipDeleteIconStyles({ isDeleteHovered })}
+                    onMouseEnter={() => setIsDeleteHovered(true)}
+                    onMouseLeave={() => setIsDeleteHovered(false)}
+                  >
+                    <CheckCloseSmall />
+                  </button>
+                )}
               </Tooltip.Content>
             </Tooltip.Portal>
           </Tooltip.Root>

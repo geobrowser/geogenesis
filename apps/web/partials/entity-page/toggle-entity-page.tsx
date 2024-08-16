@@ -12,8 +12,6 @@ type EntityPageProps = {
   relationsOut: Relation[];
   id: string;
   spaceId: string;
-  typeId?: string | null;
-  attributes?: Array<Attribute> | null;
 };
 
 type Attribute = [AttributeId, AttributeValue];

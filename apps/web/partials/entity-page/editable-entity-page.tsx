@@ -1,28 +1,26 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { pipe } from 'effect';
 
 import * as React from 'react';
-import { useEffect, useState } from 'react';
 
 import { useTriples } from '~/core/database/triples';
-import { useWriteOps } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
-import { Entity, Relation } from '~/core/io/dto/entities';
+import { Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
-import { Services } from '~/core/services';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Triple } from '~/core/types';
+import { RelationRenderableData, Triple, TripleRenderableData } from '~/core/types';
 import { Triple as ITriple, ValueType as TripleValueType } from '~/core/types';
-import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
+import { toRenderables } from '~/core/utils/to-renderables';
+import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { SquareButton } from '~/design-system/button';
-import { DeletableChipButton } from '~/design-system/chip';
+import { DeletableChipButton, LinkableChip, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { Date } from '~/design-system/icons/date';
@@ -30,30 +28,29 @@ import { Relation as RelationIcon } from '~/design-system/icons/relation';
 import { Text as TextIcon } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
 import { Url } from '~/design-system/icons/url';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
-import { sortEntityPageTriples } from './entity-page-utils';
+import { sortEntityPageTriples, sortRenderables } from './entity-page-utils';
 import { TripleTypeDropdown } from './triple-type-dropdown';
 
 interface Props {
   triples: ITriple[];
   id: string;
   spaceId: string;
-  typeId?: string | null;
-  attributes?: Array<Attribute> | null;
   relationsOut: Relation[];
 }
 
-type Attribute = [AttributeId, AttributeValue];
-type AttributeId = string;
-type AttributeValue = string;
+// type Attribute = [AttributeId, AttributeValue];
+// type AttributeId = string;
+// type AttributeValue = string;
 
-export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, attributes }: Props) {
-  const { triples: localTriples, schema, hideSchema, hiddenSchemaIds, name } = useEntityPageStore();
+export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Props) {
+  const { triples: localTriples, relations, schema, hideSchema, hiddenSchemaIds, name } = useEntityPageStore();
 
-  const { upsertMany } = useWriteOps();
+  useDeriveNewSchemaFromParams();
 
   const triplesFromSpace = useTriples(
     React.useMemo(() => {
@@ -62,7 +59,6 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
       };
     }, [spaceId])
   );
-  const { subgraph, config } = Services.useServices();
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
@@ -82,120 +78,64 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
 
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 
-  const [hasSetType, setHasSetType] = useState(false);
-  const [hasSetAttributes, setHasSetAttributes] = useState(false);
+  const attributesWithAValue = new Set([...triples.map(t => t.attributeId), ...relations.map(r => r.typeOf.id)]);
 
-  useEffect(() => {
-    if (hasSetType) return;
+  // Make some fake triples derived from the schema. We later hide and show these depending
+  // on if the entity has filled these fields or not.
+  // @TODO: We need to know the schema value type to know the type of renderable we need
+  // to show. We can default to TEXT for now.
+  const schemaTriples = schema
+    .map(
+      (s): ITriple => ({
+        attributeId: s.id,
+        entityId: id,
+        entityName: name,
+        space: spaceId,
+        attributeName: s.name,
 
-    const setTypeTriple = async () => {
-      // @TODO: Abstract to a hook and with useSearchParams instad of passing down the params
-      if (typeId) {
-        const typeEntity = await subgraph.fetchEntity({ id: typeId ?? '' });
+        value: {
+          type: 'TEXT',
+          value: '',
+        },
+      })
+    )
+    // Filter out schema renderables if we already have a triple or relation for that attribute
+    .filter(renderable => !attributesWithAValue.has(renderable.attributeId));
 
-        if (typeEntity) {
-          send({
-            type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
-            payload: {
-              attributeId: 'type',
-              attributeName: 'Types',
-              entityId: typeEntity.id,
-              entityName: typeEntity.name || '',
-            },
-          });
-
-          const templateTriple = typeEntity.triples.find(
-            triple => triple.attributeId === SYSTEM_IDS.TEMPLATE_ATTRIBUTE
-          );
-
-          if (templateTriple) {
-            const templateEntity = await subgraph.fetchEntity({ id: templateTriple.value.value ?? '' });
-
-            if (templateEntity) {
-              const newTriples = await cloneEntity({
-                oldEntityId: templateEntity.id,
-                entityName: name ?? '',
-                entityId: id,
-                spaceId,
-              });
-
-              upsertMany(newTriples, spaceId);
-            }
-          }
-        }
-      } else if (name === '') {
-        send({
-          type: 'CREATE_ENTITY_TRIPLE',
-          payload: {
-            attributeId: 'type',
-            attributeName: 'Types',
-          },
-        });
-      }
-    };
-
-    setTypeTriple();
-
-    setHasSetType(true);
-  }, [hasSetType, send, typeId, config, subgraph, name, upsertMany, spaceId, id]);
-
-  useEffect(() => {
-    if (!hasSetType) return;
-    if (hasSetAttributes) return;
-
-    const setAttributesTriples = async () => {
-      if (!attributes || attributes.length === 0) return;
-
-      const attributeEntities = await Promise.all(
-        attributes.map((filter: Attribute) => {
-          return Promise.all([
-            subgraph.fetchEntity({ id: filter[0] ?? '' }),
-            subgraph.fetchEntity({ id: filter[1] ?? '' }),
-          ]);
-        })
-      );
-
-      attributeEntities.forEach((attributeEntities: [Entity | null, Entity | null]) => {
-        const idEntity = attributeEntities[0];
-        const valueEntity = attributeEntities[1];
-
-        if (!idEntity || !valueEntity) return;
-
-        send({
-          type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
-          payload: {
-            attributeId: idEntity.id,
-            attributeName: idEntity.name ?? '',
-            entityId: valueEntity.id,
-            entityName: valueEntity.name || '',
-          },
-        });
-      });
-    };
-
-    if (attributes && attributes.length > 0) {
-      setAttributesTriples();
-    }
-
-    setHasSetAttributes(true);
-  }, [hasSetType, hasSetAttributes, subgraph, config, send, attributes]);
+  /**
+   * Things we want to support
+   * 1. Sorting the attribute groups based on a priority heuristic
+   * 2. Always show name, description, and types fields if they don't exist already
+   * 3. Support rendering empty list of fields for schemas
+   */
+  const renderables = pipe(
+    toRenderables(
+      [...triples, ...schemaTriples],
+      // We don't show blocks in the data section
+      relations.filter(r => r.typeOf.id !== SYSTEM_IDS.BLOCKS),
+      spaceId
+    ),
+    renderables => sortRenderables(renderables),
+    renderables => groupBy(renderables, r => r.attributeId)
+  );
 
   return (
     <>
       <div className="rounded-lg border border-grey-02 shadow-button">
         <div className="flex flex-col gap-6 p-5">
-          <EntityAttributes
-            entityId={id}
-            triples={triples}
-            schema={schema}
-            name={name ?? ''}
-            send={send}
-            hideSchema={hideSchema}
-            hiddenSchemaIds={hiddenSchemaIds}
-            spaceId={spaceId}
-          />
+          {Object.entries(renderables).map(([attributeId, renderable]) => {
+            const isRelation = renderable[0].type === 'RELATION';
+
+            if (isRelation) {
+              return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableData[]} />;
+            }
+
+            return <TriplesGroup key={attributeId} entityId={id} triples={renderable as TripleRenderableData[]} />;
+          })}
         </div>
         <div className="p-4">
+          {/* @TODO(relations): This shouldn't be a triple, but instead just a random field where we can enter the attribute
+          and value */}
           <SquareButton onClick={onCreateNewTriple} icon={<Create />}>
             Add triple
           </SquareButton>
@@ -205,12 +145,97 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
   );
 }
 
+function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) {
+  const attributeId = relations[0].attributeId;
+  const attributeName = relations[0].attributeName;
+  const spaceId = relations[0].spaceId;
+
+  return (
+    <>
+      <div key={`${attributeId}-${attributeName}`} className="break-words">
+        <Link href={NavUtils.toEntity(spaceId, attributeId)}>
+          <Text as="p" variant="bodySemibold">
+            {attributeName ?? attributeId}
+          </Text>
+        </Link>
+        <div className="flex flex-wrap gap-2">
+          {relations.map(r => {
+            const relationId = r.relationId;
+            const relationName = r.valueName;
+            const renderableType = r.renderableType;
+            const relationValue = r.value;
+
+            if (renderableType === 'IMAGE') {
+              return (
+                <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue ?? '')} />
+              );
+            }
+
+            return (
+              <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
+                <LinkableRelationChip
+                  entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
+                  relationHref={NavUtils.toEntity(spaceId, relationId)}
+                >
+                  {relationName ?? relationId}
+                </LinkableRelationChip>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function TriplesGroup({ entityId, triples }: { entityId: string; triples: TripleRenderableData[] }) {
+  return (
+    <>
+      {triples.map((t, index) => {
+        return (
+          <div key={`${entityId}-${t.attributeId}-${index}`} className="break-words">
+            <Text as="p" variant="bodySemibold">
+              {triples[0].attributeName || t.attributeId}
+            </Text>
+            <div className="flex flex-wrap gap-2">
+              {triples.map(renderable => {
+                switch (renderable.type) {
+                  case 'TEXT':
+                    return (
+                      <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
+                        {renderable.value}
+                      </Text>
+                    );
+                  case 'TIME':
+                    return <DateField isEditing={false} value={renderable.value} />;
+                  case 'URI':
+                    return <WebUrlField isEditing={false} value={renderable.value} />;
+                  case 'ENTITY': {
+                    return (
+                      <div key={`entity-${renderable.attributeId}-${renderable.value.value}}`} className="mt-1">
+                        <LinkableChip href={NavUtils.toEntity(renderable.spaceId, renderable.value.value)}>
+                          {renderable.value.name || renderable.value.value}
+                        </LinkableChip>
+                      </div>
+                    );
+                  }
+                  case 'NUMBER':
+                    return null;
+                }
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function EntityAttributes({
   entityId,
   triples,
   schema,
   name,
-  send,
   hideSchema,
   hiddenSchemaIds,
   spaceId,
@@ -218,12 +243,19 @@ function EntityAttributes({
   entityId: string;
   triples: ITriple[];
   schema: { id: EntityId; name: string | null }[];
-  send: ReturnType<typeof useEditEvents>;
   name: string;
   hideSchema: (id: string) => void;
   hiddenSchemaIds: string[];
   spaceId: string;
 }) {
+  const send = useEditEvents({
+    context: {
+      entityId,
+      spaceId,
+      entityName: name,
+    },
+  });
+
   // Make some fake triples derived from the schema. We later hide and show these depending
   // on if the entity has filled these fields or not.
   // @TODO(relations): Should work for relations too
@@ -632,4 +664,104 @@ function EntityAttributes({
       })}
     </>
   );
+}
+
+// const EMPTY_ARRAY_AS_ENCODED_URI = '%5B%5D';
+
+function useDeriveNewSchemaFromParams() {
+  // const { subgraph, config } = Services.useServices();
+  // const { upsertMany } = useWriteOps();
+  // const { id, spaceId, name } = useEntityPageStore();
+  // const searchParams = useSearchParams();
+  // const encodedAttributes = searchParams?.get('attributes') ?? EMPTY_ARRAY_AS_ENCODED_URI;
+  // const attributes = JSON.parse(decodeURI(encodedAttributes));
+  // const typeId = searchParams?.get('typeId') ?? null;
+  // const send = useEditEvents({
+  //   context: {
+  //     entityId: id,
+  //     spaceId,
+  //     entityName: name ?? '',
+  //   },
+  // });
+  // const [hasSetType, setHasSetType] = useState(false);
+  // const [hasSetAttributes, setHasSetAttributes] = useState(false);
+  // useEffect(() => {
+  //   if (hasSetType) return;
+  //   const setTypeTriple = async () => {
+  //     // @TODO: Abstract to a hook and with useSearchParams instad of passing down the params
+  //     if (typeId) {
+  //       const typeEntity = await subgraph.fetchEntity({ id: typeId ?? '' });
+  //       if (typeEntity) {
+  //         send({
+  //           type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
+  //           payload: {
+  //             attributeId: 'type',
+  //             attributeName: 'Types',
+  //             entityId: typeEntity.id,
+  //             entityName: typeEntity.name || '',
+  //           },
+  //         });
+  //         const templateTriple = typeEntity.triples.find(
+  //           triple => triple.attributeId === SYSTEM_IDS.TEMPLATE_ATTRIBUTE
+  //         );
+  //         if (templateTriple) {
+  //           const templateEntity = await subgraph.fetchEntity({ id: templateTriple.value.value ?? '' });
+  //           if (templateEntity) {
+  //             const newTriples = await cloneEntity({
+  //               oldEntityId: templateEntity.id,
+  //               entityName: name ?? '',
+  //               entityId: id,
+  //               spaceId,
+  //             });
+  //             upsertMany(newTriples, spaceId);
+  //           }
+  //         }
+  //       }
+  //     } else if (name === '') {
+  //       // @TODO(relations)
+  //       send({
+  //         type: 'CREATE_ENTITY_TRIPLE',
+  //         payload: {
+  //           attributeId: 'type',
+  //           attributeName: 'Types',
+  //         },
+  //       });
+  //     }
+  //   };
+  //   setTypeTriple();
+  //   setHasSetType(true);
+  // }, [hasSetType, send, typeId, config, subgraph, name, upsertMany, spaceId, id]);
+  // useEffect(() => {
+  //   if (!hasSetType) return;
+  //   if (hasSetAttributes) return;
+  //   const setAttributesTriples = async () => {
+  //     if (!attributes || attributes.length === 0) return;
+  //     const attributeEntities = await Promise.all(
+  //       attributes.map((filter: Attribute) => {
+  //         return Promise.all([
+  //           subgraph.fetchEntity({ id: filter[0] ?? '' }),
+  //           subgraph.fetchEntity({ id: filter[1] ?? '' }),
+  //         ]);
+  //       })
+  //     );
+  //     attributeEntities.forEach((attributeEntities: [Entity | null, Entity | null]) => {
+  //       const idEntity = attributeEntities[0];
+  //       const valueEntity = attributeEntities[1];
+  //       if (!idEntity || !valueEntity) return;
+  //       send({
+  //         type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
+  //         payload: {
+  //           attributeId: idEntity.id,
+  //           attributeName: idEntity.name ?? '',
+  //           entityId: valueEntity.id,
+  //           entityName: valueEntity.name || '',
+  //         },
+  //       });
+  //     });
+  //   };
+  //   if (attributes && attributes.length > 0) {
+  //     setAttributesTriples();
+  //   }
+  //   setHasSetAttributes(true);
+  // }, [hasSetType, hasSetAttributes, subgraph, config, send, attributes]);
 }

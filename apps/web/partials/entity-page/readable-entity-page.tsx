@@ -1,4 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { pipe } from 'effect';
 
 import * as React from 'react';
 
@@ -16,7 +17,7 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-import { sortEntityPageTriples } from './entity-page-utils';
+import { sortRenderables } from './entity-page-utils';
 
 interface Props {
   triples: Triple[];
@@ -38,15 +39,15 @@ export function ReadableEntityPage({ triples: serverTriples, relations, id, spac
   // we can fallback to the server triples so we render real data and there's no layout shift.
   const triples = localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
 
-  const sortedTriples = sortEntityPageTriples(triples, []);
-  const renderables = groupBy(
+  const renderables = pipe(
     toRenderables(
-      sortedTriples,
+      triples,
       // We don't show blocks in the data section
       relations.filter(r => r.typeOf.id !== SYSTEM_IDS.BLOCKS),
       spaceId
     ),
-    r => r.attributeId
+    renderables => sortRenderables(renderables),
+    renderables => groupBy(renderables, r => r.attributeId)
   );
 
   return (
