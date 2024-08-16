@@ -1,7 +1,7 @@
 import { StoredTriple } from './types';
 
 export const activeTriplesForEntityIdSelector = (entityId: string) => (triple: StoredTriple) => {
-  return triple.entityId === entityId && triple.isDeleted === false;
+  return triple.entityId === entityId && isDeletedSelector(triple);
 };
 
 export const isDeletedSelector = (triple: StoredTriple) => {

@@ -28,6 +28,16 @@ export type EditEvent =
       };
     }
   | {
+      type: 'UPSERT_ATTRIBUTE';
+      payload: {
+        renderable: RenderableData;
+        attributeId: string;
+        attributeName: string | null;
+      };
+    }
+
+  // EVERYTHING BELOW THIS IS A LEGACY EVENT THAT WILL GET REMOVED
+  | {
       type: 'UPSERT_TRIPLE_VALUE';
       payload: {
         triple: TripleType;
@@ -210,6 +220,65 @@ const listener =
           context.spaceId
         );
       }
+
+      case 'UPSERT_ATTRIBUTE': {
+        const { renderable, attributeId, attributeName } = event.payload;
+
+        // When we change the attribute for a renderable we actually change
+        // the id. We delete the previous renderable here so we don't still
+        // render the old renderable.
+        remove(renderable, context.spaceId);
+
+        if (renderable.type === 'RELATION') {
+          return upsert(
+            {
+              entityId: renderable.relationId,
+              entityName: null,
+              attributeId: SYSTEM_IDS.TYPES,
+              attributeName: 'Types',
+              // Relations are the only entity in the system that we expect
+              // to use an entity value type in a triple
+              value: {
+                type: 'ENTITY',
+                value: attributeId,
+                name: attributeName,
+              },
+            },
+            context.spaceId
+          );
+        }
+
+        if (renderable.type === 'ENTITY') {
+          return upsert(
+            {
+              ...renderable,
+              attributeId,
+              attributeName,
+              value: {
+                type: renderable.type,
+                value: renderable.value.value,
+                name: renderable.value.name,
+              },
+            },
+            context.spaceId
+          );
+        }
+
+        return upsert(
+          {
+            ...renderable,
+            attributeId,
+            attributeName,
+            value: {
+              type: renderable.type,
+              value: renderable.value,
+            },
+          },
+          context.spaceId
+        );
+      }
+
+      // ALL OF THE BELOW EVENTS ARE LEGACY AND WILL GET REMOVED
 
       case 'EDIT_ENTITY_NAME': {
         const { name } = event.payload;

@@ -149,7 +149,10 @@ export function EntityTextAutocomplete({
                 >
                   <ResultContent
                     key={result.id}
-                    onClick={() => onDone(result)}
+                    onClick={() => {
+                      onDone(result);
+                      onQueryChange('');
+                    }}
                     alreadySelected={itemIdsSet.has(result.id)}
                     result={result}
                   />

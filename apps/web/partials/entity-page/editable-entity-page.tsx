@@ -10,7 +10,7 @@ import { useEditEvents } from '~/core/events/edit-events';
 import { Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RelationRenderableData, Triple, TripleRenderableData } from '~/core/types';
+import { RelationRenderableData, RenderableData, Triple, TripleRenderableData } from '~/core/types';
 import { Triple as ITriple, ValueType as TripleValueType } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
@@ -124,32 +124,17 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
 
             // @TODO: This is where we add the floating UI for the type switcher and deleter buttons
             if (isRelation) {
-              const attributeId = renderable[0].attributeId;
-              const attributeName = renderable[0].attributeName;
-
               return (
-                <div key={`${attributeId}-${attributeName}`} className="break-words">
-                  <Link href={NavUtils.toEntity(spaceId, attributeId)}>
-                    {/* @TODO: Find or create for the attribute */}
-                    <Text as="p" variant="bodySemibold">
-                      {attributeName ?? attributeId}
-                    </Text>
-                  </Link>
+                <div key={`${id}-${attributeId}`} className="break-words">
+                  <EditableAttribute renderable={renderable[0]} />
                   <RelationsGroup key={attributeId} relations={renderable as RelationRenderableData[]} />
                 </div>
               );
             }
 
-            const attributeName = renderable[0].attributeName;
-
             return (
               <div key={`${id}-${attributeId}`} className="break-words">
-                <Link href={NavUtils.toEntity(spaceId, attributeId)}>
-                  {/* @TODO: Find or create for the attribute */}
-                  <Text as="p" variant="bodySemibold">
-                    {attributeName || attributeId}
-                  </Text>
-                </Link>
+                <EditableAttribute renderable={renderable[0]} />
                 <TriplesGroup key={attributeId} triples={renderable as TripleRenderableData[]} />
               </div>
             );
@@ -162,6 +147,45 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
         </div>
       </div>
     </>
+  );
+}
+
+function EditableAttribute({ renderable }: { renderable: RenderableData }) {
+  const { id, name, spaceId } = useEntityPageStore();
+
+  const send = useEditEvents({
+    context: {
+      entityId: id,
+      spaceId,
+      entityName: name ?? '',
+    },
+  });
+
+  if (renderable.attributeId === '') {
+    return (
+      <EntityTextAutocomplete
+        spaceId={spaceId}
+        placeholder="Add attribute..."
+        onDone={result => {
+          console.log('result', result);
+          send({
+            type: 'UPSERT_ATTRIBUTE',
+            payload: { renderable, attributeId: result.id, attributeName: result.name },
+          });
+        }}
+        filterByTypes={[{ typeId: SYSTEM_IDS.ATTRIBUTE, typeName: 'Attribute' }]}
+        alreadySelectedIds={[]}
+        attributeId={renderable.attributeId}
+      />
+    );
+  }
+
+  return (
+    <Link href={NavUtils.toEntity(spaceId, renderable.attributeId)}>
+      <Text as="p" variant="bodySemibold">
+        {renderable.attributeName ?? renderable.attributeId}
+      </Text>
+    </Link>
   );
 }
 
