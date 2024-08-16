@@ -1,10 +1,10 @@
 import Image from 'next/legacy/image';
-import Link from 'next/link';
 
 import * as React from 'react';
 
 import { getImagePath } from '~/core/utils/utils';
 
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 

@@ -1,5 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import Link from 'next/link';
 
 import * as React from 'react';
 
@@ -14,6 +13,7 @@ import { LinkableChip, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { sortEntityPageTriples } from './entity-page-utils';

@@ -4,9 +4,10 @@ import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
-import Link from 'next/link';
 
 import * as React from 'react';
+
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface Props {
   children: React.ReactNode;

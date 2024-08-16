@@ -3,7 +3,6 @@
 import { cva } from 'class-variance-authority';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
@@ -23,6 +22,7 @@ import { InfoSmall } from '~/design-system/icons/info-small';
 import { Member } from '~/design-system/icons/member';
 import { VideoSmall } from '~/design-system/icons/video-small';
 import { Menu } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 type PersonalHomeView = 'all' | 'membership' | 'content';

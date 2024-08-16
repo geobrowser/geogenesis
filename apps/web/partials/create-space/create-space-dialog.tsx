@@ -6,7 +6,6 @@ import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
-import Link from 'next/link';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
@@ -24,6 +23,7 @@ import { Close } from '~/design-system/icons/close';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { RadioGroup } from '~/design-system/radio-group';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';

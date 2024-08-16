@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
@@ -14,6 +13,7 @@ import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
 // import { CsvImport } from '~/design-system/icons/csv-import';
 import { Menu, MenuItem } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { HistoryPanel } from '../history/history-panel';
 

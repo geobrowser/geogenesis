@@ -8,7 +8,6 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom } from 'jotai';
 import Image from 'next/legacy/image';
-import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
@@ -40,6 +39,7 @@ import { FilteredTableView } from '~/design-system/icons/filtered-table-view';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Input } from '~/design-system/input';
 import { MenuItem } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Skeleton } from '~/design-system/skeleton';
 import { TextButton } from '~/design-system/text-button';

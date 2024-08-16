@@ -2,7 +2,6 @@
 
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { cva } from 'class-variance-authority';
-import Link from 'next/link';
 
 import * as React from 'react';
 import { useState } from 'react';
@@ -10,6 +9,7 @@ import { useState } from 'react';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ColorName, colors } from './theme/colors';
 

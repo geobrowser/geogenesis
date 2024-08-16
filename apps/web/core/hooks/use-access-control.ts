@@ -1,10 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
-import { Subgraph } from '../io';
 import { useHydrated } from './use-hydrated';
 import { useSmartAccount } from './use-smart-account';
+import { useSpace } from './use-space';
 
 export function useAccessControl(spaceId?: string | null) {
   // We need to wait for the client to check the status of the client-side wallet
@@ -13,14 +11,7 @@ export function useAccessControl(spaceId?: string | null) {
   const smartAccount = useSmartAccount();
   const address = smartAccount?.account.address;
 
-  const { data: space } = useQuery({
-    queryKey: ['access-control', spaceId, address],
-    queryFn: async () => {
-      if (!spaceId || !address) return null;
-
-      return await Subgraph.fetchSpace({ id: spaceId });
-    },
-  });
+  const { space } = useSpace(spaceId ?? '');
 
   if (process.env.NODE_ENV === 'development') {
     return {

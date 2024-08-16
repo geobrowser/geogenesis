@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import * as React from 'react';
@@ -18,6 +17,7 @@ import { Avatar } from '~/design-system/avatar';
 import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Tick } from '~/design-system/icons/tick';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { AcceptOrReject } from './accept-or-reject';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';

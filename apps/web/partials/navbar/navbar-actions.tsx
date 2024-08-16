@@ -3,7 +3,6 @@
 import * as Popover from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import { AnimatePresence, AnimationControls, motion, useAnimation } from 'framer-motion';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 import * as React from 'react';
@@ -20,6 +19,7 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Home } from '~/design-system/icons/home';
 import { Menu } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 export function NavbarActions() {

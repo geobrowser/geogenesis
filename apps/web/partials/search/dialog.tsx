@@ -2,7 +2,6 @@ import { A } from '@mobily/ts-belt';
 import cx from 'classnames';
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { useSearch } from '~/core/hooks/use-search';
@@ -13,6 +12,7 @@ import { ResultContent, ResultsList } from '~/design-system/autocomplete/results
 import { Dots } from '~/design-system/dots';
 import { Search } from '~/design-system/icons/search';
 import { Input } from '~/design-system/input';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ResizableContainer } from '~/design-system/resizable-container';
 
 interface Props {

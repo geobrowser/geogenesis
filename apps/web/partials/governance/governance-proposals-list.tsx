@@ -1,7 +1,6 @@
 import { Schema } from '@effect/schema';
 import { Effect, Either } from 'effect';
 import { cookies } from 'next/headers';
-import Link from 'next/link';
 
 import React from 'react';
 
@@ -14,6 +13,7 @@ import { graphql } from '~/core/io/subgraph/graphql';
 import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceStatusChip } from './governance-status-chip';

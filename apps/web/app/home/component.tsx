@@ -1,6 +1,5 @@
 import { cookies } from 'next/headers';
 import Image from 'next/legacy/image';
-import Link from 'next/link';
 
 import * as React from 'react';
 
@@ -21,6 +20,7 @@ import {
 import { Avatar } from '~/design-system/avatar';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { TabGroup } from '~/design-system/tab-group';
 

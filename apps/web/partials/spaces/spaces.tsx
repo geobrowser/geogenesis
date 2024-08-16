@@ -2,10 +2,11 @@
 
 import cx from 'classnames';
 import Image from 'next/image';
-import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getImagePath } from '~/core/utils/utils';
+
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { SpaceData } from '~/app/space/[id]/spaces/page';
 

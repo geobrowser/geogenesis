@@ -2,15 +2,15 @@
 
 import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
 import { createSubspaceProposal } from '@geogenesis/sdk/proto';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';
 import { encodeFunctionData, stringToHex } from 'viem';
 
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { fetchSpace } from '~/core/io/subgraph';
 
 import { IpfsEffectClient } from '../io/ipfs-client';
+import { useSpace } from './use-space';
 
 interface RemoveSubspaceArgs {
   spaceId: string;
@@ -22,10 +22,7 @@ export function useRemoveSubspace(args: RemoveSubspaceArgs) {
 
   // @TODO(performance): We can pass the space down from the layout as well to avoid
   // fetching on the client here.
-  const { data: space } = useQuery({
-    queryKey: ['fetch-space', args.spaceId],
-    queryFn: () => fetchSpace({ id: args.spaceId }),
-  });
+  const { space } = useSpace(args.spaceId);
 
   const tx = useSmartAccountTransaction({
     address:

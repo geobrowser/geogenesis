@@ -13,7 +13,6 @@ import {
 import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
 import Image from 'next/image';
-import Link from 'next/link';
 
 import * as React from 'react';
 import { useState } from 'react';
@@ -30,6 +29,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 

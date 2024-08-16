@@ -1,11 +1,11 @@
 import Image from 'next/legacy/image';
-import Link from 'next/link';
 
 import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 interface Props {

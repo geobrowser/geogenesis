@@ -19,7 +19,7 @@ export function NavbarSpaceMetadata() {
   const spaceId: string | undefined = params?.['id'] as string | undefined;
 
   const { data } = useSuspenseQuery({
-    queryKey: ['space', spaceId],
+    queryKey: ['navbar-space-metadata', spaceId],
     queryFn: async () => {
       if (!spaceId) return null;
       const space = await subgraph.fetchSpace({ id: spaceId });

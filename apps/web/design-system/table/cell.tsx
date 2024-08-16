@@ -2,11 +2,11 @@
 
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
-import Link from 'next/link';
 
 import * as React from 'react';
 
 import { SquareButton } from '~/design-system/button';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ContractSmall } from '../icons/contract-small';
 import { ExpandSmall } from '../icons/expand-small';
