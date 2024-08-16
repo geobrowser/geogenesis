@@ -18,7 +18,7 @@ import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { SquareButton } from '~/design-system/button';
-import { DeletableChipButton, LinkableChip, LinkableRelationChip } from '~/design-system/chip';
+import { DeletableChipButton, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
@@ -43,12 +43,8 @@ interface Props {
   relationsOut: Relation[];
 }
 
-// type Attribute = [AttributeId, AttributeValue];
-// type AttributeId = string;
-// type AttributeValue = string;
-
 export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Props) {
-  const { triples: localTriples, relations, schema, hideSchema, hiddenSchemaIds, name } = useEntityPageStore();
+  const { triples: localTriples, relations, schema, name } = useEntityPageStore();
 
   useDeriveNewSchemaFromParams();
 
@@ -76,8 +72,13 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     },
   });
 
+  // @TODO: Not sure if we're creating a triple or a relation or something else. We need
+  // some sort of placeholder field that isn't yet written to the database.
   const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
 
+  // The schema for a given set of types define the expected attributes and relations for
+  // any entities with those types. We want to show any properties from the schema that
+  // aren't already set on the entity.
   const attributesWithAValue = new Set([...triples.map(t => t.attributeId), ...relations.map(r => r.typeOf.id)]);
 
   // Make some fake triples derived from the schema. We later hide and show these depending
@@ -102,13 +103,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     // Filter out schema renderables if we already have a triple or relation for that attribute
     .filter(renderable => !attributesWithAValue.has(renderable.attributeId));
 
-  /**
-   * Things we want to support
-   * 1. Sorting the attribute groups based on a priority heuristic
-   * 2. Always show name, description, and types fields if they don't exist already
-   * 3. Support rendering empty list of fields for schemas
-   */
-  const renderables = pipe(
+  const renderablesGroupedByAttributeId = pipe(
     toRenderables(
       [...triples, ...schemaTriples],
       // We don't show blocks in the data section
@@ -116,29 +111,54 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
       spaceId
     ),
     renderables => sortRenderables(renderables),
-    renderables => groupBy(renderables, r => r.attributeId)
+    sortedRenderables => groupBy(sortedRenderables, r => r.attributeId)
   );
 
   return (
     <>
+      {/* @TODO: Unify the component between the readable and editable pages */}
       <div className="rounded-lg border border-grey-02 shadow-button">
         <div className="flex flex-col gap-6 p-5">
-          {Object.entries(renderables).map(([attributeId, renderable]) => {
+          {Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderable]) => {
             const isRelation = renderable[0].type === 'RELATION';
 
+            // @TODO: This is where we add the floating UI for the type switcher and deleter buttons
             if (isRelation) {
-              return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableData[]} />;
+              const attributeId = renderable[0].attributeId;
+              const attributeName = renderable[0].attributeName;
+
+              return (
+                <div key={`${attributeId}-${attributeName}`} className="break-words">
+                  <Link href={NavUtils.toEntity(spaceId, attributeId)}>
+                    {/* @TODO: Find or create for the attribute */}
+                    <Text as="p" variant="bodySemibold">
+                      {attributeName ?? attributeId}
+                    </Text>
+                  </Link>
+                  <RelationsGroup key={attributeId} relations={renderable as RelationRenderableData[]} />
+                </div>
+              );
             }
 
-            return <TriplesGroup key={attributeId} entityId={id} triples={renderable as TripleRenderableData[]} />;
+            const attributeName = renderable[0].attributeName;
+
+            return (
+              <div key={`${id}-${attributeId}`} className="break-words">
+                <Link href={NavUtils.toEntity(spaceId, attributeId)}>
+                  {/* @TODO: Find or create for the attribute */}
+                  <Text as="p" variant="bodySemibold">
+                    {attributeName || attributeId}
+                  </Text>
+                </Link>
+                <TriplesGroup key={attributeId} triples={renderable as TripleRenderableData[]} />
+              </div>
+            );
           })}
         </div>
         <div className="p-4">
           {/* @TODO(relations): This shouldn't be a triple, but instead just a random field where we can enter the attribute
           and value */}
-          <SquareButton onClick={onCreateNewTriple} icon={<Create />}>
-            Add triple
-          </SquareButton>
+          <SquareButton onClick={onCreateNewTriple} icon={<Create />} />
         </div>
       </div>
     </>
@@ -146,88 +166,123 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
 }
 
 function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) {
-  const attributeId = relations[0].attributeId;
-  const attributeName = relations[0].attributeName;
   const spaceId = relations[0].spaceId;
 
   return (
-    <>
-      <div key={`${attributeId}-${attributeName}`} className="break-words">
-        <Link href={NavUtils.toEntity(spaceId, attributeId)}>
-          <Text as="p" variant="bodySemibold">
-            {attributeName ?? attributeId}
-          </Text>
-        </Link>
-        <div className="flex flex-wrap gap-2">
-          {relations.map(r => {
-            const relationId = r.relationId;
-            const relationName = r.valueName;
-            const renderableType = r.renderableType;
-            const relationValue = r.value;
+    <div className="flex flex-wrap gap-2">
+      {relations.map(r => {
+        const relationId = r.relationId;
+        const relationName = r.valueName;
+        const renderableType = r.renderableType;
+        const relationValue = r.value;
 
-            if (renderableType === 'IMAGE') {
+        if (renderableType === 'IMAGE') {
+          return (
+            <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue ?? '')} />
+          );
+        }
+
+        return (
+          <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
+            <LinkableRelationChip
+              entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
+              relationHref={NavUtils.toEntity(spaceId, relationId)}
+            >
+              {relationName ?? relationId}
+            </LinkableRelationChip>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TriplesGroup({ triples }: { triples: TripleRenderableData[] }) {
+  const { id, name, spaceId } = useEntityPageStore();
+
+  const send = useEditEvents({
+    context: {
+      entityId: id,
+      spaceId: spaceId,
+      entityName: name ?? '',
+    },
+  });
+
+  /**
+   * Upserting triple by renderable type (e.g., text, entity, time, number, image)
+   * Deleting triples
+   * Placeholder field for + button and schema fields
+   */
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {triples.map(renderable => {
+        switch (renderable.type) {
+          case 'TEXT':
+            return (
+              <PageStringField
+                key={renderable.attributeId}
+                variant="body"
+                placeholder="Add value..."
+                aria-label="text-field"
+                value={renderable.value}
+                onChange={e => {
+                  console.log('updateTextValue', e.target.value);
+                  send({
+                    type: 'UPSERT_TEXT_VALUE',
+                    payload: {
+                      renderable,
+                      value: e.target.value,
+                    },
+                  });
+                }}
+              />
+              // <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
+              //   {renderable.value}
+              // </Text>
+            );
+          case 'TIME':
+            return <DateField isEditing={true} value={renderable.value} />;
+          case 'URI':
+            return <WebUrlField isEditing={true} value={renderable.value} />;
+          case 'ENTITY': {
+            if (renderable.value.value === '') {
               return (
-                <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue ?? '')} />
+                <div data-testid="select-entity" className="w-full">
+                  <SelectEntity
+                    spaceId={spaceId}
+                    onDone={() => {
+                      //
+                    }}
+                    // onDone={result => {
+                    //   if (renderable.attributeId) {
+                    //     addEntityValue(attributeId, result);
+                    //   }
+                    // }}
+                    wrapperClassName="contents"
+                    inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
+                    resultsClassName="absolute z-[1000]"
+                  />
+                </div>
               );
             }
 
             return (
-              <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
-                <LinkableRelationChip
-                  entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
-                  relationHref={NavUtils.toEntity(spaceId, relationId)}
+              <div key={`entity-${renderable.value.value}`}>
+                <DeletableChipButton
+                  href={NavUtils.toEntity(renderable.spaceId, renderable.value.value)}
+                  // onClick={() => removeOrResetEntityTriple(triple)}
                 >
-                  {relationName ?? relationId}
-                </LinkableRelationChip>
+                  {renderable.value.name || renderable.value.value}
+                </DeletableChipButton>
               </div>
             );
-          })}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function TriplesGroup({ entityId, triples }: { entityId: string; triples: TripleRenderableData[] }) {
-  return (
-    <>
-      {triples.map((t, index) => {
-        return (
-          <div key={`${entityId}-${t.attributeId}-${index}`} className="break-words">
-            <Text as="p" variant="bodySemibold">
-              {triples[0].attributeName || t.attributeId}
-            </Text>
-            <div className="flex flex-wrap gap-2">
-              {triples.map(renderable => {
-                switch (renderable.type) {
-                  case 'TEXT':
-                    return (
-                      <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-                        {renderable.value}
-                      </Text>
-                    );
-                  case 'TIME':
-                    return <DateField isEditing={false} value={renderable.value} />;
-                  case 'URI':
-                    return <WebUrlField isEditing={false} value={renderable.value} />;
-                  case 'ENTITY': {
-                    return (
-                      <div key={`entity-${renderable.attributeId}-${renderable.value.value}}`} className="mt-1">
-                        <LinkableChip href={NavUtils.toEntity(renderable.spaceId, renderable.value.value)}>
-                          {renderable.value.name || renderable.value.value}
-                        </LinkableChip>
-                      </div>
-                    );
-                  }
-                  case 'NUMBER':
-                    return null;
-                }
-              })}
-            </div>
-          </div>
-        );
+          }
+          case 'NUMBER':
+            return null;
+        }
       })}
-    </>
+    </div>
   );
 }
 

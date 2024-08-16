@@ -5,7 +5,13 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { Value as IValue, OmitStrict, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
+import {
+  Value as IValue,
+  OmitStrict,
+  RenderableData,
+  Triple as TripleType,
+  ValueType as TripleValueType,
+} from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
@@ -14,6 +20,13 @@ import { valueTypeNames, valueTypes } from '~/core/value-types';
 import { useWriteOps } from '../database/write';
 
 export type EditEvent =
+  | {
+      type: 'UPSERT_TEXT_VALUE';
+      payload: {
+        renderable: RenderableData;
+        value: string;
+      };
+    }
   | {
       type: 'UPSERT_TRIPLE_VALUE';
       payload: {
@@ -183,6 +196,21 @@ const listener =
   ({ api: { upsert, remove, upsertMany }, context }: ListenerConfig) =>
   (event: EditEvent) => {
     switch (event.type) {
+      case 'UPSERT_TEXT_VALUE': {
+        const { renderable, value } = event.payload;
+
+        return upsert(
+          {
+            ...renderable,
+            value: {
+              type: 'TEXT',
+              value,
+            },
+          },
+          context.spaceId
+        );
+      }
+
       case 'EDIT_ENTITY_NAME': {
         const { name } = event.payload;
 
@@ -585,7 +613,6 @@ const listener =
 export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
   const { upsert, remove, upsertMany } = useWriteOps();
 
-  // TODO: Only create config when content changes
   const send = useMemo(() => {
     return listener({
       ...config,

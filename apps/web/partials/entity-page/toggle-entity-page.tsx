@@ -14,10 +14,6 @@ type EntityPageProps = {
   spaceId: string;
 };
 
-type Attribute = [AttributeId, AttributeValue];
-type AttributeId = string;
-type AttributeValue = string;
-
 export function ToggleEntityPage(props: EntityPageProps) {
   const renderEditablePage = useUserIsEditing(props.spaceId);
 

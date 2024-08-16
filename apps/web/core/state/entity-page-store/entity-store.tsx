@@ -14,17 +14,6 @@ export function useEntityPageStore() {
     React.useMemo(() => ({ triples: initialTriples, relations: initialRelations }), [initialTriples, initialRelations])
   );
 
-  const [hiddenSchemaIds, setHiddenSchemaIds] = React.useState<string[]>([]);
-
-  const hideSchema = React.useCallback(
-    (id: string) => {
-      if (!hiddenSchemaIds.includes(id)) {
-        setHiddenSchemaIds([...hiddenSchemaIds, id]);
-      }
-    },
-    [hiddenSchemaIds]
-  );
-
   return {
     triples,
     relations: relationsOut,
@@ -34,7 +23,5 @@ export function useEntityPageStore() {
     id,
 
     schema,
-    hideSchema,
-    hiddenSchemaIds,
   };
 }

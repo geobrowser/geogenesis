@@ -169,7 +169,6 @@ const ReviewChanges = () => {
   }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace]);
 
   if (isLoading || !data || isSpacesLoading) {
-    console.log('loading', isLoading, data, isSpacesLoading);
     return null;
   }
 
