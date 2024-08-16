@@ -220,25 +220,15 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
                 <>
                   <PageNumber number={1} onClick={() => setPage(0)} />
                   {pageNumber > 2 ? (
-                    <>
-                      <Text color="grey-03" variant="metadataMedium">
-                        ...
-                      </Text>
-                    </>
+                    <Text color="grey-03" variant="metadataMedium">
+                      ...
+                    </Text>
                   ) : null}
                 </>
               )}
-              {hasPreviousPage && (
-                <>
-                  <PageNumber number={pageNumber} onClick={() => setPage('previous')} />
-                </>
-              )}
+              {hasPreviousPage && <PageNumber number={pageNumber} onClick={() => setPage('previous')} />}
               <PageNumber isActive number={pageNumber + 1} />
-              {hasNextPage && (
-                <>
-                  <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />
-                </>
-              )}
+              {hasNextPage && <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />}
               <Spacer width={8} />
               <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
               <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
