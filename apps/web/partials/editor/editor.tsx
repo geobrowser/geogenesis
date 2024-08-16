@@ -10,6 +10,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Text from '@tiptap/extension-text';
 import { EditorContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 import cx from 'classnames';
+import { LayoutGroup } from 'framer-motion';
 
 import * as React from 'react';
 
@@ -176,10 +177,12 @@ export const Editor = React.memo(function Editor({
   }
 
   return (
-    <div className={cx(editable ? 'editable' : 'not-editable')}>
-      {!editor ? <ServerContent content={editorJson.content} /> : <EditorContent editor={editor} />}
+    <LayoutGroup id="editor">
+      <div className={cx(editable ? 'editable' : 'not-editable')}>
+        {!editor ? <ServerContent content={editorJson.content} /> : <EditorContent editor={editor} />}
 
-      {shouldHandleOwnSpacing && <Spacer height={60} />}
-    </div>
+        {shouldHandleOwnSpacing && <Spacer height={60} />}
+      </div>
+    </LayoutGroup>
   );
 });

@@ -114,7 +114,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const hasPagination = hasPreviousPage || hasNextPage;
 
   return (
-    <div>
+    <motion.div layout="position" transition={{ duration: 0.15 }}>
       <div className="mb-2 flex h-8 items-center justify-between">
         <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
@@ -253,7 +253,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
           </>
         )}
       </motion.div>
-    </div>
+    </motion.div>
   );
 });
 
