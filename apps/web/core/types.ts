@@ -3,12 +3,12 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'URI' | 'TIME';
+export type ValueType = 'TEXT' | 'ENTITY' | 'URI' | 'TIME';
 // | GEO_LOCATION
 // | 'CHECKBOX'
 
 export type AppValue = {
-  type: 'TEXT' | 'NUMBER' | 'URI' | 'TIME';
+  type: 'TEXT' | 'URI' | 'TIME';
   value: string;
 };
 

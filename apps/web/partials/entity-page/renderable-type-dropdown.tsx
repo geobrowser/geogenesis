@@ -7,10 +7,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { ValueType as TripleValueType } from '~/core/types';
-
 import { SquareButton } from '~/design-system/button';
 import { Date } from '~/design-system/icons/date';
+import { Image } from '~/design-system/icons/image';
 import { Relation } from '~/design-system/icons/relation';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
@@ -18,20 +17,25 @@ import { ColorName } from '~/design-system/theme/colors';
 
 const MotionContent = motion(DropdownPrimitive.Content);
 
-const icons: Record<TripleValueType, React.FunctionComponent<{ color?: ColorName }>> = {
+// The types of renderables don't map 1:1 to the triple value types. We might
+// also render relations with a specific type, e.g., an Image entity or a
+// Person entity, etc.
+type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URI' | 'TIME' | 'IMAGE';
+
+const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
   TIME: Date,
-  ENTITY: Relation,
   TEXT: Text,
-  NUMBER: Text,
   URI: Url,
+  RELATION: Relation,
+  IMAGE: Image,
 };
 
 interface Props {
-  value: TripleValueType;
-  options: { value: TripleValueType; label: React.ReactNode; onClick: () => void; disabled: boolean }[];
+  value: SwitchableRenderableType;
+  options: { value: SwitchableRenderableType; label: React.ReactNode; onClick: () => void }[];
 }
 
-export const TripleTypeDropdown = ({ value, options }: Props) => {
+export const RenderableTypeDropdown = ({ value, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
 
@@ -61,7 +65,7 @@ export const TripleTypeDropdown = ({ value, options }: Props) => {
               {options.map((option, index) => (
                 <DropdownPrimitive.Item
                   key={`triple-type-dropdown-${index}`}
-                  onClick={option.disabled ? undefined : option.onClick}
+                  onClick={option.onClick}
                   className={cx(
                     'flex w-full select-none items-center justify-between px-3 py-2 text-button text-grey-04 last:border-b last:border-b-grey-02 hover:cursor-pointer hover:!bg-bg focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:text-grey-04',
                     value === option.value && '!bg-bg !text-text'

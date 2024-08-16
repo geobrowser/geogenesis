@@ -35,6 +35,19 @@ export type EditEvent =
         attributeName: string | null;
       };
     }
+  | {
+      type: 'DELETE_RENDERABLE';
+      payload: {
+        renderable: RenderableData;
+      };
+    }
+  | {
+      type: 'CHANGE_RENDERABLE_TYPE';
+      payload: {
+        renderable: RenderableData;
+        type: RenderableData['type'];
+      };
+    }
 
   // EVERYTHING BELOW THIS IS A LEGACY EVENT THAT WILL GET REMOVED
   | {
@@ -276,6 +289,52 @@ const listener =
           },
           context.spaceId
         );
+      }
+
+      case 'CHANGE_RENDERABLE_TYPE': {
+        const { renderable, type } = event.payload;
+
+        // @TODO(relations): Handle changing to and from a relation
+        // If we're changing from a relation then we actually need to delete all of the triples
+        // on the relation as well and not a single triple.
+        if (type === 'RELATION') {
+          return;
+        }
+
+        if (type === 'ENTITY') {
+          return upsert(
+            {
+              ...renderable,
+              value: {
+                type,
+                value: '',
+                name: null,
+              },
+            },
+            context.spaceId
+          );
+        }
+
+        return upsert(
+          {
+            ...renderable,
+            value: {
+              type,
+              value: '',
+            },
+          },
+          context.spaceId
+        );
+      }
+      case 'DELETE_RENDERABLE': {
+        const { renderable } = event.payload;
+
+        // @TODO(relations): Handle deleting a relation
+        if (renderable.type === 'RELATION') {
+          return;
+        }
+
+        return remove(renderable, context.spaceId);
       }
 
       // ALL OF THE BELOW EVENTS ARE LEGACY AND WILL GET REMOVED

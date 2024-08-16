@@ -17,7 +17,7 @@ import { Text as TextIcon } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
 import { Spacer } from '~/design-system/spacer';
 
-import { TripleTypeDropdown } from '../entity-page/triple-type-dropdown';
+import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
   column: Column;
@@ -99,7 +99,7 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
       />
 
       {isUnpublished && (
-        <TripleTypeDropdown
+        <RenderableTypeDropdown
           value={valueTypes[valueType]}
           options={[
             {
