@@ -133,6 +133,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                 )}
 
                 <div className="absolute right-0 top-6 flex items-center gap-1">
+                  {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
                   {renderableType !== 'ENTITY' && (
                     <>
                       <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
