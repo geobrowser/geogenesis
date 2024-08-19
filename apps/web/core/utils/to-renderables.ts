@@ -1,8 +1,8 @@
 import { Relation } from '../io/dto/entities';
-import { RelationRenderableData, RenderableData, Triple, TripleRenderableData } from '../types';
+import { RelationRenderableProperty, RenderableProperty, Triple, TripleRenderableProperty } from '../types';
 
-export function toRenderables(triples: Triple[], relations: Relation[], spaceId: string): RenderableData[] {
-  const triplesToRenderable = triples.map((t): TripleRenderableData => {
+export function toRenderables(triples: Triple[], relations: Relation[], spaceId: string): RenderableProperty[] {
+  const triplesToRenderable = triples.map((t): TripleRenderableProperty => {
     if (t.value.type === 'ENTITY') {
       return {
         type: t.value.type,
@@ -26,7 +26,7 @@ export function toRenderables(triples: Triple[], relations: Relation[], spaceId:
     };
   });
 
-  const relationsToRenderable = relations.map((r): RelationRenderableData => {
+  const relationsToRenderable = relations.map((r): RelationRenderableProperty => {
     return {
       type: 'RELATION',
       entityId: r.typeOf.id,

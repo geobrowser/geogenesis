@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { memo } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { Cell, Triple, TripleRenderableData } from '~/core/types';
+import { Cell, Triple, TripleRenderableProperty } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils } from '~/core/utils/utils';
@@ -125,7 +125,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
       payload: {
         // @TODO(relations): Fix once we handle relations in tables
-        renderable: toRenderables([triple], [], space)[0] as TripleRenderableData,
+        renderable: toRenderables([triple], [], space)[0] as TripleRenderableProperty,
         value: {
           type: 'TEXT',
           value,
@@ -139,7 +139,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
       payload: {
         // @TODO(relations): Fix once we handle relations in tables
-        renderable: toRenderables([triple], [], space)[0] as TripleRenderableData,
+        renderable: toRenderables([triple], [], space)[0] as TripleRenderableProperty,
         value: {
           type: 'URI',
           value,
@@ -153,7 +153,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
       payload: {
         // @TODO(relations): Fix once we handle relations in tables
-        renderable: toRenderables([triple], [], space)[0] as TripleRenderableData,
+        renderable: toRenderables([triple], [], space)[0] as TripleRenderableProperty,
         value: {
           type: 'TIME',
           value,

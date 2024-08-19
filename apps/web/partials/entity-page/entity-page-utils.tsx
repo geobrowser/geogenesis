@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { RenderableData, Triple } from '~/core/types';
+import { RenderableProperty, Triple } from '~/core/types';
 
 /* Sort order goes Name -> Description -> Types -> Placeholders (Empty or modified) -> Triples in Schema -> Alphabetical */
 export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: Triple[]) {
@@ -49,7 +49,7 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
   });
 }
 
-export function sortRenderables(renderables: RenderableData[]) {
+export function sortRenderables(renderables: RenderableProperty[]) {
   /* Visible triples includes both real triples and placeholder triples */
   return renderables.sort((renderableA, renderableB) => {
     const { attributeId: attributeIdA, attributeName: attributeNameA } = renderableA;

@@ -7,8 +7,8 @@ import { useMemo } from 'react';
 import { ID } from '~/core/id';
 import {
   OmitStrict,
-  RenderableData,
-  TripleRenderableData,
+  RenderableProperty,
+  TripleRenderableProperty,
   Triple as TripleType,
   ValueType as TripleValueType,
   Value,
@@ -25,14 +25,14 @@ export type EditEvent =
   | {
       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE';
       payload: {
-        renderable: TripleRenderableData;
+        renderable: TripleRenderableProperty;
         value: Value;
       };
     }
   | {
       type: 'UPSERT_ATTRIBUTE';
       payload: {
-        renderable: RenderableData;
+        renderable: RenderableProperty;
         attributeId: string;
         attributeName: string | null;
       };
@@ -40,7 +40,7 @@ export type EditEvent =
   | {
       type: 'DELETE_RENDERABLE';
       payload: {
-        renderable: RenderableData;
+        renderable: RenderableProperty;
       };
     }
   | {
@@ -54,8 +54,8 @@ export type EditEvent =
   | {
       type: 'CHANGE_RENDERABLE_TYPE';
       payload: {
-        renderable: RenderableData;
-        type: RenderableData['type'];
+        renderable: RenderableProperty;
+        type: RenderableProperty['type'];
       };
     }
 
@@ -307,11 +307,25 @@ const listener =
       case 'CHANGE_RENDERABLE_TYPE': {
         const { renderable, type } = event.payload;
 
-        // @TODO(relations): Handle changing to and from a relation
+        // @TODO(relations): Handle deleting all triples for a relation
         // If we're changing from a relation then we actually need to delete all of the triples
         // on the relation as well and not a single triple.
-        if (type === 'RELATION') {
+        if (renderable.type === 'RELATION') {
           return;
+        }
+
+        if (type === 'RELATION') {
+          // Delete the previous triple and create a new relation entity
+          remove(renderable, context.spaceId);
+
+          const relationTriples = Relations.createRelationshipTriples({
+            fromId: context.entityId,
+            toId: '',
+            typeId: renderable.attributeId,
+            spaceId: context.spaceId,
+          });
+
+          return upsertMany(relationTriples, context.spaceId);
         }
 
         if (type === 'ENTITY') {

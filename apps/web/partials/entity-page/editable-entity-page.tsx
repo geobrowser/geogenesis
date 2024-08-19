@@ -9,7 +9,7 @@ import { useTriples } from '~/core/database/triples';
 import { useEditEvents } from '~/core/events/edit-events';
 import { Relation } from '~/core/io/dto/entities';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RelationRenderableData, RenderableData, TripleRenderableData } from '~/core/types';
+import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
 import { Triple as ITriple } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
@@ -114,10 +114,14 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
       <div className="rounded-lg border border-grey-02 shadow-button">
         <div className="flex flex-col gap-6 p-5">
           {Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
-            const renderableType = renderables[0].type;
-
             // Triple groups only ever have one renderable
             const firstRenderable = renderables[0];
+            const renderableType = firstRenderable.type;
+
+            if (attributeId === '03aa11edd69a4d5ea0aea0f197614cfd') {
+              console.log('type', { renderableType, firstRenderable });
+            }
+
             const selectorOptions = getRenderableTypeSelectorOptions(firstRenderable, send);
 
             return (
@@ -125,9 +129,9 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                 <EditableAttribute renderable={firstRenderable} />
                 {renderableType === 'RELATION' ? (
                   // @TODO: Empty selectable field if relations are empty
-                  <RelationsGroup key={attributeId} relations={renderables as RelationRenderableData[]} />
+                  <RelationsGroup key={attributeId} relations={renderables as RelationRenderableProperty[]} />
                 ) : (
-                  <TriplesGroup key={attributeId} triples={renderables as TripleRenderableData[]} />
+                  <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
                 )}
 
                 <div className="absolute right-0 top-6 flex items-center gap-1">
@@ -160,7 +164,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
   );
 }
 
-function EditableAttribute({ renderable }: { renderable: RenderableData }) {
+function EditableAttribute({ renderable }: { renderable: RenderableProperty }) {
   const { id, name, spaceId } = useEntityPageStore();
 
   const send = useEditEvents({
@@ -198,7 +202,7 @@ function EditableAttribute({ renderable }: { renderable: RenderableData }) {
   );
 }
 
-function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) {
+function RelationsGroup({ relations }: { relations: RelationRenderableProperty[] }) {
   const spaceId = relations[0].spaceId;
 
   return (
@@ -238,7 +242,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) 
   );
 }
 
-function TriplesGroup({ triples }: { triples: TripleRenderableData[] }) {
+function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
   const { id, name, spaceId } = useEntityPageStore();
 
   const send = useEditEvents({

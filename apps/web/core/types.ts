@@ -73,7 +73,7 @@ export type RenderableEntityType = 'IMAGE' | 'DEFAULT' | 'BLOCK'; // specific bl
 // Editing these values mostly works the same way as ops, so we need the same
 // properties that ops mostly do in order to upsert or remove the renderable
 // fields.
-export type NativeRenderableDataField = {
+export type NativeRenderableProperty = {
   type: AppValue['type'];
   entityId: string;
   entityName: string | null;
@@ -84,7 +84,7 @@ export type NativeRenderableDataField = {
 };
 
 // Entity renderable fields should only exist on Relations pages
-export type EntityRenderableData = {
+export type EntityRenderableProperty = {
   type: 'ENTITY';
   entityId: string;
   entityName: string | null;
@@ -97,7 +97,7 @@ export type EntityRenderableData = {
   };
 };
 
-export type RelationRenderableData = {
+export type RelationRenderableProperty = {
   type: 'RELATION';
   entityId: string;
   entityName: string | null;
@@ -110,8 +110,13 @@ export type RelationRenderableData = {
   value: string | null;
 };
 
-export type TripleRenderableData = NativeRenderableDataField | EntityRenderableData;
-export type RenderableData = TripleRenderableData | RelationRenderableData;
+export type TripleRenderableProperty = NativeRenderableProperty | EntityRenderableProperty;
+export type RenderableProperty = TripleRenderableProperty | RelationRenderableProperty;
+
+// The types of renderables don't map 1:1 to the triple value types. We might
+// also render relations with a specific type, e.g., an Image entity or a
+// Person entity, etc.
+export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URI' | 'TIME' | 'IMAGE';
 
 export type ReviewState =
   | 'idle'

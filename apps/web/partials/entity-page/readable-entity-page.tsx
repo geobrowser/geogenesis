@@ -6,7 +6,7 @@ import * as React from 'react';
 import { useTriples } from '~/core/database/triples';
 import { Relation } from '~/core/io/dto/entities';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RelationRenderableData, Triple, TripleRenderableData } from '~/core/types';
+import { RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
 
@@ -56,16 +56,16 @@ export function ReadableEntityPage({ triples: serverTriples, relations, id, spac
         const isRelation = renderable[0].type === 'RELATION';
 
         if (isRelation) {
-          return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableData[]} />;
+          return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableProperty[]} />;
         }
 
-        return <TriplesGroup key={attributeId} entityId={id} triples={renderable as TripleRenderableData[]} />;
+        return <TriplesGroup key={attributeId} entityId={id} triples={renderable as TripleRenderableProperty[]} />;
       })}
     </div>
   );
 }
 
-function TriplesGroup({ entityId, triples }: { entityId: string; triples: TripleRenderableData[] }) {
+function TriplesGroup({ entityId, triples }: { entityId: string; triples: TripleRenderableProperty[] }) {
   return (
     <>
       {triples.map((t, index) => {
@@ -106,7 +106,7 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
   );
 }
 
-function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) {
+function RelationsGroup({ relations }: { relations: RelationRenderableProperty[] }) {
   const attributeId = relations[0].attributeId;
   const attributeName = relations[0].attributeName;
   const spaceId = relations[0].spaceId;

@@ -7,6 +7,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import * as React from 'react';
 import { useState } from 'react';
 
+import { SwitchableRenderableType } from '~/core/types';
+
 import { SquareButton } from '~/design-system/button';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
@@ -16,11 +18,6 @@ import { Url } from '~/design-system/icons/url';
 import { ColorName } from '~/design-system/theme/colors';
 
 const MotionContent = motion(DropdownPrimitive.Content);
-
-// The types of renderables don't map 1:1 to the triple value types. We might
-// also render relations with a specific type, e.g., an Image entity or a
-// Person entity, etc.
-type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URI' | 'TIME' | 'IMAGE';
 
 const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: ColorName }>> = {
   TIME: Date,
