@@ -5,19 +5,27 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { OmitStrict, RenderableData, Triple as TripleType, ValueType as TripleValueType, Value } from '~/core/types';
+import {
+  OmitStrict,
+  RenderableData,
+  TripleRenderableData,
+  Triple as TripleType,
+  ValueType as TripleValueType,
+  Value,
+} from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
 import { useWriteOps } from '../database/write';
+import { Relations } from '../utils/relations';
 
 export type EditEvent =
   | {
-      type: 'UPSERT_RENDERABLE_VALUE';
+      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE';
       payload: {
-        renderable: RenderableData;
+        renderable: TripleRenderableData;
         value: Value;
       };
     }
@@ -33,6 +41,14 @@ export type EditEvent =
       type: 'DELETE_RENDERABLE';
       payload: {
         renderable: RenderableData;
+      };
+    }
+  | {
+      type: 'UPSERT_RELATION';
+      payload: {
+        toEntityId: string;
+        fromEntityId: string;
+        typeOfId: string;
       };
     }
   | {
@@ -206,7 +222,7 @@ const listener =
   ({ api: { upsert, remove, upsertMany }, context }: ListenerConfig) =>
   (event: EditEvent) => {
     switch (event.type) {
-      case 'UPSERT_RENDERABLE_VALUE': {
+      case 'UPSERT_RENDERABLE_TRIPLE_VALUE': {
         const { value, renderable } = event.payload;
 
         return upsert(
@@ -216,6 +232,19 @@ const listener =
           },
           context.spaceId
         );
+      }
+
+      case 'UPSERT_RELATION': {
+        const { toEntityId, fromEntityId, typeOfId } = event.payload;
+
+        const relationTriples = Relations.createRelationshipTriples({
+          fromId: fromEntityId,
+          toId: toEntityId,
+          typeId: typeOfId,
+          spaceId: context.spaceId,
+        });
+
+        return upsertMany(relationTriples, context.spaceId);
       }
 
       case 'UPSERT_ATTRIBUTE': {

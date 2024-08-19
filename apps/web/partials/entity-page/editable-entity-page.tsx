@@ -176,7 +176,6 @@ function EditableAttribute({ renderable }: { renderable: RenderableData }) {
         spaceId={spaceId}
         placeholder="Add attribute..."
         onDone={result => {
-          console.log('result', result);
           send({
             type: 'UPSERT_ATTRIBUTE',
             payload: { renderable, attributeId: result.id, attributeName: result.name },
@@ -255,7 +254,7 @@ function TriplesGroup({ triples }: { triples: TripleRenderableData[] }) {
                 value={renderable.value}
                 onChange={e => {
                   send({
-                    type: 'UPSERT_RENDERABLE_VALUE',
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                     payload: {
                       renderable,
                       value: {
@@ -279,7 +278,7 @@ function TriplesGroup({ triples }: { triples: TripleRenderableData[] }) {
                     spaceId={spaceId}
                     onDone={result => {
                       send({
-                        type: 'UPSERT_RENDERABLE_VALUE',
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
                         payload: {
                           renderable,
                           value: {
