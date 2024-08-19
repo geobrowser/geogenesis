@@ -105,7 +105,9 @@ type IconButtonProps = React.ComponentPropsWithoutRef<'button'> & {
 
 const iconButtonClassNames = cva('background-transparent cursor-pointer border-none', {
   variants: {
-    disabled: 'cursor-not-allowed',
+    disabled: {
+      true: 'cursor-not-allowed',
+    },
   },
   defaultVariants: {
     disabled: false,

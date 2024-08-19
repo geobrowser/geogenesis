@@ -81,7 +81,7 @@ export function EntityDto(entity: SubstreamEntity): Entity {
           // render it depending on their use case.
           renderableType: renderableType,
           // Right now we only support images and entity ids as the value of the To entity.
-          value: renderableType === 'IMAGE' ? imageEntityUrlValue : t.toEntity.id,
+          value: renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : t.toEntity.id,
         },
       };
     }),
