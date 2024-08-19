@@ -9,10 +9,6 @@ import DefaultEntityPage from '~/app/space/(entity)/[id]/[entityId]/default-enti
 
 export type Props = {
   params: { id: string };
-  searchParams: {
-    typeId?: string;
-    filters?: string;
-  };
 };
 
 export const Tab = async (props: Props & { slug: string }) => {
