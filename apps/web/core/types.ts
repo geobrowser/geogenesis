@@ -98,16 +98,15 @@ export type EntityRenderableProperty = {
 };
 
 export type RelationRenderableProperty = {
-  type: 'RELATION';
+  type: 'RELATION' | 'IMAGE';
   entityId: string;
   entityName: string | null;
   attributeId: string;
   attributeName: string | null;
   spaceId: string;
   relationId: string;
-  renderableType: RenderableEntityType;
   valueName: string | null; // name of the entity
-  value: string | null;
+  value: string;
 };
 
 export type TripleRenderableProperty = NativeRenderableProperty | EntityRenderableProperty;

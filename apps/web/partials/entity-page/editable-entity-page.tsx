@@ -97,6 +97,11 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     // Filter out schema renderables if we already have a triple or relation for that attribute
     .filter(renderable => !attributesWithAValue.has(renderable.attributeId));
 
+  console.log('relations + triples', {
+    relations: relations.filter(r => r.typeOf.id !== SYSTEM_IDS.BLOCKS),
+    triples,
+  });
+
   const renderablesGroupedByAttributeId = pipe(
     toRenderables(
       [...triples, ...schemaTriples],
@@ -117,10 +122,6 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
             // Triple groups only ever have one renderable
             const firstRenderable = renderables[0];
             const renderableType = firstRenderable.type;
-
-            if (attributeId === '03aa11edd69a4d5ea0aea0f197614cfd') {
-              console.log('type', { renderableType, firstRenderable });
-            }
 
             const selectorOptions = getRenderableTypeSelectorOptions(firstRenderable, send);
 
@@ -210,7 +211,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
       {relations.map(r => {
         const relationId = r.relationId;
         const relationName = r.valueName;
-        const renderableType = r.renderableType;
+        const renderableType = r.type;
         const relationValue = r.value;
 
         if (renderableType === 'IMAGE') {

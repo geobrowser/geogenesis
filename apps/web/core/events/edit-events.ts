@@ -49,6 +49,7 @@ export type EditEvent =
         toEntityId: string;
         fromEntityId: string;
         typeOfId: string;
+        typeOfName: string | null;
       };
     }
   | {
@@ -235,12 +236,13 @@ const listener =
       }
 
       case 'UPSERT_RELATION': {
-        const { toEntityId, fromEntityId, typeOfId } = event.payload;
+        const { toEntityId, fromEntityId, typeOfId, typeOfName } = event.payload;
 
         const relationTriples = Relations.createRelationshipTriples({
           fromId: fromEntityId,
           toId: toEntityId,
-          typeId: typeOfId,
+          typeOfId: typeOfId,
+          typeOfName: typeOfName,
           spaceId: context.spaceId,
         });
 
@@ -272,6 +274,11 @@ const listener =
             },
             context.spaceId
           );
+        }
+
+        // @TODO(relations): Add support for IMAGE
+        if (renderable.type === 'IMAGE') {
+          return;
         }
 
         if (renderable.type === 'ENTITY') {
@@ -306,6 +313,7 @@ const listener =
 
       case 'CHANGE_RENDERABLE_TYPE': {
         const { renderable, type } = event.payload;
+        console.log('CHANGE_RENDERABLE_TYPE', { renderable, type });
 
         // @TODO(relations): Handle deleting all triples for a relation
         // If we're changing from a relation then we actually need to delete all of the triples
@@ -321,11 +329,19 @@ const listener =
           const relationTriples = Relations.createRelationshipTriples({
             fromId: context.entityId,
             toId: '',
-            typeId: renderable.attributeId,
+            typeOfId: renderable.attributeId,
+            typeOfName: renderable.attributeName,
             spaceId: context.spaceId,
           });
 
+          console.log('relationTriples', relationTriples);
+
           return upsertMany(relationTriples, context.spaceId);
+        }
+
+        // @TODO(relations): Add support for IMAGE
+        if (type === 'IMAGE') {
+          return;
         }
 
         if (type === 'ENTITY') {

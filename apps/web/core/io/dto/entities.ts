@@ -41,7 +41,7 @@ export type Relation = {
     // if the entity is an image, the value is the URL of the image. If it's
     // a regular entity, the valu is the ID. It's a bit duplicative, but will
     // make more sense when we add support for other entity types.
-    value: string | null;
+    value: string;
   };
 };
 

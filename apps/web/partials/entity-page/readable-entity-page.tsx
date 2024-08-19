@@ -123,7 +123,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
           {relations.map(r => {
             const relationId = r.relationId;
             const relationName = r.valueName;
-            const renderableType = r.renderableType;
+            const renderableType = r.type;
             const relationValue = r.value;
 
             if (renderableType === 'IMAGE') {

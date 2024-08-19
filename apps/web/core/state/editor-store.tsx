@@ -14,7 +14,7 @@ import { tiptapExtensions } from '~/partials/editor/editor';
 import { htmlToPlainText } from '~/partials/editor/editor-utils';
 
 import { TableBlockSdk } from '../blocks-sdk';
-import { createRelationsForEntityAtom } from '../database/atoms';
+import { getRelations } from '../database/relations';
 import { remove, upsert } from '../database/write';
 import { Entity, Relation } from '../io/dto/entities';
 import { EntityId, TypeId } from '../io/schema';
@@ -43,7 +43,10 @@ const createMergedBlockRelationsAtom = (
   entityPageId: string
 ) => {
   return atom(get => {
-    const relationsForEntityId = get(createRelationsForEntityAtom(entityPageId, initialRelations));
+    const relationsForEntityId = getRelations({
+      mergeWith: initialRelations,
+      selector: r => r.fromEntity.id === entityPageId,
+    });
 
     /************************************** */
     // Merging blocks is a different process from merging relations. We can compose merging relations

@@ -37,16 +37,17 @@ interface OpsToTriplesArgs {
   toId: string;
   fromId: string;
   spaceId: string;
-  typeId: string;
+  typeOfId: string;
+  typeOfName: string | null;
 }
 
 export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
-  const { fromId, toId, spaceId, typeId } = args;
+  const { fromId, toId, spaceId, typeOfId } = args;
 
-  const [typeOp, fromOp, toOp, indexOp] = createRelationship({
+  const [typeOp, fromOp, toOp, indexOp, typeOfOp] = createRelationship({
     fromId,
     toId,
-    relationTypeId: typeId,
+    relationTypeId: typeOfId,
   });
 
   return [
@@ -95,6 +96,18 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       value: {
         type: 'TEXT',
         value: indexOp.triple.value.value,
+      },
+    },
+    {
+      space: spaceId,
+      attributeId: typeOfOp.triple.attribute,
+      attributeName: 'Relation type',
+      entityId: typeOfOp.triple.entity,
+      entityName: null,
+      value: {
+        type: 'ENTITY',
+        name: args.typeOfName,
+        value: typeOfOp.triple.value.value,
       },
     },
   ];

@@ -29,13 +29,12 @@ export function toRenderables(triples: Triple[], relations: Relation[], spaceId:
   const relationsToRenderable = relations.map((r): RelationRenderableProperty => {
     return {
       type: 'RELATION',
-      entityId: r.typeOf.id,
-      entityName: r.typeOf.name,
+      entityId: r.id,
+      entityName: null,
       attributeId: r.typeOf.id,
       attributeName: r.typeOf.name,
       spaceId,
       relationId: r.id,
-      renderableType: r.toEntity.renderableType,
       value: r.toEntity.value, // This is either the image URL or the entity ID
       valueName: r.toEntity.name,
     };
