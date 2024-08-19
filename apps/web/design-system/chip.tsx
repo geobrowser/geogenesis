@@ -11,6 +11,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { RelationSmall } from './icons/relation-small';
 import { ColorName, colors } from './theme/colors';
 
 interface LinkableChipProps {
@@ -51,7 +52,7 @@ interface LinkableRelationChipProps {
 }
 
 const linkableRelationChipStyles = cva(
-  'inline-flex min-h-[1.5rem] items-center break-words rounded border border-grey-02 bg-white py-1 pl-1.5 text-left text-metadataMedium !font-normal !leading-[1.125rem] hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
+  'inline-flex h-6 items-center break-words rounded border border-grey-02 bg-white pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg',
   {
     variants: {
       shouldClamp: {
@@ -166,7 +167,7 @@ export function LinkableRelationChip({ entityHref, relationHref, children, onDel
                   onMouseLeave={() => setIsRelationHovered(false)}
                   className={relationChipRelationIconStyles({ isRelationHovered })}
                 >
-                  <RelationLinkSmall fill={isRelationHovered ? 'ctaPrimary' : undefined} />
+                  <RelationSmall fill={isRelationHovered ? 'ctaPrimary' : undefined} />
                 </Link>
                 {isEditing && (
                   <button
@@ -244,19 +245,6 @@ function RelationDots({ color }: RelationDotsProps) {
     <svg width="2" height="6" viewBox="0 0 2 6" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="1" cy="1" r="1" fill={themeColor} />
       <circle cx="1" cy="5" r="1" fill={themeColor} />
-    </svg>
-  );
-}
-
-function RelationLinkSmall({ color, fill }: RelationDotsProps) {
-  const themeColor = color ? colors.light[color] : 'currentColor';
-  const fillColor = fill ? colors.light[fill] : 'white';
-
-  return (
-    <svg width="12" height="6" viewBox="0 0 12 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="8.99988" cy="3" r="2" transform="rotate(-180 8.99988 3)" stroke={themeColor} fill={fillColor} />
-      <rect x="7.49988" y="3.5" width="2.99993" height="1" transform="rotate(-180 7.49988 3.5)" fill={themeColor} />
-      <circle cx="3" cy="3" r="2" transform="rotate(-180 3 3)" stroke={themeColor} fill={fillColor} />
     </svg>
   );
 }

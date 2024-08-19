@@ -124,6 +124,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
               <div key={`${id}-${attributeId}`} className="relative break-words">
                 <EditableAttribute renderable={firstRenderable} />
                 {renderableType === 'RELATION' ? (
+                  // @TODO: Empty selectable field if relations are empty
                   <RelationsGroup key={attributeId} relations={renderables as RelationRenderableData[]} />
                 ) : (
                   <TriplesGroup key={attributeId} triples={renderables as TripleRenderableData[]} />
@@ -201,7 +202,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) 
   const spaceId = relations[0].spaceId;
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {relations.map(r => {
         const relationId = r.relationId;
         const relationName = r.valueName;
@@ -225,6 +226,14 @@ function RelationsGroup({ relations }: { relations: RelationRenderableData[] }) 
           </div>
         );
       })}
+      <div className="mt-1">
+        <SquareButton
+          onClick={() => {
+            //
+          }}
+          icon={<Create />}
+        />
+      </div>
     </div>
   );
 }

@@ -80,7 +80,7 @@ export const SquareButton = forwardRef(function SquareButton(
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   const squareButtonClassNames = cva([
-    'relative box-border flex h-6 w-6 items-center justify-center rounded-sm border bg-white p-1 text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
+    'relative box-border flex h-6 w-6 items-center justify-center rounded border bg-white text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
     !isActive ? 'border-grey-02' : 'border-text !bg-bg !text-text',
     !disabled
       ? 'cursor-pointer'
@@ -103,17 +103,21 @@ type IconButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   icon: React.ReactNode;
 };
 
+const iconButtonClassNames = cva('background-transparent cursor-pointer border-none', {
+  variants: {
+    disabled: 'cursor-not-allowed',
+  },
+  defaultVariants: {
+    disabled: false,
+  },
+});
+
 export const IconButton = forwardRef(function IconButton(
   { icon, disabled = false, ...rest }: IconButtonProps,
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
-  const iconButtonClassNames = cva([
-    'background-transparent border-none',
-    !disabled ? 'cursor-pointer' : 'cursor-not-allowed',
-  ]);
-
   return (
-    <button ref={ref} className={iconButtonClassNames()} {...rest}>
+    <button ref={ref} className={iconButtonClassNames({ disabled })} {...rest}>
       {icon}
     </button>
   );

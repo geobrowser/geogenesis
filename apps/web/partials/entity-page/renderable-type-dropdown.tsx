@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { SquareButton } from '~/design-system/button';
 import { Date } from '~/design-system/icons/date';
 import { Image } from '~/design-system/icons/image';
-import { Relation } from '~/design-system/icons/relation';
+import { RelationSmall } from '~/design-system/icons/relation-small';
 import { Text } from '~/design-system/icons/text';
 import { Url } from '~/design-system/icons/url';
 import { ColorName } from '~/design-system/theme/colors';
@@ -26,7 +26,7 @@ const icons: Record<SwitchableRenderableType, React.FunctionComponent<{ color?: 
   TIME: Date,
   TEXT: Text,
   URI: Url,
-  RELATION: Relation,
+  RELATION: RelationSmall,
   IMAGE: Image,
 };
 
