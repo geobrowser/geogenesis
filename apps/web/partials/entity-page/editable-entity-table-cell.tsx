@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useEditEvents } from '~/core/events/edit-events';
 import { Cell, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 
@@ -121,9 +122,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const updateStringTripleValue = (triple: Triple, value: string) => {
     send({
-      type: 'UPSERT_TRIPLE_VALUE',
+      type: 'UPSERT_RENDERABLE_VALUE',
       payload: {
-        triple,
+        // @TODO(relations): Fix once we handle relations in tables
+        renderable: toRenderables([triple], [], space)[0],
         value: {
           type: 'TEXT',
           value,
@@ -134,9 +136,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const updateUrlTripleValue = (triple: Triple, value: string) => {
     send({
-      type: 'UPSERT_TRIPLE_VALUE',
+      type: 'UPSERT_RENDERABLE_VALUE',
       payload: {
-        triple,
+        // @TODO(relations): Fix once we handle relations in tables
+        renderable: toRenderables([triple], [], space)[0],
         value: {
           type: 'URI',
           value,
@@ -147,9 +150,10 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const updateTimeTripleValue = (triple: Triple, value: string) => {
     send({
-      type: 'UPSERT_TRIPLE_VALUE',
+      type: 'UPSERT_RENDERABLE_VALUE',
       payload: {
-        triple,
+        // @TODO(relations): Fix once we handle relations in tables
+        renderable: toRenderables([triple], [], space)[0],
         value: {
           type: 'TIME',
           value,

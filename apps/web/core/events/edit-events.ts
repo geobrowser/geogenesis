@@ -5,13 +5,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import {
-  Value as IValue,
-  OmitStrict,
-  RenderableData,
-  Triple as TripleType,
-  ValueType as TripleValueType,
-} from '~/core/types';
+import { OmitStrict, RenderableData, Triple as TripleType, ValueType as TripleValueType, Value } from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
@@ -21,10 +15,10 @@ import { useWriteOps } from '../database/write';
 
 export type EditEvent =
   | {
-      type: 'UPSERT_TEXT_VALUE';
+      type: 'UPSERT_RENDERABLE_VALUE';
       payload: {
         renderable: RenderableData;
-        value: string;
+        value: Value;
       };
     }
   | {
@@ -50,13 +44,6 @@ export type EditEvent =
     }
 
   // EVERYTHING BELOW THIS IS A LEGACY EVENT THAT WILL GET REMOVED
-  | {
-      type: 'UPSERT_TRIPLE_VALUE';
-      payload: {
-        triple: TripleType;
-        value: IValue;
-      };
-    }
   | {
       type: 'EDIT_ENTITY_NAME';
       payload: {
@@ -219,16 +206,13 @@ const listener =
   ({ api: { upsert, remove, upsertMany }, context }: ListenerConfig) =>
   (event: EditEvent) => {
     switch (event.type) {
-      case 'UPSERT_TEXT_VALUE': {
-        const { renderable, value } = event.payload;
+      case 'UPSERT_RENDERABLE_VALUE': {
+        const { value, renderable } = event.payload;
 
         return upsert(
           {
             ...renderable,
-            value: {
-              type: 'TEXT',
-              value,
-            },
+            value,
           },
           context.spaceId
         );
@@ -700,17 +684,6 @@ const listener =
 
         return upsertMany(
           [newAttributeNameTriple, newAttributeTriple, newValueTypeTriple, newTypeTriple],
-          context.spaceId
-        );
-      }
-      case 'UPSERT_TRIPLE_VALUE': {
-        const { value, triple } = event.payload;
-
-        return upsert(
-          {
-            ...triple,
-            value,
-          },
           context.spaceId
         );
       }

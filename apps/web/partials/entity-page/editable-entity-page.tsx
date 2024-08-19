@@ -241,12 +241,6 @@ function TriplesGroup({ triples }: { triples: TripleRenderableData[] }) {
     },
   });
 
-  /**
-   * Upserting triple by renderable type (e.g., text, entity, time, number, image)
-   * Deleting triples
-   * Placeholder field for + button and schema fields
-   */
-
   return (
     <div className="flex flex-wrap gap-2">
       {triples.map(renderable => {
@@ -260,38 +254,42 @@ function TriplesGroup({ triples }: { triples: TripleRenderableData[] }) {
                 aria-label="text-field"
                 value={renderable.value}
                 onChange={e => {
-                  console.log('updateTextValue', e.target.value);
                   send({
-                    type: 'UPSERT_TEXT_VALUE',
+                    type: 'UPSERT_RENDERABLE_VALUE',
                     payload: {
                       renderable,
-                      value: e.target.value,
+                      value: {
+                        type: 'TEXT',
+                        value: e.target.value,
+                      },
                     },
                   });
                 }}
               />
-              // <Text key={`string-${renderable.attributeId}-${renderable.value}`} as="p">
-              //   {renderable.value}
-              // </Text>
             );
           case 'TIME':
             return <DateField isEditing={true} value={renderable.value} />;
           case 'URI':
-            return <WebUrlField isEditing={true} value={renderable.value} />;
+            return <WebUrlField placeholder="Add a URI" isEditing={true} value={renderable.value} />;
           case 'ENTITY': {
             if (renderable.value.value === '') {
               return (
                 <div data-testid="select-entity" className="w-full">
                   <SelectEntity
                     spaceId={spaceId}
-                    onDone={() => {
-                      //
+                    onDone={result => {
+                      send({
+                        type: 'UPSERT_RENDERABLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'ENTITY',
+                            value: result.id,
+                            name: result.name,
+                          },
+                        },
+                      });
                     }}
-                    // onDone={result => {
-                    //   if (renderable.attributeId) {
-                    //     addEntityValue(attributeId, result);
-                    //   }
-                    // }}
                     wrapperClassName="contents"
                     inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
                     resultsClassName="absolute z-[1000]"
