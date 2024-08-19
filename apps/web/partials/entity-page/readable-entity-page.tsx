@@ -1,12 +1,7 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { pipe } from 'effect';
-
 import * as React from 'react';
 
-import { useTriples } from '~/core/database/triples';
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { Relation } from '~/core/io/dto/entities';
-import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
