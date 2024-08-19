@@ -18,7 +18,9 @@ import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
-import { useWriteOps } from '../database/write';
+import { mergeEntityAsync } from '../database/entities';
+import { removeMany, useWriteOps } from '../database/write';
+import { EntityId } from '../io/schema';
 import { Relations } from '../utils/relations';
 
 export type EditEvent =
@@ -262,8 +264,8 @@ const listener =
             {
               entityId: renderable.relationId,
               entityName: null,
-              attributeId: SYSTEM_IDS.TYPES,
-              attributeName: 'Types',
+              attributeId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+              attributeName: 'Relation type',
               // Relations are the only entity in the system that we expect
               // to use an entity value type in a triple
               value: {
@@ -313,13 +315,11 @@ const listener =
 
       case 'CHANGE_RENDERABLE_TYPE': {
         const { renderable, type } = event.payload;
-        console.log('CHANGE_RENDERABLE_TYPE', { renderable, type });
 
-        // @TODO(relations): Handle deleting all triples for a relation
-        // If we're changing from a relation then we actually need to delete all of the triples
-        // on the relation as well and not a single triple.
-        if (renderable.type === 'RELATION') {
-          return;
+        // If we're changing from a relation then we need to delete all of the triples
+        // on the relation.
+        if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
+          deleteRelation(renderable.relationId, context.spaceId);
         }
 
         if (type === 'RELATION') {
@@ -333,8 +333,6 @@ const listener =
             typeOfName: renderable.attributeName,
             spaceId: context.spaceId,
           });
-
-          console.log('relationTriples', relationTriples);
 
           return upsertMany(relationTriples, context.spaceId);
         }
@@ -372,9 +370,8 @@ const listener =
       case 'DELETE_RENDERABLE': {
         const { renderable } = event.payload;
 
-        // @TODO(relations): Handle deleting a relation
-        if (renderable.type === 'RELATION') {
-          return;
+        if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
+          return deleteRelation(renderable.relationId, context.spaceId);
         }
 
         return remove(renderable, context.spaceId);
@@ -785,4 +782,9 @@ export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
   }, [config, remove, upsert, upsertMany]);
 
   return send;
+}
+
+export async function deleteRelation(relationId: string, spaceId: string) {
+  const { triples } = await mergeEntityAsync(EntityId(relationId));
+  removeMany(triples, spaceId);
 }

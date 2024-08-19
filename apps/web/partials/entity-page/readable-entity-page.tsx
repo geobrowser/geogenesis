@@ -4,11 +4,11 @@ import { pipe } from 'effect';
 import * as React from 'react';
 
 import { useTriples } from '~/core/database/triples';
+import { useRenderables } from '~/core/hooks/use-renderables';
 import { Relation } from '~/core/io/dto/entities';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
-import { toRenderables } from '~/core/utils/to-renderables';
-import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { LinkableChip, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
@@ -17,8 +17,6 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-import { sortRenderables } from './entity-page-utils';
-
 interface Props {
   triples: Triple[];
   relations: Relation[];
@@ -26,29 +24,8 @@ interface Props {
   spaceId: string;
 }
 
-export function ReadableEntityPage({ triples: serverTriples, relations, id, spaceId }: Props) {
-  const triplesFromSpace = useTriples(
-    React.useMemo(() => {
-      return { selector: t => t.space === id };
-    }, [id])
-  );
-
-  const { triples: localTriples } = useEntityPageStore();
-
-  // We hydrate the local editable store with the triples from the server. While it's hydrating
-  // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
-
-  const renderables = pipe(
-    toRenderables(
-      triples,
-      // We don't show blocks in the data section
-      relations.filter(r => r.typeOf.id !== SYSTEM_IDS.BLOCKS),
-      spaceId
-    ),
-    renderables => sortRenderables(renderables),
-    renderables => groupBy(renderables, r => r.attributeId)
-  );
+export function ReadableEntityPage({ triples: serverTriples, id }: Props) {
+  const { renderablesGroupedByAttributeId: renderables } = useRenderables(serverTriples);
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">

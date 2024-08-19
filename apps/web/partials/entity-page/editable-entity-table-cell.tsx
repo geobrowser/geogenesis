@@ -125,7 +125,13 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
       payload: {
         // @TODO(relations): Fix once we handle relations in tables
-        renderable: toRenderables([triple], [], space)[0] as TripleRenderableProperty,
+        renderable: toRenderables({
+          triples: [triple],
+          relations: [],
+          spaceId: space,
+          entityId: cell.entityId,
+          entityName: entityName,
+        })[0] as TripleRenderableProperty,
         value: {
           type: 'TEXT',
           value,
@@ -139,7 +145,13 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
       payload: {
         // @TODO(relations): Fix once we handle relations in tables
-        renderable: toRenderables([triple], [], space)[0] as TripleRenderableProperty,
+        renderable: toRenderables({
+          triples: [triple],
+          relations: [],
+          spaceId: space,
+          entityId: cell.entityId,
+          entityName: entityName,
+        })[0] as TripleRenderableProperty,
         value: {
           type: 'URI',
           value,
@@ -153,7 +165,13 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
       type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
       payload: {
         // @TODO(relations): Fix once we handle relations in tables
-        renderable: toRenderables([triple], [], space)[0] as TripleRenderableProperty,
+        renderable: toRenderables({
+          triples: [triple],
+          relations: [],
+          spaceId: space,
+          entityId: cell.entityId,
+          entityName: entityName,
+        })[0] as TripleRenderableProperty,
         value: {
           type: 'TIME',
           value,

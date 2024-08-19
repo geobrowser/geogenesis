@@ -2,7 +2,6 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
 
-import { useEditEvents } from '~/core/events/edit-events';
 import { RenderableProperty, SwitchableRenderableType, ValueTypeId } from '~/core/types';
 
 import { Date } from '~/design-system/icons/date';
@@ -28,7 +27,7 @@ export function getRenderableTypeFromValueType(valueType: ValueTypeId) {
 
 export const getRenderableTypeSelectorOptions = (
   renderable: RenderableProperty,
-  send: ReturnType<typeof useEditEvents>
+  onSelect: (renderableType: RenderableProperty) => void
 ): {
   label: React.ReactNode;
   value: SwitchableRenderableType;
@@ -43,7 +42,18 @@ export const getRenderableTypeSelectorOptions = (
         </div>
       ),
       value: 'TEXT' as const,
-      onClick: () => send({ type: 'CHANGE_RENDERABLE_TYPE', payload: { renderable, type: 'TEXT' } }),
+      onClick: () => {
+        onSelect({
+          type: 'TEXT',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        });
+      },
     },
     // @TODO(relations): Add image support
     {
@@ -54,7 +64,17 @@ export const getRenderableTypeSelectorOptions = (
         </div>
       ),
       value: 'TIME' as const,
-      onClick: () => send({ type: 'CHANGE_RENDERABLE_TYPE', payload: { renderable, type: 'TIME' } }),
+      onClick: () =>
+        onSelect({
+          type: 'TIME',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        }),
     },
     {
       label: (
@@ -64,7 +84,17 @@ export const getRenderableTypeSelectorOptions = (
         </div>
       ),
       value: 'URI' as const,
-      onClick: () => send({ type: 'CHANGE_RENDERABLE_TYPE', payload: { renderable, type: 'URI' } }),
+      onClick: () =>
+        onSelect({
+          type: 'URI',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        }),
     },
     {
       label: (
@@ -74,7 +104,19 @@ export const getRenderableTypeSelectorOptions = (
         </div>
       ),
       value: 'RELATION' as const,
-      onClick: () => send({ type: 'CHANGE_RENDERABLE_TYPE', payload: { renderable, type: 'RELATION' } }),
+      onClick: () =>
+        onSelect({
+          type: 'RELATION',
+          entityId: renderable.entityId,
+          entityName: renderable.entityName,
+          attributeId: renderable.attributeId,
+          attributeName: renderable.attributeName,
+          value: '',
+          relationId: '',
+          valueName: null,
+          spaceId: renderable.spaceId,
+          placeholder: true,
+        }),
     },
   ];
 };

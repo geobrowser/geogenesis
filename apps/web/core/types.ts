@@ -81,6 +81,7 @@ export type NativeRenderableProperty = {
   attributeName: string | null;
   spaceId: string;
   value: string;
+  placeholder?: boolean;
 };
 
 // Entity renderable fields should only exist on Relations pages
@@ -95,6 +96,7 @@ export type EntityRenderableProperty = {
     value: string;
     name: string | null;
   };
+  placeholder?: boolean;
 };
 
 export type RelationRenderableProperty = {
@@ -107,6 +109,7 @@ export type RelationRenderableProperty = {
   relationId: string;
   valueName: string | null; // name of the entity
   value: string;
+  placeholder?: boolean;
 };
 
 export type TripleRenderableProperty = NativeRenderableProperty | EntityRenderableProperty;

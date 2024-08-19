@@ -40,13 +40,13 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
     }, [column.triples, column.id])
   );
 
-  const localCellTriples = useTriples(
-    React.useMemo(() => {
-      return {
-        selector: t => t.attributeId === column.id,
-      };
-    }, [column.id])
-  );
+  // const localCellTriples = useTriples(
+  //   React.useMemo(() => {
+  //     return {
+  //       selector: t => t.attributeId === column.id,
+  //     };
+  //   }, [column.id])
+  // );
 
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
@@ -65,7 +65,16 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   const triples = localTriples.length === 0 ? column.triples : localTriples;
   const valueType = Entities.valueTypeId(triples) ?? SYSTEM_IDS.TEXT;
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
-  const selectorOptions = getRenderableTypeSelectorOptions(toRenderables(triples, [], spaceId ?? '')[0], send);
+  const selectorOptions = getRenderableTypeSelectorOptions(
+    toRenderables({
+      triples: triples,
+      relations: [],
+      spaceId: spaceId ?? '',
+      entityId,
+      entityName: localName,
+    })[0],
+    () => {}
+  );
   const value = getRenderableTypeFromValueType(valueType);
 
   return (

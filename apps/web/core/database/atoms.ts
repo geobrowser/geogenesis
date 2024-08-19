@@ -62,8 +62,6 @@ export const createRelationsAtom = (initialRelations: Relation[]) => {
             name: toEntityTriple.value.type === 'ENTITY' ? toEntityTriple.value.name : null,
             renderableType: 'DEFAULT',
             value: toEntityTriple.value.type === 'ENTITY' ? toEntityTriple.value.value : '',
-
-            // @TODO(database): Not sure if this is correct
             triples: localTriples.filter(t => t.entityId === toEntityTriple.value.value),
           },
         };

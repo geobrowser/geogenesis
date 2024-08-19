@@ -1,18 +1,16 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { pipe } from 'effect';
 
 import * as React from 'react';
 
-import { useTriples } from '~/core/database/triples';
 import { useEditEvents } from '~/core/events/edit-events';
+import { useRenderables } from '~/core/hooks/use-renderables';
 import { Relation } from '~/core/io/dto/entities';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
 import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
 import { Triple as ITriple } from '~/core/types';
-import { toRenderables } from '~/core/utils/to-renderables';
-import { NavUtils, getImagePath, groupBy } from '~/core/utils/utils';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { SquareButton } from '~/design-system/button';
@@ -26,7 +24,6 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { Text } from '~/design-system/text';
 
-import { sortRenderables } from './entity-page-utils';
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
@@ -38,25 +35,8 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Props) {
-  const { triples: localTriples, relations, schema, name } = useEntityPageStore();
-
-  useDeriveNewSchemaFromParams();
-
-  const triplesFromSpace = useTriples(
-    React.useMemo(() => {
-      return {
-        selector: t => t.space === spaceId,
-      };
-    }, [spaceId])
-  );
-
-  // We hydrate the local editable store with the triples from the server. While it's hydrating
-  // we can fallback to the server triples so we render real data and there's no layout shift.
-  //
-  // There may be some deleted triples locally. We check the actions to make sure that there are
-  // actually 0 actions in the case that there are 0 local triples as the local triples here
-  // are only the ones where `isDeleted` is false.
-  const triples = localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
+  const { renderablesGroupedByAttributeId, addPlaceholderRenderable } = useRenderables(serverTriples);
+  const { name } = useEntityPageStore();
 
   const send = useEditEvents({
     context: {
@@ -66,52 +46,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
     },
   });
 
-  // @TODO: Not sure if we're creating a triple or a relation or something else. We need
-  // some sort of placeholder field that isn't yet written to the database.
-  const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
-
-  // The schema for a given set of types define the expected attributes and relations for
-  // any entities with those types. We want to show any properties from the schema that
-  // aren't already set on the entity.
-  const attributesWithAValue = new Set([...triples.map(t => t.attributeId), ...relations.map(r => r.typeOf.id)]);
-
-  // Make some fake triples derived from the schema. We later hide and show these depending
-  // on if the entity has filled these fields or not.
-  // @TODO: We need to know the schema value type to know the type of renderable we need
-  // to show. We can default to TEXT for now.
-  const schemaTriples = schema
-    .map(
-      (s): ITriple => ({
-        attributeId: s.id,
-        entityId: id,
-        entityName: name,
-        space: spaceId,
-        attributeName: s.name,
-
-        value: {
-          type: 'TEXT',
-          value: '',
-        },
-      })
-    )
-    // Filter out schema renderables if we already have a triple or relation for that attribute
-    .filter(renderable => !attributesWithAValue.has(renderable.attributeId));
-
-  console.log('relations + triples', {
-    relations: relations.filter(r => r.typeOf.id !== SYSTEM_IDS.BLOCKS),
-    triples,
-  });
-
-  const renderablesGroupedByAttributeId = pipe(
-    toRenderables(
-      [...triples, ...schemaTriples],
-      // We don't show blocks in the data section
-      relations.filter(r => r.typeOf.id !== SYSTEM_IDS.BLOCKS),
-      spaceId
-    ),
-    renderables => sortRenderables(renderables),
-    sortedRenderables => groupBy(sortedRenderables, r => r.attributeId)
-  );
+  useDeriveNewSchemaFromParams();
 
   return (
     <>
@@ -123,13 +58,16 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
             const firstRenderable = renderables[0];
             const renderableType = firstRenderable.type;
 
-            const selectorOptions = getRenderableTypeSelectorOptions(firstRenderable, send);
+            // @TODO: We can abstract this away. We also don't need to pass in the first renderable to options func.
+            const selectorOptions = getRenderableTypeSelectorOptions(firstRenderable, placeholderRenderable => {
+              send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+              addPlaceholderRenderable(placeholderRenderable);
+            });
 
             return (
               <div key={`${id}-${attributeId}`} className="relative break-words">
                 <EditableAttribute renderable={firstRenderable} />
                 {renderableType === 'RELATION' ? (
-                  // @TODO: Empty selectable field if relations are empty
                   <RelationsGroup key={attributeId} relations={renderables as RelationRenderableProperty[]} />
                 ) : (
                   <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
@@ -158,7 +96,21 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
           })}
         </div>
         <div className="p-4">
-          <SquareButton onClick={onCreateNewTriple} icon={<Create />} />
+          <SquareButton
+            onClick={() => {
+              addPlaceholderRenderable({
+                type: 'TEXT',
+                entityId: id,
+                entityName: name ?? '',
+                attributeId: '',
+                attributeName: null,
+                value: '',
+                spaceId,
+                placeholder: true,
+              });
+            }}
+            icon={<Create />}
+          />
         </div>
       </div>
     </>
@@ -204,7 +156,17 @@ function EditableAttribute({ renderable }: { renderable: RenderableProperty }) {
 }
 
 function RelationsGroup({ relations }: { relations: RelationRenderableProperty[] }) {
-  const spaceId = relations[0].spaceId;
+  const { id, name, spaceId } = useEntityPageStore();
+
+  const send = useEditEvents({
+    context: {
+      entityId: id,
+      spaceId,
+      entityName: name ?? '',
+    },
+  });
+
+  const hasPlaceholders = relations.some(r => r.placeholder === true);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -220,25 +182,59 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
           );
         }
 
+        if (r.placeholder === true) {
+          return (
+            <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
+              <SelectEntity
+                spaceId={spaceId}
+                onDone={result => {
+                  send({
+                    type: 'UPSERT_RELATION',
+                    payload: {
+                      fromEntityId: id,
+                      toEntityId: result.id,
+                      typeOfId: r.attributeId,
+                      typeOfName: r.attributeName,
+                    },
+                  });
+                }}
+                wrapperClassName="contents"
+                inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
+                resultsClassName="absolute z-[1000]"
+              />
+            </div>
+          );
+        }
+
         return (
           <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
             <LinkableRelationChip
+              onDelete={() => {
+                send({
+                  type: 'DELETE_RENDERABLE',
+                  payload: {
+                    renderable: r,
+                  },
+                });
+              }}
               entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
               relationHref={NavUtils.toEntity(spaceId, relationId)}
             >
-              {relationName ?? relationId}
+              {relationName ?? relationValue}
             </LinkableRelationChip>
           </div>
         );
       })}
-      <div className="mt-1">
-        <SquareButton
-          onClick={() => {
-            //
-          }}
-          icon={<Create />}
-        />
-      </div>
+      {!hasPlaceholders && (
+        <div className="mt-1">
+          <SquareButton
+            onClick={() => {
+              //
+            }}
+            icon={<Create />}
+          />
+        </div>
+      )}
     </div>
   );
 }
