@@ -21,16 +21,13 @@ import { DateField } from '~/design-system/editable-fields/date-field';
 import { ImageZoom, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
-import { Date } from '~/design-system/icons/date';
-import { Text as TextIcon } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
-import { Url } from '~/design-system/icons/url';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
-import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 import { sortRenderables } from './entity-page-utils';
+import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
@@ -419,42 +416,3 @@ function useDeriveNewSchemaFromParams() {
   //   setHasSetAttributes(true);
   // }, [hasSetType, hasSetAttributes, subgraph, config, send, attributes]);
 }
-
-const getRenderableTypeSelectorOptions = (renderable: RenderableData, send: ReturnType<typeof useEditEvents>) => {
-  return [
-    {
-      label: (
-        <div className="flex items-center">
-          <TextIcon />
-          <Spacer width={8} />
-          Text
-        </div>
-      ),
-      value: 'TEXT' as const,
-      onClick: () => send({ type: 'CHANGE_RENDERABLE_TYPE', payload: { renderable, type: 'TEXT' } }),
-    },
-    // @TODO(relations): Add image support
-    {
-      label: (
-        <div className="flex items-center">
-          <Date />
-          <Spacer width={8} />
-          Date
-        </div>
-      ),
-      value: 'TIME' as const,
-      onClick: () => send({ type: 'CHANGE_RENDERABLE_TYPE', payload: { renderable, type: 'TIME' } }),
-    },
-    {
-      label: (
-        <div className="flex items-center">
-          <Url />
-          <Spacer width={8} />
-          URI
-        </div>
-      ),
-      value: 'URI' as const,
-      onClick: () => send({ type: 'CHANGE_RENDERABLE_TYPE', payload: { renderable, type: 'URI' } }),
-    },
-  ];
-};

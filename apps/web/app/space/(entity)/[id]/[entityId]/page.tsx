@@ -8,18 +8,14 @@ import { ProfileEntityServerContainer } from './profile-entity-server-container'
 
 interface Props {
   params: { id: string; entityId: string };
-  searchParams: {
-    typeId?: string;
-    filters?: string;
-  };
 }
 
-export default async function EntityTemplateStrategy({ params, searchParams }: Props) {
+export default async function EntityTemplateStrategy({ params }: Props) {
   const types = await cachedFetchEntityType(params.entityId);
 
   if (types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
     return <ProfileEntityServerContainer params={params} />;
   }
 
-  return <DefaultEntityPage params={params} searchParams={searchParams} />;
+  return <DefaultEntityPage params={params} />;
 }

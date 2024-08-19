@@ -57,8 +57,6 @@ function EntityReviewAttributes({ entityId, triples }: { entityId: Props['entity
           </div>
         );
       }
-      case 'NUMBER':
-        return null;
     }
   };
 

@@ -96,8 +96,6 @@ function TriplesGroup({ entityId, triples }: { entityId: string; triples: Triple
                       </div>
                     );
                   }
-                  case 'NUMBER':
-                    return null;
                 }
               })}
             </div>

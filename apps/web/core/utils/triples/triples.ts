@@ -27,10 +27,6 @@ export function emptyValue(type: TripleValueType): Value {
       value: '',
       name: null,
     } as AppEntityValue,
-    NUMBER: {
-      type: 'NUMBER',
-      value: '',
-    },
     TIME: {
       type: 'TIME',
       value: '',
@@ -123,7 +119,6 @@ export function withLocalNames(appTriples: Triple[], triples: Triple[]): Triple[
 
 export const getValue = (triple: Triple): string | null => {
   switch (triple.value.type) {
-    case 'NUMBER':
     case 'TEXT':
     case 'ENTITY':
     case 'TIME':

@@ -16,7 +16,7 @@ export type Props = {
 };
 
 export const Tab = async (props: Props & { slug: string }) => {
-  const { slug, searchParams } = props;
+  const { slug } = props;
   const spaceId = props.params.id;
   const pageTypeId = getPageTypeId(slug);
 
@@ -32,20 +32,9 @@ export const Tab = async (props: Props & { slug: string }) => {
       entityId: newEntityId,
     };
 
-    const newSearchParams = {
-      typeId: SYSTEM_IDS.PAGE_TYPE,
-      filters: JSON.stringify([[SYSTEM_IDS.PAGE_TYPE_TYPE, pageTypeId]]),
-    };
-
     return (
       <EmptyTab spaceId={spaceId}>
-        <DefaultEntityPage
-          params={newParams}
-          searchParams={newSearchParams}
-          showCover={false}
-          showHeading={false}
-          showHeader={false}
-        />
+        <DefaultEntityPage params={newParams} showCover={false} showHeading={false} showHeader={false} />
       </EmptyTab>
     );
   }
@@ -55,15 +44,7 @@ export const Tab = async (props: Props & { slug: string }) => {
     entityId,
   };
 
-  return (
-    <DefaultEntityPage
-      params={params}
-      searchParams={searchParams}
-      showCover={false}
-      showHeading={false}
-      showHeader={false}
-    />
-  );
+  return <DefaultEntityPage params={params} showCover={false} showHeading={false} showHeader={false} />;
 };
 
 const getPageTypeId = (slug: string): string | null => {
