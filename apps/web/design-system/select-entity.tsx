@@ -29,14 +29,14 @@ type SelectEntityProps = {
   spaceId: string;
   allowedTypes?: RelationValueType[];
   placeholder?: string;
-  inputVariant?: 'floating' | 'fixed';
+  variant?: 'floating' | 'fixed';
   withSearchIcon?: boolean;
 };
 
 const inputStyles = cva('', {
   variants: {
     fixed: {
-      true: 'm-0 -mb-[1px] block w-full resize-none bg-white p-0 text-body placeholder:text-grey-02 focus:outline-none',
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none',
     },
     floating: {
       true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-02 focus:outline-none',
@@ -52,12 +52,27 @@ const inputStyles = cva('', {
   },
 });
 
+const containerStyles = cva('relative w-[400px]', {
+  variants: {
+    floating: {
+      true: 'rounded-md border border-divider bg-white',
+    },
+    isQueried: {
+      true: 'rounded-b-none',
+    },
+  },
+  defaultVariants: {
+    floating: false,
+    isQueried: false,
+  },
+});
+
 export const SelectEntity = ({
   onDone,
   spaceId,
   allowedTypes,
   placeholder = 'Find or create...',
-  inputVariant = 'fixed',
+  variant = 'fixed',
   withSearchIcon = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
@@ -123,7 +138,7 @@ export const SelectEntity = ({
   }, ref);
 
   return (
-    <div ref={ref} className="relative w-[400px]">
+    <div ref={ref} className={containerStyles({ floating: variant === 'floating', isQueried: query.length > 0 })}>
       {withSearchIcon && (
         <div className="absolute left-3 top-3.5 z-10">
           <Search />
@@ -135,13 +150,16 @@ export const SelectEntity = ({
         value={query}
         onChange={({ currentTarget: { value } }) => onQueryChange(value)}
         placeholder={placeholder}
-        className={inputStyles({ [inputVariant]: true, withSearchIcon })}
+        className={inputStyles({ [variant]: true, withSearchIcon })}
       />
 
       {query && (
         <div className="absolute z-[1000]">
           <div
-            className={cx('w-[400px] rounded-md border border-divider bg-white', withSearchIcon && 'rounded-t-none')}
+            className={cx(
+              '-ml-px w-[400px] overflow-hidden rounded-md border border-divider bg-white',
+              withSearchIcon && 'rounded-t-none'
+            )}
           >
             {!result ? (
               <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">

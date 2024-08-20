@@ -19,13 +19,13 @@ export function SelectEntityAsPopover({ trigger, onDone, spaceId, allowedTypes }
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
       <Popover.Portal>
-        <Popover.Content sideOffset={4} align="start" className="rounded-md border border-divider bg-white">
+        <Popover.Content sideOffset={4} align="start">
           <SelectEntity
             withSearchIcon={true}
             spaceId={spaceId}
             allowedTypes={allowedTypes}
             onDone={onDone}
-            inputVariant="floating"
+            variant="floating"
           />
         </Popover.Content>
       </Popover.Portal>

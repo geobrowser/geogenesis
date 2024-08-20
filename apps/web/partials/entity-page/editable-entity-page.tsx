@@ -218,7 +218,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
                     },
                   });
                 }}
-                inputVariant="fixed"
+                variant="fixed"
               />
             </div>
           );
@@ -327,7 +327,7 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
                         },
                       });
                     }}
-                    inputVariant="fixed"
+                    variant="fixed"
                   />
                 </div>
               );
