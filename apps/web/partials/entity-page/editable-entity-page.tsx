@@ -22,6 +22,7 @@ import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
@@ -183,6 +184,8 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
   });
 
   const hasPlaceholders = relations.some(r => r.placeholder === true);
+  const typeOfId = relations[0].attributeId;
+  const typeOfName = relations[0].attributeName;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -215,9 +218,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
                     },
                   });
                 }}
-                wrapperClassName="contents"
-                inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
-                resultsClassName="absolute z-[1000]"
+                variant="fixed"
               />
             </div>
           );
@@ -244,11 +245,21 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
       })}
       {!hasPlaceholders && (
         <div className="mt-1">
-          <SquareButton
-            onClick={() => {
-              //
+          <SelectEntityAsPopover
+            trigger={<SquareButton icon={<Create />} />}
+            onDone={result => {
+              send({
+                type: 'UPSERT_RELATION',
+                payload: {
+                  fromEntityId: id,
+                  toEntityId: result.id,
+                  toEntityName: result.name,
+                  typeOfId: typeOfId,
+                  typeOfName: typeOfName,
+                },
+              });
             }}
-            icon={<Create />}
+            spaceId={spaceId}
           />
         </div>
       )}
@@ -316,9 +327,7 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
                         },
                       });
                     }}
-                    wrapperClassName="contents"
-                    inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
-                    resultsClassName="absolute z-[1000]"
+                    variant="fixed"
                   />
                 </div>
               );

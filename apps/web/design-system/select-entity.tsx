@@ -1,8 +1,10 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 import pluralize from 'pluralize';
 
+import * as React from 'react';
 import { useRef, useState } from 'react';
 
 import { useWriteOps } from '~/core/database/write';
@@ -15,11 +17,11 @@ import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
-import { Search } from '~/design-system/icons/search';
 import { Tag } from '~/design-system/tag';
 import { Toggle } from '~/design-system/toggle';
 
 import { ArrowLeft } from './icons/arrow-left';
+import { Search } from './icons/search';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
@@ -27,20 +29,50 @@ type SelectEntityProps = {
   spaceId: string;
   allowedTypes?: RelationValueType[];
   placeholder?: string;
-  wrapperClassName?: string;
-  inputClassName?: string;
-  resultsClassName?: string;
+  variant?: 'floating' | 'fixed';
   withSearchIcon?: boolean;
 };
+
+const inputStyles = cva('', {
+  variants: {
+    fixed: {
+      true: 'm-0 block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none',
+    },
+    floating: {
+      true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-02 focus:outline-none',
+    },
+    withSearchIcon: {
+      true: 'pl-9',
+    },
+  },
+  defaultVariants: {
+    fixed: true,
+    floating: false,
+    withSearchIcon: false,
+  },
+});
+
+const containerStyles = cva('relative w-[400px]', {
+  variants: {
+    floating: {
+      true: 'rounded-md border border-divider bg-white',
+    },
+    isQueried: {
+      true: 'rounded-b-none',
+    },
+  },
+  defaultVariants: {
+    floating: false,
+    isQueried: false,
+  },
+});
 
 export const SelectEntity = ({
   onDone,
   spaceId,
   allowedTypes,
   placeholder = 'Find or create...',
-  wrapperClassName = '',
-  inputClassName = '',
-  resultsClassName = '',
+  variant = 'fixed',
   withSearchIcon = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
@@ -106,45 +138,47 @@ export const SelectEntity = ({
   }, ref);
 
   return (
-    <div ref={ref} className={wrapperClassName}>
-      <input
-        type="text"
-        value={query}
-        onChange={({ currentTarget: { value } }) => onQueryChange(value)}
-        placeholder={placeholder}
-        className={cx(withSearchIcon && 'pl-9', inputClassName)}
-      />
+    <div ref={ref} className={containerStyles({ floating: variant === 'floating', isQueried: query.length > 0 })}>
       {withSearchIcon && (
         <div className="absolute left-3 top-3.5 z-10">
           <Search />
         </div>
       )}
+
+      <input
+        type="text"
+        value={query}
+        onChange={({ currentTarget: { value } }) => onQueryChange(value)}
+        placeholder={placeholder}
+        className={inputStyles({ [variant]: true, withSearchIcon })}
+      />
+
       {query && (
-        <div className={resultsClassName}>
+        <div className="absolute z-[1000]">
           <div
             className={cx(
-              'w-[400px] overflow-hidden rounded-md border border-divider bg-white',
+              '-ml-px w-[400px] overflow-hidden rounded-md border border-divider bg-white',
               withSearchIcon && 'rounded-t-none'
             )}
           >
             {!result ? (
-              <div className="flex max-h-[180px] flex-col overflow-y-auto">
+              <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">
                 {!results?.length && isLoading && (
-                  <div className="block w-full border-b border-divider px-3 py-2">
+                  <div className="w-full border-b border-divider bg-white px-3 py-2">
                     <div className="truncate text-button text-text">Loading...</div>
                   </div>
                 )}
                 {isEmpty ? (
-                  <div className="block w-full border-b border-divider px-3 py-2">
+                  <div className="w-full border-b border-divider bg-white px-3 py-2">
                     <div className="truncate text-button text-text">No results.</div>
                   </div>
                 ) : (
-                  <>
+                  <div className="divider-y-divider bg-white">
                     {results.map((result, index) => (
                       <button
                         key={index}
                         onClick={() => setResult(result)}
-                        className="block w-full border-b border-divider px-3 py-2 hover:bg-grey-01"
+                        className="w-full px-3 py-2 hover:bg-grey-01"
                       >
                         <div className="truncate text-button text-text">{result.name}</div>
                         {isShowingIds && <div className="mb-2 mt-1 text-footnoteMedium text-grey-04">{result.id}</div>}
@@ -155,11 +189,7 @@ export const SelectEntity = ({
                                 key={space.spaceId}
                                 className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
                               >
-                                <img
-                                  src={getImagePath(space.image)}
-                                  alt=""
-                                  className="block h-full w-full object-cover"
-                                />
+                                <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
                               </div>
                             ))}
                           </div>
@@ -169,28 +199,28 @@ export const SelectEntity = ({
                         </div>
                       </button>
                     ))}
-                  </>
+                  </div>
                 )}
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-evenly border-b border-divider">
+                <div className="flex items-center justify-between border-b border-divider bg-white">
                   <div className="flex-1">
                     <button onClick={() => setResult(null)} className="p-2">
                       <ArrowLeft color="grey-04" />
                     </button>
                   </div>
-                  <div className="flex flex-1 justify-center">
-                    <span className="p-2 text-center text-smallButton text-grey-04">Select space version</span>
-                  </div>
-                  <div className="flex flex-1 justify-end">
-                    {/* @TODO add settings */}
-                    {/* <button className="p-2 text-smallButton text-grey-04">Settings</button> */}
-                  </div>
+                  <p className="p-2 text-smallButton text-grey-04">Select space version</p>
+                  {/* <div className="flex flex-1 justify-end">
+                     @TODO add settings 
+                    <button className="p-2 text-smallButton text-grey-04">Settings</button> 
+                  </div> */}
                 </div>
-                <div className="flex max-h-[180px] flex-col overflow-y-auto">
+                <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">
                   <button
                     onClick={() => {
+                      // @TODO: Set space
+                      setResult(null);
                       onDone({
                         id: result.id,
                         name: result.name,
@@ -210,7 +240,7 @@ export const SelectEntity = ({
                           key={space.spaceId}
                           className="-ml-[4px] h-[14px] w-[14px] overflow-clip rounded-sm border border-white first:ml-0"
                         >
-                          <img src={getImagePath(space.image)} alt="" className="block h-full w-full object-cover" />
+                          <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
                         </div>
                       ))}
                     </div>
@@ -219,6 +249,7 @@ export const SelectEntity = ({
                     <button
                       key={index}
                       onClick={() => {
+                        setResult(null);
                         onDone({
                           id: result.id,
                           name: result.name,
@@ -235,7 +266,7 @@ export const SelectEntity = ({
                       </div>
                       <div>
                         <div className="h-[32px] w-[32px] overflow-clip rounded-md">
-                          <img src={getImagePath(space.image)} alt="" className="block h-full w-full object-cover" />
+                          <img src={getImagePath(space.image)} alt="" className="h-full w-full object-cover" />
                         </div>
                       </div>
                     </button>
