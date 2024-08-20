@@ -3,13 +3,14 @@
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import React from 'react';
 
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useEditable } from '~/core/state/editable-store';
+
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface TabGroupProps {
   tabs: Array<{ href: string; label: string; badge?: string; disabled?: boolean; hidden?: boolean }>;

@@ -3,7 +3,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { cva } from 'class-variance-authority';
 import { useAtom } from 'jotai';
-import Link from 'next/link';
 import type { LinkProps } from 'next/link';
 
 import * as React from 'react';
@@ -14,6 +13,7 @@ import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { ResizableContainer } from '~/design-system/resizable-container';
 
 import { SpacePageType } from '~/app/space/[id]/page';

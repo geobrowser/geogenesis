@@ -44,6 +44,12 @@ export const remove = (op: OmitStrict<DeleteStoreOp, 'type'>, spaceId: string) =
   ]);
 };
 
+export const removeMany = (ops: OmitStrict<DeleteStoreOp, 'type'>[], spaceId: string) => {
+  // We don't delete from our local store, but instead just set a tombstone
+  // on the row. This is so we can still publish the changes as an op
+  writeMany(ops.map(op => ({ op: { ...op, type: 'DELETE_TRIPLE' }, spaceId })));
+};
+
 export const restore = (ops: { op: StoreOp; spaceId: string }[]) => {
   const triplesToWrite: StoredTriple[] = [];
 

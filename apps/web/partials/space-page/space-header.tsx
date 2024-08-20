@@ -2,7 +2,6 @@
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 import Image from 'next/legacy/image';
-import Link from 'next/link';
 
 import * as React from 'react';
 
@@ -16,6 +15,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Create } from '~/design-system/icons/create';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { HistoryEmpty } from '../history/history-empty';

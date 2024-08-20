@@ -1,7 +1,6 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import Link from 'next/link';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
@@ -10,6 +9,7 @@ import { VoteWithProfile } from '~/core/io/dto/proposals';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface Props {
   votes: VoteWithProfile[];

@@ -12,13 +12,7 @@ type EntityPageProps = {
   relationsOut: Relation[];
   id: string;
   spaceId: string;
-  typeId?: string | null;
-  attributes?: Array<Attribute> | null;
 };
-
-type Attribute = [AttributeId, AttributeValue];
-type AttributeId = string;
-type AttributeValue = string;
 
 export function ToggleEntityPage(props: EntityPageProps) {
   const renderEditablePage = useUserIsEditing(props.spaceId);

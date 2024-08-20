@@ -1,9 +1,8 @@
-import Link from 'next/link';
-
 import { OmitStrict, Profile } from '~/core/types';
 import { formatShortAddress } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface EditorRowProps {
   user: OmitStrict<Profile, 'coverUrl'>;

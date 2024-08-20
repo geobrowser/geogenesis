@@ -1,10 +1,9 @@
-import Link from 'next/link';
-
 import { Suspense } from 'react';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { Search } from '~/design-system/icons/search';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { CreateSpaceDropdown } from '../create-space/create-space-dropdown';

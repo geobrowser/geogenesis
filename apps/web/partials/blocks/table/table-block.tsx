@@ -4,7 +4,6 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import produce from 'immer';
-import Link from 'next/link';
 
 import * as React from 'react';
 
@@ -19,6 +18,7 @@ import { IconButton } from '~/design-system/button';
 import { Create } from '~/design-system/icons/create';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
@@ -114,7 +114,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
   const hasPagination = hasPreviousPage || hasNextPage;
 
   return (
-    <div>
+    <motion.div layout="position" transition={{ duration: 0.15 }}>
       <div className="mb-2 flex h-8 items-center justify-between">
         <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
@@ -220,40 +220,23 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
                 <>
                   <PageNumber number={1} onClick={() => setPage(0)} />
                   {pageNumber > 2 ? (
-                    <>
-                      <Spacer width={16} />
-                      <Text color="grey-03" variant="metadataMedium">
-                        ...
-                      </Text>
-                      <Spacer width={16} />
-                    </>
-                  ) : (
-                    <Spacer width={4} />
-                  )}
+                    <Text color="grey-03" variant="metadataMedium">
+                      ...
+                    </Text>
+                  ) : null}
                 </>
               )}
-              {hasPreviousPage && (
-                <>
-                  <PageNumber number={pageNumber} onClick={() => setPage('previous')} />
-                  <Spacer width={4} />
-                </>
-              )}
+              {hasPreviousPage && <PageNumber number={pageNumber} onClick={() => setPage('previous')} />}
               <PageNumber isActive number={pageNumber + 1} />
-              {hasNextPage && (
-                <>
-                  <Spacer width={4} />
-                  <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />
-                </>
-              )}
-              <Spacer width={32} />
+              {hasNextPage && <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />}
+              <Spacer width={8} />
               <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
-              <Spacer width={12} />
               <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
             </PageNumberContainer>
           </>
         )}
       </motion.div>
-    </div>
+    </motion.div>
   );
 });
 

@@ -5,22 +5,65 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
-import { Value as IValue, OmitStrict, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
+import {
+  OmitStrict,
+  RenderableProperty,
+  TripleRenderableProperty,
+  Triple as TripleType,
+  ValueType as TripleValueType,
+  Value,
+} from '~/core/types';
 import { Triples } from '~/core/utils/triples';
 import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
-import { useWriteOps } from '../database/write';
+import { mergeEntityAsync } from '../database/entities';
+import { removeMany, useWriteOps } from '../database/write';
+import { EntityId } from '../io/schema';
+import { Relations } from '../utils/relations';
 
 export type EditEvent =
   | {
-      type: 'UPSERT_TRIPLE_VALUE';
+      type: 'UPSERT_RENDERABLE_TRIPLE_VALUE';
       payload: {
-        triple: TripleType;
-        value: IValue;
+        renderable: TripleRenderableProperty;
+        value: Value;
       };
     }
+  | {
+      type: 'UPSERT_ATTRIBUTE';
+      payload: {
+        renderable: RenderableProperty;
+        attributeId: string;
+        attributeName: string | null;
+      };
+    }
+  | {
+      type: 'DELETE_RENDERABLE';
+      payload: {
+        renderable: RenderableProperty;
+      };
+    }
+  | {
+      type: 'UPSERT_RELATION';
+      payload: {
+        toEntityId: string;
+        toEntityName: string | null;
+        fromEntityId: string;
+        typeOfId: string;
+        typeOfName: string | null;
+      };
+    }
+  | {
+      type: 'CHANGE_RENDERABLE_TYPE';
+      payload: {
+        renderable: RenderableProperty;
+        type: RenderableProperty['type'];
+      };
+    }
+
+  // EVERYTHING BELOW THIS IS A LEGACY EVENT THAT WILL GET REMOVED
   | {
       type: 'EDIT_ENTITY_NAME';
       payload: {
@@ -183,6 +226,168 @@ const listener =
   ({ api: { upsert, remove, upsertMany }, context }: ListenerConfig) =>
   (event: EditEvent) => {
     switch (event.type) {
+      case 'UPSERT_RENDERABLE_TRIPLE_VALUE': {
+        const { value, renderable } = event.payload;
+
+        return upsert(
+          {
+            ...renderable,
+            value,
+          },
+          context.spaceId
+        );
+      }
+
+      case 'UPSERT_RELATION': {
+        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName } = event.payload;
+
+        const relationTriples = Relations.createRelationshipTriples({
+          fromId: fromEntityId,
+          toId: toEntityId,
+          toIdName: toEntityName,
+          typeOfId: typeOfId,
+          typeOfName: typeOfName,
+          spaceId: context.spaceId,
+        });
+
+        return upsertMany(relationTriples, context.spaceId);
+      }
+
+      case 'UPSERT_ATTRIBUTE': {
+        const { renderable, attributeId, attributeName } = event.payload;
+
+        // When we change the attribute for a renderable we actually change
+        // the id. We delete the previous renderable here so we don't still
+        // render the old renderable.
+        remove(renderable, context.spaceId);
+
+        if (renderable.type === 'RELATION') {
+          return upsert(
+            {
+              entityId: renderable.relationId,
+              entityName: null,
+              attributeId: SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
+              attributeName: 'Relation type',
+              // Relations are the only entity in the system that we expect
+              // to use an entity value type in a triple
+              value: {
+                type: 'ENTITY',
+                value: attributeId,
+                name: attributeName,
+              },
+            },
+            context.spaceId
+          );
+        }
+
+        // @TODO(relations): Add support for IMAGE
+        if (renderable.type === 'IMAGE') {
+          return;
+        }
+
+        if (renderable.type === 'ENTITY') {
+          return upsert(
+            {
+              ...renderable,
+              attributeId,
+              attributeName,
+              value: {
+                type: renderable.type,
+                value: renderable.value.value,
+                name: renderable.value.name,
+              },
+            },
+            context.spaceId
+          );
+        }
+
+        return upsert(
+          {
+            ...renderable,
+            attributeId,
+            attributeName,
+            value: {
+              type: renderable.type,
+              value: renderable.value,
+            },
+          },
+          context.spaceId
+        );
+      }
+
+      case 'CHANGE_RENDERABLE_TYPE': {
+        const { renderable, type } = event.payload;
+
+        // If we're changing from a relation then we need to delete all of the triples
+        // on the relation.
+        if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
+          deleteRelation(renderable.relationId, context.spaceId);
+        }
+
+        if (type === 'RELATION') {
+          // Delete the previous triple and create a new relation entity
+          remove(renderable, context.spaceId);
+
+          const relationTriples = Relations.createRelationshipTriples({
+            fromId: context.entityId,
+            toId: '',
+            toIdName: null,
+            typeOfId: renderable.attributeId,
+            typeOfName: renderable.attributeName,
+            spaceId: context.spaceId,
+          });
+
+          return upsertMany(relationTriples, context.spaceId);
+        }
+
+        // @TODO(relations): Add support for IMAGE
+        if (type === 'IMAGE') {
+          return;
+        }
+
+        if (type === 'ENTITY') {
+          return upsert(
+            {
+              ...renderable,
+              value: {
+                type,
+                value: '',
+                name: null,
+              },
+            },
+            context.spaceId
+          );
+        }
+
+        return upsert(
+          {
+            ...renderable,
+            value: {
+              type,
+              value: '',
+            },
+          },
+          context.spaceId
+        );
+      }
+      case 'DELETE_RENDERABLE': {
+        const { renderable } = event.payload;
+
+        if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
+          return deleteRelation(renderable.relationId, context.spaceId);
+        }
+
+        return remove(
+          {
+            attributeId: renderable.attributeId,
+            entityId: context.entityId,
+          },
+          context.spaceId
+        );
+      }
+
+      // ALL OF THE BELOW EVENTS ARE LEGACY AND WILL GET REMOVED
+
       case 'EDIT_ENTITY_NAME': {
         const { name } = event.payload;
 
@@ -547,17 +752,6 @@ const listener =
           context.spaceId
         );
       }
-      case 'UPSERT_TRIPLE_VALUE': {
-        const { value, triple } = event.payload;
-
-        return upsert(
-          {
-            ...triple,
-            value,
-          },
-          context.spaceId
-        );
-      }
 
       case 'DELETE_IMAGE_TRIPLE': {
         const { triple } = event.payload;
@@ -585,7 +779,6 @@ const listener =
 export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
   const { upsert, remove, upsertMany } = useWriteOps();
 
-  // TODO: Only create config when content changes
   const send = useMemo(() => {
     return listener({
       ...config,
@@ -598,4 +791,9 @@ export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
   }, [config, remove, upsert, upsertMany]);
 
   return send;
+}
+
+export async function deleteRelation(relationId: string, spaceId: string) {
+  const { triples } = await mergeEntityAsync(EntityId(relationId));
+  removeMany(triples, spaceId);
 }

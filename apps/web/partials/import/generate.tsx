@@ -5,7 +5,6 @@ import { parse } from 'csv/sync';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import * as React from 'react';
@@ -33,6 +32,7 @@ import { Text } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { Url } from '~/design-system/icons/url';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Select } from '~/design-system/select';
 
 import { examplesAtom, headersAtom, loadingAtom, publishAtom, recordsAtom, stepAtom, triplesAtom } from './atoms';

@@ -3,74 +3,41 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import * as React from 'react';
-import { useEffect, useState } from 'react';
 
-import { useTriples } from '~/core/database/triples';
-import { useWriteOps } from '~/core/database/write';
 import { useEditEvents } from '~/core/events/edit-events';
-import { Entity, Relation } from '~/core/io/dto/entities';
-import { EntityId } from '~/core/io/schema';
-import { Services } from '~/core/services';
+import { useRenderables } from '~/core/hooks/use-renderables';
+import { Relation } from '~/core/io/dto/entities';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { Triple } from '~/core/types';
-import { Triple as ITriple, ValueType as TripleValueType } from '~/core/types';
-import { cloneEntity } from '~/core/utils/contracts/clone-entity';
-import { Entities } from '~/core/utils/entity';
-import { NavUtils } from '~/core/utils/utils';
+import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
+import { Triple as ITriple } from '~/core/types';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { EntityTextAutocomplete } from '~/design-system/autocomplete/entity-text-autocomplete';
 import { SquareButton } from '~/design-system/button';
-import { DeletableChipButton } from '~/design-system/chip';
+import { DeletableChipButton, LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
+import { ImageZoom, PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
-import { Date } from '~/design-system/icons/date';
-import { Relation as RelationIcon } from '~/design-system/icons/relation';
-import { Text as TextIcon } from '~/design-system/icons/text';
 import { Trash } from '~/design-system/icons/trash';
-import { Url } from '~/design-system/icons/url';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
-import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
-import { sortEntityPageTriples } from './entity-page-utils';
-import { TripleTypeDropdown } from './triple-type-dropdown';
+import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
+import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
   triples: ITriple[];
   id: string;
   spaceId: string;
-  typeId?: string | null;
-  attributes?: Array<Attribute> | null;
   relationsOut: Relation[];
 }
 
-type Attribute = [AttributeId, AttributeValue];
-type AttributeId = string;
-type AttributeValue = string;
-
-export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId, attributes }: Props) {
-  const { triples: localTriples, schema, hideSchema, hiddenSchemaIds, name } = useEntityPageStore();
-
-  const { upsertMany } = useWriteOps();
-
-  const triplesFromSpace = useTriples(
-    React.useMemo(() => {
-      return {
-        selector: t => t.space === spaceId,
-      };
-    }, [spaceId])
-  );
-  const { subgraph, config } = Services.useServices();
-
-  // We hydrate the local editable store with the triples from the server. While it's hydrating
-  // we can fallback to the server triples so we render real data and there's no layout shift.
-  //
-  // There may be some deleted triples locally. We check the actions to make sure that there are
-  // actually 0 actions in the case that there are 0 local triples as the local triples here
-  // are only the ones where `isDeleted` is false.
-  const triples = localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
+export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Props) {
+  const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
+    useRenderables(serverTriples);
+  const { name } = useEntityPageStore();
 
   const send = useEditEvents({
     context: {
@@ -80,382 +47,173 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples, typeId
     },
   });
 
-  const onCreateNewTriple = () => send({ type: 'CREATE_NEW_TRIPLE' });
-
-  const [hasSetType, setHasSetType] = useState(false);
-  const [hasSetAttributes, setHasSetAttributes] = useState(false);
-
-  useEffect(() => {
-    if (hasSetType) return;
-
-    const setTypeTriple = async () => {
-      // @TODO: Abstract to a hook and with useSearchParams instad of passing down the params
-      if (typeId) {
-        const typeEntity = await subgraph.fetchEntity({ id: typeId ?? '' });
-
-        if (typeEntity) {
-          send({
-            type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
-            payload: {
-              attributeId: 'type',
-              attributeName: 'Types',
-              entityId: typeEntity.id,
-              entityName: typeEntity.name || '',
-            },
-          });
-
-          const templateTriple = typeEntity.triples.find(
-            triple => triple.attributeId === SYSTEM_IDS.TEMPLATE_ATTRIBUTE
-          );
-
-          if (templateTriple) {
-            const templateEntity = await subgraph.fetchEntity({ id: templateTriple.value.value ?? '' });
-
-            if (templateEntity) {
-              const newTriples = await cloneEntity({
-                oldEntityId: templateEntity.id,
-                entityName: name ?? '',
-                entityId: id,
-                spaceId,
-              });
-
-              upsertMany(newTriples, spaceId);
-            }
-          }
-        }
-      } else if (name === '') {
-        send({
-          type: 'CREATE_ENTITY_TRIPLE',
-          payload: {
-            attributeId: 'type',
-            attributeName: 'Types',
-          },
-        });
-      }
-    };
-
-    setTypeTriple();
-
-    setHasSetType(true);
-  }, [hasSetType, send, typeId, config, subgraph, name, upsertMany, spaceId, id]);
-
-  useEffect(() => {
-    if (!hasSetType) return;
-    if (hasSetAttributes) return;
-
-    const setAttributesTriples = async () => {
-      if (!attributes || attributes.length === 0) return;
-
-      const attributeEntities = await Promise.all(
-        attributes.map((filter: Attribute) => {
-          return Promise.all([
-            subgraph.fetchEntity({ id: filter[0] ?? '' }),
-            subgraph.fetchEntity({ id: filter[1] ?? '' }),
-          ]);
-        })
-      );
-
-      attributeEntities.forEach((attributeEntities: [Entity | null, Entity | null]) => {
-        const idEntity = attributeEntities[0];
-        const valueEntity = attributeEntities[1];
-
-        if (!idEntity || !valueEntity) return;
-
-        send({
-          type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
-          payload: {
-            attributeId: idEntity.id,
-            attributeName: idEntity.name ?? '',
-            entityId: valueEntity.id,
-            entityName: valueEntity.name || '',
-          },
-        });
-      });
-    };
-
-    if (attributes && attributes.length > 0) {
-      setAttributesTriples();
-    }
-
-    setHasSetAttributes(true);
-  }, [hasSetType, hasSetAttributes, subgraph, config, send, attributes]);
+  useDeriveNewSchemaFromParams();
 
   return (
     <>
+      {/* @TODO: Unify the component between the readable and editable pages */}
       <div className="rounded-lg border border-grey-02 shadow-button">
         <div className="flex flex-col gap-6 p-5">
-          <EntityAttributes
-            entityId={id}
-            triples={triples}
-            schema={schema}
-            name={name ?? ''}
-            send={send}
-            hideSchema={hideSchema}
-            hiddenSchemaIds={hiddenSchemaIds}
-            spaceId={spaceId}
-          />
+          {Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {
+            // Triple groups only ever have one renderable
+            const firstRenderable = renderables[0];
+            const renderableType = firstRenderable.type;
+
+            // @TODO: We can abstract this away. We also don't need to pass in the first renderable to options func.
+            const selectorOptions = getRenderableTypeSelectorOptions(firstRenderable, placeholderRenderable => {
+              send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+              addPlaceholderRenderable(placeholderRenderable);
+            });
+
+            return (
+              <div key={`${id}-${attributeId}`} className="relative break-words">
+                <EditableAttribute
+                  renderable={firstRenderable}
+                  onChange={() => {
+                    // If we create a placeholder using the + button the placeholder gets an empty
+                    // attribute id. If we then add an attribute the placeholder won't get removed
+                    // because the placeholder attribute id is different than the new attribute id.
+                    //
+                    // Here we manually remove the placeholder when the attribute is changed. This is
+                    // a bit of different control flow from how we handle other placeholders, but it's
+                    // only necessary on entity pages.
+                    if (firstRenderable.placeholder === true && firstRenderable.attributeId === '') {
+                      removeEmptyPlaceholderRenderable(firstRenderable);
+                    }
+                  }}
+                />
+                {renderableType === 'RELATION' ? (
+                  <RelationsGroup key={attributeId} relations={renderables as RelationRenderableProperty[]} />
+                ) : (
+                  <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />
+                )}
+
+                <div className="absolute right-0 top-6 flex items-center gap-1">
+                  {/* Entity renderables only exist on Relation entities and are not changeable to another renderable type */}
+                  {renderableType !== 'ENTITY' && (
+                    <>
+                      <RenderableTypeDropdown value={renderableType} options={selectorOptions} />
+
+                      {/* Relation renderable types don't render the delete button. Instead you delete each individual relation */}
+                      {renderableType !== 'RELATION' && (
+                        <SquareButton
+                          icon={<Trash />}
+                          onClick={() => {
+                            send({ type: 'DELETE_RENDERABLE', payload: { renderable: firstRenderable } });
+                          }}
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div className="p-4">
-          <SquareButton onClick={onCreateNewTriple} icon={<Create />}>
-            Add triple
-          </SquareButton>
+          <SquareButton
+            onClick={() => {
+              addPlaceholderRenderable({
+                type: 'TEXT',
+                entityId: id,
+                entityName: name ?? '',
+                attributeId: '',
+                attributeName: null,
+                value: '',
+                spaceId,
+                placeholder: true,
+              });
+            }}
+            icon={<Create />}
+          />
         </div>
       </div>
     </>
   );
 }
 
-function EntityAttributes({
-  entityId,
-  triples,
-  schema,
-  name,
-  send,
-  hideSchema,
-  hiddenSchemaIds,
-  spaceId,
-}: {
-  entityId: string;
-  triples: ITriple[];
-  schema: { id: EntityId; name: string | null }[];
-  send: ReturnType<typeof useEditEvents>;
-  name: string;
-  hideSchema: (id: string) => void;
-  hiddenSchemaIds: string[];
-  spaceId: string;
-}) {
-  // Make some fake triples derived from the schema. We later hide and show these depending
-  // on if the entity has filled these fields or not.
-  // @TODO(relations): Should work for relations too
-  // @TODO: Default schema triples for name and description if they don't already exist in
-  // the list. This could maybe be done from the local database by automatically adding
-  // name and description to the schema.
-  const schemaTriples: ITriple[] = schema.map(s => ({
-    attributeId: SYSTEM_IDS.TYPES,
-    entityId,
-    entityName: name,
-    space: spaceId,
-    attributeName: 'Types',
-    value: {
-      type: 'ENTITY',
-      value: s.id,
-      name: s.name,
+function EditableAttribute({ renderable, onChange }: { renderable: RenderableProperty; onChange: () => void }) {
+  const { id, name, spaceId } = useEntityPageStore();
+
+  const send = useEditEvents({
+    context: {
+      entityId: id,
+      spaceId,
+      entityName: name ?? '',
     },
-  }));
-
-  /**
-   * All the things this component is doing
-   * 1. Aggregating all of the entity value ids for every entity triple
-   * 2. Filtering out NAME and DESCRIPTION triples from the list since we render those uniquely
-   *    from the other attributes.
-   * 3. Group all of the visible, sorted triples by their attribute id so we can render them all
-   *    together. We sort the triples based on how we want to order them in the list.
-   * 4. Aggregate all entity value triple ids so we can make sure we don't return those already-
-   *    selected values in the entity search results.
-   */
-  const tripleAttributeIds = triples.map(triple => triple.attributeId);
-
-  const visibleSchemaTriples = schemaTriples.filter(schemaTriple => {
-    const notHidden = !hiddenSchemaIds.includes(schemaTriple.attributeId);
-    const notInTriples = !tripleAttributeIds.includes(schemaTriple.attributeId);
-    return notHidden && notInTriples;
   });
 
-  const visibleTriples = [...triples, ...visibleSchemaTriples];
+  if (renderable.attributeId === '') {
+    return (
+      <EntityTextAutocomplete
+        spaceId={spaceId}
+        placeholder="Add attribute..."
+        onDone={result => {
+          onChange();
+          send({
+            type: 'UPSERT_ATTRIBUTE',
+            payload: { renderable, attributeId: result.id, attributeName: result.name },
+          });
+        }}
+        filterByTypes={[{ typeId: SYSTEM_IDS.ATTRIBUTE, typeName: 'Attribute' }]}
+        alreadySelectedIds={[]}
+        attributeId={renderable.attributeId}
+      />
+    );
+  }
 
-  // Some triples are rendered outside of the normal attribute list to better control their styling.
-  const filteredAttributeIds = [SYSTEM_IDS.NAME, SYSTEM_IDS.DESCRIPTION];
-  const sortedTriples = sortEntityPageTriples(visibleTriples, schemaTriples).filter(
-    triple => !filteredAttributeIds.includes(triple.attributeId)
+  return (
+    <Link href={NavUtils.toEntity(spaceId, renderable.attributeId)}>
+      <Text as="p" variant="bodySemibold">
+        {renderable.attributeName ?? renderable.attributeId}
+      </Text>
+    </Link>
   );
+}
 
-  // There's only one triple per attribute when viewing an entity within a single space.
-  const groupedTriplesByAttributeId = sortedTriples.reduce(
-    (map, triple) => {
-      map[triple.attributeId] = triple;
-      return map;
+function RelationsGroup({ relations }: { relations: RelationRenderableProperty[] }) {
+  const { id, name, spaceId } = useEntityPageStore();
+
+  const send = useEditEvents({
+    context: {
+      entityId: id,
+      spaceId,
+      entityName: name ?? '',
     },
-    {} as Record<string, Triple>
-  );
+  });
 
-  const orderedGroupedTriples = Object.entries(groupedTriplesByAttributeId);
+  const hasPlaceholders = relations.some(r => r.placeholder === true);
 
-  const nameTriple = Entities.nameTriple(triples);
-  const descriptionTriple = Entities.descriptionTriple(triples);
-  const description = Entities.description(triples);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {relations.map(r => {
+        const relationId = r.relationId;
+        const relationName = r.valueName;
+        const renderableType = r.type;
+        const relationValue = r.value;
 
-  const onChangeTriple = (type: TripleValueType, triple: ITriple) => {
-    send({
-      type: 'CHANGE_TRIPLE_TYPE',
-      payload: {
-        type,
-        triple,
-      },
-    });
-  };
-
-  const removeOrResetEntityTriple = (triple: ITriple) => {
-    hideSchema(triple.attributeId);
-    send({
-      type: 'DELETE_ENTITY_TRIPLE',
-      payload: {
-        triple,
-        // @TODO: Check this based on the collection
-        isLastEntity: true,
-      },
-    });
-  };
-
-  const addAttribute = (attribute: { id: string; name: string | null }, oldTriple: Triple) => {
-    send({
-      type: 'ADD_ATTRIBUTE_TO_TRIPLE',
-      payload: {
-        existingTriple: groupedTriplesByAttributeId[attribute.id],
-        newAttribute: attribute,
-        oldTriple,
-      },
-    });
-  };
-
-  const addEntityValue = (
-    attributeId: string,
-    linkedEntity: {
-      id: string;
-      name: string | null;
-      space?: string;
-    }
-  ) => {
-    const existingTriple = groupedTriplesByAttributeId[attributeId];
-    send({
-      type: 'ADD_PAGE_ENTITY_VALUE',
-      payload: {
-        existingTriple: existingTriple,
-        attribute: {
-          id: attributeId,
-        },
-        linkedEntity,
-        entityName: name,
-      },
-    });
-  };
-
-  const updateTextValue = (triple: ITriple, value: string) => {
-    send({
-      type: 'UPSERT_TRIPLE_VALUE',
-      payload: {
-        triple,
-        value: {
-          type: 'TEXT',
-          value,
-        },
-      },
-    });
-  };
-
-  const updateUrlValue = (triple: ITriple, value: string) => {
-    send({
-      type: 'UPSERT_TRIPLE_VALUE',
-      payload: {
-        triple,
-        value: {
-          type: 'URI',
-          value,
-        },
-      },
-    });
-  };
-
-  const updateDateValue = (triple: ITriple, value: string) => {
-    send({
-      type: 'UPSERT_TRIPLE_VALUE',
-      payload: {
-        triple,
-        value: {
-          type: 'TIME',
-          value,
-        },
-      },
-    });
-  };
-
-  // const uploadImage = (triple: ITriple, imageSrc: string) => {
-  //   send({
-  //     type: 'UPLOAD_IMAGE',
-  //     payload: {
-  //       triple,
-  //       imageSrc,
-  //     },
-  //   });
-  // };
-
-  // const deleteImageTriple = (triple: ITriple) => {
-  //   send({
-  //     type: 'DELETE_IMAGE_TRIPLE',
-  //     payload: {
-  //       triple,
-  //     },
-  //   });
-  // };
-
-  const onNameChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    send({
-      type: 'EDIT_ENTITY_NAME',
-      payload: {
-        name: e.target.value,
-      },
-    });
-  };
-
-  const onDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    send({
-      type: 'EDIT_ENTITY_DESCRIPTION',
-      payload: {
-        name,
-        description: e.target.value,
-      },
-    });
-  };
-
-  const tripleToEditableField = (attributeId: string, triple: Triple, isEmptyEntity: boolean) => {
-    switch (triple.value.type) {
-      case 'TEXT':
-        return (
-          <PageStringField
-            key={triple.attributeId}
-            variant="body"
-            placeholder="Add value..."
-            aria-label="text-field"
-            value={triple.value.value}
-            onChange={e => {
-              updateTextValue(triple, e.target.value);
-            }}
-          />
-        );
-      case 'NUMBER':
-        return null;
-      case 'TIME':
-        return <DateField isEditing value={triple.value.value} onBlur={v => updateDateValue(triple, v)} />;
-      case 'URI':
-        return (
-          <WebUrlField
-            isEditing
-            placeholder="Add value..."
-            value={triple.value.value}
-            onBlur={e => {
-              updateUrlValue(triple, e.target.value);
-            }}
-          />
-        );
-      case 'ENTITY':
-        if (isEmptyEntity) {
+        if (renderableType === 'IMAGE') {
           return (
-            <div data-testid="select-entity" className="w-full">
+            <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue ?? '')} />
+          );
+        }
+
+        if (r.placeholder === true) {
+          return (
+            <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
               <SelectEntity
                 spaceId={spaceId}
                 onDone={result => {
-                  if (attributeId) {
-                    addEntityValue(attributeId, result);
-                  }
+                  send({
+                    type: 'UPSERT_RELATION',
+                    payload: {
+                      fromEntityId: id,
+                      toEntityId: result.id,
+                      toEntityName: result.name,
+                      typeOfId: r.attributeId,
+                      typeOfName: r.attributeName,
+                    },
+                  });
                 }}
                 wrapperClassName="contents"
                 inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
@@ -466,170 +224,219 @@ function EntityAttributes({
         }
 
         return (
-          <div key={`entity-${triple.value.value}`}>
-            <DeletableChipButton
-              href={NavUtils.toEntity(triple.space, triple.value.value)}
-              onClick={() => removeOrResetEntityTriple(triple)}
+          <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
+            <LinkableRelationChip
+              onDelete={() => {
+                send({
+                  type: 'DELETE_RENDERABLE',
+                  payload: {
+                    renderable: r,
+                  },
+                });
+              }}
+              entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
+              relationHref={NavUtils.toEntity(spaceId, relationId)}
             >
-              {triple.value.name || triple.value.value}
-            </DeletableChipButton>
-          </div>
-        );
-    }
-  };
-
-  return (
-    <>
-      <div className="relative break-words">
-        <Text as="p" variant="bodySemibold">
-          Name
-        </Text>
-        <PageStringField variant="body" placeholder="Entity name..." value={name} onChange={onNameChange} />
-        {nameTriple && (
-          <div className="absolute right-0 top-[6px] flex items-center gap-8">
-            <SquareButton
-              icon={<Trash />}
-              onClick={() => send({ type: 'REMOVE_TRIPLE', payload: { triple: nameTriple } })}
-            />
-          </div>
-        )}
-      </div>
-      <div className="relative break-words">
-        <Text as="p" variant="bodySemibold">
-          Description
-        </Text>
-        <PageStringField
-          variant="body"
-          placeholder="Add a description..."
-          value={description ?? ''}
-          onChange={onDescriptionChange}
-        />
-        {descriptionTriple && (
-          <div className="absolute right-0 top-[6px] flex items-center gap-8">
-            <SquareButton
-              icon={<Trash />}
-              onClick={() => send({ type: 'REMOVE_TRIPLE', payload: { triple: descriptionTriple } })}
-            />
-          </div>
-        )}
-      </div>
-      {/*
-        @TODO: We only ever render a single triple at a time for any (S,E,A) tuple.
-      */}
-      {orderedGroupedTriples.map(([attributeId, triple], index) => {
-        if (attributeId === SYSTEM_IDS.BLOCKS) return null;
-        const isEntity = triple.value.type === 'ENTITY';
-
-        const tripleType: TripleValueType = triple.value.type || 'TEXT';
-
-        const isEmptyEntity = triple.value.type === 'ENTITY' && !triple.value.value;
-        const attributeName = triple.attributeName;
-
-        return (
-          <div key={`${entityId}-${attributeId}-${index}`} className="relative break-words">
-            {attributeId === '' ? (
-              <EntityTextAutocomplete
-                spaceId={spaceId}
-                placeholder="Add attribute..."
-                onDone={result => addAttribute(result, triple)}
-                alreadySelectedIds={tripleAttributeIds}
-                attributeId={attributeId}
-              />
-            ) : (
-              <Text as="p" variant="bodySemibold">
-                {attributeName || attributeId}
-              </Text>
-            )}
-            {isEntity && <Spacer height={4} />}
-            <div className="flex flex-wrap items-center gap-1">
-              {tripleToEditableField(attributeId, triple, isEmptyEntity)}
-              <div className="absolute right-0 top-6 flex items-center gap-1">
-                {/* {isEntity ? (
-                  <AttributeConfigurationMenu
-                    trigger={<SquareButton icon={<CogSmall />} />}
-                    attributeId={attributeId}
-                    attributeName={attributeName}
-                  />
-                ) : null} */}
-                <TripleTypeDropdown
-                  value={tripleType}
-                  options={[
-                    {
-                      label: (
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <TextIcon />
-                          <Spacer width={8} />
-                          Text
-                        </div>
-                      ),
-                      value: 'TEXT',
-                      onClick: () => onChangeTriple('TEXT', triple),
-                      disabled: false,
-                    },
-                    {
-                      label: (
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <RelationIcon />
-                          <Spacer width={8} />
-                          Entity
-                        </div>
-                      ),
-                      value: 'ENTITY',
-                      onClick: () => onChangeTriple('ENTITY', triple),
-                      disabled: false,
-                    },
-                    // @TODO(relations): Add image support
-                    // {
-                    //   label: (
-                    //     <div style={{ display: 'flex', alignItems: 'center' }}>
-                    //       <Image />
-                    //       <Spacer width={8} />
-                    //       Image
-                    //     </div>
-                    //   ),
-                    //   value: 'IMAGE',
-                    //   onClick: () => onChangeTriple('IMAGE', triple),
-                    //   disabled: false,
-                    // },
-                    {
-                      label: (
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <Date />
-                          <Spacer width={8} />
-                          Date
-                        </div>
-                      ),
-                      value: 'TIME',
-                      onClick: () => onChangeTriple('TIME', triple),
-                      disabled: false,
-                    },
-                    {
-                      label: (
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <Url />
-                          <Spacer width={8} />
-                          Web URL
-                        </div>
-                      ),
-                      value: 'URI',
-                      onClick: () => onChangeTriple('URI', triple),
-                      disabled: false,
-                    },
-                  ]}
-                />
-                <SquareButton
-                  icon={<Trash />}
-                  onClick={() => {
-                    hideSchema(attributeId);
-                    send({ type: 'REMOVE_TRIPLE', payload: { triple } });
-                  }}
-                />
-              </div>
-              {/* @TODO: Placeholders shouldn't be a 'placeholder' triple and just be a special field */}
-            </div>
+              {relationName ?? relationValue}
+            </LinkableRelationChip>
           </div>
         );
       })}
-    </>
+      {!hasPlaceholders && (
+        <div className="mt-1">
+          <SquareButton
+            onClick={() => {
+              //
+            }}
+            icon={<Create />}
+          />
+        </div>
+      )}
+    </div>
   );
+}
+
+function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
+  const { id, name, spaceId } = useEntityPageStore();
+
+  const send = useEditEvents({
+    context: {
+      entityId: id,
+      spaceId: spaceId,
+      entityName: name ?? '',
+    },
+  });
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {triples.map(renderable => {
+        switch (renderable.type) {
+          case 'TEXT':
+            return (
+              <PageStringField
+                key={renderable.attributeId}
+                variant="body"
+                placeholder="Add value..."
+                aria-label="text-field"
+                value={renderable.value}
+                onChange={e => {
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      renderable,
+                      value: {
+                        type: 'TEXT',
+                        value: e.target.value,
+                      },
+                    },
+                  });
+                }}
+              />
+            );
+          case 'TIME':
+            return <DateField isEditing={true} value={renderable.value} />;
+          case 'URI':
+            return <WebUrlField placeholder="Add a URI" isEditing={true} value={renderable.value} />;
+          case 'ENTITY': {
+            if (renderable.value.value === '') {
+              return (
+                <div data-testid="select-entity" className="w-full">
+                  <SelectEntity
+                    spaceId={spaceId}
+                    onDone={result => {
+                      send({
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'ENTITY',
+                            value: result.id,
+                            name: result.name,
+                          },
+                        },
+                      });
+                    }}
+                    wrapperClassName="contents"
+                    inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
+                    resultsClassName="absolute z-[1000]"
+                  />
+                </div>
+              );
+            }
+
+            return (
+              <div key={`entity-${renderable.value.value}`}>
+                <DeletableChipButton
+                  href={NavUtils.toEntity(renderable.spaceId, renderable.value.value)}
+                  // onClick={() => removeOrResetEntityTriple(triple)}
+                >
+                  {renderable.value.name || renderable.value.value}
+                </DeletableChipButton>
+              </div>
+            );
+          }
+        }
+      })}
+    </div>
+  );
+}
+
+// const EMPTY_ARRAY_AS_ENCODED_URI = '%5B%5D';
+
+function useDeriveNewSchemaFromParams() {
+  // const { subgraph, config } = Services.useServices();
+  // const { upsertMany } = useWriteOps();
+  // const { id, spaceId, name } = useEntityPageStore();
+  // const searchParams = useSearchParams();
+  // const encodedAttributes = searchParams?.get('attributes') ?? EMPTY_ARRAY_AS_ENCODED_URI;
+  // const attributes = JSON.parse(decodeURI(encodedAttributes));
+  // const typeId = searchParams?.get('typeId') ?? null;
+  // const send = useEditEvents({
+  //   context: {
+  //     entityId: id,
+  //     spaceId,
+  //     entityName: name ?? '',
+  //   },
+  // });
+  // const [hasSetType, setHasSetType] = useState(false);
+  // const [hasSetAttributes, setHasSetAttributes] = useState(false);
+  // useEffect(() => {
+  //   if (hasSetType) return;
+  //   const setTypeTriple = async () => {
+  //     // @TODO: Abstract to a hook and with useSearchParams instad of passing down the params
+  //     if (typeId) {
+  //       const typeEntity = await subgraph.fetchEntity({ id: typeId ?? '' });
+  //       if (typeEntity) {
+  //         send({
+  //           type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
+  //           payload: {
+  //             attributeId: 'type',
+  //             attributeName: 'Types',
+  //             entityId: typeEntity.id,
+  //             entityName: typeEntity.name || '',
+  //           },
+  //         });
+  //         const templateTriple = typeEntity.triples.find(
+  //           triple => triple.attributeId === SYSTEM_IDS.TEMPLATE_ATTRIBUTE
+  //         );
+  //         if (templateTriple) {
+  //           const templateEntity = await subgraph.fetchEntity({ id: templateTriple.value.value ?? '' });
+  //           if (templateEntity) {
+  //             const newTriples = await cloneEntity({
+  //               oldEntityId: templateEntity.id,
+  //               entityName: name ?? '',
+  //               entityId: id,
+  //               spaceId,
+  //             });
+  //             upsertMany(newTriples, spaceId);
+  //           }
+  //         }
+  //       }
+  //     } else if (name === '') {
+  //       // @TODO(relations)
+  //       send({
+  //         type: 'CREATE_ENTITY_TRIPLE',
+  //         payload: {
+  //           attributeId: 'type',
+  //           attributeName: 'Types',
+  //         },
+  //       });
+  //     }
+  //   };
+  //   setTypeTriple();
+  //   setHasSetType(true);
+  // }, [hasSetType, send, typeId, config, subgraph, name, upsertMany, spaceId, id]);
+  // useEffect(() => {
+  //   if (!hasSetType) return;
+  //   if (hasSetAttributes) return;
+  //   const setAttributesTriples = async () => {
+  //     if (!attributes || attributes.length === 0) return;
+  //     const attributeEntities = await Promise.all(
+  //       attributes.map((filter: Attribute) => {
+  //         return Promise.all([
+  //           subgraph.fetchEntity({ id: filter[0] ?? '' }),
+  //           subgraph.fetchEntity({ id: filter[1] ?? '' }),
+  //         ]);
+  //       })
+  //     );
+  //     attributeEntities.forEach((attributeEntities: [Entity | null, Entity | null]) => {
+  //       const idEntity = attributeEntities[0];
+  //       const valueEntity = attributeEntities[1];
+  //       if (!idEntity || !valueEntity) return;
+  //       send({
+  //         type: 'CREATE_ENTITY_TRIPLE_FROM_PLACEHOLDER',
+  //         payload: {
+  //           attributeId: idEntity.id,
+  //           attributeName: idEntity.name ?? '',
+  //           entityId: valueEntity.id,
+  //           entityName: valueEntity.name || '',
+  //         },
+  //       });
+  //     });
+  //   };
+  //   if (attributes && attributes.length > 0) {
+  //     setAttributesTriples();
+  //   }
+  //   setHasSetAttributes(true);
+  // }, [hasSetType, hasSetAttributes, subgraph, config, send, attributes]);
 }

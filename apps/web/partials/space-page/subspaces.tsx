@@ -1,12 +1,12 @@
 'use client';
 
 import Image from 'next/legacy/image';
-import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Subspace } from '~/core/io/dto/subspaces';
 import { getImagePath } from '~/core/utils/utils';
 
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Slider } from '~/design-system/slider';
 import { Spacer } from '~/design-system/spacer';
 

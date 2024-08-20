@@ -2,7 +2,6 @@
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import cx from 'classnames';
-import Link from 'next/link';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
@@ -29,6 +28,7 @@ import { Upload } from '~/design-system/icons/upload';
 import { Warning } from '~/design-system/icons/warning';
 import { Menu } from '~/design-system/menu';
 import { PopoverMenu } from '~/design-system/popover-menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { NoAvatar } from './no-avatar';

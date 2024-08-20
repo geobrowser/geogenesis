@@ -7,7 +7,6 @@ export const valueTypeIds: Record<TripleValueType, ValueTypeId> = {
   ENTITY: SYSTEM_IDS.RELATION,
   TIME: SYSTEM_IDS.DATE,
   URI: SYSTEM_IDS.WEB_URL,
-  NUMBER: SYSTEM_IDS.TEXT,
 };
 
 export const valueTypes: Record<ValueTypeId, TripleValueType> = {

@@ -1,10 +1,9 @@
 'use client';
 
-import Link from 'next/link';
-
 import { Avatar } from '~/design-system/avatar';
 import { LinkableChip } from '~/design-system/chip';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import type { TeamMember as TeamMemberType } from '~/app/space/[id]/team/page';
 

@@ -1,6 +1,7 @@
 import { Op } from '@geogenesis/sdk';
 import { A, pipe } from '@mobily/ts-belt';
 
+import { StoredTriple } from '~/core/database/types';
 import { ID } from '~/core/id';
 import { getAppTripleId } from '~/core/id/create-id';
 import { AppEntityValue, OmitStrict, Triple, ValueType as TripleValueType, Value } from '~/core/types';
@@ -27,10 +28,6 @@ export function emptyValue(type: TripleValueType): Value {
       value: '',
       name: null,
     } as AppEntityValue,
-    NUMBER: {
-      type: 'NUMBER',
-      value: '',
-    },
     TIME: {
       type: 'TIME',
       value: '',
@@ -66,22 +63,18 @@ export function empty(spaceId: string, entityId: string, type: TripleValueType =
  * This would be a lot easier as a local first representation with the same  model both
  * for query time merging and ad-hoc runtime merging of the two triples sources.
  */
-export function merge(local: Triple[], remote: Triple[]): Triple[] {
+export function merge(local: StoredTriple[], remote: Triple[]): StoredTriple[] {
   const localTripleIds = new Set(local.map(t => t.id));
   const remoteTriplesWithoutLocalTriples = remote.filter(t => !localTripleIds.has(getAppTripleId(t, t.space)));
   const remoteTriplesMappedToLocalTriples = remoteTriplesWithoutLocalTriples.map(t => ({
     ...t,
-
     hasBeenPublished: false,
     isDeleted: false,
-    placeholder: false,
     id: getAppTripleId(t, t.space),
     timestamp: timestamp(),
   }));
 
-  const triples = [...remoteTriplesMappedToLocalTriples, ...local];
-
-  return triples;
+  return [...remoteTriplesMappedToLocalTriples, ...local];
 }
 
 /**
@@ -123,7 +116,6 @@ export function withLocalNames(appTriples: Triple[], triples: Triple[]): Triple[
 
 export const getValue = (triple: Triple): string | null => {
   switch (triple.value.type) {
-    case 'NUMBER':
     case 'TEXT':
     case 'ENTITY':
     case 'TIME':

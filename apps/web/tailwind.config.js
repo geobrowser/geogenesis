@@ -255,15 +255,17 @@ module.exports = {
         metadata: [
           '1rem',
           {
-            lineHeight: '1.2rem',
+            lineHeight: '0.8125rem',
             fontWeight: '400',
+            letterSpacing: "-0.5px"
           },
         ],
         metadataMedium: [
           '1rem',
           {
-            lineHeight: '1.2rem',
+            lineHeight: '0.8125rem',
             fontWeight: '500',
+            letterSpacing: "-0.5px"
           },
         ],
         breadcrumb: [

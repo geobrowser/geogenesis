@@ -25,20 +25,13 @@ import { MoveEntityReview } from '~/partials/move-entity/move-entity-review';
 
 interface Props {
   params: { id: string; entityId: string };
-  searchParams: {
-    typeId?: string;
-    attributes?: string;
-  };
   showCover?: boolean;
   showHeading?: boolean;
   showHeader?: boolean;
 }
 
-const EMPTY_ARRAY_AS_ENCODED_URI = '%5B%5D';
-
 export default async function DefaultEntityPage({
   params,
-  searchParams,
   showCover = true,
   showHeading = true,
   showHeader = true,
@@ -50,11 +43,6 @@ export default async function DefaultEntityPage({
   const avatarUrl = Entities.avatar(props.triples) ?? props.serverAvatarUrl;
   const coverUrl = Entities.cover(props.triples) ?? props.serverCoverUrl;
   const types = props.types;
-
-  const typeId = searchParams.typeId ?? null;
-
-  const encodedAttributes = searchParams.attributes ?? EMPTY_ARRAY_AS_ENCODED_URI;
-  const attributes = JSON.parse(decodeURI(encodedAttributes));
 
   return (
     <EntityStoreProvider
@@ -76,7 +64,7 @@ export default async function DefaultEntityPage({
             {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />}
             {showSpacer && <Spacer height={40} />}
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-            <ToggleEntityPage {...props} typeId={typeId} attributes={attributes} />
+            <ToggleEntityPage {...props} />
             <Spacer height={40} />
             {/*
               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to

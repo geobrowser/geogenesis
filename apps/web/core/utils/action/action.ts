@@ -8,7 +8,6 @@ export const getValue = (op: AppOp, fallback: boolean | string = false): string 
   switch (op.value.type) {
     case 'ENTITY':
     case 'TEXT':
-    case 'NUMBER':
     case 'TIME':
     case 'URI':
       value = op.value.value;

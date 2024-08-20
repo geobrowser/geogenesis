@@ -3,12 +3,12 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export type ValueType = 'TEXT' | 'NUMBER' | 'ENTITY' | 'URI' | 'TIME';
+export type ValueType = 'TEXT' | 'ENTITY' | 'URI' | 'TIME';
 // | GEO_LOCATION
 // | 'CHECKBOX'
 
 export type AppValue = {
-  type: 'TEXT' | 'NUMBER' | 'URI' | 'TIME';
+  type: 'TEXT' | 'URI' | 'TIME';
   value: string;
 };
 
@@ -66,6 +66,59 @@ export type Triple = {
 };
 
 export type RenderableEntityType = 'IMAGE' | 'DEFAULT' | 'BLOCK'; // specific block types?
+
+// Renderable fields are a special data model to represent us rendering both
+// triples and relations in the same way. This is used across tables and entity
+// pages in places where we want to render triples and relations together.
+// Editing these values mostly works the same way as ops, so we need the same
+// properties that ops mostly do in order to upsert or remove the renderable
+// fields.
+export type NativeRenderableProperty = {
+  type: AppValue['type'];
+  entityId: string;
+  entityName: string | null;
+  attributeId: string;
+  attributeName: string | null;
+  spaceId: string;
+  value: string;
+  placeholder?: boolean;
+};
+
+// Entity renderable fields should only exist on Relations pages
+export type EntityRenderableProperty = {
+  type: 'ENTITY';
+  entityId: string;
+  entityName: string | null;
+  attributeId: string;
+  attributeName: string | null;
+  spaceId: string;
+  value: {
+    value: string;
+    name: string | null;
+  };
+  placeholder?: boolean;
+};
+
+export type RelationRenderableProperty = {
+  type: 'RELATION' | 'IMAGE';
+  entityId: string;
+  entityName: string | null;
+  attributeId: string;
+  attributeName: string | null;
+  spaceId: string;
+  relationId: string;
+  valueName: string | null; // name of the entity
+  value: string;
+  placeholder?: boolean;
+};
+
+export type TripleRenderableProperty = NativeRenderableProperty | EntityRenderableProperty;
+export type RenderableProperty = TripleRenderableProperty | RelationRenderableProperty;
+
+// The types of renderables don't map 1:1 to the triple value types. We might
+// also render relations with a specific type, e.g., an Image entity or a
+// Person entity, etc.
+export type SwitchableRenderableType = 'TEXT' | 'RELATION' | 'URI' | 'TIME' | 'IMAGE';
 
 export type ReviewState =
   | 'idle'

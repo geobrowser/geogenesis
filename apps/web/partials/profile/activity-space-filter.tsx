@@ -1,7 +1,6 @@
 'use client';
 
 import Image from 'next/legacy/image';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import * as React from 'react';
@@ -13,6 +12,7 @@ import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Menu } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface Props {
   spaceId: string;

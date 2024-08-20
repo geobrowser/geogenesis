@@ -1,8 +1,7 @@
-import Link from 'next/link';
-
 import * as React from 'react';
 
 import { Button } from '~/design-system/button';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 

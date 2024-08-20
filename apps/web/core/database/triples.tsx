@@ -5,7 +5,7 @@ import * as React from 'react';
 import { store } from '../state/jotai-store';
 import { Triple as ITriple } from '../types';
 import { Triples } from '../utils/triples';
-import { isDeletedSelector } from './selectors';
+import { isNotDeletedSelector } from './selectors';
 import { StoredTriple } from './types';
 import { localOpsAtom } from './write';
 
@@ -16,11 +16,10 @@ interface UseTriplesArgs {
 
 const makeLocalActionsAtomWithSelector = ({ selector, mergeWith = [] }: UseTriplesArgs) => {
   return atom(get => {
-    const localTriples = get(localOpsAtom).filter(t => {
-      return isDeletedSelector(t) && (selector ? selector(t) : true);
+    const mergedTriples = Triples.merge(get(localOpsAtom), mergeWith);
+    return mergedTriples.filter(t => {
+      return isNotDeletedSelector(t) && (selector ? selector(t) : true);
     });
-
-    return Triples.merge(localTriples, mergeWith);
   });
 };
 

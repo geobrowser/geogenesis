@@ -4,7 +4,6 @@ import { Schema } from '@effect/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 
 import * as React from 'react';
 
@@ -26,6 +25,7 @@ import { Divider } from '~/design-system/divider';
 import { MemberTiny } from '~/design-system/icons/member-tiny';
 import { MemberTinyFilled } from '~/design-system/icons/member-tiny-filled';
 import { Input } from '~/design-system/input';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface Props {
   spaceType: SpaceGovernanceType;

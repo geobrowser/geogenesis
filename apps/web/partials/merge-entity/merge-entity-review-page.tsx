@@ -120,8 +120,6 @@ function EntityReviewAttributes({
           </div>
         );
       }
-      case 'NUMBER':
-        return null;
     }
   };
 
