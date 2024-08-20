@@ -25,7 +25,8 @@ import { useUserIsEditing } from './use-user-is-editing';
  */
 export function useRenderables(serverTriples: Triple[]) {
   const isEditing = useUserIsEditing();
-  const { placeholderRenderables, addPlaceholderRenderable } = usePlaceholderRenderables();
+  const { placeholderRenderables, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
+    usePlaceholderRenderables();
 
   // @TODO(relations): We may want to pass these in instead of reading from context so that
   // we can use the useRenderables hook for other contexts like tables. Alternatively we can
@@ -46,20 +47,26 @@ export function useRenderables(serverTriples: Triple[]) {
   // There may be some deleted triples locally. We check the actions to make sure that there are
   // actually 0 actions in the case that there are 0 local triples as the local triples here
   // are only the ones where `isDeleted` is false.
-  const triples = localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
+  const triples = React.useMemo(() => {
+    return localTriples.length === 0 && triplesFromSpace.length === 0 ? serverTriples : localTriples;
+  }, [localTriples, serverTriples, triplesFromSpace]);
 
-  const renderables = toRenderables({
-    entityId: id,
-    entityName: name,
-    spaceId,
-    triples,
-    relations,
-    // We don't show placeholder renderables in browse mode
-    schema: isEditing ? schema : undefined,
-    placeholderRenderables: isEditing ? placeholderRenderables : undefined,
-  })
-    // We don't show blocks in the properties section
-    .filter(r => r.attributeId !== SYSTEM_IDS.BLOCKS);
+  const renderables = React.useMemo(() => {
+    return (
+      toRenderables({
+        entityId: id,
+        entityName: name,
+        spaceId,
+        triples,
+        relations,
+        // We don't show placeholder renderables in browse mode
+        schema: isEditing ? schema : undefined,
+        placeholderRenderables: isEditing ? placeholderRenderables : undefined,
+      })
+        // We don't show blocks in the properties section
+        .filter(r => r.attributeId !== SYSTEM_IDS.BLOCKS)
+    );
+  }, [id, name, spaceId, triples, relations, isEditing, schema, placeholderRenderables]);
 
   const renderablesGroupedByAttributeId = pipe(
     renderables,
@@ -70,6 +77,7 @@ export function useRenderables(serverTriples: Triple[]) {
   return {
     renderablesGroupedByAttributeId,
     addPlaceholderRenderable,
+    removeEmptyPlaceholderRenderable,
   };
 }
 
@@ -81,8 +89,14 @@ export function usePlaceholderRenderables() {
     setPlaceholderRenderables([...newPlaceholders, renderable]);
   };
 
+  const onRemoveEmptyPlaceholderRenderable = (renderable: RenderableProperty) => {
+    const newPlaceholders = placeholderRenderables.filter(r => r.attributeId !== renderable.attributeId);
+    setPlaceholderRenderables([...newPlaceholders]);
+  };
+
   return {
     placeholderRenderables,
     addPlaceholderRenderable: onAddPlaceholderRenderable,
+    removeEmptyPlaceholderRenderable: onRemoveEmptyPlaceholderRenderable,
   };
 }

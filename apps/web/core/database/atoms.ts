@@ -60,6 +60,8 @@ export const createRelationsAtom = (initialRelations: Relation[]) => {
           toEntity: {
             id: EntityId(toEntityTriple.value.value),
             name: toEntityTriple.value.type === 'ENTITY' ? toEntityTriple.value.name : null,
+            // @TODO(relations): To know if a relation is an image we need to read the relations on the
+            // toEntity to see read its types.
             renderableType: 'DEFAULT',
             value: toEntityTriple.value.type === 'ENTITY' ? toEntityTriple.value.value : '',
             triples: localTriples.filter(t => t.entityId === toEntityTriple.value.value),

@@ -35,7 +35,8 @@ interface Props {
 }
 
 export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Props) {
-  const { renderablesGroupedByAttributeId, addPlaceholderRenderable } = useRenderables(serverTriples);
+  const { renderablesGroupedByAttributeId, addPlaceholderRenderable, removeEmptyPlaceholderRenderable } =
+    useRenderables(serverTriples);
   const { name } = useEntityPageStore();
 
   const send = useEditEvents({
@@ -66,7 +67,21 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
 
             return (
               <div key={`${id}-${attributeId}`} className="relative break-words">
-                <EditableAttribute renderable={firstRenderable} />
+                <EditableAttribute
+                  renderable={firstRenderable}
+                  onChange={() => {
+                    // If we create a placeholder using the + button the placeholder gets an empty
+                    // attribute id. If we then add an attribute the placeholder won't get removed
+                    // because the placeholder attribute id is different than the new attribute id.
+                    //
+                    // Here we manually remove the placeholder when the attribute is changed. This is
+                    // a bit of different control flow from how we handle other placeholders, but it's
+                    // only necessary on entity pages.
+                    if (firstRenderable.placeholder === true && firstRenderable.attributeId === '') {
+                      removeEmptyPlaceholderRenderable(firstRenderable);
+                    }
+                  }}
+                />
                 {renderableType === 'RELATION' ? (
                   <RelationsGroup key={attributeId} relations={renderables as RelationRenderableProperty[]} />
                 ) : (
@@ -117,7 +132,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
   );
 }
 
-function EditableAttribute({ renderable }: { renderable: RenderableProperty }) {
+function EditableAttribute({ renderable, onChange }: { renderable: RenderableProperty; onChange: () => void }) {
   const { id, name, spaceId } = useEntityPageStore();
 
   const send = useEditEvents({
@@ -134,6 +149,7 @@ function EditableAttribute({ renderable }: { renderable: RenderableProperty }) {
         spaceId={spaceId}
         placeholder="Add attribute..."
         onDone={result => {
+          onChange();
           send({
             type: 'UPSERT_ATTRIBUTE',
             payload: { renderable, attributeId: result.id, attributeName: result.name },
