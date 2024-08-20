@@ -3,6 +3,7 @@ import { pipe } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTriples } from '../database/triples';
+import { StoredTriple } from '../database/types';
 import { Services } from '../services';
 import { Triple as ITriple, RelationValueTypesByAttributeId } from '../types';
 import { Triples } from '../utils/triples';
@@ -13,8 +14,8 @@ import { Values } from '../utils/value';
  * created/deleted relation value types before mapping them to the RelationValueType data structure that the UI
  * expects to consume.
  */
-export const mapMergedTriplesToRelationValueTypes = (
-  triples: Array<ITriple>,
+const mapMergedTriplesToRelationValueTypes = (
+  triples: Array<StoredTriple>,
   relationTypeTriples: Array<ITriple>
 ): RelationValueTypesByAttributeId => {
   // We need to re-merge local actions with the server triples since we don't re-run RQ in useConfiguredAttributeRelationTypes
@@ -30,7 +31,7 @@ export const mapMergedTriplesToRelationValueTypes = (
 
         acc[relationType.entityId].push({
           typeId: relationType.value.value,
-          typeName: relationType.value.name,
+          typeName: relationType.value.type === 'ENTITY' ? relationType.value.name : '',
           spaceIdOfAttribute: relationType.space,
         });
 
