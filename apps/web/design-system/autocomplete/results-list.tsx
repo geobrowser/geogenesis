@@ -2,9 +2,7 @@ import cx from 'classnames';
 
 import * as React from 'react';
 
-import { Entity } from '~/core/io/dto/entities';
 import { SearchResult } from '~/core/io/dto/search';
-import { Space } from '~/core/io/dto/spaces';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';

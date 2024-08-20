@@ -92,7 +92,7 @@ importers:
       '@vitest/ui': ^0.25.6
       autoprefixer: ^10.4.13
       boring-avatars: ^1.10.1
-      class-variance-authority: ^0.4.0
+      class-variance-authority: ^0.7.0
       classnames: ^2.3.2
       cmdk: ^0.1.21
       crypto-js: ^4.2.0
@@ -189,7 +189,7 @@ importers:
       '@vercel/analytics': 0.1.6_react@18.2.0
       '@vercel/og': 0.5.4
       boring-avatars: 1.10.1
-      class-variance-authority: 0.4.0_typescript@5.5.3
+      class-variance-authority: 0.7.0
       classnames: 2.3.2
       cmdk: 0.1.21_ew3x2u2ugx4vldoypxrzsnu5mm
       crypto-js: 4.2.0
@@ -1233,7 +1233,7 @@ packages:
       eth-json-rpc-filters: 6.0.1
       eventemitter3: 5.0.1
       keccak: 3.0.4
-      preact: 10.23.1
+      preact: 10.23.2
       sha.js: 2.4.11
     transitivePeerDependencies:
       - supports-color
@@ -7701,15 +7701,10 @@ packages:
       consola: 3.2.3
     dev: false
 
-  /class-variance-authority/0.4.0_typescript@5.5.3:
-    resolution: {integrity: sha512-74enNN8O9ZNieycac/y8FxqgyzZhZbxmCitAtAeUrLPlxjSd5zA7LfpprmxEcOmQBnaGs5hYhiSGnJ0mqrtBLQ==}
-    peerDependencies:
-      typescript: '>= 4.5.5 < 5'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
+  /class-variance-authority/0.7.0:
+    resolution: {integrity: sha512-jFI8IQw4hczaL4ALINxqLEXQbWcNjoSkloa4IaufXCJr6QawJyw7tuRysRsrE8w2p/4gGaxKIt/hX3qz/IbD1A==}
     dependencies:
-      typescript: 5.5.3
+      clsx: 2.0.0
     dev: false
 
   /classnames/2.3.2:
@@ -7748,6 +7743,11 @@ packages:
 
   /clsx/1.2.1:
     resolution: {integrity: sha512-EcR6r5a8bj6pu3ycsa/E/cKVGuTgZJZdsyUYHOksG/UHIiKfjxzRxYJpyVBwYaQeOvghal9fcc4PidlgzugAQg==}
+    engines: {node: '>=6'}
+    dev: false
+
+  /clsx/2.0.0:
+    resolution: {integrity: sha512-rQ1+kcj+ttHG0MKVGBUXwayCCF1oh39BF5COIpRzuCEv8Mwjv0XucrI2ExNTOn9IlLifGClWQcU9BrZORvtw6Q==}
     engines: {node: '>=6'}
     dev: false
 
@@ -9821,7 +9821,7 @@ packages:
     resolution: {integrity: sha512-an2S5quJMiy5bnZKEf6AkfH/7r8CzHvhchU40gxN+OM6HPhe7Z9T1FUychcf2M9PpPOO0Hf7BAEfJkw2TDIBDw==}
     engines: {node: '>=12.0.0'}
     dependencies:
-      readable-stream: 4.4.2
+      readable-stream: 3.6.2
       webextension-polyfill: 0.10.0
     dev: false
 
@@ -12599,8 +12599,8 @@ packages:
     resolution: {integrity: sha512-jRYbDDgMpIb5LHq3hkI0bbl+l/TQ9UnkdQ0ww+lp+4MMOdqaUYdFc5qeyP+IV8FAd/2Em7drVPeKdQxsiWCf/A==}
     dev: false
 
-  /preact/10.23.1:
-    resolution: {integrity: sha512-O5UdRsNh4vdZaTieWe3XOgSpdMAmkIYBCT3VhQDlKrzyCm8lUYsk0fmVEvoQQifoOjFRTaHZO69ylrzTW2BH+A==}
+  /preact/10.23.2:
+    resolution: {integrity: sha512-kKYfePf9rzKnxOAKDpsWhg/ysrHPqT+yQ7UW4JjdnqjFIeNUnNcEJvhuA8fDenxAGWzUqtd51DfVg7xp/8T9NA==}
     dev: false
 
   /prebuild-install/7.1.1:

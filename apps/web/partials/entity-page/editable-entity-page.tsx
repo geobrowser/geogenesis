@@ -1,6 +1,7 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
@@ -183,6 +184,8 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
   });
 
   const hasPlaceholders = relations.some(r => r.placeholder === true);
+  const typeOfId = relations[0].attributeId;
+  const typeOfName = relations[0].attributeName;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -215,9 +218,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
                     },
                   });
                 }}
-                wrapperClassName="contents"
-                inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
-                resultsClassName="absolute z-[1000]"
+                inputVariant="fixed"
               />
             </div>
           );
@@ -244,12 +245,32 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
       })}
       {!hasPlaceholders && (
         <div className="mt-1">
-          <SquareButton
-            onClick={() => {
-              //
-            }}
-            icon={<Create />}
-          />
+          <Popover.Root>
+            <Popover.Trigger asChild>
+              <SquareButton icon={<Create />} />
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content>
+                <SelectEntity
+                  withSearchIcon={true}
+                  spaceId={spaceId}
+                  onDone={result => {
+                    send({
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: id,
+                        toEntityId: result.id,
+                        toEntityName: result.name,
+                        typeOfId: typeOfId,
+                        typeOfName: typeOfName,
+                      },
+                    });
+                  }}
+                  inputVariant="floating"
+                />
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
         </div>
       )}
     </div>
@@ -316,9 +337,7 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
                         },
                       });
                     }}
-                    wrapperClassName="contents"
-                    inputClassName="m-0 -mb-[1px] block w-full resize-none bg-transparent p-0 text-body placeholder:text-grey-02 focus:outline-none"
-                    resultsClassName="absolute z-[1000]"
+                    inputVariant="fixed"
                   />
                 </div>
               );
