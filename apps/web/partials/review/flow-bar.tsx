@@ -65,23 +65,23 @@ export const FlowBar = () => {
               exit="hidden"
               transition={transition}
               custom={!isReviewOpen}
-              className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg"
+              className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white tabular-nums shadow-lg"
             >
               <div className="inline-flex h-full items-center justify-center">
-                <span className="px-3">
+                <p className="inline-flex items-center gap-1 px-3">
                   <MotionNumber transition={{ duration: 0.35 }} value={memoizedOpsCount} />{' '}
-                  {pluralize('edit', opsCount)}
-                </span>
+                  <span>{pluralize('edit', opsCount)}</span>
+                </p>
                 <Divider type="vertical" className="inline-block h-4 w-px" />
-                <span className="px-3">
+                <p className="inline-flex items-center gap-1 px-3">
                   <MotionNumber transition={{ duration: 0.35 }} value={memoizedEntitiesCount} />{' '}
-                  {pluralize('entity', entitiesCount)}
-                </span>
+                  <span>{pluralize('entity', entitiesCount)}</span>
+                </p>
                 <Divider type="vertical" className="inline-block h-4 w-px" />
-                <span className="px-3">
+                <p className="inline-flex items-center gap-1 px-3">
                   <MotionNumber transition={{ duration: 0.35 }} value={memoizedSpacesCount} />{' '}
-                  {pluralize('space', spacesCount)}
-                </span>
+                  <span>{pluralize('space', spacesCount)}</span>
+                </p>
               </div>
               <button
                 onClick={() => setIsReviewOpen(true)}
