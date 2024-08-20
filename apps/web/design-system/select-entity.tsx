@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import * as Popover from '@radix-ui/react-popover';
+import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 import pluralize from 'pluralize';
@@ -21,7 +21,7 @@ import { Tag } from '~/design-system/tag';
 import { Toggle } from '~/design-system/toggle';
 
 import { ArrowLeft } from './icons/arrow-left';
-import { Input } from './input';
+import { Search } from './icons/search';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
@@ -32,6 +32,25 @@ type SelectEntityProps = {
   inputVariant?: 'floating' | 'fixed';
   withSearchIcon?: boolean;
 };
+
+const inputStyles = cva('', {
+  variants: {
+    fixed: {
+      true: 'm-0 -mb-[1px] block w-full resize-none bg-white p-0 text-body placeholder:text-grey-02 focus:outline-none',
+    },
+    floating: {
+      true: 'm-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-02 focus:outline-none',
+    },
+    withSearchIcon: {
+      true: 'pl-9',
+    },
+  },
+  defaultVariants: {
+    fixed: true,
+    floating: false,
+    withSearchIcon: false,
+  },
+});
 
 export const SelectEntity = ({
   onDone,
@@ -105,30 +124,24 @@ export const SelectEntity = ({
 
   return (
     <div ref={ref} className="relative w-[400px]">
-      {inputVariant === 'fixed' ? (
-        <input
-          type="text"
-          value={query}
-          onChange={({ currentTarget: { value } }) => onQueryChange(value)}
-          placeholder={placeholder}
-          className="m-0 -mb-[1px] block w-full resize-none bg-white p-0 text-body placeholder:text-grey-02 focus:outline-none"
-        />
-      ) : (
-        <Input
-          placeholder={placeholder}
-          value={query}
-          withExternalSearchIcon={withSearchIcon}
-          onChange={e => onQueryChange(e.currentTarget.value)}
-        />
+      {withSearchIcon && (
+        <div className="absolute left-3 top-3.5 z-10">
+          <Search />
+        </div>
       )}
+
+      <input
+        type="text"
+        value={query}
+        onChange={({ currentTarget: { value } }) => onQueryChange(value)}
+        placeholder={placeholder}
+        className={inputStyles({ [inputVariant]: true, withSearchIcon })}
+      />
 
       {query && (
         <div className="absolute z-[1000]">
           <div
-            className={cx(
-              'w-[400px] overflow-hidden rounded-md border border-divider bg-white',
-              withSearchIcon && 'rounded-t-none'
-            )}
+            className={cx('w-[400px] rounded-md border border-divider bg-white', withSearchIcon && 'rounded-t-none')}
           >
             {!result ? (
               <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">
@@ -260,14 +273,3 @@ export const SelectEntity = ({
     </div>
   );
 };
-
-export function SelectEntityAsPopover({ children, trigger }: { children: React.ReactNode; trigger: React.ReactNode }) {
-  return (
-    <Popover.Root>
-      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content>{children}</Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
-  );
-}

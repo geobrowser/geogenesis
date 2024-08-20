@@ -1,46 +1,34 @@
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import * as Popover from '@radix-ui/react-popover';
 
-import { useState } from 'react';
+import * as React from 'react';
 
-import type { RelationValueType } from '~/core/types';
-
-import { SquareButton } from '~/design-system/button';
-import { CreateSmall } from '~/design-system/icons/create-small';
+import { RelationValueType } from '~/core/types';
 
 import { SelectEntity } from './select-entity';
 
-type SelectEntityDialogProps = {
-  onDone: (result: { id: string; name: string | null; space?: string }) => void;
+interface Props {
+  trigger: React.ReactNode;
   spaceId: string;
+  onDone: (result: { id: string; name: string | null; space?: string }) => void;
   allowedTypes?: RelationValueType[];
-  placeholder?: string;
-  className?: string;
-};
+}
 
-export const SelectEntityDialog = ({ onDone, spaceId, allowedTypes }: SelectEntityDialogProps) => {
-  const [open, setOpen] = useState(false);
-
+export function SelectEntityAsPopover({ trigger, onDone, spaceId, allowedTypes }: Props) {
   return (
-    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
-      <PopoverPrimitive.Trigger asChild>
-        <SquareButton icon={<CreateSmall />} />
-      </PopoverPrimitive.Trigger>
-      <div className="elevated-popover">
-        <PopoverPrimitive.Content className="mt-1 flex flex-col overflow-hidden" align="start" avoidCollisions={false}>
+    <Popover.Root>
+      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+
+      <Popover.Portal>
+        <Popover.Content sideOffset={4} align="start" className="rounded-md border border-divider bg-white">
           <SelectEntity
-            onDone={result => {
-              onDone(result);
-              setOpen(false);
-            }}
+            withSearchIcon={true}
             spaceId={spaceId}
             allowedTypes={allowedTypes}
-            wrapperClassName="relative w-[400px] rounded-md border border-divider bg-white"
-            inputClassName="m-0 block w-full resize-none bg-transparent p-2 text-body placeholder:text-grey-02 focus:outline-none"
-            resultsClassName="-mx-px -mb-px"
-            withSearchIcon
+            onDone={onDone}
+            inputVariant="floating"
           />
-        </PopoverPrimitive.Content>
-      </div>
-    </PopoverPrimitive.Root>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
-};
+}

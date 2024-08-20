@@ -21,7 +21,8 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { SelectEntity, SelectEntityAsPopover } from '~/design-system/select-entity';
+import { SelectEntity } from '~/design-system/select-entity';
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
 
 import { getRenderableTypeSelectorOptions } from './get-renderable-type-options';
@@ -244,25 +245,22 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
       })}
       {!hasPlaceholders && (
         <div className="mt-1">
-          <SelectEntityAsPopover trigger={<SquareButton icon={<Create />} />}>
-            <SelectEntity
-              withSearchIcon={true}
-              spaceId={spaceId}
-              onDone={result => {
-                send({
-                  type: 'UPSERT_RELATION',
-                  payload: {
-                    fromEntityId: id,
-                    toEntityId: result.id,
-                    toEntityName: result.name,
-                    typeOfId: typeOfId,
-                    typeOfName: typeOfName,
-                  },
-                });
-              }}
-              inputVariant="floating"
-            />
-          </SelectEntityAsPopover>
+          <SelectEntityAsPopover
+            trigger={<SquareButton icon={<Create />} />}
+            onDone={result => {
+              send({
+                type: 'UPSERT_RELATION',
+                payload: {
+                  fromEntityId: id,
+                  toEntityId: result.id,
+                  toEntityName: result.name,
+                  typeOfId: typeOfId,
+                  typeOfName: typeOfName,
+                },
+              });
+            }}
+            spaceId={spaceId}
+          />
         </div>
       )}
     </div>
