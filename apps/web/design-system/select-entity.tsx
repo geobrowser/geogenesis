@@ -104,7 +104,7 @@ export const SelectEntity = ({
   }, ref);
 
   return (
-    <div ref={ref} className="w-[400px]">
+    <div ref={ref} className="relative w-[400px]">
       {inputVariant === 'fixed' ? (
         <input
           type="text"
@@ -123,7 +123,7 @@ export const SelectEntity = ({
       )}
 
       {query && (
-        <div>
+        <div className="absolute z-[1000]">
           <div
             className={cx(
               'w-[400px] overflow-hidden rounded-md border border-divider bg-white',
@@ -173,15 +173,13 @@ export const SelectEntity = ({
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-evenly border-b border-divider bg-white">
+                <div className="flex items-center justify-between border-b border-divider bg-white">
                   <div className="flex-1">
                     <button onClick={() => setResult(null)} className="p-2">
                       <ArrowLeft color="grey-04" />
                     </button>
                   </div>
-                  <div className="flex flex-1 justify-center">
-                    <span className="p-2 text-center text-smallButton text-grey-04">Select space version</span>
-                  </div>
+                  <p className="p-2 text-smallButton text-grey-04">Select space version</p>
                   {/* <div className="flex flex-1 justify-end">
                      @TODO add settings 
                     <button className="p-2 text-smallButton text-grey-04">Settings</button> 
