@@ -377,7 +377,13 @@ const listener =
           return deleteRelation(renderable.relationId, context.spaceId);
         }
 
-        return remove(renderable, context.spaceId);
+        return remove(
+          {
+            attributeId: renderable.attributeId,
+            entityId: context.entityId,
+          },
+          context.spaceId
+        );
       }
 
       // ALL OF THE BELOW EVENTS ARE LEGACY AND WILL GET REMOVED
