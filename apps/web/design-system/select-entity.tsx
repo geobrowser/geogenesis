@@ -1,8 +1,10 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import * as Popover from '@radix-ui/react-popover';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 import pluralize from 'pluralize';
 
+import * as React from 'react';
 import { useRef, useState } from 'react';
 
 import { useWriteOps } from '~/core/database/write';
@@ -260,3 +262,14 @@ export const SelectEntity = ({
     </div>
   );
 };
+
+export function SelectEntityAsPopover({ children, trigger }: { children: React.ReactNode; trigger: React.ReactNode }) {
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content>{children}</Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
