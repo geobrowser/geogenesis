@@ -110,13 +110,14 @@ importers:
       eslint-plugin-react-hooks: ^4.6.0
       ethers: ^5.0.0
       fake-indexeddb: ^4.0.2
-      framer-motion: ^10.15.2
+      framer-motion: ^11.3.28
       immer: ^9.0.16
       jotai: ^2.5.1
       jotai-scope: ^0.4.1
       js-confetti: ^0.11.0
       jsdom: ^20.0.0
       lokijs: ^1.5.12
+      motion-number: ^0.1.6
       next: ^14.2.5
       papaparse: ^5.3.2
       permissionless: 0.1.29
@@ -199,12 +200,13 @@ importers:
       diff: 5.1.0
       effect: 3.6.0
       ethers: 5.7.2
-      framer-motion: 10.15.2_biqbaboplfbrettd7655fr4n2y
+      framer-motion: 11.3.28_biqbaboplfbrettd7655fr4n2y
       immer: 9.0.16
       jotai: 2.5.1_o5ysialsahsznabqayk7pree4e
       jotai-scope: 0.4.1_jotai@2.5.1+react@18.2.0
       js-confetti: 0.11.0
       lokijs: 1.5.12
+      motion-number: 0.1.6_342njfaalftiiliitvkjkq2zpu
       next: 14.2.5_cnxlxqo7rotnclzc2lhjf3vjiq
       papaparse: 5.3.2
       permissionless: 0.1.29_mjf34erb2crt5rcp6gx2ztewnq_viem@2.13.8
@@ -1319,24 +1321,11 @@ packages:
       fast-check: 3.20.0
     dev: false
 
-  /@emotion/is-prop-valid/0.8.8:
-    resolution: {integrity: sha512-u5WtneEAr5IDG2Wv65yhunPSMLIpuKsbuOktRojfrEiEvRyC85LgPMZI63cr7NUqT8ZIGdSVg8ZKGxIug4lXcA==}
-    requiresBuild: true
-    dependencies:
-      '@emotion/memoize': 0.7.4
-    dev: false
-    optional: true
-
   /@emotion/is-prop-valid/1.3.0:
     resolution: {integrity: sha512-SHetuSLvJDzuNbOdtPVbq6yMMMlLoW5Q94uDqJZqy50gcmAjxFkVqmzqSGEFq9gT2iMuIeKV1PXVWmvUhuZLlQ==}
     dependencies:
       '@emotion/memoize': 0.9.0
     dev: false
-
-  /@emotion/memoize/0.7.4:
-    resolution: {integrity: sha512-Ja/Vfqe3HpuzRsG1oBtWTHk2PGZ7GR+2Vz5iYGelAw8dx32K0y7PjVuxK6z1nMpZOqAFsRUPCkK1YjJ56qJlgw==}
-    dev: false
-    optional: true
 
   /@emotion/memoize/0.9.0:
     resolution: {integrity: sha512-30FAj7/EoJ5mwVPOWhAyCX+FPfMDrVecJAM+Iw9NRoSl4BBAQeqj4cApHHUXOVvIPgLVDsCFoz/hGD+5QQD1GQ==}
@@ -3227,7 +3216,7 @@ packages:
       open: 8.4.0
       picocolors: 1.0.1
       tiny-glob: 0.2.9
-      tslib: 2.6.2
+      tslib: 2.6.3
     dev: true
 
   /@playwright/test/1.37.0:
@@ -10035,12 +10024,15 @@ packages:
     engines: {node: ^14.13.1 || >=16.0.0}
     dev: false
 
-  /framer-motion/10.15.2_biqbaboplfbrettd7655fr4n2y:
-    resolution: {integrity: sha512-z14GYH4WQXnuTgggwf0qyX0vo98PDE+dw21F7aLzUqEcrsmfLovy4jPiA82Cp/X0juWuEHte7rJGOjds9GAQFA==}
+  /framer-motion/11.3.28_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-dqhoawipEAjqdv32zbv72sOMJZjol7dROWn7t/FOq23WXJ40O4OUybgnO2ldnuS+3YquSn8xO/KKRavZ+TBVOQ==}
     peerDependencies:
+      '@emotion/is-prop-valid': '*'
       react: ^18.0.0
       react-dom: ^18.0.0
     peerDependenciesMeta:
+      '@emotion/is-prop-valid':
+        optional: true
       react:
         optional: true
       react-dom:
@@ -10048,9 +10040,7 @@ packages:
     dependencies:
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-      tslib: 2.6.1
-    optionalDependencies:
-      '@emotion/is-prop-valid': 0.8.8
+      tslib: 2.6.3
     dev: false
 
   /fresh/0.5.2:
@@ -11655,6 +11645,18 @@ packages:
       pathe: 1.1.2
       pkg-types: 1.1.3
       ufo: 1.5.4
+    dev: false
+
+  /motion-number/0.1.6_342njfaalftiiliitvkjkq2zpu:
+    resolution: {integrity: sha512-KR/BxaMMHaHciAxXAtp5EI+M0/KrXFWKdkUkKz0UE7WotLltpedF5YPnjsAP7bgdExR72TRUZCTtCzG9paER9w==}
+    peerDependencies:
+      framer-motion: ^11.3.19
+      react: ^18.0.0
+      react-dom: ^18.0.0
+    dependencies:
+      framer-motion: 11.3.28_biqbaboplfbrettd7655fr4n2y
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
     dev: false
 
   /motion/10.16.2:
@@ -14055,7 +14057,7 @@ packages:
     engines: {node: ^14.18.0 || >=16.0.0}
     dependencies:
       '@pkgr/utils': 2.3.1
-      tslib: 2.6.2
+      tslib: 2.6.3
     dev: true
 
   /system-architecture/0.1.0:
@@ -14321,10 +14323,10 @@ packages:
 
   /tslib/2.6.2:
     resolution: {integrity: sha512-AEYxH93jGFPn/a2iVAwW87VuUIkR1FVUKB77NwMF7nBTDkDrrT/Hpt/IrCJ0QXhW27jTBDcf5ZY7w6RiqTMw2Q==}
+    dev: false
 
   /tslib/2.6.3:
     resolution: {integrity: sha512-xNvxJEOUiWPGhUuUdQgAJPKOOJfGnIyKySOc09XkKsgdUV/3E2zvwZYdejjmRgPCgcym1juLH3226yA7sEFJKQ==}
-    dev: false
 
   /tsutils/3.21.0_typescript@5.5.3:
     resolution: {integrity: sha512-mHKK3iUXL+3UF6xL5k0PEhKRUBKPBCv/+RkEOpjRWxxx27KKRBmmA60A9pgOUvMi8GKhRMPEmjBRPzs2W7O1OA==}

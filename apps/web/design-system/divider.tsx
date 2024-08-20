@@ -12,7 +12,7 @@ export const Divider = ({ className = '', ...rest }: Props) => {
       className={cx(
         rest.type === 'horizontal' && 'justify-stretch',
         rest.type === 'vertical' && 'items-stretch',
-        'border-[0.5px] border-grey-02',
+        'border-[0.5px] border-divider',
         className
       )}
       {...rest}
