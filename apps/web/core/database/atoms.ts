@@ -69,7 +69,6 @@ export const createRelationsAtom = (initialRelations: Relation[]) => {
       .filter(r => r !== null);
 
     /***********************************************************************************************/
-
     // A relation might exist remotely but is deleted locally. We need to remove those from the
     // list of relations that we return.
     //

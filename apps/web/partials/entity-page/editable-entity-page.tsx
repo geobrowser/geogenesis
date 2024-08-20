@@ -193,6 +193,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
                     payload: {
                       fromEntityId: id,
                       toEntityId: result.id,
+                      toEntityName: result.name,
                       typeOfId: r.attributeId,
                       typeOfName: r.attributeName,
                     },

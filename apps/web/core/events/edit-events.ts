@@ -49,6 +49,7 @@ export type EditEvent =
       type: 'UPSERT_RELATION';
       payload: {
         toEntityId: string;
+        toEntityName: string | null;
         fromEntityId: string;
         typeOfId: string;
         typeOfName: string | null;
@@ -238,11 +239,12 @@ const listener =
       }
 
       case 'UPSERT_RELATION': {
-        const { toEntityId, fromEntityId, typeOfId, typeOfName } = event.payload;
+        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName } = event.payload;
 
         const relationTriples = Relations.createRelationshipTriples({
           fromId: fromEntityId,
           toId: toEntityId,
+          toIdName: toEntityName,
           typeOfId: typeOfId,
           typeOfName: typeOfName,
           spaceId: context.spaceId,
@@ -329,6 +331,7 @@ const listener =
           const relationTriples = Relations.createRelationshipTriples({
             fromId: context.entityId,
             toId: '',
+            toIdName: null,
             typeOfId: renderable.attributeId,
             typeOfName: renderable.attributeName,
             spaceId: context.spaceId,

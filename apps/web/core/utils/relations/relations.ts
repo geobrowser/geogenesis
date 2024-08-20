@@ -35,6 +35,7 @@ export function toValue(triple?: Triple): string | null {
 
 interface OpsToTriplesArgs {
   toId: string;
+  toIdName: string | null;
   fromId: string;
   spaceId: string;
   typeOfId: string;
@@ -42,7 +43,7 @@ interface OpsToTriplesArgs {
 }
 
 export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
-  const { fromId, toId, spaceId, typeOfId } = args;
+  const { fromId, toId, toIdName, spaceId, typeOfId } = args;
 
   const [typeOp, fromOp, toOp, indexOp, typeOfOp] = createRelationship({
     fromId,
@@ -83,7 +84,7 @@ export function createRelationshipTriples(args: OpsToTriplesArgs): Triple[] {
       entityName: null,
       value: {
         type: 'ENTITY',
-        name: null,
+        name: toIdName,
         value: toOp.triple.value.value,
       },
     },
