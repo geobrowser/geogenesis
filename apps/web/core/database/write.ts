@@ -8,7 +8,6 @@ import { store } from '../state/jotai-store';
 import { DeleteTripleAppOp, OmitStrict, SetTripleAppOp } from '../types';
 import { Relations } from '../utils/relations';
 import { Triples } from '../utils/triples';
-import { partition } from '../utils/utils';
 import { mergeEntityAsync } from './entities';
 import { StoredRelation, StoredTriple } from './types';
 
