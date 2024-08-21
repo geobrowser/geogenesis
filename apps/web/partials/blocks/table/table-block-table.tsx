@@ -22,7 +22,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
-import { Cell, Column, Row } from '~/core/types';
+import { Cell, Row, Schema } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { EntityCell } from '~/core/utils/entity-table/entity-table';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
@@ -42,7 +42,7 @@ import { editingColumnsAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedColumns: Column[]) => {
+const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedColumns: Schema[]) => {
   const columnSize = 784 / columns.length;
 
   return columns.map((column, i) =>
@@ -60,11 +60,12 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedC
               unpublishedColumns={unpublishedColumns}
               column={column}
               entityId={column.id}
-              spaceId={Entities.nameTriple(column.triples)?.space}
+              // @TODO(relations): Fix when we work on tables
+              spaceId={''}
             />
           </div>
         ) : (
-          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entities.name(column.triples)}</Text>
+          <Text variant="smallTitle">{isNameColumn ? 'Name' : column.name ?? column.id}</Text>
         );
       },
       size: columnSize ? (columnSize < 150 ? 150 : columnSize) : 150,
@@ -136,7 +137,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 interface Props {
   space: string;
   typeId: string;
-  columns: Column[];
+  columns: Schema[];
   rows: Row[];
   shownColumnIds: string[];
   view: DataBlockView;

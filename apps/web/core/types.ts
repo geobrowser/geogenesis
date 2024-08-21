@@ -1,5 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
+import { EntityId } from './io/schema';
+
 export type Dictionary<K extends string, T> = Partial<Record<K, T>>;
 export type OmitStrict<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
@@ -160,9 +162,10 @@ export type GeoType = {
 
 // A column in the table _is_ an Entity. It's a reference to a specific Attribute entity.
 // In this use case we don't really care about description, types, etc.
-export interface Column {
-  id: string;
-  triples: Triple[];
+export interface Schema {
+  id: EntityId;
+  name: string | null;
+  valueType: ValueTypeId;
 }
 
 export interface Cell {
@@ -201,7 +204,6 @@ export type TripleWithUrlValue = OmitStrict<Triple, 'value'> & { value: Value };
 export type SpaceId = string;
 export type SpaceTriples = Record<SpaceId, Triple[]>;
 
-export type EntityId = string;
 export type AttributeId = string;
 export type EntityActions = Record<EntityId, Record<AttributeId, Triple>>;
 

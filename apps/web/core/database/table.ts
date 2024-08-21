@@ -6,7 +6,7 @@ import { fetchColumns } from '../io/fetch-columns';
 import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
 import { queryClient } from '../query-client';
-import { Value } from '../types';
+import { Schema, Value } from '../types';
 import { EntityWithSchema, mergeEntity, mergeEntityAsync } from './entities';
 import { getRelations } from './relations';
 
@@ -97,7 +97,7 @@ export async function mergeTableEntities({ options, selectedTypeId }: MergeTable
   });
 }
 
-export async function mergeColumns(typeId: EntityId) {
+export async function mergeColumns(typeId: EntityId): Promise<Schema[]> {
   const cachedColumns = await queryClient.fetchQuery({
     queryKey: ['table-columns-for-merging', typeId],
     queryFn: () => fetchColumns({ typeIds: [typeId] }),
@@ -105,11 +105,12 @@ export async function mergeColumns(typeId: EntityId) {
 
   const localAttributesForSelectedType = getRelations({
     selector: r => r.typeOf.id === SYSTEM_IDS.ATTRIBUTES && r.fromEntity.id === typeId,
-  }).map(r => {
+  }).map((r): Schema => {
     return {
       id: r.toEntity.id,
       name: r.toEntity.name,
-      triples: r.toEntity.triples,
+      // @TODO: use the real value type
+      valueType: SYSTEM_IDS.TEXT,
     };
   });
 

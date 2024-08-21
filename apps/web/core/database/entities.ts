@@ -8,12 +8,12 @@ import { Entity, Relation } from '../io/dto/entities';
 import { EntityId, TypeId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
 import { queryClient } from '../query-client';
-import { Triple, TripleWithEntityValue } from '../types';
+import { Schema, Triple, TripleWithEntityValue } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
 import { getTriples, useTriples } from './triples';
 
-export type EntityWithSchema = Entity & { schema: { id: EntityId; name: string | null }[] };
+export type EntityWithSchema = Entity & { schema: Schema[] };
 
 export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relations: Relation[] }): EntityWithSchema {
   // If the caller passes in a set of data we use that for merging. If not,
@@ -173,7 +173,7 @@ export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> 
  *
  * We expect that attributes are only defined via relations, not triples.
  */
-export async function getSchemaFromTypeIds(typesIds: string[]) {
+export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]> {
   const schemaEntities = await Promise.all(
     typesIds.map(typeId => {
       // These are all cached in a network cache if they've been fetched before.
@@ -181,7 +181,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]) {
     })
   );
 
-  const attributes = schemaEntities.flatMap(e => {
+  const attributes = schemaEntities.flatMap((e): Schema[] => {
     const attributeRelations = e.relationsOut.filter(t => t.typeOf.id === SYSTEM_IDS.ATTRIBUTES);
 
     if (attributeRelations.length === 0) {
@@ -191,7 +191,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]) {
     return attributeRelations.map(a => ({
       id: a.toEntity.id,
       name: a.toEntity.name,
-      triples: a.toEntity.triples,
+      valueType: SYSTEM_IDS.TEXT,
     }));
   });
 
@@ -206,17 +206,17 @@ export async function getSchemaFromTypeIds(typesIds: string[]) {
       {
         id: EntityId(SYSTEM_IDS.NAME),
         name: 'Name',
-        triples: [],
+        valueType: SYSTEM_IDS.TEXT,
       },
       {
         id: EntityId(SYSTEM_IDS.DESCRIPTION),
         name: 'Description',
-        triples: [],
+        valueType: SYSTEM_IDS.TEXT,
       },
       {
         id: EntityId(SYSTEM_IDS.TYPES),
         name: 'Types',
-        triples: [],
+        valueType: SYSTEM_IDS.TEXT,
         // @TODO: Should specify that this attribute is a relation. We probably want
         // a want to distinguish  between the schema value type so we can render it
         // in the UI differently.

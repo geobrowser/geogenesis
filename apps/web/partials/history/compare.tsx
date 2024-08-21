@@ -17,7 +17,6 @@ import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
-import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
@@ -917,7 +916,7 @@ const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph) => {
     }
     return {
       ...f,
-      columnName: Entities.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: serverColumns.find(c => c.id === f.columnId)?.name ?? '',
     };
   });
 

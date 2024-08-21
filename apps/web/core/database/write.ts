@@ -94,7 +94,6 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
         id: EntityId(args.relationId),
         name: null,
         renderableType: 'DEFAULT',
-        triples: [],
         value: '',
       },
     },

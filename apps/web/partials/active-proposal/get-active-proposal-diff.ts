@@ -2,8 +2,8 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Subgraph } from '~/core/io';
 import { Proposal } from '~/core/io/dto/proposals';
+import { EntityId } from '~/core/io/schema';
 import { fetchProposal } from '~/core/io/subgraph';
-import { EntityId } from '~/core/types';
 import { Triple as TripleType } from '~/core/types';
 import { BlockValueType, Changeset } from '~/core/utils/change/change';
 import { Triples } from '~/core/utils/triples';

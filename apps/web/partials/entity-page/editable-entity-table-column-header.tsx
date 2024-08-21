@@ -1,28 +1,24 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-
 import * as React from 'react';
 import { memo, useState } from 'react';
 
-import { useTriples } from '~/core/database/triples';
 import { useEditEvents } from '~/core/events/edit-events';
-import { Column } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
+import { Schema } from '~/core/types';
 import { toRenderables } from '~/core/utils/to-renderables';
 
 import { getRenderableTypeFromValueType, getRenderableTypeSelectorOptions } from './get-renderable-type-options';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
 
 interface Props {
-  column: Column;
+  column: Schema;
   // This spaceId is the spaceId of the attribute, not the current space.
   // We need the attribute spaceId to get the actions for the attribute
   // (since actions are grouped by spaceId) to be able to keep the updated
   // name in sync.
   spaceId?: string;
   entityId: string;
-  unpublishedColumns: Column[];
+  unpublishedColumns: Schema[];
 }
 
 export const EditableEntityTableColumnHeader = memo(function EditableEntityTableColumn({
@@ -31,14 +27,13 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
   entityId,
   unpublishedColumns,
 }: Props) {
-  const localTriples = useTriples(
-    React.useMemo(() => {
-      return {
-        mergeWith: column.triples,
-        selector: t => t.entityId === column.id,
-      };
-    }, [column.triples, column.id])
-  );
+  // const localTriples = useTriples(
+  //   React.useMemo(() => {
+  //     return {
+  //       selector: t => t.entityId === column.id,
+  //     };
+  //   }, [column.id])
+  // );
 
   // const localCellTriples = useTriples(
   //   React.useMemo(() => {
@@ -50,24 +45,23 @@ export const EditableEntityTableColumnHeader = memo(function EditableEntityTable
 
   // There's some issue where this component is losing focus after changing the value of the input. For now we can work
   // around this issue by using local state.
-  const [localName, setLocalName] = useState(Entities.name(localTriples) ?? '');
+  const [localName, setLocalName] = useState(column.name ?? '');
 
   const send = useEditEvents({
     context: {
       entityId,
       spaceId: spaceId ?? '',
-      entityName: Entities.name(localTriples) ?? '',
+      entityName: column.name ?? '',
     },
   });
 
   // We hydrate the local editable store with the triples from the server. While it's hydrating
   // we can fallback to the server triples so we render real data and there's no layout shift.
-  const triples = localTriples.length === 0 ? column.triples : localTriples;
-  const valueType = Entities.valueTypeId(triples) ?? SYSTEM_IDS.TEXT;
+  const valueType = column.valueType;
   const isUnpublished = unpublishedColumns.some(unpublishedColumn => unpublishedColumn.id === column.id);
   const selectorOptions = getRenderableTypeSelectorOptions(
     toRenderables({
-      triples: triples,
+      triples: [],
       relations: [],
       spaceId: spaceId ?? '',
       entityId,

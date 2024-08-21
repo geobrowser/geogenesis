@@ -1,6 +1,5 @@
 import { Relation } from '../io/dto/entities';
-import { EntityId } from '../io/schema';
-import { RelationRenderableProperty, RenderableProperty, Triple, TripleRenderableProperty } from '../types';
+import { RelationRenderableProperty, RenderableProperty, Schema, Triple, TripleRenderableProperty } from '../types';
 
 interface ToRenderablesArgs {
   entityId: string;
@@ -8,7 +7,7 @@ interface ToRenderablesArgs {
   triples: Triple[];
   relations: Relation[];
   spaceId: string;
-  schema?: { id: EntityId; name: string | null }[];
+  schema?: Schema[];
   placeholderRenderables?: RenderableProperty[];
 }
 

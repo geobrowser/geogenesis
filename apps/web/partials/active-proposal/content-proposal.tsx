@@ -10,11 +10,11 @@ import * as React from 'react';
 import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
 import { Proposal } from '~/core/io/dto/proposals';
 import { fetchColumns } from '~/core/io/fetch-columns';
+import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import { AttributeId, EntityId, SpaceId } from '~/core/types';
+import { AttributeId, SpaceId } from '~/core/types';
 import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
-import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
 
 import { colors } from '~/design-system/theme/colors';
@@ -584,7 +584,7 @@ const getFilters = async (rawFilter: string) => {
     }
     return {
       ...f,
-      columnName: Entities.name(serverColumns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: serverColumns.find(c => c.id === f.columnId)?.name ?? '',
     };
   });
 
