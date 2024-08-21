@@ -87,7 +87,7 @@ export const FlowBar = () => {
                 onClick={() => setIsReviewOpen(true)}
                 className="h-full border-l border-divider px-4 text-ctaPrimary hover:bg-ctaTertiary focus:bg-ctaTertiary"
               >
-                Review {pluralize('edit', opsCount)}
+                Review edits
               </button>
             </motion.div>
           </div>
