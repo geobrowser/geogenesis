@@ -1,12 +1,14 @@
 'use client';
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
 import { useMemo } from 'react';
 
 import { ID } from '~/core/id';
 import {
   OmitStrict,
+  RenderableEntityType,
   RenderableProperty,
   TripleRenderableProperty,
   Triple as TripleType,
@@ -18,10 +20,8 @@ import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
-import { mergeEntityAsync } from '../database/entities';
-import { removeMany, useWriteOps } from '../database/write';
+import { StoreRelation, deleteRelation, upsertRelation, useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
-import { Relations } from '../utils/relations';
 
 export type EditEvent =
   | {
@@ -53,13 +53,11 @@ export type EditEvent =
         fromEntityId: string;
         typeOfId: string;
         typeOfName: string | null;
-      };
-    }
-  | {
-      type: 'CHANGE_RENDERABLE_TYPE';
-      payload: {
-        renderable: RenderableProperty;
-        type: RenderableProperty['type'];
+
+        // These properties can be optionally passed. e.g., we're inserting
+        // a block in between other blocks, or we'll creating an image relation.
+        renderableType?: RenderableEntityType;
+        index?: string;
       };
     }
 
@@ -239,18 +237,28 @@ const listener =
       }
 
       case 'UPSERT_RELATION': {
-        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName } = event.payload;
+        const { toEntityId, toEntityName, fromEntityId, typeOfId, typeOfName, renderableType, index } = event.payload;
 
-        const relationTriples = Relations.createRelationshipTriples({
-          fromId: fromEntityId,
-          toId: toEntityId,
-          toIdName: toEntityName,
-          typeOfId: typeOfId,
-          typeOfName: typeOfName,
-          spaceId: context.spaceId,
-        });
+        const newRelation: StoreRelation = {
+          index: index ?? INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+          typeOf: {
+            id: EntityId(typeOfId),
+            name: typeOfName,
+          },
+          fromEntity: {
+            id: EntityId(fromEntityId),
+            name: null,
+          },
+          toEntity: {
+            id: EntityId(toEntityId),
+            name: toEntityName,
+            renderableType: renderableType ?? 'DEFAULT',
+            triples: [],
+            value: toEntityId, // @TODO(relations): Add support for images
+          },
+        };
 
-        return upsertMany(relationTriples, context.spaceId);
+        return upsertRelation({ spaceId: context.spaceId, relation: newRelation });
       }
 
       case 'UPSERT_ATTRIBUTE': {
@@ -315,61 +323,6 @@ const listener =
         );
       }
 
-      case 'CHANGE_RENDERABLE_TYPE': {
-        const { renderable, type } = event.payload;
-
-        // If we're changing from a relation then we need to delete all of the triples
-        // on the relation.
-        if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
-          deleteRelation(renderable.relationId, context.spaceId);
-        }
-
-        if (type === 'RELATION') {
-          // Delete the previous triple and create a new relation entity
-          remove(renderable, context.spaceId);
-
-          const relationTriples = Relations.createRelationshipTriples({
-            fromId: context.entityId,
-            toId: '',
-            toIdName: null,
-            typeOfId: renderable.attributeId,
-            typeOfName: renderable.attributeName,
-            spaceId: context.spaceId,
-          });
-
-          return upsertMany(relationTriples, context.spaceId);
-        }
-
-        // @TODO(relations): Add support for IMAGE
-        if (type === 'IMAGE') {
-          return;
-        }
-
-        if (type === 'ENTITY') {
-          return upsert(
-            {
-              ...renderable,
-              value: {
-                type,
-                value: '',
-                name: null,
-              },
-            },
-            context.spaceId
-          );
-        }
-
-        return upsert(
-          {
-            ...renderable,
-            value: {
-              type,
-              value: '',
-            },
-          },
-          context.spaceId
-        );
-      }
       case 'DELETE_RENDERABLE': {
         const { renderable } = event.payload;
 
@@ -791,9 +744,4 @@ export function useEditEvents(config: OmitStrict<ListenerConfig, 'api'>) {
   }, [config, remove, upsert, upsertMany]);
 
   return send;
-}
-
-export async function deleteRelation(relationId: string, spaceId: string) {
-  const { triples } = await mergeEntityAsync(EntityId(relationId));
-  removeMany(triples, spaceId);
 }

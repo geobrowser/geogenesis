@@ -1,18 +1,93 @@
 import { atom } from 'jotai';
 
 import { getAppTripleId } from '../id/create-id';
+import { Relation } from '../io/dto/entities';
+import { EntityId } from '../io/schema';
 import { store } from '../state/jotai-store';
 import { DeleteTripleAppOp, OmitStrict, SetTripleAppOp } from '../types';
+import { Relations } from '../utils/relations';
 import { Triples } from '../utils/triples';
+import { partition } from '../utils/utils';
+import { mergeEntityAsync } from './entities';
 import { StoredTriple } from './types';
-
-export const localOpsAtom = atom<StoredTriple[]>([]);
 
 type WriteStoreOp = OmitStrict<SetTripleAppOp, 'id'>;
 type DeleteStoreOp = OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
 
-// @TODO: Write about why we have FOUR representations for an op (store op, app op, substream op, ipfs op)
 export type StoreOp = WriteStoreOp | DeleteStoreOp;
+export type StoreRelation = OmitStrict<Relation, 'id'>;
+
+export const localOpsAtom = atom<StoredTriple[]>([]);
+export const localRelationsAtom = atom<(Relation & { isDeleted?: boolean })[]>([]);
+
+type UpsertRelationArgs = {
+  type: 'SET_RELATION';
+  relation: StoreRelation;
+  spaceId: string;
+};
+
+type DeleteRelationArgs = {
+  type: 'DELETE_RELATION';
+  relationId: EntityId;
+  spaceId: string;
+};
+
+export const upsertRelation = (args: OmitStrict<UpsertRelationArgs, 'type'>) => {
+  writeRelation({ ...args, type: 'SET_RELATION' });
+};
+
+export const removeRelation = (args: OmitStrict<DeleteRelationArgs, 'type'>) => {
+  writeRelation({ ...args, type: 'DELETE_RELATION' });
+};
+
+const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
+  if (args.type === 'SET_RELATION') {
+    // Unchanged triples aren't included in the existing set of triples
+    // being upserted
+    // @TODO: Which ops do we write here?
+    const triples = Relations.createRelationshipTriples({
+      fromId: args.relation.fromEntity.id,
+      toId: args.relation.toEntity.id,
+      typeOfId: args.relation.typeOf.id,
+      spaceId: args.spaceId,
+      toIdName: args.relation.toEntity.name,
+      typeOfName: args.relation.typeOf.name,
+    });
+
+    const relationId = EntityId(triples[0].entityId);
+
+    const unchangedRelations = store.get(localRelationsAtom).filter(r => {
+      return r.id !== relationId;
+    });
+
+    store.set(localRelationsAtom, [
+      ...unchangedRelations,
+      {
+        ...args.relation,
+        id: relationId,
+      },
+    ]);
+
+    writeMany(triples.map(t => ({ op: { ...t, type: 'SET_TRIPLE' }, spaceId: args.spaceId })));
+    return;
+  }
+
+  const [nonDeletedRelations, deletedRelations] = partition(
+    store.get(localRelationsAtom),
+    r => r.id !== args.relationId
+  );
+
+  store.set(localRelationsAtom, [...nonDeletedRelations, ...deletedRelations.map(r => ({ ...r, isDeleted: true }))]);
+  // @TODO: Delete all triples for this relationship
+  // This is async but we aren't awaiting it so we'll see what happens I guess. Might want to
+  // use effect or something to monitor this and de-color it.
+  deleteRelation(args.relationId, args.spaceId);
+};
+
+export async function deleteRelation(relationId: string, spaceId: string) {
+  const { triples } = await mergeEntityAsync(EntityId(relationId));
+  removeMany(triples, spaceId);
+}
 
 export const upsert = (op: OmitStrict<WriteStoreOp, 'type'>, spaceId: string) => {
   writeMany([
