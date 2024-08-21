@@ -20,7 +20,7 @@ import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
-import { StoreRelation, deleteRelation, upsertRelation, useWriteOps } from '../database/write';
+import { StoreRelation, removeRelation, upsertRelation, useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
 
 export type EditEvent =
@@ -327,7 +327,7 @@ const listener =
         const { renderable } = event.payload;
 
         if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
-          return deleteRelation(renderable.relationId, context.spaceId);
+          return removeRelation({ relationId: EntityId(renderable.relationId), spaceId: context.spaceId });
         }
 
         return remove(

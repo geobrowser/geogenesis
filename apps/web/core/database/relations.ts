@@ -14,7 +14,7 @@ interface UseRelationsArgs {
 const makeLocalActionsAtomWithSelector = ({ selector, mergeWith = [] }: UseRelationsArgs) => {
   return atom(get => {
     return get(createRelationsAtom(mergeWith)).filter(r => {
-      return selector ? selector(r) : true;
+      return !r.isDeleted && (selector ? selector(r) : true);
     });
   });
 };

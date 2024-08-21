@@ -1,3 +1,4 @@
+import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { atom } from 'jotai';
 
 import { getAppTripleId } from '../id/create-id';
@@ -9,7 +10,7 @@ import { Relations } from '../utils/relations';
 import { Triples } from '../utils/triples';
 import { partition } from '../utils/utils';
 import { mergeEntityAsync } from './entities';
-import { StoredTriple } from './types';
+import { StoredRelation, StoredTriple } from './types';
 
 type WriteStoreOp = OmitStrict<SetTripleAppOp, 'id'>;
 type DeleteStoreOp = OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
@@ -18,7 +19,7 @@ export type StoreOp = WriteStoreOp | DeleteStoreOp;
 export type StoreRelation = OmitStrict<Relation, 'id'>;
 
 export const localOpsAtom = atom<StoredTriple[]>([]);
-export const localRelationsAtom = atom<(Relation & { isDeleted?: boolean })[]>([]);
+export const localRelationsAtom = atom<StoredRelation[]>([]);
 
 type UpsertRelationArgs = {
   type: 'SET_RELATION';
@@ -72,19 +73,40 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
     return;
   }
 
-  const [nonDeletedRelations, deletedRelations] = partition(
-    store.get(localRelationsAtom),
-    r => r.id !== args.relationId
-  );
+  const nonDeletedRelations = store.get(localRelationsAtom).filter(r => r.id !== args.relationId);
+  console.log('deletedRelations', { nonDeletedRelations, id: args.relationId });
 
-  store.set(localRelationsAtom, [...nonDeletedRelations, ...deletedRelations.map(r => ({ ...r, isDeleted: true }))]);
+  store.set(localRelationsAtom, [
+    ...nonDeletedRelations,
+    // We can set a dummy relation here since we only care about the deleted state
+    {
+      id: args.relationId,
+      index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+      isDeleted: true,
+      typeOf: {
+        id: EntityId(''),
+        name: null,
+      },
+      fromEntity: {
+        id: EntityId(args.relationId),
+        name: null,
+      },
+      toEntity: {
+        id: EntityId(args.relationId),
+        name: null,
+        renderableType: 'DEFAULT',
+        triples: [],
+        value: '',
+      },
+    },
+  ]);
   // @TODO: Delete all triples for this relationship
   // This is async but we aren't awaiting it so we'll see what happens I guess. Might want to
   // use effect or something to monitor this and de-color it.
   deleteRelation(args.relationId, args.spaceId);
 };
 
-export async function deleteRelation(relationId: string, spaceId: string) {
+async function deleteRelation(relationId: string, spaceId: string) {
   const { triples } = await mergeEntityAsync(EntityId(relationId));
   removeMany(triples, spaceId);
 }
