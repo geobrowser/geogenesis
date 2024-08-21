@@ -2,7 +2,6 @@
 
 import { A, D, pipe } from '@mobily/ts-belt';
 import { AnimatePresence, motion } from 'framer-motion';
-import MotionNumber from 'motion-number';
 import pluralize from 'pluralize';
 
 import * as React from 'react';
@@ -44,11 +43,6 @@ export const FlowBar = () => {
     keys => new Set(keys).size
   );
 
-  // Memoizing these to avoid re-running animations when the counts don't change.
-  const memoizedOpsCount = React.useMemo(() => opsCount.toString(), [opsCount]);
-  const memoizedEntitiesCount = React.useMemo(() => entitiesCount.toString(), [entitiesCount]);
-  const memoizedSpacesCount = React.useMemo(() => spacesCount.toString(), [spacesCount]);
-
   // Don't show the flow bar if there are no actions, if the user is not in edit mode, if there is a toast,
   // or if the status bar is rendering in place.
   const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
@@ -65,22 +59,19 @@ export const FlowBar = () => {
               exit="hidden"
               transition={transition}
               custom={!isReviewOpen}
-              className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white tabular-nums shadow-lg"
+              className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg"
             >
               <div className="inline-flex h-full items-center justify-center">
-                <p className="inline-flex items-center gap-1 px-3">
-                  <MotionNumber transition={{ duration: 0.35 }} value={memoizedOpsCount} />{' '}
-                  <span>{pluralize('edit', opsCount)}</span>
+                <p className="inline-flex items-center px-3">
+                  <span>{pluralize('edit', opsCount, true)}</span>
                 </p>
                 <Divider type="vertical" className="inline-block h-4 w-px" />
-                <p className="inline-flex items-center gap-1 px-3">
-                  <MotionNumber transition={{ duration: 0.35 }} value={memoizedEntitiesCount} />{' '}
-                  <span>{pluralize('entity', entitiesCount)}</span>
+                <p className="inline-flex items-center px-3">
+                  <span>{pluralize('entity', entitiesCount, true)}</span>
                 </p>
                 <Divider type="vertical" className="inline-block h-4 w-px" />
-                <p className="inline-flex items-center gap-1 px-3">
-                  <MotionNumber transition={{ duration: 0.35 }} value={memoizedSpacesCount} />{' '}
-                  <span>{pluralize('space', spacesCount)}</span>
+                <p className="inline-flex items-center px-3">
+                  <span>{pluralize('space', spacesCount, true)}</span>
                 </p>
               </div>
               <button
