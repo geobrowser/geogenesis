@@ -25,7 +25,7 @@ export function ReadableEntityPage({ triples: serverTriples, id }: Props) {
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
       {Object.entries(renderables).map(([attributeId, renderable]) => {
-        const isRelation = renderable[0].type === 'RELATION';
+        const isRelation = renderable[0].type === 'RELATION' || renderable[0].type === 'IMAGE';
 
         if (isRelation) {
           return <RelationsGroup key={attributeId} relations={renderable as RelationRenderableProperty[]} />;
@@ -99,9 +99,8 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
             const relationValue = r.value;
 
             if (renderableType === 'IMAGE') {
-              return (
-                <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue ?? '')} />
-              );
+              const imagePath = getImagePath(relationValue ?? '');
+              return <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={imagePath} />;
             }
 
             return (
@@ -110,7 +109,7 @@ function RelationsGroup({ relations }: { relations: RelationRenderableProperty[]
                   entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
                   relationHref={NavUtils.toEntity(spaceId, relationId)}
                 >
-                  {relationName ?? relationId}
+                  {relationName ?? relationValue}
                 </LinkableRelationChip>
               </div>
             );

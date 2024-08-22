@@ -70,7 +70,7 @@ export function toRenderables({
 
   const relationsToRenderable = relations.map((r): RelationRenderableProperty => {
     return {
-      type: 'RELATION',
+      type: r.toEntity.renderableType,
       entityId: r.id,
       entityName: null,
       attributeId: r.typeOf.id,

@@ -252,7 +252,7 @@ const listener =
           toEntity: {
             id: EntityId(toEntityId),
             name: toEntityName,
-            renderableType: renderableType ?? 'DEFAULT',
+            renderableType: renderableType ?? 'RELATION',
             value: toEntityId, // @TODO(relations): Add support for images
           },
         };

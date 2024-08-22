@@ -73,7 +73,6 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
   }
 
   const nonDeletedRelations = store.get(localRelationsAtom).filter(r => r.id !== args.relationId);
-  console.log('deletedRelations', { nonDeletedRelations, id: args.relationId });
 
   store.set(localRelationsAtom, [
     ...nonDeletedRelations,
@@ -93,7 +92,7 @@ const writeRelation = (args: UpsertRelationArgs | DeleteRelationArgs) => {
       toEntity: {
         id: EntityId(args.relationId),
         name: null,
-        renderableType: 'DEFAULT',
+        renderableType: 'RELATION',
         value: '',
       },
     },

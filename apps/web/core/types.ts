@@ -67,7 +67,7 @@ export type Triple = {
   isDeleted?: boolean;
 };
 
-export type RenderableEntityType = 'IMAGE' | 'DEFAULT' | 'BLOCK'; // specific block types?
+export type RenderableEntityType = 'IMAGE' | 'RELATION';
 
 // Renderable fields are a special data model to represent us rendering both
 // triples and relations in the same way. This is used across tables and entity
