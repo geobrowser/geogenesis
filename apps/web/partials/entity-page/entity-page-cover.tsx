@@ -15,10 +15,10 @@ type EntityPageCoverProps = {
 };
 
 export const EntityPageCover = ({ avatarUrl: serverAvatarUrl, coverUrl: serverCoverUrl }: EntityPageCoverProps) => {
-  const { triples } = useEntityPageStore();
+  const { relations } = useEntityPageStore();
 
-  const avatarUrl = Entities.avatar(triples) ?? serverAvatarUrl;
-  const coverUrl = Entities.cover(triples) ?? serverCoverUrl;
+  const avatarUrl = Entities.avatar(relations) ?? serverAvatarUrl;
+  const coverUrl = Entities.cover(relations) ?? serverCoverUrl;
 
   if (!coverUrl && !avatarUrl) return null;
 

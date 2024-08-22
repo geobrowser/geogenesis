@@ -1,24 +1,23 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Column, ValueTypeId } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
+import { Schema, ValueTypeId } from '~/core/types';
 
-export function columnName(columnId: string, columns: Column[]): string {
+export function columnName(columnId: string, columns: Schema[]): string {
   const column = columns.find(c => c.id === columnId);
 
   if (!column) {
     return '';
   }
 
-  return Entities.name(column.triples) || '';
+  return column.name ?? '';
 }
 
-export function columnValueType(columnId: string, columns: Column[]): ValueTypeId {
+export function columnValueType(columnId: string, columns: Schema[]): ValueTypeId {
   const column = columns.find(c => c.id === columnId);
 
   if (!column) {
     return SYSTEM_IDS.TEXT;
   }
 
-  return Entities.valueTypeId(column.triples) ?? SYSTEM_IDS.TEXT;
+  return column.valueType ?? SYSTEM_IDS.TEXT;
 }

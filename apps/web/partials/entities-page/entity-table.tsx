@@ -19,7 +19,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEditable } from '~/core/state/editable-store';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store/entity-table-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
-import { Cell, Column, Row } from '~/core/types';
+import { Cell, Row, Schema } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
@@ -36,7 +36,7 @@ import { EntityTableCell } from './entity-table-cell';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedColumns: Column[]) => {
+const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedColumns: Schema[]) => {
   const columnSize = 1200 / columns.length;
 
   return columns.map((column, i) =>
@@ -54,11 +54,12 @@ const formatColumns = (columns: Column[] = [], isEditMode: boolean, unpublishedC
               unpublishedColumns={unpublishedColumns}
               column={column}
               entityId={column.id}
-              spaceId={Entities.nameTriple(column.triples)?.space}
+              // @TODO: fix later
+              spaceId={''}
             />
           </div>
         ) : (
-          <Text variant="smallTitle">{isNameColumn ? 'Name' : Entities.name(column.triples)}</Text>
+          <Text variant="smallTitle">{isNameColumn ? 'Name' : column.name ?? column.id}</Text>
         );
       },
       size: columnSize ? (columnSize < 300 ? 300 : columnSize) : 300,
@@ -133,7 +134,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  columns: Column[];
+  columns: Schema[];
   rows: Row[];
 }
 

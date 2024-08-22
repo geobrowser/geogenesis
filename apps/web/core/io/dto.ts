@@ -35,13 +35,13 @@ export function TripleDto(triple: SubstreamTriple) {
 }
 
 export function SpaceMetadataDto(spaceId: string, metadata: SubstreamEntity | undefined | null): SpaceConfigEntity {
-  const spaceConfigTriples = (metadata?.triples.nodes ?? []).map(TripleDto);
+  const entity = metadata ? EntityDto(metadata) : null;
 
-  const spaceConfigWithImage: SpaceConfigEntity = metadata
+  const spaceConfigWithImage: SpaceConfigEntity = entity
     ? {
+        ...entity,
         spaceId: spaceId,
-        image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
-        ...EntityDto(metadata),
+        image: Entities.avatar(entity.relationsOut) ?? Entities.cover(entity.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
       }
     : {
         id: EntityId(''),

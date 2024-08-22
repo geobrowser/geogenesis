@@ -2,8 +2,8 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { AppOp, OmitStrict, Profile, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import { TripleDto } from '../dto';
 import { ProposalStatus, ProposalType, SubstreamEntity, SubstreamProposal, SubstreamVote } from '../schema';
+import { EntityDto } from './entities';
 
 export type VoteWithProfile = SubstreamVote & { voter: Profile };
 
@@ -47,12 +47,12 @@ export function ProposalDto(
   };
 
   const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
-  const spaceConfigTriples = (spaceConfig?.triples.nodes ?? []).map(TripleDto);
+  const entity = spaceConfig ? EntityDto(spaceConfig) : null;
 
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
     name: spaceConfig?.name ?? null,
-    image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+    image: Entities.avatar(entity?.relationsOut) ?? Entities.cover(entity?.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
   };
 
   return {
@@ -109,12 +109,12 @@ export function ProposalWithoutVotersDto(
   };
 
   const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
-  const spaceConfigTriples = (spaceConfig?.triples.nodes ?? []).map(TripleDto);
+  const entity = spaceConfig ? EntityDto(spaceConfig) : null;
 
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
     name: spaceConfig?.name ?? null,
-    image: Entities.avatar(spaceConfigTriples) ?? Entities.cover(spaceConfigTriples) ?? PLACEHOLDER_SPACE_IMAGE,
+    image: Entities.avatar(entity?.relationsOut) ?? Entities.cover(entity?.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
   };
 
   return {

@@ -30,7 +30,6 @@ export type Relation = {
   toEntity: {
     id: EntityId;
     name: string | null;
-    triples: Triple[];
 
     // The "Renderable Type" for an entity provides a hint to the consumer
     // of the entity to _what_ the entity is so they know how they should
@@ -69,19 +68,23 @@ export function EntityDto(entity: SubstreamEntity): Entity {
 
       const renderableType = getRenderableEntityType(toEntityTypes);
 
+      // @TODO(relations): Until we fix the migrations we'll manually check for cover and avatar
+      // relations and set the renderable typ to image.
+      const isCoverOrAvatar =
+        t.typeOf.id === EntityId(SYSTEM_IDS.COVER_ATTRIBUTE) || t.typeOf.id === EntityId(SYSTEM_IDS.AVATAR_ATTRIBUTE);
+
       return {
         ...t,
         toEntity: {
           id: t.toEntity.id,
           name: t.toEntity.name,
-          triples: toEntityTriples,
 
           // The "Renderable Type" for an entity provides a hint to the consumer
           // of the entity to _what_ the entity is so they know how they should
           // render it depending on their use case.
-          renderableType: renderableType,
+          renderableType: isCoverOrAvatar ? 'IMAGE' : renderableType,
           // Right now we only support images and entity ids as the value of the To entity.
-          value: renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : t.toEntity.id,
+          value: isCoverOrAvatar || renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : t.toEntity.id,
         },
       };
     }),
@@ -94,5 +97,5 @@ function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
     return 'IMAGE';
   }
 
-  return 'DEFAULT';
+  return 'RELATION';
 }

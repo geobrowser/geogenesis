@@ -2,7 +2,6 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { TableBlockFilter, useTableBlock } from '~/core/state/table-block-store';
 import { ValueType as TripleValueType } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
 import { valueTypes } from '~/core/value-types';
 
 import { SmallButton } from '~/design-system/button';
@@ -33,12 +32,10 @@ export function TableBlockEditableFilters() {
     },
     ...columns
       .map(c => {
-        const maybeValueType = Entities.valueTypeId(c.triples);
-
         return {
           columnId: c.id,
-          columnName: Entities.name(c.triples) ?? '',
-          valueType: maybeValueType ? valueTypes[maybeValueType] : 'TEXT',
+          columnName: c.name ?? '',
+          valueType: valueTypes[c.valueType],
           value: '',
           valueName: null,
         };

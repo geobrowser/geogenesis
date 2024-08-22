@@ -172,7 +172,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
 
       if (person) {
         if (types.includes(TypeId(SYSTEM_IDS.PERSON_TYPE))) {
-          const avatar = Entities.avatar(person?.triples);
+          const avatar = Entities.avatar(person?.relationsOut);
           setAvatar(avatar);
           setName(Entities.name(person?.triples ?? []));
           setPerson(person);

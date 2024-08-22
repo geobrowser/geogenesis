@@ -42,7 +42,7 @@ export function NavbarSpaceMetadata() {
         // the images explicitly from the triples, and render null if it doesn't exist.
         //
         // spaceConfig.image will have a placeholder if the images don't exist.
-        img: Entities.avatar(spaceConfig.triples) ?? Entities.cover(spaceConfig.triples),
+        img: Entities.avatar(spaceConfig.relationsOut) ?? Entities.cover(spaceConfig.relationsOut),
         href: NavUtils.toSpace(space.id),
       };
     },

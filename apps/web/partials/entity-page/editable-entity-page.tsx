@@ -83,7 +83,7 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
                     }
                   }}
                 />
-                {renderableType === 'RELATION' ? (
+                {renderableType === 'RELATION' || renderableType === 'IMAGE' ? (
                   <RelationsGroup key={attributeId} relations={renderables as RelationRenderableProperty[]} />
                 ) : (
                   <TriplesGroup key={attributeId} triples={renderables as TripleRenderableProperty[]} />

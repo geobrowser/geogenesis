@@ -35,12 +35,11 @@ interface Props {
 export const RenderableTypeDropdown = ({ value, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
-
   const Icon = icons[value];
 
   return (
     <DropdownPrimitive.Root open={open} onOpenChange={setOpen}>
-      <DropdownPrimitive.Trigger className="inline-flex flex-1 items-center justify-between">
+      <DropdownPrimitive.Trigger asChild>
         <SquareButton icon={<Icon />} isActive={open} />
       </DropdownPrimitive.Trigger>
       <AnimatePresence>

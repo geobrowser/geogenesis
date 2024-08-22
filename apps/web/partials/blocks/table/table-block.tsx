@@ -11,7 +11,6 @@ import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { IconButton } from '~/design-system/button';
@@ -59,7 +58,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
   const allColumns = columns.map(column => ({
     id: column.id,
-    name: Entities.name(column.triples),
+    name: column.name,
   }));
 
   const shownColumnRelations = [
@@ -100,7 +99,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
 
     return {
       ...f,
-      columnName: Entities.name(columns.find(c => c.id === f.columnId)?.triples ?? []) ?? '',
+      columnName: columns.find(c => c.id === f.columnId)?.name ?? '',
     };
   });
 

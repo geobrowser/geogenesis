@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { Entity } from '~/core/io/dto/entities';
-import { Column, Triple as ITriple, Row } from '~/core/types';
+import { Triple as ITriple, Row, Schema } from '~/core/types';
 
 import { Entities } from '../entity';
 
@@ -14,24 +14,24 @@ export type EntityCell = {
   image?: string | null;
 };
 
-export function fromColumnsAndRows(entities: Entity[], columns: Column[]) {
+export function fromColumnsAndRows(entities: Entity[], columns: Schema[]) {
   /* Finally, we can build our initialRows */
-  const aggregatedRows = entities.map(({ triples, id }) => {
+  const aggregatedRows = entities.map(({ name, triples, id, relationsOut, description }) => {
     return columns.reduce((acc, column) => {
+      // @TODO: Might be relations for attribute id as well
       const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
-
       const cellTriples = triplesForAttribute.length ? triplesForAttribute : [];
 
       const cell: EntityCell = {
-        name: Entities.name(triples),
+        name,
         columnId: column.id,
         entityId: id,
         triples: cellTriples,
       };
 
       if (column.id === SYSTEM_IDS.NAME) {
-        cell.description = Entities.description(triples) || null;
-        cell.image = Entities.cover(triples) || Entities.avatar(triples) || null;
+        cell.description = description;
+        cell.image = Entities.cover(relationsOut) || Entities.avatar(relationsOut) || null;
       }
 
       return {

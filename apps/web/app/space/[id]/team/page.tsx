@@ -130,7 +130,7 @@ const getTeamMembers = async (spaceId: string) => {
         //   teamMembers[teamMemberIndex].avatar = avatar;
         // }
       } else {
-        const avatar = Entities.avatar(entity.triples);
+        const avatar = Entities.avatar(entity.relationsOut);
 
         if (avatar) {
           teamMembers[teamMemberIndex].avatar = avatar;
@@ -143,7 +143,7 @@ const getTeamMembers = async (spaceId: string) => {
         teamMembers[teamMemberIndex].name = name;
       }
 
-      const avatar = Entities.avatar(entity.triples);
+      const avatar = Entities.avatar(entity.relationsOut);
 
       if (avatar) {
         teamMembers[teamMemberIndex].avatar = avatar;
