@@ -170,7 +170,7 @@ type NoticesContainerProps = {
   children?: React.ReactNode;
 };
 
-export const NoticesContainer = ({ children }: NoticesContainerProps) => {
+const NoticesContainer = ({ children }: NoticesContainerProps) => {
   return <ResizableContainer className="grid grid-cols-3 gap-8 pb-4">{children}</ResizableContainer>;
 };
 
@@ -184,25 +184,25 @@ type NoticeProps = {
   format?: 'normal' | 'wide';
 };
 
-export const Notice = ({ id, color, media, title, description, action, format = 'normal' }: NoticeProps) => {
-  const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
-
-  const classNames = cva('group relative flex w-full justify-between rounded-lg p-4', {
-    variants: {
-      color: {
-        purple: 'bg-gradient-purple',
-        blue: 'bg-gradient-blue',
-        yellow: 'bg-gradient-yellow',
-        grey: 'bg-gradient-grey',
-        green: 'bg-gradient-green',
-        orange: 'bg-gradient-orange',
-      },
-      format: {
-        normal: 'col-span-1 aspect-square flex-col',
-        wide: 'col-span-3 flex-row gap-6 pr-10',
-      },
+const noticeClassNames = cva('group relative flex w-full justify-between rounded-lg p-4', {
+  variants: {
+    color: {
+      purple: 'bg-gradient-purple',
+      blue: 'bg-gradient-blue',
+      yellow: 'bg-gradient-yellow',
+      grey: 'bg-gradient-grey',
+      green: 'bg-gradient-green',
+      orange: 'bg-gradient-orange',
     },
-  });
+    format: {
+      normal: 'col-span-1 aspect-square flex-col',
+      wide: 'col-span-3 flex-row gap-6 pr-10',
+    },
+  },
+});
+
+const Notice = ({ id, color, media, title, description, action, format = 'normal' }: NoticeProps) => {
+  const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
 
   const handleDismissNotice = useCallback(() => {
     const newDismissedNotices = [...dismissedNotices, id];
@@ -212,7 +212,7 @@ export const Notice = ({ id, color, media, title, description, action, format = 
   if (dismissedNotices.includes(id)) return null;
 
   return (
-    <div id={id} className={classNames({ color, format })}>
+    <div id={id} className={noticeClassNames({ color, format })}>
       <div className="relative -top-1.5 -mx-4 flex-shrink-0">{media}</div>
       <div>
         <div className="text-balance text-smallTitle">{title}</div>
@@ -233,7 +233,7 @@ export const Notice = ({ id, color, media, title, description, action, format = 
 
 type SimpleButtonProps = LinkProps & { children: React.ReactNode };
 
-export const SimpleButton = ({ href = '', ...rest }: SimpleButtonProps) => {
+const SimpleButton = ({ href = '', ...rest }: SimpleButtonProps) => {
   return <Link href={href} className="rounded border border-text px-2 py-1 text-smallButton text-text" {...rest} />;
 };
 
