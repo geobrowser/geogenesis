@@ -216,7 +216,7 @@ const Notice = ({ id, color, media, title, description, action, format = 'normal
       <div className="relative -top-1.5 -mx-4 flex-shrink-0">{media}</div>
       <div>
         <div className="text-balance text-smallTitle">{title}</div>
-        {description && <div className="mt-4 text-caption">{description}</div>}
+        {description && <div className="mt-4 text-metadata">{description}</div>}
         {action && <div className="mt-4 flex gap-2">{action}</div>}
       </div>
       <div className="absolute right-0 top-0 p-3">
