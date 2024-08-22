@@ -13,7 +13,7 @@ import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
 
-import { Button } from '~/design-system/button';
+import { Divider } from '~/design-system/divider';
 import { Close } from '~/design-system/icons/close';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { Warning } from '~/design-system/icons/warning';
@@ -49,9 +49,9 @@ export const FlowBar = () => {
 
   return (
     <AnimatePresence>
-      <div className="relative z-[1000]">
+      <div className="z-[1000] w-[355px]">
         {!hideFlowbar && (
-          <div className="pointer-events-none fixed bottom-0 left-0 right-0 flex w-full justify-center p-4">
+          <div className="pointer-events-none fixed bottom-0 left-0 right-0 m-5 flex w-full justify-center text-button">
             <motion.div
               variants={flowVariants}
               initial="hidden"
@@ -59,18 +59,27 @@ export const FlowBar = () => {
               exit="hidden"
               transition={transition}
               custom={!isReviewOpen}
-              className="pointer-events-auto inline-flex items-center gap-4 rounded-lg bg-white p-2 pl-3 shadow-card"
+              className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg"
             >
-              <div className="inline-flex items-center font-medium">
-                <span>{pluralize('edit', opsCount, true)}</span>
-                <hr className="mx-2 inline-block h-4 w-px border-none bg-grey-03" />
-                <span>
-                  {pluralize('entity', entitiesCount, true)} in {pluralize('space', spacesCount, true)}
-                </span>
+              <div className="inline-flex h-full items-center justify-center">
+                <p className="inline-flex items-center px-3">
+                  <span>{pluralize('edit', opsCount, true)}</span>
+                </p>
+                <Divider type="vertical" className="inline-block h-4 w-px" />
+                <p className="inline-flex items-center px-3">
+                  <span>{pluralize('entity', entitiesCount, true)}</span>
+                </p>
+                <Divider type="vertical" className="inline-block h-4 w-px" />
+                <p className="inline-flex items-center px-3">
+                  <span>{pluralize('space', spacesCount, true)}</span>
+                </p>
               </div>
-              <Button onClick={() => setIsReviewOpen(true)} variant="primary">
-                Review {pluralize('edit', opsCount, false)}
-              </Button>
+              <button
+                onClick={() => setIsReviewOpen(true)}
+                className="h-full border-l border-divider px-4 text-ctaPrimary hover:bg-ctaTertiary focus:bg-ctaTertiary"
+              >
+                Review edits
+              </button>
             </motion.div>
           </div>
         )}
