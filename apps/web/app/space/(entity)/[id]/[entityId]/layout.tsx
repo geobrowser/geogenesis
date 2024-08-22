@@ -156,8 +156,8 @@ async function getProfilePage(entityId: string): Promise<
 
   return {
     ...person,
-    avatarUrl: Entities.avatar(person.triples),
-    coverUrl: Entities.cover(person.triples),
+    avatarUrl: Entities.avatar(person.relationsOut),
+    coverUrl: Entities.cover(person.relationsOut),
 
     relationsOut: [],
     blockRelations: person.relationsOut,

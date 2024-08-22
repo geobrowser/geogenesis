@@ -48,7 +48,9 @@ export async function mergeResultsAsync(options: FetchResultsOptions): Promise<S
           ...mergedEntity,
           spaceId: space.id,
           image:
-            Entities.avatar(mergedEntity.triples) ?? Entities.cover(mergedEntity.triples) ?? PLACEHOLDER_SPACE_IMAGE,
+            Entities.avatar(mergedEntity.relationsOut) ??
+            Entities.cover(mergedEntity.relationsOut) ??
+            PLACEHOLDER_SPACE_IMAGE,
         };
       }),
     spaces => groupBy(spaces, s => s.spaceId)

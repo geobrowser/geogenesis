@@ -244,7 +244,7 @@ export default async function Layout({ children, params }: Props) {
     fetchSubspacesBySpaceId(params.id),
     fetchInFlightSubspaceProposalsForSpaceId(params.id),
   ]);
-  const coverUrl = Entities.cover(props.triples);
+  const coverUrl = Entities.cover(props.relationsOut);
 
   const typeNames = props.space.spaceConfig?.types?.flatMap(t => (t.name ? [t.name] : [])) ?? [];
   const tabs = await buildTabsForSpacePage(props.space.spaceConfig?.types ?? [], params);

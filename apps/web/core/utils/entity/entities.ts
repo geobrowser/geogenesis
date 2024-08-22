@@ -1,6 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Entity } from '~/core/io/dto/entities';
+import { Entity, Relation } from '~/core/io/dto/entities';
+import { EntityId } from '~/core/io/schema';
 import { Triple as ITriple, ValueTypeId } from '~/core/types';
 
 /**
@@ -54,21 +55,19 @@ export function valueTypeId(triples: ITriple[]): ValueTypeId | null {
 }
 
 /**
- * This function traverses through all the triples associated with an entity and attempts to find the avatar URL of the entity.
+ * This function traverses through all the relations associated with an entity and attempts to find the avatar URL of the entity.
  */
-export function avatar(triples: ITriple[] | undefined): string | null {
-  if (!triples) return null;
-  // @TODO(relations): This should be a relation pointing to the image entity
-  return null;
+export function avatar(relations?: Relation[]): string | null {
+  if (!relations) return null;
+  return relations.find(r => r.typeOf.id === EntityId(SYSTEM_IDS.AVATAR_ATTRIBUTE))?.toEntity.value ?? null;
 }
 
 /**
- * This function traverses through all the triples associated with an entity and attempts to find the cover URL of the entity.
+ * This function traverses through all the relations associated with an entity and attempts to find the cover URL of the entity.
  */
-export function cover(triples: ITriple[] | undefined): string | null {
-  if (!triples) return null;
-  // @TODO(relations): This should be a relation pointing to the image entity
-  return null;
+export function cover(relations?: Relation[]): string | null {
+  if (!relations) return null;
+  return relations.find(r => r.typeOf.id === EntityId(SYSTEM_IDS.COVER_ATTRIBUTE))?.toEntity.value ?? null;
 }
 
 /**

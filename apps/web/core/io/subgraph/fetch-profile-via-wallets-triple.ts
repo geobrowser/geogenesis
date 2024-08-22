@@ -37,8 +37,8 @@ export async function fetchProfileViaWalletsTripleAddress(address: string): Prom
   return {
     id: profile.id,
     name: profile.name,
-    avatarUrl: Entities.avatar(profile.triples),
-    coverUrl: Entities.cover(profile.triples),
+    avatarUrl: Entities.avatar(profile.relationsOut),
+    coverUrl: Entities.cover(profile.relationsOut),
     profileLink: space ? NavUtils.toEntity(space, profile.id) : null,
     address: address as `0x${string}`,
   };

@@ -40,8 +40,8 @@ export default async function DefaultEntityPage({
 
   const props = await getData(params.id, params.entityId);
 
-  const avatarUrl = Entities.avatar(props.triples) ?? props.serverAvatarUrl;
-  const coverUrl = Entities.cover(props.triples) ?? props.serverCoverUrl;
+  const avatarUrl = Entities.avatar(props.relationsOut) ?? props.serverAvatarUrl;
+  const coverUrl = Entities.cover(props.relationsOut) ?? props.serverCoverUrl;
   const types = props.types;
 
   return (
@@ -105,8 +105,8 @@ const getData = async (spaceId: string, entityId: string) => {
     }
   }
 
-  const serverAvatarUrl = Entities.avatar(entity?.triples);
-  const serverCoverUrl = Entities.cover(entity?.triples);
+  const serverAvatarUrl = Entities.avatar(entity?.relationsOut);
+  const serverCoverUrl = Entities.cover(entity?.relationsOut);
 
   const blockIds = entity?.relationsOut
     .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))

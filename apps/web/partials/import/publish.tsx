@@ -47,7 +47,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
   const setIsPublishOpen = useSetAtom(publishAtom);
 
   const spaceName = Entities.name(space?.spaceConfig?.triples ?? []);
-  const spaceAvatar = Entities.avatar(space?.spaceConfig?.triples ?? []);
+  const spaceAvatar = Entities.avatar(space?.spaceConfig?.relationsOut);
 
   const [proposalName, setProposalName] = useState('');
   const isReadyToPublish = proposalName.length > 3;
