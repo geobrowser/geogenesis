@@ -303,20 +303,6 @@ module.exports = {
             fontWeight: '500',
           },
         ],
-        caption: [
-          '1rem',
-          {
-            lineHeight: '1.2rem',
-            fontWeight: '400',
-          },
-        ],
-        captionMedium: [
-          '1rem',
-          {
-            lineHeight: '1.2rem',
-            fontWeight: '500',
-          },
-        ],
       },
       zIndex: {
         60: '60',
