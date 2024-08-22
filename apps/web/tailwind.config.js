@@ -257,7 +257,7 @@ module.exports = {
           {
             lineHeight: '0.8125rem',
             fontWeight: '400',
-            letterSpacing: "-0.5px"
+            letterSpacing: '-0.5px',
           },
         ],
         metadataMedium: [
@@ -265,7 +265,7 @@ module.exports = {
           {
             lineHeight: '0.8125rem',
             fontWeight: '500',
-            letterSpacing: "-0.5px"
+            letterSpacing: '-0.5px',
           },
         ],
         breadcrumb: [
@@ -300,6 +300,20 @@ module.exports = {
           '0.875rem',
           {
             lineHeight: '1rem',
+            fontWeight: '500',
+          },
+        ],
+        caption: [
+          '1rem',
+          {
+            lineHeight: '1.2rem',
+            fontWeight: '400',
+          },
+        ],
+        captionMedium: [
+          '1rem',
+          {
+            lineHeight: '1.2rem',
             fontWeight: '500',
           },
         ],

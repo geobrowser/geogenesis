@@ -68,18 +68,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function SpacePage({ params }: Props) {
   const spaceId = params.id;
   const props = await getData(spaceId);
+  const entityId = props.id;
   const spaceType = getSpaceType(props.spaceTypes);
 
   return (
     <>
-      {spaceType && <SpaceNotices spaceType={spaceType} spaceId={spaceId} />}
+      {spaceType && <SpaceNotices spaceType={spaceType} spaceId={spaceId} entityId={entityId} />}
       <React.Suspense fallback={<SubspacesSkeleton />}>
         <SubspacesContainer spaceId={params.id} />
       </React.Suspense>
       <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
       <ToggleEntityPage {...props} />
       <Spacer height={40} />
-      {/* 
+      {/*
         Some SEO parsers fail to parse meta tags if there's no fallback in a suspense boundary. We don't want to
         show any referenced by loading states but do want to stream it in
       */}

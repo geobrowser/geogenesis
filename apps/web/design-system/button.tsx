@@ -7,7 +7,15 @@ import { forwardRef } from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'done' | 'success' | 'error';
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'tertiary'
+  | 'ghost'
+  | 'transparent'
+  | 'done'
+  | 'success'
+  | 'error';
 
 type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   variant?: ButtonVariant;
@@ -29,6 +37,8 @@ const buttonClassNames = (className = '') =>
           tertiary: 'border-white bg-text text-white shadow-none',
           ghost:
             'border-transparent bg-white !text-grey-04 shadow-none hover:border-text hover:bg-bg hover:!text-text hover:shadow-button focus:border-text focus:shadow-inner-text',
+          transparent:
+            'border-text bg-transparent !text-text shadow-none hover:border-text hover:!text-text focus:border-text focus:shadow-inner-text',
           success: 'border-white bg-green text-white shadow-none',
           error: 'border-white bg-red-01 text-white shadow-none',
           done: 'border-green bg-green text-text',
