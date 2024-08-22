@@ -40,6 +40,13 @@ export type EditEvent =
       };
     }
   | {
+      type: 'CHANGE_RENDERABLE_TYPE';
+      payload: {
+        renderable: RenderableProperty;
+        type: RenderableProperty['type'];
+      };
+    }
+  | {
       type: 'DELETE_RENDERABLE';
       payload: {
         renderable: RenderableProperty;
@@ -253,7 +260,7 @@ const listener =
             id: EntityId(toEntityId),
             name: toEntityName,
             renderableType: renderableType ?? 'RELATION',
-            value: toEntityId, // @TODO(relations): Add support for images
+            value: toEntityId, // @TODO(relations): Add support for writing images
           },
         };
 
@@ -316,6 +323,71 @@ const listener =
             value: {
               type: renderable.type,
               value: renderable.value,
+            },
+          },
+          context.spaceId
+        );
+      }
+
+      case 'CHANGE_RENDERABLE_TYPE': {
+        const { renderable, type } = event.payload;
+
+        // If we're changing from a relation then we need to delete all of the triples
+        // on the relation.
+        if (renderable.type === 'RELATION' || renderable.type === 'IMAGE') {
+          return removeRelation({ relationId: EntityId(renderable.relationId), spaceId: context.spaceId });
+        }
+
+        if (type === 'RELATION') {
+          // Delete the previous triple and create a new relation entity
+          remove(renderable, context.spaceId);
+
+          const newRelation: StoreRelation = {
+            index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+            typeOf: {
+              id: EntityId(renderable.attributeId),
+              name: renderable.attributeName,
+            },
+            fromEntity: {
+              id: EntityId(renderable.entityId),
+              name: null,
+            },
+            toEntity: {
+              id: EntityId(''),
+              name: null,
+              renderableType: 'RELATION',
+              value: '',
+            },
+          };
+
+          return upsertRelation({ spaceId: context.spaceId, relation: newRelation });
+        }
+
+        // @TODO(relations): Add support for IMAGE
+        if (type === 'IMAGE') {
+          return;
+        }
+
+        if (type === 'ENTITY') {
+          return upsert(
+            {
+              ...renderable,
+              value: {
+                type,
+                value: '',
+                name: null,
+              },
+            },
+            context.spaceId
+          );
+        }
+
+        return upsert(
+          {
+            ...renderable,
+            value: {
+              type,
+              value: '',
             },
           },
           context.spaceId
