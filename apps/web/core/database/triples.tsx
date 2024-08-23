@@ -12,13 +12,14 @@ import { localOpsAtom } from './write';
 interface UseTriplesArgs {
   mergeWith?: ITriple[];
   selector?: (t: StoredTriple) => boolean;
+  includeDeleted?: boolean;
 }
 
-const makeLocalActionsAtomWithSelector = ({ selector, mergeWith = [] }: UseTriplesArgs) => {
+const makeLocalActionsAtomWithSelector = ({ selector, includeDeleted = false, mergeWith = [] }: UseTriplesArgs) => {
   return atom(get => {
     const mergedTriples = Triples.merge(get(localOpsAtom), mergeWith);
     return mergedTriples.filter(t => {
-      return isNotDeletedSelector(t) && (selector ? selector(t) : true);
+      return (selector ? selector(t) : true) && (includeDeleted ? true : isNotDeletedSelector(t));
     });
   });
 };
