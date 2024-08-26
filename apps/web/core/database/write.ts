@@ -13,9 +13,11 @@ import { StoredRelation, StoredTriple } from './types';
 
 type WriteStoreOp = OmitStrict<SetTripleAppOp, 'id'>;
 type DeleteStoreOp = OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
+export type UpsertOp = OmitStrict<WriteStoreOp, 'type'>;
+export type RemoveOp = OmitStrict<DeleteStoreOp, 'type'>;
 
-export type StoreOp = WriteStoreOp | DeleteStoreOp;
-export type StoreRelation = OmitStrict<Relation, 'id'>;
+type StoreOp = WriteStoreOp | DeleteStoreOp;
+type StoreRelation = OmitStrict<Relation, 'id'>;
 
 export const localOpsAtom = atom<StoredTriple[]>([]);
 export const localRelationsAtom = atom<StoredRelation[]>([]);
@@ -108,7 +110,7 @@ async function deleteRelation(relationId: string, spaceId: string) {
   removeMany(triples, spaceId);
 }
 
-export const upsert = (op: OmitStrict<WriteStoreOp, 'type'>, spaceId: string) => {
+export const upsert = (op: UpsertOp, spaceId: string) => {
   writeMany([
     {
       op: {
@@ -120,11 +122,11 @@ export const upsert = (op: OmitStrict<WriteStoreOp, 'type'>, spaceId: string) =>
   ]);
 };
 
-export const upsertMany = (ops: OmitStrict<WriteStoreOp, 'type'>[], spaceId: string) => {
+export const upsertMany = (ops: UpsertOp[], spaceId: string) => {
   writeMany(ops.map(op => ({ op: { ...op, type: 'SET_TRIPLE' }, spaceId })));
 };
 
-export const remove = (op: OmitStrict<DeleteStoreOp, 'type'>, spaceId: string) => {
+export const remove = (op: RemoveOp, spaceId: string) => {
   // We don't delete from our local store, but instead just set a tombstone
   // on the row. This is so we can still publish the changes as an op
   writeMany([
@@ -138,7 +140,7 @@ export const remove = (op: OmitStrict<DeleteStoreOp, 'type'>, spaceId: string) =
   ]);
 };
 
-export const removeMany = (ops: OmitStrict<DeleteStoreOp, 'type'>[], spaceId: string) => {
+export const removeMany = (ops: RemoveOp[], spaceId: string) => {
   // We don't delete from our local store, but instead just set a tombstone
   // on the row. This is so we can still publish the changes as an op
   writeMany(ops.map(op => ({ op: { ...op, type: 'DELETE_TRIPLE' }, spaceId })));

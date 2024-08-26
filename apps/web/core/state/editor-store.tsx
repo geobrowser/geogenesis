@@ -14,7 +14,7 @@ import { htmlToPlainText } from '~/partials/editor/editor-utils';
 
 import { useRelations } from '../database/relations';
 import { getTriples } from '../database/triples';
-import { DB } from '../database/write';
+import { DB, UpsertOp } from '../database/write';
 import { ID } from '../id';
 import { Entity, Relation } from '../io/dto/entities';
 import { EntityId, TypeId } from '../io/schema';
@@ -30,11 +30,6 @@ interface RelationWithBlock {
     type: RenderableEntityType;
     value: string;
   };
-}
-
-interface TiptapNode {
-  id: string;
-  type: 'paragraph' | 'bulletList' | 'tableNode' | 'image';
 }
 
 function relationToRelationWithBlock(r: Relation): RelationWithBlock {
@@ -59,6 +54,19 @@ function sortByIndex(a: RelationWithBlock, z: RelationWithBlock) {
   }
   return 0;
 }
+
+const createBlockNameOp = (node: JSONContent): UpsertOp => {
+  const blockEntityId = getNodeId(node);
+  const entityName = getNodeName(node);
+
+  return {
+    entityId: blockEntityId,
+    entityName: entityName,
+    attributeId: SYSTEM_IDS.NAME,
+    attributeName: 'Name',
+    value: { type: 'TEXT' as const, value: entityName },
+  };
+};
 
 /**
  * The editor store manages state for the entity page blocks editor, primarily
@@ -163,7 +171,6 @@ export function useEditorStoreV2() {
 
   // Helper function to create or update the block IDs on an entity
   // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
-  // @TODO(relations): fix
   const upsertBlocksRelations = React.useCallback(
     async (newBlockIds: string[]) => {
       const prevBlockIds = blockIds;
@@ -173,10 +180,6 @@ export function useEditorStoreV2() {
       const addedBlockIds = A.difference(newBlockIds, prevBlockIds);
 
       if (newBlockIds.length > 0) {
-        /**
-         * @TODO: Rethink the best way to structure state of the edit in the Geo state
-         * vs. the Editor state.
-         */
         // We store the new collection items being created so we can check if the new
         // ordering for a block is dependent on other blocks being created at the same time.
         //
@@ -195,9 +198,9 @@ export function useEditorStoreV2() {
           const beforeBlockIndex = newBlockIds[position - 1] as string | undefined;
           const afterBlockIndex = newBlockIds[position + 1] as string | undefined;
 
-          // Check both the existing collection items and any that are created as part of this
-          // same update tick. This is necessary as right now we don't update the Geo state
-          // until the user blurs the editor. See the comment earlier in this function.
+          // Check both the existing blocks and any that are created as part of this update
+          // tick. This is necessary as right now we don't update the Geo state until the
+          // user blurs the editor. See the comment earlier in this function.
           const beforeCollectionItemIndex =
             blocks.find(c => c.block.id === beforeBlockIndex)?.index ??
             newBlocks.find(c => c.id === beforeBlockIndex)?.index;
@@ -368,9 +371,6 @@ export function useEditorStoreV2() {
       for (const node of addedBlocks) {
         const blockEntityId = getNodeId(node);
 
-        // @TODO: Block name
-        const entityName = getNodeName(node);
-
         const blockType = (() => {
           switch (node.type) {
             case 'tableNode':
@@ -435,6 +435,8 @@ export function useEditorStoreV2() {
               // @TODO: Do we need this with our custom parser?
               markdown = markdown.replaceAll('\n<!-- -->\n', '');
             }
+
+            DB.upsert(createBlockNameOp(node), spaceId);
 
             DB.upsert(
               {
