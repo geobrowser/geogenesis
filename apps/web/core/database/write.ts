@@ -16,8 +16,8 @@ type DeleteStoreOp = OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'ent
 export type UpsertOp = OmitStrict<WriteStoreOp, 'type'>;
 export type RemoveOp = OmitStrict<DeleteStoreOp, 'type'>;
 
-type StoreOp = WriteStoreOp | DeleteStoreOp;
-type StoreRelation = OmitStrict<Relation, 'id'>;
+export type StoreOp = WriteStoreOp | DeleteStoreOp;
+export type StoreRelation = OmitStrict<Relation, 'id'>;
 
 export const localOpsAtom = atom<StoredTriple[]>([]);
 export const localRelationsAtom = atom<StoredRelation[]>([]);

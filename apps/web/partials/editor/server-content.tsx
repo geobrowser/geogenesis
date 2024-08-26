@@ -1,3 +1,5 @@
+import { Content } from '~/core/state/editor/types';
+
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
@@ -16,45 +18,6 @@ export const ServerContent = ({ content }: ServerContentProps) => {
       <TrailingBreak />
     </div>
   );
-};
-
-type Content =
-  | {
-      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem' | 'tableNode';
-      content: Content[];
-      attrs: {
-        id: string;
-      };
-    }
-  | {
-      type: 'heading';
-      content: Content[];
-      attrs: {
-        id: string;
-        level: 1 | 2 | 3 | 4 | 5 | 6;
-      };
-    }
-  | {
-      type: 'text';
-      text: string;
-      content: Content[];
-      marks: Mark[];
-      attrs: {
-        id: string;
-      };
-    }
-  | {
-      type: 'image';
-      content: Content[];
-      attrs: {
-        id: string;
-        src: string;
-      };
-    };
-
-type Mark = {
-  type: 'bold' | 'italic';
-  text: string;
 };
 
 type BlockProps = {

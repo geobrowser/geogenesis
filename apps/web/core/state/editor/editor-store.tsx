@@ -4,24 +4,24 @@ import { SYSTEM_IDS, reorderCollectionItem } from '@geogenesis/sdk';
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { A } from '@mobily/ts-belt';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
-import { JSONContent, generateHTML, generateJSON } from '@tiptap/react';
-import pluralize from 'pluralize';
+import { JSONContent, generateJSON } from '@tiptap/react';
 
 import * as React from 'react';
 
-import { tiptapExtensions } from '~/partials/editor/editor';
-import { htmlToPlainText } from '~/partials/editor/editor-utils';
+import { tiptapExtensions } from '~/partials/editor/extensions';
 
 import { useRelations } from '../../database/relations';
 import { getTriples } from '../../database/triples';
-import { DB, UpsertOp } from '../../database/write';
+import { DB } from '../../database/write';
 import { ID } from '../../id';
 import { Entity, Relation } from '../../io/dto/entities';
 import { EntityId, TypeId } from '../../io/schema';
 import { RenderableEntityType } from '../../types';
 import { Values } from '../../utils/value';
 import { useEditorInstance } from './editor-provider';
-import { htmlToMarkdown, markdownToHtml } from './parser';
+import { markdownToHtml } from './parser';
+import { getTextBlockOps } from './text-block';
+import { getNodeId } from './utils';
 
 interface RelationWithBlock {
   relationId: EntityId;
@@ -56,19 +56,6 @@ function sortByIndex(a: RelationWithBlock, z: RelationWithBlock) {
   }
   return 0;
 }
-
-const createBlockNameOp = (node: JSONContent): UpsertOp => {
-  const blockEntityId = getNodeId(node);
-  const entityName = getNodeName(node);
-
-  return {
-    entityId: blockEntityId,
-    entityName: entityName,
-    attributeId: SYSTEM_IDS.NAME,
-    attributeName: 'Name',
-    value: { type: 'TEXT' as const, value: entityName },
-  };
-};
 
 interface UpsertBlocksRelationsArgs {
   newBlockIds: string[];
@@ -419,9 +406,6 @@ export function useEditorStore() {
 
       upsertBlocksRelations({ newBlockIds, spaceId, blocks, entityPageId: entityId });
 
-      // @TODO: Update each block if they were previously created
-      // @TODO: Handle each type here instead of calling every function and returning early
-      // if the type is invalid
       for (const node of populatedContent) {
         switch (node.type) {
           case 'tableNode':
@@ -429,32 +413,8 @@ export function useEditorStore() {
             break;
           case 'bulletList':
           case 'paragraph': {
-            // upsertBlockNameTriple(node);
-            const nodeHTML = textNodeHTML(node);
-            const entityName = getNodeName(node);
-            let markdown = htmlToMarkdown(nodeHTML);
-
-            //  Overrides Showdown's unwanted "consecutive list" behavior found in
-            //  `src/subParsers/makeMarkdown/list.js`
-            if (node.type === 'bulletList') {
-              // @TODO: Do we need this with our custom parser?
-              markdown = markdown.replaceAll('\n<!-- -->\n', '');
-            }
-
-            DB.upsertMany(
-              [
-                createBlockNameOp(node),
-                {
-                  entityId: getNodeId(node),
-                  entityName: entityName,
-                  attributeId: SYSTEM_IDS.MARKDOWN_CONTENT,
-                  attributeName: 'Markdown Content',
-                  value: { type: 'TEXT', value: markdown },
-                },
-              ],
-              spaceId
-            );
-
+            const ops = getTextBlockOps(node);
+            DB.upsertMany(ops, spaceId);
             break;
           }
 
@@ -520,24 +480,3 @@ function getBlockValueForBlockType(
 
   return null;
 }
-
-/* Helper function for transforming a single node of TipTap's JSONContent structure into HTML */
-const textNodeHTML = (node: JSONContent): string => {
-  return generateHTML({ type: 'doc', content: [node] }, tiptapExtensions);
-};
-
-/* Helper function for getting the human-readable, plain-text name of a node */
-const getNodeName = (node: JSONContent): string => {
-  const isTableNode = node.type === 'tableNode';
-
-  if (isTableNode) {
-    return `${pluralize(node.attrs?.typeName, 2, false)}`;
-  }
-
-  const nodeHTML = textNodeHTML(node);
-  const nodeNameLength = 20;
-  return htmlToPlainText(nodeHTML).slice(0, nodeNameLength);
-};
-
-// Returns the id of the first paragraph even if nested inside of a list
-const getNodeId = (node: JSONContent): string => node.attrs?.id ?? node?.content?.[0]?.content?.[0]?.attrs?.id;
