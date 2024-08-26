@@ -15,7 +15,7 @@ import { LayoutGroup } from 'framer-motion';
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useEditorStore } from '~/core/state/editor-store';
+import { useEditorStoreV2 } from '~/core/state/editor-store';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -91,7 +91,7 @@ export const Editor = React.memo(function Editor({
   placeholder = null,
   spacePage = false,
 }: Props) {
-  const { editorJson, blockIds, updateEditorBlocks } = useEditorStore();
+  const { upsertEditorState, editorJson, blockIds } = useEditorStoreV2();
   const editable = useUserIsEditing(spaceId);
   const [hasUpdatedEditorJson, setHasUpdatedEditorJson] = React.useState(false);
 
@@ -110,10 +110,10 @@ export const Editor = React.memo(function Editor({
     (params: { editor: TiptapEditor }) => {
       // Responsible for converting all editor blocks to triples
       // Fires after the IdExtension's onBlur event which sets the "id" attribute on all nodes
-      updateEditorBlocks(params.editor.getJSON);
+      upsertEditorState(params.editor.getJSON());
       setHasUpdatedEditorJson(true);
     },
-    [updateEditorBlocks]
+    [upsertEditorState]
   );
 
   // Running onBlur directly through the hook executes it twice for some reason.

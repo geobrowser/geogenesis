@@ -247,3 +247,12 @@ export function useWriteOps() {
     restore,
   };
 }
+
+export const DB = {
+  upsert,
+  upsertMany,
+  remove,
+  removeMany,
+  upsertRelation,
+  removeRelation,
+};
