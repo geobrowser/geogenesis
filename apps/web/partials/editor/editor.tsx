@@ -15,7 +15,7 @@ import { LayoutGroup } from 'framer-motion';
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useEditorStoreV2 } from '~/core/state/editor-store';
+import { useEditorStore } from '~/core/state/editor/editor-store';
 
 import { Spacer } from '~/design-system/spacer';
 
@@ -91,7 +91,7 @@ export const Editor = React.memo(function Editor({
   placeholder = null,
   spacePage = false,
 }: Props) {
-  const { upsertEditorState, editorJson, blockIds } = useEditorStoreV2();
+  const { upsertEditorState, editorJson, blockIds } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const [hasUpdatedEditorJson, setHasUpdatedEditorJson] = React.useState(false);
 
@@ -127,33 +127,6 @@ export const Editor = React.memo(function Editor({
       editor?.off('blur', onBlur as unknown as any);
     };
   }, [onBlur, editor]);
-
-  React.useEffect(() => {
-    // We only update the editor with editorJson up until the first time we have made local edits.
-    // We don't want to re-render the editor every time content has changed.
-    //
-    // This is so we ensure we have the most up-to-date content from the local store when first
-    // mounting the editor, but after that we don't re-render the editor at all since state
-    // is already correctly represented internally by tiptap.
-    //
-    // Normally this isn't a problem in Tiptap, but since we have custom react block nodes we
-    // need to more granularly control when we re-render the editor to avoid janky re-rendering UX.
-    if (!hasUpdatedEditorJson) {
-      // The timeout is needed to workaround a react error in tiptap
-      // https://github.com/ueberdosis/tiptap/issues/3764#issuecomment-1546629928
-      setTimeout(() => {
-        editor?.commands.setContent(editorJson);
-      });
-    }
-
-    // Commands is not memoized correctly by tiptap, so we need to disable the rule, else the
-    // effect will run infinitely.
-    //
-    // We shouldn't re-render the editor every time the editorJson changes as that would result
-    // in a janky UX. We let the editor handle block ordering state while each block handles it's
-    // own state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorJson, hasUpdatedEditorJson]);
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {

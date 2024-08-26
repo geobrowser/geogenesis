@@ -6,7 +6,7 @@ import * as React from 'react';
 import { Subgraph } from '~/core/io';
 import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
-import { EditorProvider } from '~/core/state/editor-store';
+import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { MoveEntityProvider } from '~/core/state/move-entity-store';
 import { Entities } from '~/core/utils/entity';
