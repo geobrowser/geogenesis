@@ -1,7 +1,6 @@
 'use client';
 
 import { SYSTEM_IDS, reorderCollectionItem } from '@geogenesis/sdk';
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { A } from '@mobily/ts-belt';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';

@@ -2,22 +2,13 @@ import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { atom } from 'jotai';
 
 import { getAppTripleId } from '../id/create-id';
-import { Relation } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { store } from '../state/jotai-store';
-import { DeleteTripleAppOp, OmitStrict, SetTripleAppOp } from '../types';
+import { OmitStrict } from '../types';
 import { Relations } from '../utils/relations';
 import { Triples } from '../utils/triples';
 import { mergeEntityAsync } from './entities';
-import { StoredRelation, StoredTriple } from './types';
-
-type WriteStoreOp = OmitStrict<SetTripleAppOp, 'id'>;
-type DeleteStoreOp = OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
-export type UpsertOp = OmitStrict<WriteStoreOp, 'type'>;
-export type RemoveOp = OmitStrict<DeleteStoreOp, 'type'>;
-
-export type StoreOp = WriteStoreOp | DeleteStoreOp;
-export type StoreRelation = OmitStrict<Relation, 'id'>;
+import { RemoveOp, StoreOp, StoreRelation, StoredRelation, StoredTriple, UpsertOp } from './types';
 
 export const localOpsAtom = atom<StoredTriple[]>([]);
 export const localRelationsAtom = atom<StoredRelation[]>([]);

@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { JSONContent } from '@tiptap/core';
 
-import { UpsertOp } from '~/core/database/write';
+import { UpsertOp } from '~/core/database/types';
 
 import { htmlToMarkdown } from './parser';
 import { getNodeId, getNodeName, getTextNodeHtml } from './utils';

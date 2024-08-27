@@ -1,11 +1,13 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
-import { StoreRelation } from '~/core/database/write';
+import { StoreRelation } from '~/core/database/types';
 import { ID } from '~/core/id';
+import { Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
 
 import { getInitialBlockTypeRelation } from './block-types';
+import { Source } from './types';
 
 // Set a source by id as the source of the data block
 export function setSource() {
@@ -22,7 +24,7 @@ export function somethingWithFilters() {
 }
 
 /**
- * Returns the ops and relations to create a data entity. Data entities by default
+ * Returns the relations to create a data entity. Data entities by default
  * have a type of Data, source set to be a collection, and a name.
  */
 export function getInitialDataEntityRelations(
@@ -90,4 +92,51 @@ export function getInitialDataEntityRelations(
       },
     },
   ];
+}
+
+/**
+ * Reads the relations on the data block to find the Data Source Type
+ * and data source value and maps it to our local representation of the
+ * Source.
+ *
+ * Valid data source types are:
+ *  - Collection
+ *  - Spaces
+ *  - All of Geo
+ *
+ * Depending on the source type we either need to later read from a single
+ * collection, or generate a query.
+ *
+ * @param dataEntityRelations - The relations coming from the data entity
+ * @returns The source of the data block with the source type and entity id(s)
+ * for the type of source.
+ */
+export function getSource(dataEntityRelations: Relation[]): Source {
+  const sourceType = dataEntityRelations.find(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE)?.toEntity
+    .id;
+
+  if (sourceType === SYSTEM_IDS.COLLECTION_DATA_SOURCE) {
+    return {
+      type: 'collection',
+      value: dataEntityRelations.find(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE)?.toEntity.id ?? '',
+    };
+  }
+
+  if (sourceType === SYSTEM_IDS.QUERY_DATA_SOURCE) {
+    return {
+      type: 'spaces',
+      value: dataEntityRelations.filter(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE).map(r => r.toEntity.id),
+    };
+  }
+
+  if (sourceType === SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE) {
+    return {
+      type: 'geo',
+    };
+  }
+
+  return {
+    type: 'collection',
+    value: '',
+  };
 }

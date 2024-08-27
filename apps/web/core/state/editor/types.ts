@@ -1,3 +1,5 @@
+import { EntityId } from '~/core/io/schema';
+
 export type Content =
   | {
       type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem' | 'tableNode';
@@ -36,3 +38,20 @@ type Mark = {
   type: 'bold' | 'italic';
   text: string;
 };
+
+export type CollectionSource = {
+  type: 'collection';
+  value: string;
+};
+
+// @TODO add support for `collections` with multiple `collectionId`s
+export type MultipleSources = {
+  type: 'spaces'; // | 'collections';
+  value: Array<EntityId>;
+};
+
+export type AllOfGeoSource = {
+  type: 'geo'; // we don't care about the value since we aren't querying based on a specific space or collection
+};
+
+export type Source = CollectionSource | MultipleSources | AllOfGeoSource;

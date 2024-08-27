@@ -12,6 +12,8 @@ import { EntityId } from '../io/schema';
 import { GeoType, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { Values } from '../utils/value';
+import { getSource } from './editor/data-entity';
+import { Source } from './editor/types';
 
 export const PAGE_SIZE = 9;
 
@@ -21,21 +23,6 @@ export interface TableBlockFilter {
   value: string;
   valueName: string | null;
 }
-
-type SpaceId = string;
-
-type SingleSource = {
-  type: 'collection' | 'geo';
-  value: string;
-};
-
-// @TODO add support for `collections` with multiple `collectionId`s
-type MultipleSources = {
-  type: 'spaces';
-  value: Array<SpaceId>;
-};
-
-type Source = SingleSource | MultipleSources;
 
 export function useTableBlock() {
   const { entityId, spaceId } = useTableBlockInstance();
@@ -51,6 +38,12 @@ export function useTableBlock() {
   };
 
   const blockEntity = useEntity(React.useMemo(() => EntityId(entityId), [entityId]));
+
+  const source: Source = React.useMemo(() => {
+    return getSource(blockEntity.relationsOut);
+  }, [blockEntity.relationsOut]);
+
+  console.log('source', source);
 
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
@@ -183,30 +176,6 @@ export function useTableBlock() {
 
   const view = getView(blockEntity);
   const placeholder = getPlaceholder(blockEntity, view);
-
-  let source: Source = {
-    type: 'collection',
-    value: '',
-  };
-
-  // required to coerce returned source type to `Source`
-  // @TODO replace with proper logic for collection blocks
-  const isCollection = false;
-  if (isCollection) {
-    source = {
-      type: 'collection',
-      value: 'MOCK_COLLECTION_ID',
-    };
-  }
-
-  if (filterState && filterState.find(filter => filter.columnId === SYSTEM_IDS.SPACE)) {
-    const spaces = filterState.filter(filter => filter.columnId === SYSTEM_IDS.SPACE).map(filter => filter.value);
-
-    source = {
-      type: 'spaces',
-      value: spaces,
-    };
-  }
 
   return {
     blockEntity,
