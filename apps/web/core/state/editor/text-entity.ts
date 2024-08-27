@@ -18,7 +18,7 @@ interface UpsertMarkdownOp extends UpsertOp {
   value: { type: 'TEXT'; value: string };
 }
 
-export function getTextBlockOps(node: JSONContent): [UpsertNameOp, UpsertMarkdownOp] {
+export function getTextEntityOps(node: JSONContent): [UpsertNameOp, UpsertMarkdownOp] {
   const blockEntityId = getNodeId(node);
   const nodeHTML = getTextNodeHtml(node);
   const entityName = getNodeName(node);

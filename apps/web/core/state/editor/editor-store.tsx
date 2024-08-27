@@ -18,9 +18,11 @@ import { Entity, Relation } from '../../io/dto/entities';
 import { EntityId, TypeId } from '../../io/schema';
 import { RenderableEntityType } from '../../types';
 import { Values } from '../../utils/value';
+import { getInitialBlockTypeRelation } from './block-types';
+import { getInitialDataEntityRelations } from './data-entity';
 import { useEditorInstance } from './editor-provider';
 import { markdownToHtml } from './parser';
-import { getTextBlockOps } from './text-block';
+import { getTextEntityOps } from './text-entity';
 import { getNodeId } from './utils';
 
 interface RelationWithBlock {
@@ -351,18 +353,19 @@ export function useEditorStore() {
       const addedBlockIds = new Set(A.difference(newBlockIds, blockIds));
       const addedBlocks = newBlocks.filter(b => addedBlockIds.has(b.id));
 
-      // Create entities for each new block. e.g., you add a text block,
-      // so we need to create a new entity for it.
+      // Updating all of the Geo state as the editor state changes is complex. There are
+      // many relations and entities created to create the graph of different block types
+      // and any relations they have for themselves or with the entity from which they're
+      // being consumed.
       //
-      // upsertBlockRelations handles creating the relations for each block.
-      // @TODO: How should we handle adding vs updating block? Should they
-      // be in the same expression? Right now the main reason we split it up
-      // is to avoid creating new relations and triples if they already exist.
-      // New triples get upserted, but that would create a new entry in the
-      // actions count.
+      // To make modeling this easier, we should follow this pattern:
+      // 1. Create and delete entities as they are added/removed (?)
+      // 2. Create and remove relations consuming these entities as they are added/removed
+      // 3. Update any individual relations, triples, or blocks as they are changed.
+      //
+      // One consideration is that we may want to consume already-existing entities
+      // in a block, so we may not want to delete them.
       for (const node of addedBlocks) {
-        const blockEntityId = getNodeId(node);
-
         const blockType = (() => {
           switch (node.type) {
             case 'tableNode':
@@ -378,30 +381,22 @@ export function useEditorStore() {
         })();
 
         // Create an entity with Types -> XBlock
-        // @TODO: Create the block entity
-        // @TODO: TableBlock
-        // @TODO: TextBlock
         // @TODO: ImageBlock
-        DB.upsertRelation({
-          relation: {
-            index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
-            typeOf: {
-              id: EntityId(SYSTEM_IDS.TYPES),
-              name: 'Types',
-            },
-            toEntity: {
-              id: EntityId(blockEntityId),
-              renderableType: 'RELATION',
-              name: null,
-              value: blockType,
-            },
-            fromEntity: {
-              id: EntityId(node.id),
-              name: null,
-            },
-          },
-          spaceId,
-        });
+        switch (blockType) {
+          case SYSTEM_IDS.TEXT_BLOCK:
+            DB.upsertRelation({ relation: getInitialBlockTypeRelation(node.id, SYSTEM_IDS.TEXT_BLOCK), spaceId });
+            break;
+          case SYSTEM_IDS.IMAGE_BLOCK:
+            break;
+          case SYSTEM_IDS.TABLE_BLOCK: {
+            // @TODO(performance): upsertMany
+            for (const relation of getInitialDataEntityRelations(node.id)) {
+              DB.upsertRelation({ relation, spaceId });
+            }
+
+            break;
+          }
+        }
       }
 
       upsertBlocksRelations({ newBlockIds, spaceId, blocks, entityPageId: entityId });
@@ -413,7 +408,7 @@ export function useEditorStore() {
             break;
           case 'bulletList':
           case 'paragraph': {
-            const ops = getTextBlockOps(node);
+            const ops = getTextEntityOps(node);
             DB.upsertMany(ops, spaceId);
             break;
           }

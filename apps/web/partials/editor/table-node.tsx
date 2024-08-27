@@ -49,36 +49,21 @@ export const TableNode = Node.create({
 });
 
 function TableNodeComponent({ node }: NodeViewRendererProps) {
-  const { spaceId, typeId, id } = node.attrs;
+  const { spaceId, id } = node.attrs;
 
   return (
     <NodeViewWrapper>
       <div contentEditable="false">
-        <TableNodeChildren spaceId={spaceId} entityId={id} typeId={typeId} />
+        <TableNodeChildren spaceId={spaceId} entityId={id} />
       </div>
     </NodeViewWrapper>
   );
 }
 
-function TableNodeChildren({ spaceId, entityId, typeId }: { spaceId: string; entityId: string; typeId: string }) {
-  // @TODO: Fetch the type with the space and name
-  const selectedType = useMemo(() => {
-    return {
-      entityId: typeId,
-      entityName: '',
-      space: '',
-    };
-  }, [typeId]);
-
+function TableNodeChildren({ spaceId, entityId }: { spaceId: string; entityId: string }) {
   return (
-    <ErrorBoundary
-      fallback={
-        <>
-          <TableBlockError spaceId={spaceId} blockId={entityId} />
-        </>
-      }
-    >
-      <TableBlockProvider spaceId={spaceId} entityId={entityId} selectedType={selectedType}>
+    <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={entityId} />}>
+      <TableBlockProvider spaceId={spaceId} entityId={entityId}>
         <TableBlock spaceId={spaceId} />
       </TableBlockProvider>
     </ErrorBoundary>

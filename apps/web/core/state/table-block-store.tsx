@@ -38,10 +38,17 @@ type MultipleSources = {
 type Source = SingleSource | MultipleSources;
 
 export function useTableBlock() {
-  const { entityId, selectedType, spaceId } = useTableBlockInstance();
+  const { entityId, spaceId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
-
   const { upsert } = useWriteOps();
+
+  // @TODO(collections): Don't need type anymore as this
+  // should be derived from the query string
+  const selectedType: GeoType = {
+    entityId: '',
+    entityName: '',
+    space: '',
+  };
 
   const blockEntity = useEntity(React.useMemo(() => EntityId(entityId), [entityId]));
 
@@ -178,7 +185,7 @@ export function useTableBlock() {
   const placeholder = getPlaceholder(blockEntity, view);
 
   let source: Source = {
-    type: 'geo',
+    type: 'collection',
     value: '',
   };
 
@@ -300,33 +307,21 @@ const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string 
   },
 };
 
-const TableBlockContext = React.createContext<{ entityId: string; selectedType: GeoType; spaceId: string } | undefined>(
-  undefined
-);
+const TableBlockContext = React.createContext<{ entityId: string; spaceId: string } | undefined>(undefined);
 
 interface Props {
   spaceId: string;
   children: React.ReactNode;
-
-  selectedType?: GeoType;
   entityId: string;
 }
 
-export function TableBlockProvider({ spaceId, children, selectedType, entityId }: Props) {
-  if (!selectedType) {
-    // A table block might reference a type that has been deleted which will not be found
-    // in the types store.
-    console.error(`Undefined type in blockId: ${entityId}`);
-    throw new Error('Missing selectedType in TableBlockStoreProvider');
-  }
-
+export function TableBlockProvider({ spaceId, children, entityId }: Props) {
   const store = React.useMemo(() => {
     return {
       spaceId,
       entityId,
-      selectedType,
     };
-  }, [spaceId, selectedType, entityId]);
+  }, [spaceId, entityId]);
 
   return <TableBlockContext.Provider value={store}>{children}</TableBlockContext.Provider>;
 }
