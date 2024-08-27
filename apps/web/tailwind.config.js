@@ -255,7 +255,7 @@ module.exports = {
         metadata: [
           '1rem',
           {
-            lineHeight: '0.8125rem',
+            lineHeight: '1.25rem',
             fontWeight: '400',
             letterSpacing: '-0.25px',
           },
@@ -263,7 +263,7 @@ module.exports = {
         metadataMedium: [
           '1rem',
           {
-            lineHeight: '0.8125rem',
+            lineHeight: '1.25rem',
             fontWeight: '500',
             letterSpacing: '-0.25px',
           },
