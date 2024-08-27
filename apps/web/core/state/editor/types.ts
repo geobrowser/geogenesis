@@ -1,4 +1,4 @@
-import { EntityId } from '~/core/io/schema';
+import { SpaceId } from '~/core/io/schema';
 
 export type Content =
   | {
@@ -47,7 +47,7 @@ export type CollectionSource = {
 // @TODO add support for `collections` with multiple `collectionId`s
 export type MultipleSources = {
   type: 'spaces'; // | 'collections';
-  value: Array<EntityId>;
+  value: Array<SpaceId>;
 };
 
 export type AllOfGeoSource = {

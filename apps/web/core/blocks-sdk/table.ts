@@ -247,6 +247,8 @@ export async function createFiltersFromGraphQLString(
   return filters;
 }
 
+// @TODO(data blocks): The filters now include the typeId instead of the typeId being
+// a unique field.
 export function createGraphQLStringFromFiltersV2(
   filters: {
     columnId: string;

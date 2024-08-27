@@ -43,15 +43,11 @@ export function useTableBlock() {
     return getSource(blockEntity.relationsOut);
   }, [blockEntity.relationsOut]);
 
-  console.log('source', source);
-
+  // @TODO(data blocks): What do we do for filters now?
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
   }, [blockEntity?.triples]);
 
-  // We memoize the filterString since several of the subsequent queries rely
-  // on the graphql representation of the filter. Memoizing it means we avoid
-  // unnecessary re-renders.
   const filterString = React.useMemo(() => {
     const stringValue = Values.stringValue(filterTriple ?? undefined);
 
@@ -77,6 +73,7 @@ export function useTableBlock() {
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
     queryKey: ['table-block-columns', selectedType.entityId],
     queryFn: async () => {
+      // @TODO(data blocks): Fetch columns based on source type
       return await mergeColumns(EntityId(selectedType.entityId));
     },
   });
@@ -85,6 +82,8 @@ export function useTableBlock() {
     queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterState],
     queryFn: async () => {
       if (!columns) return [];
+
+      // @TODO(data blocks): Fetch rows based on source type
 
       const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
 

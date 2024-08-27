@@ -59,7 +59,6 @@ export const DataBlockSourceMenu = ({
                     <div className="inline-flex">
                       {source.value.map(spaceId => {
                         const selectedSpace = spaces.find(space => space.id === spaceId);
-
                         if (!selectedSpace) return null;
 
                         return (

@@ -4,7 +4,7 @@ import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 import { StoreRelation } from '~/core/database/types';
 import { ID } from '~/core/id';
 import { Relation } from '~/core/io/dto/entities';
-import { EntityId } from '~/core/io/schema';
+import { EntityId, SpaceId } from '~/core/io/schema';
 
 import { getInitialBlockTypeRelation } from './block-types';
 import { Source } from './types';
@@ -125,7 +125,9 @@ export function getSource(dataEntityRelations: Relation[]): Source {
   if (sourceType === SYSTEM_IDS.QUERY_DATA_SOURCE) {
     return {
       type: 'spaces',
-      value: dataEntityRelations.filter(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE).map(r => r.toEntity.id),
+      value: dataEntityRelations
+        .filter(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE)
+        .map(r => SpaceId(r.toEntity.id)),
     };
   }
 
