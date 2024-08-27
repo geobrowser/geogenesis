@@ -14,7 +14,7 @@ export type EntityCell = {
   image?: string | null;
 };
 
-export function fromColumnsAndRows(entities: Entity[], columns: Schema[]) {
+export function fromColumnsAndRows(entities: Entity[], columns: Schema[]): Row[] {
   /* Finally, we can build our initialRows */
   const aggregatedRows = entities.map(({ name, triples, id, relationsOut, description }) => {
     return columns.reduce((acc, column) => {
@@ -41,7 +41,5 @@ export function fromColumnsAndRows(entities: Entity[], columns: Schema[]) {
     }, {} as Row);
   });
 
-  return {
-    rows: aggregatedRows,
-  };
+  return aggregatedRows;
 }

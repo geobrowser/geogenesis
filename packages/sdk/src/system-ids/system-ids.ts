@@ -79,6 +79,12 @@ export const COLLECTION_DATA_SOURCE = 'a82dd96e24064feea770265ddf707ee3';
 export const QUERY_DATA_SOURCE = '8c3658dd8b174cb9836daf9278c179e2';
 export const ALL_OF_GEO_DATA_SOURCE = '21417aaa69b745509f4297e59ffd8e2b';
 
+/**
+ * The collection item relation type is used to identify the relations that point to
+ * collection items from a collection.
+ */
+export const COLLECTION_ITEM_RELATION_TYPE = '66579048ca0d47b1-8ac1c9de1ddfd4bd'
+
 /*
   Example Usage: Rhonda Patrick > TYPES > Person
   Note that we should probably convert "type" to "types" or a UUID in the future.

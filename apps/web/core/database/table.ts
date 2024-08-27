@@ -5,6 +5,7 @@ import { TableBlockSdk } from '../blocks-sdk';
 import { fetchColumns } from '../io/fetch-columns';
 import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
+import { fetchCollectionItemEntities } from '../io/subgraph/fetch-collection-items';
 import { queryClient } from '../query-client';
 import { Schema, Value } from '../types';
 import { EntityWithSchema, mergeEntity, mergeEntityAsync } from './entities';
@@ -115,6 +116,45 @@ export async function mergeColumns(typeId: EntityId): Promise<Schema[]> {
   });
 
   return dedupeWith([...cachedColumns, ...localAttributesForSelectedType], (a, b) => a.id === b.id);
+}
+
+/**
+ * Few things we need to support
+ * 1. Just fetch remote entities
+ * 2. Merge remote entities with local entities
+ * 3. Filter them with a selector (either manual one or one derived from FilterState)
+ */
+async function mergeCollectionRowEntitiesAsync(collectionId: string): Promise<EntityWithSchema[]> {
+  const cachedEntities = await queryClient.fetchQuery({
+    queryKey: ['collection-entities-for-merging', collectionId],
+    queryFn: ({ signal }) => fetchCollectionItemEntities(collectionId, signal),
+  });
+
+  const remoteMergedEntities = cachedEntities.map(e => mergeEntity({ id: e.id, mergeWith: e }));
+  const alreadyMergedEntitiesIds = new Set(remoteMergedEntities.map(e => e.id));
+
+  // Get all local entities that are consumed by the collection id and whose
+  // relation type is COLLECTION_ITEM_RELATION_TYPE.
+  const localEntities = getRelations({
+    selector: r => {
+      return r.fromEntity.id === collectionId && r.typeOf.id === SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE;
+    },
+  })
+    .map(r => r.fromEntity.id)
+    // Filter out entities we've already merged so we don't fetch them again
+    .filter(id => !alreadyMergedEntitiesIds.has(id));
+
+  // If an entity exists locally and was given properties that now match it to
+  // the filters then we need to fetch its remote contents to make sure we have
+  // all the data needed to merge it with the local state, filter and render it.
+  // @TODO(performance): Batch instead of fetching an unknown number of them at once.
+  const localMergedEntities = await Promise.all(localEntities.map(id => mergeEntityAsync(id)));
+  return [...localMergedEntities, ...remoteMergedEntities];
+}
+
+export async function mergeCollectionItemEntitiesAsync(collectionId: string) {
+  // @TODO(data-block): filters, pagination
+  return await mergeCollectionRowEntitiesAsync(collectionId);
 }
 
 function filterValue(value: Value, valueToFilter: string) {

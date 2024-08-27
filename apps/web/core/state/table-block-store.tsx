@@ -1,11 +1,17 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
+import { Match, pipe } from 'effect';
 
 import * as React from 'react';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { mergeEntityAsync, useEntity } from '../database/entities';
-import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '../database/table';
+import {
+  MergeTableEntitiesArgs,
+  mergeCollectionItemEntitiesAsync,
+  mergeColumns,
+  mergeTableEntities,
+} from '../database/table';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
@@ -70,21 +76,21 @@ export function useTableBlock() {
     },
   });
 
+  // We need the entities before we can fetch the columns since we need to know the
+  // types of the entities when rendering a collection source.
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
     queryKey: ['table-block-columns', selectedType.entityId],
     queryFn: async () => {
       // @TODO(data blocks): Fetch columns based on source type
+      return [];
       return await mergeColumns(EntityId(selectedType.entityId));
     },
   });
 
   const { data: rows, isLoading: isLoadingRows } = useQuery({
-    queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterState],
+    queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterState, source],
     queryFn: async () => {
-      if (!columns) return [];
-
       // @TODO(data blocks): Fetch rows based on source type
-
       const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
 
       const params: MergeTableEntitiesArgs['options'] = {
@@ -93,15 +99,19 @@ export function useTableBlock() {
         skip: pageNumber * PAGE_SIZE,
       };
 
-      /**
-       * Aggregate data for the rows from local and server entities.
-       */
-      const entities = await mergeTableEntities({
-        options: params,
-        selectedTypeId: EntityId(selectedType.entityId),
-      });
+      // Depending on the source type we use different queries to aggregate the data
+      // for the data view.
+      const entities = await pipe(
+        Match.value(source),
+        Match.when({ type: 'collection' }, source => mergeCollectionItemEntitiesAsync(source.value)),
+        Match.when({ type: 'spaces' }, () =>
+          mergeTableEntities({ options: params, selectedTypeId: EntityId(selectedType.entityId) })
+        ),
+        Match.orElse(() => [])
+      );
 
-      return EntityTable.fromColumnsAndRows(entities, columns).rows;
+      return EntityTable.fromColumnsAndRows(entities, []);
+      // return EntityTable.fromColumnsAndRows(entities, columns);
     },
   });
 

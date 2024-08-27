@@ -174,7 +174,7 @@ export interface Cell {
   triples: Triple[];
 }
 
-export type Row = Record<string, Cell>;
+export type Row = Record<EntityId, Cell>;
 
 export type Profile = {
   id: string;
