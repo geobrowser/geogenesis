@@ -115,7 +115,7 @@ export function GeoConnectButton() {
   const setStep = useSetAtom(stepAtom);
 
   const resetOnboarding = () => {
-    setAccountType(null);
+    setAccountType('personal');
     setName('');
     setAvatar('');
     setSpaceId('');

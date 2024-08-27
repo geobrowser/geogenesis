@@ -29,7 +29,7 @@ import { RadioGroup } from '~/design-system/radio-group';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
-export const accountTypeAtom = atomWithStorage<SpaceType | null>('onboardingAccountType', null);
+export const accountTypeAtom = atomWithStorage<SpaceType>('onboardingAccountType', 'personal');
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
@@ -114,7 +114,6 @@ export const OnboardingDialog = () => {
             transition={{ type: 'tween', ease: 'easeInOut', duration: 0.15, opacity: { duration: 0.1 } }}
             className="fixed inset-0 z-100 bg-text"
           />
-
           <MotionContent
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -218,10 +217,11 @@ function StepStart() {
         <StepContents childKey="start">
           <div className="w-full">
             <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
-              Create your first space
+              Create your Geo account
             </Text>
-            <Text as="p" variant="body" className="mx-auto mt-2 px-8 text-center !text-base">
-              We’ll get you set up with a personal space, activity feed, and multiple spaces to join.
+            <Text as="p" variant="body" className="mx-auto mt-2 px-2 text-center !text-base">
+              We’ll get you set up with a personal space, activity feed, multiple spaces to join and contribute to and
+              many other things to get on with!
             </Text>
           </div>
         </StepContents>
@@ -230,7 +230,7 @@ function StepStart() {
         </div>
       </div>
       <div className="absolute inset-x-4 bottom-4">
-        <Button onClick={() => setStep('select-type')} className="w-full">
+        <Button onClick={() => setStep('enter-profile')} className="w-full">
           Start
         </Button>
       </div>
@@ -279,7 +279,7 @@ type StepOnboardingProps = {
 };
 
 const placeholderMessage: Record<SpaceType, string> = {
-  personal: 'Personal name',
+  personal: 'Your name...',
   company: 'Company name',
   nonprofit: 'Nonprofit name',
 
@@ -379,7 +379,7 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
 
       <div className="absolute inset-x-4 bottom-4 flex">
         <Button variant="secondary" disabled={!validName} onClick={onNext} className="w-full">
-          Create Space
+          {accountType === 'personal' ? 'Create Account' : 'Create Space'}
         </Button>
       </div>
     </div>
@@ -389,14 +389,6 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
 type StepCompleteProps = {
   onRetry: () => void;
   showRetry: boolean;
-};
-
-const stepNumber: Record<Step, number> = {
-  start: 0,
-  'select-type': 0,
-  'enter-profile': 1,
-  'create-space': 2,
-  completed: 3,
 };
 
 const retryMessage: Record<Step, string> = {
@@ -410,17 +402,9 @@ const retryMessage: Record<Step, string> = {
 type SpaceTypeSubsetForOnboarding = Extract<SpaceType, 'personal' | 'company' | 'nonprofit'>;
 
 const completeMessage: Record<SpaceTypeSubsetForOnboarding, string> = {
-  personal: 'Go to my personal space',
+  personal: 'Visit my personal space',
   company: 'Go to my company space',
   nonprofit: 'Go to my nonprofit space',
-};
-
-const complete: Record<number, { label: string; image: string }> = {
-  1: { label: `Setting up your personal space`, image: `/images/onboarding/1.png` },
-  2: {
-    label: `Browse content, curate information, join as a member or editor and contribute to spaces that matter to you.`,
-    image: `/images/onboarding/1.png`,
-  },
 };
 
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
@@ -439,12 +423,17 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
             variant="bodySemibold"
             className={cx('mx-auto text-center !text-2xl', step === 'completed' && '-mt-[24px]')}
           >
-            {step === 'completed' ? `Welcome to Geo!` : `Creating your Space`}
+            {step === 'completed'
+              ? `Welcome to Geo!`
+              : accountType === 'personal'
+              ? `Creating your Geo account`
+              : `Creating your Space`}
           </Text>
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center !text-base">
-            {complete[stepNumber[step]].label}
+            {step === 'completed'
+              ? `Browse content, curate information, join as a member or editor and contribute to spaces that matter to you.`
+              : `This may take a minute or two to complete.`}
           </Text>
-
           {step !== 'completed' && (
             <>
               <Spacer height={32} />
@@ -467,7 +456,7 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
       </StepContents>
       <div className="absolute inset-x-4 bottom-4 space-y-4">
         <div className="relative aspect-video">
-          <img src={complete[stepNumber[step]].image} alt="" className="inline-block h-full w-full" />
+          <img src="/images/onboarding/1.png" alt="" className="inline-block h-full w-full" />
         </div>
         <div className="flex justify-center gap-2 whitespace-nowrap">
           <Link href={NavUtils.toSpace(spaceId)} className="w-full" onClick={hideOnboarding}>
