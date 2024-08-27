@@ -257,7 +257,7 @@ module.exports = {
           {
             lineHeight: '0.8125rem',
             fontWeight: '400',
-            letterSpacing: "-0.25px"
+            letterSpacing: '-0.25px',
           },
         ],
         metadataMedium: [
@@ -265,7 +265,7 @@ module.exports = {
           {
             lineHeight: '0.8125rem',
             fontWeight: '500',
-            letterSpacing: "-0.25px"
+            letterSpacing: '-0.25px',
           },
         ],
         breadcrumb: [
