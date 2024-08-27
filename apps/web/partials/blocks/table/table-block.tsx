@@ -54,6 +54,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     type,
     view,
     placeholder,
+    source,
   } = useTableBlock();
 
   const allColumns = columns.map(column => ({
@@ -209,6 +210,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             shownColumnIds={shownColumnIds}
             placeholder={placeholder}
             view={view}
+            source={source}
           />
         )}
         {hasPagination && (

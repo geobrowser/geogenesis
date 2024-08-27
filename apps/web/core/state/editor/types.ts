@@ -40,18 +40,18 @@ type Mark = {
 };
 
 export type CollectionSource = {
-  type: 'collection';
+  type: 'COLLECTION';
   value: string;
 };
 
 // @TODO add support for `collections` with multiple `collectionId`s
 export type MultipleSources = {
-  type: 'spaces'; // | 'collections';
+  type: 'SPACES'; // | 'collections';
   value: Array<SpaceId>;
 };
 
 export type AllOfGeoSource = {
-  type: 'geo'; // we don't care about the value since we aren't querying based on a specific space or collection
+  type: 'GEO'; // we don't care about the value since we aren't querying based on a specific space or collection
 };
 
 export type Source = CollectionSource | MultipleSources | AllOfGeoSource;

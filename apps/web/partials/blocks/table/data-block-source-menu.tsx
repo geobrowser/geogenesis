@@ -106,7 +106,7 @@ type SpacesMenuProps = {
   onBack: () => void;
 };
 
-export const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
+const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
   const { query, setQuery, spaces: queriedSpaces } = useSpacesQuery();
   const { filterState, setFilterState } = useTableBlock();
 

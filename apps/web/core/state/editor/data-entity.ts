@@ -1,7 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
 
-import { StoreRelation } from '~/core/database/types';
+import { StoreRelation, UpsertOp } from '~/core/database/types';
+import { DB } from '~/core/database/write';
 import { ID } from '~/core/id';
 import { Relation } from '~/core/io/dto/entities';
 import { EntityId, SpaceId } from '~/core/io/schema';
@@ -117,14 +118,14 @@ export function getSource(dataEntityRelations: Relation[]): Source {
 
   if (sourceType === SYSTEM_IDS.COLLECTION_DATA_SOURCE) {
     return {
-      type: 'collection',
+      type: 'COLLECTION',
       value: dataEntityRelations.find(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE)?.toEntity.id ?? '',
     };
   }
 
   if (sourceType === SYSTEM_IDS.QUERY_DATA_SOURCE) {
     return {
-      type: 'spaces',
+      type: 'SPACES',
       value: dataEntityRelations
         .filter(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE)
         .map(r => SpaceId(r.toEntity.id)),
@@ -133,12 +134,62 @@ export function getSource(dataEntityRelations: Relation[]): Source {
 
   if (sourceType === SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE) {
     return {
-      type: 'geo',
+      type: 'GEO',
     };
   }
 
   return {
-    type: 'collection',
+    type: 'COLLECTION',
     value: '',
+  };
+}
+
+export function createEmptyCollectionItemEntity(collectionId: EntityId, spaceId: string) {
+  // Create an empty entity with an empty name
+  const nameOp = getEmptyEntityNameOps();
+
+  DB.upsert(nameOp, spaceId);
+  DB.upsertRelation({
+    relation: getRelationForCollectionItem(collectionId, EntityId(SYSTEM_IDS.NAME), nameOp.value.value),
+    spaceId,
+  });
+}
+
+function getRelationForCollectionItem(
+  collectionId: EntityId,
+  toEntityId: EntityId,
+  toEntityName: string
+): StoreRelation {
+  // Create a relation that points from the collection to the entity with Relation Type -> CollectionItem
+  // 1. Relation type -> CollectionItem
+  return {
+    index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
+    typeOf: {
+      id: EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE),
+      name: 'Collection Item',
+    },
+    fromEntity: {
+      id: collectionId,
+      name: null,
+    },
+    toEntity: {
+      id: toEntityId,
+      name: toEntityName,
+      renderableType: 'RELATION',
+      value: toEntityId,
+    },
+  };
+}
+
+function getEmptyEntityNameOps(): UpsertOp {
+  return {
+    attributeId: SYSTEM_IDS.NAME,
+    attributeName: 'Name',
+    entityId: ID.createEntityId(),
+    entityName: '',
+    value: {
+      type: 'TEXT',
+      value: '',
+    },
   };
 }

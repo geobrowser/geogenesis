@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { mergeEntityAsync, useEntity } from '../database/entities';
+import { useRelations } from '../database/relations';
 import {
   MergeTableEntitiesArgs,
   mergeCollectionItemEntitiesAsync,
@@ -15,7 +16,7 @@ import {
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
-import { GeoType, ValueType as TripleValueType } from '../types';
+import { GeoType, Schema, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { Values } from '../utils/value';
 import { getSource } from './editor/data-entity';
@@ -49,6 +50,17 @@ export function useTableBlock() {
     return getSource(blockEntity.relationsOut);
   }, [blockEntity.relationsOut]);
 
+  const collectionItems = useRelations(
+    React.useMemo(() => {
+      return {
+        selector: r => {
+          if (source.type !== 'COLLECTION') return false;
+          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
+        },
+      };
+    }, [source])
+  );
+
   // @TODO(data blocks): What do we do for filters now?
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
@@ -81,15 +93,33 @@ export function useTableBlock() {
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
     queryKey: ['table-block-columns', selectedType.entityId],
     queryFn: async () => {
-      // @TODO(data blocks): Fetch columns based on source type
-      return [];
+      // @TODO(data blocks): Fetch columns based on source type or entities schemas
+      return [
+        {
+          id: EntityId(SYSTEM_IDS.NAME),
+          name: 'Name',
+          valueType: SYSTEM_IDS.TEXT,
+        },
+      ] satisfies Schema[];
       return await mergeColumns(EntityId(selectedType.entityId));
     },
   });
 
+  console.log('collectionItems', collectionItems);
+
   const { data: rows, isLoading: isLoadingRows } = useQuery({
-    queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterState, source],
+    queryKey: [
+      'table-block-rows',
+      columns,
+      selectedType.entityId,
+      pageNumber,
+      entityId,
+      filterState,
+      source,
+      collectionItems,
+    ],
     queryFn: async () => {
+      if (!columns) return [];
       // @TODO(data blocks): Fetch rows based on source type
       const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
 
@@ -103,15 +133,18 @@ export function useTableBlock() {
       // for the data view.
       const entities = await pipe(
         Match.value(source),
-        Match.when({ type: 'collection' }, source => mergeCollectionItemEntitiesAsync(source.value)),
-        Match.when({ type: 'spaces' }, () =>
+        Match.when({ type: 'COLLECTION' }, source => mergeCollectionItemEntitiesAsync(source.value)),
+        // Match.when(
+        //   { type: 'COLLECTION' },
+        //   async () => await Promise.all(collectionItems.map(i => mergeEntityAsync(i.toEntity.id)))
+        // ),
+        Match.when({ type: 'SPACES' }, () =>
           mergeTableEntities({ options: params, selectedTypeId: EntityId(selectedType.entityId) })
         ),
         Match.orElse(() => [])
       );
 
-      return EntityTable.fromColumnsAndRows(entities, []);
-      // return EntityTable.fromColumnsAndRows(entities, columns);
+      return EntityTable.fromColumnsAndRows(entities, columns);
     },
   });
 
