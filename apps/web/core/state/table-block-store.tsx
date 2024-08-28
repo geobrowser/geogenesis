@@ -7,16 +7,11 @@ import * as React from 'react';
 import { TableBlockSdk } from '../blocks-sdk';
 import { mergeEntityAsync, useEntity } from '../database/entities';
 import { useRelations } from '../database/relations';
-import {
-  MergeTableEntitiesArgs,
-  mergeCollectionItemEntitiesAsync,
-  mergeColumns,
-  mergeTableEntities,
-} from '../database/table';
+import { MergeTableEntitiesArgs, mergeCollectionItemEntitiesAsync, mergeTableEntities } from '../database/table';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
-import { GeoType, Schema, ValueType as TripleValueType } from '../types';
+import { Schema, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { Values } from '../utils/value';
 import { getSource } from './editor/data-entity';
@@ -35,14 +30,6 @@ export function useTableBlock() {
   const { entityId, spaceId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
   const { upsert } = useWriteOps();
-
-  // @TODO(collections): Don't need type anymore as this
-  // should be derived from the query string
-  const selectedType: GeoType = {
-    entityId: '',
-    entityName: '',
-    space: '',
-  };
 
   const blockEntity = useEntity(React.useMemo(() => EntityId(entityId), [entityId]));
 
@@ -73,8 +60,8 @@ export function useTableBlock() {
       return stringValue;
     }
 
-    return TableBlockSdk.createGraphQLStringFromFiltersV2([], selectedType.entityId);
-  }, [filterTriple, selectedType.entityId]);
+    return TableBlockSdk.createGraphQLStringFromFiltersV2([]);
+  }, [filterTriple]);
 
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
     queryKey: ['table-block-filter-value', filterString],
@@ -91,7 +78,7 @@ export function useTableBlock() {
   // We need the entities before we can fetch the columns since we need to know the
   // types of the entities when rendering a collection source.
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
-    queryKey: ['table-block-columns', selectedType.entityId],
+    queryKey: ['table-block-columns'],
     queryFn: async () => {
       // @TODO(data blocks): Fetch columns based on source type or entities schemas
       return [
@@ -101,27 +88,18 @@ export function useTableBlock() {
           valueType: SYSTEM_IDS.TEXT,
         },
       ] satisfies Schema[];
-      return await mergeColumns(EntityId(selectedType.entityId));
+      // return await mergeColumns(EntityId(selectedType.entityId));
     },
   });
 
   console.log('collectionItems', collectionItems);
 
   const { data: rows, isLoading: isLoadingRows } = useQuery({
-    queryKey: [
-      'table-block-rows',
-      columns,
-      selectedType.entityId,
-      pageNumber,
-      entityId,
-      filterState,
-      source,
-      collectionItems,
-    ],
+    queryKey: ['table-block-rows', columns, pageNumber, entityId, filterState, source, collectionItems],
     queryFn: async () => {
       if (!columns) return [];
       // @TODO(data blocks): Fetch rows based on source type
-      const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
+      const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? []);
 
       const params: MergeTableEntitiesArgs['options'] = {
         filter: filterString,
@@ -138,9 +116,7 @@ export function useTableBlock() {
         //   { type: 'COLLECTION' },
         //   async () => await Promise.all(collectionItems.map(i => mergeEntityAsync(i.toEntity.id)))
         // ),
-        Match.when({ type: 'SPACES' }, () =>
-          mergeTableEntities({ options: params, selectedTypeId: EntityId(selectedType.entityId) })
-        ),
+        Match.when({ type: 'SPACES' }, () => mergeTableEntities({ options: params })),
         Match.orElse(() => [])
       );
 
@@ -182,8 +158,7 @@ export function useTableBlock() {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString =
-        newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, selectedType.entityId);
+      const newFiltersString = newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState);
 
       const entityName = blockEntity.name ?? '';
 
@@ -201,7 +176,7 @@ export function useTableBlock() {
         spaceId
       );
     },
-    [upsert, entityId, selectedType.entityId, spaceId, blockEntity.name]
+    [upsert, entityId, spaceId, blockEntity.name]
   );
 
   const setName = React.useCallback(
@@ -236,7 +211,6 @@ export function useTableBlock() {
     hasPreviousPage: pageNumber > 0,
     setPage,
 
-    type: selectedType,
     entityId,
     spaceId,
 

@@ -19,7 +19,6 @@ import { useState } from 'react';
 
 import { getTriples } from '~/core/database/triples';
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
 import { createEmptyCollectionItemEntity } from '~/core/state/editor/data-entity';
@@ -139,7 +138,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  typeId: string;
   columns: Schema[];
   rows: Row[];
   shownColumnIds: string[];
@@ -150,7 +148,7 @@ interface Props {
 
 // eslint-disable-next-line react/display-name
 export const TableBlockTable = React.memo(
-  ({ rows, space, typeId, columns, shownColumnIds, placeholder, view, source }: Props) => {
+  ({ rows, space, columns, shownColumnIds, placeholder, view, source }: Props) => {
     const isEditingColumns = useAtomValue(editingColumnsAtom);
 
     const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});

@@ -29,7 +29,6 @@ function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
 export interface FetchTableRowEntitiesOptions {
   first?: number;
   skip?: number;
-  typeIds?: string[];
   filter: string; // this is a graphql query string
   signal?: AbortController['signal'];
 }

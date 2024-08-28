@@ -15,10 +15,8 @@ export interface MergeTableEntitiesArgs {
   options: {
     first?: number;
     skip?: number;
-    typeIds?: string[];
     filter: string; // this is a graphql query string
   };
-  selectedTypeId: EntityId;
 }
 
 /**
@@ -44,15 +42,9 @@ async function mergeTableRowEntitiesAsync(
   // Our queries usually require at least one type which is why we can safely use
   // the relations merging to aggregate entities.
   const localEntities = getRelations({
-    selector: r => {
-      if (options.typeIds && options.typeIds.length > 0) {
-        return (
-          r.typeOf.id === SYSTEM_IDS.SCHEMA_TYPE &&
-          r.typeOf.id === SYSTEM_IDS.TYPES &&
-          options.typeIds.includes(r.toEntity.id)
-        );
-      }
-
+    selector: () => {
+      // @TODO(data-block): Map the filter string into a selector  relations are
+      // correctly filtered.
       return true;
     },
   })
@@ -68,11 +60,8 @@ async function mergeTableRowEntitiesAsync(
   return [...localMergedEntities, ...remoteMergedEntities];
 }
 
-export async function mergeTableEntities({ options, selectedTypeId }: MergeTableEntitiesArgs) {
-  const entities = await mergeTableRowEntitiesAsync({
-    ...options,
-    ...(selectedTypeId ? { typeIds: [selectedTypeId] } : {}),
-  });
+export async function mergeTableEntities({ options }: MergeTableEntitiesArgs) {
+  const entities = await mergeTableRowEntitiesAsync(options);
 
   const filterState = await TableBlockSdk.createFiltersFromGraphQLString(
     options.filter ?? '',

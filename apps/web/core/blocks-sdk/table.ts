@@ -67,14 +67,14 @@ export function createGraphQLStringFromFilters(
     columnId: string;
     valueType: TripleValueType;
     value: string;
-  }[],
-  typeId: string | null
+  }[]
 ): string {
-  if (!typeId) return '';
-  if (filters.length === 0) return `{typeIds_contains_nocase: ["${typeId}"]}`;
-
   const filtersAsStrings = filters
     .map(filter => {
+      if (filter.columnId === SYSTEM_IDS.TYPES && filter.valueType === 'ENTITY') {
+        return `typeIds_contains_nocase: ["${filter.value}"]`;
+      }
+
       // We treat Name and Space as special filters even though they are not always
       // columns on the type schema for a table. We allow users to be able to filter
       // by name and space.
@@ -103,13 +103,13 @@ export function createGraphQLStringFromFilters(
     .flatMap(f => (f ? [f] : []));
 
   if (filtersAsStrings.length === 1) {
-    return `{typeIds_contains_nocase: ["${typeId}"], ${filtersAsStrings[0]}}`;
+    return filtersAsStrings[0];
   }
 
   // Wrap each filter expression in curly brackets
   const multiFilterQuery = filtersAsStrings.map(f => `{${f}}`).join(', ');
 
-  return `{and: [{typeIds_contains_nocase: ["${typeId}"]}, ${multiFilterQuery}]}`;
+  return `{and: [${multiFilterQuery}]}`;
 }
 
 /**
@@ -254,14 +254,17 @@ export function createGraphQLStringFromFiltersV2(
     columnId: string;
     valueType: TripleValueType;
     value: string;
-  }[],
-  typeId: string | null
+  }[]
 ): string {
-  if (!typeId) return '';
-  if (filters.length === 0) return `{ entityTypes: { some: { typeId: { equalTo: "${typeId}" } } } }`;
+  if (filters.length === 0) return '';
 
   const filtersAsStrings = filters
     .map(filter => {
+      // Assume we can only filter by one type at a time for now
+      if (filter.columnId === SYSTEM_IDS.TYPES && filter.valueType === 'ENTITY') {
+        return `entityTypes: { some: { typeId: { equalTo: "${filter.value}" } } }`;
+      }
+
       // We treat Name and Space as special filters even though they are not always
       // columns on the type schema for a table. We allow users to be able to filter
       // by name and space.
@@ -295,11 +298,11 @@ export function createGraphQLStringFromFiltersV2(
     .flatMap(f => (f ? [f] : []));
 
   if (filtersAsStrings.length === 1) {
-    return `{ entityTypes: { some: { typeId: { equalTo: "${typeId}" } } }, ${filtersAsStrings[0]}}`;
+    return filtersAsStrings[0];
   }
 
   // Wrap each filter expression in curly brackets
   const multiFilterQuery = filtersAsStrings.map(f => `{ ${f} }`).join(', ');
 
-  return `{ and: [{ entityTypes: { some: { typeId: { equalTo: "${typeId}" } } } } ${multiFilterQuery}] }`;
+  return `{ and: [${multiFilterQuery}] }`;
 }

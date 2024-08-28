@@ -51,7 +51,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     blockEntity,
     hasPreviousPage,
     pageNumber,
-    type,
     view,
     placeholder,
     source,
@@ -104,7 +103,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     };
   });
 
-  const typeId = type.entityId;
   const attributes: Array<[string, string]> =
     filterState && filterState.length > 0
       ? // filters can include 'space', which is not an attribute
@@ -154,7 +152,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             shownColumnIds={shownColumnIds}
           />
           {isEditing && (
-            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, attributes)}>
+            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), undefined, attributes)}>
               <Create />
             </Link>
           )}
@@ -204,7 +202,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
         ) : (
           <TableBlockTable
             space={spaceId}
-            typeId={typeId}
             columns={columns}
             rows={rows}
             shownColumnIds={shownColumnIds}

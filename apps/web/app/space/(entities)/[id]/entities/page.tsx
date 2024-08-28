@@ -71,22 +71,18 @@ const getData = async ({
     ...initialParams,
     first: DEFAULT_PAGE_SIZE,
     skip: initialParams.pageNumber * DEFAULT_PAGE_SIZE,
-    typeIds: typeId ? [typeId] : [],
-    filter: TableBlockSdk.createGraphQLStringFromFilters(
-      [
-        {
-          columnId: SYSTEM_IDS.NAME,
-          value: initialParams.query,
-          valueType: 'TEXT',
-        },
-        {
-          columnId: SYSTEM_IDS.SPACE,
-          value: spaceId,
-          valueType: 'TEXT',
-        },
-      ],
-      typeId
-    ),
+    filter: TableBlockSdk.createGraphQLStringFromFilters([
+      {
+        columnId: SYSTEM_IDS.NAME,
+        value: initialParams.query,
+        valueType: 'TEXT',
+      },
+      {
+        columnId: SYSTEM_IDS.SPACE,
+        value: spaceId,
+        valueType: 'TEXT',
+      },
+    ]),
   };
 
   const serverColumns = await fetchColumns({
@@ -100,7 +96,7 @@ const getData = async ({
     params: fetchParams,
   });
 
-  const { rows: finalRows } = EntityTable.fromColumnsAndRows(serverRows, serverColumns);
+  const finalRows = EntityTable.fromColumnsAndRows(serverRows, serverColumns);
 
   return {
     space,
