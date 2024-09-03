@@ -31,9 +31,9 @@ export function useOnboarding() {
   // of any spaces OR there is no profile representing the user in
   // any of the spaces where they are a member.
   useEffect(() => {
-    if (isModalOpen || !!user) {
+    if (isModalOpen) {
       setIsOnboardingVisible(false);
-    } else if (isFetched && !isLoading && !profile?.profileLink) {
+    } else if (isFetched && !isLoading && !profile?.profileLink && user) {
       setIsOnboardingVisible(true);
     } else {
       setIsOnboardingVisible(false);

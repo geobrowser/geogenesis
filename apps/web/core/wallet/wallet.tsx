@@ -12,7 +12,7 @@ import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors'
 import { Button } from '~/design-system/button';
 import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 
-import { accountTypeAtom, avatarAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
+import { avatarAtom, nameAtom, spaceIdAtom, stepAtom } from '~/partials/onboarding/dialog';
 
 import { Cookie } from '../cookie';
 import { CONDUIT_TESTNET } from './conduit-chain';
@@ -108,14 +108,12 @@ export function GeoConnectButton() {
   const { user } = usePrivy();
   const { wallets } = useWallets();
 
-  const setAccountType = useSetAtom(accountTypeAtom);
   const setName = useSetAtom(nameAtom);
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
 
   const resetOnboarding = () => {
-    setAccountType('personal');
     setName('');
     setAvatar('');
     setSpaceId('');

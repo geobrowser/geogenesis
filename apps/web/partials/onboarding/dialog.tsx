@@ -1,11 +1,11 @@
 'use client';
 
 import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
-import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
+import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
@@ -21,20 +21,19 @@ import { Values } from '~/core/utils/value';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
+import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { RadioGroup } from '~/design-system/radio-group';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
+import { Tooltip } from '~/design-system/tooltip';
 
-export const accountTypeAtom = atomWithStorage<SpaceType>('onboardingAccountType', 'personal');
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
-type Step = 'start' | 'select-type' | 'enter-profile' | 'create-space' | 'completed';
+type Step = 'start' | 'enter-profile' | 'create-space' | 'completed';
 
 export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
@@ -48,7 +47,6 @@ export const OnboardingDialog = () => {
 
   const smartAccount = useSmartAccount();
 
-  const accountType = useAtomValue(accountTypeAtom);
   const name = useAtomValue(nameAtom);
   const avatar = useAtomValue(avatarAtom);
   const { deploy } = useDeploySpace();
@@ -88,7 +86,7 @@ export const OnboardingDialog = () => {
   }
 
   async function onRunOnboardingWorkflow() {
-    if (!address || !smartAccount || !accountType) return;
+    if (!address || !smartAccount) return;
 
     setShowRetry(false);
 
@@ -96,10 +94,10 @@ export const OnboardingDialog = () => {
       case 'enter-profile':
         setStep('create-space');
         await sleep(100);
-        createSpaces(accountType);
+        createSpaces('personal');
         break;
       case 'create-space':
-        createSpaces(accountType);
+        createSpaces('personal');
         break;
     }
   }
@@ -123,7 +121,6 @@ export const OnboardingDialog = () => {
             <ModalCard childKey="card">
               <StepHeader />
               {step === 'start' && <StepStart />}
-              {step === 'select-type' && <StepSelectType />}
               {step === 'enter-profile' && <StepOnboarding onNext={onRunOnboardingWorkflow} address={address} />}
               {workflowSteps.includes(step) && <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />}
             </ModalCard>
@@ -159,15 +156,12 @@ const StepHeader = () => {
 
   const [step, setStep] = useAtom(stepAtom);
 
-  const showBack = step === 'select-type' || step === 'enter-profile';
+  const showBack = step === 'enter-profile';
 
   const handleBack = () => {
     switch (step) {
-      case 'select-type':
-        setStep('start');
-        break;
       case 'enter-profile':
-        setStep('select-type');
+        setStep('start');
         break;
       default:
         break;
@@ -217,11 +211,11 @@ function StepStart() {
         <StepContents childKey="start">
           <div className="w-full">
             <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
-              Create your Geo account
+              Create your first space
             </Text>
-            <Text as="p" variant="body" className="mx-auto mt-2 px-2 text-center !text-base">
-              We’ll get you set up with a personal space, activity feed, multiple spaces to join and contribute to and
-              many other things to get on with!
+            <Text as="p" variant="body" className="mx-auto mt-2 text-center !text-base">
+              This space will represent you. After, you can create spaces on any topic - including projects or groups
+              you're a part of - linked with any Geo accounts.
             </Text>
           </div>
         </StepContents>
@@ -238,65 +232,13 @@ function StepStart() {
   );
 }
 
-function StepSelectType() {
-  const [accountType, setAccountType] = useAtom(accountTypeAtom);
-  const setStep = useSetAtom(stepAtom);
-
-  const options: { image: string; label: string; value: SpaceType }[] = [
-    { image: '/images/onboarding/person.png', label: 'Person', value: 'personal' },
-    { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
-    { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
-  ];
-
-  return (
-    <>
-      <StepContents childKey="account-type">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center !text-2xl">
-            Select the account type
-          </Text>
-        </div>
-        <div className="mt-8">
-          <RadioGroup
-            value={accountType ?? ''}
-            onValueChange={setAccountType as (value: string) => void}
-            options={options}
-          />
-        </div>
-      </StepContents>
-      <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <Button onClick={() => setStep('enter-profile')} disabled={accountType === null} className="w-full">
-          Continue
-        </Button>
-      </div>
-    </>
-  );
-}
-
 type StepOnboardingProps = {
   onNext: () => void;
   address: string;
 };
 
-const placeholderMessage: Record<SpaceType, string> = {
-  personal: 'Your name...',
-  company: 'Company name',
-  nonprofit: 'Nonprofit name',
-
-  // Should never trigger these governance types
-  default: 'Space name',
-  'academic-field': 'Academic field name',
-  region: 'Region name',
-  industry: 'Industry name',
-  protocol: 'Protocol name',
-  dao: 'DAO name',
-  'government-org': 'Government org name',
-  'interest-group': 'Interest group name',
-};
-
-function StepOnboarding({ onNext, address }: StepOnboardingProps) {
+function StepOnboarding({ onNext }: StepOnboardingProps) {
   const { ipfs } = Services.useServices();
-  const accountType = useAtomValue(accountTypeAtom);
   const [name, setName] = useAtom(nameAtom);
   const [avatar, setAvatar] = useAtom(avatarAtom);
 
@@ -325,19 +267,24 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
         <div className="space-y-4">
           <div className="flex justify-center">
             <div className="overflow-hidden rounded-lg bg-cover bg-center shadow-lg">
-              <div className="overflow-hidden rounded-lg">
+              <div className="group relative overflow-hidden rounded-lg">
                 {avatar ? (
-                  <div
-                    style={{
-                      backgroundImage: `url(${getImagePath(avatar)})`,
-                      height: 152,
-                      width: 152,
-                      backgroundSize: 'cover',
-                      backgroundRepeat: 'no-repeat',
-                    }}
-                  />
+                  <>
+                    <div
+                      style={{
+                        backgroundImage: `url(${getImagePath(avatar)})`,
+                        height: 152,
+                        width: 152,
+                        backgroundSize: 'cover',
+                        backgroundRepeat: 'no-repeat',
+                      }}
+                    />
+                    <div className="absolute bottom-0 right-0 p-1.5 opacity-0 group-hover:opacity-100">
+                      <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
+                    </div>
+                  </>
                 ) : (
-                  <BoringAvatar size={154} name={address} variant="beam" square />
+                  <img src="/images/onboarding/no-avatar.png" alt="" className="size-[152px] object-cover" />
                 )}
               </div>
             </div>
@@ -348,9 +295,6 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
                 Upload
               </SmallButton>
             </label>
-            <div>
-              <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
-            </div>
             <input
               ref={fileInputRef}
               accept="image/png, image/jpeg"
@@ -365,21 +309,33 @@ function StepOnboarding({ onNext, address }: StepOnboardingProps) {
       <div className="flex w-full flex-col items-center justify-center gap-3">
         <div className="inline-block">
           <input
-            placeholder={placeholderMessage[accountType as SpaceType]}
+            placeholder="Your name..."
             className="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
             value={name}
             onChange={({ currentTarget: { value } }) => setName(value)}
             autoFocus
           />
         </div>
-        <Text as="h3" variant="body" className="text-center !text-base">
-          You can update this at any time.
-        </Text>
       </div>
-
       <div className="absolute inset-x-4 bottom-4 flex">
+        <div className="absolute left-0 right-0 top-0 flex -translate-y-full justify-center pb-4">
+          <Tooltip
+            trigger={
+              <div className="inline-flex items-center gap-1">
+                <Text as="h3" variant="footnote" className="text-center">
+                  Personal access controls
+                </Text>
+                <div>
+                  <QuestionCircle />
+                </div>
+              </div>
+            }
+            label="Some tooltip..."
+            position="top"
+          />
+        </div>
         <Button variant="secondary" disabled={!validName} onClick={onNext} className="w-full">
-          {accountType === 'personal' ? 'Create Account' : 'Create Space'}
+          Create Space
         </Button>
       </div>
     </div>
@@ -393,55 +349,41 @@ type StepCompleteProps = {
 
 const retryMessage: Record<Step, string> = {
   start: '',
-  'select-type': '',
   'enter-profile': '',
   'create-space': 'Space creation failed',
   completed: '',
 };
 
-type SpaceTypeSubsetForOnboarding = Extract<SpaceType, 'personal' | 'company' | 'nonprofit'>;
-
-const completeMessage: Record<SpaceTypeSubsetForOnboarding, string> = {
-  personal: 'Visit my personal space',
-  company: 'Go to my company space',
-  nonprofit: 'Go to my nonprofit space',
-};
-
 function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
   const { hideOnboarding } = useOnboarding();
+  const router = useRouter();
 
-  const accountType = useAtomValue(accountTypeAtom);
   const spaceId = useAtomValue(spaceIdAtom);
   const step = useAtomValue(stepAtom);
+
+  const hasCompleted = step === 'completed';
+
+  if (hasCompleted) {
+    setTimeout(() => {
+      hideOnboarding();
+      const destination = NavUtils.toSpace(spaceId);
+      router.push(destination);
+    }, 3_600);
+  }
 
   return (
     <>
       <StepContents childKey="start">
-        <div className="flex w-full flex-col items-center pt-6">
-          <Text
-            as="h3"
-            variant="bodySemibold"
-            className={cx('mx-auto text-center !text-2xl', step === 'completed' && '-mt-[24px]')}
-          >
-            {step === 'completed'
-              ? `Welcome to Geo!`
-              : accountType === 'personal'
-              ? `Creating your Geo account`
-              : `Creating your Space`}
+        <div className="flex w-full flex-col items-center pt-3">
+          <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center !text-2xl')}>
+            {step === 'completed' ? `Finalizing details...` : `Creating space...`}
           </Text>
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center !text-base">
-            {step === 'completed'
-              ? `Browse content, curate information, join as a member or editor and contribute to spaces that matter to you.`
-              : `This may take a minute or two to complete.`}
+            Get ready to experience a new way of creating and sharing knowledge.
           </Text>
           {step !== 'completed' && (
             <>
               <Spacer height={32} />
-
-              <div className="w-4">
-                <Dots />
-              </div>
-
               {showRetry && (
                 <p className=" mt-4 text-center text-smallButton">
                   {retryMessage[step]}{' '}
@@ -454,18 +396,69 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
           )}
         </div>
       </StepContents>
-      <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="relative aspect-video">
-          <img src="/images/onboarding/1.png" alt="" className="inline-block h-full w-full" />
+      <div className="absolute inset-x-4 bottom-4">
+        <div className="absolute left-0 right-0 top-0 z-10 flex -translate-y-1/2 justify-center">
+          <div className="flex size-11 items-center justify-center rounded-full bg-white shadow-card">
+            <Dots />
+          </div>
         </div>
-        <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Link href={NavUtils.toSpace(spaceId)} className="w-full" onClick={hideOnboarding}>
-            <Button className="w-full" disabled={step !== 'completed'}>
-              {completeMessage[accountType as SpaceTypeSubsetForOnboarding]}
-            </Button>
-          </Link>
+        <div className="relative z-0">
+          <Animation active={hasCompleted} />
         </div>
       </div>
     </>
   );
 }
+
+const Animation = ({ active = false }) => {
+  return (
+    <div className="bg-gradient-geo relative flex h-[272px] w-[328px] items-center justify-center overflow-clip rounded">
+      <div className="absolute -left-5 top-3">
+        <div
+          className={cx('transition duration-300', active ? 'translate-x-2 translate-y-2 opacity-50' : 'opacity-20')}
+        >
+          <img src="/images/onboarding/top-left.png" alt="" className="w-1/2" />
+        </div>
+      </div>
+      <div className="absolute -right-20 -top-6">
+        <div
+          className={cx('transition duration-300', active ? '-translate-x-2 translate-y-2 opacity-50' : 'opacity-20')}
+        >
+          <img src="/images/onboarding/top-right.png" alt="" className="w-1/2" />
+        </div>
+      </div>
+      <div className="absolute -right-16 bottom-0 top-0 flex items-center">
+        <div className={cx('transition duration-300', active ? '-translate-x-2 opacity-50' : 'opacity-20')}>
+          <img src="/images/onboarding/right-middle.png" alt="" className="w-1/2" />
+        </div>
+      </div>
+      <div className="absolute -bottom-8 -right-48">
+        <div
+          className={cx('transition duration-300', active ? '-translate-x-2 -translate-y-2 opacity-50' : 'opacity-20')}
+        >
+          <img src="/images/onboarding/right-bottom.png" alt="" className="w-1/2" />
+        </div>
+      </div>
+      <div className="absolute -bottom-4 -left-4">
+        <div
+          className={cx('transition duration-300', active ? '-translate-y-2 translate-x-2 opacity-50' : 'opacity-20')}
+        >
+          <img src="/images/onboarding/left-bottom.png" alt="" className="w-1/2" />
+        </div>
+      </div>
+      <div className="z-1000 relative -mb-6">
+        <img src="/images/onboarding/main.png" alt="" className="h-auto w-[246px]" />
+      </div>
+      <div className="absolute bottom-8 left-3">
+        <div className={cx('transition duration-300', active ? '-translate-y-2 opacity-100' : 'opacity-0')}>
+          <img src="/images/onboarding/left-middle-float.png" alt="" className="w-1/2" />
+        </div>
+      </div>
+      <div className="absolute -right-16 top-12">
+        <div className={cx('transition duration-300', active ? 'translate-y-2 opacity-100' : 'opacity-0')}>
+          <img src="/images/onboarding/right-middle-float.png" alt="" className="w-1/2" />
+        </div>
+      </div>
+    </div>
+  );
+};
