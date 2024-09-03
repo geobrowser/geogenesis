@@ -43,8 +43,8 @@ async function mergeTableRowEntitiesAsync(
   // the relations merging to aggregate entities.
   const localEntities = getRelations({
     selector: () => {
-      // @TODO(data-block): Map the filter string into a selector  relations are
-      // correctly filtered.
+      // @TODO(data-block): Map the filter string into a selector so local relations
+      // are correctly filtered.
       return true;
     },
   })
