@@ -6,28 +6,22 @@ export const INDEXED_SPACE = '306598522df542f69ad72921c33ad84b';
 export const ATTRIBUTE = '808a04ceb21c4d888ad12e240613e5ca';
 
 /**
- * Collections are a data model that enable us to create references between some
+ * Relations are a data model that enable us to create references between some
  * arbitrary id and a set of entity ids.
  *
  * They act similarly to Join Tables in a relational database, but are designed
- * around the graphbased nature of the Geo data model.
- *
- * A collection is primarily just an id. These can exist as a value in a triple or
- * as an Entire entity. Collection items create a reference between a collection and
- * an entity.
+ * around the graph-based nature of the Geo data model.
+ * 
+ * Relations are themselves entities, so can store any metadata about the relation
+ * as triples. Currently Relation entities cannot have their own relations. This is a
+ * technical limitation to avoid infinitely creating recursive relations.
  *
  * ┌─────────────────────┐       ┌────────────────────┐      ┌──────────────────────┐
  * │                     │       │                    │      │                      │
- * │      Collection     │◄──────┤   Collection Item  │─────►│        Entity        │
+ * │      Entity         │◄──────┤     Relation       │─────►│        Entity        │
  * │                     │       │                    │      │                      │
  * └─────────────────────┘       └────────────────────┘      └──────────────────────┘
  */
-
-/**
- * Collection entity type. This is used when the Collection itself is an entity
- * vs. being a value in a Triple
- */
-export const COLLECTION_TYPE = 'c373a33052df47b3a6d2df552bda4b44';
 
 /**
  * Relation type. This is the entity representing the Join between the
@@ -58,6 +52,38 @@ export const RELATION_TYPE_ATTRIBUTE = 'd747a35a6aa14f468f76e6c2064c7036'
  * default, but we set all collection items to a default index value of 0.
  */
 export const RELATION_INDEX = 'ede47e6930b044998ea4aafbda449609';
+
+/**
+ * Collection entity type. This is used when the Collection itself is an entity
+ * vs. being a value in a Triple
+ */
+export const COLLECTION_TYPE = 'c373a33052df47b3a6d2df552bda4b44';
+
+/**
+ * Data entities in Geo can specify one or many data sources. These data sources
+ * might fall into various categories which determine how data for these sources
+ * are fetched.
+ * 
+ * A collection data source points to a collection with one or many collection item
+ * relations coming from it.
+ * 
+ * A query data source points to one, many, or no spaces. This determines which spaces
+ * we query data from.
+ * 
+ * An all-of-geo data source doesn't point to any spaces, and instead queries the
+ * entirety of the knowledge graph.
+ */
+export const DATA_SOURCE_ATTRIBUTE = 'f971040607704042947558595625e48f';
+export const DATA_SOURCE_TYPE_RELATION_TYPE = 'aa0d4ddd70994b1093339fd7a8e5f715';
+export const COLLECTION_DATA_SOURCE = 'a82dd96e24064feea770265ddf707ee3';
+export const QUERY_DATA_SOURCE = '8c3658dd8b174cb9836daf9278c179e2';
+export const ALL_OF_GEO_DATA_SOURCE = '21417aaa69b745509f4297e59ffd8e2b';
+
+/**
+ * The collection item relation type is used to identify the relations that point to
+ * collection items from a collection.
+ */
+export const COLLECTION_ITEM_RELATION_TYPE = '66579048ca0d47b1-8ac1c9de1ddfd4bd'
 
 /*
   Example Usage: Rhonda Patrick > TYPES > Person

@@ -1,7 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { JSONContent } from '@tiptap/core';
 
-import { UpsertOp } from '~/core/database/write';
+import { UpsertOp } from '~/core/database/types';
 
 import { htmlToMarkdown } from './parser';
 import { getNodeId, getNodeName, getTextNodeHtml } from './utils';
@@ -18,7 +18,7 @@ interface UpsertMarkdownOp extends UpsertOp {
   value: { type: 'TEXT'; value: string };
 }
 
-export function getTextBlockOps(node: JSONContent): [UpsertNameOp, UpsertMarkdownOp] {
+export function getTextEntityOps(node: JSONContent): [UpsertNameOp, UpsertMarkdownOp] {
   const blockEntityId = getNodeId(node);
   const nodeHTML = getTextNodeHtml(node);
   const entityName = getNodeName(node);

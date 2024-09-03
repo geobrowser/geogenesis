@@ -44,22 +44,21 @@ export const DataBlockSourceMenu = ({
               <span className="text-smallButton text-grey-04">Back</span>
             </button>
           </div>
-          <MenuItem active={source.type === 'collection'}>
+          <MenuItem active={source.type === 'COLLECTION'}>
             <button onClick={() => null} className="flex w-full items-center justify-between gap-2">
               <span className="text-button text-text">{collectionName || 'New collection'}</span>
-              {source.type === 'collection' && <Check />}
+              {source.type === 'COLLECTION' && <Check />}
             </button>
           </MenuItem>
-          <MenuItem active={source.type === 'spaces'}>
+          <MenuItem active={source.type === 'SPACES'}>
             <button onClick={() => setView('spaces')} className="flex w-full items-center justify-between gap-2">
               <div>
                 <div className="text-button text-text">Spaces</div>
-                {source.type === 'spaces' && source.value.length > 0 && (
+                {source.type === 'SPACES' && source.value.length > 0 && (
                   <div className="mt-1.5 flex items-center gap-1">
                     <div className="inline-flex">
                       {source.value.map(spaceId => {
                         const selectedSpace = spaces.find(space => space.id === spaceId);
-
                         if (!selectedSpace) return null;
 
                         return (
@@ -79,7 +78,7 @@ export const DataBlockSourceMenu = ({
               <ChevronRight />
             </button>
           </MenuItem>
-          <MenuItem active={source.type === 'geo'}>
+          <MenuItem active={source.type === 'GEO'}>
             <button
               onClick={() => {
                 const newFilterState = filterState.filter(filter => filter.columnId !== SYSTEM_IDS.SPACE);
@@ -89,7 +88,7 @@ export const DataBlockSourceMenu = ({
             >
               <div className="flex w-full justify-between gap-2">
                 <div className="text-button text-text">All of Geo</div>
-                {source.type === 'geo' && <Check />}
+                {source.type === 'GEO' && <Check />}
               </div>
               <div className="mt-0.5 text-footnote text-grey-04">
                 Fields limited to Name, Description, Types, Cover and Avatar
@@ -107,7 +106,7 @@ type SpacesMenuProps = {
   onBack: () => void;
 };
 
-export const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
+const SpacesMenu = ({ onBack }: SpacesMenuProps) => {
   const { query, setQuery, spaces: queriedSpaces } = useSpacesQuery();
   const { filterState, setFilterState } = useTableBlock();
 

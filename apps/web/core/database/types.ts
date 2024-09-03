@@ -1,4 +1,4 @@
-import { Triple } from '~/core/types';
+import { DeleteTripleAppOp, OmitStrict, SetTripleAppOp, Triple } from '~/core/types';
 
 import { Relation } from '../io/dto/entities';
 
@@ -7,3 +7,11 @@ export interface StoredTriple extends Triple {
 }
 
 export type StoredRelation = Relation & { isDeleted?: boolean };
+
+type WriteStoreOp = OmitStrict<SetTripleAppOp, 'id'>;
+type DeleteStoreOp = OmitStrict<DeleteTripleAppOp, 'id' | 'attributeName' | 'entityName' | 'value'>;
+export type UpsertOp = OmitStrict<WriteStoreOp, 'type'>;
+export type RemoveOp = OmitStrict<DeleteStoreOp, 'type'>;
+
+export type StoreOp = WriteStoreOp | DeleteStoreOp;
+export type StoreRelation = OmitStrict<Relation, 'id'>;

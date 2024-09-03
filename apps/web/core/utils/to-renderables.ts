@@ -68,19 +68,23 @@ export function toRenderables({
     };
   });
 
-  const relationsToRenderable = relations.map((r): RelationRenderableProperty => {
-    return {
-      type: r.toEntity.renderableType,
-      entityId: r.id,
-      entityName: null,
-      attributeId: r.typeOf.id,
-      attributeName: r.typeOf.name,
-      spaceId,
-      relationId: r.id,
-      value: r.toEntity.value, // This is either the image URL or the entity ID
-      valueName: r.toEntity.name,
-    };
-  });
+  const relationsToRenderable = relations
+    // DATA and TEXT relations are mostly consumed by components rendering blocks. We don't
+    // care about those in the property area.
+    .filter(r => r.toEntity.renderableType === 'DATA' || r.toEntity.renderableType === 'TEXT')
+    .map((r): RelationRenderableProperty => {
+      return {
+        type: r.toEntity.renderableType as RelationRenderableProperty['type'], // We filter out data and text relations above
+        entityId: r.id,
+        entityName: null,
+        attributeId: r.typeOf.id,
+        attributeName: r.typeOf.name,
+        spaceId,
+        relationId: r.id,
+        value: r.toEntity.value, // This is either the image URL or the entity ID
+        valueName: r.toEntity.name,
+      };
+    });
 
   return [
     ...triplesToRenderable,

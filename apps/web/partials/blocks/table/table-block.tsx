@@ -51,9 +51,9 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     blockEntity,
     hasPreviousPage,
     pageNumber,
-    type,
     view,
     placeholder,
+    source,
   } = useTableBlock();
 
   const allColumns = columns.map(column => ({
@@ -76,7 +76,8 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
    * special handling when creating the graphql string.
    * 1. Name
    * 2. Space
-   * 3. Any entity or string column
+   * 3. Types
+   * 4. Any entity or string column
    *
    * Name and Space are treated specially throughout this code path.
    */
@@ -88,11 +89,17 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       };
     }
 
+    if (f.columnId === SYSTEM_IDS.TYPES) {
+      return {
+        ...f,
+        columnName: 'Types',
+      };
+    }
+
     if (f.columnId === SYSTEM_IDS.SPACE) {
       return {
         ...f,
         columnName: 'Space',
-        // @TODO: Substreams don't have the correct checksum for space address. This is being fixed.
         value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
       };
     }
@@ -103,7 +110,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     };
   });
 
-  const typeId = type.entityId;
   const attributes: Array<[string, string]> =
     filterState && filterState.length > 0
       ? // filters can include 'space', which is not an attribute
@@ -153,7 +159,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             shownColumnIds={shownColumnIds}
           />
           {isEditing && (
-            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, attributes)}>
+            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), undefined, attributes)}>
               <Create />
             </Link>
           )}
@@ -203,12 +209,12 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
         ) : (
           <TableBlockTable
             space={spaceId}
-            typeId={typeId}
             columns={columns}
             rows={rows}
             shownColumnIds={shownColumnIds}
             placeholder={placeholder}
             view={view}
+            source={source}
           />
         )}
         {hasPagination && (

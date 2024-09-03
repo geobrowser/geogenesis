@@ -1,17 +1,21 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
+import { Match, pipe } from 'effect';
 
 import * as React from 'react';
 
 import { TableBlockSdk } from '../blocks-sdk';
 import { mergeEntityAsync, useEntity } from '../database/entities';
-import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '../database/table';
+import { useRelations } from '../database/relations';
+import { MergeTableEntitiesArgs, mergeCollectionItemEntitiesAsync, mergeTableEntities } from '../database/table';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
-import { EntityId } from '../io/schema';
-import { GeoType, ValueType as TripleValueType } from '../types';
+import { EntityId, SpaceId } from '../io/schema';
+import { Schema, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { Values } from '../utils/value';
+import { getSource } from './editor/data-entity';
+import { Source } from './editor/types';
 
 export const PAGE_SIZE = 9;
 
@@ -22,36 +26,33 @@ export interface TableBlockFilter {
   valueName: string | null;
 }
 
-type SpaceId = string;
-
-type SingleSource = {
-  type: 'collection' | 'geo';
-  value: string;
-};
-
-// @TODO add support for `collections` with multiple `collectionId`s
-type MultipleSources = {
-  type: 'spaces';
-  value: Array<SpaceId>;
-};
-
-type Source = SingleSource | MultipleSources;
-
 export function useTableBlock() {
-  const { entityId, selectedType, spaceId } = useTableBlockInstance();
+  const { entityId, spaceId } = useTableBlockInstance();
   const [pageNumber, setPageNumber] = React.useState(0);
-
   const { upsert } = useWriteOps();
 
   const blockEntity = useEntity(React.useMemo(() => EntityId(entityId), [entityId]));
 
+  const source: Source = React.useMemo(() => {
+    return getSource(blockEntity.relationsOut, SpaceId(spaceId));
+  }, [blockEntity.relationsOut, spaceId]);
+
+  const collectionItems = useRelations(
+    React.useMemo(() => {
+      return {
+        selector: r => {
+          if (source.type !== 'COLLECTION') return false;
+          return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
+        },
+      };
+    }, [source])
+  );
+
+  // @TODO(data blocks): What do we do for filters now?
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
   }, [blockEntity?.triples]);
 
-  // We memoize the filterString since several of the subsequent queries rely
-  // on the graphql representation of the filter. Memoizing it means we avoid
-  // unnecessary re-renders.
   const filterString = React.useMemo(() => {
     const stringValue = Values.stringValue(filterTriple ?? undefined);
 
@@ -59,8 +60,8 @@ export function useTableBlock() {
       return stringValue;
     }
 
-    return TableBlockSdk.createGraphQLStringFromFiltersV2([], selectedType.entityId);
-  }, [filterTriple, selectedType.entityId]);
+    return TableBlockSdk.createGraphQLStringFromFiltersV2([]);
+  }, [filterTriple]);
 
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
     queryKey: ['table-block-filter-value', filterString],
@@ -74,19 +75,29 @@ export function useTableBlock() {
     },
   });
 
+  // We need the entities before we can fetch the columns since we need to know the
+  // types of the entities when rendering a collection source.
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
-    queryKey: ['table-block-columns', selectedType.entityId],
+    queryKey: ['table-block-columns'],
     queryFn: async () => {
-      return await mergeColumns(EntityId(selectedType.entityId));
+      // @TODO(data blocks): Fetch columns based on source type or entities schemas
+      return [
+        {
+          id: EntityId(SYSTEM_IDS.NAME),
+          name: 'Name',
+          valueType: SYSTEM_IDS.TEXT,
+        },
+      ] satisfies Schema[];
+      // return await mergeColumns(EntityId(selectedType.entityId));
     },
   });
 
   const { data: rows, isLoading: isLoadingRows } = useQuery({
-    queryKey: ['table-block-rows', columns, selectedType.entityId, pageNumber, entityId, filterState],
+    queryKey: ['table-block-rows', columns, pageNumber, entityId, filterState, source, collectionItems],
     queryFn: async () => {
       if (!columns) return [];
 
-      const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? [], selectedType.entityId);
+      const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? []);
 
       const params: MergeTableEntitiesArgs['options'] = {
         filter: filterString,
@@ -94,15 +105,16 @@ export function useTableBlock() {
         skip: pageNumber * PAGE_SIZE,
       };
 
-      /**
-       * Aggregate data for the rows from local and server entities.
-       */
-      const entities = await mergeTableEntities({
-        options: params,
-        selectedTypeId: EntityId(selectedType.entityId),
-      });
+      // Depending on the source type we use different queries to aggregate the data
+      // for the data view.
+      const entities = await pipe(
+        Match.value(source),
+        Match.when({ type: 'COLLECTION' }, source => mergeCollectionItemEntitiesAsync(source.value)),
+        Match.when({ type: 'SPACES' }, () => mergeTableEntities({ options: params })),
+        Match.orElse(() => [])
+      );
 
-      return EntityTable.fromColumnsAndRows(entities, columns).rows;
+      return EntityTable.fromColumnsAndRows(entities, columns);
     },
   });
 
@@ -140,8 +152,7 @@ export function useTableBlock() {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString =
-        newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState, selectedType.entityId);
+      const newFiltersString = newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState);
 
       const entityName = blockEntity.name ?? '';
 
@@ -159,7 +170,7 @@ export function useTableBlock() {
         spaceId
       );
     },
-    [upsert, entityId, selectedType.entityId, spaceId, blockEntity.name]
+    [upsert, entityId, spaceId, blockEntity.name]
   );
 
   const setName = React.useCallback(
@@ -176,30 +187,6 @@ export function useTableBlock() {
 
   const view = getView(blockEntity);
   const placeholder = getPlaceholder(blockEntity, view);
-
-  let source: Source = {
-    type: 'geo',
-    value: '',
-  };
-
-  // required to coerce returned source type to `Source`
-  // @TODO replace with proper logic for collection blocks
-  const isCollection = false;
-  if (isCollection) {
-    source = {
-      type: 'collection',
-      value: 'MOCK_COLLECTION_ID',
-    };
-  }
-
-  if (filterState && filterState.find(filter => filter.columnId === SYSTEM_IDS.SPACE)) {
-    const spaces = filterState.filter(filter => filter.columnId === SYSTEM_IDS.SPACE).map(filter => filter.value);
-
-    source = {
-      type: 'spaces',
-      value: spaces,
-    };
-  }
 
   return {
     blockEntity,
@@ -218,7 +205,6 @@ export function useTableBlock() {
     hasPreviousPage: pageNumber > 0,
     setPage,
 
-    type: selectedType,
     entityId,
     spaceId,
 
@@ -300,33 +286,21 @@ const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string 
   },
 };
 
-const TableBlockContext = React.createContext<{ entityId: string; selectedType: GeoType; spaceId: string } | undefined>(
-  undefined
-);
+const TableBlockContext = React.createContext<{ entityId: string; spaceId: string } | undefined>(undefined);
 
 interface Props {
   spaceId: string;
   children: React.ReactNode;
-
-  selectedType?: GeoType;
   entityId: string;
 }
 
-export function TableBlockProvider({ spaceId, children, selectedType, entityId }: Props) {
-  if (!selectedType) {
-    // A table block might reference a type that has been deleted which will not be found
-    // in the types store.
-    console.error(`Undefined type in blockId: ${entityId}`);
-    throw new Error('Missing selectedType in TableBlockStoreProvider');
-  }
-
+export function TableBlockProvider({ spaceId, children, entityId }: Props) {
   const store = React.useMemo(() => {
     return {
       spaceId,
       entityId,
-      selectedType,
     };
-  }, [spaceId, selectedType, entityId]);
+  }, [spaceId, entityId]);
 
   return <TableBlockContext.Provider value={store}>{children}</TableBlockContext.Provider>;
 }

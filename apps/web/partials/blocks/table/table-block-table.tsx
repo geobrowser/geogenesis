@@ -19,8 +19,10 @@ import { useState } from 'react';
 
 import { getTriples } from '~/core/database/triples';
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { ID } from '~/core/id';
+import { EntityId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
+import { createEmptyCollectionItemEntity } from '~/core/state/editor/data-entity';
+import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Row, Schema } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -136,23 +138,26 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  typeId: string;
   columns: Schema[];
   rows: Row[];
   shownColumnIds: string[];
   view: DataBlockView;
+  source: Source;
   placeholder: { text: string; image: string };
 }
 
 // eslint-disable-next-line react/display-name
 export const TableBlockTable = React.memo(
-  ({ rows, space, typeId, columns, shownColumnIds, placeholder, view }: Props) => {
+  ({ rows, space, columns, shownColumnIds, placeholder, view, source }: Props) => {
     const isEditingColumns = useAtomValue(editingColumnsAtom);
 
     const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
     const { editable } = useEditable();
     const { isEditor, isMember } = useAccessControl(space);
     const isEditMode = (isEditor || isMember) && editable;
+
+    // @TODO(data blocks): Somehow need to make a placeholder row
+    // For now we'll make a button where someone can create a new row easily
 
     const table = useReactTable({
       data: rows,
@@ -175,19 +180,24 @@ export const TableBlockTable = React.memo(
       },
     });
 
+    const onNewRow = () => {
+      if (source.type === 'COLLECTION') {
+        createEmptyCollectionItemEntity(EntityId(source.value), space);
+      }
+    };
+
     const isEmpty = rows.length === 0;
 
     if (isEmpty) {
       if (isEditMode) {
         return (
-          <Link href={NavUtils.toEntity(space, ID.createEntityId(), typeId)} className="block rounded-lg bg-grey-01">
+          <div className="block rounded-lg bg-grey-01">
             <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
               <div>{placeholder.text}</div>
-              <div>
-                <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
-              </div>
+              <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
+              <button onClick={onNewRow}>Make a new row</button>
             </div>
-          </Link>
+          </div>
         );
       }
 

@@ -2,32 +2,18 @@
 
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
-import { useSuspenseQuery } from '@tanstack/react-query';
-import { cva } from 'class-variance-authority';
 import cx from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
-import { atom, useAtom } from 'jotai';
-import Image from 'next/legacy/image';
-import pluralize from 'pluralize';
+import { motion } from 'framer-motion';
+import { useAtom } from 'jotai';
 
 import * as React from 'react';
 
-import { getSchemaFromTypeIds, mergeEntityAsync } from '~/core/database/entities';
 import { useWriteOps } from '~/core/database/write';
-import { useSearch } from '~/core/hooks/use-search';
-import { useSpaces } from '~/core/hooks/use-spaces';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { Entity, Relation } from '~/core/io/dto/entities';
-import { SearchResult } from '~/core/io/dto/search';
-import { useMigrateHub } from '~/core/migrate/migrate';
+import { Relation } from '~/core/io/dto/entities';
 import { useTableBlock } from '~/core/state/table-block-store';
-import { Triple as ITriple, ValueTypeId } from '~/core/types';
-import { Triples } from '~/core/utils/triples';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
-import { valueTypeNames, valueTypes } from '~/core/value-types';
+import { NavUtils } from '~/core/utils/utils';
 
-import { ResultContent } from '~/design-system/autocomplete/results-list';
-import { Dots } from '~/design-system/dots';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
 import { Cog } from '~/design-system/icons/cog';
@@ -35,18 +21,12 @@ import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
-import { FilteredTableView } from '~/design-system/icons/filtered-table-view';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
-import { Input } from '~/design-system/input';
 import { MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { ResizableContainer } from '~/design-system/resizable-container';
-import { Skeleton } from '~/design-system/skeleton';
-import { TextButton } from '~/design-system/text-button';
 
 import { DataBlockSourceMenu } from '~/partials/blocks/table/data-block-source-menu';
 
-import { TableBlockSchemaConfigurationDialog } from './table-block-schema-configuration-dialog';
 import { editingColumnsAtom } from '~/atoms';
 
 const MotionContent = motion(Dropdown.Content);
@@ -54,165 +34,165 @@ const MotionContent = motion(Dropdown.Content);
 // We keep track of the attributes in local state in order to quickly render
 // the changes the user has made to the schema. Otherwise there will be loading
 // states for several actions which will make the UI feel slow.
-const optimisticAttributesAtom = atom<SearchResult[]>([]);
+// const optimisticAttributesAtom = atom<SearchResult[]>([]);
 
-function useOptimisticAttributes({
-  entityId,
-  entityName,
-  spaceId,
-}: {
-  entityId: string;
-  entityName: string | null;
-  spaceId: string;
-}) {
-  const [optimisticAttributes, setOptimisticAttributes] = useAtom(optimisticAttributesAtom);
-  const { upsert, remove } = useWriteOps();
-  const migrateHub = useMigrateHub();
+// function useOptimisticAttributes({
+//   entityId,
+//   entityName,
+//   spaceId,
+// }: {
+//   entityId: string;
+//   entityName: string | null;
+//   spaceId: string;
+// }) {
+//   const [optimisticAttributes, setOptimisticAttributes] = useAtom(optimisticAttributesAtom);
+//   const { upsert, remove } = useWriteOps();
+//   const migrateHub = useMigrateHub();
 
-  const onAddAttribute = (attribute: SearchResult) => {
-    upsert(
-      {
-        entityId: entityId,
-        entityName: attribute.name,
-        attributeId: SYSTEM_IDS.ATTRIBUTES,
-        attributeName: 'Attributes',
-        value: {
-          type: 'ENTITY',
-          value: attribute.id,
-          name: attribute.name,
-        },
-      },
-      spaceId
-    );
+//   const onAddAttribute = (attribute: SearchResult) => {
+//     upsert(
+//       {
+//         entityId: entityId,
+//         entityName: attribute.name,
+//         attributeId: SYSTEM_IDS.ATTRIBUTES,
+//         attributeName: 'Attributes',
+//         value: {
+//           type: 'ENTITY',
+//           value: attribute.id,
+//           name: attribute.name,
+//         },
+//       },
+//       spaceId
+//     );
 
-    setOptimisticAttributes([...optimisticAttributes, attribute]);
-  };
+//     setOptimisticAttributes([...optimisticAttributes, attribute]);
+//   };
 
-  const onUpdateAttribute = (attribute: SearchResult) => {
-    const remappedOptimisticAttributes = optimisticAttributes.map(a => {
-      if (a.id === attribute.id) {
-        return attribute;
-      }
+//   const onUpdateAttribute = (attribute: SearchResult) => {
+//     const remappedOptimisticAttributes = optimisticAttributes.map(a => {
+//       if (a.id === attribute.id) {
+//         return attribute;
+//       }
 
-      return a;
-    });
+//       return a;
+//     });
 
-    setOptimisticAttributes(remappedOptimisticAttributes);
-  };
+//     setOptimisticAttributes(remappedOptimisticAttributes);
+//   };
 
-  const onRemoveAttribute = (attribute: Entity, nameTriple?: ITriple) => {
-    if (!nameTriple) {
-      return;
-    }
+//   const onRemoveAttribute = (attribute: Entity, nameTriple?: ITriple) => {
+//     if (!nameTriple) {
+//       return;
+//     }
 
-    remove(
-      Triples.withId({
-        attributeId: SYSTEM_IDS.ATTRIBUTES,
-        attributeName: 'Attributes',
-        entityId: entityId,
-        entityName: entityName,
-        space: spaceId,
-        value: {
-          type: 'ENTITY',
-          value: nameTriple.entityId,
-          name: nameTriple.entityName,
-        },
-      }),
-      spaceId
-    );
+//     remove(
+//       Triples.withId({
+//         attributeId: SYSTEM_IDS.ATTRIBUTES,
+//         attributeName: 'Attributes',
+//         entityId: entityId,
+//         entityName: entityName,
+//         space: spaceId,
+//         value: {
+//           type: 'ENTITY',
+//           value: nameTriple.entityId,
+//           name: nameTriple.entityName,
+//         },
+//       }),
+//       spaceId
+//     );
 
-    setOptimisticAttributes(optimisticAttributes.filter(a => a.id !== attribute.id));
-  };
+//     setOptimisticAttributes(optimisticAttributes.filter(a => a.id !== attribute.id));
+//   };
 
-  const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: Entity) => {
-    const attributeValueTypeTriple = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE);
-    // This _should_ only be one space, but there may be a situation now where it's multiple spaces. Need to monitor this.
-    const attributeSpace = attribute.nameTripleSpaces?.[0];
+//   const onChangeAttributeValueType = (newValueTypeId: ValueTypeId, attribute: Entity) => {
+//     const attributeValueTypeTriple = attribute.triples.find(t => t.attributeId === SYSTEM_IDS.VALUE_TYPE);
+//     // This _should_ only be one space, but there may be a situation now where it's multiple spaces. Need to monitor this.
+//     const attributeSpace = attribute.nameTripleSpaces?.[0];
 
-    if (attributeValueTypeTriple) {
-      if (attributeSpace) {
-        remove(attributeValueTypeTriple, attributeSpace);
-      }
+//     if (attributeValueTypeTriple) {
+//       if (attributeSpace) {
+//         remove(attributeValueTypeTriple, attributeSpace);
+//       }
 
-      const oldValueTypeId = attributeValueTypeTriple.value.value;
+//       const oldValueTypeId = attributeValueTypeTriple.value.value;
 
-      // We want to make sure that the ID is actually one of the value types
-      // before we run any migrations.
-      //
-      // @TODO: Is there a better way to have this encoded into the type system
-      // of `value.id`?
-      if (oldValueTypeId in valueTypes) {
-        migrateHub.dispatch({
-          type: 'CHANGE_VALUE_TYPE',
-          payload: {
-            attributeId: attribute.id,
-            oldValueType: valueTypes[oldValueTypeId as ValueTypeId],
-            newValueType: valueTypes[newValueTypeId],
-          },
-        });
-      }
-    }
+//       // We want to make sure that the ID is actually one of the value types
+//       // before we run any migrations.
+//       //
+//       // @TODO: Is there a better way to have this encoded into the type system
+//       // of `value.id`?
+//       if (oldValueTypeId in valueTypes) {
+//         migrateHub.dispatch({
+//           type: 'CHANGE_VALUE_TYPE',
+//           payload: {
+//             attributeId: attribute.id,
+//             oldValueType: valueTypes[oldValueTypeId as ValueTypeId],
+//             newValueType: valueTypes[newValueTypeId],
+//           },
+//         });
+//       }
+//     }
 
-    if (attributeSpace) {
-      const newTriple = Triples.withId({
-        entityId: attribute.id,
-        entityName: attribute.name,
-        attributeId: SYSTEM_IDS.VALUE_TYPE,
-        attributeName: 'Value type',
-        space: attributeSpace,
-        value: {
-          type: 'ENTITY',
-          value: newValueTypeId,
-          name: valueTypeNames[newValueTypeId],
-        },
-      });
+//     if (attributeSpace) {
+//       const newTriple = Triples.withId({
+//         entityId: attribute.id,
+//         entityName: attribute.name,
+//         attributeId: SYSTEM_IDS.VALUE_TYPE,
+//         attributeName: 'Value type',
+//         space: attributeSpace,
+//         value: {
+//           type: 'ENTITY',
+//           value: newValueTypeId,
+//           name: valueTypeNames[newValueTypeId],
+//         },
+//       });
 
-      // @TODO(relations): Update the attribute in-place in the optimistic state
-      // const updatedTriples = [
-      //   ...attribute.triples.filter(t => {
-      //     return t.attributeId !== SYSTEM_IDS.VALUE_TYPE;
-      //   }),
-      //   newTriple,
-      // ];
+//       // @TODO(relations): Update the attribute in-place in the optimistic state
+//       // const updatedTriples = [
+//       //   ...attribute.triples.filter(t => {
+//       //     return t.attributeId !== SYSTEM_IDS.VALUE_TYPE;
+//       //   }),
+//       //   newTriple,
+//       // ];
 
-      // Update the attribute in-place in the optimistic state
-      onUpdateAttribute({
-        ...attribute,
-        // @TODO(database)
-        spaces: [],
-        // triples: updatedTriples,
-      });
+//       // Update the attribute in-place in the optimistic state
+//       onUpdateAttribute({
+//         ...attribute,
+//         // @TODO(database)
+//         spaces: [],
+//         // triples: updatedTriples,
+//       });
 
-      // Create a new Value Type triple with the new value type
-      upsert(newTriple, newTriple.space);
-    }
-  };
+//       // Create a new Value Type triple with the new value type
+//       upsert(newTriple, newTriple.space);
+//     }
+//   };
 
-  const { data } = useSuspenseQuery({
-    queryKey: ['table-block-type-schema-configuration-attributes-list', entityId],
-    queryFn: async () => {
-      const attributes = await getSchemaFromTypeIds([entityId]);
+//   const { data } = useSuspenseQuery({
+//     queryKey: ['table-block-type-schema-configuration-attributes-list', entityId],
+//     queryFn: async () => {
+//       const attributes = await getSchemaFromTypeIds([entityId]);
 
-      // Fetch the the entities for each of the Attribute in the type
-      const maybeAttributeEntities = await Promise.all(attributes.map(t => mergeEntityAsync(t.id)));
-      return maybeAttributeEntities.filter(e => e !== null);
-    },
-  });
+//       // Fetch the the entities for each of the Attribute in the type
+//       const maybeAttributeEntities = await Promise.all(attributes.map(t => mergeEntityAsync(t.id)));
+//       return maybeAttributeEntities.filter(e => e !== null);
+//     },
+//   });
 
-  // Update the modal state with the initial data for the attributes. We update this modal state optimistically
-  // when users add or remove attributes.
-  React.useEffect(() => {
-    // @ts-expect-error @TODO(database)
-    setOptimisticAttributes(data ?? []);
-  }, [data, setOptimisticAttributes]);
+//   // Update the modal state with the initial data for the attributes. We update this modal state optimistically
+//   // when users add or remove attributes.
+//   React.useEffect(() => {
+//     // @ts-expect-error @TODO(database)
+//     setOptimisticAttributes(data ?? []);
+//   }, [data, setOptimisticAttributes]);
 
-  return {
-    optimisticAttributes,
-    onAddAttribute,
-    onRemoveAttribute,
-    onChangeAttributeValueType,
-  };
-}
+//   return {
+//     optimisticAttributes,
+//     onAddAttribute,
+//     onRemoveAttribute,
+//     onChangeAttributeValueType,
+//   };
+// }
 
 type Column = {
   id: string;
@@ -231,7 +211,7 @@ export function TableBlockContextMenu({
   shownColumnIds,
 }: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const { type, spaceId, entityId, name } = useTableBlock();
+  const { spaceId, entityId, name } = useTableBlock();
   const [isEditingDataSource, setIsEditingDataSource] = React.useState(false);
   const [isEditingColumns, setIsEditingColumns] = useAtom(editingColumnsAtom);
 
@@ -240,9 +220,6 @@ export function TableBlockContextMenu({
   if (!isEditing) {
     setIsEditingColumns(false);
   }
-
-  const { spaces } = useSpaces();
-  const space = spaces.find(s => s.id === type.space);
 
   const onCopyBlockId = async () => {
     try {
@@ -265,7 +242,6 @@ export function TableBlockContextMenu({
     }
   };
 
-  const spaceImage = space?.spaceConfig?.image ?? null;
   const isInitialState = !isEditingDataSource && !isEditingColumns;
 
   return (
@@ -306,7 +282,7 @@ export function TableBlockContextMenu({
                       <ChevronRight />
                     </button>
                   </MenuItem>
-                  <TableBlockSchemaConfigurationDialog
+                  {/* <TableBlockSchemaConfigurationDialog
                     trigger={
                       <MenuItem>
                         <div className="flex items-center justify-between gap-2">
@@ -329,14 +305,13 @@ export function TableBlockContextMenu({
                             Making changes to this type it will affect everywhere that this type is referenced.
                           </h2>
                         </div>
-
                         <React.Suspense fallback={<AddAttributeLoading />}>
                           <AddAttribute />
                           <SchemaAttributes />
                         </React.Suspense>
                       </div>
                     }
-                  />
+                  /> */}
                   <MenuItem>
                     <Link
                       href={NavUtils.toEntity(spaceId, entityId)}
@@ -457,204 +432,204 @@ const ToggleColumn = ({
   );
 };
 
-function AddAttributeLoading() {
-  return (
-    <div className="flex flex-col gap-1">
-      <Skeleton className="h-7 w-24" />
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-9 w-14" />
-        <Skeleton className="h-9 w-[400px]" />
-        <Skeleton className="h-9 w-[76px]" />
-      </div>
-    </div>
-  );
-}
+// function AddAttributeLoading() {
+//   return (
+//     <div className="flex flex-col gap-1">
+//       <Skeleton className="h-7 w-24" />
+//       <div className="flex items-center gap-2">
+//         <Skeleton className="h-9 w-14" />
+//         <Skeleton className="h-9 w-[400px]" />
+//         <Skeleton className="h-9 w-[76px]" />
+//       </div>
+//     </div>
+//   );
+// }
 
-const resultsListActionBarStyles = cva(
-  'sticky bottom-0 flex items-center justify-between gap-2 overflow-hidden bg-white p-2 text-smallButton',
-  {
-    variants: {
-      // We add some styling if the aciton bar is being rendered when results are present vs when results
-      // are not present.
-      withFullBorder: {
-        false: 'rounded shadow-inner-grey-02',
-        true: 'rounded rounded-tl-none rounded-tr-none shadow-inner-grey-02',
-      },
-    },
-    defaultVariants: {
-      withFullBorder: true,
-    },
-  }
-);
+// const resultsListActionBarStyles = cva(
+//   'sticky bottom-0 flex items-center justify-between gap-2 overflow-hidden bg-white p-2 text-smallButton',
+//   {
+//     variants: {
+//       // We add some styling if the aciton bar is being rendered when results are present vs when results
+//       // are not present.
+//       withFullBorder: {
+//         false: 'rounded shadow-inner-grey-02',
+//         true: 'rounded rounded-tl-none rounded-tr-none shadow-inner-grey-02',
+//       },
+//     },
+//     defaultVariants: {
+//       withFullBorder: true,
+//     },
+//   }
+// );
 
-function AddAttribute() {
-  const { type } = useTableBlock();
+// function AddAttribute() {
+//   const { type } = useTableBlock();
 
-  const autocomplete = useSearch({
-    filterByTypes: [SYSTEM_IDS.ATTRIBUTE],
-  });
+//   const autocomplete = useSearch({
+//     filterByTypes: [SYSTEM_IDS.ATTRIBUTE],
+//   });
 
-  const { optimisticAttributes, onAddAttribute } = useOptimisticAttributes({
-    entityId: type.entityId,
-    entityName: type.entityName,
-    spaceId: type.space,
-  });
+//   const { optimisticAttributes, onAddAttribute } = useOptimisticAttributes({
+//     entityId: type.entityId,
+//     entityName: type.entityName,
+//     spaceId: type.space,
+//   });
 
-  const onSelect = (result: SearchResult) => {
-    autocomplete.onQueryChange('');
-    onAddAttribute(result);
-  };
+//   const onSelect = (result: SearchResult) => {
+//     autocomplete.onQueryChange('');
+//     onAddAttribute(result);
+//   };
 
-  return (
-    <div className="flex flex-col gap-1">
-      <h3 className="text-bodySemibold">Add attribute</h3>
-      <div className="relative">
-        <Input
-          placeholder="Attribute name..."
-          onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
-          value={autocomplete.query}
-        />
-        {autocomplete.query && (
-          // The max-height includes extra padding for the action bar to be stuck at the bottom of the list
-          // without overlapping results.
-          <div className="absolute top-10 z-100 flex max-h-[188px] w-full flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
-            <ResizableContainer duration={0.125}>
-              <ul className="flex max-h-40 list-none flex-col justify-start overflow-y-auto overflow-x-hidden">
-                {autocomplete.results.map((result, i) => (
-                  <motion.li
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.02 * i }}
-                    key={result.id}
-                  >
-                    <ResultContent
-                      key={result.id}
-                      onClick={() => onSelect(result)}
-                      alreadySelected={optimisticAttributes.map(a => a.id).includes(result.id)}
-                      result={result}
-                    />
-                  </motion.li>
-                ))}
-              </ul>
+//   return (
+//     <div className="flex flex-col gap-1">
+//       <h3 className="text-bodySemibold">Add attribute</h3>
+//       <div className="relative">
+//         <Input
+//           placeholder="Attribute name..."
+//           onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
+//           value={autocomplete.query}
+//         />
+//         {autocomplete.query && (
+//           // The max-height includes extra padding for the action bar to be stuck at the bottom of the list
+//           // without overlapping results.
+//           <div className="absolute top-10 z-100 flex max-h-[188px] w-full flex-col overflow-hidden rounded bg-white shadow-inner-grey-02">
+//             <ResizableContainer duration={0.125}>
+//               <ul className="flex max-h-40 list-none flex-col justify-start overflow-y-auto overflow-x-hidden">
+//                 {autocomplete.results.map((result, i) => (
+//                   <motion.li
+//                     initial={{ opacity: 0, y: -5 }}
+//                     animate={{ opacity: 1, y: 0 }}
+//                     transition={{ delay: 0.02 * i }}
+//                     key={result.id}
+//                   >
+//                     <ResultContent
+//                       key={result.id}
+//                       onClick={() => onSelect(result)}
+//                       alreadySelected={optimisticAttributes.map(a => a.id).includes(result.id)}
+//                       result={result}
+//                     />
+//                   </motion.li>
+//                 ))}
+//               </ul>
 
-              <div
-                className={resultsListActionBarStyles({
-                  withFullBorder: !autocomplete.isEmpty && !autocomplete.isLoading,
-                })}
-              >
-                <AnimatePresence mode="popLayout">
-                  {autocomplete.isLoading ? (
-                    <motion.span
-                      key="dots"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.1 }}
-                    >
-                      <Dots />
-                    </motion.span>
-                  ) : (
-                    <motion.span
-                      key="attributes-found"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.1 }}
-                    >
-                      {autocomplete.results.length} {pluralize('attribute', autocomplete.results.length)} found
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-                <div className="flex items-baseline gap-3">
-                  <TextButton>Create new attribute</TextButton>
-                </div>
-              </div>
-            </ResizableContainer>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+//               <div
+//                 className={resultsListActionBarStyles({
+//                   withFullBorder: !autocomplete.isEmpty && !autocomplete.isLoading,
+//                 })}
+//               >
+//                 <AnimatePresence mode="popLayout">
+//                   {autocomplete.isLoading ? (
+//                     <motion.span
+//                       key="dots"
+//                       initial={{ opacity: 0, scale: 0.95 }}
+//                       animate={{ opacity: 1, scale: 1 }}
+//                       exit={{ opacity: 0 }}
+//                       transition={{ duration: 0.1 }}
+//                     >
+//                       <Dots />
+//                     </motion.span>
+//                   ) : (
+//                     <motion.span
+//                       key="attributes-found"
+//                       initial={{ opacity: 0, scale: 0.95 }}
+//                       animate={{ opacity: 1, scale: 1 }}
+//                       exit={{ opacity: 0 }}
+//                       transition={{ duration: 0.1 }}
+//                     >
+//                       {autocomplete.results.length} {pluralize('attribute', autocomplete.results.length)} found
+//                     </motion.span>
+//                   )}
+//                 </AnimatePresence>
+//                 <div className="flex items-baseline gap-3">
+//                   <TextButton>Create new attribute</TextButton>
+//                 </div>
+//               </div>
+//             </ResizableContainer>
+//           </div>
+//         )}
+//       </div>
+//     </div>
+//   );
+// }
 
-function SchemaAttributes() {
-  const { type } = useTableBlock();
+// function SchemaAttributes() {
+//   const { type } = useTableBlock();
 
-  const {
-    optimisticAttributes: attributes,
-    // onRemoveAttribute,
-    // onChangeAttributeValueType,
-  } = useOptimisticAttributes({
-    entityId: type.entityId,
-    entityName: type.entityName,
-    spaceId: type.space,
-  });
+//   const {
+//     optimisticAttributes: attributes,
+//     // onRemoveAttribute,
+//     // onChangeAttributeValueType,
+//   } = useOptimisticAttributes({
+//     entityId: type.entityId,
+//     entityName: type.entityName,
+//     spaceId: type.space,
+//   });
 
-  // @TODO(relations)
-  // const onChangeAttributeName = (newName: string, attribute: Entity, oldNameTriple?: ITriple) => {
-  //   // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
-  //   const attributeSpace = attribute.nameTripleSpaces?.[0];
+//   // @TODO(relations)
+//   // const onChangeAttributeName = (newName: string, attribute: Entity, oldNameTriple?: ITriple) => {
+//   //   // This _should_ only be in one space, but it could be in multiple now. Need to monitor this.
+//   //   const attributeSpace = attribute.nameTripleSpaces?.[0];
 
-  //   if (!attributeSpace || !oldNameTriple) {
-  //     console.error("The entity doesn't have a name triple space");
-  //     return;
-  //   }
+//   //   if (!attributeSpace || !oldNameTriple) {
+//   //     console.error("The entity doesn't have a name triple space");
+//   //     return;
+//   //   }
 
-  //   upsert(
-  //     {
-  //       ...oldNameTriple,
-  //       entityName: newName,
-  //       value: {
-  //         type: 'TEXT',
-  //         value: newName,
-  //       },
-  //     },
-  //     attributeSpace
-  //   );
-  // };
+//   //   upsert(
+//   //     {
+//   //       ...oldNameTriple,
+//   //       entityName: newName,
+//   //       value: {
+//   //         type: 'TEXT',
+//   //         value: newName,
+//   //       },
+//   //     },
+//   //     attributeSpace
+//   //   );
+//   // };
 
-  return (
-    <div className="flex flex-col gap-1">
-      <h3 className="text-bodySemibold">Attributes</h3>
-      <div className="flex flex-col gap-2">
-        {attributes?.map(() => {
-          // @TODO(relations)
-          return null;
-          // const valueTypeId: ValueTypeId | undefined = attributeEntity.triples.find(
-          //   t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
-          // )?.value.value as ValueTypeId;
+//   return (
+//     <div className="flex flex-col gap-1">
+//       <h3 className="text-bodySemibold">Attributes</h3>
+//       <div className="flex flex-col gap-2">
+//         {attributes?.map(() => {
+//           // @TODO(relations)
+//           return null;
+//           // const valueTypeId: ValueTypeId | undefined = attributeEntity.triples.find(
+//           //   t => t.attributeId === SYSTEM_IDS.VALUE_TYPE
+//           // )?.value.value as ValueTypeId;
 
-          // const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
+//           // const nameTripleForAttribute = attributeEntity.triples.find(t => t.attributeId === SYSTEM_IDS.NAME);
 
-          // return (
-          //   <div key={attributeEntity.id} className="flex items-center gap-4">
-          //     {/* <div className="rounded bg-grey-01 px-5 py-2.5"> */}
-          //     <AttributeValueTypeDropdown
-          //       valueTypeId={valueTypeId}
-          //       onChange={valueTypeId => onChangeAttributeValueType(valueTypeId, attributeEntity)}
-          //     />
-          //     {/* </div> */}
-          //     <Input
-          //       defaultValue={attributeEntity.name ?? ''}
-          //       onBlur={e => onChangeAttributeName(e.currentTarget.value, attributeEntity, nameTripleForAttribute)}
-          //     />
-          //     {/* {valueTypeId === SYSTEM_IDS.RELATION && (
-          //       <AttributeConfigurationMenu
-          //         trigger={<Cog />}
-          //         attributeId={attributeEntity.id}
-          //         attributeName={attributeEntity.name}
-          //       />
-          //     )} */}
-          //     <AttributeRowContextMenu
-          //       onRemoveAttribute={() => onRemoveAttribute(attributeEntity, nameTripleForAttribute)}
-          //     />
-          //   </div>
-          // );
-        })}
-      </div>
-    </div>
-  );
-}
+//           // return (
+//           //   <div key={attributeEntity.id} className="flex items-center gap-4">
+//           //     {/* <div className="rounded bg-grey-01 px-5 py-2.5"> */}
+//           //     <AttributeValueTypeDropdown
+//           //       valueTypeId={valueTypeId}
+//           //       onChange={valueTypeId => onChangeAttributeValueType(valueTypeId, attributeEntity)}
+//           //     />
+//           //     {/* </div> */}
+//           //     <Input
+//           //       defaultValue={attributeEntity.name ?? ''}
+//           //       onBlur={e => onChangeAttributeName(e.currentTarget.value, attributeEntity, nameTripleForAttribute)}
+//           //     />
+//           //     {/* {valueTypeId === SYSTEM_IDS.RELATION && (
+//           //       <AttributeConfigurationMenu
+//           //         trigger={<Cog />}
+//           //         attributeId={attributeEntity.id}
+//           //         attributeName={attributeEntity.name}
+//           //       />
+//           //     )} */}
+//           //     <AttributeRowContextMenu
+//           //       onRemoveAttribute={() => onRemoveAttribute(attributeEntity, nameTripleForAttribute)}
+//           //     />
+//           //   </div>
+//           // );
+//         })}
+//       </div>
+//     </div>
+//   );
+// }
 
 // function AttributeRowContextMenu({ onRemoveAttribute }: { onRemoveAttribute: () => void }) {
 //   const [isOpen, setIsOpen] = React.useState(false);
