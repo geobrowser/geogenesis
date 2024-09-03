@@ -76,7 +76,8 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
    * special handling when creating the graphql string.
    * 1. Name
    * 2. Space
-   * 3. Any entity or string column
+   * 3. Types
+   * 4. Any entity or string column
    *
    * Name and Space are treated specially throughout this code path.
    */
@@ -88,11 +89,17 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       };
     }
 
+    if (f.columnId === SYSTEM_IDS.TYPES) {
+      return {
+        ...f,
+        columnName: 'Types',
+      };
+    }
+
     if (f.columnId === SYSTEM_IDS.SPACE) {
       return {
         ...f,
         columnName: 'Space',
-        // @TODO: Substreams don't have the correct checksum for space address. This is being fixed.
         value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
       };
     }

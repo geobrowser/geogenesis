@@ -25,10 +25,6 @@ type BlockProps = {
 };
 
 const Block = ({ block }: BlockProps) => {
-  if (!block || !block.content) {
-    return null;
-  }
-
   switch (block.type) {
     case 'paragraph': {
       return (
