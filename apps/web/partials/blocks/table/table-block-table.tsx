@@ -182,7 +182,6 @@ export const TableBlockTable = React.memo(
 
     const onNewRow = () => {
       if (source.type === 'COLLECTION') {
-        console.log('create empty collection item entity');
         createEmptyCollectionItemEntity(EntityId(source.value), space);
       }
     };

@@ -103,7 +103,7 @@ export function createGraphQLStringFromFilters(
     .flatMap(f => (f ? [f] : []));
 
   if (filtersAsStrings.length === 1) {
-    return filtersAsStrings[0];
+    return `{ ${filtersAsStrings[0]} }`;
   }
 
   // Wrap each filter expression in curly brackets
@@ -298,7 +298,7 @@ export function createGraphQLStringFromFiltersV2(
     .flatMap(f => (f ? [f] : []));
 
   if (filtersAsStrings.length === 1) {
-    return filtersAsStrings[0];
+    return `{ ${filtersAsStrings[0]} }`;
   }
 
   // Wrap each filter expression in curly brackets

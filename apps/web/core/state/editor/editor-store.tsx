@@ -262,10 +262,7 @@ export function useEditorStore() {
 
         const markdownTripleForBlockId = markdownTriplesForBlockId[0];
         const relationForBlockId = blocks.find(r => r.block.id === blockId);
-        const toEntity = relationForBlockId?.block.id;
-
-        // @TODO: Support image and data blocks
-        // const value = getBlockValueForBlockType(toEntity);
+        const toEntity = relationForBlockId?.block;
 
         // if (value?.type === 'IMAGE') {
         //   return {
@@ -280,17 +277,15 @@ export function useEditorStore() {
         //   };
         // }
 
-        // if (value?.type === 'DATA') {
-        //   return {
-        //     type: 'tableNode',
-        //     attrs: {
-        //       spaceId,
-        //       id: blockId,
-        //       typeId: value.value,
-        //       typeName: value.name,
-        //     },
-        //   };
-        // }
+        if (toEntity?.type === 'DATA') {
+          return {
+            type: 'tableNode',
+            attrs: {
+              spaceId,
+              id: blockId,
+            },
+          };
+        }
 
         const html = markdownTripleForBlockId ? markdownToHtml(Values.stringValue(markdownTripleForBlockId) || '') : '';
         /* SSR on custom react nodes doesn't seem to work out of the box at the moment */
@@ -435,42 +430,4 @@ export function useEditorStore() {
     editorJson,
     blockIds,
   };
-}
-
-function getBlockValueForBlockType(
-  block?: Entity
-): { type: 'IMAGE' | 'TEXT' | 'DATA'; value: string; name: string | null } | null {
-  if (!block) {
-    return null;
-  }
-
-  const blockTypes = block.types.map(t => t.id);
-
-  const isTextBlock = blockTypes?.includes(TypeId(SYSTEM_IDS.TEXT_BLOCK));
-  const isTableBlock = blockTypes?.includes(TypeId(SYSTEM_IDS.TABLE_BLOCK));
-  const isImageBlock = blockTypes?.includes(TypeId(SYSTEM_IDS.IMAGE_BLOCK));
-
-  if (isTextBlock) {
-    const value = block.triples.find(t => t.attributeId === SYSTEM_IDS.MARKDOWN_CONTENT)?.value.value;
-
-    return value
-      ? {
-          type: 'TEXT',
-          value: value ?? '',
-          name: null,
-        }
-      : null;
-  }
-
-  if (isTableBlock) {
-    const rowType = block.relationsOut.find(r => r.typeOf.id === EntityId(SYSTEM_IDS.ROW_TYPE));
-    return rowType ? { type: 'DATA', value: rowType.toEntity.id, name: rowType.toEntity.name } : null;
-  }
-
-  if (isImageBlock) {
-    const value = block.relationsOut.find(r => r.typeOf.id === EntityId(SYSTEM_IDS.IMAGE_ATTRIBUTE))?.toEntity.id;
-    return value ? { type: 'IMAGE', value, name: null } : null;
-  }
-
-  return null;
 }

@@ -10,7 +10,7 @@ import { useRelations } from '../database/relations';
 import { MergeTableEntitiesArgs, mergeCollectionItemEntitiesAsync, mergeTableEntities } from '../database/table';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
-import { EntityId } from '../io/schema';
+import { EntityId, SpaceId } from '../io/schema';
 import { Schema, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { Values } from '../utils/value';
@@ -34,8 +34,8 @@ export function useTableBlock() {
   const blockEntity = useEntity(React.useMemo(() => EntityId(entityId), [entityId]));
 
   const source: Source = React.useMemo(() => {
-    return getSource(blockEntity.relationsOut);
-  }, [blockEntity.relationsOut]);
+    return getSource(blockEntity.relationsOut, SpaceId(spaceId));
+  }, [blockEntity.relationsOut, spaceId]);
 
   const collectionItems = useRelations(
     React.useMemo(() => {
@@ -92,13 +92,11 @@ export function useTableBlock() {
     },
   });
 
-  console.log('collectionItems', collectionItems);
-
   const { data: rows, isLoading: isLoadingRows } = useQuery({
     queryKey: ['table-block-rows', columns, pageNumber, entityId, filterState, source, collectionItems],
     queryFn: async () => {
       if (!columns) return [];
-      // @TODO(data blocks): Fetch rows based on source type
+
       const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? []);
 
       const params: MergeTableEntitiesArgs['options'] = {
@@ -112,10 +110,6 @@ export function useTableBlock() {
       const entities = await pipe(
         Match.value(source),
         Match.when({ type: 'COLLECTION' }, source => mergeCollectionItemEntitiesAsync(source.value)),
-        // Match.when(
-        //   { type: 'COLLECTION' },
-        //   async () => await Promise.all(collectionItems.map(i => mergeEntityAsync(i.toEntity.id)))
-        // ),
         Match.when({ type: 'SPACES' }, () => mergeTableEntities({ options: params })),
         Match.orElse(() => [])
       );

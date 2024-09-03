@@ -83,7 +83,7 @@ export function getInitialDataEntityRelations(
       },
       toEntity: {
         id: EntityId(SYSTEM_IDS.COLLECTION_DATA_SOURCE),
-        renderableType: 'RELATION',
+        renderableType: 'DATA',
         name: null,
         value: EntityId(SYSTEM_IDS.COLLECTION_DATA_SOURCE),
       },
@@ -112,7 +112,7 @@ export function getInitialDataEntityRelations(
  * @returns The source of the data block with the source type and entity id(s)
  * for the type of source.
  */
-export function getSource(dataEntityRelations: Relation[]): Source {
+export function getSource(dataEntityRelations: Relation[], currentSpaceId: SpaceId): Source {
   const sourceType = dataEntityRelations.find(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE)?.toEntity
     .id;
 
@@ -139,8 +139,8 @@ export function getSource(dataEntityRelations: Relation[]): Source {
   }
 
   return {
-    type: 'COLLECTION',
-    value: '',
+    type: 'SPACES',
+    value: [currentSpaceId],
   };
 }
 
@@ -149,17 +149,29 @@ export function createEmptyCollectionItemEntity(collectionId: EntityId, spaceId:
   const nameOp = getEmptyEntityNameOps();
 
   DB.upsert(nameOp, spaceId);
+
+  // Create a relation for the Collection Item pointing from the collection to the new entity
   DB.upsertRelation({
-    relation: getRelationForCollectionItem(collectionId, EntityId(SYSTEM_IDS.NAME), nameOp.value.value),
+    relation: getRelationForCollectionItem({
+      collectionId,
+      toEntityId: EntityId(SYSTEM_IDS.NAME),
+      toEntityName: nameOp.value.value,
+    }),
     spaceId,
   });
 }
 
-function getRelationForCollectionItem(
-  collectionId: EntityId,
-  toEntityId: EntityId,
-  toEntityName: string
-): StoreRelation {
+type GetRelationForCollectionItemArgs = {
+  collectionId: EntityId;
+  toEntityId: EntityId;
+  toEntityName: string;
+};
+
+function getRelationForCollectionItem({
+  collectionId,
+  toEntityId,
+  toEntityName,
+}: GetRelationForCollectionItemArgs): StoreRelation {
   // Create a relation that points from the collection to the entity with Relation Type -> CollectionItem
   // 1. Relation type -> CollectionItem
   return {
