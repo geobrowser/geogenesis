@@ -152,7 +152,7 @@ export function useTableBlock() {
   );
 
   const setFilterState = React.useCallback(
-    async (filters: TableBlockFilter[]) => {
+    (filters: TableBlockFilter[]) => {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.

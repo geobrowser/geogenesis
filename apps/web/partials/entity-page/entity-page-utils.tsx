@@ -49,8 +49,6 @@ export function sortEntityPageTriples(visibleTriples: Triple[], schemaTriples: T
   });
 }
 
-
-
 export function sortRenderables(renderables: RenderableProperty[]) {
   /* Visible triples includes both real triples and placeholder triples */
   return renderables.sort((renderableA, renderableB) => {
