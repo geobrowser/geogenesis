@@ -48,7 +48,6 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   >;
 
   const where = [
-    `isStale: { equalTo: false }`,
     options.space && `spaceId: { equalTo: ${JSON.stringify(options.space)} }`,
     // We can pass either `query` or `fieldFilters['entity-name']` to filter by entity name
     (options.query || fieldFilters['entity-name']) &&
