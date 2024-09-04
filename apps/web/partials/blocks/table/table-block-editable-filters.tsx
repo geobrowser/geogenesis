@@ -9,20 +9,24 @@ import { CreateSmall } from '~/design-system/icons/create-small';
 
 import { TableBlockFilterPrompt } from './table-block-filter-creation-prompt';
 
+type RenderableFilter = TableBlockFilter & { columnName: string };
+
 export function TableBlockEditableFilters() {
   const { setFilterState, columns, filterState } = useTableBlock();
 
-  // We treat Name and Space as special filters even though they are not always
-  // columns on the type schema for a table. We allow users to be able to filter
-  // by name and space.
-  const filterableColumns: (TableBlockFilter & { columnName: string })[] = [
-    {
-      columnId: SYSTEM_IDS.NAME,
-      columnName: 'Name',
-      valueType: valueTypes[SYSTEM_IDS.TEXT],
-      value: '',
-      valueName: null,
-    },
+  // We treat Name, Typs and Space as special filters even though they are not
+  // always columns on the type schema for a table. We allow users to be able
+  // to filter by name and space.
+  const filterableColumns: RenderableFilter[] = [
+    // @TODO(data blocks): We should add the default filters to the data model
+    // itself instead of manually here.
+    // {
+    //   columnId: SYSTEM_IDS.NAME,
+    //   columnName: 'Name',
+    //   valueType: valueTypes[SYSTEM_IDS.TEXT],
+    //   value: '',
+    //   valueName: null,
+    // },
     {
       columnId: SYSTEM_IDS.SPACE,
       columnName: 'Space',
@@ -51,6 +55,8 @@ export function TableBlockEditableFilters() {
       .flatMap(c => (c.columnName !== '' && (c.valueType === 'ENTITY' || c.valueType === 'TEXT') ? [c] : [])),
   ];
 
+  const sortedFilters = sortFilters(filterableColumns);
+
   const onCreateFilter = ({
     columnId,
     value,
@@ -62,8 +68,6 @@ export function TableBlockEditableFilters() {
     valueType: TripleValueType;
     valueName: string | null;
   }) => {
-    console.log('onCreateFilter', columnId, value, valueType, valueName);
-
     setFilterState([
       ...filterState,
       {
@@ -77,7 +81,7 @@ export function TableBlockEditableFilters() {
 
   return (
     <TableBlockFilterPrompt
-      options={filterableColumns}
+      options={sortedFilters}
       onCreate={onCreateFilter}
       trigger={
         <SmallButton icon={<CreateSmall />} variant="secondary">
@@ -86,4 +90,30 @@ export function TableBlockEditableFilters() {
       }
     />
   );
+}
+
+function sortFilters(filters: RenderableFilter[]): RenderableFilter[] {
+  /* Visible triples includes both real triples and placeholder triples */
+  return filters.sort((renderableA, renderableB) => {
+    const { columnId: attributeIdA, columnName: attributeNameA } = renderableA;
+    const { columnId: attributeIdB, columnName: attributeNameB } = renderableB;
+
+    const isNameA = attributeIdA === SYSTEM_IDS.NAME;
+    const isNameB = attributeIdB === SYSTEM_IDS.NAME;
+    const isDescriptionA = attributeIdA === SYSTEM_IDS.DESCRIPTION;
+    const isDescriptionB = attributeIdB === SYSTEM_IDS.DESCRIPTION;
+    const isTypesA = attributeIdA === SYSTEM_IDS.TYPES;
+    const isTypesB = attributeIdB === SYSTEM_IDS.TYPES;
+
+    if (isNameA && !isNameB) return -1;
+    if (!isNameA && isNameB) return 1;
+
+    if (isDescriptionA && !isDescriptionB) return -1;
+    if (!isDescriptionA && isDescriptionB) return 1;
+
+    if (isTypesA && !isTypesB) return -1;
+    if (!isTypesA && isTypesB) return 1;
+
+    return (attributeNameA || '').localeCompare(attributeNameB || '');
+  });
 }
