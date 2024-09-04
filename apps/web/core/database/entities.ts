@@ -33,7 +33,6 @@ export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relat
         relations: entity?.relationsOut ?? [],
       };
     },
-    staleTime: Infinity,
   });
 
   const triples = useTriples(

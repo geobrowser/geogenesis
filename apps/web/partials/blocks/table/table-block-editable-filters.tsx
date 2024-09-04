@@ -62,6 +62,8 @@ export function TableBlockEditableFilters() {
     valueType: TripleValueType;
     valueName: string | null;
   }) => {
+    console.log('onCreateFilter', columnId, value, valueType, valueName);
+
     setFilterState([
       ...filterState,
       {

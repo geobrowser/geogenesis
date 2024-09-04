@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
-import { Match, pipe } from 'effect';
+import { Match } from 'effect';
 
 import * as React from 'react';
 
@@ -42,6 +42,9 @@ export function useTableBlock() {
       return {
         selector: r => {
           if (source.type !== 'COLLECTION') return false;
+
+          // Return all local relations pointing to the collection id in the source block
+          // @TODO(data blocks): Merge with any remote collection items
           return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
         },
       };
@@ -60,13 +63,15 @@ export function useTableBlock() {
       return stringValue;
     }
 
-    return TableBlockSdk.createGraphQLStringFromFiltersV2([]);
+    return null;
   }, [filterTriple]);
 
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
     queryKey: ['table-block-filter-value', filterString],
     queryFn: async () => {
-      const filterState = TableBlockSdk.createFiltersFromGraphQLString(
+      if (!filterString) return [];
+
+      const filterState = await TableBlockSdk.createFiltersFromGraphQLString(
         filterString,
         async id => await mergeEntityAsync(EntityId(id))
       );
@@ -107,8 +112,7 @@ export function useTableBlock() {
 
       // Depending on the source type we use different queries to aggregate the data
       // for the data view.
-      const entities = await pipe(
-        Match.value(source),
+      const entities = await Match.value(source).pipe(
         Match.when({ type: 'COLLECTION' }, source => mergeCollectionItemEntitiesAsync(source.value)),
         Match.when({ type: 'SPACES' }, () => mergeTableEntities({ options: params })),
         Match.orElse(() => [])
@@ -148,7 +152,7 @@ export function useTableBlock() {
   );
 
   const setFilterState = React.useCallback(
-    (filters: TableBlockFilter[]) => {
+    async (filters: TableBlockFilter[]) => {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.

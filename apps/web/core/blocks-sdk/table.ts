@@ -109,7 +109,7 @@ export function createGraphQLStringFromFilters(
   // Wrap each filter expression in curly brackets
   const multiFilterQuery = filtersAsStrings.map(f => `{${f}}`).join(', ');
 
-  return `{and: [${multiFilterQuery}]}`;
+  return `{ and: [${multiFilterQuery}] }`;
 }
 
 /**
@@ -177,6 +177,24 @@ export async function createFiltersFromGraphQLString(
     value: string;
     valueName: string | null;
   }[] = [];
+
+  const typeRegex = /typeIds_contains_nocase:\s*\[(.*?)\]/;
+  const typeMatch = graphQLString.match(typeRegex);
+  const typeValue = typeMatch ? typeMatch[1] : null;
+
+  // @TODO: fix json parsing requirements
+  if (typeValue) {
+    const maybeType = await fetchEntity(JSON.parse(typeValue));
+
+    if (maybeType) {
+      filters.push({
+        columnId: SYSTEM_IDS.TYPES,
+        valueType: 'ENTITY',
+        value: JSON.parse(typeValue),
+        valueName: maybeType.name,
+      });
+    }
+  }
 
   // Parse a name query from the filter
   const nameRegex = /name_starts_with_nocase\s*:\s*"([^"]*)"/;
@@ -247,8 +265,6 @@ export async function createFiltersFromGraphQLString(
   return filters;
 }
 
-// @TODO(data blocks): The filters now include the typeId instead of the typeId being
-// a unique field.
 export function createGraphQLStringFromFiltersV2(
   filters: {
     columnId: string;
@@ -276,20 +292,19 @@ export function createGraphQLStringFromFiltersV2(
       if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
         return `triples: {
           some: {
-            spaceId: { equalTo: "${filter.value}" },
-            isStale: { equalTo: false }
+            spaceId: { equalTo: "${filter.value}" }
           }
         }`;
       }
 
       if (filter.valueType === 'ENTITY') {
         // value is the ID of the relation
-        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, entityValueId: { equalTo: "${filter.value}"}, isStale: { equalTo: false } } }`;
+        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, entityValueId: { equalTo: "${filter.value}"} } }`;
       }
 
       if (filter.valueType === 'TEXT') {
         // value is just the stringValue of the triple
-        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, stringValue: { equalToInsensitive: "${filter.value}"}, isStale: { equalTo: false } } }`;
+        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, stringValue: { equalToInsensitive: "${filter.value}"} } }`;
       }
 
       // We don't support other value types yet

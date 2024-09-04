@@ -31,7 +31,6 @@ function getFetchEntitiesQuery(
         triples: {
           some: {
             ${entityOfWhere}
-            isStale: { equalTo: false }
           }
         }
         ${typeIdsString}
