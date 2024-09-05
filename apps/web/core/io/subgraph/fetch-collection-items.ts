@@ -11,14 +11,14 @@ import { graphql } from './graphql';
 
 const query = (collectionId: string) => {
   return `{
-      relations(filter: {fromEntityId: "${collectionId}"}) {
-        nodes {
-          entity {
-            ${entityFragment}
-          }
+    relations(filter: { fromEntityId: { equalTo: "${collectionId}" } }) {
+      nodes {
+        entity {
+          ${entityFragment}
         }
       }
-    }`;
+    }
+  }`;
 };
 
 export async function fetchCollectionItemEntities(
