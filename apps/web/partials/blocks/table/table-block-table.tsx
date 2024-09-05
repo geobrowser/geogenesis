@@ -195,7 +195,7 @@ export const TableBlockTable = React.memo(
             <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
               <div>{placeholder.text}</div>
               <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
-              <button onClick={onNewRow}>Make a new row</button>
+              {source.type === 'COLLECTION' && <button onClick={onNewRow}>Make a new row</button>}
             </div>
           </div>
         );

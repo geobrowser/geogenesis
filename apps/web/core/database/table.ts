@@ -1,17 +1,19 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { dedupeWith } from 'effect/Array';
 
-import { TableBlockSdk } from '../blocks-sdk';
+import { createFiltersFromGraphQLStringAndSource } from '../blocks-sdk/table';
 import { fetchColumns } from '../io/fetch-columns';
 import { EntityId } from '../io/schema';
 import { fetchTableRowEntities } from '../io/subgraph';
 import { fetchCollectionItemEntities } from '../io/subgraph/fetch-collection-items';
 import { queryClient } from '../query-client';
+import { Source } from '../state/editor/types';
 import { Schema, Value } from '../types';
 import { EntityWithSchema, mergeEntity, mergeEntityAsync } from './entities';
 import { getRelations } from './relations';
 
 export interface MergeTableEntitiesArgs {
+  source: Source;
   options: {
     first?: number;
     skip?: number;
@@ -56,27 +58,32 @@ async function mergeTableRowEntitiesAsync(
   // the filters then we need to fetch its remote contents to make sure we have
   // all the data needed to merge it with the local state, filter and render it.
   // @TODO(performance): Batch instead of fetching an unknown number of them at once.
-  const localMergedEntities = await Promise.all(localEntities.map(id => mergeEntityAsync(id)));
+  const localMergedEntities = await queryClient.fetchQuery({
+    queryKey: ['table-local-entities-for-merging', localEntities],
+    queryFn: () => Promise.all(localEntities.map(id => mergeEntityAsync(id))),
+  });
+
   return [...localMergedEntities, ...remoteMergedEntities];
 }
 
-export async function mergeTableEntities({ options }: MergeTableEntitiesArgs) {
+export async function mergeTableEntities({ options, source }: MergeTableEntitiesArgs) {
   const entities = await mergeTableRowEntitiesAsync(options);
 
-  const filterState = await TableBlockSdk.createFiltersFromGraphQLString(
+  const filterState = await createFiltersFromGraphQLStringAndSource(
     options.filter ?? '',
+    source,
     async id => await mergeEntityAsync(EntityId(id))
   );
 
   return entities.filter(entity => {
     for (const filter of filterState) {
       return entity.triples.some(triple => {
-        // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
-        // attached to a triple in the data model. Once we represents entities across multiple spaces
-        // this filter likely won't make sense anymore.
-        if (filter.columnId === 'space') {
+        if (filter.columnId === SYSTEM_IDS.SPACE) {
+          // @HACK: We special-case `space` since it's not an attribute:value in an entity but is a property
+          // attached to a triple in the data model. Once we represents entities across multiple spaces
+          // this filter likely won't make sense anymore.
           // @TODO: We now store the entitySpaces on the entity itself
-          return entity.nameTripleSpaces?.includes(filter.value);
+          return triple.space.includes(filter.value);
         }
 
         return triple.attributeId === filter.columnId && filterValue(triple.value, filter.value);

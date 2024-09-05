@@ -12,8 +12,9 @@ function extractValue(networkTriple: SubstreamTriple): Value {
     case 'ENTITY': {
       return {
         type: 'ENTITY',
-        value: networkTriple.entityValue.id,
-        name: networkTriple.entityValue.name,
+        // @TODO: Fix runtime error when decoding in table
+        value: networkTriple?.entityValue?.id ?? '',
+        name: networkTriple?.entityValue?.name ?? null,
       };
     }
     case 'TIME':
