@@ -1,62 +1,56 @@
 'use client';
 
-import * as Popover from '@radix-ui/react-popover';
+import { Arrow, Content, Provider, Root, Trigger } from '@radix-ui/react-tooltip';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import * as React from 'react';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 type TooltipProps = {
-  trigger: React.ReactNode;
-  label: React.ReactNode;
+  trigger: ReactNode;
+  label: ReactNode;
   position?: Position;
+  className?: string;
 };
 
 type Position = 'top' | 'bottom' | 'left' | 'right';
 
-export const Tooltip = ({ trigger, label = '', position = 'bottom' }: TooltipProps) => {
-  const [isTooltipShown, setIsTooltipShown] = useState(false);
+export const Tooltip = ({ trigger, label = '', position = 'bottom', className = '' }: TooltipProps) => {
+  const [isOpen, setIsOpen] = useState<boolean>(false);
 
   return (
-    <Popover.Root open={isTooltipShown} onOpenChange={setIsTooltipShown}>
-      <Popover.Anchor asChild>
-        <div onClick={() => setIsTooltipShown(true)} onMouseEnter={() => setIsTooltipShown(true)}>
-          {trigger}
-        </div>
-      </Popover.Anchor>
-      <Popover.Portal>
+    <Provider delayDuration={300} skipDelayDuration={300}>
+      <Root open={isOpen} onOpenChange={setIsOpen}>
+        <Trigger className={className}>{trigger}</Trigger>
         <AnimatePresence mode="popLayout">
-          {isTooltipShown && (
-            <MotionPopoverContent
-              className={cx(
-                'relative z-10 w-full max-w-[192px] rounded bg-text p-2 text-white shadow-button focus:outline-none',
-                positionClassName[position]
-              )}
-              side={position}
-              align="center"
-              alignOffset={0}
-              sideOffset={8}
-              initial={{ opacity: 0, scale: 0.95, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -10 }}
-              transition={{
-                type: 'spring',
-                duration: 0.15,
-                bounce: 0,
-              }}
-            >
-              <div className="text-center text-breadcrumb">{label}</div>
-              <Popover.Arrow />
-            </MotionPopoverContent>
+          {isOpen && (
+            // a combined <MotionContent> component made with motion(Content) breaks the tooltip behavior
+            <Content side={position} align="center" alignOffset={0} sideOffset={8} forceMount>
+              <motion.div
+                className={cx(
+                  'relative w-full max-w-[192px] rounded bg-text p-2 text-white shadow-button focus:outline-none',
+                  positionClassName[position]
+                )}
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                transition={{
+                  type: 'spring',
+                  duration: 0.15,
+                  bounce: 0,
+                }}
+              >
+                <Arrow />
+                <div className="text-center text-breadcrumb">{label}</div>
+              </motion.div>
+            </Content>
           )}
         </AnimatePresence>
-      </Popover.Portal>
-    </Popover.Root>
+      </Root>
+    </Provider>
   );
 };
-
-const MotionPopoverContent = motion(Popover.Content);
 
 const positionClassName: Record<Position, string> = {
   top: 'origin-bottom',

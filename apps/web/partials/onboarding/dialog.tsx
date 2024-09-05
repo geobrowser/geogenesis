@@ -279,7 +279,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
                         backgroundRepeat: 'no-repeat',
                       }}
                     />
-                    <div className="absolute bottom-0 right-0 p-1.5 opacity-0 group-hover:opacity-100">
+                    <div className="absolute bottom-0 right-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
                       <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
                     </div>
                   </>
@@ -318,7 +318,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
         </div>
       </div>
       <div className="absolute inset-x-4 bottom-4 flex">
-        <div className="absolute left-0 right-0 top-0 flex -translate-y-full justify-center pb-4">
+        <div className="absolute left-0 right-0 top-0 z-100 flex -translate-y-full justify-center pb-4">
           <Tooltip
             trigger={
               <div className="inline-flex items-center gap-1">
@@ -330,11 +330,11 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
                 </div>
               </div>
             }
-            label="Some tooltip..."
+            label="A vote isn’t required to publish edits in this space"
             position="top"
           />
         </div>
-        <Button variant="secondary" disabled={!validName} onClick={onNext} className="w-full">
+        <Button disabled={!validName} onClick={onNext} className="w-full">
           Create Space
         </Button>
       </div>
