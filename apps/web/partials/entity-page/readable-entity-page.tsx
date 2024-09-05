@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { useRenderables } from '~/core/hooks/use-renderables';
 import { Relation } from '~/core/io/dto/entities';
-import { Services } from '~/core/services';
 import { RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 

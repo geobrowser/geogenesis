@@ -71,7 +71,7 @@ export function toRenderables({
   const relationsToRenderable = relations
     // DATA and TEXT relations are mostly consumed by components rendering blocks. We don't
     // care about those in the property area.
-    .filter(r => r.toEntity.renderableType === 'DATA' || r.toEntity.renderableType === 'TEXT')
+    .filter(r => r.toEntity.renderableType !== 'DATA' && r.toEntity.renderableType !== 'TEXT')
     .map((r): RelationRenderableProperty => {
       return {
         type: r.toEntity.renderableType as RelationRenderableProperty['type'], // We filter out data and text relations above

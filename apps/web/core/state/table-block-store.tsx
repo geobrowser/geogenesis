@@ -14,7 +14,7 @@ import { EntityId, SpaceId } from '../io/schema';
 import { Schema, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { Values } from '../utils/value';
-import { getSource } from './editor/data-entity';
+import { createSource, deleteSources, getSource } from './editor/data-entity';
 import { Source } from './editor/types';
 
 export const PAGE_SIZE = 9;
@@ -36,6 +36,10 @@ export function useTableBlock() {
   const source: Source = React.useMemo(() => {
     return getSource(blockEntity.relationsOut, SpaceId(spaceId));
   }, [blockEntity.relationsOut, spaceId]);
+
+  if (entityId === 'd5b7cf8fb6904af893b29ad1d1822534') {
+    console.log('source', { source, relations: blockEntity.relationsOut });
+  }
 
   const collectionItems = useRelations(
     React.useMemo(() => {
@@ -177,6 +181,16 @@ export function useTableBlock() {
     [upsert, entityId, spaceId, blockEntity.name]
   );
 
+  const setSource = React.useCallback(
+    (newSource: Source) => {
+      console.log('setSource', newSource);
+
+      deleteSources({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
+      createSource({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
+    },
+    [entityId, blockEntity.relationsOut, spaceId]
+  );
+
   const setName = React.useCallback(
     (newName: string) => {
       TableBlockSdk.upsertName({
@@ -195,6 +209,7 @@ export function useTableBlock() {
   return {
     blockEntity,
     source,
+    setSource,
 
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
     columns: columns ?? [],
