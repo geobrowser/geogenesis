@@ -13,6 +13,7 @@ import { useSearch } from '~/core/hooks/use-search';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { SearchResult } from '~/core/io/dto/search';
+import { EntityId, SpaceId } from '~/core/io/schema';
 import type { RelationValueType } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -25,7 +26,7 @@ import { Search } from './icons/search';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
-  onDone: (result: { id: string; name: string | null; space?: string }) => void;
+  onDone: (result: { id: EntityId; name: string | null; space?: SpaceId }) => void;
   spaceId: string;
   allowedTypes?: RelationValueType[];
   placeholder?: string;
@@ -55,7 +56,7 @@ const inputStyles = cva('', {
   },
 });
 
-const containerStyles = cva('relative', {
+const containerStyles = cva('', {
   variants: {
     width: {
       clamped: 'w-[400px]',
@@ -173,7 +174,7 @@ export const SelectEntity = ({
       />
 
       {query && (
-        <div className="absolute z-[1000] w-full">
+        <div className="fixed z-[1000] w-full">
           <div
             className={cx(
               '-ml-px overflow-hidden rounded-md border border-divider bg-white',
@@ -230,7 +231,7 @@ export const SelectEntity = ({
                       <ArrowLeft color="grey-04" />
                     </button>
                   </div>
-                  <p className="p-2 text-smallButton text-grey-04">Select space version</p>
+                  <span className="p-2 text-smallButton text-grey-04">Select space version</span>
                   {/* <div className="flex flex-1 justify-end">
                      @TODO add settings
                     <button className="p-2 text-smallButton text-grey-04">Settings</button>
@@ -274,7 +275,7 @@ export const SelectEntity = ({
                         onDone({
                           id: result.id,
                           name: result.name,
-                          space: space.spaceId,
+                          space: SpaceId(space.spaceId),
                         });
                         onQueryChange('');
                       }}

@@ -17,8 +17,10 @@ import { graphql } from './graphql';
 // Ideally we let the caller define the logic for fetching and handling the result, but for now we are
 // following the pre-existing pattern.
 function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
+  const maybeFilter = filter === '' ? '' : `filter: ${filter}`;
+
   return `query {
-    entities(filter: ${filter} first: ${first} offset: ${skip} orderBy: UPDATED_AT_DESC) {
+    entities(${maybeFilter} first: ${first} offset: ${skip} orderBy: UPDATED_AT_DESC) {
       nodes {
         ${entityFragment}
       }
@@ -29,7 +31,6 @@ function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
 export interface FetchTableRowEntitiesOptions {
   first?: number;
   skip?: number;
-  typeIds?: string[];
   filter: string; // this is a graphql query string
   signal?: AbortController['signal'];
 }
@@ -90,7 +91,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
 
   const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const decodedEntities = entities.nodes
+  return entities.nodes
     .map(e => {
       const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
 
@@ -100,11 +101,9 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
           return null;
         },
         onRight: entity => {
-          return entity;
+          return EntityDto(entity);
         },
       });
     })
     .filter(e => e !== null);
-
-  return decodedEntities.map(EntityDto);
 }

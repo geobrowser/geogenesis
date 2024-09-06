@@ -19,8 +19,11 @@ import { useState } from 'react';
 
 import { getTriples } from '~/core/database/triples';
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { ID } from '~/core/id';
+import { SearchResult } from '~/core/io/dto/search';
+import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
+import { upsertCollectionItemRelation } from '~/core/state/editor/data-entity';
+import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Row, Schema } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -30,6 +33,7 @@ import { valueTypes } from '~/core/value-types';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { SelectEntity } from '~/design-system/select-entity';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
@@ -136,23 +140,26 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
 interface Props {
   space: string;
-  typeId: string;
   columns: Schema[];
   rows: Row[];
   shownColumnIds: string[];
   view: DataBlockView;
+  source: Source;
   placeholder: { text: string; image: string };
 }
 
 // eslint-disable-next-line react/display-name
 export const TableBlockTable = React.memo(
-  ({ rows, space, typeId, columns, shownColumnIds, placeholder, view }: Props) => {
+  ({ rows, space, columns, shownColumnIds, placeholder, view, source }: Props) => {
     const isEditingColumns = useAtomValue(editingColumnsAtom);
 
     const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
     const { editable } = useEditable();
     const { isEditor, isMember } = useAccessControl(space);
     const isEditMode = (isEditor || isMember) && editable;
+
+    // @TODO(data blocks): Somehow need to make a placeholder row
+    // For now we'll make a button where someone can create a new row easily
 
     const table = useReactTable({
       data: rows,
@@ -175,19 +182,30 @@ export const TableBlockTable = React.memo(
       },
     });
 
+    const onSelectCollectionItem = (entity: Pick<SearchResult, 'id' | 'name'>) => {
+      if (source.type === 'COLLECTION') {
+        upsertCollectionItemRelation({
+          collectionId: EntityId(source.value),
+          spaceId: SpaceId(space),
+          toEntity: {
+            id: entity.id,
+            name: entity.name,
+          },
+        });
+      }
+    };
+
     const isEmpty = rows.length === 0;
 
-    if (isEmpty) {
+    if (isEmpty && source.type !== 'COLLECTION') {
       if (isEditMode) {
         return (
-          <Link href={NavUtils.toEntity(space, ID.createEntityId(), typeId)} className="block rounded-lg bg-grey-01">
+          <div className="block rounded-lg bg-grey-01">
             <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
               <div>{placeholder.text}</div>
-              <div>
-                <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
-              </div>
+              <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
             </div>
-          </Link>
+          </div>
         );
       }
 
@@ -239,6 +257,11 @@ export const TableBlockTable = React.memo(
                   ))}
                 </thead>
                 <tbody>
+                  {source.type === 'COLLECTION' && (
+                    <TableCell width={784} isExpanded={false} toggleExpanded={() => {}} isShown>
+                      <SelectEntity spaceId={space} onDone={onSelectCollectionItem} />
+                    </TableCell>
+                  )}
                   {table.getRowModel().rows.map((row, index: number) => {
                     const cells = row.getVisibleCells();
                     const entityId = cells?.[0]?.getValue<Cell>()?.entityId;

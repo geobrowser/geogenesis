@@ -3,8 +3,8 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { RenderableEntityType, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import { TripleDto } from '../dto';
 import { EntityId, SubstreamEntity, SubstreamType, TypeId } from '../schema';
+import { TripleDto } from './triples';
 
 export type Entity = {
   id: EntityId;
@@ -95,6 +95,14 @@ export function EntityDto(entity: SubstreamEntity): Entity {
 function getRenderableEntityType(types: SubstreamType[]): RenderableEntityType {
   if (types.map(t => t.id).includes(TypeId(SYSTEM_IDS.IMAGE))) {
     return 'IMAGE';
+  }
+
+  if (types.map(t => t.id).includes(TypeId(SYSTEM_IDS.TABLE_BLOCK))) {
+    return 'DATA';
+  }
+
+  if (types.map(t => t.id).includes(TypeId(SYSTEM_IDS.TEXT_BLOCK))) {
+    return 'TEXT';
   }
 
   return 'RELATION';

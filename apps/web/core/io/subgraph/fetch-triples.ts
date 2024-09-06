@@ -6,7 +6,7 @@ import { v4 as uuid } from 'uuid';
 import { Environment } from '~/core/environment';
 import { FilterField, FilterState } from '~/core/types';
 
-import { TripleDto } from '../dto';
+import { TripleDto } from '../dto/triples';
 import { SubstreamTriple } from '../schema';
 import { tripleFragment } from './fragments';
 import { graphql } from './graphql';
@@ -48,7 +48,6 @@ export async function fetchTriples(options: FetchTriplesOptions) {
   >;
 
   const where = [
-    `isStale: { equalTo: false }`,
     options.space && `spaceId: { equalTo: ${JSON.stringify(options.space)} }`,
     // We can pass either `query` or `fieldFilters['entity-name']` to filter by entity name
     (options.query || fieldFilters['entity-name']) &&
@@ -110,7 +109,7 @@ export async function fetchTriples(options: FetchTriplesOptions) {
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const decodedTriples = result.triples.nodes
+  return result.triples.nodes
     .map(t => {
       const decodedSpace = Schema.decodeEither(SubstreamTriple)(t);
 
@@ -120,11 +119,9 @@ export async function fetchTriples(options: FetchTriplesOptions) {
           return null;
         },
         onRight: triple => {
-          return triple;
+          return TripleDto(triple);
         },
       });
     })
     .filter(t => t !== null);
-
-  return decodedTriples.map(TripleDto);
 }

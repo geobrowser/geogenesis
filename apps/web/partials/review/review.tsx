@@ -12,15 +12,15 @@ import pluralize from 'pluralize';
 import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
+import { createFiltersFromGraphQLStringAndSource } from '~/core/blocks-sdk/table';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useTriples } from '~/core/database/triples';
 import { usePublish } from '~/core/hooks/use-publish';
-import { Subgraph } from '~/core/io';
 import { Entity } from '~/core/io/dto/entities';
 import { fetchColumns } from '~/core/io/fetch-columns';
+import { EntityId, SpaceId } from '~/core/io/schema';
+import { fetchEntity } from '~/core/io/subgraph';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
-import { Services } from '~/core/services';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
@@ -53,15 +53,12 @@ export const Review = () => {
   );
 };
 
-type SpaceId = string;
-type Proposals = Record<SpaceId, Proposal>;
+type Proposals = Record<PropertyKey, Proposal>;
 
 type Proposal = {
   name: string;
   description: string;
 };
-
-type EntityId = string;
 
 const ReviewChanges = () => {
   const { state } = useStatusBar();
@@ -1051,17 +1048,22 @@ const TableFilter = ({ filter }: TableFilterProps) => {
 };
 
 const useFilters = (rawFilter: string) => {
-  const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${rawFilter}`],
-    queryFn: async () => getFilters(rawFilter, subgraph),
+    queryFn: async () => getFilters(rawFilter),
   });
 
   return [data, isLoading] as const;
 };
 
-const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph) => {
-  const filters = await createFiltersFromGraphQLString(rawFilter, async id => await subgraph.fetchEntity({ id }));
+const getFilters = async (rawFilter: string) => {
+  // @TODO(data blocks): fix
+  const filters = await createFiltersFromGraphQLStringAndSource(
+    rawFilter,
+    { type: 'SPACES', value: [SpaceId('')] },
+    async id => await fetchEntity({ id })
+  );
+
   const serverColumns = await fetchColumns({
     typeIds: [],
   });

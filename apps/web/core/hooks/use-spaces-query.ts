@@ -8,10 +8,11 @@ import { useState } from 'react';
 
 import { Environment } from '~/core/environment';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
-import { SpaceMetadataDto } from '~/core/io/dto';
 import { SubstreamSpace, SubstreamSpaceEntityConfig } from '~/core/io/schema';
 import { spaceMetadataFragment } from '~/core/io/subgraph/fragments';
 import { graphql } from '~/core/io/subgraph/graphql';
+
+import { SpaceMetadataDto } from '../io/dto/spaces';
 
 type NetworkResult = {
   spaces: {

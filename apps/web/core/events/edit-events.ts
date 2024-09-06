@@ -20,7 +20,8 @@ import { groupBy } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 import { valueTypeNames, valueTypes } from '~/core/value-types';
 
-import { StoreRelation, removeRelation, upsertRelation, useWriteOps } from '../database/write';
+import { StoreRelation } from '../database/types';
+import { removeRelation, upsertRelation, useWriteOps } from '../database/write';
 import { EntityId } from '../io/schema';
 
 export type EditEvent =

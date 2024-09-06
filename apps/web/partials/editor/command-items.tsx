@@ -2,7 +2,6 @@ import { Editor, Range } from '@tiptap/core';
 
 import * as React from 'react';
 
-import { Environment } from '~/core/environment';
 import { IpfsClient } from '~/core/io/ipfs-client';
 
 import { EditorH1 } from '~/design-system/icons/editor-h1';
@@ -31,8 +30,6 @@ export const tableCommandItem: CommandSuggestionItem = {
         type: 'tableNode',
         attrs: {
           spaceId: props.spaceId,
-          typeId: props.selectedType.entityId,
-          typeName: props.selectedType.entityName,
         },
       })
       .createParagraphNear()
@@ -111,7 +108,7 @@ export const commandItems: CommandSuggestionItem[] = [
       input.onchange = async (e: any) => {
         if (!e?.target?.files?.[0]) return;
         const file = e.target.files[0];
-
+        // @TODO(relations)
         const src = await IpfsClient.uploadFile(file);
         editor.chain().focus().deleteRange(range).setImage({ src }).run();
       };

@@ -293,7 +293,7 @@ async function waitForSpaceToBeIndexed(daoAddress: string) {
     Schedule.exponential(100).pipe(
       Schedule.jittered,
       Schedule.compose(Schedule.elapsed),
-      // Retry for 30 seconds.
+      // Retry for 60 seconds.
       Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.seconds(60)))
     )
   );

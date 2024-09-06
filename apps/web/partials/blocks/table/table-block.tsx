@@ -51,9 +51,9 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     blockEntity,
     hasPreviousPage,
     pageNumber,
-    type,
     view,
     placeholder,
+    source,
   } = useTableBlock();
 
   const allColumns = columns.map(column => ({
@@ -76,7 +76,8 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
    * special handling when creating the graphql string.
    * 1. Name
    * 2. Space
-   * 3. Any entity or string column
+   * 3. Types
+   * 4. Any entity or string column
    *
    * Name and Space are treated specially throughout this code path.
    */
@@ -88,11 +89,17 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       };
     }
 
+    if (f.columnId === SYSTEM_IDS.TYPES) {
+      return {
+        ...f,
+        columnName: 'Types',
+      };
+    }
+
     if (f.columnId === SYSTEM_IDS.SPACE) {
       return {
         ...f,
         columnName: 'Space',
-        // @TODO: Substreams don't have the correct checksum for space address. This is being fixed.
         value: spaces.find(s => s.id.toLowerCase() === f.value.toLowerCase())?.spaceConfig?.name ?? f.value,
       };
     }
@@ -103,7 +110,6 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
     };
   });
 
-  const typeId = type.entityId;
   const attributes: Array<[string, string]> =
     filterState && filterState.length > 0
       ? // filters can include 'space', which is not an attribute
@@ -117,35 +123,12 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       <div className="mb-2 flex h-8 items-center justify-between">
         <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
-          <AnimatePresence initial={false} mode="wait">
-            {filterState.length > 0 ? (
-              <motion.div
-                className="flex items-center"
-                key="filter-table-with-filters"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.15, bounce: 0.2 }}
-              >
-                <IconButton
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  icon={<FilterTableWithFilters />}
-                  color="grey-04"
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                className="flex items-center"
-                key="filter-table-without-filters"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.15, bounce: 0.2 }}
-              >
-                <IconButton onClick={() => setIsFilterOpen(!isFilterOpen)} icon={<FilterTable />} color="grey-04" />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <IconButton
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+            color="grey-04"
+          />
+
           <DataBlockViewMenu activeView={view} viewTriple={viewTriple} isLoading={isLoading} />
           <TableBlockContextMenu
             allColumns={allColumns}
@@ -153,7 +136,7 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
             shownColumnIds={shownColumnIds}
           />
           {isEditing && (
-            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), typeId, attributes)}>
+            <Link href={NavUtils.toEntity(spaceId, ID.createEntityId(), undefined, attributes)}>
               <Create />
             </Link>
           )}
@@ -203,12 +186,12 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
         ) : (
           <TableBlockTable
             space={spaceId}
-            typeId={typeId}
             columns={columns}
             rows={rows}
             shownColumnIds={shownColumnIds}
             placeholder={placeholder}
             view={view}
+            source={source}
           />
         )}
         {hasPagination && (

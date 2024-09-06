@@ -9,7 +9,7 @@ import * as React from 'react';
 import { TableBlockSdk } from '~/core/blocks-sdk';
 import { MergeTableEntitiesArgs, mergeColumns, mergeTableEntities } from '~/core/database/table';
 import { useWriteOps } from '~/core/database/write';
-import { EntityId } from '~/core/io/schema';
+import { EntityId, SpaceId } from '~/core/io/schema';
 import { createForeignType as insertForeignType, createType as insertType } from '~/core/type/create-type';
 import { GeoType, Triple as TripleType, ValueType as TripleValueType } from '~/core/types';
 import { EntityTable } from '~/core/utils/entity-table';
@@ -45,22 +45,19 @@ export function useEntityTable() {
     }
   }, [initialSelectedType, setSelectedType, selectedType]);
 
-  const filterString = TableBlockSdk.createGraphQLStringFromFilters(
-    [
-      {
-        columnId: SYSTEM_IDS.NAME,
-        value: query,
-        valueType: 'TEXT',
-      },
-      // Only return rows that are in the current space
-      {
-        columnId: SYSTEM_IDS.SPACE,
-        value: spaceId,
-        valueType: 'TEXT',
-      },
-    ],
-    selectedType?.entityId ?? null
-  );
+  const filterString = TableBlockSdk.createGraphQLStringFromFilters([
+    {
+      columnId: SYSTEM_IDS.NAME,
+      value: query,
+      valueType: 'TEXT',
+    },
+    // Only return rows that are in the current space
+    {
+      columnId: SYSTEM_IDS.SPACE,
+      value: spaceId,
+      valueType: 'TEXT',
+    },
+  ]);
 
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
     queryKey: ['table-block-columns', selectedType?.entityId],
@@ -71,7 +68,7 @@ export function useEntityTable() {
   });
 
   const { data: rows, isLoading: isLoadingRows } = useQuery({
-    queryKey: ['table-block-rows', columns, selectedType?.entityId, pageNumber, filterString],
+    queryKey: ['table-block-rows', columns, pageNumber, filterString, spaceId],
     queryFn: async () => {
       if (!columns || !selectedType) return [];
 
@@ -86,11 +83,14 @@ export function useEntityTable() {
        */
       const entities = await mergeTableEntities({
         options: params,
-        selectedTypeId: EntityId(selectedType.entityId),
+        source: {
+          type: 'SPACES',
+          value: [SpaceId(spaceId)],
+        },
       });
 
       hydrated.current = true;
-      return EntityTable.fromColumnsAndRows(entities, columns).rows;
+      return EntityTable.fromColumnsAndRows(entities, columns);
     },
   });
 

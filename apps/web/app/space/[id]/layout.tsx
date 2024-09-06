@@ -8,7 +8,7 @@ import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
-import { EditorProvider } from '~/core/state/editor-store';
+import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
 import { Entities } from '~/core/utils/entity';

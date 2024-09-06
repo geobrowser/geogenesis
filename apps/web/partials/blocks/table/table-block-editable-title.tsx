@@ -12,18 +12,18 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
 
   const { name, setName, source } = useTableBlock();
 
-  const hasOverflow = source.type === 'spaces' ? source.value.length > 3 : false;
-  const renderedSpaces = source.type === 'spaces' ? (hasOverflow ? source.value.slice(0, 2) : source.value) : [];
+  const hasOverflow = source.type === 'SPACES' ? source.value.length > 3 : false;
+  const renderedSpaces = source.type === 'SPACES' ? (hasOverflow ? source.value.slice(0, 2) : source.value) : [];
 
   return (
     <div className="flex items-center gap-2">
-      {source.type === 'geo' && (
+      {source.type === 'GEO' && (
         <img
           src={getImagePath(PLACEHOLDER_SPACE_IMAGE)}
           className="flex !size-[16px] flex-shrink-0 overflow-clip !rounded-sm border border-white object-cover"
         />
       )}
-      {source.type === 'spaces' && (
+      {source.type === 'SPACES' && (
         <div className="group relative z-100 flex h-full">
           {renderedSpaces.map(spaceId => {
             const selectedSpace = spaces.find(space => space.id === spaceId);

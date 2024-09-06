@@ -21,90 +21,75 @@ describe('TableBlock SDK', () => {
    * These four combinations can also be used together with an "and" filter
    */
   it('Builds a graphql query from table block filters', () => {
-    const stringFilter = createGraphQLStringFromFilters(
-      [
-        {
-          columnId: 'type',
-          value: 'Value 1',
-          valueType: 'TEXT',
-        },
-      ],
-      'type-id'
-    );
+    const stringFilter = createGraphQLStringFromFilters([
+      {
+        columnId: 'type',
+        value: 'Value 1',
+        valueType: 'TEXT',
+      },
+    ]);
 
     expect(stringFilter).toEqual(
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", stringValue_starts_with_nocase: "Value 1"}}`
     );
 
-    const entityFilter = createGraphQLStringFromFilters(
-      [
-        {
-          columnId: 'type',
-          value: 'id 1',
-          valueType: 'ENTITY',
-        },
-      ],
-      'type-id'
-    );
+    const entityFilter = createGraphQLStringFromFilters([
+      {
+        columnId: 'type',
+        value: 'id 1',
+        valueType: 'ENTITY',
+      },
+    ]);
 
     expect(entityFilter).toEqual(
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {attribute: "type", entityValue: "id 1"}}`
     );
 
-    const nameFilter = createGraphQLStringFromFilters(
-      [
-        {
-          columnId: SYSTEM_IDS.NAME,
-          value: 'id 1',
-          valueType: 'TEXT',
-        },
-      ],
-      'type-id'
-    );
+    const nameFilter = createGraphQLStringFromFilters([
+      {
+        columnId: SYSTEM_IDS.NAME,
+        value: 'id 1',
+        valueType: 'TEXT',
+      },
+    ]);
 
     expect(nameFilter).toEqual(`{typeIds_contains_nocase: ["type-id"], name_starts_with_nocase: "id 1"}`);
 
-    const andFilter = createGraphQLStringFromFilters(
-      [
-        {
-          columnId: 'type',
-          value: 'Value 1',
-          valueType: 'TEXT',
-        },
-        {
-          columnId: 'type',
-          value: 'id 1',
-          valueType: 'ENTITY',
-        },
-        {
-          columnId: SYSTEM_IDS.NAME,
-          value: 'id 1',
-          valueType: 'TEXT',
-        },
-      ],
-      'type-id'
-    );
+    const andFilter = createGraphQLStringFromFilters([
+      {
+        columnId: 'type',
+        value: 'Value 1',
+        valueType: 'TEXT',
+      },
+      {
+        columnId: 'type',
+        value: 'id 1',
+        valueType: 'ENTITY',
+      },
+      {
+        columnId: SYSTEM_IDS.NAME,
+        value: 'id 1',
+        valueType: 'TEXT',
+      },
+    ]);
 
     expect(andFilter).toEqual(
       `{and: [{typeIds_contains_nocase: ["type-id"]}, {entityOf_: {attribute: "type", stringValue_starts_with_nocase: "Value 1"}}, {entityOf_: {attribute: "type", entityValue: "id 1"}}, {name_starts_with_nocase: "id 1"}]}`
     );
 
-    const spaceFilter = createGraphQLStringFromFilters(
-      [
-        {
-          columnId: SYSTEM_IDS.SPACE,
-          valueType: 'TEXT',
-          value: '0x0000000000000000000000000000000000000000',
-        },
-      ],
-      'type-id'
-    );
+    const spaceFilter = createGraphQLStringFromFilters([
+      {
+        columnId: SYSTEM_IDS.SPACE,
+        valueType: 'TEXT',
+        value: '0x0000000000000000000000000000000000000000',
+      },
+    ]);
 
     expect(spaceFilter).toEqual(
       `{typeIds_contains_nocase: ["type-id"], entityOf_: {space: "0x0000000000000000000000000000000000000000"}}`
     );
 
-    const nullTypeIdFilter = createGraphQLStringFromFilters([], null);
+    const nullTypeIdFilter = createGraphQLStringFromFilters([]);
 
     expect(nullTypeIdFilter).toEqual('');
   });
@@ -246,82 +231,67 @@ describe('TableBlock SDK', () => {
   });
 
   it('Builds a graphql query from table block filters for the postgraphile-based substreams API', () => {
-    const stringFilter = createGraphQLStringFromFiltersV2(
-      [
-        {
-          columnId: 'type',
-          value: 'Value 1',
-          valueType: 'TEXT',
-        },
-      ],
-      'type-id'
-    );
+    const stringFilter = createGraphQLStringFromFiltersV2([
+      {
+        columnId: 'type',
+        value: 'Value 1',
+        valueType: 'TEXT',
+      },
+    ]);
 
     expect(stringFilter).toMatchSnapshot();
 
-    const entityFilter = createGraphQLStringFromFiltersV2(
-      [
-        {
-          columnId: 'type',
-          value: 'id 1',
-          valueType: 'ENTITY',
-        },
-      ],
-      'type-id'
-    );
+    const entityFilter = createGraphQLStringFromFiltersV2([
+      {
+        columnId: 'type',
+        value: 'id 1',
+        valueType: 'ENTITY',
+      },
+    ]);
 
     expect(entityFilter).toMatchSnapshot();
 
-    const nameFilter = createGraphQLStringFromFiltersV2(
-      [
-        {
-          columnId: SYSTEM_IDS.NAME,
-          value: 'id 1',
-          valueType: 'TEXT',
-        },
-      ],
-      'type-id'
-    );
+    const nameFilter = createGraphQLStringFromFiltersV2([
+      {
+        columnId: SYSTEM_IDS.NAME,
+        value: 'id 1',
+        valueType: 'TEXT',
+      },
+    ]);
 
     expect(nameFilter).toMatchSnapshot();
 
-    const andFilter = createGraphQLStringFromFiltersV2(
-      [
-        {
-          columnId: 'type',
-          value: 'Value 1',
-          valueType: 'TEXT',
-        },
-        {
-          columnId: 'type',
-          value: 'id 1',
-          valueType: 'ENTITY',
-        },
-        {
-          columnId: SYSTEM_IDS.NAME,
-          value: 'id 1',
-          valueType: 'TEXT',
-        },
-      ],
-      'type-id'
-    );
+    const andFilter = createGraphQLStringFromFiltersV2([
+      {
+        columnId: 'type',
+        value: 'Value 1',
+        valueType: 'TEXT',
+      },
+      {
+        columnId: 'type',
+        value: 'id 1',
+        valueType: 'ENTITY',
+      },
+      {
+        columnId: SYSTEM_IDS.NAME,
+        value: 'id 1',
+        valueType: 'TEXT',
+      },
+    ]);
 
     expect(andFilter).toMatchSnapshot();
 
-    const spaceFilter = createGraphQLStringFromFiltersV2(
-      [
-        {
-          columnId: SYSTEM_IDS.SPACE,
-          valueType: 'TEXT',
-          value: '0x0000000000000000000000000000000000000000',
-        },
-      ],
-      'type-id'
-    );
+    const spaceFilter = createGraphQLStringFromFiltersV2([
+      {
+        columnId: SYSTEM_IDS.SPACE,
+        valueType: 'TEXT',
+        value: '0x0000000000000000000000000000000000000000',
+      },
+    ]);
 
     expect(spaceFilter).toMatchSnapshot();
 
-    const nullTypeIdFilter = createGraphQLStringFromFiltersV2([], null);
+    const nullTypeIdFilter = createGraphQLStringFromFiltersV2([]);
 
     expect(nullTypeIdFilter).toEqual('');
   });

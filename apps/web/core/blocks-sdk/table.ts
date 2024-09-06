@@ -4,6 +4,7 @@ import { ValueType as TripleValueType } from '~/core/types';
 
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
+import { Source } from '../state/editor/types';
 
 export function upsertName({
   newName,
@@ -67,14 +68,14 @@ export function createGraphQLStringFromFilters(
     columnId: string;
     valueType: TripleValueType;
     value: string;
-  }[],
-  typeId: string | null
+  }[]
 ): string {
-  if (!typeId) return '';
-  if (filters.length === 0) return `{typeIds_contains_nocase: ["${typeId}"]}`;
-
   const filtersAsStrings = filters
     .map(filter => {
+      if (filter.columnId === SYSTEM_IDS.TYPES && filter.valueType === 'ENTITY') {
+        return `typeIds_contains_nocase: ["${filter.value}"]`;
+      }
+
       // We treat Name and Space as special filters even though they are not always
       // columns on the type schema for a table. We allow users to be able to filter
       // by name and space.
@@ -84,7 +85,7 @@ export function createGraphQLStringFromFilters(
       }
 
       if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
-        return `entityOf_: {space: "${filter.value}"}`;
+        return `entityOf_: { space: "${filter.value}" }`;
       }
 
       if (filter.valueType === 'ENTITY') {
@@ -103,13 +104,13 @@ export function createGraphQLStringFromFilters(
     .flatMap(f => (f ? [f] : []));
 
   if (filtersAsStrings.length === 1) {
-    return `{typeIds_contains_nocase: ["${typeId}"], ${filtersAsStrings[0]}}`;
+    return `{ ${filtersAsStrings[0]} }`;
   }
 
   // Wrap each filter expression in curly brackets
   const multiFilterQuery = filtersAsStrings.map(f => `{${f}}`).join(', ');
 
-  return `{and: [{typeIds_contains_nocase: ["${typeId}"]}, ${multiFilterQuery}]}`;
+  return `{ and: [${multiFilterQuery}] }`;
 }
 
 /**
@@ -160,8 +161,9 @@ export function createGraphQLStringFromFilters(
  * ]
  * ```
  */
-export async function createFiltersFromGraphQLString(
-  graphQLString: string,
+export async function createFiltersFromGraphQLStringAndSource(
+  graphQLString: string | null,
+  source: Source,
   fetchEntity: (entityId: string) => Promise<Entity | null>
 ): Promise<
   {
@@ -178,67 +180,85 @@ export async function createFiltersFromGraphQLString(
     valueName: string | null;
   }[] = [];
 
-  // Parse a name query from the filter
-  const nameRegex = /name_starts_with_nocase\s*:\s*"([^"]*)"/;
-  const nameMatch = graphQLString.match(nameRegex);
-  const nameValue = nameMatch ? nameMatch[1] : null;
+  if (graphQLString) {
+    const typeRegex = /typeIds_contains_nocase:\s*\[(.*?)\]/;
+    const typeMatch = graphQLString.match(typeRegex);
+    const typeValue = typeMatch ? typeMatch[1] : null;
 
-  if (nameValue) {
-    filters.push({
-      columnId: SYSTEM_IDS.NAME,
-      valueType: 'TEXT',
-      value: nameValue,
-      valueName: null,
-    });
-  }
+    // @TODO: fix json parsing requirements
+    if (typeValue) {
+      const maybeType = await fetchEntity(JSON.parse(typeValue));
 
-  const spaceRegex = /entityOf_\s*:\s*{\s*space\s*:\s*"([^"]*)"\s*}/;
-  const spaceMatch = graphQLString.match(spaceRegex);
-  const spaceValue = spaceMatch ? spaceMatch[1] : null;
+      if (maybeType) {
+        filters.push({
+          columnId: SYSTEM_IDS.TYPES,
+          valueType: 'ENTITY',
+          value: JSON.parse(typeValue),
+          valueName: maybeType.name,
+        });
+      }
+    }
 
-  if (spaceValue) {
-    filters.push({
-      columnId: SYSTEM_IDS.SPACE,
-      valueType: 'TEXT',
-      value: spaceValue,
-      valueName: null,
-    });
-  }
+    // Parse a name query from the filter
+    const nameRegex = /name_starts_with_nocase\s*:\s*"([^"]*)"/;
+    const nameMatch = graphQLString.match(nameRegex);
+    const nameValue = nameMatch ? nameMatch[1] : null;
 
-  // Parse all entity relationship queries from the filter
-  const entityValueRegex = /entityOf_\s*:\s*{\s*attribute\s*:\s*"([^"]*)"\s*,\s*entityValue\s*:\s*"([^"]*)"\s*}/g;
+    if (nameValue) {
+      filters.push({
+        columnId: SYSTEM_IDS.NAME,
+        valueType: 'TEXT',
+        value: nameValue,
+        valueName: null,
+      });
+    }
 
-  for (const match of graphQLString.matchAll(entityValueRegex)) {
-    const attribute = match[1];
-    const entityValue = match[2];
+    // Parse all entity relationship queries from the filter
+    const entityValueRegex = /entityOf_\s*:\s*{\s*attribute\s*:\s*"([^"]*)"\s*,\s*entityValue\s*:\s*"([^"]*)"\s*}/g;
 
-    if (attribute && entityValue) {
-      const maybeEntity = await fetchEntity(entityValue);
+    for (const match of graphQLString.matchAll(entityValueRegex)) {
+      const attribute = match[1];
+      const entityValue = match[2];
 
-      if (maybeEntity) {
+      if (attribute && entityValue) {
+        const maybeEntity = await fetchEntity(entityValue);
+
+        if (maybeEntity) {
+          filters.push({
+            columnId: attribute,
+            valueType: 'ENTITY',
+            value: entityValue,
+            valueName: maybeEntity.name,
+          });
+        }
+      }
+    }
+
+    // Parse all string queries from the filter
+    const stringValueRegex =
+      /entityOf_\s*:\s*{\s*attribute\s*:\s*"([^"]*)"\s*,\s*stringValue_starts_with_nocase\s*:\s*"([^"]*)"\s*}/g;
+
+    for (const match of graphQLString.matchAll(stringValueRegex)) {
+      const attribute = match[1];
+      const stringValue = match[2];
+
+      if (attribute && stringValue) {
         filters.push({
           columnId: attribute,
-          valueType: 'ENTITY',
-          value: entityValue,
-          valueName: maybeEntity.name,
+          valueType: 'TEXT',
+          value: stringValue,
+          valueName: null,
         });
       }
     }
   }
 
-  // Parse all string queries from the filter
-  const stringValueRegex =
-    /entityOf_\s*:\s*{\s*attribute\s*:\s*"([^"]*)"\s*,\s*stringValue_starts_with_nocase\s*:\s*"([^"]*)"\s*}/g;
-
-  for (const match of graphQLString.matchAll(stringValueRegex)) {
-    const attribute = match[1];
-    const stringValue = match[2];
-
-    if (attribute && stringValue) {
+  if (source.type === 'SPACES') {
+    for (const spaceId of source.value) {
       filters.push({
-        columnId: attribute,
+        columnId: SYSTEM_IDS.SPACE,
         valueType: 'TEXT',
-        value: stringValue,
+        value: spaceId,
         valueName: null,
       });
     }
@@ -252,14 +272,17 @@ export function createGraphQLStringFromFiltersV2(
     columnId: string;
     valueType: TripleValueType;
     value: string;
-  }[],
-  typeId: string | null
+  }[]
 ): string {
-  if (!typeId) return '';
-  if (filters.length === 0) return `{ entityTypes: { some: { typeId: { equalTo: "${typeId}" } } } }`;
+  if (filters.length === 0) return '';
 
   const filtersAsStrings = filters
     .map(filter => {
+      // Assume we can only filter by one type at a time for now
+      if (filter.columnId === SYSTEM_IDS.TYPES && filter.valueType === 'ENTITY') {
+        return `entityTypes: { some: { typeId: { equalTo: "${filter.value}" } } }`;
+      }
+
       // We treat Name and Space as special filters even though they are not always
       // columns on the type schema for a table. We allow users to be able to filter
       // by name and space.
@@ -269,22 +292,21 @@ export function createGraphQLStringFromFiltersV2(
       }
 
       if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
-        return `triples: {
+        return `entitySpaces: {
           some: {
-            spaceId: { equalTo: "${filter.value}" },
-            isStale: { equalTo: false }
+            spaceId: { equalTo: "${filter.value}" }
           }
         }`;
       }
 
       if (filter.valueType === 'ENTITY') {
         // value is the ID of the relation
-        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, entityValueId: { equalTo: "${filter.value}"}, isStale: { equalTo: false } } }`;
+        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, entityValueId: { equalTo: "${filter.value}"} } }`;
       }
 
       if (filter.valueType === 'TEXT') {
         // value is just the stringValue of the triple
-        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, stringValue: { equalToInsensitive: "${filter.value}"}, isStale: { equalTo: false } } }`;
+        return `triples: { some: { attributeId: { equalTo: "${filter.columnId}" }, stringValue: { equalToInsensitive: "${filter.value}"} } }`;
       }
 
       // We don't support other value types yet
@@ -293,11 +315,11 @@ export function createGraphQLStringFromFiltersV2(
     .flatMap(f => (f ? [f] : []));
 
   if (filtersAsStrings.length === 1) {
-    return `{ entityTypes: { some: { typeId: { equalTo: "${typeId}" } } }, ${filtersAsStrings[0]}}`;
+    return `{ ${filtersAsStrings[0]} }`;
   }
 
   // Wrap each filter expression in curly brackets
   const multiFilterQuery = filtersAsStrings.map(f => `{ ${f} }`).join(', ');
 
-  return `{ and: [{ entityTypes: { some: { typeId: { equalTo: "${typeId}" } } } } ${multiFilterQuery}] }`;
+  return `{ and: [${multiFilterQuery}] }`;
 }

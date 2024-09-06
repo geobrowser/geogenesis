@@ -14,9 +14,8 @@ export type EntityCell = {
   image?: string | null;
 };
 
-export function fromColumnsAndRows(entities: Entity[], columns: Schema[]) {
-  /* Finally, we can build our initialRows */
-  const aggregatedRows = entities.map(({ name, triples, id, relationsOut, description }) => {
+export function fromColumnsAndRows(entities: Entity[], columns: Schema[]): Row[] {
+  return entities.map(({ name, triples, id, relationsOut, description }) => {
     return columns.reduce((acc, column) => {
       // @TODO: Might be relations for attribute id as well
       const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
@@ -40,8 +39,4 @@ export function fromColumnsAndRows(entities: Entity[], columns: Schema[]) {
       };
     }, {} as Row);
   });
-
-  return {
-    rows: aggregatedRows,
-  };
 }

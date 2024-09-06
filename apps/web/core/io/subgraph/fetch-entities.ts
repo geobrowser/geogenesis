@@ -31,7 +31,6 @@ function getFetchEntitiesQuery(
         triples: {
           some: {
             ${entityOfWhere}
-            isStale: { equalTo: false }
           }
         }
         ${typeIdsString}
@@ -144,14 +143,13 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
           return null;
         },
         onRight: entity => {
-          return entity;
+          return EntityDto(entity);
         },
       });
     })
     .filter(e => e !== null);
 
-  const sortedResults = sortSearchResultsByRelevance(entities);
-  return sortedResults.map(EntityDto);
+  return sortSearchResultsByRelevance(entities);
 }
 
 const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
@@ -170,6 +168,6 @@ const sortLengthThenAlphabetically = (a: string | null, b: string | null) => {
   return a.length - b.length;
 };
 
-function sortSearchResultsByRelevance(startEntities: SubstreamEntity[]) {
+function sortSearchResultsByRelevance(startEntities: Entity[]) {
   return startEntities.sort((a, b) => sortLengthThenAlphabetically(a.name, b.name));
 }

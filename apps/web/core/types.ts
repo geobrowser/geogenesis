@@ -67,7 +67,7 @@ export type Triple = {
   isDeleted?: boolean;
 };
 
-export type RenderableEntityType = 'IMAGE' | 'RELATION';
+export type RenderableEntityType = 'IMAGE' | 'RELATION' | 'DATA' | 'TEXT';
 
 // Renderable fields are a special data model to represent us rendering both
 // triples and relations in the same way. This is used across tables and entity
@@ -220,21 +220,3 @@ export type SpaceType =
   | 'government-org'
   | 'interest-group';
 export type SpaceGovernanceType = 'PUBLIC' | 'PERSONAL';
-
-export type CollectionItem = {
-  id: string; // id of the collection item entity itself
-  collectionId: string; // pointing to the collection referenced by the collection item
-  entity: {
-    // pointing to the entity referenced by the collection item
-    id: string;
-    name: string | null;
-    types: string[];
-  };
-  value: {
-    type: 'IMAGE' | 'ENTITY';
-    // either the name of the thing we're rendering or the image or null in the  case that
-    // it's an entity value type but does not have a name
-    value: string | null;
-  };
-  index: string; // the order of the item in the list
-};
