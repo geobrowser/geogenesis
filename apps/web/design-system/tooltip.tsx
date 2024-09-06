@@ -11,30 +11,30 @@ type TooltipProps = {
   trigger: ReactNode;
   label: ReactNode;
   position?: Position;
-  className?: string;
 };
 
 type Position = 'top' | 'bottom' | 'left' | 'right';
 
-export const Tooltip = ({ trigger, label = '', position = 'bottom', className = '' }: TooltipProps) => {
+export const Tooltip = ({ trigger, label = '', position = 'bottom' }: TooltipProps) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [x, y] = originCoordinates[position];
 
   return (
     <Provider delayDuration={300} skipDelayDuration={300}>
       <Root open={isOpen} onOpenChange={setIsOpen}>
-        <Trigger className={className}>{trigger}</Trigger>
+        <Trigger asChild>{trigger}</Trigger>
         <AnimatePresence mode="popLayout">
           {isOpen && (
             // a combined <MotionContent> component made with motion(Content) breaks the tooltip behavior
-            <Content side={position} align="center" alignOffset={0} sideOffset={8} forceMount>
+            <Content side={position} align="center" alignOffset={0} sideOffset={4} forceMount>
               <motion.div
                 className={cx(
                   'relative w-full max-w-[192px] rounded bg-text p-2 text-white shadow-button focus:outline-none',
                   positionClassName[position]
                 )}
-                initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                initial={{ opacity: 0, scale: 0.95, x, y }}
+                animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, x, y }}
                 transition={{
                   type: 'spring',
                   duration: 0.15,
@@ -50,6 +50,13 @@ export const Tooltip = ({ trigger, label = '', position = 'bottom', className = 
       </Root>
     </Provider>
   );
+};
+
+const originCoordinates: Record<Position, [number, number]> = {
+  top: [0, 10],
+  bottom: [0, -10],
+  left: [10, 0],
+  right: [-10, 0],
 };
 
 const positionClassName: Record<Position, string> = {
