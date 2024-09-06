@@ -30,7 +30,10 @@ type SelectEntityProps = {
   spaceId: string;
   allowedTypes?: RelationValueType[];
   placeholder?: string;
+  containerClassName?: string;
+  inputClassName?: string;
   variant?: 'floating' | 'fixed';
+  width?: 'clamped' | 'full';
   withSearchIcon?: boolean;
 };
 
@@ -53,8 +56,12 @@ const inputStyles = cva('', {
   },
 });
 
-const containerStyles = cva('w-[400px]', {
+const containerStyles = cva('', {
   variants: {
+    width: {
+      clamped: 'w-[400px]',
+      full: 'w-full',
+    },
     floating: {
       true: 'rounded-md border border-divider bg-white',
     },
@@ -63,6 +70,7 @@ const containerStyles = cva('w-[400px]', {
     },
   },
   defaultVariants: {
+    width: 'clamped',
     floating: false,
     isQueried: false,
   },
@@ -73,7 +81,10 @@ export const SelectEntity = ({
   spaceId,
   allowedTypes,
   placeholder = 'Find or create...',
+  width = 'clamped',
   variant = 'fixed',
+  containerClassName = '',
+  inputClassName = '',
   withSearchIcon = false,
 }: SelectEntityProps) => {
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
@@ -139,9 +150,17 @@ export const SelectEntity = ({
   }, ref);
 
   return (
-    <div ref={ref} className={containerStyles({ floating: variant === 'floating', isQueried: query.length > 0 })}>
+    <div
+      ref={ref}
+      className={containerStyles({
+        width,
+        floating: variant === 'floating',
+        isQueried: query.length > 0,
+        className: containerClassName,
+      })}
+    >
       {withSearchIcon && (
-        <div className="absolute left-3 top-3.5 z-10">
+        <div className="absolute bottom-0 left-3 top-0 z-10 flex items-center">
           <Search />
         </div>
       )}
@@ -151,14 +170,15 @@ export const SelectEntity = ({
         value={query}
         onChange={({ currentTarget: { value } }) => onQueryChange(value)}
         placeholder={placeholder}
-        className={inputStyles({ [variant]: true, withSearchIcon })}
+        className={inputStyles({ [variant]: true, withSearchIcon, className: inputClassName })}
       />
 
       {query && (
-        <div className="fixed z-[1000]">
+        <div className="fixed z-[1000] w-full">
           <div
             className={cx(
-              '-ml-px w-[400px] overflow-hidden rounded-md border border-divider bg-white',
+              '-ml-px overflow-hidden rounded-md border border-divider bg-white',
+              width === 'clamped' ? 'w-[400px]' : '-mr-px',
               withSearchIcon && 'rounded-t-none'
             )}
           >
@@ -213,8 +233,8 @@ export const SelectEntity = ({
                   </div>
                   <span className="p-2 text-smallButton text-grey-04">Select space version</span>
                   {/* <div className="flex flex-1 justify-end">
-                     @TODO add settings 
-                    <button className="p-2 text-smallButton text-grey-04">Settings</button> 
+                     @TODO add settings
+                    <button className="p-2 text-smallButton text-grey-04">Settings</button>
                   </div> */}
                 </div>
                 <div className="flex max-h-[180px] flex-col overflow-y-auto bg-white">
@@ -226,6 +246,7 @@ export const SelectEntity = ({
                         id: result.id,
                         name: result.name,
                       });
+                      onQueryChange('');
                     }}
                     className="flex min-h-[60px] w-full items-center justify-between border-b border-divider px-3 py-2 hover:bg-grey-01"
                   >
@@ -256,6 +277,7 @@ export const SelectEntity = ({
                           name: result.name,
                           space: SpaceId(space.spaceId),
                         });
+                        onQueryChange('');
                       }}
                       className="flex w-full items-center justify-between border-b border-divider px-3 py-2 hover:bg-grey-01"
                     >

@@ -119,6 +119,9 @@ textarea::placeholder {
   .bg-gradient-yellow {
     background: linear-gradient(109deg, #ffcdb0 12.96%, #f9f6a8 87.04%);
   }
+  .bg-gradient-geo {
+    background: linear-gradient(46deg, #bafeff 0%, #e5c4f6 47.02%, #ffcbb4 93.78%, #c7f5fd 160.1%);
+  }
 }
 
 @tailwind utilities;

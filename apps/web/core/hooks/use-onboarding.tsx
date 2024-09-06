@@ -1,7 +1,7 @@
 import { usePrivy } from '@privy-io/react-auth';
 import { atom, useAtom } from 'jotai';
 
-import * as React from 'react';
+import { useCallback, useEffect } from 'react';
 
 import { useAccountEffect } from 'wagmi';
 
@@ -14,8 +14,9 @@ export function useOnboarding() {
   const smartAccount = useSmartAccount();
   const address = smartAccount?.account.address;
 
-  const { isModalOpen } = usePrivy();
-  const [, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
+  const { user, isModalOpen } = usePrivy();
+
+  const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const { profile, isFetched, isLoading } = useGeoProfile(address);
 
   // Set the onboarding to visible the first time we fetch the
@@ -29,15 +30,15 @@ export function useOnboarding() {
   // @TODO: We should only show onboarding if the user is not a member
   // of any spaces OR there is no profile representing the user in
   // any of the spaces where they are a member.
-  React.useEffect(() => {
+  useEffect(() => {
     if (isModalOpen) {
       setIsOnboardingVisible(false);
-    } else if (isFetched && !isLoading && !profile?.profileLink) {
+    } else if (isFetched && !isLoading && !profile?.profileLink && user) {
       setIsOnboardingVisible(true);
     } else {
       setIsOnboardingVisible(false);
     }
-  }, [isFetched, profile, isLoading, isModalOpen, setIsOnboardingVisible]);
+  }, [isFetched, profile, isLoading, isModalOpen, setIsOnboardingVisible, user]);
 
   useAccountEffect({
     onDisconnect: () => setIsOnboardingVisible(false),
@@ -48,11 +49,9 @@ export function useOnboarding() {
     },
   });
 
-  const hideOnboarding = React.useCallback(() => {
+  const hideOnboarding = useCallback(() => {
     setIsOnboardingVisible(false);
   }, [setIsOnboardingVisible]);
 
-  // Disabling onboarding until full launch as we are currently doing migrations
-  // and some other work affecting user onboarding.
-  return { isOnboardingVisible: false, hideOnboarding };
+  return { isOnboardingVisible, hideOnboarding };
 }

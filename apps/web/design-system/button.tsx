@@ -7,7 +7,15 @@ import { forwardRef } from 'react';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'done' | 'success' | 'error';
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'tertiary'
+  | 'ghost'
+  | 'transparent'
+  | 'done'
+  | 'success'
+  | 'error';
 
 type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   variant?: ButtonVariant;
@@ -29,6 +37,8 @@ const buttonClassNames = (className = '') =>
           tertiary: 'border-white bg-text text-white shadow-none',
           ghost:
             'border-transparent bg-white !text-grey-04 shadow-none hover:border-text hover:bg-bg hover:!text-text hover:shadow-button focus:border-text focus:shadow-inner-text',
+          transparent:
+            'border-text bg-transparent !text-text shadow-none hover:border-text hover:!text-text focus:border-text focus:shadow-inner-text',
           success: 'border-white bg-green text-white shadow-none',
           error: 'border-white bg-red-01 text-white shadow-none',
           done: 'border-green bg-green text-text',
@@ -40,7 +50,7 @@ const buttonClassNames = (className = '') =>
           true: 'gap-1.5 px-1.5 py-1 text-smallButton leading-none',
         },
         disabled: {
-          true: 'cursor-not-allowed',
+          true: 'cursor-pointer',
           false: 'cursor-pointer',
         },
       },
@@ -82,9 +92,7 @@ export const SquareButton = forwardRef(function SquareButton(
   const squareButtonClassNames = cva([
     'relative box-border flex h-6 w-6 items-center justify-center rounded border bg-white text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
     !isActive ? 'border-grey-02' : 'border-text !bg-bg !text-text',
-    !disabled
-      ? 'cursor-pointer'
-      : '!hover:border-divider !hover:bg-divider cursor-not-allowed !border-divider !bg-divider',
+    disabled ? 'cursor-pointer' : '!hover:border-divider !hover:bg-divider cursor-pointer !border-divider !bg-divider',
   ]);
 
   return (
@@ -106,7 +114,7 @@ type IconButtonProps = React.ComponentPropsWithoutRef<'button'> & {
 const iconButtonClassNames = cva('background-transparent cursor-pointer border-none', {
   variants: {
     disabled: {
-      true: 'cursor-not-allowed',
+      true: 'cursor-pointer',
     },
   },
   defaultVariants: {
