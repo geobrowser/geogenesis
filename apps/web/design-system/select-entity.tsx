@@ -254,7 +254,7 @@ export const SelectEntity = ({
                         onDone({
                           id: result.id,
                           name: result.name,
-                          space: space.spaceId,
+                          space: SpaceId(space.spaceId),
                         });
                       }}
                       className="flex w-full items-center justify-between border-b border-divider px-3 py-2 hover:bg-grey-01"
