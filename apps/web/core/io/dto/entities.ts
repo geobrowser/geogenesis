@@ -3,8 +3,8 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { RenderableEntityType, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import { TripleDto } from '../dto';
 import { EntityId, SubstreamEntity, SubstreamType, TypeId } from '../schema';
+import { TripleDto } from './triples';
 
 export type Entity = {
   id: EntityId;

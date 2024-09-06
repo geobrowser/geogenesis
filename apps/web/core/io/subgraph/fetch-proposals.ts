@@ -134,7 +134,7 @@ export async function fetchProposals({
   const proposals = result.proposals.nodes;
   const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdBy.id));
 
-  const decodedProposals = proposals
+  return proposals
     .map(p => {
       const proposalOrError = Schema.decodeEither(SubstreamProposal)(p);
 
@@ -144,14 +144,10 @@ export async function fetchProposals({
           return null;
         },
         onRight: proposal => {
-          return proposal;
+          const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
+          return ProposalWithoutVotersDto(proposal, maybeProfile);
         },
       });
     })
     .filter(p => p !== null);
-
-  return decodedProposals.map(p => {
-    const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
-    return ProposalWithoutVotersDto(p, maybeProfile);
-  });
 }

@@ -13,11 +13,11 @@ import { useRelations } from '../../database/relations';
 import { getTriples } from '../../database/triples';
 import { DB } from '../../database/write';
 import { ID } from '../../id';
-import { Entity, Relation } from '../../io/dto/entities';
+import { Relation } from '../../io/dto/entities';
 import { EntityId, TypeId } from '../../io/schema';
 import { RenderableEntityType } from '../../types';
 import { Values } from '../../utils/value';
-import { getInitialBlockTypeRelation } from './block-types';
+import { getRelationForBlockType } from './block-types';
 import { getInitialDataEntityRelations } from './data-entity';
 import { useEditorInstance } from './editor-provider';
 import { markdownToHtml } from './parser';
@@ -316,7 +316,7 @@ export function useEditorStore() {
     }
 
     return json;
-  }, [blockIds, blocks, initialBlocks]);
+  }, [blockIds, blocks, initialBlocks, spaceId]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
@@ -378,13 +378,13 @@ export function useEditorStore() {
         // @TODO: ImageBlock
         switch (blockType) {
           case SYSTEM_IDS.TEXT_BLOCK:
-            DB.upsertRelation({ relation: getInitialBlockTypeRelation(node.id, SYSTEM_IDS.TEXT_BLOCK), spaceId });
+            DB.upsertRelation({ relation: getRelationForBlockType(node.id, SYSTEM_IDS.TEXT_BLOCK), spaceId });
             break;
           case SYSTEM_IDS.IMAGE_BLOCK:
             break;
           case SYSTEM_IDS.TABLE_BLOCK: {
             // @TODO(performance): upsertMany
-            for (const relation of getInitialDataEntityRelations(node.id)) {
+            for (const relation of getInitialDataEntityRelations(EntityId(node.id))) {
               DB.upsertRelation({ relation, spaceId });
             }
 

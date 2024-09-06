@@ -1,8 +1,9 @@
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { SpaceGovernanceType } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 
-import { SpaceMetadataDto } from '../dto';
-import { Address, type Address as IAddress, SpaceId, SubstreamSpace } from '../schema';
-import { Entity } from './entities';
+import { Address, EntityId, type Address as IAddress, SpaceId, SubstreamEntity, SubstreamSpace } from '../schema';
+import { Entity, EntityDto } from './entities';
 
 export type Space = {
   id: SpaceId;
@@ -39,4 +40,28 @@ export function SpaceDto(space: SubstreamSpace): Space {
     personalSpaceAdminPluginAddress: space.personalSpaceAdminPluginAddress,
     spacePluginAddress: space.spacePluginAddress,
   };
+}
+
+export function SpaceMetadataDto(spaceId: string, metadata: SubstreamEntity | undefined | null): SpaceConfigEntity {
+  const entity = metadata ? EntityDto(metadata) : null;
+
+  const spaceConfigWithImage: SpaceConfigEntity = entity
+    ? {
+        ...entity,
+        spaceId: spaceId,
+        image: Entities.avatar(entity.relationsOut) ?? Entities.cover(entity.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
+      }
+    : {
+        id: EntityId(''),
+        spaceId: spaceId,
+        name: null,
+        description: null,
+        image: PLACEHOLDER_SPACE_IMAGE,
+        triples: [],
+        types: [],
+        nameTripleSpaces: [],
+        relationsOut: [],
+      };
+
+  return spaceConfigWithImage;
 }

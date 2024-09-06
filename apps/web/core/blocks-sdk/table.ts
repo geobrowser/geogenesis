@@ -4,6 +4,7 @@ import { ValueType as TripleValueType } from '~/core/types';
 
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
+import { Source } from '../state/editor/types';
 
 export function upsertName({
   newName,
@@ -84,7 +85,7 @@ export function createGraphQLStringFromFilters(
       }
 
       if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
-        return `entityOf_: {space: "${filter.value}"}`;
+        return `entityOf_: { space: "${filter.value}" }`;
       }
 
       if (filter.valueType === 'ENTITY') {
@@ -160,8 +161,9 @@ export function createGraphQLStringFromFilters(
  * ]
  * ```
  */
-export async function createFiltersFromGraphQLString(
-  graphQLString: string,
+export async function createFiltersFromGraphQLStringAndSource(
+  graphQLString: string | null,
+  source: Source,
   fetchEntity: (entityId: string) => Promise<Entity | null>
 ): Promise<
   {
@@ -178,85 +180,85 @@ export async function createFiltersFromGraphQLString(
     valueName: string | null;
   }[] = [];
 
-  const typeRegex = /typeIds_contains_nocase:\s*\[(.*?)\]/;
-  const typeMatch = graphQLString.match(typeRegex);
-  const typeValue = typeMatch ? typeMatch[1] : null;
+  if (graphQLString) {
+    const typeRegex = /typeIds_contains_nocase:\s*\[(.*?)\]/;
+    const typeMatch = graphQLString.match(typeRegex);
+    const typeValue = typeMatch ? typeMatch[1] : null;
 
-  // @TODO: fix json parsing requirements
-  if (typeValue) {
-    const maybeType = await fetchEntity(JSON.parse(typeValue));
+    // @TODO: fix json parsing requirements
+    if (typeValue) {
+      const maybeType = await fetchEntity(JSON.parse(typeValue));
 
-    if (maybeType) {
+      if (maybeType) {
+        filters.push({
+          columnId: SYSTEM_IDS.TYPES,
+          valueType: 'ENTITY',
+          value: JSON.parse(typeValue),
+          valueName: maybeType.name,
+        });
+      }
+    }
+
+    // Parse a name query from the filter
+    const nameRegex = /name_starts_with_nocase\s*:\s*"([^"]*)"/;
+    const nameMatch = graphQLString.match(nameRegex);
+    const nameValue = nameMatch ? nameMatch[1] : null;
+
+    if (nameValue) {
       filters.push({
-        columnId: SYSTEM_IDS.TYPES,
-        valueType: 'ENTITY',
-        value: JSON.parse(typeValue),
-        valueName: maybeType.name,
+        columnId: SYSTEM_IDS.NAME,
+        valueType: 'TEXT',
+        value: nameValue,
+        valueName: null,
       });
     }
-  }
 
-  // Parse a name query from the filter
-  const nameRegex = /name_starts_with_nocase\s*:\s*"([^"]*)"/;
-  const nameMatch = graphQLString.match(nameRegex);
-  const nameValue = nameMatch ? nameMatch[1] : null;
+    // Parse all entity relationship queries from the filter
+    const entityValueRegex = /entityOf_\s*:\s*{\s*attribute\s*:\s*"([^"]*)"\s*,\s*entityValue\s*:\s*"([^"]*)"\s*}/g;
 
-  if (nameValue) {
-    filters.push({
-      columnId: SYSTEM_IDS.NAME,
-      valueType: 'TEXT',
-      value: nameValue,
-      valueName: null,
-    });
-  }
+    for (const match of graphQLString.matchAll(entityValueRegex)) {
+      const attribute = match[1];
+      const entityValue = match[2];
 
-  const spaceRegex = /entityOf_\s*:\s*{\s*space\s*:\s*"([^"]*)"\s*}/;
-  const spaceMatch = graphQLString.match(spaceRegex);
-  const spaceValue = spaceMatch ? spaceMatch[1] : null;
+      if (attribute && entityValue) {
+        const maybeEntity = await fetchEntity(entityValue);
 
-  if (spaceValue) {
-    filters.push({
-      columnId: SYSTEM_IDS.SPACE,
-      valueType: 'TEXT',
-      value: spaceValue,
-      valueName: null,
-    });
-  }
+        if (maybeEntity) {
+          filters.push({
+            columnId: attribute,
+            valueType: 'ENTITY',
+            value: entityValue,
+            valueName: maybeEntity.name,
+          });
+        }
+      }
+    }
 
-  // Parse all entity relationship queries from the filter
-  const entityValueRegex = /entityOf_\s*:\s*{\s*attribute\s*:\s*"([^"]*)"\s*,\s*entityValue\s*:\s*"([^"]*)"\s*}/g;
+    // Parse all string queries from the filter
+    const stringValueRegex =
+      /entityOf_\s*:\s*{\s*attribute\s*:\s*"([^"]*)"\s*,\s*stringValue_starts_with_nocase\s*:\s*"([^"]*)"\s*}/g;
 
-  for (const match of graphQLString.matchAll(entityValueRegex)) {
-    const attribute = match[1];
-    const entityValue = match[2];
+    for (const match of graphQLString.matchAll(stringValueRegex)) {
+      const attribute = match[1];
+      const stringValue = match[2];
 
-    if (attribute && entityValue) {
-      const maybeEntity = await fetchEntity(entityValue);
-
-      if (maybeEntity) {
+      if (attribute && stringValue) {
         filters.push({
           columnId: attribute,
-          valueType: 'ENTITY',
-          value: entityValue,
-          valueName: maybeEntity.name,
+          valueType: 'TEXT',
+          value: stringValue,
+          valueName: null,
         });
       }
     }
   }
 
-  // Parse all string queries from the filter
-  const stringValueRegex =
-    /entityOf_\s*:\s*{\s*attribute\s*:\s*"([^"]*)"\s*,\s*stringValue_starts_with_nocase\s*:\s*"([^"]*)"\s*}/g;
-
-  for (const match of graphQLString.matchAll(stringValueRegex)) {
-    const attribute = match[1];
-    const stringValue = match[2];
-
-    if (attribute && stringValue) {
+  if (source.type === 'SPACES') {
+    for (const spaceId of source.value) {
       filters.push({
-        columnId: attribute,
+        columnId: SYSTEM_IDS.SPACE,
         valueType: 'TEXT',
-        value: stringValue,
+        value: spaceId,
         valueName: null,
       });
     }
@@ -290,7 +292,7 @@ export function createGraphQLStringFromFiltersV2(
       }
 
       if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
-        return `triples: {
+        return `entitySpaces: {
           some: {
             spaceId: { equalTo: "${filter.value}" }
           }

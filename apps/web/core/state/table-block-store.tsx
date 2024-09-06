@@ -4,7 +4,12 @@ import { Match } from 'effect';
 
 import * as React from 'react';
 
-import { TableBlockSdk } from '../blocks-sdk';
+import {
+  createFiltersFromGraphQLStringAndSource,
+  createGraphQLStringFromFilters,
+  createGraphQLStringFromFiltersV2,
+  upsertName,
+} from '../blocks-sdk/table';
 import { mergeEntityAsync, useEntity } from '../database/entities';
 import { useRelations } from '../database/relations';
 import { MergeTableEntitiesArgs, mergeCollectionItemEntitiesAsync, mergeTableEntities } from '../database/table';
@@ -14,7 +19,7 @@ import { EntityId, SpaceId } from '../io/schema';
 import { Schema, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { Values } from '../utils/value';
-import { getSource } from './editor/data-entity';
+import { createSource, deleteSources, getSource } from './editor/data-entity';
 import { Source } from './editor/types';
 
 export const PAGE_SIZE = 9;
@@ -51,7 +56,6 @@ export function useTableBlock() {
     }, [source])
   );
 
-  // @TODO(data blocks): What do we do for filters now?
   const filterTriple = React.useMemo(() => {
     return blockEntity?.triples.find(t => t.attributeId === SYSTEM_IDS.FILTER) ?? null;
   }, [blockEntity?.triples]);
@@ -66,13 +70,17 @@ export function useTableBlock() {
     return null;
   }, [filterTriple]);
 
+  /**
+   * The filter state is derived from the filter string and the source. The source
+   * might include a list of spaceIds to include in the filter. The filter string
+   * only includes _data_ filters, but not _where_ to query from.
+   */
   const { data: filterState, isLoading: isLoadingFilterState } = useQuery({
-    queryKey: ['table-block-filter-value', filterString],
+    queryKey: ['table-block-filter-value', filterString, source],
     queryFn: async () => {
-      if (!filterString) return [];
-
-      const filterState = await TableBlockSdk.createFiltersFromGraphQLString(
+      const filterState = await createFiltersFromGraphQLStringAndSource(
         filterString,
+        source,
         async id => await mergeEntityAsync(EntityId(id))
       );
 
@@ -100,9 +108,9 @@ export function useTableBlock() {
   const { data: rows, isLoading: isLoadingRows } = useQuery({
     queryKey: ['table-block-rows', columns, pageNumber, entityId, filterState, source, collectionItems],
     queryFn: async () => {
-      if (!columns) return [];
+      if (!columns || !filterState) return [];
 
-      const filterString = TableBlockSdk.createGraphQLStringFromFiltersV2(filterState ?? []);
+      const filterString = createGraphQLStringFromFiltersV2(filterState);
 
       const params: MergeTableEntitiesArgs['options'] = {
         filter: filterString,
@@ -114,11 +122,13 @@ export function useTableBlock() {
       // for the data view.
       const entities = await Match.value(source).pipe(
         Match.when({ type: 'COLLECTION' }, source => mergeCollectionItemEntitiesAsync(source.value)),
-        Match.when({ type: 'SPACES' }, () => mergeTableEntities({ options: params })),
+        Match.when({ type: 'SPACES' }, () => mergeTableEntities({ options: params, source })),
         Match.orElse(() => [])
       );
 
-      return EntityTable.fromColumnsAndRows(entities, columns);
+      const res = EntityTable.fromColumnsAndRows(entities, columns);
+
+      return res;
     },
   });
 
@@ -156,7 +166,7 @@ export function useTableBlock() {
       const newState = filters.length === 0 ? [] : filters;
 
       // We can just set the string as empty if the new state is empty. Alternatively we just delete the triple.
-      const newFiltersString = newState.length === 0 ? '' : TableBlockSdk.createGraphQLStringFromFilters(newState);
+      const newFiltersString = newState.length === 0 ? '' : createGraphQLStringFromFilters(newState);
 
       const entityName = blockEntity.name ?? '';
 
@@ -177,9 +187,17 @@ export function useTableBlock() {
     [upsert, entityId, spaceId, blockEntity.name]
   );
 
+  const setSource = React.useCallback(
+    (newSource: Source) => {
+      deleteSources({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
+      createSource({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
+    },
+    [entityId, blockEntity.relationsOut, spaceId]
+  );
+
   const setName = React.useCallback(
     (newName: string) => {
-      TableBlockSdk.upsertName({
+      upsertName({
         newName: newName,
         spaceId,
         entityId,
@@ -195,6 +213,7 @@ export function useTableBlock() {
   return {
     blockEntity,
     source,
+    setSource,
 
     rows: rows?.slice(0, PAGE_SIZE) ?? [],
     columns: columns ?? [],

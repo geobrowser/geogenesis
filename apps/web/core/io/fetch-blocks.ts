@@ -72,7 +72,7 @@ export async function fetchBlocks(ids: string[]): Promise<Entity[]> {
 
   const { entities: unknownEntities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const entities = unknownEntities.nodes
+  return unknownEntities.nodes
     .map(e => {
       const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
 
@@ -82,11 +82,9 @@ export async function fetchBlocks(ids: string[]): Promise<Entity[]> {
           return null;
         },
         onRight: entity => {
-          return entity;
+          return EntityDto(entity);
         },
       });
     })
     .filter(e => e !== null);
-
-  return entities.map(EntityDto);
 }

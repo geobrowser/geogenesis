@@ -7,13 +7,13 @@ import type { Change as Difference } from 'diff';
 
 import * as React from 'react';
 
-import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
+import { createFiltersFromGraphQLStringAndSource } from '~/core/blocks-sdk/table';
 import { Proposal } from '~/core/io/dto/proposals';
 import { fetchColumns } from '~/core/io/fetch-columns';
-import { EntityId } from '~/core/io/schema';
+import { EntityId, SpaceId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import { AttributeId, SpaceId } from '~/core/types';
+import { AttributeId } from '~/core/types';
 import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -571,7 +571,12 @@ const TableFilter = ({ filter }: TableFilterProps) => {
 };
 
 const getFilters = async (rawFilter: string) => {
-  const filters = await createFiltersFromGraphQLString(rawFilter, async id => await fetchEntity({ id }));
+  // @TODO(data blocks): fix
+  const filters = await createFiltersFromGraphQLStringAndSource(
+    rawFilter,
+    { type: 'SPACES', value: [SpaceId('')] },
+    async id => await fetchEntity({ id })
+  );
   const serverColumns = await fetchColumns({
     typeIds: [],
   });

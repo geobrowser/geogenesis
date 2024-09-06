@@ -123,35 +123,12 @@ export const TableBlock = React.memo(({ spaceId }: Props) => {
       <div className="mb-2 flex h-8 items-center justify-between">
         <TableBlockEditableTitle spaceId={spaceId} />
         <div className="flex items-center gap-5">
-          <AnimatePresence initial={false} mode="wait">
-            {filterState.length > 0 ? (
-              <motion.div
-                className="flex items-center"
-                key="filter-table-with-filters"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.15, bounce: 0.2 }}
-              >
-                <IconButton
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  icon={<FilterTableWithFilters />}
-                  color="grey-04"
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                className="flex items-center"
-                key="filter-table-without-filters"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.15, bounce: 0.2 }}
-              >
-                <IconButton onClick={() => setIsFilterOpen(!isFilterOpen)} icon={<FilterTable />} color="grey-04" />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <IconButton
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+            color="grey-04"
+          />
+
           <DataBlockViewMenu activeView={view} viewTriple={viewTriple} isLoading={isLoading} />
           <TableBlockContextMenu
             allColumns={allColumns}

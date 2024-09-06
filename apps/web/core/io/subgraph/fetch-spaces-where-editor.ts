@@ -5,8 +5,7 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '~/core/environment';
 
-import { SpaceMetadataDto } from '../dto';
-import { SpaceConfigEntity } from '../dto/spaces';
+import { SpaceConfigEntity, SpaceMetadataDto } from '../dto/spaces';
 import { SpaceId, SubstreamEntity } from '../schema';
 import { entityFragment } from './fragments';
 import { graphql } from './graphql';
