@@ -91,7 +91,7 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
 
   const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const decodedEntities = entities.nodes
+  return entities.nodes
     .map(e => {
       const decodedSpace = Schema.decodeEither(SubstreamEntity)(e);
 
@@ -101,11 +101,9 @@ export async function fetchTableRowEntities(options: FetchTableRowEntitiesOption
           return null;
         },
         onRight: entity => {
-          return entity;
+          return EntityDto(entity);
         },
       });
     })
     .filter(e => e !== null);
-
-  return decodedEntities.map(EntityDto);
 }

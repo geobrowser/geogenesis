@@ -94,7 +94,7 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
 
   const { entities } = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
 
-  const decodedResults = entities.nodes
+  return entities.nodes
     .map(result => {
       const decodedResult = Schema.decodeEither(SubstreamSearchResult)(result);
 
@@ -104,11 +104,9 @@ export async function fetchResults(options: FetchResultsOptions): Promise<Search
           return null;
         },
         onRight: result => {
-          return result;
+          return SearchResultDto(result);
         },
       });
     })
     .filter(s => s !== null);
-
-  return decodedResults.map(SearchResultDto);
 }

@@ -96,13 +96,11 @@ type SubstreamUriValue = Schema.Schema.Type<typeof SubstreamUriValue>;
 const SubstreamEntityValue = Schema.Struct({
   valueType: Schema.Literal('ENTITY'),
   textValue: Schema.Null,
-  entityValue: Schema.NullOr(
-    Schema.Struct({
-      id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
-      name: Schema.NullOr(Schema.String),
-      entityTypes: SubstreamEntityTypes,
-    })
-  ),
+  entityValue: Schema.Struct({
+    id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
+    name: Schema.NullOr(Schema.String),
+    entityTypes: SubstreamEntityTypes,
+  }),
 });
 
 type SubstreamEntityValue = Schema.Schema.Type<typeof SubstreamEntityValue>;
