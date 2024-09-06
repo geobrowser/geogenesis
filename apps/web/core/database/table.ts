@@ -136,7 +136,7 @@ async function mergeCollectionRowEntitiesAsync(collectionId: string): Promise<En
       return r.fromEntity.id === collectionId && r.typeOf.id === SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE;
     },
   })
-    .map(r => r.fromEntity.id)
+    .map(r => r.toEntity.id)
     // Filter out entities we've already merged so we don't fetch them again
     .filter(id => !alreadyMergedEntitiesIds.has(id));
 

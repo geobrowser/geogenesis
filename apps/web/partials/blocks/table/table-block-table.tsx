@@ -19,9 +19,10 @@ import { useState } from 'react';
 
 import { getTriples } from '~/core/database/triples';
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { EntityId } from '~/core/io/schema';
+import { SearchResult } from '~/core/io/dto/search';
+import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
-import { createEmptyCollectionItemEntity } from '~/core/state/editor/data-entity';
+import { createCollectionItemRelation } from '~/core/state/editor/data-entity';
 import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Row, Schema } from '~/core/types';
@@ -32,6 +33,7 @@ import { valueTypes } from '~/core/value-types';
 
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { SelectEntity } from '~/design-system/select-entity';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
@@ -180,22 +182,28 @@ export const TableBlockTable = React.memo(
       },
     });
 
-    const onNewRow = () => {
+    const onSelectCollectionItem = (entity: Pick<SearchResult, 'id' | 'name'>) => {
       if (source.type === 'COLLECTION') {
-        createEmptyCollectionItemEntity(EntityId(source.value), space);
+        createCollectionItemRelation({
+          collectionId: EntityId(source.value),
+          spaceId: SpaceId(space),
+          toEntity: {
+            id: entity.id,
+            name: entity.name,
+          },
+        });
       }
     };
 
     const isEmpty = rows.length === 0;
 
-    if (isEmpty) {
+    if (isEmpty && source.type !== 'COLLECTION') {
       if (isEditMode) {
         return (
           <div className="block rounded-lg bg-grey-01">
             <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
               <div>{placeholder.text}</div>
               <img src={placeholder.image} className="!h-[64px] w-auto object-contain" alt="" />
-              {source.type === 'COLLECTION' && <button onClick={onNewRow}>Make a new row</button>}
             </div>
           </div>
         );
@@ -249,6 +257,11 @@ export const TableBlockTable = React.memo(
                   ))}
                 </thead>
                 <tbody>
+                  {source.type === 'COLLECTION' && (
+                    <TableCell width={784} isExpanded={false} toggleExpanded={() => {}} isShown>
+                      <SelectEntity spaceId={space} onDone={onSelectCollectionItem} />
+                    </TableCell>
+                  )}
                   {table.getRowModel().rows.map((row, index: number) => {
                     const cells = row.getVisibleCells();
                     const entityId = cells?.[0]?.getValue<Cell>()?.entityId;
