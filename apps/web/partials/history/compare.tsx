@@ -10,10 +10,10 @@ import type { Change as Difference } from 'diff';
 
 import * as React from 'react';
 
-import { createFiltersFromGraphQLString } from '~/core/blocks-sdk/table';
-import { Subgraph } from '~/core/io';
+import { createFiltersFromGraphQLStringAndSource } from '~/core/blocks-sdk/table';
 import { fetchColumns } from '~/core/io/fetch-columns';
-import { Services } from '~/core/services';
+import { EntityId, SpaceId } from '~/core/io/schema';
+import { fetchEntity } from '~/core/io/subgraph';
 import { useDiff } from '~/core/state/diff-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
@@ -36,9 +36,6 @@ export const Compare = () => {
     </SlideUp>
   );
 };
-
-type SpaceId = string;
-type EntityId = string;
 
 const CompareChanges = () => {
   const { compareMode, setIsCompareOpen } = useDiff();
@@ -892,17 +889,22 @@ const TableFilter = ({ filter }: TableFilterProps) => {
 };
 
 const useFilters = (rawFilter: string) => {
-  const { subgraph } = Services.useServices();
   const { data, isLoading } = useQuery({
     queryKey: [`${rawFilter}`],
-    queryFn: () => getFilters(rawFilter, subgraph),
+    queryFn: () => getFilters(rawFilter),
   });
 
   return [data, isLoading] as const;
 };
 
-const getFilters = async (rawFilter: string, subgraph: Subgraph.ISubgraph) => {
-  const filters = await createFiltersFromGraphQLString(rawFilter, async id => await subgraph.fetchEntity({ id }));
+const getFilters = async (rawFilter: string) => {
+  // @TODO(data blocks): fix
+  const filters = await createFiltersFromGraphQLStringAndSource(
+    rawFilter,
+    { type: 'SPACES', value: [SpaceId('')] },
+    async id => await fetchEntity({ id })
+  );
+
   // @TODO: Why are we fetching these?
   const serverColumns = await fetchColumns({
     typeIds: [],

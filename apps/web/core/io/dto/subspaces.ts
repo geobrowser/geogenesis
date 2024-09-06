@@ -1,6 +1,5 @@
-import { SpaceMetadataDto } from '../dto';
 import { Address, SpaceId, SubstreamSubspace } from '../schema';
-import { SpaceConfigEntity } from './spaces';
+import { SpaceConfigEntity, SpaceMetadataDto } from './spaces';
 
 export type Subspace = {
   id: SpaceId;
