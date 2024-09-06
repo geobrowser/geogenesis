@@ -321,7 +321,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
         <div className="absolute left-0 right-0 top-0 z-100 flex -translate-y-full justify-center pb-4">
           <Tooltip
             trigger={
-              <div className="inline-flex items-center gap-1">
+              <div className="inline-flex cursor-pointer items-center gap-1 text-grey-04">
                 <Text as="h3" variant="footnote" className="text-center">
                   Personal access controls
                 </Text>
