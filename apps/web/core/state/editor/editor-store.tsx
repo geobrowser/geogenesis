@@ -18,7 +18,7 @@ import { EntityId, TypeId } from '../../io/schema';
 import { RenderableEntityType } from '../../types';
 import { Values } from '../../utils/value';
 import { getRelationForBlockType } from './block-types';
-import { getInitialDataEntityRelations } from './data-entity';
+import { makeInitialDataEntityRelations } from './data-entity';
 import { useEditorInstance } from './editor-provider';
 import { markdownToHtml } from './parser';
 import { getTextEntityOps } from './text-entity';
@@ -384,7 +384,7 @@ export function useEditorStore() {
             break;
           case SYSTEM_IDS.TABLE_BLOCK: {
             // @TODO(performance): upsertMany
-            for (const relation of getInitialDataEntityRelations(EntityId(node.id))) {
+            for (const relation of makeInitialDataEntityRelations(EntityId(node.id))) {
               DB.upsertRelation({ relation, spaceId });
             }
 

@@ -19,7 +19,7 @@ import { EntityId, SpaceId } from '../io/schema';
 import { Schema, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { Values } from '../utils/value';
-import { createSource, deleteSources, getSource } from './editor/data-entity';
+import { getSource, removeSources, upsertSource } from './editor/sources';
 import { Source } from './editor/types';
 
 export const PAGE_SIZE = 9;
@@ -187,8 +187,8 @@ export function useTableBlock() {
 
   const setSource = React.useCallback(
     (newSource: Source) => {
-      deleteSources({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
-      createSource({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
+      removeSources({ relations: blockEntity.relationsOut, spaceId: SpaceId(spaceId) });
+      upsertSource({ source: newSource, blockId: EntityId(entityId), spaceId: SpaceId(spaceId) });
     },
     [entityId, blockEntity.relationsOut, spaceId]
   );

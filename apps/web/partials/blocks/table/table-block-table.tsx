@@ -22,7 +22,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
 import { useEditable } from '~/core/state/editable-store';
-import { createCollectionItemRelation } from '~/core/state/editor/data-entity';
+import { upsertCollectionItemRelation } from '~/core/state/editor/data-entity';
 import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Row, Schema } from '~/core/types';
@@ -184,7 +184,7 @@ export const TableBlockTable = React.memo(
 
     const onSelectCollectionItem = (entity: Pick<SearchResult, 'id' | 'name'>) => {
       if (source.type === 'COLLECTION') {
-        createCollectionItemRelation({
+        upsertCollectionItemRelation({
           collectionId: EntityId(source.value),
           spaceId: SpaceId(space),
           toEntity: {

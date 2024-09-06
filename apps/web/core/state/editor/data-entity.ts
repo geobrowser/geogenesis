@@ -1,29 +1,33 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
-import { Match } from 'effect';
 
-import { StoreRelation, UpsertOp } from '~/core/database/types';
+import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
 import { ID } from '~/core/id';
-import { Relation } from '~/core/io/dto/entities';
 import { EntityId, SpaceId } from '~/core/io/schema';
 
 import { getRelationForBlockType } from './block-types';
-import { Source } from './types';
+import { makeRelationForSource, makeRelationForSourceType } from './sources';
 
 /**
- * Returns the relations to create a data entity. Data entities by default
- * have a type of Data, source set to be a collection id, and source type
- * set to be collection.
+ * Returns the relations to create a data entity. Data entities require a type,
+ * source type, and source relations by default to be valid.
+ *
+ * This function returns all the relations needed to make a data entity, defaulting
+ * to a source type of Collection. The initial source points to a new collection
+ * created for the new data entity.
+ *
+ * @param blockId the id of the new data block as an {@link EntityId}
+ * @returns an array of {@link StoreRelation} representing the data entity relations.
  */
-export function getInitialDataEntityRelations(
+export function makeInitialDataEntityRelations(
   blockId: EntityId
 ): [StoreRelation, StoreRelation, StoreRelation, StoreRelation] {
   const newCollectionId = ID.createEntityId();
 
   return [
     // Create relation for the source type, e.g., Spaces, Collection, Geo, etc.
-    getRelationForSourceType('COLLECTION', blockId),
+    makeRelationForSourceType('COLLECTION', blockId),
 
     // Create the type relation for the block itself. e.g., Table, Image, Text, etc.
     getRelationForBlockType(blockId, SYSTEM_IDS.TABLE_BLOCK),
@@ -48,86 +52,8 @@ export function getInitialDataEntityRelations(
 
     // Set the new collection as a data source. This points from the block entity to
     // the collection entity.
-    getRelationForSource(EntityId(newCollectionId), blockId),
+    makeRelationForSource(EntityId(newCollectionId), blockId),
   ];
-}
-
-/**
- * Reads the relations on the data block to find the Data Source Type
- * and data source value and maps it to our local representation of the
- * Source.
- *
- * Valid data source types are:
- *  - Collection
- *  - Spaces
- *  - All of Geo
- *
- * Depending on the source type we either need to later read from a single
- * collection, or generate a query.
- *
- * @param dataEntityRelations - The relations coming from the data entity
- * @returns The source of the data block with the source type and entity id(s)
- * for the type of source.
- */
-export function getSource(dataEntityRelations: Relation[], currentSpaceId: SpaceId): Source {
-  const sourceType = dataEntityRelations.find(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE)?.toEntity
-    .id;
-
-  if (sourceType === SYSTEM_IDS.COLLECTION_DATA_SOURCE) {
-    return {
-      type: 'COLLECTION',
-      value: dataEntityRelations.find(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE)?.toEntity.id ?? '',
-    };
-  }
-
-  if (sourceType === SYSTEM_IDS.QUERY_DATA_SOURCE) {
-    return {
-      type: 'SPACES',
-      value: dataEntityRelations
-        .filter(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE)
-        .map(r => SpaceId(r.toEntity.id)),
-    };
-  }
-
-  if (sourceType === SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE) {
-    return {
-      type: 'GEO',
-    };
-  }
-
-  return {
-    type: 'SPACES',
-    value: [currentSpaceId],
-  };
-}
-
-export function deleteSources({ relations, spaceId }: { relations: Relation[]; spaceId: SpaceId }) {
-  // Delete the existing source type relation. There should only be one source type
-  // relation, but delete many just in case.
-  const sourceTypeRelations = relations.filter(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE);
-  // Delete the existing sources relations. There might be one or many of these depending
-  // on the source type.
-  const sourceRelations = relations.filter(r => r.typeOf.id === SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE);
-
-  // @TODO(relations): Remove many
-  for (const relation of [...sourceRelations, ...sourceTypeRelations]) {
-    DB.removeRelation({
-      relationId: relation.id,
-      spaceId,
-    });
-  }
-}
-
-export function createSource({ source, blockId, spaceId }: { source: Source; blockId: EntityId; spaceId: SpaceId }) {
-  const newSourceType = getRelationForSourceType(source.type, blockId); // Source: COLLECTION | SPACES | GEO | etc.
-  const newSources = getRelationsForSourceEntities(source, blockId); // Source ids: SpaceId[] | CollectionId | GeoId
-
-  for (const relation of [newSourceType, ...newSources]) {
-    DB.upsertRelation({
-      relation: relation,
-      spaceId,
-    });
-  }
 }
 
 type CreateCollectionItemRelationArgs = {
@@ -139,10 +65,18 @@ type CreateCollectionItemRelationArgs = {
   };
 };
 
-export function createCollectionItemRelation({ collectionId, spaceId, toEntity }: CreateCollectionItemRelationArgs) {
+/**
+ * Creates the relation describing a collection item in a collection. Collection items
+ * are just Relations with a Relation type of {@link SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE}
+ *
+ * @params collectionId - The collection id as an {@link EntityId}
+ * @params spaceId - The space id as a {@link SpaceId}
+ * @params toEntity - The entity id and name of the ToEntity as an object with an id and name
+ */
+export function upsertCollectionItemRelation({ collectionId, spaceId, toEntity }: CreateCollectionItemRelationArgs) {
   // Create a relation for the Collection Item pointing from the collection to the new entity
   DB.upsertRelation({
-    relation: getRelationForCollectionItem({
+    relation: makeRelationForCollectionItem({
       collectionId,
       toEntityId: toEntity.id,
       toEntityName: toEntity.name,
@@ -157,7 +91,14 @@ type GetRelationForCollectionItemArgs = {
   toEntityName: string | null;
 };
 
-function getRelationForCollectionItem({
+/**
+ * @param collectionId - The collection id as an {@link EntityId}
+ * @param toEntityId - The entity id for the ToEntity as an {@link EntityId}
+ * @param toEntityName - The name of the ToEntity as a string if it exists or null if it doesn't
+ *
+ * @returns A `StoreRelation` representing a Collection Item in a Collection.
+ */
+function makeRelationForCollectionItem({
   collectionId,
   toEntityId,
   toEntityName,
@@ -179,87 +120,6 @@ function getRelationForCollectionItem({
       name: toEntityName,
       renderableType: 'RELATION',
       value: toEntityId,
-    },
-  };
-}
-
-function getRelationForSourceType(sourceType: Source['type'], blockId: EntityId): StoreRelation {
-  // Get the source type system id based on the source type
-  const sourceTypeId = Match.value(sourceType).pipe(
-    Match.when('COLLECTION', () => SYSTEM_IDS.COLLECTION_DATA_SOURCE),
-    Match.when('SPACES', () => SYSTEM_IDS.QUERY_DATA_SOURCE),
-    Match.when('GEO', () => SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE),
-    Match.orElse(() => SYSTEM_IDS.COLLECTION_DATA_SOURCE)
-  );
-
-  return {
-    index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
-    typeOf: {
-      id: EntityId(SYSTEM_IDS.DATA_SOURCE_TYPE_RELATION_TYPE),
-      name: 'Data Source Type',
-    },
-    toEntity: {
-      id: EntityId(sourceTypeId),
-      renderableType: 'RELATION',
-      name: null,
-      value: EntityId(sourceTypeId),
-    },
-    fromEntity: {
-      id: EntityId(blockId),
-      name: null,
-    },
-  };
-}
-
-function getRelationsForSourceEntities(source: Source, blockId: EntityId): StoreRelation[] {
-  if (source.type === 'COLLECTION') {
-    return [
-      // Set the new collection as a data source. This points from the block entity to
-      // the collection entity.
-      getRelationForSource(EntityId(source.value), blockId),
-    ];
-  }
-
-  if (source.type === 'SPACES') {
-    return source.value.map(spaceId => {
-      return getRelationForSource(EntityId(spaceId), blockId);
-    });
-  }
-
-  return [getRelationForSource(EntityId(SYSTEM_IDS.ALL_OF_GEO_DATA_SOURCE), blockId)];
-}
-
-function getRelationForSource(sourceId: EntityId, blockId: EntityId): StoreRelation {
-  // Set the new collection as a data source. This points from the block entity to
-  // the collection entity.
-  return {
-    index: INITIAL_COLLECTION_ITEM_INDEX_VALUE,
-    typeOf: {
-      id: EntityId(SYSTEM_IDS.DATA_SOURCE_ATTRIBUTE),
-      name: 'Data Source',
-    },
-    toEntity: {
-      id: EntityId(sourceId),
-      renderableType: 'DATA',
-      name: null,
-      value: EntityId(sourceId),
-    },
-    fromEntity: {
-      id: EntityId(blockId),
-      name: null,
-    },
-  };
-}
-
-function getEmptyEntityNameOps(): UpsertOp {
-  return {
-    attributeId: SYSTEM_IDS.NAME,
-    attributeName: 'Name',
-    entityId: ID.createEntityId(),
-    entityName: '',
-    value: {
-      type: 'TEXT',
-      value: '',
     },
   };
 }
