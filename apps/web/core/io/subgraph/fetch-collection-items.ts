@@ -35,8 +35,6 @@ export async function fetchCollectionItemEntities(
     signal,
   });
 
-  console.log('query', query(collectionId));
-
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
     const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
 
