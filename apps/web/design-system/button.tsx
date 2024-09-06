@@ -50,7 +50,7 @@ const buttonClassNames = (className = '') =>
           true: 'gap-1.5 px-1.5 py-1 text-smallButton leading-none',
         },
         disabled: {
-          true: 'cursor-not-allowed',
+          true: 'cursor-pointer',
           false: 'cursor-pointer',
         },
       },
@@ -92,9 +92,7 @@ export const SquareButton = forwardRef(function SquareButton(
   const squareButtonClassNames = cva([
     'relative box-border flex h-6 w-6 items-center justify-center rounded border bg-white text-text transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:!text-text focus:border-text focus:shadow-inner-text focus:outline-none',
     !isActive ? 'border-grey-02' : 'border-text !bg-bg !text-text',
-    !disabled
-      ? 'cursor-pointer'
-      : '!hover:border-divider !hover:bg-divider cursor-not-allowed !border-divider !bg-divider',
+    disabled ? 'cursor-pointer' : '!hover:border-divider !hover:bg-divider cursor-pointer !border-divider !bg-divider',
   ]);
 
   return (
@@ -116,7 +114,7 @@ type IconButtonProps = React.ComponentPropsWithoutRef<'button'> & {
 const iconButtonClassNames = cva('background-transparent cursor-pointer border-none', {
   variants: {
     disabled: {
-      true: 'cursor-not-allowed',
+      true: 'cursor-pointer',
     },
   },
   defaultVariants: {

@@ -296,7 +296,7 @@ export const FindTeamMember = ({ spaceId }: FindTeamMemberProps) => {
                   {!hasFoundPerson ? (
                     <Tooltip
                       trigger={
-                        <div>
+                        <div className="cursor-pointer">
                           <InfoSmall />
                         </div>
                       }
