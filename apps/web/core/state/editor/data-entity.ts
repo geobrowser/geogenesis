@@ -130,18 +130,22 @@ export function createSource({ source, blockId, spaceId }: { source: Source; blo
   }
 }
 
-export function createEmptyCollectionItemEntity(collectionId: EntityId, spaceId: string) {
-  // Create an empty entity with an empty name
-  const nameOp = getEmptyEntityNameOps();
+type CreateCollectionItemRelationArgs = {
+  collectionId: EntityId;
+  spaceId: SpaceId;
+  toEntity: {
+    id: EntityId;
+    name: string | null;
+  };
+};
 
-  DB.upsert(nameOp, spaceId);
-
+export function createCollectionItemRelation({ collectionId, spaceId, toEntity }: CreateCollectionItemRelationArgs) {
   // Create a relation for the Collection Item pointing from the collection to the new entity
   DB.upsertRelation({
     relation: getRelationForCollectionItem({
       collectionId,
-      toEntityId: EntityId(SYSTEM_IDS.NAME),
-      toEntityName: nameOp.value.value,
+      toEntityId: toEntity.id,
+      toEntityName: toEntity.name,
     }),
     spaceId,
   });
@@ -150,7 +154,7 @@ export function createEmptyCollectionItemEntity(collectionId: EntityId, spaceId:
 type GetRelationForCollectionItemArgs = {
   collectionId: EntityId;
   toEntityId: EntityId;
-  toEntityName: string;
+  toEntityName: string | null;
 };
 
 function getRelationForCollectionItem({

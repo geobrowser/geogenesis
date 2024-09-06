@@ -13,7 +13,7 @@ const query = (collectionId: string) => {
   return `{
     relations(filter: { fromEntityId: { equalTo: "${collectionId}" } }) {
       nodes {
-        entity {
+        toEntity {
           ${entityFragment}
         }
       }
@@ -28,7 +28,7 @@ export async function fetchCollectionItemEntities(
   const queryId = v4();
 
   const graphqlFetchEffect = graphql<{
-    relations: { nodes: { entity: SubstreamEntity }[] };
+    relations: { nodes: { toEntity: SubstreamEntity }[] };
   }>({
     endpoint: Environment.getConfig().api,
     query: query(collectionId),
@@ -69,11 +69,13 @@ export async function fetchCollectionItemEntities(
 
     return resultOrError.right.relations.nodes
       .map(e => {
-        const decodedSpace = Schema.decodeEither(SubstreamEntity)(e.entity);
+        const decodedSpace = Schema.decodeEither(SubstreamEntity)(e.toEntity);
 
         return Either.match(decodedSpace, {
           onLeft: error => {
-            console.error(`Unable to decode entity ${e.entity.id} for collection ${collectionId} with error ${error}`);
+            console.error(
+              `Unable to decode entity ${e.toEntity.id} for collection ${collectionId} with error ${error}`
+            );
             return null;
           },
           onRight: entity => {

@@ -126,9 +126,7 @@ export function useTableBlock() {
         Match.orElse(() => [])
       );
 
-      const res = EntityTable.fromColumnsAndRows(entities, columns);
-
-      return res;
+      return EntityTable.fromColumnsAndRows(entities, columns);
     },
   });
 
