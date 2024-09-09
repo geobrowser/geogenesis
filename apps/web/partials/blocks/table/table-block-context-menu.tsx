@@ -29,8 +29,6 @@ import { DataBlockSourceMenu } from '~/partials/blocks/table/data-block-source-m
 
 import { editingColumnsAtom } from '~/atoms';
 
-const MotionContent = motion(Dropdown.Content);
-
 // We keep track of the attributes in local state in order to quickly render
 // the changes the user has made to the schema. Otherwise there will be loading
 // states for several actions which will make the UI feel slow.
@@ -248,16 +246,9 @@ export function TableBlockContextMenu({
     <Dropdown.Root open={isMenuOpen} onOpenChange={onOpenChange}>
       <Dropdown.Trigger>{isMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}</Dropdown.Trigger>
       <Dropdown.Portal>
-        <MotionContent
-          initial={{ opacity: 0, scale: 0.95, y: -10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: -10 }}
-          transition={{
-            duration: 0.1,
-            ease: 'easeInOut',
-          }}
+        <Dropdown.Content
           sideOffset={8}
-          className="z-100 block !w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          className="z-[1001] block !w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           align="end"
         >
           {isInitialState && (
@@ -363,7 +354,7 @@ export function TableBlockContextMenu({
               })}
             </>
           )}
-        </MotionContent>
+        </Dropdown.Content>
       </Dropdown.Portal>
     </Dropdown.Root>
   );
