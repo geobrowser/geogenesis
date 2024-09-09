@@ -25,7 +25,7 @@ export const tableCommandItem: CommandSuggestionItem = {
     editor
       .chain()
       .focus()
-      .deleteRange(range)
+      .deleteRange({ from: range.from, to: range.to - 1 })
       .insertContent({
         type: 'tableNode',
         attrs: {

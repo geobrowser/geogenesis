@@ -3,7 +3,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
-import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 
 import * as React from 'react';

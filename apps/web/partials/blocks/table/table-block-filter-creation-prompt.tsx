@@ -29,8 +29,6 @@ interface TableBlockFilterPromptProps {
   onCreate: (filter: { columnId: string; value: string; valueType: TripleValueType; valueName: string | null }) => void;
 }
 
-const TableBlockFilterPromptContent = motion(Content);
-
 /**
  * We allow users to filter by Name, Space, or any Text or Relation column. We need to support
  * different autocomplete experiences for the filter inputs for each of these cases. Each data
@@ -193,15 +191,8 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
       <Portal>
         <AnimatePresence>
           {state.open && (
-            <TableBlockFilterPromptContent
+            <Content
               forceMount={true}
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{
-                duration: 0.1,
-                ease: 'easeInOut',
-              }}
               avoidCollisions={true}
               className="z-10 w-[472px] origin-top-left rounded-lg border border-grey-02 bg-white p-2 shadow-lg"
               sideOffset={8}
@@ -265,7 +256,7 @@ export function TableBlockFilterPrompt({ trigger, onCreate, options }: TableBloc
                   </div>
                 </div>
               </form>
-            </TableBlockFilterPromptContent>
+            </Content>
           )}
         </AnimatePresence>
       </Portal>
