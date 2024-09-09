@@ -6,6 +6,8 @@ import cx from 'classnames';
 import * as React from 'react';
 import { ReactNode, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
+import { useEditorInstance } from '~/core/state/editor/editor-provider';
+
 import { Text } from '~/design-system/text';
 
 import { CommandSuggestionItem, tableCommandItem } from './command-items';
@@ -16,14 +18,14 @@ export interface CommandListRef {
 
 export interface CommandListProps {
   items: CommandSuggestionItem[];
-  spaceId: string;
   screen?: ReactNode;
   editor: Editor;
   command: (...props: any) => void;
 }
 
-export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ command, spaceId, items }, ref) => {
+export const CommandList = forwardRef<CommandListRef, CommandListProps>(({ command, items }, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const { spaceId } = useEditorInstance();
 
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => setSelectedIndex(0), [items]);

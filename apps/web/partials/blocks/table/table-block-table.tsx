@@ -45,7 +45,7 @@ import { editingColumnsAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
 
-const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedColumns: Schema[]) => {
+const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedColumns: Schema[], spaceId: SpaceId) => {
   const columnSize = 784 / columns.length;
 
   return columns.map((column, i) =>
@@ -63,8 +63,7 @@ const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedC
               unpublishedColumns={unpublishedColumns}
               column={column}
               entityId={column.id}
-              // @TODO(relations): Fix when we work on tables
-              spaceId={''}
+              spaceId={spaceId}
             />
           </div>
         ) : (
@@ -158,7 +157,7 @@ export const TableBlockTable = React.memo(
 
     const table = useReactTable({
       data: rows,
-      columns: formatColumns(columns, isEditable, []),
+      columns: formatColumns(columns, isEditable, [], SpaceId(space)),
       defaultColumn,
       getCoreRowModel: getCoreRowModel(),
       getFilteredRowModel: getFilteredRowModel(),
@@ -175,8 +174,6 @@ export const TableBlockTable = React.memo(
         isEditable: isEditable,
       },
     });
-
-    console.log('space', space);
 
     const onSelectCollectionItem = (entity: Pick<SearchResult, 'id' | 'name'>) => {
       if (source.type === 'COLLECTION') {

@@ -15,8 +15,7 @@ import { cx } from 'class-variance-authority';
 import { useState } from 'react';
 
 import { getTriples } from '~/core/database/triples';
-import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useEditable } from '~/core/state/editable-store';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store/entity-table-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 import { Cell, Row, Schema } from '~/core/types';
@@ -72,15 +71,13 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const space = table.options.meta!.space;
     const cellId = `${row.original.id}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
-    const editable = table.options.meta?.editable;
-    const isEditor = table.options.meta?.isEditor;
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { columns, columnRelationTypes } = useEntityTable();
+    const { columns } = useEntityTable();
 
     const cellData = getValue<Cell | undefined>();
-    const isEditMode = isEditor && editable;
+    const isEditable = table.options.meta?.isEditable;
 
     if (!cellData) return null;
 
@@ -97,7 +94,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       },
     });
 
-    if (isEditMode) {
+    if (isEditable) {
       return (
         <EditableEntityTableCell
           // HACK (baiirun): For some reason the table value for the name field is stale
@@ -140,14 +137,12 @@ interface Props {
 
 export const EntityTable = ({ rows, space, columns }: Props) => {
   const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
-  const { editable } = useEditable();
-  const { isEditor } = useAccessControl(space);
   const { selectedType, unpublishedColumns } = useEntityTable();
-  const isEditMode = isEditor && editable;
+  const isEditable = useUserIsEditing(space);
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(columns, isEditMode, unpublishedColumns),
+    columns: formatColumns(columns, isEditable, unpublishedColumns),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -161,8 +156,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
     meta: {
       expandedCells,
       space,
-      editable,
-      isEditor,
+      isEditable,
     },
   });
 
@@ -184,7 +178,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
             </tr>
           ))}
         </thead>
-        {editable && selectedType && <AddNewColumn space={space} selectedType={selectedType} />}
+        {isEditable && selectedType && <AddNewColumn space={space} selectedType={selectedType} />}
         <tbody>
           {table.getRowModel().rows.length === 0 && (
             <tr>
@@ -205,7 +199,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
                   return (
                     <TableCell
                       key={cellId}
-                      isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
+                      isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && isEditable}
                       href={NavUtils.toEntity(space, entityId)}
                       isExpandable={isExpandable}
                       isExpanded={expandedCells[cellId]}

@@ -3,6 +3,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
 
+import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { TableBlockProvider } from '~/core/state/table-block-store';
 
 import { TableBlock, TableBlockError } from '../blocks/table/table-block';
@@ -42,7 +43,8 @@ export const TableNode = Node.create({
 });
 
 function TableNodeComponent({ node }: NodeViewRendererProps) {
-  const { spaceId, id } = node.attrs;
+  const { spaceId } = useEditorInstance();
+  const { id } = node.attrs;
 
   return (
     <NodeViewWrapper>

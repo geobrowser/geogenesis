@@ -108,8 +108,7 @@ export const TripleTable = ({ space, triples }: Props) => {
     meta: {
       expandedCells,
       space,
-      isEditor: false,
-      editable: false,
+      isEditable: false,
     },
   });
 
