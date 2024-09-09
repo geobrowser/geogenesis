@@ -2,7 +2,6 @@ import { Node, NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer, me
 import { ErrorBoundary } from 'react-error-boundary';
 
 import * as React from 'react';
-import { useMemo } from 'react';
 
 import { TableBlockProvider } from '~/core/state/table-block-store';
 
@@ -27,12 +26,6 @@ export const TableNode = Node.create({
 
   addAttributes() {
     return {
-      typeId: {
-        default: null,
-      },
-      typeName: {
-        default: null,
-      },
       spaceId: {
         default: '',
       },
