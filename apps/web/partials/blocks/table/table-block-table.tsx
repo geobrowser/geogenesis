@@ -18,10 +18,9 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import { getTriples } from '~/core/database/triples';
-import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
-import { useEditable } from '~/core/state/editable-store';
 import { upsertCollectionItemRelation } from '~/core/state/editor/data-entity';
 import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
@@ -82,15 +81,13 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const space = table.options.meta!.space;
     const cellId = `${row.original.id}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
-    const editable = table.options.meta?.editable;
-    const isEditor = table.options.meta?.isEditor;
 
     // We know that cell is rendered as a React component by react-table
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { columns, columnRelationTypes } = useTableBlock();
 
     const cellData = getValue<Cell | undefined>();
-    const isEditMode = isEditor && editable;
+    const isEditable = table.options.meta?.isEditable;
 
     if (!cellData) return null;
 
@@ -107,7 +104,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       },
     });
 
-    if (isEditMode) {
+    if (isEditable) {
       return (
         <EditableEntityTableCell
           // HACK (baiirun): For some reason the table value for the name field is stale
@@ -154,16 +151,14 @@ export const TableBlockTable = React.memo(
     const isEditingColumns = useAtomValue(editingColumnsAtom);
 
     const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
-    const { editable } = useEditable();
-    const { isEditor, isMember } = useAccessControl(space);
-    const isEditMode = (isEditor || isMember) && editable;
+    const isEditable = useUserIsEditing(space);
 
     // @TODO(data blocks): Somehow need to make a placeholder row
     // For now we'll make a button where someone can create a new row easily
 
     const table = useReactTable({
       data: rows,
-      columns: formatColumns(columns, isEditMode, []),
+      columns: formatColumns(columns, isEditable, []),
       defaultColumn,
       getCoreRowModel: getCoreRowModel(),
       getFilteredRowModel: getFilteredRowModel(),
@@ -177,10 +172,11 @@ export const TableBlockTable = React.memo(
       meta: {
         expandedCells,
         space,
-        editable,
-        isEditor: isEditor || isMember,
+        isEditable: isEditable,
       },
     });
+
+    console.log('space', space);
 
     const onSelectCollectionItem = (entity: Pick<SearchResult, 'id' | 'name'>) => {
       if (source.type === 'COLLECTION') {
@@ -198,7 +194,7 @@ export const TableBlockTable = React.memo(
     const isEmpty = rows.length === 0;
 
     if (isEmpty && source.type !== 'COLLECTION') {
-      if (isEditMode) {
+      if (isEditable) {
         return (
           <div className="block rounded-lg bg-grey-01">
             <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
@@ -234,7 +230,7 @@ export const TableBlockTable = React.memo(
                         const isShown = shownColumnIds.includes(header.id);
                         const headerClassNames = isShown
                           ? null
-                          : !isEditingColumns || !isEditMode
+                          : !isEditingColumns || !isEditable
                           ? 'hidden'
                           : '!bg-grey-01 !text-grey-03';
 
@@ -247,7 +243,7 @@ export const TableBlockTable = React.memo(
                             )}
                           >
                             <div className="flex h-full w-full items-center gap-[10px]">
-                              {isEditMode && !isShown ? <EyeHide /> : null}
+                              {isEditable && !isShown ? <EyeHide /> : null}
                               {flexRender(header.column.columnDef.header, header.getContext())}
                             </div>
                           </th>
@@ -257,7 +253,7 @@ export const TableBlockTable = React.memo(
                   ))}
                 </thead>
                 <tbody>
-                  {source.type === 'COLLECTION' && (
+                  {source.type === 'COLLECTION' && isEditable && (
                     <TableCell width={784} isExpanded={false} toggleExpanded={() => {}} isShown>
                       <SelectEntity spaceId={space} onDone={onSelectCollectionItem} />
                     </TableCell>
@@ -277,7 +273,7 @@ export const TableBlockTable = React.memo(
                           return (
                             <TableCell
                               key={cellId}
-                              isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && editable}
+                              isLinkable={Boolean(firstTriple?.attributeId === SYSTEM_IDS.NAME) && isEditable}
                               href={NavUtils.toEntity(space, entityId)}
                               isExpandable={isExpandable}
                               isExpanded={expandedCells[cellId]}
@@ -289,7 +285,7 @@ export const TableBlockTable = React.memo(
                                 }))
                               }
                               isShown={isShown}
-                              isEditMode={isEditMode}
+                              isEditMode={isEditable}
                             >
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </TableCell>
