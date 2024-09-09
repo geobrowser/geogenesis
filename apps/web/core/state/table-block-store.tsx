@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Match } from 'effect';
 
 import * as React from 'react';
@@ -106,6 +106,7 @@ export function useTableBlock() {
   });
 
   const { data: rows, isLoading: isLoadingRows } = useQuery({
+    placeholderData: keepPreviousData,
     queryKey: ['table-block-rows', columns, pageNumber, entityId, filterState, source, collectionItems],
     queryFn: async () => {
       if (!columns || !filterState) return [];
