@@ -14,7 +14,7 @@ import { EntityId, SpaceId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import { AttributeId } from '~/core/types';
-import { AttributeChange, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
+import { BlockChange, BlockId, Changeset, RenderableChange } from '~/core/utils/change/change';
 import { getImagePath } from '~/core/utils/utils';
 
 import { colors } from '~/design-system/theme/colors';
@@ -53,7 +53,7 @@ export async function ContentProposal({ proposal }: { proposal: Proposal }) {
 
 type ChangedAttributeProps = {
   attributeId: AttributeId;
-  attribute: AttributeChange;
+  attribute: RenderableChange;
   entityId: EntityId;
 };
 

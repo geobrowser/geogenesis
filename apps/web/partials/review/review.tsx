@@ -24,9 +24,8 @@ import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { Triple } from '~/core/types';
 import { Change } from '~/core/utils/change';
-import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
+import type { AttributeId, BlockChange, BlockId, Changeset, RenderableChange } from '~/core/utils/change/change';
 import { GeoDate, getImagePath } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -133,6 +132,7 @@ const ReviewChanges = () => {
   const proposalName = proposals[activeSpace]?.name?.trim() ?? '';
   const isReadyToPublish = proposalName?.length > 3;
   const [unstagedChanges, setUnstagedChanges] = useState<Record<string, Record<string, boolean>>>({});
+
   const triplesFromSpace = useTriples(
     React.useMemo(() => {
       return {
@@ -142,7 +142,7 @@ const ReviewChanges = () => {
   );
 
   const { makeProposal } = usePublish();
-  const [data, isLoading] = useChanges(triplesFromSpace, activeSpace);
+  const [data, isLoading] = useChanges(activeSpace);
 
   const handlePublish = useCallback(async () => {
     if (!activeSpace) return;
@@ -168,9 +168,12 @@ const ReviewChanges = () => {
     return null;
   }
 
-  const { changes, entities } = data;
-  const totalChanges = getTotalChanges(changes as Record<string, Change.Changeset>);
-  const totalEdits = getTotalEdits(changes, unstagedChanges);
+  // const { changes, entities } = data;
+  // const totalChanges = getTotalChanges(changes as Record<string, Change.Changeset>);
+  // const totalEdits = getTotalEdits(changes, unstagedChanges);
+
+  const totalChanges = 0;
+  const totalEdits = 0;
 
   // const changedEntityIds = Object.keys(changes);
 
@@ -585,7 +588,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
 type ChangedAttributeProps = {
   spaceId: SpaceId;
   attributeId: AttributeId;
-  attribute: AttributeChange;
+  attribute: RenderableChange;
   entityId: EntityId;
   entity: Entity;
   unstagedChanges: Record<string, Record<string, boolean>>;
@@ -935,15 +938,13 @@ const labelClassNames = `text-footnote text-grey-04`;
 
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
-export const useChanges = (triples: Array<Triple> = [], spaceId: string) => {
-  // @TODO: fix
-  // const { subgraph } = Services.useServices();
-  // const { data, isLoading } = useQuery({
-  //   queryKey: ['changes', spaceId, triples],
-  //   queryFn: async () => Change.fromTriples(Triples.squash(triples), subgraph),
-  // });
-  // return [data, isLoading] as const;
-  return React.useMemo(() => [{ changes: {}, entities: {} }, false] as const, []);
+export const useChanges = (spaceId: string) => {
+  const { data, isLoading } = useQuery({
+    queryKey: ['changes', spaceId],
+    queryFn: () => Change.fromLocal(spaceId),
+  });
+
+  return [data, isLoading] as const;
 };
 
 type ChipProps = {

@@ -16,7 +16,7 @@ import { EntityId, SpaceId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { useDiff } from '~/core/state/diff-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { AttributeChange, AttributeId, BlockChange, BlockId, Changeset } from '~/core/utils/change/change';
+import type { AttributeId, BlockChange, BlockId, Changeset, RenderableChange } from '~/core/utils/change/change';
 import { getImagePath } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
@@ -580,7 +580,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
 
 type ChangedAttributeProps = {
   attributeId: AttributeId;
-  attribute: AttributeChange;
+  attribute: RenderableChange;
   entityId: EntityId;
 };
 
