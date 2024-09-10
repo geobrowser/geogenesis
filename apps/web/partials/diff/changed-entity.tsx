@@ -28,20 +28,19 @@ import { colors } from '~/design-system/theme/colors';
 import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
 
 type ChangedEntityProps = {
-  spaceId: SpaceId;
   change: EntityChange;
   unstagedChanges: Record<string, Record<string, boolean>>;
   setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
-export const ChangedEntity = ({ spaceId, change, unstagedChanges, setUnstagedChanges }: ChangedEntityProps) => {
+export const ChangedEntity = ({ change, unstagedChanges, setUnstagedChanges }: ChangedEntityProps) => {
   const handleDeleteActions = useCallback(() => {
     // @TODO(database)
   }, []);
 
   const attributes = groupBy(change.changes, c => c.attribute.id);
 
-  // const blockIds = Object.keys(blocks);
+  const blocks = attributes[SYSTEM_IDS.BLOCKS];
   const attributeIds = Object.keys(attributes);
 
   return (
@@ -58,10 +57,10 @@ export const ChangedEntity = ({ spaceId, change, unstagedChanges, setUnstagedCha
           </div>
         </div>
       </div>
-      {/* {blockIds.length > 0 && (
+      {/* {blocks.length > 0 && (
         <div className="mt-4">
-          {blockIds.map((blockId: BlockId) => (
-            <ChangedBlock key={blockId} blockId={blockId} block={blocks[blockId]} />
+          {blocks.map(blockChange => (
+            <ChangedBlock key={blockChange.id} blockId={blockChange.after.value} block={blocks[blockId]} />
           ))}
         </div>
       )} */}
@@ -346,6 +345,7 @@ const ChangedAttribute = ({
         </div>
       );
     }
+    case 'RELATION':
     case 'ENTITY': {
       return (
         <div key={attributeId} className="-mt-px flex gap-8">
@@ -353,7 +353,7 @@ const ChangedAttribute = ({
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {/* @TODO: Support entity triple diffs */}
-              <Chip status="unchanged">{after?.valueName ?? after?.value}</Chip>
+              {before && <Chip status="unchanged">{before.valueName ?? before.value}</Chip>}
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">

@@ -1,6 +1,8 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Record } from 'effect';
 
 import { mergeEntityAsync } from '~/core/database/entities';
+import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import { Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
@@ -98,6 +100,7 @@ type TripleChange = NativeTripleChange | EntityTripleChange;
 export type EntityChange = {
   id: EntityId;
   name: string | null;
+  blockChanges: RenderableChange[];
   changes: RenderableChange[];
 };
 
@@ -114,8 +117,10 @@ export async function fromLocal(spaceId?: string) {
     includeDeleted: true,
   });
 
+  const localRelations = getRelations({ includeDeleted: true });
+
   // This includes any relations that have been changed locally
-  const entityIds = new Set(triples.map(t => t.entityId));
+  const entityIds = new Set([...triples.map(t => t.entityId), ...localRelations.map(r => r.fromEntity.id)]);
   const entityIdsToFetch = [...entityIds.values()];
 
   // @TODO: effect
@@ -132,20 +137,24 @@ export async function fromLocal(spaceId?: string) {
   // Each map is 1:1 with each entity only having one attribute per attribute id and one triple per attribute id
   //
   // Additionally, make sure that we're filtering out triples that don't match the current space id.
+  const localTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(triples);
   const remoteTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
     remoteEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
   );
 
+  const localRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(localRelations);
   const remoteRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(remoteEntities.flatMap(e => e.relationsOut));
 
   const changes = localEntities.map((entity): EntityChange => {
     const tripleChanges: TripleChange[] = [];
     const relationChanges: RelationChange[] = [];
 
+    const localTriplesForEntity = localTriplesByEntityId[entity.id] ?? {};
     const remoteTriplesForEntity = remoteTriplesByEntityId[entity.id] ?? {};
+    const localRelationsForEntity = localRelationsByEntityId[entity.id] ?? {};
     const remoteRelationsForEntity = remoteRelationsByEntityId[entity.id] ?? {};
 
-    for (const triple of entity.triples) {
+    for (const triple of Object.values(localTriplesForEntity)) {
       const remoteTriple = remoteTriplesForEntity[triple.attributeId] ?? null;
       const before = getBeforeTripleChange(triple, remoteTriple);
       const after = getAfterTripleChange(triple, remoteTriple);
@@ -162,35 +171,43 @@ export async function fromLocal(spaceId?: string) {
       });
     }
 
-    for (const relation of entity.relationsOut) {
-      const remoteRelationsForAttributeId = remoteRelationsForEntity[relation.typeOf.id] ?? null;
-      const before = getBeforeRelationChange(relation, remoteRelationsForAttributeId);
-      const after = getAfterRelationChange(relation, remoteRelationsForAttributeId);
+    for (const relations of Object.values(localRelationsForEntity)) {
+      const remoteRelationsForAttributeId = remoteRelationsForEntity[entity.id] ?? null;
 
-      // @TODO: Handle block relations
-      if (relation.toEntity.renderableType !== 'DATA' && relation.toEntity.renderableType !== 'TEXT') {
-        continue;
+      for (const relation of relations) {
+        const before = getBeforeRelationChange(relation, remoteRelationsForAttributeId);
+        const after = getAfterRelationChange(relation, remoteRelationsForAttributeId);
+
+        // @TODO: Handle block relations
+        if (relation.toEntity.renderableType === 'DATA' || relation.toEntity.renderableType === 'TEXT') {
+          continue;
+        }
+
+        relationChanges.push({
+          id: entity.id,
+          attribute: {
+            id: relation.typeOf.id,
+            name: relation.typeOf.name,
+          },
+          type: 'RELATION',
+          before,
+          after,
+        });
       }
-
-      relationChanges.push({
-        id: entity.id,
-        attribute: {
-          id: relation.typeOf.id,
-          name: relation.typeOf.name,
-        },
-        type: 'RELATION',
-        before,
-        after,
-      });
     }
+
+    // Filter out any "dead" changes where the values are the exact same
+    // in the before and after.
+    const realChanges = [...tripleChanges, ...relationChanges].filter(c => isRealChange(c.before, c.after));
+
+    // @TODO: Need to do more work for block diffs?
+    const blockChanges = relationChanges.filter(c => c.attribute.id === SYSTEM_IDS.BLOCKS);
 
     return {
       id: entity.id,
       name: entity.name,
-
-      // Filter out any "dead" changes where the values are the exact same
-      // in the before and after.
-      changes: [...tripleChanges, ...relationChanges].filter(c => isRealChange(c.before, c.after)),
+      blockChanges,
+      changes: realChanges,
     };
   });
 
