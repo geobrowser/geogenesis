@@ -123,7 +123,7 @@ export async function fromLocal(spaceId?: string) {
   const entityIds = new Set([...triples.map(t => t.entityId), ...localRelations.map(r => r.fromEntity.id)]);
   const entityIdsToFetch = [...entityIds.values()];
 
-  const run = Effect.gen(function* () {
+  const collectEntities = Effect.gen(function* () {
     const maybeRemoteEntitiesEffect = Effect.all(
       entityIdsToFetch.map(id => Effect.promise(() => getEntityAsync(EntityId(id))))
     );
@@ -146,7 +146,7 @@ export async function fromLocal(spaceId?: string) {
     };
   });
 
-  const { remoteEntities, localEntities } = await Effect.runPromise(run);
+  const { remoteEntities, localEntities } = await Effect.runPromise(collectEntities);
 
   // Aggregate remote triples into a map of entities -> attributes and attributes -> triples
   // Each map is 1:1 with each entity only having one attribute per attribute id and one triple per attribute id

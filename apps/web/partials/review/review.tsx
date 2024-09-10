@@ -252,7 +252,6 @@ const ReviewChanges = () => {
               {changes.map(change => (
                 <ChangedEntity
                   key={change.id}
-                  spaceId={SpaceId(activeSpace)}
                   change={change}
                   unstagedChanges={unstagedChanges}
                   setUnstagedChanges={setUnstagedChanges}
