@@ -1,5 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { Array, Record, pipe } from 'effect';
+import { Record } from 'effect';
 
 import { mergeEntityAsync } from '~/core/database/entities';
 import { getTriples } from '~/core/database/triples';
@@ -42,10 +41,12 @@ type RelationChangeValue = {
 
 type ImageChangeValue = {
   value: string;
+  valueName: string | null;
 } & ChangeType;
 
 type TripleChangeValue = {
   value: string;
+  valueName: string | null;
 } & ChangeType;
 
 type Attribute = {
@@ -138,23 +139,12 @@ export async function fromLocal(spaceId?: string) {
     remoteEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
   );
 
-  // @TODO: read the name from localTriplesByEntityId
-  const localNamesByEntityId = pipe(
-    triples,
-    Array.filter(t => t.attributeId === SYSTEM_IDS.NAME),
-    Array.map(t => [t.entityId, t.value.value] as const),
-    Record.fromEntries
-  );
-
-  const changes = entityIdsToFetch.map((id): EntityChange => {
-    const maybeRemoteEntity = remoteEntities.find(e => e.id === id) ?? null;
-
+  const changes = localEntities.map((entity): EntityChange => {
     // @TODO: aggregate relations by from entity id
-    // @TODO: support entity triple diffs
-    const tripleChanges: NativeTripleChange[] = [];
+    const tripleChanges: TripleChange[] = [];
 
-    const tripleChangesForEntity = localTriplesByEntityId[id];
-    const remoteTriplesForEntity = remoteTriplesByEntityId[id];
+    const tripleChangesForEntity = localTriplesByEntityId[entity.id];
+    const remoteTriplesForEntity = remoteTriplesByEntityId[entity.id];
 
     for (const triple of Object.values(tripleChangesForEntity)) {
       const remoteTriple = remoteTriplesForEntity[triple.attributeId] ?? null;
@@ -162,12 +152,11 @@ export async function fromLocal(spaceId?: string) {
       const after = getAfterTripleChange(triple, remoteTriple);
 
       if (triple.value.type === 'ENTITY') {
-        // @TODO: Handle entity triple values
         continue;
       }
 
       tripleChanges.push({
-        id: EntityId(id),
+        id: entity.id,
         attribute: {
           id: triple.attributeId,
           name: triple.attributeName,
@@ -179,14 +168,16 @@ export async function fromLocal(spaceId?: string) {
     }
 
     return {
-      id: EntityId(id),
-      name: localNamesByEntityId[id] ?? maybeRemoteEntity?.name ?? null,
+      id: entity.id,
+      name: entity.name,
 
       // Filter out any "dead" changes where the values are the exact same
       // in the before and after.
       changes: tripleChanges.filter(c => isRealChange(c.before, c.after)),
     };
   });
+
+  console.log('changes', changes);
 
   // For each change grouping, we want to diff between the relations and triples
   return changes;
@@ -233,7 +224,10 @@ function groupTriplesByEntityIdAndAttributeId(triples: Triple[]) {
  * @params remoteTriple - the remote triple as it exists in the remote database as a {@link Triple}
  * @returns - {@link TripleChange} or null if the triple is not present in the remote database
  */
-function getBeforeTripleChange(triple: Triple, remoteTriple: Triple | null): TripleChangeValue | null {
+function getBeforeTripleChange(
+  triple: Triple,
+  remoteTriple: Triple | null
+): (TripleChangeValue | RelationChangeValue) | null {
   if (remoteTriple === null) {
     return null;
   }
@@ -241,12 +235,14 @@ function getBeforeTripleChange(triple: Triple, remoteTriple: Triple | null): Tri
   if (triple.value.value !== remoteTriple.value.value) {
     return {
       value: remoteTriple.value.value,
+      valueName: remoteTriple.value.type === 'ENTITY' ? remoteTriple.value.name : null,
       type: 'UPDATE',
     };
   }
 
   return {
     value: remoteTriple.value.value,
+    valueName: remoteTriple.value.type === 'ENTITY' ? remoteTriple.value.name : null,
     type: 'REMOVE',
   };
 }
@@ -261,10 +257,11 @@ function getBeforeTripleChange(triple: Triple, remoteTriple: Triple | null): Tri
  * @returns - {@link TripleChange}. There is always an after triple change, so this version
  * of the function always returns a value.
  */
-function getAfterTripleChange(triple: Triple, remoteTriple: Triple | null): TripleChangeValue {
+function getAfterTripleChange(triple: Triple, remoteTriple: Triple | null): TripleChangeValue | RelationChangeValue {
   if (remoteTriple === null) {
     return {
       value: triple.value.value,
+      valueName: triple.value.type === 'ENTITY' ? triple.value.name : null,
       type: 'ADD',
     };
   }
@@ -272,12 +269,14 @@ function getAfterTripleChange(triple: Triple, remoteTriple: Triple | null): Trip
   if (triple.value.value !== remoteTriple.value.value) {
     return {
       value: triple.value.value,
+      valueName: triple.value.type === 'ENTITY' ? triple.value.name : null,
       type: 'UPDATE',
     };
   }
 
   return {
     value: triple.value.value,
+    valueName: triple.value.type === 'ENTITY' ? triple.value.name : null,
     type: 'REMOVE',
   };
 }
