@@ -15,7 +15,7 @@ import { Close } from '~/design-system/icons/close';
 import { Warning } from '~/design-system/icons/warning';
 import { SlideUp } from '~/design-system/slide-up';
 
-import { DateTimeDiff, useChanges } from '../review/review';
+import { DateTimeDiff, useLocalChanges } from '../review/review';
 import { actionsCountAtom, entityCountAtom, entityCountByTypeAtom, publishAtom, stepAtom, triplesAtom } from './atoms';
 
 type PublishProps = {
@@ -71,7 +71,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
     });
   };
 
-  const [data, isLoading] = useChanges(triples.slice(0, 150), spaceId);
+  const [data, isLoading] = useLocalChanges(triples.slice(0, 150), spaceId);
 
   if (isLoading || !data) {
     return null;
