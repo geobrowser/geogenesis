@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { Record } from 'effect';
+import { Effect, Record } from 'effect';
 
 import { mergeEntityAsync } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
@@ -123,15 +123,30 @@ export async function fromLocal(spaceId?: string) {
   const entityIds = new Set([...triples.map(t => t.entityId), ...localRelations.map(r => r.fromEntity.id)]);
   const entityIdsToFetch = [...entityIds.values()];
 
-  // @TODO: effect
-  const remoteEntities = (await Promise.all(entityIdsToFetch.map(id => getEntityAsync(EntityId(id))))).filter(
-    e => e !== null
-  );
+  const run = Effect.gen(function* () {
+    const maybeRemoteEntitiesEffect = Effect.all(
+      entityIdsToFetch.map(id => Effect.promise(() => getEntityAsync(EntityId(id))))
+    );
 
-  // @TODO: performance by merging with above
-  const localEntities = (await Promise.all(entityIdsToFetch.map(id => mergeEntityAsync(EntityId(id))))).filter(
-    e => e !== null
-  );
+    const maybeLocalEntitiesEffect = Effect.all(
+      entityIdsToFetch.map(id => Effect.promise(() => mergeEntityAsync(EntityId(id))))
+    );
+
+    const [maybeRemoteEntities, maybeLocalEntities] = yield* Effect.all([
+      maybeRemoteEntitiesEffect,
+      maybeLocalEntitiesEffect,
+    ]);
+
+    const remoteEntities = maybeRemoteEntities.filter(e => e !== null);
+    const localEntities = maybeLocalEntities.filter(e => e !== null);
+
+    return {
+      remoteEntities,
+      localEntities,
+    };
+  });
+
+  const { remoteEntities, localEntities } = await Effect.runPromise(run);
 
   // Aggregate remote triples into a map of entities -> attributes and attributes -> triples
   // Each map is 1:1 with each entity only having one attribute per attribute id and one triple per attribute id
@@ -145,7 +160,7 @@ export async function fromLocal(spaceId?: string) {
   const localRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(localRelations);
   const remoteRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(remoteEntities.flatMap(e => e.relationsOut));
 
-  const changes = localEntities.map((entity): EntityChange => {
+  return localEntities.map((entity): EntityChange => {
     const tripleChanges: TripleChange[] = [];
     const relationChanges: RelationChange[] = [];
 
@@ -210,11 +225,6 @@ export async function fromLocal(spaceId?: string) {
       changes: realChanges,
     };
   });
-
-  console.log('changes', changes);
-
-  // For each change grouping, we want to diff between the relations and triples
-  return changes;
 }
 
 function isRealChange(before: TripleChangeValue | null, after: TripleChangeValue) {
