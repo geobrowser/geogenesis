@@ -154,7 +154,7 @@ const ReviewChanges = () => {
   }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace]);
 
   if (isLoading || !changes || isSpacesLoading) {
-    return null;
+    return <div>Loading...</div>;
   }
 
   const totalChanges = changes.length;

@@ -353,7 +353,7 @@ const ChangedAttribute = ({
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {/* @TODO: Support entity triple diffs */}
-              <Chip status="unchanged">{before?.value}</Chip>
+              <Chip status="unchanged">{after?.valueName ?? after?.value}</Chip>
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
@@ -368,7 +368,7 @@ const ChangedAttribute = ({
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
               {/* @TODO: Support entity triple diffs */}
-              <Chip status="added">{after?.value}</Chip>
+              <Chip status="added">{after?.valueName ?? after?.value}</Chip>
             </div>
           </div>
         </div>
@@ -585,7 +585,7 @@ const chip = cva(
   }
 );
 
-const Chip = ({ status = 'unchanged', children }: ChipProps) => {
+export const Chip = ({ status = 'unchanged', children }: ChipProps) => {
   return <span className={chip({ status })}>{children}</span>;
 };
 

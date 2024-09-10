@@ -2,6 +2,7 @@ import { Record } from 'effect';
 
 import { mergeEntityAsync } from '~/core/database/entities';
 import { getTriples } from '~/core/database/triples';
+import { Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { queryClient } from '~/core/query-client';
@@ -39,11 +40,6 @@ type RelationChangeValue = {
   valueName: string | null;
 } & ChangeType;
 
-type ImageChangeValue = {
-  value: string;
-  valueName: string | null;
-} & ChangeType;
-
 type TripleChangeValue = {
   value: string;
   valueName: string | null;
@@ -61,23 +57,25 @@ type Attribute = {
  *
  * This makes it so the diff UI can work the same way as our standard rendering UI.
  */
-export type RenderableChange =
-  | NativeTripleChange
-  | EntityTripleChange
-  | {
-      type: BaseRelationRenderableProperty['type'];
-      id: EntityId;
-      attribute: Attribute;
-      before: RelationChangeValue | null;
-      after: RelationChangeValue;
-    }
-  | {
-      type: ImageRelationRenderableProperty['type'];
-      id: EntityId;
-      attribute: Attribute;
-      before: ImageChangeValue | null;
-      after: ImageChangeValue;
-    };
+export type RenderableChange = TripleChange | RelationChange;
+
+type RelationChange = BaseRelationChange | ImageRelationChange;
+
+type BaseRelationChange = {
+  type: BaseRelationRenderableProperty['type'];
+  id: EntityId;
+  attribute: Attribute;
+  before: RelationChangeValue | null;
+  after: RelationChangeValue;
+};
+
+type ImageRelationChange = {
+  type: ImageRelationRenderableProperty['type'];
+  id: EntityId;
+  attribute: Attribute;
+  before: RelationChangeValue | null;
+  after: RelationChangeValue;
+};
 
 type NativeTripleChange = {
   type: NativeRenderableProperty['type'];
@@ -130,30 +128,27 @@ export async function fromLocal(spaceId?: string) {
     e => e !== null
   );
 
-  // Aggregate local and remote triples into a map of entities -> attributes and attributes -> triples
+  // Aggregate remote triples into a map of entities -> attributes and attributes -> triples
   // Each map is 1:1 with each entity only having one attribute per attribute id and one triple per attribute id
   //
   // Additionally, make sure that we're filtering out triples that don't match the current space id.
-  const localTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(triples);
   const remoteTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
     remoteEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
   );
 
+  const remoteRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(remoteEntities.flatMap(e => e.relationsOut));
+
   const changes = localEntities.map((entity): EntityChange => {
-    // @TODO: aggregate relations by from entity id
     const tripleChanges: TripleChange[] = [];
+    const relationChanges: RelationChange[] = [];
 
-    const tripleChangesForEntity = localTriplesByEntityId[entity.id];
-    const remoteTriplesForEntity = remoteTriplesByEntityId[entity.id];
+    const remoteTriplesForEntity = remoteTriplesByEntityId[entity.id] ?? {};
+    const remoteRelationsForEntity = remoteRelationsByEntityId[entity.id] ?? {};
 
-    for (const triple of Object.values(tripleChangesForEntity)) {
+    for (const triple of entity.triples) {
       const remoteTriple = remoteTriplesForEntity[triple.attributeId] ?? null;
       const before = getBeforeTripleChange(triple, remoteTriple);
       const after = getAfterTripleChange(triple, remoteTriple);
-
-      if (triple.value.type === 'ENTITY') {
-        continue;
-      }
 
       tripleChanges.push({
         id: entity.id,
@@ -167,13 +162,35 @@ export async function fromLocal(spaceId?: string) {
       });
     }
 
+    for (const relation of entity.relationsOut) {
+      const remoteRelationsForAttributeId = remoteRelationsForEntity[relation.typeOf.id] ?? null;
+      const before = getBeforeRelationChange(relation, remoteRelationsForAttributeId);
+      const after = getAfterRelationChange(relation, remoteRelationsForAttributeId);
+
+      // @TODO: Handle block relations
+      if (relation.toEntity.renderableType !== 'DATA' && relation.toEntity.renderableType !== 'TEXT') {
+        continue;
+      }
+
+      relationChanges.push({
+        id: entity.id,
+        attribute: {
+          id: relation.typeOf.id,
+          name: relation.typeOf.name,
+        },
+        type: 'RELATION',
+        before,
+        after,
+      });
+    }
+
     return {
       id: entity.id,
       name: entity.name,
 
       // Filter out any "dead" changes where the values are the exact same
       // in the before and after.
-      changes: tripleChanges.filter(c => isRealChange(c.before, c.after)),
+      changes: [...tripleChanges, ...relationChanges].filter(c => isRealChange(c.before, c.after)),
     };
   });
 
@@ -210,6 +227,25 @@ function groupTriplesByEntityIdAndAttributeId(triples: Triple[]) {
     }
 
     acc[entityId][attributeId] = triple;
+
+    return acc;
+  }, {});
+}
+
+function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
+  return relations.reduce<Record<string, Record<string, Relation[]>>>((acc, relation) => {
+    const entityId = relation.fromEntity.id;
+    const attributeId = relation.typeOf.id;
+
+    if (!acc[entityId]) {
+      acc[entityId] = {};
+    }
+
+    if (!acc[entityId][attributeId]) {
+      acc[entityId][attributeId] = [];
+    }
+
+    acc[entityId][attributeId].push(relation);
 
     return acc;
   }, {});
@@ -277,7 +313,67 @@ function getAfterTripleChange(triple: Triple, remoteTriple: Triple | null): Trip
   return {
     value: triple.value.value,
     valueName: triple.value.type === 'ENTITY' ? triple.value.name : null,
+    type: 'ADD',
+  };
+}
+
+function getBeforeRelationChange(relation: Relation, remoteRelations: Relation[] | null): RelationChangeValue | null {
+  if (remoteRelations === null) {
+    return null;
+  }
+
+  const maybeRemoteRelationWithSameId = remoteRelations.find(r => r.id === relation.id);
+
+  if (!maybeRemoteRelationWithSameId) {
+    return null;
+  }
+
+  if (relation.toEntity.value !== maybeRemoteRelationWithSameId.toEntity.value) {
+    return {
+      value: maybeRemoteRelationWithSameId.toEntity.value,
+      valueName: maybeRemoteRelationWithSameId.toEntity.name,
+      type: 'UPDATE',
+    };
+  }
+
+  return {
+    value: maybeRemoteRelationWithSameId.toEntity.value,
+    valueName: maybeRemoteRelationWithSameId.toEntity.name,
     type: 'REMOVE',
+  };
+}
+
+function getAfterRelationChange(relation: Relation, remoteRelations: Relation[] | null): RelationChangeValue {
+  if (remoteRelations === null) {
+    return {
+      value: relation.toEntity.value,
+      valueName: relation.toEntity.name,
+      type: 'ADD',
+    };
+  }
+
+  const maybeRemoteRelationWithSameId = remoteRelations.find(r => r.id === relation.id);
+
+  if (!maybeRemoteRelationWithSameId) {
+    return {
+      value: relation.toEntity.value,
+      valueName: relation.toEntity.name,
+      type: 'ADD',
+    };
+  }
+
+  if (relation.toEntity.value !== maybeRemoteRelationWithSameId.toEntity.value) {
+    return {
+      value: relation.toEntity.value,
+      valueName: relation.toEntity.name,
+      type: 'UPDATE',
+    };
+  }
+
+  return {
+    value: relation.toEntity.value,
+    valueName: relation.toEntity.name,
+    type: 'ADD',
   };
 }
 
