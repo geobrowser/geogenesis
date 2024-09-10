@@ -11,7 +11,7 @@ export const ATTRIBUTE = '808a04ceb21c4d888ad12e240613e5ca';
  *
  * They act similarly to Join Tables in a relational database, but are designed
  * around the graph-based nature of the Geo data model.
- * 
+ *
  * Relations are themselves entities, so can store any metadata about the relation
  * as triples. Currently Relation entities cannot have their own relations. This is a
  * technical limitation to avoid infinitely creating recursive relations.
@@ -63,13 +63,13 @@ export const COLLECTION_TYPE = 'c373a33052df47b3a6d2df552bda4b44';
  * Data entities in Geo can specify one or many data sources. These data sources
  * might fall into various categories which determine how data for these sources
  * are fetched.
- * 
+ *
  * A collection data source points to a collection with one or many collection item
  * relations coming from it.
- * 
+ *
  * A query data source points to one, many, or no spaces. This determines which spaces
  * we query data from.
- * 
+ *
  * An all-of-geo data source doesn't point to any spaces, and instead queries the
  * entirety of the knowledge graph.
  */
@@ -275,6 +275,7 @@ export const POSTS_PAGE = 'e73c3db8320042309ae952eddb73b566'
 export const PRODUCTS_PAGE = '6764f3827ff247e2b2ad295791153705'
 export const SERVICES_PAGE = 'e5d69a755ede4a56b43344e5d3fde7bc'
 export const EVENTS_PAGE = 'bb2917434c394223afba91a08aa83478'
+export const TEAM_PAGE = 'TEMP' // @ TODO (migration) add
 export const JOBS_PAGE = 'abb4700856554b27bae8e7dba063b394'
 export const PROJECTS_PAGE = '7171ce7a83b940a2abe2751a54c1c245'
 export const FINANCES_PAGE = 'f20af8deb57c472ab13d0247c46a8eeb'

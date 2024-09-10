@@ -1,5 +1,7 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
+import type { ReactNode } from 'react';
+
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 
@@ -11,7 +13,7 @@ export type Props = {
   params: { id: string };
 };
 
-export const Tab = async (props: Props & { slug: string }) => {
+export const Tab = async (props: Props & { slug: string; notice: ReactNode }) => {
   const { slug } = props;
   const spaceId = props.params.id;
   const pageTypeId = getPageTypeId(slug);
@@ -40,7 +42,9 @@ export const Tab = async (props: Props & { slug: string }) => {
     entityId,
   };
 
-  return <DefaultEntityPage params={params} showCover={false} showHeading={false} showHeader={false} />;
+  const { notice } = props;
+
+  return <DefaultEntityPage params={params} showCover={false} showHeading={false} showHeader={false} notice={notice} />;
 };
 
 const getPageTypeId = (slug: string): string | null => {
@@ -52,6 +56,7 @@ const pageTypeIds: Record<string, string> = {
   products: SYSTEM_IDS.PRODUCTS_PAGE,
   services: SYSTEM_IDS.SERVICES_PAGE,
   events: SYSTEM_IDS.EVENTS_PAGE,
+  team: SYSTEM_IDS.TEAM_PAGE,
   jobs: SYSTEM_IDS.JOBS_PAGE,
   projects: SYSTEM_IDS.PROJECTS_PAGE,
   finances: SYSTEM_IDS.FINANCES_PAGE,
