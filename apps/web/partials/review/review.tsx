@@ -4,6 +4,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { useQuery } from '@tanstack/react-query';
 import BoringAvatar from 'boring-avatars';
 import { cva } from 'class-variance-authority';
+import { StringToBoolean } from 'class-variance-authority/dist/types';
 import cx from 'classnames';
 import { diffWords } from 'diff';
 import type { Change as Difference } from 'diff';
@@ -25,8 +26,8 @@ import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { TableBlockFilter } from '~/core/state/table-block-store';
 import { Change } from '~/core/utils/change';
-import type { AttributeId, BlockChange, BlockId, Changeset, RenderableChange } from '~/core/utils/change/change';
-import { GeoDate, getImagePath } from '~/core/utils/utils';
+import type { BlockChange, BlockId, Changeset, EntityChange, RenderableChange } from '~/core/utils/change/change';
+import { GeoDate, getImagePath, groupBy } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -142,7 +143,7 @@ const ReviewChanges = () => {
   );
 
   const { makeProposal } = usePublish();
-  const [data, isLoading] = useChanges(activeSpace);
+  const [changes, isLoading] = useChanges(activeSpace);
 
   const handlePublish = useCallback(async () => {
     if (!activeSpace) return;
@@ -164,16 +165,14 @@ const ReviewChanges = () => {
     });
   }, [activeSpace, proposalName, proposals, makeProposal, triplesFromSpace]);
 
-  if (isLoading || !data || isSpacesLoading) {
+  if (isLoading || !changes || isSpacesLoading) {
     return null;
   }
 
-  // const { changes, entities } = data;
+  const totalChanges = changes.length;
+  const totalEdits = changes.flatMap(c => c.changes).length;
   // const totalChanges = getTotalChanges(changes as Record<string, Change.Changeset>);
   // const totalEdits = getTotalEdits(changes, unstagedChanges);
-
-  const totalChanges = 0;
-  const totalEdits = 0;
 
   // const changedEntityIds = Object.keys(changes);
 
@@ -266,18 +265,15 @@ const ReviewChanges = () => {
               />
             </div>
             <div className="flex flex-col gap-16 divide-y divide-grey-02">
-              Diffs are temporarily disabled
-              {/* {changedEntityIds.map((entityId: EntityId) => (
+              {changes.map(change => (
                 <ChangedEntity
-                  key={entityId}
-                  spaceId={activeSpace}
-                  change={changes[entityId] as Changeset}
-                  entityId={entityId}
-                  entity={entities[entityId] as Entity}
+                  key={change.id}
+                  spaceId={SpaceId(activeSpace)}
+                  change={change}
                   unstagedChanges={unstagedChanges}
                   setUnstagedChanges={setUnstagedChanges}
                 />
-              ))} */}
+              ))}
             </div>
           </div>
         </div>
@@ -286,92 +282,29 @@ const ReviewChanges = () => {
   );
 };
 
-const getTotalChanges = (changes: Record<string, Change.Changeset>) => {
-  let totalChanges = 0;
-
-  for (const key in changes) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    for (const _ in changes[key]?.attributes) {
-      totalChanges++;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    for (const _ in changes[key]?.blocks) {
-      totalChanges++;
-    }
-  }
-
-  return totalChanges;
-};
-
-const getTotalEdits = (
-  changes: Record<string, Change.Changeset>,
-  unstagedChanges: Record<string, Record<string, boolean>>
-) => {
-  let totalEdits = 0;
-
-  for (const key in changes) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    for (const _ in changes[key]?.attributes) {
-      totalEdits++;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    for (const _ in changes[key]?.blocks) {
-      totalEdits++;
-    }
-  }
-
-  for (const key in unstagedChanges) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    for (const _ in unstagedChanges[key]) {
-      totalEdits--;
-    }
-  }
-
-  return totalEdits;
-};
-
 type ChangedEntityProps = {
   spaceId: SpaceId;
-  change: Changeset;
-  entityId: EntityId;
-  entity: Entity;
+  change: EntityChange;
   unstagedChanges: Record<string, Record<string, boolean>>;
   setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
-const ChangedEntity = ({
-  spaceId,
-  change,
-  entityId,
-  entity,
-  unstagedChanges,
-  setUnstagedChanges,
-}: ChangedEntityProps) => {
-  const { name, blocks = {}, attributes = {}, actions = [] } = change;
+const ChangedEntity = ({ spaceId, change, unstagedChanges, setUnstagedChanges }: ChangedEntityProps) => {
+  const { name } = change;
 
   const handleDeleteActions = useCallback(() => {
     // @TODO(database)
   }, []);
 
-  const blockIds = Object.keys(blocks);
+  const attributes = groupBy(change.changes, c => c.attribute.id);
+
+  // const blockIds = Object.keys(blocks);
   const attributeIds = Object.keys(attributes);
-
-  let renderedName = name;
-
-  if (!renderedName) {
-    attributeIds.forEach(attributeId => {
-      const attribute = attributes[attributeId];
-
-      if (attribute.name === 'Name' && typeof attribute.after === 'string') {
-        renderedName = attribute.after;
-      }
-    });
-  }
 
   return (
     <div className="relative -top-12 pt-12">
       <div className="flex flex-col gap-5">
-        <div className="text-mediumTitle">{renderedName}</div>
+        <div className="text-mediumTitle">{name}</div>
         <div className="flex gap-8">
           <div className="flex-1 text-body">Current version</div>
           <div className="relative flex-1 text-body">
@@ -382,16 +315,16 @@ const ChangedEntity = ({
           </div>
         </div>
       </div>
-      {blockIds.length > 0 && (
+      {/* {blockIds.length > 0 && (
         <div className="mt-4">
           {blockIds.map((blockId: BlockId) => (
             <ChangedBlock key={blockId} blockId={blockId} block={blocks[blockId]} />
           ))}
         </div>
-      )}
-      {attributeIds.length > 0 && (
+      )} */}
+      {/* {attributeIds.length > 0 && (
         <div className="mt-2">
-          {attributeIds.map((attributeId: AttributeId) => (
+          {attributeIds.map(attributeId => (
             <ChangedAttribute
               key={`${entityId}-${attributeId}`}
               spaceId={spaceId}
@@ -404,7 +337,7 @@ const ChangedEntity = ({
             />
           ))}
         </div>
-      )}
+      )} */}
     </div>
   );
 };

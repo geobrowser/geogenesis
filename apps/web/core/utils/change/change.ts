@@ -96,7 +96,7 @@ type EntityTripleChange = {
 
 type TripleChange = NativeTripleChange | EntityTripleChange;
 
-type EntityChange = {
+export type EntityChange = {
   id: EntityId;
   name: string | null;
   changes: RenderableChange[];
