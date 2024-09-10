@@ -188,19 +188,17 @@ export async function fromLocal(spaceId?: string) {
     };
   });
 
-  console.log('changes', changes);
-
   // For each change grouping, we want to diff between the relations and triples
   return changes;
 }
 
 function isRealChange(before: TripleChangeValue | null, after: TripleChangeValue) {
   // The before and after values are the same
-  if (before?.type === 'UPDATE' && after.type === 'UPDATE' && before.value === after.value) {
+  if (before?.value === after.value) {
     return false;
   }
 
-  // We add then eventually remove a triple that doesn't exist remotely
+  // We add then remove a triple locally that doesn't exist remotely
   if (before === null && after.type === 'REMOVE') {
     return false;
   }

@@ -290,8 +290,6 @@ type ChangedEntityProps = {
 };
 
 const ChangedEntity = ({ spaceId, change, unstagedChanges, setUnstagedChanges }: ChangedEntityProps) => {
-  const { name } = change;
-
   const handleDeleteActions = useCallback(() => {
     // @TODO(database)
   }, []);
@@ -304,7 +302,7 @@ const ChangedEntity = ({ spaceId, change, unstagedChanges, setUnstagedChanges }:
   return (
     <div className="relative -top-12 pt-12">
       <div className="flex flex-col gap-5">
-        <div className="text-mediumTitle">{name}</div>
+        <div className="text-mediumTitle">{change.name}</div>
         <div className="flex gap-8">
           <div className="flex-1 text-body">Current version</div>
           <div className="relative flex-1 text-body">
@@ -322,22 +320,21 @@ const ChangedEntity = ({ spaceId, change, unstagedChanges, setUnstagedChanges }:
           ))}
         </div>
       )} */}
-      {/* {attributeIds.length > 0 && (
+      {attributeIds.length > 0 && (
         <div className="mt-2">
-          {attributeIds.map(attributeId => (
+          {change.changes.map(subchange => (
             <ChangedAttribute
-              key={`${entityId}-${attributeId}`}
+              key={`${change.id}-${subchange.attribute.id}`}
               spaceId={spaceId}
-              attributeId={attributeId}
-              attribute={attributes[attributeId]}
-              entityId={entityId}
-              entity={entity}
+              change={subchange}
+              attributeId={subchange.attribute.id}
+              entityId={change.id}
               unstagedChanges={unstagedChanges}
               setUnstagedChanges={setUnstagedChanges}
             />
           ))}
         </div>
-      )} */}
+      )}
     </div>
   );
 };
@@ -519,26 +516,20 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
 };
 
 type ChangedAttributeProps = {
-  spaceId: SpaceId;
-  attributeId: AttributeId;
-  attribute: RenderableChange;
+  attributeId: string;
+  change: EntityChange['changes'][number];
   entityId: EntityId;
-  entity: Entity;
   unstagedChanges: Record<string, Record<string, boolean>>;
   setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
 const ChangedAttribute = ({
-  spaceId,
   attributeId,
-  attribute,
+  change,
   entityId,
-  entity,
   unstagedChanges,
   setUnstagedChanges,
 }: ChangedAttributeProps) => {
-  const { actions = [] } = attribute;
-
   const handleDeleteActions = useCallback(() => {
     // @TODO(database)
   }, []);
@@ -546,7 +537,8 @@ const ChangedAttribute = ({
   // Don't show page blocks
   if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
-  const { name, before, after } = attribute;
+  const { before, after } = change;
+  const name = change.attribute.name;
 
   const unstaged = Object.hasOwn(unstagedChanges[entityId] ?? {}, attributeId);
 
@@ -568,13 +560,10 @@ const ChangedAttribute = ({
     }
   };
 
-  // Don't show dead changes
-  if (!before && !after) return null;
-
-  switch (attribute.type) {
+  switch (change.type) {
     case 'TEXT': {
-      const checkedBefore = typeof before === 'string' ? before : '';
-      const checkedAfter = typeof after === 'string' ? after : '';
+      const checkedBefore = before ? before.value : '';
+      const checkedAfter = after ? after.value : '';
       const differences = diffWords(checkedBefore, checkedAfter);
 
       return (
@@ -620,22 +609,8 @@ const ChangedAttribute = ({
           <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
-              {entity?.triples
-                .filter((triple: any) => triple.attributeId === attributeId && !before?.includes(triple.value.name))
-                .map((triple: any) => (
-                  <Chip key={triple.id} status="unchanged">
-                    {triple.value.name}
-                  </Chip>
-                ))}
-              {Array.isArray(before) && (
-                <>
-                  {before.map(item => (
-                    <Chip key={item} status="removed">
-                      {before}
-                    </Chip>
-                  ))}
-                </>
-              )}
+              {/* @TODO: Support entity triple diffs */}
+              <Chip status="unchanged">{before?.value}</Chip>
             </div>
           </div>
           <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
@@ -649,27 +624,8 @@ const ChangedAttribute = ({
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="flex flex-wrap gap-2">
-              {entity?.triples
-                .filter(
-                  (triple: any) =>
-                    triple.attributeId === attributeId &&
-                    !before?.includes(triple.value.name) &&
-                    !after?.includes(triple.value.name)
-                )
-                .map((triple: any) => (
-                  <Chip key={triple.id} status="unchanged">
-                    {triple.value.name}
-                  </Chip>
-                ))}
-              {Array.isArray(after) && (
-                <>
-                  {after.map(item => (
-                    <Chip key={item} status="added">
-                      {item}
-                    </Chip>
-                  ))}
-                </>
-              )}
+              {/* @TODO: Support entity triple diffs */}
+              <Chip status="added">{after?.value}</Chip>
             </div>
           </div>
         </div>
@@ -716,7 +672,7 @@ const ChangedAttribute = ({
           <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
-              {before && <DateTimeDiff mode="before" before={before as string | null} after={after as string | null} />}
+              {before && <DateTimeDiff mode="before" before={before.value} after={after.value} />}
             </div>
           </div>
           <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
@@ -730,7 +686,7 @@ const ChangedAttribute = ({
             </div>
             <div className="text-bodySemibold capitalize">{name}</div>
             <div className="text-body">
-              {after && <DateTimeDiff mode="after" before={before as string | null} after={after as string | null} />}
+              {after && <DateTimeDiff mode="after" before={before?.value ?? null} after={after.value} />}
             </div>
           </div>
         </div>
