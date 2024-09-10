@@ -72,11 +72,16 @@ const ReviewChanges = () => {
     }, [])
   ).map(t => t.space);
 
+  const dedupedSpacesWithActions = React.useMemo(() => {
+    return [...new Set(allSpacesWithActions).values()];
+  }, [allSpacesWithActions]);
+
   const { data: spaces, isLoading: isSpacesLoading } = useQuery({
-    queryKey: ['spaces-in-review', allSpacesWithActions],
+    queryKey: ['spaces-in-review', dedupedSpacesWithActions],
     queryFn: async () => {
-      const maybeSpaces = await fetchSpacesById(allSpacesWithActions);
-      const spaces = maybeSpaces.filter(s => s !== null && s.spaceConfig !== null);
+      const maybeSpaces = await fetchSpacesById(dedupedSpacesWithActions);
+
+      const spaces = maybeSpaces.filter(s => s.spaceConfig !== null);
 
       const spacesMap = new Map<string, { id: string; name: string | null; image: string | null }>();
 
@@ -99,18 +104,18 @@ const ReviewChanges = () => {
   // Set a new default active space when active spaces change
   useEffect(() => {
     if (
-      allSpacesWithActions.length === 0 &&
+      dedupedSpacesWithActions.length === 0 &&
       state.reviewState !== 'publish-complete' &&
       state.reviewState !== 'publishing-contract'
     ) {
       setIsReviewOpen(false);
     } else {
-      setActiveSpace(allSpacesWithActions[0] ?? '');
+      setActiveSpace(dedupedSpacesWithActions[0] ?? '');
     }
-  }, [allSpacesWithActions, setActiveSpace, setIsReviewOpen, state.reviewState]);
+  }, [dedupedSpacesWithActions, setActiveSpace, setIsReviewOpen, state.reviewState]);
 
   // Options for space selector dropdown
-  const options = allSpacesWithActions.map(spaceId => ({
+  const options = dedupedSpacesWithActions.map(spaceId => ({
     value: spaceId,
     label: (
       <span className="inline-flex items-center gap-2 text-button text-text">
@@ -171,20 +176,16 @@ const ReviewChanges = () => {
 
   const totalChanges = changes.length;
   const totalEdits = changes.flatMap(c => c.changes).length;
-  // const totalChanges = getTotalChanges(changes as Record<string, Change.Changeset>);
-  // const totalEdits = getTotalEdits(changes, unstagedChanges);
-
-  // const changedEntityIds = Object.keys(changes);
 
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
         <div className="inline-flex items-center gap-4">
           <SquareButton onClick={() => setIsReviewOpen(false)} icon={<Close />} />
-          {allSpacesWithActions.length > 0 && (
+          {dedupedSpacesWithActions.length > 0 && (
             <div className="inline-flex items-center gap-2">
               <span className="text-metadataMedium leading-none">Review your edits in</span>
-              {allSpacesWithActions.length === 1 && (
+              {dedupedSpacesWithActions.length === 1 && (
                 <span className="inline-flex items-center gap-2 text-button text-text ">
                   <span className="relative h-4 w-4 overflow-hidden rounded-sm">
                     <img
@@ -196,7 +197,7 @@ const ReviewChanges = () => {
                   <span>{spaces?.get(activeSpace)?.name}</span>
                 </span>
               )}
-              {allSpacesWithActions.length > 1 && (
+              {dedupedSpacesWithActions.length > 1 && (
                 <Dropdown
                   trigger={
                     <span className="inline-flex items-center gap-2">
@@ -325,7 +326,6 @@ const ChangedEntity = ({ spaceId, change, unstagedChanges, setUnstagedChanges }:
           {change.changes.map(subchange => (
             <ChangedAttribute
               key={`${change.id}-${subchange.attribute.id}`}
-              spaceId={spaceId}
               change={subchange}
               attributeId={subchange.attribute.id}
               entityId={change.id}
@@ -509,8 +509,7 @@ const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
       );
     }
     default: {
-      // required for <ChangedBlock /> to be valid JSX
-      return <React.Fragment />;
+      return null;
     }
   }
 };
@@ -573,7 +572,7 @@ const ChangedAttribute = ({
             <div className="text-body">
               {differences
                 .filter(item => !item.added)
-                .map((difference: Difference, index: number) => (
+                .map((difference, index) => (
                   <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
                     {difference.value}
                   </span>
@@ -593,7 +592,7 @@ const ChangedAttribute = ({
             <div className="text-body">
               {differences
                 .filter(item => !item.removed)
-                .map((difference: Difference, index: number) => (
+                .map((difference, index) => (
                   <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
                     {difference.value}
                   </span>
