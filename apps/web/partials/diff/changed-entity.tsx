@@ -281,7 +281,7 @@ const ChangedAttribute = ({
   if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
   const { before, after } = change;
-  const name = change.attribute.name;
+  const name = change.attribute.name ?? change.attribute.id;
 
   const unstaged = Object.hasOwn(unstagedChanges[entityId] ?? {}, attributeId);
 
@@ -436,8 +436,8 @@ const ChangedAttribute = ({
       );
     }
     case 'URI': {
-      const checkedBefore = typeof before === 'string' ? before : '';
-      const checkedAfter = typeof after === 'string' ? after : '';
+      const checkedBefore = before ? before.value : '';
+      const checkedAfter = after ? after.value : '';
       const differences = diffWords(checkedBefore, checkedAfter);
 
       return (
@@ -478,8 +478,7 @@ const ChangedAttribute = ({
       );
     }
     default: {
-      // required for <ChangedAttribute /> to be valid JSX
-      return <React.Fragment />;
+      return null;
     }
   }
 };
@@ -565,9 +564,7 @@ export const DateTimeDiff = ({ mode, before, after }: DateTimeProps) => {
 };
 
 const dateFieldClassNames = `w-full bg-transparent text-center text-body tabular-nums`;
-
 const labelClassNames = `text-footnote text-grey-04`;
-
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
 type ChipProps = {
