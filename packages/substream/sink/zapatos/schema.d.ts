@@ -136,6 +136,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       block_number: number;
+      /**
+      * **cursors.block_hash**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      block_hash: string;
+      /**
+      * **cursors.block_timestamp**
+      * - `int4` in database
+      * - `NOT NULL`, default
+      */
+      block_timestamp: number;
     }
     export interface JSONSelectable {
       /**
@@ -156,6 +168,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       block_number: number;
+      /**
+      * **cursors.block_hash**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      block_hash: string;
+      /**
+      * **cursors.block_timestamp**
+      * - `int4` in database
+      * - `NOT NULL`, default
+      */
+      block_timestamp: number;
     }
     export interface Whereable {
       /**
@@ -176,6 +200,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       block_number?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **cursors.block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      block_hash?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **cursors.block_timestamp**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      block_timestamp?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -196,6 +232,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       block_number: number | db.Parameter<number> | db.SQLFragment;
+      /**
+      * **cursors.block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      block_hash: string | db.Parameter<string> | db.SQLFragment;
+      /**
+      * **cursors.block_timestamp**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      block_timestamp: number | db.Parameter<number> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -216,6 +264,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       block_number?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
+      /**
+      * **cursors.block_hash**
+      * - `text` in database
+      * - `NOT NULL`, no default
+      */
+      block_hash?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **cursors.block_timestamp**
+      * - `int4` in database
+      * - `NOT NULL`, no default
+      */
+      block_timestamp?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
     }
     export type UniqueIndex = 'cursors_pkey';
     export type Column = keyof Selectable;

@@ -1,12 +1,12 @@
 import { gql, makeExtendSchemaPlugin } from 'graphile-utils';
 
-import { getBlockMetadata, getChainHead } from './get-block-meta';
+import { getChainHead } from './get-block-meta';
 import { getCursor } from './get-cursor';
+import { GEO_SUBGRAPH_DEPLOYMENT_ID } from './config';
 
 const INITIAL_GEO_BLOCK = 620;
 const INITIAL_BLOCK_HASH = '0xf731eaa44bd7a55e25a0252e1aa85e023a3d35d64763ae4ad6e713699a218ca2';
 const GEO_NETWORK_ID = 'geo';
-const GEO_SUBGRAPH_ID = 'geo';
 
 export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
   return {
@@ -67,55 +67,45 @@ export const IndexingStatusPlugin = makeExtendSchemaPlugin(() => {
     `,
     resolvers: {
       Query: {
-        async indexingStatuses(subgraphs: string[]) {
+        async indexingStatuses(_: any, args: any) {
+          const { subgraphs } = args;
+          if (subgraphs && subgraphs.length !== 0 && !subgraphs.includes(GEO_SUBGRAPH_DEPLOYMENT_ID)) {
+            return [];
+          }
           const [head, cursor] = await Promise.all([getChainHead(), getCursor()]);
 
-          let latestBlock: { number: number; hash: string; timestamp: number } = {
+          let latestBlock: { number: number; hash: string;} = {
             number: INITIAL_GEO_BLOCK,
             hash: INITIAL_BLOCK_HASH,
-            timestamp: 0,
           };
 
           if (cursor) {
-            const block = await getBlockMetadata(cursor.block_number);
-
             latestBlock = {
               number: cursor.block_number,
-              timestamp: block.timestamp,
-              hash: block.hash,
+              hash: cursor.block_hash,
             };
           }
 
           return [
             {
-              subgraph: GEO_SUBGRAPH_ID,
+              subgraph: GEO_SUBGRAPH_DEPLOYMENT_ID,
               synced: true,
               health: 'healthy',
               entityCount: 0,
               paused: false,
               node: 'geo-node',
               historyBlocks: 0,
-              fatalError: {
-                message: 'N/A',
-                block: {
-                  number: 0,
-                  hash: '0x',
-                },
-                handler: 'N/A',
-                deterministic: false,
-              },
+              fatalError: null,
               chains: [
                 {
                   network: GEO_NETWORK_ID,
                   chainHeadBlock: {
                     number: head.number,
                     hash: head.hash,
-                    timestamp: 0,
                   },
                   earliestBlock: {
                     number: INITIAL_GEO_BLOCK,
-                    hash: '0x',
-                    timestamp: 0,
+                    hash: '0x0',
                   },
                   latestBlock: latestBlock,
                   latestHealthyBlock: latestBlock,

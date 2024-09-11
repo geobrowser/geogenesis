@@ -1,5 +1,4 @@
 import { gql, makeExtendSchemaPlugin } from 'graphile-utils';
-import { getBlockMetadata } from './get-block-meta';
 import { getCursor } from './get-cursor';
 
 export const MetaPlugin = makeExtendSchemaPlugin(() => {
@@ -23,13 +22,12 @@ export const MetaPlugin = makeExtendSchemaPlugin(() => {
       Query: {
         async _meta() {
           const cursor = await getCursor();
-          const blockMetadata = cursor ? await getBlockMetadata(cursor.block_number) : { hash: '', timestamp: 0 };
 
           return {
             block: {
               number: cursor?.block_number ?? 0,
-              hash: blockMetadata.hash,
-              timestamp: blockMetadata.timestamp,
+              hash: cursor?.block_hash ?? "0x",
+              timestamp: cursor?.block_timestamp ?? 0,
             },
           };
         },
