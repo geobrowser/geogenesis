@@ -31,8 +31,10 @@ export const getFetchProposalQuery = (id: string) => `query {
     }
 
     createdAtBlock
-    createdById
     createdAt
+    createdBy {
+      id
+    }
     startTime
     endTime
     status
@@ -47,14 +49,11 @@ export const getFetchProposalQuery = (id: string) => `query {
       }
     }
 
-    createdBy {
-      id
-    }
+
 
     proposedVersions {
       nodes {
         id
-        createdById
         entity {
           id
           name
