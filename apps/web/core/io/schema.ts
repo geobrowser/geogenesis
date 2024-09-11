@@ -320,6 +320,11 @@ export const ProposalType = Schema.Union(
 
 export type ProposalType = Schema.Schema.Type<typeof ProposalType>;
 
+const Op = Schema.Struct({
+  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+  type: Schema.Union(Schema.Literal('SET_TRIPLE'), Schema.Literal('DELETE_TRIPLE')),
+});
+
 export const SubstreamProposal = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
   name: Schema.NullOr(Schema.String),
@@ -327,8 +332,8 @@ export const SubstreamProposal = Schema.Struct({
   onchainProposalId: Schema.String,
   createdBy: Account,
   createdAt: Schema.Number,
-  createdAtBlock: Schema.String,
-  space: SubstreamSpace,
+  createdAtBlock: Schema.Number,
+  space: SubstreamSpaceEntityConfig,
   startTime: Schema.Number,
   endTime: Schema.Number,
   status: ProposalStatus,
@@ -337,7 +342,18 @@ export const SubstreamProposal = Schema.Struct({
     totalCount: Schema.Number,
   }),
   proposedVersions: Schema.Struct({
-    nodes: Schema.Array(SubstreamProposedVersion),
+    nodes: Schema.Array(
+      Schema.Struct({
+        id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+        entity: Schema.Struct({
+          id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+          name: Schema.NullOr(Schema.String),
+        }),
+        ops: Schema.Struct({
+          nodes: Schema.Array(Op),
+        }),
+      })
+    ),
   }),
 });
 

@@ -9,7 +9,7 @@ import { Proposal, ProposalDto } from '../dto/proposals';
 import { SubstreamProposal } from '../schema';
 import { fetchProfile } from './fetch-profile';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { spaceMetadataFragment } from './fragments';
+import { proposedVersionFragment, spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 export const getFetchProposalQuery = (id: string) => `query {
@@ -49,15 +49,9 @@ export const getFetchProposalQuery = (id: string) => `query {
       }
     }
 
-
-
     proposedVersions {
       nodes {
-        id
-        entity {
-          id
-          name
-        }
+        ${proposedVersionFragment}
       }
     }
   }

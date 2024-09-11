@@ -20,7 +20,7 @@ export type Proposal = {
   name: string | null;
   createdBy: Profile;
   createdAt: number;
-  createdAtBlock: string;
+  createdAtBlock: number;
   space: SpaceWithImage;
   startTime: number;
   endTime: number;
@@ -29,7 +29,7 @@ export type Proposal = {
     totalCount: number;
     nodes: VoteWithProfile[];
   };
-  // @TODO: Proposed versions
+  proposedVersions: ProposedVersion[];
 };
 
 export function ProposalDto(
@@ -90,10 +90,28 @@ export function ProposalDto(
         };
       }),
     },
+    proposedVersions: proposal.proposedVersions.nodes.map(pv => ({
+      id: pv.id,
+      createdBy: {
+        id: '',
+        name: null,
+        avatarUrl: null,
+        coverUrl: null,
+        address: '0x0000000000000000000000000000000000000000',
+        profileLink: null,
+      },
+      createdAt: 0,
+      createdAtBlock: 0,
+      ops: pv.ops.nodes.map(op => ({
+        id: op.id,
+        type: op.type,
+      })),
+      entity: pv.entity,
+    })),
   };
 }
 
-export type ProposalWithoutVoters = OmitStrict<Proposal, 'proposalVotes'>;
+export type ProposalWithoutVoters = OmitStrict<Proposal, 'proposalVotes' | 'proposedVersions'>;
 
 export function ProposalWithoutVotersDto(
   proposal: SubstreamProposal,
@@ -151,11 +169,11 @@ export type ProposedVersion = {
   id: string;
   createdBy: Profile;
   createdAt: number;
-  createdAtBlock: string;
-  space: SpaceWithImage;
-  ops: AppOp[];
+  createdAtBlock: number;
+  // ops: AppOp[];
+  ops: { id: string; type: 'SET_TRIPLE' | 'DELETE_TRIPLE' }[];
   entity: {
     id: string;
-    name: string;
+    name: string | null;
   };
 };
