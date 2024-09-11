@@ -100,14 +100,14 @@ export const TeamNotice = ({ spaceId }: TeamNoticeProps) => {
 };
 
 const CopyInviteLink = () => {
-  const [hasCopiedId, setHasCopiedId] = useState(false);
+  const [hasCopiedLink, setHasCopiedLink] = useState<boolean>(false);
 
-  const onCopyId = async () => {
+  const onCopyLink = async () => {
     try {
       await navigator.clipboard.writeText('https://geobrowser.io');
-      setHasCopiedId(true);
+      setHasCopiedLink(true);
       setTimeout(() => {
-        setHasCopiedId(false);
+        setHasCopiedLink(false);
       }, 3000);
     } catch (error) {
       console.error(error);
@@ -115,9 +115,9 @@ const CopyInviteLink = () => {
   };
 
   return (
-    <SmallButton onClick={onCopyId}>
-      <span className={cx('absolute', !hasCopiedId && 'invisible')}>Copied!</span>
-      <span className={cx(hasCopiedId && 'invisible')}>Copy invite link</span>
+    <SmallButton onClick={onCopyLink}>
+      <span className={cx('absolute', !hasCopiedLink && 'invisible')}>Copied!</span>
+      <span className={cx(hasCopiedLink && 'invisible')}>Copy invite link</span>
     </SmallButton>
   );
 };
