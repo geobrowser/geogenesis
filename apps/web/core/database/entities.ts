@@ -84,7 +84,6 @@ export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relat
     name,
     nameTripleSpaces,
     description,
-    // @TODO: Types
     // @TODO: Spaces with metadata
     schema: schema ?? [],
     triples,

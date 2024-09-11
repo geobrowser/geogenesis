@@ -101,8 +101,7 @@ export type EntityRenderableProperty = {
   placeholder?: boolean;
 };
 
-export type RelationRenderableProperty = {
-  type: 'RELATION' | 'IMAGE';
+type RelationPropertyProperties = {
   entityId: string;
   entityName: string | null;
   attributeId: string;
@@ -114,8 +113,21 @@ export type RelationRenderableProperty = {
   placeholder?: boolean;
 };
 
+export type BaseRelationRenderableProperty = {
+  type: 'RELATION';
+} & RelationPropertyProperties;
+
+export type ImageRelationRenderableProperty = {
+  type: 'IMAGE';
+} & RelationPropertyProperties;
+
+export type RelationRenderableProperty = BaseRelationRenderableProperty | ImageRelationRenderableProperty;
+
 export type TripleRenderableProperty = NativeRenderableProperty | EntityRenderableProperty;
-export type RenderableProperty = TripleRenderableProperty | RelationRenderableProperty;
+export type RenderableProperty =
+  | TripleRenderableProperty
+  | BaseRelationRenderableProperty
+  | ImageRelationRenderableProperty;
 
 // The types of renderables don't map 1:1 to the triple value types. We might
 // also render relations with a specific type, e.g., an Image entity or a

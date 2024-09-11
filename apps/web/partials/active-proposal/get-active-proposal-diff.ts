@@ -5,7 +5,7 @@ import { Proposal } from '~/core/io/dto/proposals';
 import { EntityId } from '~/core/io/schema';
 import { fetchProposal } from '~/core/io/subgraph';
 import { Triple as TripleType } from '~/core/types';
-import { BlockValueType, Changeset } from '~/core/utils/change/change';
+import { BlockValueType, EntityChange } from '~/core/utils/change/change';
 import { Triples } from '~/core/utils/triples';
 
 export async function getActiveProposalDiff(
@@ -13,7 +13,7 @@ export async function getActiveProposalDiff(
   previousProposalId: string | null,
   subgraph: Subgraph.ISubgraph
 ) {
-  const changes: Record<EntityId, Changeset> = {};
+  const changes: Record<EntityId, EntityChange> = {};
 
   const previousProposal = previousProposalId ? await fetchProposal({ id: previousProposalId }) : null;
 

@@ -1,401 +1,399 @@
-// import { SYSTEM_IDS } from '@geogenesis/sdk';
-// import { Subgraph } from '~/core/io/';
-// import { fetchVersion } from '~/core/io/subgraph/fetch-version';
-// import { fetchVersions } from '~/core/io/subgraph/fetch-versions';
-import type { ValueType as TripleValueType } from '~/core/types';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { Effect, Record } from 'effect';
 
-// import { Entities } from '~/core/utils/entity';
-// import { Triples } from '~/core/utils/triples';
-// import { Values } from '~/core/utils/value';
+import { mergeEntityAsync } from '~/core/database/entities';
+import { getRelations } from '~/core/database/relations';
+import { getTriples } from '~/core/database/triples';
+import { Relation } from '~/core/io/dto/entities';
+import { EntityId } from '~/core/io/schema';
+import { fetchEntity } from '~/core/io/subgraph';
+import { queryClient } from '~/core/query-client';
+import type {
+  BaseRelationRenderableProperty,
+  EntityRenderableProperty,
+  ImageRelationRenderableProperty,
+  NativeRenderableProperty,
+  Triple,
+} from '~/core/types';
 
-export type ActionId = string;
-export type EntityId = string;
 export type BlockId = string;
+
 export type BlockValueType = 'textBlock' | 'tableFilter' | 'imageBlock' | 'tableBlock' | 'markdownContent';
-export type AttributeId = string;
-export type Changeset = {
-  name: string;
-  blocks?: Record<BlockId, BlockChange>;
-  attributes?: Record<AttributeId, AttributeChange>;
-  actions?: Array<ActionId>;
-};
+
 export type BlockChange = {
   type: BlockValueType;
   before: string | null;
   after: string | null;
 };
-export type AttributeChange = {
-  type: TripleValueType;
-  name: string;
-  before: string | null | Array<string | null>;
-  after: string | null | Array<string | null>;
-  actions: Array<ActionId>;
+
+type ChangeType = {
+  type: 'ADD' | 'REMOVE' | 'UPDATE';
 };
 
-// export async function fromTriples(triples: TripleType[], subgraph: Subgraph.ISubgraph) {
-//   const entities: Record<EntityId, EntityType> = await getEntitiesFromActions(triples, subgraph);
-//   const changes: Record<EntityId, Changeset> = {};
-//   const newBlocks = new Map();
+type RelationChangeValue = {
+  value: string;
+  valueName: string | null;
+} & ChangeType;
 
-//   /**
-//    * @TODO:
-//    * There's a few ways that we can do a diff at review time
-//    * 1) Store the original value of any triple in the case there are edits. In the case of creates or deletes we key off of the `isDeleted` flag
-//    * 2) Fetch the "live" content for every entity edited by the user. This is slower but also means that we always have the latest diff.
-//    */
-//   // triples.forEach(action => {
-//   //   switch (action.type) {
-//   //     case 'createTriple': {
-//   //       const entityId = action.entityId;
+type TripleChangeValue = {
+  value: string;
+  valueName: string | null;
+} & ChangeType;
 
-//   //       if (action.attributeId === SYSTEM_IDS.PARENT_ENTITY) {
-//   //         const parentEntityId = action.id.split(':').slice(-1)[0];
-//   //         newBlocks.set(entityId, parentEntityId);
-//   //       }
+type Attribute = {
+  id: string;
+  name: string | null;
+};
 
-//   //       const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
-//   //       const attributeId = action.attributeId;
+/**
+ * The data model for how we represent changes maps to the data model we use
+ * to render data, either as a native triple, entity triple, or relations and
+ * their renderable types.
+ *
+ * This makes it so the diff UI can work the same way as our standard rendering UI.
+ */
+export type RenderableChange = TripleChange | RelationChange;
 
-//   //       if (parentEntityId) {
-//   //         const blockType = Action.getBlockType(action);
+type RelationChange = BaseRelationChange | ImageRelationChange;
 
-//   //         if (blockType === null) {
-//   //           // @NOTE we're assuming this means we're creating a table block
-//   //           if (action.attributeId === 'name') {
-//   //             changes[parentEntityId] = {
-//   //               ...changes[parentEntityId],
-//   //               name: entities?.[parentEntityId]?.name ?? '',
-//   //               blocks: {
-//   //                 ...(changes[parentEntityId]?.blocks ?? {}),
-//   //                 [entityId]: {
-//   //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-//   //                   type: 'tableBlock',
-//   //                   before: null,
-//   //                   after: Action.getValue(action, ''),
-//   //                 },
-//   //               },
-//   //               actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-//   //             };
-//   //             // @NOTE we're assuming this means we're creating a table filter
-//   //           } else {
-//   //             changes[parentEntityId] = {
-//   //               ...changes[parentEntityId],
-//   //               name: entities?.[parentEntityId]?.name ?? '',
-//   //               blocks: {
-//   //                 ...(changes[parentEntityId]?.blocks ?? {}),
-//   //                 [entityId]: {
-//   //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-//   //                   type: 'tableFilter',
-//   //                   before: null,
-//   //                   after: Action.getValue(action, ''),
-//   //                 },
-//   //               },
-//   //               actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-//   //             };
-//   //           }
+type BaseRelationChange = {
+  type: BaseRelationRenderableProperty['type'];
+  id: EntityId;
+  attribute: Attribute;
+  before: RelationChangeValue | null;
+  after: RelationChangeValue;
+};
 
-//   //           break;
-//   //         }
+type ImageRelationChange = {
+  type: ImageRelationRenderableProperty['type'];
+  id: EntityId;
+  attribute: Attribute;
+  before: RelationChangeValue | null;
+  after: RelationChangeValue;
+};
 
-//   //         changes[parentEntityId] = {
-//   //           ...changes[parentEntityId],
-//   //           name: entities?.[parentEntityId]?.name ?? '',
-//   //           blocks: {
-//   //             ...(changes[parentEntityId]?.blocks ?? {}),
-//   //             [entityId]: {
-//   //               ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-//   //               type: blockType,
-//   //               before: null,
-//   //               after: Action.getValue(action, ''),
-//   //             },
-//   //           },
-//   //           actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-//   //         };
-//   //       } else if (action.value.type === 'entity') {
-//   //         changes[entityId] = {
-//   //           ...changes[entityId],
-//   //           name: entities?.[entityId]?.name ?? '',
-//   //           attributes: {
-//   //             ...(changes[entityId]?.attributes ?? {}),
-//   //             [attributeId]: {
-//   //               ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
-//   //               type: Action.getValueType(action),
-//   //               name: action.attributeName ?? '',
-//   //               before: [...(changes[entityId]?.attributes?.[attributeId]?.before ?? [])],
-//   //               after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? []), Action.getName(action)],
-//   //               actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
-//   //             },
-//   //           },
-//   //           actions: [...(changes[entityId]?.actions ?? []), action.id],
-//   //         };
-//   //       } else {
-//   //         changes[entityId] = {
-//   //           ...changes[entityId],
-//   //           name: entities?.[entityId]?.name ?? '',
-//   //           attributes: {
-//   //             ...(changes[entityId]?.attributes ?? {}),
-//   //             [attributeId]: {
-//   //               ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
-//   //               type: Action.getValueType(action),
-//   //               name: action.attributeName ?? '',
-//   //               before: null,
-//   //               after: Action.getValue(action, ''),
-//   //               actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
-//   //             },
-//   //           },
-//   //           actions: [...(changes[entityId]?.actions ?? []), action.id],
-//   //         };
-//   //       }
+type NativeTripleChange = {
+  type: NativeRenderableProperty['type'];
+  id: EntityId;
+  attribute: Attribute;
+  before: TripleChangeValue | null;
+  after: TripleChangeValue;
+};
 
-//   //       break;
-//   //     }
+type EntityTripleChange = {
+  type: EntityRenderableProperty['type'];
+  id: EntityId;
+  attribute: Attribute;
+  before: RelationChangeValue | null;
+  after: RelationChangeValue;
+};
 
-//   //     case 'editTriple': {
-//   //       const entityId = action.before.entityId;
-//   //       const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
-//   //       const attributeId = action.before.attributeId;
+type TripleChange = NativeTripleChange | EntityTripleChange;
 
-//   //       if (parentEntityId) {
-//   //         const blockType = Action.getBlockType(action.before);
+export type EntityChange = {
+  id: EntityId;
+  name: string | null;
+  blockChanges: RenderableChange[];
+  changes: RenderableChange[];
+};
 
-//   //         if (blockType === null) {
-//   //           // @NOTE we're assuming this means we're editing the name of a table block
-//   //           if (action.before.attributeId === 'name') {
-//   //             changes[parentEntityId] = {
-//   //               ...changes[parentEntityId],
-//   //               name: entities?.[parentEntityId]?.name ?? '',
-//   //               blocks: {
-//   //                 ...(changes[parentEntityId]?.blocks ?? {}),
-//   //                 [entityId]: {
-//   //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-//   //                   type: 'tableBlock',
-//   //                   before:
-//   //                     typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
-//   //                       ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-//   //                       : null,
-//   //                   after: Action.getValue(action.after, ''),
-//   //                 },
-//   //               },
-//   //               actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
-//   //             };
-//   //             // @NOTE we're assuming this means we're editing a table filter
-//   //           } else {
-//   //             changes[parentEntityId] = {
-//   //               ...changes[parentEntityId],
-//   //               name: entities?.[parentEntityId]?.name ?? '',
-//   //               blocks: {
-//   //                 ...(changes[parentEntityId]?.blocks ?? {}),
-//   //                 [entityId]: {
-//   //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-//   //                   type: 'tableFilter',
-//   //                   before:
-//   //                     typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
-//   //                       ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-//   //                       : Action.getValue(action.before, ''),
-//   //                   after: Action.getValue(action.after, ''),
-//   //                 },
-//   //               },
-//   //               actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
-//   //             };
-//   //           }
+function getEntityAsync(id: EntityId) {
+  return queryClient.fetchQuery({
+    queryKey: ['entity-for-review', id],
+    queryFn: () => fetchEntity({ id }),
+  });
+}
 
-//   //           break;
-//   //         }
+export async function fromLocal(spaceId?: string) {
+  const triples = getTriples({
+    selector: t => (t.hasBeenPublished === false && spaceId ? t.space === spaceId : true),
+    includeDeleted: true,
+  });
 
-//   //         changes[parentEntityId] = {
-//   //           ...changes[parentEntityId],
-//   //           name: entities?.[parentEntityId]?.name ?? '',
-//   //           blocks: {
-//   //             ...(changes[parentEntityId]?.blocks ?? {}),
-//   //             [entityId]: {
-//   //               ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-//   //               type: blockType,
-//   //               before:
-//   //                 typeof changes[parentEntityId]?.blocks?.[entityId]?.before === 'undefined'
-//   //                   ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-//   //                   : Action.getValue(action.before, ''),
-//   //               after: Action.getValue(action.after, ''),
-//   //             },
-//   //           },
-//   //           actions: [...(changes[parentEntityId]?.actions ?? []), action.before.id],
-//   //         };
-//   //       } else {
-//   //         changes[entityId] = {
-//   //           ...changes[entityId],
-//   //           name: entities?.[entityId]?.name ?? '',
-//   //           attributes: {
-//   //             ...(changes[entityId]?.attributes ?? {}),
-//   //             [attributeId]: {
-//   //               ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
-//   //               type: Action.getValueType(action.after),
-//   //               name: action.before.attributeName ?? '',
-//   //               before:
-//   //                 typeof changes[entityId]?.attributes?.[attributeId]?.before !== 'undefined'
-//   //                   ? (changes[entityId]?.attributes?.[attributeId]?.before as string | null)
-//   //                   : Action.getName(action.before) ?? Action.getValue(action.before, ''),
-//   //               after: Action.getValue(action.after, ''),
-//   //               actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.before.id],
-//   //             },
-//   //           },
-//   //           actions: [...(changes[entityId]?.actions ?? []), action.before.id],
-//   //         };
-//   //       }
+  const localRelations = getRelations({ includeDeleted: true });
 
-//   //       break;
-//   //     }
+  // This includes any relations that have been changed locally
+  const entityIds = new Set([...triples.map(t => t.entityId), ...localRelations.map(r => r.fromEntity.id)]);
+  const entityIdsToFetch = [...entityIds.values()];
 
-//   //     case 'deleteTriple': {
-//   //       const entityId = action.entityId;
-//   //       const parentEntityId = newBlocks.get(entityId) ?? Entity.getParentEntityId(entities?.[entityId]?.triples);
-//   //       const attributeId = action.attributeId;
+  const collectEntities = Effect.gen(function* () {
+    const maybeRemoteEntitiesEffect = Effect.all(
+      entityIdsToFetch.map(id => Effect.promise(() => getEntityAsync(EntityId(id))))
+    );
 
-//   //       if (parentEntityId) {
-//   //         const blockType = Action.getBlockType(action);
+    const maybeLocalEntitiesEffect = Effect.all(
+      entityIdsToFetch.map(id => Effect.promise(() => mergeEntityAsync(EntityId(id))))
+    );
 
-//   //         if (blockType === null) {
-//   //           // @NOTE we're assuming this means we're deleting a table block
-//   //           if (action.attributeId === 'name') {
-//   //             changes[parentEntityId] = {
-//   //               ...changes[parentEntityId],
-//   //               name: entities?.[parentEntityId]?.name ?? '',
-//   //               blocks: {
-//   //                 ...(changes[parentEntityId]?.blocks ?? {}),
-//   //                 [entityId]: {
-//   //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-//   //                   type: 'tableBlock',
-//   //                   before:
-//   //                     typeof changes[parentEntityId]?.blocks?.[entityId]?.before === 'undefined'
-//   //                       ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-//   //                       : Action.getValue(action, ''),
-//   //                   after: null,
-//   //                 },
-//   //               },
-//   //               actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-//   //             };
-//   //             // @NOTE we're assuming this means we're deleting a table filter
-//   //           } else {
-//   //             changes[parentEntityId] = {
-//   //               ...changes[parentEntityId],
-//   //               name: entities?.[parentEntityId]?.name ?? '',
-//   //               blocks: {
-//   //                 ...(changes[parentEntityId]?.blocks ?? {}),
-//   //                 [entityId]: {
-//   //                   ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-//   //                   type: 'tableFilter',
-//   //                   before:
-//   //                     typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
-//   //                       ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-//   //                       : Action.getValue(action, ''),
-//   //                   after: null,
-//   //                 },
-//   //               },
-//   //               actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-//   //             };
-//   //           }
+    const [maybeRemoteEntities, maybeLocalEntities] = yield* Effect.all([
+      maybeRemoteEntitiesEffect,
+      maybeLocalEntitiesEffect,
+    ]);
 
-//   //           break;
-//   //         }
+    const remoteEntities = maybeRemoteEntities.filter(e => e !== null);
+    const localEntities = maybeLocalEntities.filter(e => e !== null);
 
-//   //         changes[parentEntityId] = {
-//   //           ...changes[parentEntityId],
-//   //           name: entities?.[parentEntityId]?.name ?? '',
-//   //           blocks: {
-//   //             ...(changes[parentEntityId]?.blocks ?? {}),
-//   //             [entityId]: {
-//   //               ...(changes[parentEntityId]?.blocks?.[entityId] ?? {}),
-//   //               type: blockType,
-//   //               before:
-//   //                 typeof changes[parentEntityId]?.blocks?.[entityId]?.before !== 'undefined'
-//   //                   ? (changes[parentEntityId]?.blocks?.[entityId]?.before as string | null)
-//   //                   : Action.getValue(action, ''),
-//   //               after: null,
-//   //             },
-//   //           },
-//   //           actions: [...(changes[parentEntityId]?.actions ?? []), action.id],
-//   //         };
-//   //       } else if (action.value.type === 'entity') {
-//   //         changes[entityId] = {
-//   //           ...changes[entityId],
-//   //           name: entities?.[entityId]?.name ?? '',
-//   //           attributes: {
-//   //             ...(changes[entityId]?.attributes ?? {}),
-//   //             [attributeId]: {
-//   //               ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
-//   //               type: Action.getValueType(action),
-//   //               name: action.attributeName ?? '',
-//   //               before: [...(changes[entityId]?.attributes?.[attributeId]?.before ?? []), Action.getName(action)],
-//   //               after: [...(changes[entityId]?.attributes?.[attributeId]?.after ?? [])],
-//   //               actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
-//   //             },
-//   //           },
-//   //           actions: [...(changes[entityId]?.actions ?? []), action.id],
-//   //         };
-//   //       } else {
-//   //         changes[entityId] = {
-//   //           ...changes[entityId],
-//   //           name: entities?.[entityId]?.name ?? '',
-//   //           attributes: {
-//   //             ...(changes[entityId]?.attributes ?? {}),
-//   //             [attributeId]: {
-//   //               ...(changes[entityId]?.attributes?.[attributeId] ?? {}),
-//   //               type: Action.getValueType(action),
-//   //               name: action.attributeName ?? '',
-//   //               before:
-//   //                 typeof changes[entityId]?.attributes?.[attributeId]?.before !== 'undefined'
-//   //                   ? (changes[entityId]?.attributes?.[attributeId]?.before as string | null)
-//   //                   : Action.getValue(action, ''),
-//   //               after: null,
-//   //               actions: [...(changes[entityId]?.attributes?.[attributeId]?.actions ?? []), action.id],
-//   //             },
-//   //           },
-//   //           actions: [...(changes[entityId]?.actions ?? []), action.id],
-//   //         };
-//   //       }
+    return {
+      remoteEntities,
+      localEntities,
+    };
+  });
 
-//   //       break;
-//   //     }
-//   //   }
-//   // });
+  const { remoteEntities, localEntities } = await Effect.runPromise(collectEntities);
 
-//   return { changes, entities };
-// }
+  // Aggregate remote triples into a map of entities -> attributes and attributes -> triples
+  // Each map is 1:1 with each entity only having one attribute per attribute id and one triple per attribute id
+  //
+  // Additionally, make sure that we're filtering out triples that don't match the current space id.
+  const localTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(triples);
+  const remoteTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
+    remoteEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
+  );
 
-// const getEntitiesFromActions = async (triples: TripleType[], subgraph: Subgraph.ISubgraph) => {
-//   const entities: Record<EntityId, EntityType> = {};
-//   const entitySet = new Set<EntityId>(triples.map(t => t.entityId));
+  const localRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(localRelations);
+  const remoteRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(remoteEntities.flatMap(e => e.relationsOut));
 
-//   const maybeRemoteEntities = await Promise.all(
-//     [...entitySet.values()].map((entityId: EntityId) => subgraph.fetchEntity({ id: entityId }))
-//   );
-//   const remoteEntities = maybeRemoteEntities.flatMap(entity => (entity ? [entity] : []));
+  // This might be a performance bottleneck for large sets of ops, so we'll need
+  // to monitor this over time.
+  return localEntities.map((entity): EntityChange => {
+    const tripleChanges: TripleChange[] = [];
+    const relationChanges: RelationChange[] = [];
 
-//   remoteEntities.forEach(entity => {
-//     entities[entity.id] = entity;
-//   });
+    const localTriplesForEntity = localTriplesByEntityId[entity.id] ?? {};
+    const remoteTriplesForEntity = remoteTriplesByEntityId[entity.id] ?? {};
+    const localRelationsForEntity = localRelationsByEntityId[entity.id] ?? {};
+    const remoteRelationsForEntity = remoteRelationsByEntityId[entity.id] ?? {};
 
-//   const parentEntitySet = new Set<EntityId>();
+    for (const triple of Object.values(localTriplesForEntity)) {
+      const remoteTriple = remoteTriplesForEntity[triple.attributeId] ?? null;
+      const before = getBeforeTripleChange(triple, remoteTriple);
+      const after = getAfterTripleChange(triple, remoteTriple);
 
-//   Object.keys(entities).forEach(entityId => {
-//     const parentEntityId = Entities.getParentEntityId(entities?.[entityId]?.triples);
+      tripleChanges.push({
+        id: entity.id,
+        attribute: {
+          id: triple.attributeId,
+          name: triple.attributeName,
+        },
+        type: triple.value.type,
+        before,
+        after,
+      });
+    }
 
-//     if (parentEntityId && !entitySet.has(parentEntityId)) {
-//       parentEntitySet.add(parentEntityId);
-//     }
-//   });
+    for (const relations of Object.values(localRelationsForEntity)) {
+      const remoteRelationsForAttributeId = remoteRelationsForEntity[entity.id] ?? null;
 
-//   const parentEntityIds = [...parentEntitySet.values()];
+      for (const relation of relations) {
+        const before = getBeforeRelationChange(relation, remoteRelationsForAttributeId);
+        const after = getAfterRelationChange(relation, remoteRelationsForAttributeId);
 
-//   const maybeRemoteParentEntities = await Promise.all(
-//     parentEntityIds.map((entityId: EntityId) => subgraph.fetchEntity({ id: entityId }))
-//   );
-//   const remoteParentEntities = maybeRemoteParentEntities.flatMap(entity => (entity ? [entity] : []));
+        relationChanges.push({
+          id: entity.id,
+          attribute: {
+            id: relation.typeOf.id,
+            name: relation.typeOf.name,
+          },
+          // Filter out the block-related relation types until we render blocks in the diff editor
+          type: relation.toEntity.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
+          before,
+          after,
+        });
+      }
+    }
 
-//   remoteParentEntities.forEach(entity => {
-//     entities[entity.id] = entity;
-//   });
+    // Filter out any "dead" changes where the values are the exact same
+    // in the before and after.
+    const realChanges = [...tripleChanges, ...relationChanges].filter(c => isRealChange(c.before, c.after));
 
-//   return entities;
-// };
+    // @TODO: map block diffs into a renderable format
+    const blockChanges = relationChanges.filter(c => c.attribute.id === SYSTEM_IDS.BLOCKS);
+
+    return {
+      id: entity.id,
+      name: entity.name,
+      blockChanges,
+      changes: realChanges,
+    };
+  });
+}
+
+function isRealChange(before: TripleChangeValue | null, after: TripleChangeValue) {
+  // The before and after values are the same
+  if (before?.value === after.value) {
+    return false;
+  }
+
+  // We add then remove a triple locally that doesn't exist remotely
+  if (before === null && after.type === 'REMOVE') {
+    return false;
+  }
+
+  return true;
+}
+
+type TripleByAttributeMap = Record<string, Triple>;
+type EntityByAttributeMapMap = Record<string, TripleByAttributeMap>;
+
+function groupTriplesByEntityIdAndAttributeId(triples: Triple[]) {
+  return triples.reduce<EntityByAttributeMapMap>((acc, triple) => {
+    const entityId = triple.entityId;
+    const attributeId = triple.attributeId;
+
+    if (!acc[entityId]) {
+      acc[entityId] = {};
+    }
+
+    acc[entityId][attributeId] = triple;
+
+    return acc;
+  }, {});
+}
+
+function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
+  return relations.reduce<Record<string, Record<string, Relation[]>>>((acc, relation) => {
+    const entityId = relation.fromEntity.id;
+    const attributeId = relation.typeOf.id;
+
+    if (!acc[entityId]) {
+      acc[entityId] = {};
+    }
+
+    if (!acc[entityId][attributeId]) {
+      acc[entityId][attributeId] = [];
+    }
+
+    acc[entityId][attributeId].push(relation);
+
+    return acc;
+  }, {});
+}
+
+/**
+ * Compare the local triple with the remote triple and return the TripleChange.
+ * The TripleChange is used to represent what either the before or after renderable
+ * should be to include the type of diff to show in the UI.
+ *
+ * @params triple - the local triple as it exists in the local database as a {@link Triple}
+ * @params remoteTriple - the remote triple as it exists in the remote database as a {@link Triple}
+ * @returns - {@link TripleChange} or null if the triple is not present in the remote database
+ */
+function getBeforeTripleChange(
+  triple: Triple,
+  remoteTriple: Triple | null
+): (TripleChangeValue | RelationChangeValue) | null {
+  if (remoteTriple === null) {
+    return null;
+  }
+
+  if (triple.value.value !== remoteTriple.value.value) {
+    return {
+      value: remoteTriple.value.value,
+      valueName: remoteTriple.value.type === 'ENTITY' ? remoteTriple.value.name : null,
+      type: 'UPDATE',
+    };
+  }
+
+  return {
+    value: remoteTriple.value.value,
+    valueName: remoteTriple.value.type === 'ENTITY' ? remoteTriple.value.name : null,
+    type: 'REMOVE',
+  };
+}
+
+/**
+ * Compare the local triple with the remote triple and return the TripleChange for the
+ * "after" triple. The TripleChange is used to represent what either the before or after
+ * renderable should be to include the type of diff to show in the UI.
+ *
+ * @params triple - the local triple as it exists in the local database as a {@link Triple}
+ * @params remoteTriple - the remote triple as it exists in the remote database as a {@link Triple}
+ * @returns - {@link TripleChange}. There is always an after triple change, so this version
+ * of the function always returns a value.
+ */
+function getAfterTripleChange(triple: Triple, remoteTriple: Triple | null): TripleChangeValue | RelationChangeValue {
+  if (remoteTriple === null) {
+    return {
+      value: triple.value.value,
+      valueName: triple.value.type === 'ENTITY' ? triple.value.name : null,
+      type: 'ADD',
+    };
+  }
+
+  if (triple.value.value !== remoteTriple.value.value) {
+    return {
+      value: triple.value.value,
+      valueName: triple.value.type === 'ENTITY' ? triple.value.name : null,
+      type: 'UPDATE',
+    };
+  }
+
+  return {
+    value: triple.value.value,
+    valueName: triple.value.type === 'ENTITY' ? triple.value.name : null,
+    type: 'ADD',
+  };
+}
+
+function getBeforeRelationChange(relation: Relation, remoteRelations: Relation[] | null): RelationChangeValue | null {
+  if (remoteRelations === null) {
+    return null;
+  }
+
+  const maybeRemoteRelationWithSameId = remoteRelations.find(r => r.id === relation.id);
+
+  if (!maybeRemoteRelationWithSameId) {
+    return null;
+  }
+
+  if (relation.toEntity.value !== maybeRemoteRelationWithSameId.toEntity.value) {
+    return {
+      value: maybeRemoteRelationWithSameId.toEntity.value,
+      valueName: maybeRemoteRelationWithSameId.toEntity.name,
+      type: 'UPDATE',
+    };
+  }
+
+  return {
+    value: maybeRemoteRelationWithSameId.toEntity.value,
+    valueName: maybeRemoteRelationWithSameId.toEntity.name,
+    type: 'REMOVE',
+  };
+}
+
+function getAfterRelationChange(relation: Relation, remoteRelations: Relation[] | null): RelationChangeValue {
+  if (remoteRelations === null) {
+    return {
+      value: relation.toEntity.value,
+      valueName: relation.toEntity.name,
+      type: 'ADD',
+    };
+  }
+
+  const maybeRemoteRelationWithSameId = remoteRelations.find(r => r.id === relation.id);
+
+  if (!maybeRemoteRelationWithSameId) {
+    return {
+      value: relation.toEntity.value,
+      valueName: relation.toEntity.name,
+      type: 'ADD',
+    };
+  }
+
+  if (relation.toEntity.value !== maybeRemoteRelationWithSameId.toEntity.value) {
+    return {
+      value: relation.toEntity.value,
+      valueName: relation.toEntity.name,
+      type: 'UPDATE',
+    };
+  }
+
+  return {
+    value: relation.toEntity.value,
+    valueName: relation.toEntity.name,
+    type: 'ADD',
+  };
+}
 
 // export async function fromVersion(versionId: string, previousVersionId: string, subgraph: Subgraph.ISubgraph) {
 // const changes: Record<EntityId, Changeset> = {};
@@ -827,5 +825,3 @@ export type AttributeChange = {
 //   SYSTEM_IDS.MARKDOWN_CONTENT,
 //   SYSTEM_IDS.FILTER,
 // ];
-
-export {};

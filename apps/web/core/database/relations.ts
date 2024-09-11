@@ -9,12 +9,13 @@ import { createRelationsAtom } from './atoms';
 interface UseRelationsArgs {
   mergeWith?: Relation[];
   selector?: (t: Relation) => boolean;
+  includeDeleted?: boolean;
 }
 
-const makeLocalActionsAtomWithSelector = ({ selector, mergeWith = [] }: UseRelationsArgs) => {
+const makeLocalActionsAtomWithSelector = ({ selector, includeDeleted = false, mergeWith = [] }: UseRelationsArgs) => {
   return atom(get => {
     return get(createRelationsAtom(mergeWith)).filter(r => {
-      return !r.isDeleted && (selector ? selector(r) : true);
+      return (selector ? selector(r) : true) && (includeDeleted ? true : !r.isDeleted);
     });
   });
 };

@@ -29,6 +29,7 @@ export const FlowBar = () => {
     React.useMemo(() => ({ selector: t => t.hasBeenPublished === false, includeDeleted: true }), [])
   );
 
+  // @TODO: We can use Change.fromLocal to aggregate the "real" counts.
   const opsCount = triples.length;
 
   const entitiesCount = pipe(
