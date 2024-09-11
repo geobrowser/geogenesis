@@ -1380,15 +1380,15 @@ declare module 'zapatos/schema' {
       /**
       * **ops.entity_id**
       * - `text` in database
-      * - `NOT NULL`, no default
+      * - Nullable, no default
       */
-      entity_id: string;
+      entity_id: string | null;
       /**
       * **ops.attribute_id**
       * - `text` in database
-      * - `NOT NULL`, no default
+      * - Nullable, no default
       */
-      attribute_id: string;
+      attribute_id: string | null;
       /**
       * **ops.value_type**
       * - `triple_value_type` in database
@@ -1460,15 +1460,15 @@ declare module 'zapatos/schema' {
       /**
       * **ops.entity_id**
       * - `text` in database
-      * - `NOT NULL`, no default
+      * - Nullable, no default
       */
-      entity_id: string;
+      entity_id: string | null;
       /**
       * **ops.attribute_id**
       * - `text` in database
-      * - `NOT NULL`, no default
+      * - Nullable, no default
       */
-      attribute_id: string;
+      attribute_id: string | null;
       /**
       * **ops.value_type**
       * - `triple_value_type` in database
@@ -1540,13 +1540,13 @@ declare module 'zapatos/schema' {
       /**
       * **ops.entity_id**
       * - `text` in database
-      * - `NOT NULL`, no default
+      * - Nullable, no default
       */
       entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **ops.attribute_id**
       * - `text` in database
-      * - `NOT NULL`, no default
+      * - Nullable, no default
       */
       attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
@@ -1620,15 +1620,15 @@ declare module 'zapatos/schema' {
       /**
       * **ops.entity_id**
       * - `text` in database
-      * - `NOT NULL`, no default
+      * - Nullable, no default
       */
-      entity_id: string | db.Parameter<string> | db.SQLFragment;
+      entity_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
       * **ops.attribute_id**
       * - `text` in database
-      * - `NOT NULL`, no default
+      * - Nullable, no default
       */
-      attribute_id: string | db.Parameter<string> | db.SQLFragment;
+      attribute_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
       /**
       * **ops.value_type**
       * - `triple_value_type` in database
@@ -1700,15 +1700,15 @@ declare module 'zapatos/schema' {
       /**
       * **ops.entity_id**
       * - `text` in database
-      * - `NOT NULL`, no default
+      * - Nullable, no default
       */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      entity_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **ops.attribute_id**
       * - `text` in database
-      * - `NOT NULL`, no default
+      * - Nullable, no default
       */
-      attribute_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      attribute_id?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **ops.value_type**
       * - `triple_value_type` in database
@@ -4442,12 +4442,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
-      /**
-      * **triples.is_stale**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_stale: boolean;
     }
     export interface JSONSelectable {
       /**
@@ -4504,12 +4498,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number;
-      /**
-      * **triples.is_stale**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_stale: boolean;
     }
     export interface Whereable {
       /**
@@ -4566,12 +4554,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **triples.is_stale**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_stale?: boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment | db.ParentColumn>;
     }
     export interface Insertable {
       /**
@@ -4628,12 +4610,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block: number | db.Parameter<number> | db.SQLFragment;
-      /**
-      * **triples.is_stale**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_stale: boolean | db.Parameter<boolean> | db.SQLFragment;
     }
     export interface Updatable {
       /**
@@ -4690,12 +4666,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
-      /**
-      * **triples.is_stale**
-      * - `bool` in database
-      * - `NOT NULL`, no default
-      */
-      is_stale?: boolean | db.Parameter<boolean> | db.SQLFragment | db.SQLFragment<any, boolean | db.Parameter<boolean> | db.SQLFragment>;
     }
     export type UniqueIndex = 'triples_pkey';
     export type Column = keyof Selectable;

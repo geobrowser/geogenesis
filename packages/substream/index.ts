@@ -96,7 +96,13 @@ async function main() {
         Schedule.jittered,
         Schedule.whileInput(Predicate.isTagged('TimeoutError')),
         Schedule.tapInput(() =>
-          Effect.sync(() => slog({ message: 'Restarting stream after timeout period', requestId: '-1', level: 'warn' }))
+          Effect.sync(() =>
+            slog({
+              message: 'Restarting stream after timeout period while waiting for firehose connection',
+              requestId: '-1',
+              level: 'warn',
+            })
+          )
         )
       )
     );

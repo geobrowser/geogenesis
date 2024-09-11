@@ -23,7 +23,6 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
       text_value,
       created_at: block.timestamp,
       created_at_block: block.blockNumber,
-      is_stale: false,
     };
   }
 
@@ -36,6 +35,5 @@ export function getTripleFromOp(op: Op, spaceId: string, block: BlockEvent): S.t
     created_at_block: block.blockNumber,
     entity_value_id: null,
     text_value: null,
-    is_stale: false,
   };
 }

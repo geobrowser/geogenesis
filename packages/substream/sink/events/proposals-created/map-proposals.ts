@@ -1,3 +1,4 @@
+import { createGeoId } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import { createVersionId } from '../../utils/id';
@@ -207,7 +208,7 @@ function mapEditProposalToSchema(
   for (const p of proposals) {
     const spaceId = p.space;
 
-    const proposalToWrite: S.proposals.Insertable = {
+    proposalsToWrite.push({
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
       plugin_address: p.pluginAddress,
@@ -221,52 +222,14 @@ function mapEditProposalToSchema(
       space_id: spaceId,
       status: 'proposed',
       uri: p.metadataUri,
-    };
-
-    proposalsToWrite.push(proposalToWrite);
-
-    // p.ops.forEach((op, index) => {
-    //   const string_value =
-    //     op.value.type === 'string' || op.value.type === 'image' || op.value.type === 'url' || op.value.type === 'date'
-    //       ? op.value.value
-    //       : null;
-    //   const entity_value = op.value.type === 'entity' ? op.value.id : null;
-
-    //   const proposed_version_id = generateVersionId({
-    //     entryIndex: index,
-    //     entityId: op.entityId,
-    //     cursor: block.cursor,
-    //   });
-
-    //   const action_id = generateActionId({
-    //     space_id: spaceId,
-    //     entity_id: op.entityId,
-    //     attribute_id: op.attributeId,
-    //     value_id: op.value.id,
-    //     cursor: block.cursor,
-    //   });
-
-    //   const mappedAction: S.actions.Insertable = {
-    //     id: action_id,
-    //     action_type: op.payload.type,
-    //     entity_id: op.entityId,
-    //     attribute_id: op.attributeId,
-    //     value_type: op.value.type,
-    //     value_id: op.value.id,
-    //     string_value,
-    //     entity_value_id: entity_value,
-    //     proposed_version_id,
-    //     created_at: Number(p.startTime),
-    //     created_at_block: block.blockNumber,
-    //   };
-
-    //   return actionsToWrite.push(mappedAction);
-    // });
+    } satisfies S.proposals.Insertable);
 
     const uniqueEntityIds = new Set(p.ops.map(action => action.triple.entity));
 
-    [...uniqueEntityIds.values()].forEach(entityId => {
-      const mappedProposedVersion: S.proposed_versions.Insertable = {
+    for (const entityId of [...uniqueEntityIds.values()]) {
+      proposedVersionsToWrite.push({
+        // For now we use a deterministic version for the proposed version id
+        // so we can easily derive it for the op -> proposed version mapping.
         id: createVersionId({
           entityId,
           proposalId: p.proposalId,
@@ -277,10 +240,29 @@ function mapEditProposalToSchema(
         created_by_id: p.creator,
         proposal_id: p.proposalId,
         space_id: spaceId,
-      };
+      } satisfies S.proposed_versions.Insertable);
+    }
 
-      proposedVersionsToWrite.push(mappedProposedVersion);
-    });
+    for (const op of p.ops) {
+      opsToWrite.push({
+        id: createGeoId(),
+        type: op.type,
+        entity_id: op.triple.entity,
+        attribute_id: op.triple.attribute,
+        value_type: op.triple.value.type,
+        text_value: op.triple.value.type !== 'ENTITY' ? op.triple.value.value : null,
+        entity_value_id: op.triple.value.type === 'ENTITY' ? op.triple.value.value : null,
+        created_at: Number(p.startTime),
+        created_at_block: block.blockNumber,
+        space_id: spaceId,
+        // For now we use a deterministic version for the proposed version id
+        // so we can easily derive it for this op -> proposed version mapping.
+        proposed_version_id: createVersionId({
+          entityId: op.triple.entity,
+          proposalId: p.proposalId,
+        }),
+      } satisfies S.ops.Insertable);
+    }
   }
 
   return {
