@@ -103,7 +103,7 @@ const SubstreamEntityValue = Schema.Struct({
   }),
 });
 
-type SubstreamEntityValue = Schema.Schema.Type<typeof SubstreamEntityValue>;
+export type SubstreamEntityValue = Schema.Schema.Type<typeof SubstreamEntityValue>;
 
 const SubstreamValue = Schema.Union(SubstreamTextValue, SubstreamEntityValue, SubstreamTimeValue, SubstreamUriValue);
 type SubstreamValue = Schema.Schema.Type<typeof SubstreamValue>;
@@ -267,14 +267,6 @@ export const SubstreamSearchResult = Schema.extend(
 
 export type SubstreamSearchResult = Schema.Schema.Type<typeof SubstreamSearchResult>;
 
-// @TODO: Ops
-// export type SubstreamOp = OmitStrict<SubstreamTriple, 'space'> &
-//   SubstreamValue & {
-//     id: string;
-//     type: 'SET_TRIPLE' | 'DELETE_TRIPLE';
-//     entityValue: string | null;
-//   };
-
 /**
  * Proposals
  */
@@ -320,10 +312,24 @@ export const ProposalType = Schema.Union(
 
 export type ProposalType = Schema.Schema.Type<typeof ProposalType>;
 
-const Op = Schema.Struct({
-  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  type: Schema.Union(Schema.Literal('SET_TRIPLE'), Schema.Literal('DELETE_TRIPLE')),
-});
+const SubstreamOp = Schema.extend(
+  Schema.Struct({
+    id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+    type: Schema.Union(Schema.Literal('SET_TRIPLE'), Schema.Literal('DELETE_TRIPLE')),
+    attributeId: Schema.String,
+    entityId: Schema.String,
+  }),
+  Schema.extend(
+    Schema.Struct({
+      entity: Schema.NullOr(Schema.extend(Identifiable, Nameable)),
+      attribute: Schema.NullOr(Schema.extend(Identifiable, Nameable)),
+      space: SubstreamSpaceWithoutMetadata.pick('id'),
+    }),
+    SubstreamValue
+  )
+);
+
+export type SubstreamOp = Schema.Schema.Type<typeof SubstreamOp>;
 
 export const SubstreamProposal = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
@@ -350,7 +356,7 @@ export const SubstreamProposal = Schema.Struct({
           name: Schema.NullOr(Schema.String),
         }),
         ops: Schema.Struct({
-          nodes: Schema.Array(Op),
+          nodes: Schema.Array(SubstreamOp),
         }),
       })
     ),

@@ -4,6 +4,8 @@ import { Entities } from '~/core/utils/entity';
 
 import { ProposalStatus, ProposalType, SubstreamEntity, SubstreamProposal, SubstreamVote } from '../schema';
 import { EntityDto } from './entities';
+import { OpDto } from './ops';
+import { extractValue } from './triples';
 
 export type VoteWithProfile = SubstreamVote & { voter: Profile };
 
@@ -102,10 +104,7 @@ export function ProposalDto(
       },
       createdAt: 0,
       createdAtBlock: 0,
-      ops: pv.ops.nodes.map(op => ({
-        id: op.id,
-        type: op.type,
-      })),
+      ops: pv.ops.nodes.map(OpDto),
       entity: pv.entity,
     })),
   };
@@ -170,8 +169,7 @@ export type ProposedVersion = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: number;
-  // ops: AppOp[];
-  ops: { id: string; type: 'SET_TRIPLE' | 'DELETE_TRIPLE' }[];
+  ops: AppOp[];
   entity: {
     id: string;
     name: string | null;

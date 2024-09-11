@@ -253,8 +253,8 @@ const ReviewChanges = () => {
                 <ChangedEntity
                   key={change.id}
                   change={change}
-                  unstagedChanges={unstagedChanges}
-                  setUnstagedChanges={setUnstagedChanges}
+                  // unstagedChanges={unstagedChanges}
+                  // setUnstagedChanges={setUnstagedChanges}
                 />
               ))}
             </div>

@@ -180,6 +180,9 @@ export const proposedVersionFragment = `
   ops {
     nodes {
       ${opFragment}
+      ${tripleFragment}
+      attributeId
+      entityId
     }
   }
 `;

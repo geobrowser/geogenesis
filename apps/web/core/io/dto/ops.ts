@@ -1,8 +1,8 @@
-import { Value } from '~/core/types';
+import { AppOp, Value } from '~/core/types';
 
-import { SubstreamTriple } from '../schema';
+import { SubstreamOp } from '../schema';
 
-export function extractValue(networkTriple: SubstreamTriple): Value {
+export function extractValue(networkTriple: SubstreamOp): Value {
   switch (networkTriple.valueType) {
     case 'TEXT':
       return { type: 'TEXT', value: networkTriple.textValue };
@@ -20,13 +20,14 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
   }
 }
 
-export function TripleDto(triple: SubstreamTriple) {
+export function OpDto(op: SubstreamOp): AppOp {
   return {
-    entityId: triple.entity.id,
-    entityName: triple.entity.name,
-    attributeId: triple.attribute.id,
-    attributeName: triple.attribute.name,
-    value: extractValue(triple),
-    space: triple.space.id,
+    id: op.id,
+    type: op.type,
+    attributeId: op.attributeId,
+    attributeName: op.attribute?.name ?? null,
+    value: extractValue(op),
+    entityId: op.entityId,
+    entityName: op.entity?.name ?? null,
   };
 }

@@ -8,94 +8,10 @@ import { Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { queryClient } from '~/core/query-client';
-import type {
-  BaseRelationRenderableProperty,
-  EntityRenderableProperty,
-  ImageRelationRenderableProperty,
-  NativeRenderableProperty,
-  Triple,
-} from '~/core/types';
+import type { Triple } from '~/core/types';
 
-export type BlockId = string;
-
-export type BlockValueType = 'textBlock' | 'tableFilter' | 'imageBlock' | 'tableBlock' | 'markdownContent';
-
-export type BlockChange = {
-  type: BlockValueType;
-  before: string | null;
-  after: string | null;
-};
-
-type ChangeType = {
-  type: 'ADD' | 'REMOVE' | 'UPDATE';
-};
-
-type RelationChangeValue = {
-  value: string;
-  valueName: string | null;
-} & ChangeType;
-
-type TripleChangeValue = {
-  value: string;
-  valueName: string | null;
-} & ChangeType;
-
-type Attribute = {
-  id: string;
-  name: string | null;
-};
-
-/**
- * The data model for how we represent changes maps to the data model we use
- * to render data, either as a native triple, entity triple, or relations and
- * their renderable types.
- *
- * This makes it so the diff UI can work the same way as our standard rendering UI.
- */
-export type RenderableChange = TripleChange | RelationChange;
-
-type RelationChange = BaseRelationChange | ImageRelationChange;
-
-type BaseRelationChange = {
-  type: BaseRelationRenderableProperty['type'];
-  id: EntityId;
-  attribute: Attribute;
-  before: RelationChangeValue | null;
-  after: RelationChangeValue;
-};
-
-type ImageRelationChange = {
-  type: ImageRelationRenderableProperty['type'];
-  id: EntityId;
-  attribute: Attribute;
-  before: RelationChangeValue | null;
-  after: RelationChangeValue;
-};
-
-type NativeTripleChange = {
-  type: NativeRenderableProperty['type'];
-  id: EntityId;
-  attribute: Attribute;
-  before: TripleChangeValue | null;
-  after: TripleChangeValue;
-};
-
-type EntityTripleChange = {
-  type: EntityRenderableProperty['type'];
-  id: EntityId;
-  attribute: Attribute;
-  before: RelationChangeValue | null;
-  after: RelationChangeValue;
-};
-
-type TripleChange = NativeTripleChange | EntityTripleChange;
-
-export type EntityChange = {
-  id: EntityId;
-  name: string | null;
-  blockChanges: RenderableChange[];
-  changes: RenderableChange[];
-};
+import { getAfterTripleChange, getBeforeTripleChange } from './get-triple-change';
+import { EntityChange, RelationChange, RelationChangeValue, TripleChange, TripleChangeValue } from './types';
 
 function getEntityAsync(id: EntityId) {
   return queryClient.fetchQuery({
@@ -165,12 +81,11 @@ export async function fromLocal(spaceId?: string) {
     const remoteRelationsForEntity = remoteRelationsByEntityId[entity.id] ?? {};
 
     for (const triple of Object.values(localTriplesForEntity)) {
-      const remoteTriple = remoteTriplesForEntity[triple.attributeId] ?? null;
-      const before = getBeforeTripleChange(triple, remoteTriple);
-      const after = getAfterTripleChange(triple, remoteTriple);
+      const remoteTriple: Triple | null = remoteTriplesForEntity[triple.attributeId] ?? null;
+      const before = getBeforeTripleChange(triple.value, remoteTriple.value);
+      const after = getAfterTripleChange(triple.value, remoteTriple.value);
 
       tripleChanges.push({
-        id: entity.id,
         attribute: {
           id: triple.attributeId,
           name: triple.attributeName,
@@ -189,7 +104,6 @@ export async function fromLocal(spaceId?: string) {
         const after = getAfterRelationChange(relation, remoteRelationsForAttributeId);
 
         relationChanges.push({
-          id: entity.id,
           attribute: {
             id: relation.typeOf.id,
             name: relation.typeOf.name,
@@ -267,72 +181,6 @@ function groupRelationsByEntityIdAndAttributeId(relations: Relation[]) {
 
     return acc;
   }, {});
-}
-
-/**
- * Compare the local triple with the remote triple and return the TripleChange.
- * The TripleChange is used to represent what either the before or after renderable
- * should be to include the type of diff to show in the UI.
- *
- * @params triple - the local triple as it exists in the local database as a {@link Triple}
- * @params remoteTriple - the remote triple as it exists in the remote database as a {@link Triple}
- * @returns - {@link TripleChange} or null if the triple is not present in the remote database
- */
-function getBeforeTripleChange(
-  triple: Triple,
-  remoteTriple: Triple | null
-): (TripleChangeValue | RelationChangeValue) | null {
-  if (remoteTriple === null) {
-    return null;
-  }
-
-  if (triple.value.value !== remoteTriple.value.value) {
-    return {
-      value: remoteTriple.value.value,
-      valueName: remoteTriple.value.type === 'ENTITY' ? remoteTriple.value.name : null,
-      type: 'UPDATE',
-    };
-  }
-
-  return {
-    value: remoteTriple.value.value,
-    valueName: remoteTriple.value.type === 'ENTITY' ? remoteTriple.value.name : null,
-    type: 'REMOVE',
-  };
-}
-
-/**
- * Compare the local triple with the remote triple and return the TripleChange for the
- * "after" triple. The TripleChange is used to represent what either the before or after
- * renderable should be to include the type of diff to show in the UI.
- *
- * @params triple - the local triple as it exists in the local database as a {@link Triple}
- * @params remoteTriple - the remote triple as it exists in the remote database as a {@link Triple}
- * @returns - {@link TripleChange}. There is always an after triple change, so this version
- * of the function always returns a value.
- */
-function getAfterTripleChange(triple: Triple, remoteTriple: Triple | null): TripleChangeValue | RelationChangeValue {
-  if (remoteTriple === null) {
-    return {
-      value: triple.value.value,
-      valueName: triple.value.type === 'ENTITY' ? triple.value.name : null,
-      type: 'ADD',
-    };
-  }
-
-  if (triple.value.value !== remoteTriple.value.value) {
-    return {
-      value: triple.value.value,
-      valueName: triple.value.type === 'ENTITY' ? triple.value.name : null,
-      type: 'UPDATE',
-    };
-  }
-
-  return {
-    value: triple.value.value,
-    valueName: triple.value.type === 'ENTITY' ? triple.value.name : null,
-    type: 'ADD',
-  };
 }
 
 function getBeforeRelationChange(relation: Relation, remoteRelations: Relation[] | null): RelationChangeValue | null {
