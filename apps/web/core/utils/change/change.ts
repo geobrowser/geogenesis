@@ -16,16 +16,9 @@ import type {
   Triple,
 } from '~/core/types';
 
-export type ActionId = string;
 export type BlockId = string;
 
 export type BlockValueType = 'textBlock' | 'tableFilter' | 'imageBlock' | 'tableBlock' | 'markdownContent';
-
-export type Changeset = {
-  name: string;
-  blocks?: Record<BlockId, BlockChange>;
-  attributes?: Record<EntityId, RenderableChange>;
-};
 
 export type BlockChange = {
   type: BlockValueType;
@@ -160,6 +153,8 @@ export async function fromLocal(spaceId?: string) {
   const localRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(localRelations);
   const remoteRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(remoteEntities.flatMap(e => e.relationsOut));
 
+  // This might be a performance bottleneck for large sets of ops, so we'll need
+  // to monitor this over time.
   return localEntities.map((entity): EntityChange => {
     const tripleChanges: TripleChange[] = [];
     const relationChanges: RelationChange[] = [];
@@ -193,18 +188,14 @@ export async function fromLocal(spaceId?: string) {
         const before = getBeforeRelationChange(relation, remoteRelationsForAttributeId);
         const after = getAfterRelationChange(relation, remoteRelationsForAttributeId);
 
-        // @TODO: Handle block relations
-        if (relation.toEntity.renderableType === 'DATA' || relation.toEntity.renderableType === 'TEXT') {
-          continue;
-        }
-
         relationChanges.push({
           id: entity.id,
           attribute: {
             id: relation.typeOf.id,
             name: relation.typeOf.name,
           },
-          type: 'RELATION',
+          // Filter out the block-related relation types until we render blocks in the diff editor
+          type: relation.toEntity.renderableType === 'IMAGE' ? 'IMAGE' : 'RELATION',
           before,
           after,
         });
@@ -215,7 +206,7 @@ export async function fromLocal(spaceId?: string) {
     // in the before and after.
     const realChanges = [...tripleChanges, ...relationChanges].filter(c => isRealChange(c.before, c.after));
 
-    // @TODO: Need to do more work for block diffs?
+    // @TODO: map block diffs into a renderable format
     const blockChanges = relationChanges.filter(c => c.attribute.id === SYSTEM_IDS.BLOCKS);
 
     return {

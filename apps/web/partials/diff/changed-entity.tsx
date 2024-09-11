@@ -1,6 +1,4 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { useQuery } from '@tanstack/react-query';
-import BoringAvatar from 'boring-avatars';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
@@ -9,13 +7,9 @@ import type { Change as Difference } from 'diff';
 import * as React from 'react';
 import { useCallback } from 'react';
 
-import { createFiltersFromGraphQLStringAndSource } from '~/core/blocks-sdk/table';
-import { fetchColumns } from '~/core/io/fetch-columns';
-import { EntityId, SpaceId } from '~/core/io/schema';
-import { fetchEntity } from '~/core/io/subgraph';
-import { TableBlockFilter } from '~/core/state/table-block-store';
-import type { BlockChange, BlockId, EntityChange } from '~/core/utils/change/change';
-import { GeoDate, getImagePath, groupBy } from '~/core/utils/utils';
+import { EntityId } from '~/core/io/schema';
+import type { EntityChange } from '~/core/utils/change/change';
+import { GeoDate } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 import { Blank } from '~/design-system/icons/blank';
@@ -23,9 +17,6 @@ import { Minus } from '~/design-system/icons/minus';
 import { Tick } from '~/design-system/icons/tick';
 import { Trash } from '~/design-system/icons/trash';
 import { Spacer } from '~/design-system/spacer';
-import { colors } from '~/design-system/theme/colors';
-
-import { TableBlockPlaceholder } from '~/partials/blocks/table/table-block';
 
 type ChangedEntityProps = {
   change: EntityChange;
@@ -38,15 +29,10 @@ export const ChangedEntity = ({ change, unstagedChanges, setUnstagedChanges }: C
     // @TODO(database)
   }, []);
 
-  const attributes = groupBy(change.changes, c => c.attribute.id);
-
-  const blocks = attributes[SYSTEM_IDS.BLOCKS];
-  const attributeIds = Object.keys(attributes);
-
   return (
     <div className="relative -top-12 pt-12">
       <div className="flex flex-col gap-5">
-        <div className="text-mediumTitle">{change.name}</div>
+        <div className="text-mediumTitle">{change.name ?? change.id}</div>
         <div className="flex gap-8">
           <div className="flex-1 text-body">Current version</div>
           <div className="relative flex-1 text-body">
@@ -64,227 +50,207 @@ export const ChangedEntity = ({ change, unstagedChanges, setUnstagedChanges }: C
           ))}
         </div>
       )} */}
-      {attributeIds.length > 0 && (
-        <div className="mt-2">
-          {change.changes.map(subchange => (
-            <ChangedAttribute
-              key={`${change.id}-${subchange.attribute.id}`}
-              change={subchange}
-              attributeId={subchange.attribute.id}
-              entityId={change.id}
-              unstagedChanges={unstagedChanges}
-              setUnstagedChanges={setUnstagedChanges}
-            />
-          ))}
-        </div>
-      )}
+      <div className="mt-2">
+        <ChangedAttribute
+          key={`${change.id}-${change.id}`}
+          changes={change.changes}
+          entityId={change.id}
+          unstagedChanges={unstagedChanges}
+          setUnstagedChanges={setUnstagedChanges}
+        />
+      </div>
     </div>
   );
 };
 
-type ChangedBlockProps = {
-  blockId: BlockId;
-  block: BlockChange;
-};
+// type ChangedBlockProps = {
+//   blockId: BlockId;
+//   block: BlockChange;
+// };
 
-const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
-  const { before, after } = block;
+// const ChangedBlock = ({ blockId, block }: ChangedBlockProps) => {
+//   const { before, after } = block;
 
-  // Don't show dead changes
-  if (!before && !after) return null;
+//   // Don't show dead changes
+//   if (!before && !after) return null;
 
-  switch (block.type) {
-    case 'markdownContent': {
-      const { markdownType: beforeMarkdownType, markdownContent: beforeMarkdownContent } = parseMarkdown(before ?? '');
-      const { markdownType: afterMarkdownType, markdownContent: afterMarkdownContent } = parseMarkdown(after ?? '');
+//   switch (block.type) {
+//     case 'markdownContent': {
+//       const { markdownType: beforeMarkdownType, markdownContent: beforeMarkdownContent } = parseMarkdown(before ?? '');
+//       const { markdownType: afterMarkdownType, markdownContent: afterMarkdownContent } = parseMarkdown(after ?? '');
 
-      const differences = diffWords(beforeMarkdownContent, afterMarkdownContent);
+//       const differences = diffWords(beforeMarkdownContent, afterMarkdownContent);
 
-      const BeforeComponent = beforeMarkdownType;
-      const AfterComponent = afterMarkdownType;
+//       const BeforeComponent = beforeMarkdownType;
+//       const AfterComponent = afterMarkdownType;
 
-      return (
-        <div key={blockId} className="flex gap-8">
-          <div className="ProseMirror flex-1 py-4">
-            <BeforeComponent>
-              {differences
-                .filter(item => !item.added)
-                .map((difference: Difference, index: number) => (
-                  <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-                    {difference.value}
-                  </span>
-                ))}
-            </BeforeComponent>
-          </div>
-          <div className="ProseMirror flex-1 py-4">
-            <AfterComponent>
-              {differences
-                .filter(item => !item.removed)
-                .map((difference: Difference, index: number) => (
-                  <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                    {difference.value}
-                  </span>
-                ))}
-            </AfterComponent>
-          </div>
-        </div>
-      );
-    }
-    case 'imageBlock': {
-      return (
-        <div key={blockId} className="flex gap-8">
-          <div className="flex-1 py-4">
-            <div>
-              {before && (
-                <span className="-lg inline-block bg-errorTertiary p-1">
-                  <img src={getImagePath(before)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex-1 py-4">
-            <div>
-              {after && (
-                <span className="inline-block rounded-lg bg-successTertiary p-1">
-                  <img src={getImagePath(after)} className="rounded-lg" />
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
-    case 'tableBlock': {
-      const isNewTableBlock = before === null;
-      const differences = diffWords(before ?? '', after ?? '');
+//       return (
+//         <div key={blockId} className="flex gap-8">
+//           <div className="ProseMirror flex-1 py-4">
+//             <BeforeComponent>
+//               {differences
+//                 .filter(item => !item.added)
+//                 .map((difference: Difference, index: number) => (
+//                   <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+//                     {difference.value}
+//                   </span>
+//                 ))}
+//             </BeforeComponent>
+//           </div>
+//           <div className="ProseMirror flex-1 py-4">
+//             <AfterComponent>
+//               {differences
+//                 .filter(item => !item.removed)
+//                 .map((difference: Difference, index: number) => (
+//                   <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+//                     {difference.value}
+//                   </span>
+//                 ))}
+//             </AfterComponent>
+//           </div>
+//         </div>
+//       );
+//     }
+//     case 'imageBlock': {
+//       return (
+//         <div key={blockId} className="flex gap-8">
+//           <div className="flex-1 py-4">
+//             <div>
+//               {before && (
+//                 <span className="-lg inline-block bg-errorTertiary p-1">
+//                   <img src={getImagePath(before)} className="rounded-lg" />
+//                 </span>
+//               )}
+//             </div>
+//           </div>
+//           <div className="flex-1 py-4">
+//             <div>
+//               {after && (
+//                 <span className="inline-block rounded-lg bg-successTertiary p-1">
+//                   <img src={getImagePath(after)} className="rounded-lg" />
+//                 </span>
+//               )}
+//             </div>
+//           </div>
+//         </div>
+//       );
+//     }
+//     case 'tableBlock': {
+//       const isNewTableBlock = before === null;
+//       const differences = diffWords(before ?? '', after ?? '');
 
-      return (
-        <div key={blockId} className="flex gap-8">
-          <div className="flex-1 py-4">
-            {!isNewTableBlock && (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="overflow-hidden rounded">
-                    <BoringAvatar
-                      size={16}
-                      square={true}
-                      variant="bauhaus"
-                      name={before ?? 'Untitled'}
-                      colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
-                    />
-                  </span>
-                  <div className="text-smallTitle">
-                    {differences
-                      .filter(item => !item.added)
-                      .map((difference: Difference, index: number) => (
-                        <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-                          {difference.value}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <TableBlockPlaceholder
-                    columns={2}
-                    rows={2}
-                    className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-          <div className="flex-1 py-4">
-            {after && (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="overflow-hidden rounded">
-                    <BoringAvatar
-                      size={16}
-                      square={true}
-                      variant="bauhaus"
-                      name={after ?? 'Untitled'}
-                      colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
-                    />
-                  </span>
-                  <div className="text-smallTitle">
-                    {differences
-                      .filter(item => !item.removed)
-                      .map((difference: Difference, index: number) => (
-                        <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                          {difference.value}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <TableBlockPlaceholder
-                    columns={2}
-                    rows={2}
-                    className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      );
-    }
-    case 'tableFilter': {
-      const isNewTableFilter = before === null;
+//       return (
+//         <div key={blockId} className="flex gap-8">
+//           <div className="flex-1 py-4">
+//             {!isNewTableBlock && (
+//               <>
+//                 <div className="flex items-center gap-2">
+//                   <span className="overflow-hidden rounded">
+//                     <BoringAvatar
+//                       size={16}
+//                       square={true}
+//                       variant="bauhaus"
+//                       name={before ?? 'Untitled'}
+//                       colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
+//                     />
+//                   </span>
+//                   <div className="text-smallTitle">
+//                     {differences
+//                       .filter(item => !item.added)
+//                       .map((difference: Difference, index: number) => (
+//                         <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+//                           {difference.value}
+//                         </span>
+//                       ))}
+//                   </div>
+//                 </div>
+//                 <div className="mt-2">
+//                   <TableBlockPlaceholder
+//                     columns={2}
+//                     rows={2}
+//                     className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
+//                   />
+//                 </div>
+//               </>
+//             )}
+//           </div>
+//           <div className="flex-1 py-4">
+//             {after && (
+//               <>
+//                 <div className="flex items-center gap-2">
+//                   <span className="overflow-hidden rounded">
+//                     <BoringAvatar
+//                       size={16}
+//                       square={true}
+//                       variant="bauhaus"
+//                       name={after ?? 'Untitled'}
+//                       colors={[colors.light['grey-03'], colors.light['grey-02'], colors.light['grey-01']]}
+//                     />
+//                   </span>
+//                   <div className="text-smallTitle">
+//                     {differences
+//                       .filter(item => !item.removed)
+//                       .map((difference: Difference, index: number) => (
+//                         <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+//                           {difference.value}
+//                         </span>
+//                       ))}
+//                   </div>
+//                 </div>
+//                 <div className="mt-2">
+//                   <TableBlockPlaceholder
+//                     columns={2}
+//                     rows={2}
+//                     className="!overflow-hidden rounded-lg p-0 opacity-50 shadow-button"
+//                   />
+//                 </div>
+//               </>
+//             )}
+//           </div>
+//         </div>
+//       );
+//     }
+//     case 'tableFilter': {
+//       const isNewTableFilter = before === null;
 
-      return (
-        <div key={blockId} className="flex gap-8">
-          <div className="flex-1 py-4">
-            {!isNewTableFilter && (
-              <div className="flex flex-wrap gap-2">
-                <TableFilters rawFilter={before} />
-              </div>
-            )}
-          </div>
-          <div className="flex-1 py-4">
-            {after && (
-              <div className="flex flex-wrap gap-2">
-                <TableFilters rawFilter={after} />
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-    default: {
-      return null;
-    }
-  }
-};
+//       return (
+//         <div key={blockId} className="flex gap-8">
+//           <div className="flex-1 py-4">
+//             {!isNewTableFilter && (
+//               <div className="flex flex-wrap gap-2">
+//                 <TableFilters rawFilter={before} />
+//               </div>
+//             )}
+//           </div>
+//           <div className="flex-1 py-4">
+//             {after && (
+//               <div className="flex flex-wrap gap-2">
+//                 <TableFilters rawFilter={after} />
+//               </div>
+//             )}
+//           </div>
+//         </div>
+//       );
+//     }
+//     default: {
+//       return null;
+//     }
+//   }
+// };
 
 type ChangedAttributeProps = {
-  attributeId: string;
-  change: EntityChange['changes'][number];
+  changes: EntityChange['changes'];
   entityId: EntityId;
   unstagedChanges: Record<string, Record<string, boolean>>;
   setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
-const ChangedAttribute = ({
-  attributeId,
-  change,
-  entityId,
-  unstagedChanges,
-  setUnstagedChanges,
-}: ChangedAttributeProps) => {
+const ChangedAttribute = ({ changes, entityId, unstagedChanges, setUnstagedChanges }: ChangedAttributeProps) => {
   const handleDeleteActions = useCallback(() => {
     // @TODO(database)
   }, []);
 
-  // Don't show page blocks
-  if (attributeId === SYSTEM_IDS.BLOCKS) return null;
-
-  const { before, after } = change;
-  const name = change.attribute.name ?? change.attribute.id;
-
-  const unstaged = Object.hasOwn(unstagedChanges[entityId] ?? {}, attributeId);
-
-  const handleStaging = () => {
+  const handleStaging = (attributeId: string, unstaged: boolean) => {
     if (!unstaged) {
       setUnstagedChanges({
         ...unstagedChanges,
@@ -302,185 +268,208 @@ const ChangedAttribute = ({
     }
   };
 
-  switch (change.type) {
-    case 'TEXT': {
-      const checkedBefore = before ? before.value : '';
-      const checkedAfter = after ? after.value : '';
-      const differences = diffWords(checkedBefore, checkedAfter);
+  return changes.map(change => {
+    const attributeId = change.attribute.id;
+    // Don't show page blocks
+    if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
-      return (
-        <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div className="text-body">
-              {differences
-                .filter(item => !item.added)
-                .map((difference, index) => (
-                  <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-                    {difference.value}
-                  </span>
-                ))}
-            </div>
-          </div>
-          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
-            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-              <SquareButton
-                onClick={handleDeleteActions}
-                icon={<Trash />}
-                className="opacity-0 group-hover:opacity-100"
-              />
-              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
-            </div>
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div className="text-body">
-              {differences
-                .filter(item => !item.removed)
-                .map((difference, index) => (
-                  <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                    {difference.value}
-                  </span>
-                ))}
-            </div>
-          </div>
-        </div>
-      );
-    }
-    case 'RELATION':
-    case 'ENTITY': {
-      return (
-        <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div className="flex flex-wrap gap-2">
-              {/* @TODO: Support entity triple diffs */}
-              {before && <Chip status="unchanged">{before.valueName ?? before.value}</Chip>}
-            </div>
-          </div>
-          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-              <SquareButton
-                onClick={handleDeleteActions}
-                icon={<Trash />}
-                className="opacity-0 group-hover:opacity-100"
-              />
-              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
-            </div>
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div className="flex flex-wrap gap-2">
-              {/* @TODO: Support entity triple diffs */}
-              <Chip status="added">{after?.valueName ?? after?.value}</Chip>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    // @TODO(relations): Add image support
-    // case 'IMAGE': {
-    //   return (
-    //     <div key={attributeId} className="-mt-px flex gap-8">
-    //       <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-    //         <div className="text-bodySemibold capitalize">{name}</div>
-    //         <div>
-    //           {typeof before !== 'object' && (
-    //             <span className="inline-block rounded-lg bg-errorTertiary p-1">
-    //               <img src={getImagePath(before)} className="rounded-lg" />
-    //             </span>
-    //           )}
-    //         </div>
-    //       </div>
-    //       <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-    //         <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-    //           <SquareButton
-    //             onClick={handleDeleteActions}
-    //             icon={<Trash />}
-    //             className="opacity-0 group-hover:opacity-100"
-    //           />
-    //           <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
-    //         </div>
-    //         <div className="text-bodySemibold capitalize">{name}</div>
-    //         <div>
-    //           {typeof after !== 'object' && (
-    //             <span className="inline-block rounded-lg bg-successTertiary p-1">
-    //               <img src={getImagePath(after)} className="rounded-lg" />
-    //             </span>
-    //           )}
-    //         </div>
-    //       </div>
-    //     </div>
-    //   );
-    // }
-    case 'TIME': {
-      return (
-        <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div className="text-body">
-              {before && <DateTimeDiff mode="before" before={before.value} after={after.value} />}
-            </div>
-          </div>
-          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-              <SquareButton
-                onClick={handleDeleteActions}
-                icon={<Trash />}
-                className="opacity-0 group-hover:opacity-100"
-              />
-              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
-            </div>
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div className="text-body">
-              {after && <DateTimeDiff mode="after" before={before?.value ?? null} after={after.value} />}
-            </div>
-          </div>
-        </div>
-      );
-    }
-    case 'URI': {
-      const checkedBefore = before ? before.value : '';
-      const checkedAfter = after ? after.value : '';
-      const differences = diffWords(checkedBefore, checkedAfter);
+    const { before, after } = change;
+    const name = change.attribute.name ?? change.attribute.id;
 
-      return (
-        <div key={attributeId} className="-mt-px flex gap-8">
-          <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div className="truncate text-ctaPrimary no-underline">
-              {differences
-                .filter(item => !item.added)
-                .map((difference: Difference, index: number) => (
-                  <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-                    {difference.value}
-                  </span>
-                ))}
+    const unstaged = Object.hasOwn(unstagedChanges[entityId] ?? {}, attributeId);
+
+    switch (change.type) {
+      case 'TEXT': {
+        const checkedBefore = before ? before.value : '';
+        const checkedAfter = after ? after.value : '';
+        const differences = diffWords(checkedBefore, checkedAfter);
+
+        return (
+          <div key={attributeId} className="-mt-px flex gap-8">
+            <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+              <div className="text-bodySemibold capitalize">{name}</div>
+              <div className="text-body">
+                {differences
+                  .filter(item => !item.added)
+                  .map((difference, index) => (
+                    <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+                      {difference.value}
+                    </span>
+                  ))}
+              </div>
+            </div>
+            <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
+              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+                <SquareButton
+                  onClick={handleDeleteActions}
+                  icon={<Trash />}
+                  className="opacity-0 group-hover:opacity-100"
+                />
+                <SquareButton
+                  onClick={() => handleStaging(attributeId, unstaged)}
+                  icon={unstaged ? <Blank /> : <Tick />}
+                />
+              </div>
+              <div className="text-bodySemibold capitalize">{name}</div>
+              <div className="text-body">
+                {differences
+                  .filter(item => !item.removed)
+                  .map((difference, index) => (
+                    <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                      {difference.value}
+                    </span>
+                  ))}
+              </div>
             </div>
           </div>
-          <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-            <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-              <SquareButton
-                onClick={handleDeleteActions}
-                icon={<Trash />}
-                className="opacity-0 group-hover:opacity-100"
-              />
-              <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
+        );
+      }
+      case 'RELATION':
+      case 'ENTITY': {
+        return (
+          <div key={attributeId} className="-mt-px flex gap-8">
+            <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
+              <div className="text-bodySemibold capitalize">{name}</div>
+              <div className="flex flex-wrap gap-2">
+                {/* @TODO: Support entity triple diffs */}
+                {before && <Chip status="unchanged">{before.valueName ?? before.value}</Chip>}
+              </div>
             </div>
-            <div className="text-bodySemibold capitalize">{name}</div>
-            <div className="truncate text-ctaPrimary no-underline">
-              {differences
-                .filter(item => !item.removed)
-                .map((difference: Difference, index: number) => (
-                  <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                    {difference.value}
-                  </span>
-                ))}
+            <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+                <SquareButton
+                  onClick={handleDeleteActions}
+                  icon={<Trash />}
+                  className="opacity-0 group-hover:opacity-100"
+                />
+                <SquareButton
+                  onClick={() => handleStaging(attributeId, unstaged)}
+                  icon={unstaged ? <Blank /> : <Tick />}
+                />
+              </div>
+              <div className="text-bodySemibold capitalize">{name}</div>
+              <div className="flex flex-wrap gap-2">
+                {/* @TODO: Support entity triple diffs */}
+                <Chip status="added">{after?.valueName ?? after?.value}</Chip>
+              </div>
             </div>
           </div>
-        </div>
-      );
+        );
+      }
+      // @TODO(relations): Add image support
+      // case 'IMAGE': {
+      //   return (
+      //     <div key={attributeId} className="-mt-px flex gap-8">
+      //       <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+      //         <div className="text-bodySemibold capitalize">{name}</div>
+      //         <div>
+      //           {typeof before !== 'object' && (
+      //             <span className="inline-block rounded-lg bg-errorTertiary p-1">
+      //               <img src={getImagePath(before)} className="rounded-lg" />
+      //             </span>
+      //           )}
+      //         </div>
+      //       </div>
+      //       <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+      //         <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+      //           <SquareButton
+      //             onClick={handleDeleteActions}
+      //             icon={<Trash />}
+      //             className="opacity-0 group-hover:opacity-100"
+      //           />
+      //           <SquareButton onClick={handleStaging} icon={unstaged ? <Blank /> : <Tick />} />
+      //         </div>
+      //         <div className="text-bodySemibold capitalize">{name}</div>
+      //         <div>
+      //           {typeof after !== 'object' && (
+      //             <span className="inline-block rounded-lg bg-successTertiary p-1">
+      //               <img src={getImagePath(after)} className="rounded-lg" />
+      //             </span>
+      //           )}
+      //         </div>
+      //       </div>
+      //     </div>
+      //   );
+      // }
+      case 'TIME': {
+        return (
+          <div key={attributeId} className="-mt-px flex gap-8">
+            <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+              <div className="text-bodySemibold capitalize">{name}</div>
+              <div className="text-body">
+                {before && <DateTimeDiff mode="before" before={before.value} after={after.value} />}
+              </div>
+            </div>
+            <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+                <SquareButton
+                  onClick={handleDeleteActions}
+                  icon={<Trash />}
+                  className="opacity-0 group-hover:opacity-100"
+                />
+                <SquareButton
+                  onClick={() => handleStaging(attributeId, unstaged)}
+                  icon={unstaged ? <Blank /> : <Tick />}
+                />
+              </div>
+              <div className="text-bodySemibold capitalize">{name}</div>
+              <div className="text-body">
+                {after && <DateTimeDiff mode="after" before={before?.value ?? null} after={after.value} />}
+              </div>
+            </div>
+          </div>
+        );
+      }
+      case 'URI': {
+        const checkedBefore = before ? before.value : '';
+        const checkedAfter = after ? after.value : '';
+        const differences = diffWords(checkedBefore, checkedAfter);
+
+        return (
+          <div key={attributeId} className="-mt-px flex gap-8">
+            <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+              <div className="text-bodySemibold capitalize">{name}</div>
+              <div className="truncate text-ctaPrimary no-underline">
+                {differences
+                  .filter(item => !item.added)
+                  .map((difference: Difference, index: number) => (
+                    <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+                      {difference.value}
+                    </span>
+                  ))}
+              </div>
+            </div>
+            <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
+              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+                <SquareButton
+                  onClick={handleDeleteActions}
+                  icon={<Trash />}
+                  className="opacity-0 group-hover:opacity-100"
+                />
+                <SquareButton
+                  onClick={() => handleStaging(attributeId, unstaged)}
+                  icon={unstaged ? <Blank /> : <Tick />}
+                />
+              </div>
+              <div className="text-bodySemibold capitalize">{name}</div>
+              <div className="truncate text-ctaPrimary no-underline">
+                {differences
+                  .filter(item => !item.removed)
+                  .map((difference: Difference, index: number) => (
+                    <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                      {difference.value}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          </div>
+        );
+      }
+      default: {
+        return null;
+      }
     }
-    default: {
-      return null;
-    }
-  }
+  });
 };
 
 type DateTimeProps = {
@@ -589,117 +578,117 @@ export const Chip = ({ status = 'unchanged', children }: ChipProps) => {
   return <span className={chip({ status })}>{children}</span>;
 };
 
-type MarkdownType = 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+// type MarkdownType = 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
 
-const markdownComponent: Record<number, MarkdownType> = {
-  0: 'p',
-  1: 'h1',
-  2: 'h2',
-  3: 'h3',
-  4: 'h4',
-  5: 'h5',
-  6: 'h6',
-};
+// const markdownComponent: Record<number, MarkdownType> = {
+//   0: 'p',
+//   1: 'h1',
+//   2: 'h2',
+//   3: 'h3',
+//   4: 'h4',
+//   5: 'h5',
+//   6: 'h6',
+// };
 
-// Parse raw markdown into basic formatting
-// faster than rendering TipTap editor
-function parseMarkdown(markdownString: string) {
-  let markdownType: MarkdownType = 'p';
-  let markdownContent = markdownString;
-  let markdownLevel = 0;
+// // Parse raw markdown into basic formatting
+// // faster than rendering TipTap editor
+// function parseMarkdown(markdownString: string) {
+//   let markdownType: MarkdownType = 'p';
+//   let markdownContent = markdownString;
+//   let markdownLevel = 0;
 
-  while (markdownContent.startsWith('#')) {
-    markdownContent = markdownContent.substring(1);
-    markdownLevel++;
-  }
+//   while (markdownContent.startsWith('#')) {
+//     markdownContent = markdownContent.substring(1);
+//     markdownLevel++;
+//   }
 
-  markdownType = markdownComponent[markdownLevel];
-  markdownContent = markdownContent.trim();
+//   markdownType = markdownComponent[markdownLevel];
+//   markdownContent = markdownContent.trim();
 
-  return { markdownType, markdownContent };
-}
+//   return { markdownType, markdownContent };
+// }
 
-type TableFiltersProps = {
-  rawFilter: string;
-};
+// type TableFiltersProps = {
+//   rawFilter: string;
+// };
 
-const TableFilters = ({ rawFilter }: TableFiltersProps) => {
-  const [filters, isLoading] = useFilters(rawFilter);
+// const TableFilters = ({ rawFilter }: TableFiltersProps) => {
+//   const [filters, isLoading] = useFilters(rawFilter);
 
-  if (isLoading || !filters || filters.length === 0) return null;
+//   if (isLoading || !filters || filters.length === 0) return null;
 
-  return (
-    <>
-      {filters.map((filter, index) => (
-        <TableFilter key={index} filter={filter} />
-      ))}
-    </>
-  );
-};
+//   return (
+//     <>
+//       {filters.map((filter, index) => (
+//         <TableFilter key={index} filter={filter} />
+//       ))}
+//     </>
+//   );
+// };
 
-type TableFilterProps = {
-  filter: TableBlockFilter & { columnName: string };
-};
+// type TableFilterProps = {
+//   filter: TableBlockFilter & { columnName: string };
+// };
 
-const TableFilter = ({ filter }: TableFilterProps) => {
-  const value = filter.valueType === 'ENTITY' ? filter.valueName : filter.value;
+// const TableFilter = ({ filter }: TableFilterProps) => {
+//   const value = filter.valueType === 'ENTITY' ? filter.valueName : filter.value;
 
-  return (
-    <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 12 12"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="flex-shrink-0"
-      >
-        <path
-          d="M9.12976 0L2.87024 0C1.6588 0 0.947091 1.36185 1.63876 2.35643L4.45525 6.40634C4.48438 6.44823 4.5 6.49804 4.5 6.54907L4.5 10.5C4.5 11.3284 5.17157 12 6 12C6.82843 12 7.5 11.3284 7.5 10.5L7.5 6.54907C7.5 6.49804 7.51562 6.44823 7.54475 6.40634L10.3612 2.35642C11.0529 1.36185 10.3412 0 9.12976 0Z"
-          fill={colors.light['text']}
-        />
-      </svg>
-      <div className="flex items-center gap-1">
-        <span>{filter.columnName ?? `[ID]`} is</span>
-        <span>·</span>
-        <span>{value}</span>
-      </div>
-    </div>
-  );
-};
+//   return (
+//     <div className="flex items-center gap-2 rounded bg-divider py-1 pl-2 pr-1 text-metadata">
+//       <svg
+//         width="12"
+//         height="12"
+//         viewBox="0 0 12 12"
+//         fill="none"
+//         xmlns="http://www.w3.org/2000/svg"
+//         className="flex-shrink-0"
+//       >
+//         <path
+//           d="M9.12976 0L2.87024 0C1.6588 0 0.947091 1.36185 1.63876 2.35643L4.45525 6.40634C4.48438 6.44823 4.5 6.49804 4.5 6.54907L4.5 10.5C4.5 11.3284 5.17157 12 6 12C6.82843 12 7.5 11.3284 7.5 10.5L7.5 6.54907C7.5 6.49804 7.51562 6.44823 7.54475 6.40634L10.3612 2.35642C11.0529 1.36185 10.3412 0 9.12976 0Z"
+//           fill={colors.light['text']}
+//         />
+//       </svg>
+//       <div className="flex items-center gap-1">
+//         <span>{filter.columnName ?? `[ID]`} is</span>
+//         <span>·</span>
+//         <span>{value}</span>
+//       </div>
+//     </div>
+//   );
+// };
 
-const useFilters = (rawFilter: string) => {
-  const { data, isLoading } = useQuery({
-    queryKey: [`${rawFilter}`],
-    queryFn: async () => getFilters(rawFilter),
-  });
+// const useFilters = (rawFilter: string) => {
+//   const { data, isLoading } = useQuery({
+//     queryKey: [`${rawFilter}`],
+//     queryFn: async () => getFilters(rawFilter),
+//   });
 
-  return [data, isLoading] as const;
-};
+//   return [data, isLoading] as const;
+// };
 
-const getFilters = async (rawFilter: string) => {
-  // @TODO(data blocks): fix
-  const filters = await createFiltersFromGraphQLStringAndSource(
-    rawFilter,
-    { type: 'SPACES', value: [SpaceId('')] },
-    async id => await fetchEntity({ id })
-  );
+// const getFilters = async (rawFilter: string) => {
+//   // @TODO(data blocks): fix
+//   const filters = await createFiltersFromGraphQLStringAndSource(
+//     rawFilter,
+//     { type: 'SPACES', value: [SpaceId('')] },
+//     async id => await fetchEntity({ id })
+//   );
 
-  const serverColumns = await fetchColumns({
-    typeIds: [],
-  });
-  const filtersWithColumnName = filters.map(f => {
-    if (f.columnId === SYSTEM_IDS.NAME) {
-      return {
-        ...f,
-        columnName: 'Name',
-      };
-    }
-    return {
-      ...f,
-      columnName: serverColumns.find(c => c.id === f.columnId)?.name ?? '',
-    };
-  });
+//   const serverColumns = await fetchColumns({
+//     typeIds: [],
+//   });
+//   const filtersWithColumnName = filters.map(f => {
+//     if (f.columnId === SYSTEM_IDS.NAME) {
+//       return {
+//         ...f,
+//         columnName: 'Name',
+//       };
+//     }
+//     return {
+//       ...f,
+//       columnName: serverColumns.find(c => c.id === f.columnId)?.name ?? '',
+//     };
+//   });
 
-  return filtersWithColumnName;
-};
+//   return filtersWithColumnName;
+// };
