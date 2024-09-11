@@ -10,7 +10,7 @@ import * as React from 'react';
 import { useCallback } from 'react';
 
 import { EntityId } from '~/core/io/schema';
-import type { EntityChange } from '~/core/utils/change/change';
+import { EntityChange } from '~/core/utils/change/types';
 import { GeoDate } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
