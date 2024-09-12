@@ -9,10 +9,6 @@ import { EmptyTab } from '~/partials/tab/empty-tab';
 
 import DefaultEntityPage from '~/app/space/(entity)/[id]/[entityId]/default-entity-page';
 
-export type Props = {
-  params: { id: string };
-};
-
 type TabProps = {
   params: { id: string };
   slug: string;
