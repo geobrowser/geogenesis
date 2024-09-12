@@ -1,4 +1,4 @@
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
 import { Entities } from '../db';
