@@ -207,9 +207,18 @@ CREATE TABLE public.entity_spaces (
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
--- CREATE TABLE public.triple_versions (
---     PRIMARY KEY (triple_id, version_id),
---     triple_id text NOT NULL REFERENCES public.triples(id),
+CREATE TABLE public.triple_versions (
+    triple_id text NOT NULL REFERENCES public.triples(id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    attribute_id text NOT NULL REFERENCES public.entities(id),
+    version_id text NOT NULL REFERENCES public.versions(id),
+    FOREIGN KEY (space_id, entity_id, attribute_id) REFERENCES public.triples(space_id, entity_id, attribute_id)
+);
+
+-- CREATE TABLE public.relation_versions (
+--     PRIMARY KEY (relation_id, version_id),
+--     relation_id text NOT NULL REFERENCES public.relations(id),
 --     version_id text NOT NULL REFERENCES public.versions(id)
 -- );
 
