@@ -34,30 +34,13 @@ export function populateContent(
 
       entitiesToWrite.push(entity);
 
-      // const tripleVersions = yield* awaited(mapTripleVersions(versions));
-      const tripleVersions = [];
-
-      /**
-       * We need to map each set of ops with the proposal/proposed version that contains
-       * the ops.
-       *
-       * An entity might change in multiple proposals that are executed within the same block.
-       * The current implementation groups _all_ ops across _all_ proposals/proposedVersions
-       * for a given entity, so we could write the same ops multiple times if there are multiple
-       * proposedVersions that change the same entity.
-       */
       const editWithCreatedById: SchemaTripleEdit = {
-        proposalId: version.proposal_id.toString(),
+        versonId: version.id.toString(),
         createdById: version.created_by_id.toString(),
         spaceId: version.space_id.toString(),
         ops: opsByVersionId.get(version.id.toString())!,
       };
 
-      // @TODO: Filter out invalid invalid individual triples. We want to filter the triples
-      // out instead of just erroring during write since there may be some triples that are
-      // required in order to write a higher-order data structure to a database table, e.g.,
-      // Relations. If we don't filter then it will look like we have all the valid data for
-      // one of the data structures when we actually don't.
       triplesToWrite.push(...mapSchemaTriples(editWithCreatedById, block));
     }
 

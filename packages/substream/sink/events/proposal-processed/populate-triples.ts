@@ -552,7 +552,7 @@ function upsertEntityType(triple: Schema.triples.Insertable, block: BlockEvent) 
         Types.upsert([
           {
             entity_id: triple.entity_id,
-            type_id: triple.entity_value_id?.toString()!,
+            type_id: triple.entity_value_id!.toString(),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
           },

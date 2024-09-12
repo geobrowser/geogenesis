@@ -8,7 +8,7 @@ import {
   ROOT_SPACE_CREATED_AT_BLOCK,
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
-import { Accounts, Entities, EntitySpaces, Proposals, Spaces, Triples, Types } from './db';
+import { Accounts, Entities, EntitySpaces, Proposals, Spaces, Triples, Types, Versions } from './db';
 import { Edits } from './db/edits';
 import { Relations } from './db/relations';
 import { getTripleFromOp } from './events/get-triple-from-op';
@@ -207,8 +207,19 @@ const geoEntities: s.entities.Insertable[] = entities.map(entity => ({
   updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
 }));
 
+const versions: s.versions.Insertable[] = entities.map(entity => ({
+  id: createGeoId(),
+  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+  created_at: ROOT_SPACE_CREATED_AT,
+  created_by_id: ROOT_SPACE_CREATED_BY_ID,
+  entity_id: entity,
+  space_id: SYSTEM_IDS.ROOT_SPACE_ID,
+  proposal_id: '0',
+}));
+
 const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
   ([id, name]): s.triples.Insertable => ({
+    version_id: createGeoId(),
     entity_id: id,
     attribute_id: SYSTEM_IDS.NAME,
     value_type: 'TEXT',
@@ -229,13 +240,15 @@ const makeTypeRelations = () => {
   // Make the relation triples for the type entity. For every type we need
   // to make a relation entity to represent the type
   for (const [typeEntityId] of Object.entries(types)) {
+    const versionId = entities.find(e => e === typeEntityId)!;
+
     // Create all the relationship triples for the Types -> Type relation
     const typeRelationshipTriples = createRelationship({
       relationTypeId: SYSTEM_IDS.TYPES,
       fromId: typeEntityId,
       toId: SYSTEM_IDS.SCHEMA_TYPE,
     }).map(op =>
-      getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, {
+      getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, versionId, {
         blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
         cursor: '',
         requestId: '',
@@ -264,12 +277,14 @@ const makeTypeRelations = () => {
     // Person -> Attribute -> Age
     // Person -> Attribute -> Date of Birth
     for (const attributeId of attributeIds) {
+      const versionId = entities.find(e => e === attributeId)!;
+
       const relationshipTriples = createRelationship({
         relationTypeId: SYSTEM_IDS.ATTRIBUTES,
         fromId: typeId,
         toId: attributeId,
       }).map(op =>
-        getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, {
+        getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, versionId, {
           blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
           cursor: '',
           requestId: '',
@@ -402,14 +417,13 @@ export function bootstrapRoot() {
             Entities.upsert(geoEntities),
             Entities.upsert(entitiesForRelations),
 
-            Triples.insert(namesTriples),
-            Triples.upsert(triplesForTypesAndAttributes),
-            // Triples.insert(attributeTriples),
-
             Proposals.upsert([proposal]),
             Edits.upsert([edit]),
+            Versions.upsert(versions),
             Relations.upsert(relationsForTypesAndAttributes),
           ]);
+
+          await Promise.all([Triples.insert(namesTriples), Triples.upsert(triplesForTypesAndAttributes)]);
 
           await Types.upsert(
             typesToWrite.map(r => ({

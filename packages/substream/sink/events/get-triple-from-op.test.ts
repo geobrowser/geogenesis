@@ -17,6 +17,7 @@ describe('tripleFromOp', () => {
         },
       },
       '0x1234',
+      '0',
       {
         blockNumber: 0,
         cursor: '',
@@ -36,6 +37,7 @@ describe('tripleFromOp', () => {
       space_id: '0x1234',
       text_value: 'test value',
       value_type: 'TEXT',
+      version_id: '0',
     });
   });
 
@@ -50,6 +52,7 @@ describe('tripleFromOp', () => {
         },
       },
       '0x1234',
+      '0',
       {
         blockNumber: 0,
         cursor: '',
@@ -69,6 +72,7 @@ describe('tripleFromOp', () => {
       space_id: '0x1234',
       text_value: null,
       value_type: 'TEXT',
+      version_id: '0',
     });
   });
 });

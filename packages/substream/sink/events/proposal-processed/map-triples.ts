@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import { getTripleFromOp } from '../get-triple-from-op';
@@ -10,21 +9,13 @@ export interface OpWithCreatedBy {
   triple: S.triples.Insertable;
 }
 
-export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string; proposalId: string };
+export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string; versonId: string };
 
 export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
   const squashedOps = squashOps(edit.ops, edit.spaceId);
 
   return squashedOps.map((op): OpWithCreatedBy => {
-    const triple = getTripleFromOp(op, edit.spaceId, block);
-
-    if (!triple.value_type) {
-      console.log('invalid triple', {
-        triple,
-        op: JSON.stringify(op, null, 2),
-        proposalId: edit.proposalId,
-      });
-    }
+    const triple = getTripleFromOp(op, edit.spaceId, edit.versonId, block);
 
     return {
       createdById: edit.createdById,

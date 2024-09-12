@@ -110,6 +110,16 @@ CREATE TABLE public.space_subspaces (
     CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
+CREATE TABLE public.versions (
+    id text PRIMARY KEY,
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    created_by_id text NOT NULL REFERENCES public.accounts(id),
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    space_id text NOT NULL REFERENCES public.spaces(id)
+);
+
 CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URI', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
 
 CREATE TABLE public.triples (
@@ -122,17 +132,8 @@ CREATE TABLE public.triples (
     text_value text,
     entity_value_id text REFERENCES public.entities(id),
     created_at integer NOT NULL,
-    created_at_block integer NOT NULL
-);
-
-CREATE TABLE public.versions (
-    id text PRIMARY KEY,
-    created_at integer NOT NULL,
     created_at_block integer NOT NULL,
-    created_by_id text NOT NULL REFERENCES public.accounts(id),
-    proposal_id text NOT NULL REFERENCES public.proposals(id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
-    space_id text NOT NULL REFERENCES public.spaces(id)
+    version_id text NOT NULL REFERENCES public.versions(id)
 );
 
 CREATE TABLE public.spaces_metadata (
@@ -207,21 +208,6 @@ CREATE TABLE public.entity_spaces (
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
-CREATE TABLE public.triple_versions (
-    triple_id text NOT NULL REFERENCES public.triples(id),
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
-    attribute_id text NOT NULL REFERENCES public.entities(id),
-    version_id text NOT NULL REFERENCES public.versions(id),
-    FOREIGN KEY (space_id, entity_id, attribute_id) REFERENCES public.triples(space_id, entity_id, attribute_id)
-);
-
--- CREATE TABLE public.relation_versions (
---     PRIMARY KEY (relation_id, version_id),
---     relation_id text NOT NULL REFERENCES public.relations(id),
---     version_id text NOT NULL REFERENCES public.versions(id)
--- );
-
 --
 -- Disable Foreign Key Constraints to allow for bulk loading + unordered inserts
 --
@@ -251,7 +237,4 @@ ALTER TABLE
 
 ALTER TABLE
     public.space_editors DISABLE TRIGGER ALL;
-
--- ALTER TABLE
---     public.triple_versions DISABLE TRIGGER ALL;
 
