@@ -215,7 +215,6 @@ const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
     space_id: SYSTEM_IDS.ROOT_SPACE_ID,
     created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
     created_at: ROOT_SPACE_CREATED_AT,
-    is_stale: false,
   })
 );
 
@@ -228,7 +227,7 @@ const makeTypeRelations = () => {
 
   // Make the relation triples for the type entity. For every type we need
   // to make a relation entity to represent the type
-  for (let [typeEntityId] of Object.entries(types)) {
+  for (const [typeEntityId] of Object.entries(types)) {
     // Create all the relationship triples for the Types -> Type relation
     const typeRelationshipTriples = createRelationship({
       relationTypeId: SYSTEM_IDS.TYPES,
@@ -258,12 +257,12 @@ const makeTypeRelations = () => {
   }
 
   // For every attribute on the type we need to create a relations entity
-  for (let [typeId, attributeIds] of Object.entries(types)) {
+  for (const [typeId, attributeIds] of Object.entries(types)) {
     // Create a relationship and all of the triples for each Attribute on the Type
     // e.g.,
     // Person -> Attribute -> Age
     // Person -> Attribute -> Date of Birth
-    for (let attributeId of attributeIds) {
+    for (const attributeId of attributeIds) {
       const relationshipTriples = createRelationship({
         relationTypeId: SYSTEM_IDS.ATTRIBUTES,
         fromId: typeId,

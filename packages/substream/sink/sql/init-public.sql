@@ -148,8 +148,7 @@ CREATE TABLE public.triples (
     text_value text,
     entity_value_id text REFERENCES public.entities(id),
     created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    is_stale boolean NOT NULL
+    created_at_block integer NOT NULL
 );
 
 CREATE TABLE public.versions (
@@ -185,8 +184,8 @@ CREATE TABLE public.ops (
     id text PRIMARY KEY NOT NULL,
     type op_type NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
-    attribute_id text NOT NULL REFERENCES public.entities(id),
+    entity_id text REFERENCES public.entities(id),
+    attribute_id text REFERENCES public.entities(id),
     value_type triple_value_type NOT NULL,
     number_value text,
     text_value text,
@@ -279,6 +278,9 @@ ALTER TABLE
 
 ALTER TABLE
     public.triples DISABLE TRIGGER ALL;
+
+ALTER TABLE
+    public.ops DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.space_subspaces DISABLE TRIGGER ALL;

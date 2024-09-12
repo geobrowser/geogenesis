@@ -106,23 +106,21 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
     const writtenProposals = yield* _(
       Effect.tryPromise({
         try: async () => {
-          // @TODO: Batch since there might be postgres byte limits. See upsertChunked
           await Promise.all([
             // Content proposals
             Proposals.upsert(schemaEditProposals.proposals),
             ProposedVersions.upsert(schemaEditProposals.proposedVersions),
-            Ops.upsert(schemaEditProposals.ops),
+            Ops.upsert(schemaEditProposals.ops, { chunk: true }),
 
             // Subspace proposals
             Proposals.upsert(schemaSubspaceProposals.proposals),
-            ProposedSubspaces.upsert(schemaSubspaceProposals.proposedSubspaces),
-
             // Editorship proposals
             Proposals.upsert(schemaEditorshipProposals.proposals),
-            ProposedEditors.upsert(schemaEditorshipProposals.proposedEditors),
-
             // Membership proposals
             Proposals.upsert(schemaMembershipProposals.proposals),
+
+            ProposedSubspaces.upsert(schemaSubspaceProposals.proposedSubspaces),
+            ProposedEditors.upsert(schemaEditorshipProposals.proposedEditors),
             ProposedMembers.upsert(schemaMembershipProposals.proposedMembers),
           ]);
         },
@@ -138,9 +136,11 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       const error = writtenProposals.left;
       telemetry.captureException(error);
 
+      console.log('error', error);
+
       slog({
         requestId: block.requestId,
-        message: `Could not write created proposals: ${error.message}`,
+        message: `Could not write created proposals: ${error.message} ${error.cause}`,
         level: 'error',
       });
 

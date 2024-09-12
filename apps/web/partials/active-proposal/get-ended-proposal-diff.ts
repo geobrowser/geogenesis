@@ -5,7 +5,7 @@ import { Proposal } from '~/core/io/dto/proposals';
 import { EntityId } from '~/core/io/schema';
 import { fetchProposal } from '~/core/io/subgraph';
 import { Triple as TripleType } from '~/core/types';
-import { BlockValueType, EntityChange } from '~/core/utils/change/change';
+import { BlockValueType, EntityChange } from '~/core/utils/change/types';
 import { Triples } from '~/core/utils/triples';
 
 export async function getEndedProposalDiff(

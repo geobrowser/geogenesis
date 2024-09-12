@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
@@ -7,7 +7,7 @@ import { type BlockEvent } from '../../types';
 import { pool } from '../../utils/pool';
 import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
-import { Entities, EntitySpaces, SpaceMetadata, Triples, Types } from '~/sink/db';
+import { EntitySpaces, SpaceMetadata, Triples, Types } from '~/sink/db';
 import { Relations } from '~/sink/db/relations';
 import { slog } from '~/sink/utils/slog';
 
@@ -398,7 +398,6 @@ function maybeUpdateEntityNameAfterDeletedNameTriple(
             entity_id: triple.entity_id,
             attribute_id: SYSTEM_IDS.NAME,
             value_type: 'TEXT',
-            is_stale: false,
           })
           .run(pool),
       catch: error =>

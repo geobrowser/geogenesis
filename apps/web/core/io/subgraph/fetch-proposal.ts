@@ -9,7 +9,7 @@ import { Proposal, ProposalDto } from '../dto/proposals';
 import { SubstreamProposal } from '../schema';
 import { fetchProfile } from './fetch-profile';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { spaceMetadataFragment } from './fragments';
+import { proposedVersionFragment, spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 export const getFetchProposalQuery = (id: string) => `query {
@@ -31,8 +31,10 @@ export const getFetchProposalQuery = (id: string) => `query {
     }
 
     createdAtBlock
-    createdById
     createdAt
+    createdBy {
+      id
+    }
     startTime
     endTime
     status
@@ -47,18 +49,9 @@ export const getFetchProposalQuery = (id: string) => `query {
       }
     }
 
-    createdBy {
-      id
-    }
-
     proposedVersions {
       nodes {
-        id
-        createdById
-        entity {
-          id
-          name
-        }
+        ${proposedVersionFragment}
       }
     }
   }

@@ -80,7 +80,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
             // Content proposals
             Proposals.upsert(schemaEditProposals.proposals),
             ProposedVersions.upsert(schemaEditProposals.proposedVersions),
-            Ops.upsert(schemaEditProposals.ops),
+            Ops.upsert(schemaEditProposals.ops, { chunk: true }),
           ]);
         },
         catch: error => {
@@ -97,7 +97,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
 
       slog({
         requestId: block.requestId,
-        message: 'Could not write proposals for edits without proposals',
+        message: `Could not write proposals for edits without proposals ${error.message}`,
         level: 'error',
       });
 

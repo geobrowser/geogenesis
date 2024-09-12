@@ -1,3 +1,5 @@
+'use client';
+
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
@@ -8,7 +10,7 @@ import * as React from 'react';
 import { useCallback } from 'react';
 
 import { EntityId } from '~/core/io/schema';
-import type { EntityChange } from '~/core/utils/change/change';
+import { EntityChange } from '~/core/utils/change/types';
 import { GeoDate } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
@@ -20,11 +22,11 @@ import { Spacer } from '~/design-system/spacer';
 
 type ChangedEntityProps = {
   change: EntityChange;
-  unstagedChanges: Record<string, Record<string, boolean>>;
-  setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
+  // unstagedChanges: Record<string, Record<string, boolean>>;
+  // setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
-export const ChangedEntity = ({ change, unstagedChanges, setUnstagedChanges }: ChangedEntityProps) => {
+export const ChangedEntity = ({ change }: ChangedEntityProps) => {
   const handleDeleteActions = useCallback(() => {
     // @TODO(database)
   }, []);
@@ -55,8 +57,8 @@ export const ChangedEntity = ({ change, unstagedChanges, setUnstagedChanges }: C
           key={`${change.id}-${change.id}`}
           changes={change.changes}
           entityId={change.id}
-          unstagedChanges={unstagedChanges}
-          setUnstagedChanges={setUnstagedChanges}
+          // unstagedChanges={unstagedChanges}
+          // setUnstagedChanges={setUnstagedChanges}
         />
       </div>
     </div>
@@ -241,32 +243,32 @@ export const ChangedEntity = ({ change, unstagedChanges, setUnstagedChanges }: C
 type ChangedAttributeProps = {
   changes: EntityChange['changes'];
   entityId: EntityId;
-  unstagedChanges: Record<string, Record<string, boolean>>;
-  setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
+  // unstagedChanges: Record<string, Record<string, boolean>>;
+  // setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
-const ChangedAttribute = ({ changes, entityId, unstagedChanges, setUnstagedChanges }: ChangedAttributeProps) => {
+const ChangedAttribute = ({ changes, entityId }: ChangedAttributeProps) => {
   const handleDeleteActions = useCallback(() => {
     // @TODO(database)
   }, []);
 
-  const handleStaging = (attributeId: string, unstaged: boolean) => {
-    if (!unstaged) {
-      setUnstagedChanges({
-        ...unstagedChanges,
-        [entityId]: {
-          ...(unstagedChanges[entityId] ?? {}),
-          [attributeId]: true,
-        },
-      });
-    } else {
-      const newUnstagedChanges: Record<string, Record<string, boolean>> = { ...unstagedChanges };
-      if (newUnstagedChanges?.[entityId] && newUnstagedChanges?.[entityId]?.[attributeId]) {
-        delete newUnstagedChanges?.[entityId]?.[attributeId];
-      }
-      setUnstagedChanges(newUnstagedChanges);
-    }
-  };
+  // const handleStaging = (attributeId: string, unstaged: boolean) => {
+  //   if (!unstaged) {
+  //     setUnstagedChanges({
+  //       ...unstagedChanges,
+  //       [entityId]: {
+  //         ...(unstagedChanges[entityId] ?? {}),
+  //         [attributeId]: true,
+  //       },
+  //     });
+  //   } else {
+  //     const newUnstagedChanges: Record<string, Record<string, boolean>> = { ...unstagedChanges };
+  //     if (newUnstagedChanges?.[entityId] && newUnstagedChanges?.[entityId]?.[attributeId]) {
+  //       delete newUnstagedChanges?.[entityId]?.[attributeId];
+  //     }
+  //     setUnstagedChanges(newUnstagedChanges);
+  //   }
+  // };
 
   return changes.map(change => {
     const attributeId = change.attribute.id;
@@ -276,7 +278,8 @@ const ChangedAttribute = ({ changes, entityId, unstagedChanges, setUnstagedChang
     const { before, after } = change;
     const name = change.attribute.name ?? change.attribute.id;
 
-    const unstaged = Object.hasOwn(unstagedChanges[entityId] ?? {}, attributeId);
+    // const unstaged = Object.hasOwn(unstagedChanges[entityId] ?? {}, attributeId);
+    const unstaged = false;
 
     switch (change.type) {
       case 'TEXT': {
@@ -306,7 +309,7 @@ const ChangedAttribute = ({ changes, entityId, unstagedChanges, setUnstagedChang
                   className="opacity-0 group-hover:opacity-100"
                 />
                 <SquareButton
-                  onClick={() => handleStaging(attributeId, unstaged)}
+                  // onClick={() => handleStaging(attributeId, unstaged)}
                   icon={unstaged ? <Blank /> : <Tick />}
                 />
               </div>
@@ -343,7 +346,7 @@ const ChangedAttribute = ({ changes, entityId, unstagedChanges, setUnstagedChang
                   className="opacity-0 group-hover:opacity-100"
                 />
                 <SquareButton
-                  onClick={() => handleStaging(attributeId, unstaged)}
+                  // onClick={() => handleStaging(attributeId, unstaged)}
                   icon={unstaged ? <Blank /> : <Tick />}
                 />
               </div>
@@ -408,7 +411,7 @@ const ChangedAttribute = ({ changes, entityId, unstagedChanges, setUnstagedChang
                   className="opacity-0 group-hover:opacity-100"
                 />
                 <SquareButton
-                  onClick={() => handleStaging(attributeId, unstaged)}
+                  // onClick={() => handleStaging(attributeId, unstaged)}
                   icon={unstaged ? <Blank /> : <Tick />}
                 />
               </div>
@@ -447,7 +450,7 @@ const ChangedAttribute = ({ changes, entityId, unstagedChanges, setUnstagedChang
                   className="opacity-0 group-hover:opacity-100"
                 />
                 <SquareButton
-                  onClick={() => handleStaging(attributeId, unstaged)}
+                  // onClick={() => handleStaging(attributeId, unstaged)}
                   icon={unstaged ? <Blank /> : <Tick />}
                 />
               </div>

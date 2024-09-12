@@ -17,7 +17,6 @@ export class Triples {
           'space_id',
           'text_value',
           'value_type',
-          'is_stale',
         ],
       })
       .run(pool);
