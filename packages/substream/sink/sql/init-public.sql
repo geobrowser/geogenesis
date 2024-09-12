@@ -47,29 +47,6 @@ CREATE TABLE public.entity_types (
     created_at_block integer NOT NULL
 );
 
-CREATE TABLE public.onchain_profiles (
-    id text PRIMARY KEY,
-    account_id text REFERENCES public.accounts(id) NOT NULL,
-    home_space_id text REFERENCES public.spaces(id) NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
-);
-
--- ALTER TABLE
---     public.entities
--- ADD
---     CONSTRAINT attribute_value_type_id_fk FOREIGN KEY (attribute_value_type_id) REFERENCES public.entities(id);
-CREATE TABLE public.log_entries (
-    id text PRIMARY KEY,
-    created_at_block text NOT NULL,
-    uri text NOT NULL,
-    created_by_id text NOT NULL REFERENCES public.accounts(id),
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    mime_type text,
-    decoded text,
-    json text
-);
-
 CREATE TABLE public.relations (
     id text PRIMARY KEY NOT NULL,
     type_of_id text REFERENCES public.entities(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
@@ -107,16 +84,6 @@ CREATE TABLE public.proposals (
     edit_id text REFERENCES public.edits(id),
     start_time integer NOT NULL,
     end_time integer NOT NULL
-);
-
-CREATE TABLE public.proposed_versions (
-    id text PRIMARY KEY,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    created_by_id text NOT NULL REFERENCES public.accounts(id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
-    proposal_id text NOT NULL REFERENCES public.proposals(id),
-    space_id text NOT NULL REFERENCES public.spaces(id)
 );
 
 CREATE TABLE public.space_editors (
@@ -163,7 +130,7 @@ CREATE TABLE public.versions (
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
-    proposed_version_id text NOT NULL REFERENCES public.proposed_versions(id),
+    proposal_id text NOT NULL REFERENCES public.proposals(id),
     entity_id text NOT NULL REFERENCES public.entities(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
@@ -259,13 +226,7 @@ ALTER TABLE
     public.entity_types DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.log_entries DISABLE TRIGGER ALL;
-
-ALTER TABLE
     public.proposals DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.proposed_versions DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.triples DISABLE TRIGGER ALL;

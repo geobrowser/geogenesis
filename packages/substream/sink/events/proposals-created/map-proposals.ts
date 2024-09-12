@@ -1,4 +1,3 @@
-import { createGeoId } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import { createVersionId } from '../../utils/id';
@@ -189,11 +188,11 @@ function mapEditProposalToSchema(
   block: BlockEvent
 ): {
   proposals: S.proposals.Insertable[];
-  proposedVersions: S.proposed_versions.Insertable[];
+  versions: S.versions.Insertable[];
   edits: S.edits.Insertable[];
 } {
   const proposalsToWrite: S.proposals.Insertable[] = [];
-  const proposedVersionsToWrite: S.proposed_versions.Insertable[] = [];
+  const versionsToWrite: S.versions.Insertable[] = [];
   const editsToWrite: S.edits.Insertable[] = [];
 
   for (const p of proposals) {
@@ -218,6 +217,7 @@ function mapEditProposalToSchema(
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
+      edit_id: p.proposalId,
       space_id: spaceId,
       status: 'proposed',
     } satisfies S.proposals.Insertable);
@@ -225,7 +225,7 @@ function mapEditProposalToSchema(
     const uniqueEntityIds = new Set(p.ops.map(action => action.triple.entity));
 
     for (const entityId of [...uniqueEntityIds.values()]) {
-      proposedVersionsToWrite.push({
+      versionsToWrite.push({
         // For now we use a deterministic version for the proposed version id
         // so we can easily derive it for the op -> proposed version mapping.
         id: createVersionId({
@@ -237,14 +237,14 @@ function mapEditProposalToSchema(
         created_at: Number(p.startTime),
         created_by_id: p.creator,
         proposal_id: p.proposalId,
-        space_id: spaceId,
-      } satisfies S.proposed_versions.Insertable);
+        space_id: p.space,
+      } satisfies S.versions.Insertable);
     }
   }
 
   return {
     proposals: proposalsToWrite,
-    proposedVersions: proposedVersionsToWrite,
+    versions: versionsToWrite,
     edits: editsToWrite,
   };
 }

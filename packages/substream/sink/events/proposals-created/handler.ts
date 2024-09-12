@@ -1,7 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
-import { Accounts, Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, ProposedVersions } from '~/sink/db';
+import { Accounts, Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
@@ -102,7 +102,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
           await Promise.all([
             // Content proposals
             Proposals.upsert(schemaEditProposals.proposals),
-            ProposedVersions.upsert(schemaEditProposals.proposedVersions),
+            Versions.upsert(schemaEditProposals.versions),
             Edits.upsert(schemaEditProposals.edits),
 
             // Subspace proposals

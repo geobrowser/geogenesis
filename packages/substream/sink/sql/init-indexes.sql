@@ -28,20 +28,17 @@ CREATE INDEX edits_created_by_id
 CREATE INDEX proposal_edit_id
     on proposals (edit_id);
 
-CREATE INDEX proposal_proposed_versions
-    on proposed_versions (proposal_id);
+CREATE INDEX versions_proposal_id
+    on versions (proposal_id);
 
-CREATE INDEX proposal_space_id
-    on proposed_versions (space_id);
+CREATE INDEX versions_created_by_id
+    on versions (created_by_id);
 
-CREATE INDEX proposal_versions 
-    on proposed_versions (proposal_id);
+CREATE INDEX versions_entity_id
+    on versions (entity_id);
 
-CREATE INDEX onchain_profile_account_id
-    on onchain_profiles (account_id);
-
-CREATE INDEX onchain_profile_space_id
-    on onchain_profiles (home_space_id);
+CREATE INDEX versions_space_id
+    on versions (space_id);
 
 CREATE INDEX relations_to_entity_id
     on relations (to_entity_id);

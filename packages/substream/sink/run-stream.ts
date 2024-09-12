@@ -26,10 +26,8 @@ import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleMemberRemoved } from './events/member-removed/handler';
 import { ZodMemberRemovedStreamResponse } from './events/member-removed/parser';
-import { handleOnchainProfilesRegistered } from './events/onchain-profiles-registered/handler';
-import { ZodOnchainProfilesRegisteredStreamResponse } from './events/onchain-profiles-registered/parser';
 import { getEditsProposalsFromIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
-import { ProposalDoesNotExistError, handleProposalsProcessed } from './events/proposal-processed/handler';
+import { handleProposalsProcessed } from './events/proposal-processed/handler';
 import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
   ZodProposalCreatedStreamResponse,
@@ -193,7 +191,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
           const proposalCreatedResponse = ZodProposalCreatedStreamResponse.safeParse(jsonOutput);
           const proposalProcessedResponse = ZodProposalProcessedStreamResponse.safeParse(jsonOutput);
           const votesCast = ZodVotesCastStreamResponse.safeParse(jsonOutput);
-          const profilesRegistered = ZodOnchainProfilesRegisteredStreamResponse.safeParse(jsonOutput);
           const executedProposals = ZodProposalExecutedStreamResponse.safeParse(jsonOutput);
           const membersAdded = ZodMemberAddedStreamResponse.safeParse(jsonOutput);
           const membersRemoved = ZodMemberRemovedStreamResponse.safeParse(jsonOutput);
@@ -210,7 +207,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             proposalCreatedResponse.success ||
             proposalProcessedResponse.success ||
             votesCast.success ||
-            profilesRegistered.success ||
             executedProposals.success ||
             membersAdded.success ||
             editorsAdded.success ||
@@ -228,17 +224,6 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
                 timestamp,
                 hash: message.clock?.id ?? '',
                 network: NETWORK_IDS.GEO,
-              })
-            );
-          }
-
-          if (profilesRegistered.success) {
-            yield* _(
-              handleOnchainProfilesRegistered(profilesRegistered.data.profilesRegistered, {
-                blockNumber,
-                cursor,
-                timestamp,
-                requestId,
               })
             );
           }
