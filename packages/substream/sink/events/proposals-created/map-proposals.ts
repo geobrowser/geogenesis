@@ -2,7 +2,7 @@ import type * as S from 'zapatos/schema';
 
 import { createVersionId } from '../../utils/id';
 import type { EditProposal, EditorshipProposal, MembershipProposal, SubspaceProposal } from './parser';
-import type { BlockEvent } from '~/sink/types';
+import type { BlockEvent, Op } from '~/sink/types';
 
 function groupProposalsByType(
   proposals: (MembershipProposal | SubspaceProposal | EditorshipProposal | EditProposal)[]
@@ -190,10 +190,12 @@ function mapEditProposalToSchema(
   proposals: S.proposals.Insertable[];
   versions: S.versions.Insertable[];
   edits: S.edits.Insertable[];
+  opsByVersionId: Map<string, Op[]>;
 } {
   const proposalsToWrite: S.proposals.Insertable[] = [];
   const versionsToWrite: S.versions.Insertable[] = [];
   const editsToWrite: S.edits.Insertable[] = [];
+  const opsByVersionId = new Map<string, Op[]>();
 
   for (const p of proposals) {
     const spaceId = p.space;
@@ -225,13 +227,15 @@ function mapEditProposalToSchema(
     const uniqueEntityIds = new Set(p.ops.map(action => action.triple.entity));
 
     for (const entityId of [...uniqueEntityIds.values()]) {
+      // For now we use a deterministic version for the proposed version id
+      // so we can easily derive it for the op -> proposed version mapping.
+      const id = createVersionId({
+        entityId,
+        proposalId: p.proposalId,
+      });
+
       versionsToWrite.push({
-        // For now we use a deterministic version for the proposed version id
-        // so we can easily derive it for the op -> proposed version mapping.
-        id: createVersionId({
-          entityId,
-          proposalId: p.proposalId,
-        }),
+        id,
         entity_id: entityId,
         created_at_block: block.blockNumber,
         created_at: Number(p.startTime),
@@ -239,6 +243,8 @@ function mapEditProposalToSchema(
         proposal_id: p.proposalId,
         space_id: p.space,
       } satisfies S.versions.Insertable);
+
+      opsByVersionId.set(id, p.ops);
     }
   }
 
@@ -246,6 +252,7 @@ function mapEditProposalToSchema(
     proposals: proposalsToWrite,
     versions: versionsToWrite,
     edits: editsToWrite,
+    opsByVersionId,
   };
 }
 

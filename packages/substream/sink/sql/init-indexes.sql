@@ -10,15 +10,6 @@ CREATE INDEX entity_space ON public.entity_spaces(entity_id, space_id);
 CREATE INDEX triple_entity_id
     on triples (entity_id);
 
-CREATE INDEX versions_entity_id
-    on versions (entity_id);
-
--- CREATE INDEX triple_versions_triple_index
---     on triple_versions (triple_id);
-
--- CREATE INDEX triple_versions_version_index
---     on triple_versions (version_id);
-
 CREATE INDEX edits_space_id
     on edits (space_id);
 

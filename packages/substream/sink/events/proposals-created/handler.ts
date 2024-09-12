@@ -3,6 +3,7 @@ import { Effect, Either } from 'effect';
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
 import { Accounts, Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
+import { populateContent } from '~/sink/entries/populate-content';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
 import type {
@@ -129,8 +130,6 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       const error = writtenProposals.left;
       telemetry.captureException(error);
 
-      console.log('error', error);
-
       slog({
         requestId: block.requestId,
         message: `Could not write created proposals: ${error.message} ${error.cause}`,
@@ -144,5 +143,16 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       requestId: block.requestId,
       message: 'Created proposals written successfully!',
     });
+
+    const populateResult = yield* _(
+      Effect.either(populateContent(schemaEditProposals.versions, schemaEditProposals.opsByVersionId, block))
+    );
+
+    if (Either.isRight(populateResult)) {
+      slog({
+        requestId: block.requestId,
+        message: 'Edits from content proposals written successfully!',
+      });
+    }
   });
 }

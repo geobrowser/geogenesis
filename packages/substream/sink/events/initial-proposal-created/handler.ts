@@ -4,6 +4,7 @@ import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-
 import type { EditProposal } from '../proposals-created/parser';
 import { Accounts, Proposals, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
+import { populateContent } from '~/sink/entries/populate-content';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
@@ -103,6 +104,17 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       });
 
       return;
+    }
+
+    const populateResult = yield* _(
+      Effect.either(populateContent(schemaEditProposals.versions, schemaEditProposals.opsByVersionId, block))
+    );
+
+    if (Either.isRight(populateResult)) {
+      slog({
+        requestId: block.requestId,
+        message: 'Edits from content proposals written successfully!',
+      });
     }
 
     slog({
