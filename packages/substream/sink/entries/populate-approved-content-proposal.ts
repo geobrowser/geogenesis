@@ -8,7 +8,6 @@ import { populateTriples } from '../events/proposal-processed/populate-triples';
 import type { EditProposal } from '../events/proposals-created/parser';
 import type { BlockEvent, Op } from '../types';
 import { upsertChunked } from '../utils/db';
-import { createVersionId } from '../utils/id';
 import { pool } from '../utils/pool';
 
 export function populateApprovedContentProposal(
@@ -21,11 +20,11 @@ export function populateApprovedContentProposal(
   block: BlockEvent
 ) {
   return Effect.gen(function* (awaited) {
-    const proposedVersionsByProposal = yield* awaited(
+    const versionsByProposal = yield* awaited(
       Effect.all(
         proposals.map(p => {
           return Effect.tryPromise({
-            try: () => db.select('proposed_versions', { proposal_id: p.proposalId }).run(pool),
+            try: () => db.select('versions', { proposal_id: p.proposalId }).run(pool),
             catch: error => new Error(`Failed to fetch proposed versions. ${(error as Error).message}`),
           });
         })
@@ -47,8 +46,8 @@ export function populateApprovedContentProposal(
     // We might get multiple proposals at once in the same block that change the same set of entities.
     // We need to make  sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
-    for (const proposedVersions of proposedVersionsByProposal) {
-      const entities = proposedVersions.map(pv => {
+    for (const versions of versionsByProposal) {
+      const entities = versions.map(pv => {
         const newEntity: Schema.Insertable = {
           id: pv.entity_id,
           created_by_id: pv.created_by_id,
@@ -59,23 +58,6 @@ export function populateApprovedContentProposal(
         };
 
         return newEntity;
-      });
-
-      const versions = proposedVersions.map(pv => {
-        const newVersion: Schema.versions.Insertable = {
-          id: createVersionId({
-            entityId: pv.entity_id,
-            proposalId: pv.proposal_id,
-          }),
-          entity_id: pv.entity_id,
-          created_at_block: block.blockNumber,
-          created_at: block.timestamp,
-          created_by_id: pv.created_by_id,
-          proposed_version_id: pv.id,
-          space_id: pv.space_id,
-        };
-
-        return newVersion;
       });
 
       // const tripleVersions = yield* awaited(mapTripleVersions(versions));
@@ -113,7 +95,7 @@ export function populateApprovedContentProposal(
        * for a given entity, so we could write the same ops multiple times if there are multiple
        * proposedVersions that change the same entity.
        */
-      const editsWithCreatedById = proposedVersions.map((pv): SchemaTripleEdit => {
+      const editsWithCreatedById = versions.map((pv): SchemaTripleEdit => {
         // Safe to cast with ! since we know that we set this in the mapping earlier in this function
         const ops = opsByProposalId.get(pv.proposal_id)!.filter(o => o.triple.entity === pv.entity_id);
 

@@ -2,7 +2,7 @@ import { Effect, Either } from 'effect';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
-import { Accounts, Proposals, ProposedVersions } from '~/sink/db';
+import { Accounts, Proposals, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
@@ -80,7 +80,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
             // What if we get multiple proposals in the same block with different content types?
             // Content proposals
             Proposals.upsert(schemaEditProposals.proposals),
-            ProposedVersions.upsert(schemaEditProposals.proposedVersions),
+            Versions.upsert(schemaEditProposals.versions),
             Edits.upsert(schemaEditProposals.edits),
           ]);
         },

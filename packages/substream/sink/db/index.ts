@@ -3,7 +3,7 @@ export * from './proposals';
 export * from './proposed-editors';
 export * from './proposed-members';
 export * from './proposed-subspaces';
-export * from './proposed-versions';
+export * from './versions';
 export * from './space-members';
 export * from './space-editors';
 export * from './spaces';

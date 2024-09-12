@@ -1180,442 +1180,6 @@ declare module 'zapatos/schema' {
   }
 
   /**
-   * **log_entries**
-   * - Table in database
-   */
-  export namespace log_entries {
-    export type Table = 'log_entries';
-    export interface Selectable {
-      /**
-      * **log_entries.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string;
-      /**
-      * **log_entries.created_at_block**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block: string;
-      /**
-      * **log_entries.uri**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      uri: string;
-      /**
-      * **log_entries.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id: string;
-      /**
-      * **log_entries.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id: string;
-      /**
-      * **log_entries.mime_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      mime_type: string | null;
-      /**
-      * **log_entries.decoded**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      decoded: string | null;
-      /**
-      * **log_entries.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json: string | null;
-    }
-    export interface JSONSelectable {
-      /**
-      * **log_entries.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string;
-      /**
-      * **log_entries.created_at_block**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block: string;
-      /**
-      * **log_entries.uri**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      uri: string;
-      /**
-      * **log_entries.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id: string;
-      /**
-      * **log_entries.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id: string;
-      /**
-      * **log_entries.mime_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      mime_type: string | null;
-      /**
-      * **log_entries.decoded**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      decoded: string | null;
-      /**
-      * **log_entries.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json: string | null;
-    }
-    export interface Whereable {
-      /**
-      * **log_entries.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **log_entries.created_at_block**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **log_entries.uri**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      uri?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **log_entries.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **log_entries.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **log_entries.mime_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      mime_type?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **log_entries.decoded**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      decoded?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **log_entries.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-    }
-    export interface Insertable {
-      /**
-      * **log_entries.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **log_entries.created_at_block**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **log_entries.uri**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      uri: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **log_entries.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **log_entries.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **log_entries.mime_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      mime_type?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
-      /**
-      * **log_entries.decoded**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      decoded?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
-      /**
-      * **log_entries.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
-    }
-    export interface Updatable {
-      /**
-      * **log_entries.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **log_entries.created_at_block**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **log_entries.uri**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      uri?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **log_entries.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **log_entries.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **log_entries.mime_type**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      mime_type?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
-      /**
-      * **log_entries.decoded**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      decoded?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
-      /**
-      * **log_entries.json**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      json?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
-    }
-    export type UniqueIndex = 'log_entries_pkey';
-    export type Column = keyof Selectable;
-    export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
-    export type SQL = SQLExpression | SQLExpression[];
-  }
-
-  /**
-   * **onchain_profiles**
-   * - Table in database
-   */
-  export namespace onchain_profiles {
-    export type Table = 'onchain_profiles';
-    export interface Selectable {
-      /**
-      * **onchain_profiles.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string;
-      /**
-      * **onchain_profiles.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id: string;
-      /**
-      * **onchain_profiles.home_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      home_space_id: string;
-      /**
-      * **onchain_profiles.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at: number;
-      /**
-      * **onchain_profiles.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block: number;
-    }
-    export interface JSONSelectable {
-      /**
-      * **onchain_profiles.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string;
-      /**
-      * **onchain_profiles.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id: string;
-      /**
-      * **onchain_profiles.home_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      home_space_id: string;
-      /**
-      * **onchain_profiles.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at: number;
-      /**
-      * **onchain_profiles.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block: number;
-    }
-    export interface Whereable {
-      /**
-      * **onchain_profiles.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **onchain_profiles.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **onchain_profiles.home_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      home_space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **onchain_profiles.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **onchain_profiles.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
-    }
-    export interface Insertable {
-      /**
-      * **onchain_profiles.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **onchain_profiles.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **onchain_profiles.home_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      home_space_id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **onchain_profiles.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
-      /**
-      * **onchain_profiles.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
-    }
-    export interface Updatable {
-      /**
-      * **onchain_profiles.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **onchain_profiles.account_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      account_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **onchain_profiles.home_space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      home_space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **onchain_profiles.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
-      /**
-      * **onchain_profiles.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
-    }
-    export type UniqueIndex = 'onchain_profiles_pkey';
-    export type Column = keyof Selectable;
-    export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
-    export type SQL = SQLExpression | SQLExpression[];
-  }
-
-  /**
    * **proposal_votes**
    * - Table in database
    */
@@ -2864,239 +2428,6 @@ declare module 'zapatos/schema' {
       type?: subspace_proposal_type | db.Parameter<subspace_proposal_type> | db.SQLFragment | db.SQLFragment<any, subspace_proposal_type | db.Parameter<subspace_proposal_type> | db.SQLFragment>;
     }
     export type UniqueIndex = 'proposed_subspaces_pkey';
-    export type Column = keyof Selectable;
-    export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-    export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
-    export type SQL = SQLExpression | SQLExpression[];
-  }
-
-  /**
-   * **proposed_versions**
-   * - Table in database
-   */
-  export namespace proposed_versions {
-    export type Table = 'proposed_versions';
-    export interface Selectable {
-      /**
-      * **proposed_versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string;
-      /**
-      * **proposed_versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at: number;
-      /**
-      * **proposed_versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block: number;
-      /**
-      * **proposed_versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id: string;
-      /**
-      * **proposed_versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id: string;
-      /**
-      * **proposed_versions.proposal_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposal_id: string;
-      /**
-      * **proposed_versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id: string;
-    }
-    export interface JSONSelectable {
-      /**
-      * **proposed_versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string;
-      /**
-      * **proposed_versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at: number;
-      /**
-      * **proposed_versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block: number;
-      /**
-      * **proposed_versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id: string;
-      /**
-      * **proposed_versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id: string;
-      /**
-      * **proposed_versions.proposal_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposal_id: string;
-      /**
-      * **proposed_versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id: string;
-    }
-    export interface Whereable {
-      /**
-      * **proposed_versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **proposed_versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **proposed_versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **proposed_versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **proposed_versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **proposed_versions.proposal_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **proposed_versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-    }
-    export interface Insertable {
-      /**
-      * **proposed_versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **proposed_versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at: number | db.Parameter<number> | db.SQLFragment;
-      /**
-      * **proposed_versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block: number | db.Parameter<number> | db.SQLFragment;
-      /**
-      * **proposed_versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **proposed_versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **proposed_versions.proposal_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposal_id: string | db.Parameter<string> | db.SQLFragment;
-      /**
-      * **proposed_versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id: string | db.Parameter<string> | db.SQLFragment;
-    }
-    export interface Updatable {
-      /**
-      * **proposed_versions.id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **proposed_versions.created_at**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
-      /**
-      * **proposed_versions.created_at_block**
-      * - `int4` in database
-      * - `NOT NULL`, no default
-      */
-      created_at_block?: number | db.Parameter<number> | db.SQLFragment | db.SQLFragment<any, number | db.Parameter<number> | db.SQLFragment>;
-      /**
-      * **proposed_versions.created_by_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **proposed_versions.entity_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      entity_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **proposed_versions.proposal_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **proposed_versions.space_id**
-      * - `text` in database
-      * - `NOT NULL`, no default
-      */
-      space_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-    }
-    export type UniqueIndex = 'proposed_versions_pkey';
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
     export type SQLExpression = Table | db.ColumnNames<Updatable | (keyof Updatable)[]> | db.ColumnValues<Updatable> | Whereable | Column | db.ParentColumn | db.GenericSQLExpression;
@@ -4436,11 +3767,11 @@ declare module 'zapatos/schema' {
       */
       created_by_id: string;
       /**
-      * **versions.proposed_version_id**
+      * **versions.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      proposed_version_id: string;
+      proposal_id: string;
       /**
       * **versions.entity_id**
       * - `text` in database
@@ -4480,11 +3811,11 @@ declare module 'zapatos/schema' {
       */
       created_by_id: string;
       /**
-      * **versions.proposed_version_id**
+      * **versions.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      proposed_version_id: string;
+      proposal_id: string;
       /**
       * **versions.entity_id**
       * - `text` in database
@@ -4524,11 +3855,11 @@ declare module 'zapatos/schema' {
       */
       created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **versions.proposed_version_id**
+      * **versions.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
       * **versions.entity_id**
       * - `text` in database
@@ -4568,11 +3899,11 @@ declare module 'zapatos/schema' {
       */
       created_by_id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **versions.proposed_version_id**
+      * **versions.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      proposed_version_id: string | db.Parameter<string> | db.SQLFragment;
+      proposal_id: string | db.Parameter<string> | db.SQLFragment;
       /**
       * **versions.entity_id**
       * - `text` in database
@@ -4612,11 +3943,11 @@ declare module 'zapatos/schema' {
       */
       created_by_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
-      * **versions.proposed_version_id**
+      * **versions.proposal_id**
       * - `text` in database
       * - `NOT NULL`, no default
       */
-      proposed_version_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      proposal_id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
       /**
       * **versions.entity_id**
       * - `text` in database
@@ -4640,20 +3971,20 @@ declare module 'zapatos/schema' {
   /* --- aggregate types --- */
 
   export namespace public {  
-    export type Table = accounts.Table | cursors.Table | edits.Table | entities.Table | entity_spaces.Table | entity_types.Table | geo_blocks.Table | log_entries.Table | onchain_profiles.Table | proposal_votes.Table | proposals.Table | proposed_editors.Table | proposed_members.Table | proposed_subspaces.Table | proposed_versions.Table | relations.Table | space_editors.Table | space_members.Table | space_subspaces.Table | spaces.Table | spaces_metadata.Table | triples.Table | versions.Table;
-    export type Selectable = accounts.Selectable | cursors.Selectable | edits.Selectable | entities.Selectable | entity_spaces.Selectable | entity_types.Selectable | geo_blocks.Selectable | log_entries.Selectable | onchain_profiles.Selectable | proposal_votes.Selectable | proposals.Selectable | proposed_editors.Selectable | proposed_members.Selectable | proposed_subspaces.Selectable | proposed_versions.Selectable | relations.Selectable | space_editors.Selectable | space_members.Selectable | space_subspaces.Selectable | spaces.Selectable | spaces_metadata.Selectable | triples.Selectable | versions.Selectable;
-    export type JSONSelectable = accounts.JSONSelectable | cursors.JSONSelectable | edits.JSONSelectable | entities.JSONSelectable | entity_spaces.JSONSelectable | entity_types.JSONSelectable | geo_blocks.JSONSelectable | log_entries.JSONSelectable | onchain_profiles.JSONSelectable | proposal_votes.JSONSelectable | proposals.JSONSelectable | proposed_editors.JSONSelectable | proposed_members.JSONSelectable | proposed_subspaces.JSONSelectable | proposed_versions.JSONSelectable | relations.JSONSelectable | space_editors.JSONSelectable | space_members.JSONSelectable | space_subspaces.JSONSelectable | spaces.JSONSelectable | spaces_metadata.JSONSelectable | triples.JSONSelectable | versions.JSONSelectable;
-    export type Whereable = accounts.Whereable | cursors.Whereable | edits.Whereable | entities.Whereable | entity_spaces.Whereable | entity_types.Whereable | geo_blocks.Whereable | log_entries.Whereable | onchain_profiles.Whereable | proposal_votes.Whereable | proposals.Whereable | proposed_editors.Whereable | proposed_members.Whereable | proposed_subspaces.Whereable | proposed_versions.Whereable | relations.Whereable | space_editors.Whereable | space_members.Whereable | space_subspaces.Whereable | spaces.Whereable | spaces_metadata.Whereable | triples.Whereable | versions.Whereable;
-    export type Insertable = accounts.Insertable | cursors.Insertable | edits.Insertable | entities.Insertable | entity_spaces.Insertable | entity_types.Insertable | geo_blocks.Insertable | log_entries.Insertable | onchain_profiles.Insertable | proposal_votes.Insertable | proposals.Insertable | proposed_editors.Insertable | proposed_members.Insertable | proposed_subspaces.Insertable | proposed_versions.Insertable | relations.Insertable | space_editors.Insertable | space_members.Insertable | space_subspaces.Insertable | spaces.Insertable | spaces_metadata.Insertable | triples.Insertable | versions.Insertable;
-    export type Updatable = accounts.Updatable | cursors.Updatable | edits.Updatable | entities.Updatable | entity_spaces.Updatable | entity_types.Updatable | geo_blocks.Updatable | log_entries.Updatable | onchain_profiles.Updatable | proposal_votes.Updatable | proposals.Updatable | proposed_editors.Updatable | proposed_members.Updatable | proposed_subspaces.Updatable | proposed_versions.Updatable | relations.Updatable | space_editors.Updatable | space_members.Updatable | space_subspaces.Updatable | spaces.Updatable | spaces_metadata.Updatable | triples.Updatable | versions.Updatable;
-    export type UniqueIndex = accounts.UniqueIndex | cursors.UniqueIndex | edits.UniqueIndex | entities.UniqueIndex | entity_spaces.UniqueIndex | entity_types.UniqueIndex | geo_blocks.UniqueIndex | log_entries.UniqueIndex | onchain_profiles.UniqueIndex | proposal_votes.UniqueIndex | proposals.UniqueIndex | proposed_editors.UniqueIndex | proposed_members.UniqueIndex | proposed_subspaces.UniqueIndex | proposed_versions.UniqueIndex | relations.UniqueIndex | space_editors.UniqueIndex | space_members.UniqueIndex | space_subspaces.UniqueIndex | spaces.UniqueIndex | spaces_metadata.UniqueIndex | triples.UniqueIndex | versions.UniqueIndex;
-    export type Column = accounts.Column | cursors.Column | edits.Column | entities.Column | entity_spaces.Column | entity_types.Column | geo_blocks.Column | log_entries.Column | onchain_profiles.Column | proposal_votes.Column | proposals.Column | proposed_editors.Column | proposed_members.Column | proposed_subspaces.Column | proposed_versions.Column | relations.Column | space_editors.Column | space_members.Column | space_subspaces.Column | spaces.Column | spaces_metadata.Column | triples.Column | versions.Column;
+    export type Table = accounts.Table | cursors.Table | edits.Table | entities.Table | entity_spaces.Table | entity_types.Table | geo_blocks.Table | proposal_votes.Table | proposals.Table | proposed_editors.Table | proposed_members.Table | proposed_subspaces.Table | relations.Table | space_editors.Table | space_members.Table | space_subspaces.Table | spaces.Table | spaces_metadata.Table | triples.Table | versions.Table;
+    export type Selectable = accounts.Selectable | cursors.Selectable | edits.Selectable | entities.Selectable | entity_spaces.Selectable | entity_types.Selectable | geo_blocks.Selectable | proposal_votes.Selectable | proposals.Selectable | proposed_editors.Selectable | proposed_members.Selectable | proposed_subspaces.Selectable | relations.Selectable | space_editors.Selectable | space_members.Selectable | space_subspaces.Selectable | spaces.Selectable | spaces_metadata.Selectable | triples.Selectable | versions.Selectable;
+    export type JSONSelectable = accounts.JSONSelectable | cursors.JSONSelectable | edits.JSONSelectable | entities.JSONSelectable | entity_spaces.JSONSelectable | entity_types.JSONSelectable | geo_blocks.JSONSelectable | proposal_votes.JSONSelectable | proposals.JSONSelectable | proposed_editors.JSONSelectable | proposed_members.JSONSelectable | proposed_subspaces.JSONSelectable | relations.JSONSelectable | space_editors.JSONSelectable | space_members.JSONSelectable | space_subspaces.JSONSelectable | spaces.JSONSelectable | spaces_metadata.JSONSelectable | triples.JSONSelectable | versions.JSONSelectable;
+    export type Whereable = accounts.Whereable | cursors.Whereable | edits.Whereable | entities.Whereable | entity_spaces.Whereable | entity_types.Whereable | geo_blocks.Whereable | proposal_votes.Whereable | proposals.Whereable | proposed_editors.Whereable | proposed_members.Whereable | proposed_subspaces.Whereable | relations.Whereable | space_editors.Whereable | space_members.Whereable | space_subspaces.Whereable | spaces.Whereable | spaces_metadata.Whereable | triples.Whereable | versions.Whereable;
+    export type Insertable = accounts.Insertable | cursors.Insertable | edits.Insertable | entities.Insertable | entity_spaces.Insertable | entity_types.Insertable | geo_blocks.Insertable | proposal_votes.Insertable | proposals.Insertable | proposed_editors.Insertable | proposed_members.Insertable | proposed_subspaces.Insertable | relations.Insertable | space_editors.Insertable | space_members.Insertable | space_subspaces.Insertable | spaces.Insertable | spaces_metadata.Insertable | triples.Insertable | versions.Insertable;
+    export type Updatable = accounts.Updatable | cursors.Updatable | edits.Updatable | entities.Updatable | entity_spaces.Updatable | entity_types.Updatable | geo_blocks.Updatable | proposal_votes.Updatable | proposals.Updatable | proposed_editors.Updatable | proposed_members.Updatable | proposed_subspaces.Updatable | relations.Updatable | space_editors.Updatable | space_members.Updatable | space_subspaces.Updatable | spaces.Updatable | spaces_metadata.Updatable | triples.Updatable | versions.Updatable;
+    export type UniqueIndex = accounts.UniqueIndex | cursors.UniqueIndex | edits.UniqueIndex | entities.UniqueIndex | entity_spaces.UniqueIndex | entity_types.UniqueIndex | geo_blocks.UniqueIndex | proposal_votes.UniqueIndex | proposals.UniqueIndex | proposed_editors.UniqueIndex | proposed_members.UniqueIndex | proposed_subspaces.UniqueIndex | relations.UniqueIndex | space_editors.UniqueIndex | space_members.UniqueIndex | space_subspaces.UniqueIndex | spaces.UniqueIndex | spaces_metadata.UniqueIndex | triples.UniqueIndex | versions.UniqueIndex;
+    export type Column = accounts.Column | cursors.Column | edits.Column | entities.Column | entity_spaces.Column | entity_types.Column | geo_blocks.Column | proposal_votes.Column | proposals.Column | proposed_editors.Column | proposed_members.Column | proposed_subspaces.Column | relations.Column | space_editors.Column | space_members.Column | space_subspaces.Column | spaces.Column | spaces_metadata.Column | triples.Column | versions.Column;
   
-    export type AllBaseTables = [accounts.Table, cursors.Table, edits.Table, entities.Table, entity_spaces.Table, entity_types.Table, geo_blocks.Table, log_entries.Table, onchain_profiles.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, proposed_versions.Table, relations.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, spaces_metadata.Table, triples.Table, versions.Table];
+    export type AllBaseTables = [accounts.Table, cursors.Table, edits.Table, entities.Table, entity_spaces.Table, entity_types.Table, geo_blocks.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, relations.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, spaces_metadata.Table, triples.Table, versions.Table];
     export type AllForeignTables = [];
     export type AllViews = [];
     export type AllMaterializedViews = [];
-    export type AllTablesAndViews = [accounts.Table, cursors.Table, edits.Table, entities.Table, entity_spaces.Table, entity_types.Table, geo_blocks.Table, log_entries.Table, onchain_profiles.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, proposed_versions.Table, relations.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, spaces_metadata.Table, triples.Table, versions.Table];
+    export type AllTablesAndViews = [accounts.Table, cursors.Table, edits.Table, entities.Table, entity_spaces.Table, entity_types.Table, geo_blocks.Table, proposal_votes.Table, proposals.Table, proposed_editors.Table, proposed_members.Table, proposed_subspaces.Table, relations.Table, space_editors.Table, space_members.Table, space_subspaces.Table, spaces.Table, spaces_metadata.Table, triples.Table, versions.Table];
   }
 
 
@@ -5182,14 +4513,11 @@ declare module 'zapatos/schema' {
     "entity_spaces": entity_spaces.Selectable;
     "entity_types": entity_types.Selectable;
     "geo_blocks": geo_blocks.Selectable;
-    "log_entries": log_entries.Selectable;
-    "onchain_profiles": onchain_profiles.Selectable;
     "proposal_votes": proposal_votes.Selectable;
     "proposals": proposals.Selectable;
     "proposed_editors": proposed_editors.Selectable;
     "proposed_members": proposed_members.Selectable;
     "proposed_subspaces": proposed_subspaces.Selectable;
-    "proposed_versions": proposed_versions.Selectable;
     "relations": relations.Selectable;
     "space_editors": space_editors.Selectable;
     "space_members": space_members.Selectable;
@@ -5210,14 +4538,11 @@ declare module 'zapatos/schema' {
     "entity_spaces": entity_spaces.JSONSelectable;
     "entity_types": entity_types.JSONSelectable;
     "geo_blocks": geo_blocks.JSONSelectable;
-    "log_entries": log_entries.JSONSelectable;
-    "onchain_profiles": onchain_profiles.JSONSelectable;
     "proposal_votes": proposal_votes.JSONSelectable;
     "proposals": proposals.JSONSelectable;
     "proposed_editors": proposed_editors.JSONSelectable;
     "proposed_members": proposed_members.JSONSelectable;
     "proposed_subspaces": proposed_subspaces.JSONSelectable;
-    "proposed_versions": proposed_versions.JSONSelectable;
     "relations": relations.JSONSelectable;
     "space_editors": space_editors.JSONSelectable;
     "space_members": space_members.JSONSelectable;
@@ -5238,14 +4563,11 @@ declare module 'zapatos/schema' {
     "entity_spaces": entity_spaces.Whereable;
     "entity_types": entity_types.Whereable;
     "geo_blocks": geo_blocks.Whereable;
-    "log_entries": log_entries.Whereable;
-    "onchain_profiles": onchain_profiles.Whereable;
     "proposal_votes": proposal_votes.Whereable;
     "proposals": proposals.Whereable;
     "proposed_editors": proposed_editors.Whereable;
     "proposed_members": proposed_members.Whereable;
     "proposed_subspaces": proposed_subspaces.Whereable;
-    "proposed_versions": proposed_versions.Whereable;
     "relations": relations.Whereable;
     "space_editors": space_editors.Whereable;
     "space_members": space_members.Whereable;
@@ -5266,14 +4588,11 @@ declare module 'zapatos/schema' {
     "entity_spaces": entity_spaces.Insertable;
     "entity_types": entity_types.Insertable;
     "geo_blocks": geo_blocks.Insertable;
-    "log_entries": log_entries.Insertable;
-    "onchain_profiles": onchain_profiles.Insertable;
     "proposal_votes": proposal_votes.Insertable;
     "proposals": proposals.Insertable;
     "proposed_editors": proposed_editors.Insertable;
     "proposed_members": proposed_members.Insertable;
     "proposed_subspaces": proposed_subspaces.Insertable;
-    "proposed_versions": proposed_versions.Insertable;
     "relations": relations.Insertable;
     "space_editors": space_editors.Insertable;
     "space_members": space_members.Insertable;
@@ -5294,14 +4613,11 @@ declare module 'zapatos/schema' {
     "entity_spaces": entity_spaces.Updatable;
     "entity_types": entity_types.Updatable;
     "geo_blocks": geo_blocks.Updatable;
-    "log_entries": log_entries.Updatable;
-    "onchain_profiles": onchain_profiles.Updatable;
     "proposal_votes": proposal_votes.Updatable;
     "proposals": proposals.Updatable;
     "proposed_editors": proposed_editors.Updatable;
     "proposed_members": proposed_members.Updatable;
     "proposed_subspaces": proposed_subspaces.Updatable;
-    "proposed_versions": proposed_versions.Updatable;
     "relations": relations.Updatable;
     "space_editors": space_editors.Updatable;
     "space_members": space_members.Updatable;
@@ -5322,14 +4638,11 @@ declare module 'zapatos/schema' {
     "entity_spaces": entity_spaces.UniqueIndex;
     "entity_types": entity_types.UniqueIndex;
     "geo_blocks": geo_blocks.UniqueIndex;
-    "log_entries": log_entries.UniqueIndex;
-    "onchain_profiles": onchain_profiles.UniqueIndex;
     "proposal_votes": proposal_votes.UniqueIndex;
     "proposals": proposals.UniqueIndex;
     "proposed_editors": proposed_editors.UniqueIndex;
     "proposed_members": proposed_members.UniqueIndex;
     "proposed_subspaces": proposed_subspaces.UniqueIndex;
-    "proposed_versions": proposed_versions.UniqueIndex;
     "relations": relations.UniqueIndex;
     "space_editors": space_editors.UniqueIndex;
     "space_members": space_members.UniqueIndex;
@@ -5350,14 +4663,11 @@ declare module 'zapatos/schema' {
     "entity_spaces": entity_spaces.Column;
     "entity_types": entity_types.Column;
     "geo_blocks": geo_blocks.Column;
-    "log_entries": log_entries.Column;
-    "onchain_profiles": onchain_profiles.Column;
     "proposal_votes": proposal_votes.Column;
     "proposals": proposals.Column;
     "proposed_editors": proposed_editors.Column;
     "proposed_members": proposed_members.Column;
     "proposed_subspaces": proposed_subspaces.Column;
-    "proposed_versions": proposed_versions.Column;
     "relations": relations.Column;
     "space_editors": space_editors.Column;
     "space_members": space_members.Column;
@@ -5378,14 +4688,11 @@ declare module 'zapatos/schema' {
     "entity_spaces": entity_spaces.SQL;
     "entity_types": entity_types.SQL;
     "geo_blocks": geo_blocks.SQL;
-    "log_entries": log_entries.SQL;
-    "onchain_profiles": onchain_profiles.SQL;
     "proposal_votes": proposal_votes.SQL;
     "proposals": proposals.SQL;
     "proposed_editors": proposed_editors.SQL;
     "proposed_members": proposed_members.SQL;
     "proposed_subspaces": proposed_subspaces.SQL;
-    "proposed_versions": proposed_versions.SQL;
     "relations": relations.SQL;
     "space_editors": space_editors.SQL;
     "space_members": space_members.SQL;
