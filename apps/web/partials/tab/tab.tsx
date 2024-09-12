@@ -13,7 +13,13 @@ export type Props = {
   params: { id: string };
 };
 
-export const Tab = async (props: Props & { slug: string; notice?: ReactNode }) => {
+type TabProps = {
+  params: { id: string };
+  slug: string;
+  notice?: ReactNode;
+};
+
+export const Tab = async (props: TabProps) => {
   const { slug } = props;
   const spaceId = props.params.id;
   const pageTypeId = getPageTypeId(slug);
