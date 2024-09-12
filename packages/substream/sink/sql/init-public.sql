@@ -85,19 +85,26 @@ CREATE TYPE public.proposal_status as ENUM ('proposed', 'accepted', 'rejected', 
 -- Maps to 2 or 3 onchain
 CREATE TYPE public.vote_type as ENUM ('accept', 'reject');
 
+CREATE TABLE public.edits (
+    id text PRIMARY KEY,
+    name text NOT NULL,
+    description text,
+    uri text NOT NULL,
+    created_at_block text NOT NULL,
+    created_at integer NOT NULL,
+    created_by_id text NOT NULL REFERENCES public.accounts(id),
+    space_id text NOT NULL REFERENCES public.spaces(id)
+);
+
 CREATE TABLE public.proposals (
     id text PRIMARY KEY,
     onchain_proposal_id text NOT NULL,
     plugin_address text NOT NULL,
     space_id text NOT NULL REFERENCES public.spaces(id),
-    name text NOT NULL,
-    description text,
-    uri text,
     type proposal_type NOT NULL,
     status proposal_status NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
+    edit_id text REFERENCES public.edits(id),
     start_time integer NOT NULL,
     end_time integer NOT NULL
 );
@@ -179,22 +186,6 @@ CREATE TABLE public.proposal_votes (
 );
 
 CREATE TYPE public.op_type as ENUM ('SET_TRIPLE', 'DELETE_TRIPLE');
-
-CREATE TABLE public.ops (
-    id text PRIMARY KEY NOT NULL,
-    type op_type NOT NULL,
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    entity_id text REFERENCES public.entities(id),
-    attribute_id text REFERENCES public.entities(id),
-    value_type triple_value_type NOT NULL,
-    number_value text,
-    text_value text,
-    entity_value_id text REFERENCES public.entities(id),
-    collection_value_id text REFERENCES public.entities(id),
-    proposed_version_id text REFERENCES public.proposed_versions(id) NOT NULL,
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
-);
 
 CREATE TYPE public.subspace_proposal_type as ENUM ('ADD_SUBSPACE', 'REMOVE_SUBSPACE');
 
@@ -278,9 +269,6 @@ ALTER TABLE
 
 ALTER TABLE
     public.triples DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.ops DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.space_subspaces DISABLE TRIGGER ALL;

@@ -9,6 +9,7 @@ import {
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
 import { Accounts, Entities, EntitySpaces, Proposals, Spaces, Triples, Types } from './db';
+import { Edits } from './db/edits';
 import { Relations } from './db/relations';
 import { getTripleFromOp } from './events/get-triple-from-op';
 
@@ -345,15 +346,23 @@ const proposal: s.proposals.Insertable = {
   id: '0',
   onchain_proposal_id: '-1',
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
-  created_at: ROOT_SPACE_CREATED_AT,
   plugin_address: '',
   space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-  name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
   type: 'ADD_EDIT',
   status: 'accepted',
   start_time: ROOT_SPACE_CREATED_AT,
   end_time: ROOT_SPACE_CREATED_AT,
+};
+
+const edit: s.edits.Insertable = {
+  id: '0',
+  name: 'Root Space Bootstrap',
+  description: null,
+  uri: '',
+  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK.toString(),
+  created_at: ROOT_SPACE_CREATED_AT,
+  created_by_id: ROOT_SPACE_CREATED_BY_ID,
+  space_id: SYSTEM_IDS.ROOT_SPACE_ID,
 };
 
 export class BootstrapRootError extends Error {
@@ -398,6 +407,7 @@ export function bootstrapRoot() {
             // Triples.insert(attributeTriples),
 
             Proposals.upsert([proposal]),
+            Edits.upsert([edit]),
             Relations.upsert(relationsForTypesAndAttributes),
           ]);
 

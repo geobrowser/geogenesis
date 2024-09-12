@@ -19,6 +19,15 @@ CREATE INDEX versions_entity_id
 -- CREATE INDEX triple_versions_version_index
 --     on triple_versions (version_id);
 
+CREATE INDEX edits_space_id
+    on edits (space_id);
+
+CREATE INDEX edits_created_by_id
+    on edits (created_by_id);
+
+CREATE INDEX proposal_edit_id
+    on proposals (edit_id);
+
 CREATE INDEX proposal_proposed_versions
     on proposed_versions (proposal_id);
 
@@ -33,9 +42,6 @@ CREATE INDEX onchain_profile_account_id
 
 CREATE INDEX onchain_profile_space_id
     on onchain_profiles (home_space_id);
-
-CREATE INDEX proposed_versions_ops
-    on ops (proposed_version_id);
 
 CREATE INDEX relations_to_entity_id
     on relations (to_entity_id);

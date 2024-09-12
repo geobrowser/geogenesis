@@ -2,7 +2,8 @@ import { Effect, Either } from 'effect';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
-import { Accounts, Ops, Proposals, ProposedVersions } from '~/sink/db';
+import { Accounts, Proposals, ProposedVersions } from '~/sink/db';
+import { Edits } from '~/sink/db/edits';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
@@ -73,14 +74,14 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
     const writtenProposals = yield* _(
       Effect.tryPromise({
         try: async () => {
-          // @TODO: Batch since there might be postgres byte limits. See upsertChunked
+          // @TODO: Transaction
           await Promise.all([
             // @TODO: Should we only attempt to write to the db for the correct content type?
             // What if we get multiple proposals in the same block with different content types?
             // Content proposals
             Proposals.upsert(schemaEditProposals.proposals),
             ProposedVersions.upsert(schemaEditProposals.proposedVersions),
-            Ops.upsert(schemaEditProposals.ops, { chunk: true }),
+            Edits.upsert(schemaEditProposals.edits),
           ]);
         },
         catch: error => {

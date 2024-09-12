@@ -9,7 +9,7 @@ export * from './space-editors';
 export * from './spaces';
 export * from './subspaces';
 export * from './triples';
-export * from './ops';
+export * from './edits';
 export * from './entities';
 export * from './blocks';
 export * from './space-metadata';

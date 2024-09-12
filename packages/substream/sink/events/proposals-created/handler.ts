@@ -1,15 +1,8 @@
 import { Effect, Either } from 'effect';
 
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
-import {
-  Accounts,
-  Ops,
-  Proposals,
-  ProposedEditors,
-  ProposedMembers,
-  ProposedSubspaces,
-  ProposedVersions,
-} from '~/sink/db';
+import { Accounts, Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, ProposedVersions } from '~/sink/db';
+import { Edits } from '~/sink/db/edits';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
 import type {
@@ -110,7 +103,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
             // Content proposals
             Proposals.upsert(schemaEditProposals.proposals),
             ProposedVersions.upsert(schemaEditProposals.proposedVersions),
-            Ops.upsert(schemaEditProposals.ops, { chunk: true }),
+            Edits.upsert(schemaEditProposals.edits),
 
             // Subspace proposals
             Proposals.upsert(schemaSubspaceProposals.proposals),
