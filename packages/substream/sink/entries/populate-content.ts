@@ -55,7 +55,6 @@ export function populateContent(
         populateTriples({
           schemaTriples: triplesToWrite,
           block,
-          versions: versions,
         }),
       ])
     );

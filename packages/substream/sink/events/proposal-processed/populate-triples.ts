@@ -14,10 +14,9 @@ import { slog } from '~/sink/utils/slog';
 interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
   block: BlockEvent;
-  versions: Schema.versions.Insertable[];
 }
 
-export function populateTriples({ schemaTriples, block, versions }: PopulateTriplesArgs) {
+export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
   return Effect.gen(function* (_) {
     /**
      * Changes to data in Geo are modeled as "operations (ops)." You can create a triple or delete a triple.
