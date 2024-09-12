@@ -305,13 +305,20 @@ function TriplesGroup({ triples }: { triples: TripleRenderableProperty[] }) {
               />
             );
           case 'TIME':
-            return <DateField isEditing={true} value={renderable.value} />;
+            return <DateField key={renderable.attributeId} isEditing={true} value={renderable.value} />;
           case 'URI':
-            return <WebUrlField placeholder="Add a URI" isEditing={true} value={renderable.value} />;
+            return (
+              <WebUrlField
+                key={renderable.attributeId}
+                placeholder="Add a URI"
+                isEditing={true}
+                value={renderable.value}
+              />
+            );
           case 'ENTITY': {
             if (renderable.value.value === '') {
               return (
-                <div data-testid="select-entity" className="w-full">
+                <div key={renderable.attributeId} data-testid="select-entity" className="w-full">
                   <SelectEntity
                     spaceId={spaceId}
                     onDone={result => {
