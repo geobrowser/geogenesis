@@ -1,8 +1,7 @@
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 
 import type { EditProposal } from '../proposals-created/parser';
 import { Proposals } from '~/sink/db';
-import { populateApprovedContentProposal } from '~/sink/entries/populate-approved-content-proposal';
 import type { BlockEvent } from '~/sink/types';
 import { slog } from '~/sink/utils/slog';
 
@@ -34,53 +33,9 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
       )
     );
 
-    const ipfsProposalsWithExistingDbProposal = dbProposals.flatMap(maybeProposal => {
-      if (Either.isLeft(maybeProposal)) {
-        slog({
-          requestId: block.requestId,
-          message: `Failed to read proposal from DB ${maybeProposal.left}`,
-          level: 'error',
-        });
-
-        return [];
-      }
-
-      if (maybeProposal.right[0]) {
-        return [maybeProposal.right[0]];
-      }
-
-      slog({
-        requestId: block.requestId,
-        message: `Failed to read proposal from DB for unknown reason`,
-        level: 'error',
-      });
-
-      return [];
-    });
-
-    const proposals = ipfsProposals.filter(ipfs =>
-      ipfsProposalsWithExistingDbProposal.some(p => p.id === ipfs.proposalId)
-    );
-
     slog({
       requestId: block.requestId,
-      message: `${proposals.length} proposals set to accepted successfully`,
-    });
-
-    slog({
-      requestId: block.requestId,
-      message: `Writing data for ${proposals.length} processed proposals`,
-    });
-
-    // @TODO(performance):
-    // We store the proposal data and ops in the DB already, so we can read the
-    // content of the ipfs proposals directly from the db instead of fetching
-    // from IPFS again.
-    yield* _(populateApprovedContentProposal(proposals, block));
-
-    slog({
-      requestId: block.requestId,
-      message: 'Processed proposals written successfully!',
+      message: `${dbProposals.length} proposals set to accepted successfully`,
     });
   });
 }
