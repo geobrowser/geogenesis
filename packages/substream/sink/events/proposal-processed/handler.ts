@@ -37,5 +37,8 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
       requestId: block.requestId,
       message: `${dbProposals.length} proposals set to accepted successfully`,
     });
+
+    // @TODO: Merge versions from the same entity into a new super version. This will require
+    // writing all their ops to the new version
   });
 }
