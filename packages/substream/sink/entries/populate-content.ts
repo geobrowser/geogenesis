@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Entities } from '../db';
+import { Entities, Triples, Versions } from '../db';
 import {
   type OpWithCreatedBy,
   type SchemaTripleEdit,
@@ -34,6 +34,43 @@ export function populateContent(
       };
 
       entities.push(entity);
+
+      // We probably want to precalculate this instead of doing it blocking in the loop
+      const lastVersion = yield* awaited(Effect.promise(() => Versions.findLatestValid(entity.id.toString())));
+
+      if (lastVersion) {
+        const lastVersionTriples = yield* awaited(Effect.promise(() => Triples.select({ version_id: lastVersion.id })));
+
+        if (version.entity_id.toString() === '1d5d0c2adb23466ca0b09abe879df457' && lastVersionTriples.length > 0) {
+          console.log({
+            version,
+            lastVersionTriples,
+          });
+        }
+
+        const editWithCreatedById: SchemaTripleEdit = {
+          versonId: version.id.toString(),
+          createdById: version.created_by_id.toString(),
+          spaceId: version.space_id.toString(),
+          ops: lastVersionTriples.map((t): Op => {
+            return {
+              type: 'SET_TRIPLE',
+              triple: {
+                entity: t.entity_id,
+                attribute: t.attribute_id,
+                value: {
+                  type: t.value_type,
+                  value: (t.value_type === 'ENTITY' ? t.entity_value_id : t.text_value) as string,
+                },
+              },
+            };
+          }),
+        };
+
+        // Make sure that we put the last version's ops before the new version's
+        // ops so that when we squash the ops later they're ordered correctly.
+        triples.push(...mapSchemaTriples(editWithCreatedById, block));
+      }
 
       const editWithCreatedById: SchemaTripleEdit = {
         versonId: version.id.toString(),
