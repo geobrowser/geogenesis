@@ -35,7 +35,7 @@ export function populateContent(
 
       entities.push(entity);
 
-      // We probably want to precalculate this instead of doing it blocking in the loop
+      // @TODO(performance): We probably want to precalculate this instead of doing it blocking in the loop
       const lastVersion = yield* awaited(Effect.promise(() => Versions.findLatestValid(entity.id.toString())));
 
       if (lastVersion) {

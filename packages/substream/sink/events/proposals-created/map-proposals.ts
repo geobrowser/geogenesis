@@ -244,7 +244,10 @@ function mapEditProposalToSchema(
         space_id: p.space,
       } satisfies S.versions.Insertable);
 
-      opsByVersionId.set(id, p.ops);
+      opsByVersionId.set(
+        id,
+        p.ops.filter(o => o.triple.entity === entityId)
+      );
     }
   }
 
