@@ -48,8 +48,6 @@ export function populateContent(
 
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
 
-    console.log('ops length', triples.length);
-
     yield* awaited(
       Effect.all([
         Effect.tryPromise({
