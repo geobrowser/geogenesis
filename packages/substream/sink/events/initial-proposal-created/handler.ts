@@ -77,12 +77,9 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
         try: async () => {
           // @TODO: Transaction
           await Promise.all([
-            // @TODO: Should we only attempt to write to the db for the correct content type?
-            // What if we get multiple proposals in the same block with different content types?
-            // Content proposals
+            Edits.upsert(schemaEditProposals.edits),
             Proposals.upsert(schemaEditProposals.proposals),
             Versions.upsert(schemaEditProposals.versions),
-            Edits.upsert(schemaEditProposals.edits),
           ]);
         },
         catch: error => {

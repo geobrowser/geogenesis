@@ -102,9 +102,9 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
         try: async () => {
           await Promise.all([
             // Content proposals
+            Edits.upsert(schemaEditProposals.edits),
             Proposals.upsert(schemaEditProposals.proposals),
             Versions.upsert(schemaEditProposals.versions),
-            Edits.upsert(schemaEditProposals.edits),
 
             // Subspace proposals
             Proposals.upsert(schemaSubspaceProposals.proposals),

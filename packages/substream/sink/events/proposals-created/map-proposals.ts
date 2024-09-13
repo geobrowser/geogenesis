@@ -224,7 +224,7 @@ function mapEditProposalToSchema(
       status: 'proposed',
     } satisfies S.proposals.Insertable);
 
-    const uniqueEntityIds = new Set(p.ops.map(action => action.triple.entity));
+    const uniqueEntityIds = new Set(p.ops.map(op => op.triple.entity));
 
     for (const entityId of [...uniqueEntityIds.values()]) {
       // For now we use a deterministic version for the proposed version id

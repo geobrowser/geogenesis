@@ -39,14 +39,6 @@ CREATE TABLE public.spaces (
     personal_space_admin_plugin_address text
 );
 
-CREATE TABLE public.entity_types (
-    PRIMARY KEY (entity_id, type_id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
-    type_id text NOT NULL REFERENCES public.entities(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
-);
-
 CREATE TABLE public.relations (
     id text PRIMARY KEY NOT NULL,
     type_of_id text REFERENCES public.entities(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
@@ -110,21 +102,6 @@ CREATE TABLE public.space_subspaces (
     CONSTRAINT space_subspaces_unique_space_subspace_pair UNIQUE (parent_space_id, subspace_id)
 );
 
-CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URI', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
-
-CREATE TABLE public.triples (
-    PRIMARY KEY (space_id, entity_id, attribute_id),
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
-    attribute_id text NOT NULL REFERENCES public.entities(id),
-    value_type triple_value_type NOT NULL,
-    number_value text,
-    text_value text,
-    entity_value_id text REFERENCES public.entities(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
-);
-
 CREATE TABLE public.versions (
     id text PRIMARY KEY,
     created_at integer NOT NULL,
@@ -133,6 +110,30 @@ CREATE TABLE public.versions (
     proposal_id text NOT NULL REFERENCES public.proposals(id),
     entity_id text NOT NULL REFERENCES public.entities(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
+);
+
+CREATE TABLE public.entity_types (
+    PRIMARY KEY (version_id, type_id),
+    version_id text NOT NULL REFERENCES public.versions(id),
+    type_id text NOT NULL REFERENCES public.entities(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL
+);
+
+CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URI', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
+
+CREATE TABLE public.triples (
+    PRIMARY KEY (space_id, entity_id, attribute_id, version_id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    attribute_id text NOT NULL REFERENCES public.entities(id),
+    value_type triple_value_type NOT NULL,
+    number_value text,
+    text_value text,
+    entity_value_id text REFERENCES public.entities(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    version_id text NOT NULL REFERENCES public.versions(id)
 );
 
 CREATE TABLE public.spaces_metadata (
@@ -202,16 +203,10 @@ CREATE TABLE public.geo_blocks (
 );
 
 CREATE TABLE public.entity_spaces (
-    PRIMARY KEY (entity_id, space_id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
+    PRIMARY KEY (version_id, space_id),
+    version_id text NOT NULL REFERENCES public.versions(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
-
--- CREATE TABLE public.triple_versions (
---     PRIMARY KEY (triple_id, version_id),
---     triple_id text NOT NULL REFERENCES public.triples(id),
---     version_id text NOT NULL REFERENCES public.versions(id)
--- );
 
 --
 -- Disable Foreign Key Constraints to allow for bulk loading + unordered inserts
@@ -221,6 +216,9 @@ ALTER TABLE
 
 ALTER TABLE
     public.entities DISABLE TRIGGER ALL;
+
+ALTER TABLE
+    public.entity_spaces DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.entity_types DISABLE TRIGGER ALL;
@@ -242,7 +240,4 @@ ALTER TABLE
 
 ALTER TABLE
     public.space_editors DISABLE TRIGGER ALL;
-
--- ALTER TABLE
---     public.triple_versions DISABLE TRIGGER ALL;
 
