@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
@@ -9,11 +9,46 @@ import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
 import { EntitySpaces, SpaceMetadata, Triples, Types } from '~/sink/db';
 import { Relations } from '~/sink/db/relations';
-import { slog } from '~/sink/utils/slog';
 
 interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
   block: BlockEvent;
+}
+
+function populateEntityNames(schemaTriples: OpWithCreatedBy[], block: BlockEvent) {
+  return Effect.gen(function* (_) {
+    const lastNameOpsByEntityId = schemaTriples
+      .filter(t => t.triple.attribute_id === SYSTEM_IDS.NAME)
+      .reduce((acc, op) => {
+        acc.set(op.triple.entity_id.toString(), op);
+        return acc;
+      }, new Map<string, OpWithCreatedBy>());
+
+    const entities = [...lastNameOpsByEntityId.values()].map(op => {
+      return {
+        id: op.triple.entity_id,
+        name: op.triple.text_value,
+        created_by_id: op.createdById,
+        created_at: block.timestamp,
+        created_at_block: block.blockNumber,
+        updated_at: block.timestamp,
+        updated_at_block: block.blockNumber,
+      } satisfies Schema.entities.Insertable;
+    });
+
+    yield* _(
+      Effect.tryPromise({
+        try: () =>
+          db
+            .upsert('entities', entities, 'id', {
+              updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
+              noNullUpdateColumns: ['description'],
+            })
+            .run(pool),
+        catch: error => new Error(`Failed to create name for entities. ${(error as Error).message}`),
+      })
+    );
+  });
 }
 
 export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
@@ -29,8 +64,11 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
       })
     );
 
-    // @TODO: Get adds and removes so we can map other dependent types
+    yield* _(populateEntityNames(schemaTriples, block));
     // @TODO: Get relations so we can map relations and other dependent types
+    // @TODO: description
+    // @TODO: space
+    // @TODO: types
 
     /**
      * Changes to data in Geo are modeled as "operations (ops)." You can create a triple or delete a triple.
@@ -67,18 +105,6 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
     //   const isNameDeleteOp = isDeleteTriple && isNameAttribute && isStringValueType;
     //   const isDescriptionCreateAction = isUpsertTriple && isDescriptionAttribute && isStringValueType;
     //   const isDescriptionDeleteAction = isDeleteTriple && isDescriptionAttribute && isStringValueType;
-
-    //   /**
-    //    * Insert all new triples and existing triples into the triple_versions join table.
-    //    *
-    //    * The new Version should include all triples that were added as part of this proposal, and
-    //    * also all triples that exist in previous versions of the entity. In the next step we delete
-    //    * all triples that were deleted as part of this proposal to ensure they aren't included in
-    //    * the new version.
-    //    *
-    //    * @TODO(performance): This is insanely slow for large data sets (some of which we have)
-    //    */
-    //   // const version = versions.find(v => v.entity_id === triple.entity_id);
 
     //   /**
     //    * @TODO(bug): There's a bug here where we might create a triple_version for a triple that gets
@@ -355,41 +381,6 @@ function maybeDeleteEntitySpace({ space_id, entity_id }: Schema.entity_spaces.Wh
 
       yield* _(deleteEntitySpaceEffect, retryEffect);
     }
-  });
-}
-
-function upsertEntityName(triple: Schema.triples.Insertable, block: BlockEvent, createdById: string) {
-  return Effect.gen(function* (_) {
-    const insertNameEffect = Effect.tryPromise({
-      try: () =>
-        db
-          .upsert(
-            'entities',
-            {
-              id: triple.entity_id,
-              name: triple.text_value,
-              created_by_id: createdById,
-              created_at: block.timestamp,
-              created_at_block: block.blockNumber,
-              updated_at: block.timestamp,
-              updated_at_block: block.blockNumber,
-            },
-            'id',
-            {
-              updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
-              noNullUpdateColumns: ['description'],
-            }
-          )
-          .run(pool),
-      catch: error =>
-        new Error(
-          `Failed to create name ${String(triple.text_value)} for triple ${triple.space_id}:${triple.entity_id}:${
-            triple.attribute_id
-          }. ${(error as Error).message}`
-        ),
-    });
-
-    yield* _(insertNameEffect, retryEffect);
   });
 }
 
