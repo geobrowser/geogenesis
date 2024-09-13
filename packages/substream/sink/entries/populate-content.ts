@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
-import type { S } from 'vitest/dist/reporters-xEmem8D4.js';
 import type * as Schema from 'zapatos/schema';
 
 import { Entities } from '../db';
