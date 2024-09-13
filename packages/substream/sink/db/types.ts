@@ -5,7 +5,7 @@ import { pool } from '../utils/pool';
 
 export class Types {
   static async upsert(types: S.entity_types.Insertable[]) {
-    return await db.upsert('entity_types', types, ['entity_id', 'type_id'], { updateColumns: db.doNothing }).run(pool);
+    return await db.upsert('entity_types', types, ['version_id', 'type_id'], { updateColumns: db.doNothing }).run(pool);
   }
 
   static async remove(where: S.entity_types.Whereable) {

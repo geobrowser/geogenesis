@@ -24,6 +24,8 @@ function populateEntityNames(schemaTriples: OpWithCreatedBy[], block: BlockEvent
         return acc;
       }, new Map<string, OpWithCreatedBy>());
 
+    // @TODO: In the case of a delete we need to check if there's another triple
+    // with the name triple for that entity id and set the name to that
     const entities = [...lastNameOpsByEntityId.values()].map(op => {
       return {
         id: op.triple.entity_id,
@@ -105,7 +107,11 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
     // Update the names and descriptions of the entities in this block
     yield* _(Effect.all([populateEntityNames(schemaTriples, block), populateEntityDescriptions(schemaTriples, block)]));
 
+    // -- mapping dependent tables should probably only happen after processing the proposals vs now ---
+    // -- alternatively we add the types and spaces, etc., on the version and not the entity --
     // @TODO: Get relations so we can map relations and other dependent types
+
+    // --- These should probably be done after processing the proposals vs now ---
     // @TODO: space
     // @TODO: types
 
@@ -132,18 +138,10 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
     //   const isUpsertTriple = op === 'SET_TRIPLE';
     //   const isDeleteTriple = op === 'DELETE_TRIPLE';
 
-    //   // @TODO(migration): These could be a collection
     //   const isAddTypeViaTriple = triple.attribute_id === SYSTEM_IDS.TYPES && isUpsertTriple && triple.entity_value_id;
     //   const isDeleteTypeViaTriple = triple.attribute_id === SYSTEM_IDS.TYPES && isDeleteTriple;
 
-    //   const isNameAttribute = triple.attribute_id === SYSTEM_IDS.NAME;
-    //   const isDescriptionAttribute = triple.attribute_id === SYSTEM_IDS.DESCRIPTION;
     //   const isStringValueType = triple.value_type === 'TEXT';
-
-    //   const isNameCreateOp = isUpsertTriple && isNameAttribute && isStringValueType;
-    //   const isNameDeleteOp = isDeleteTriple && isNameAttribute && isStringValueType;
-    //   const isDescriptionCreateAction = isUpsertTriple && isDescriptionAttribute && isStringValueType;
-    //   const isDescriptionDeleteAction = isDeleteTriple && isDescriptionAttribute && isStringValueType;
 
     //   /**
     //    * @TODO(bug): There's a bug here where we might create a triple_version for a triple that gets
@@ -151,7 +149,6 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
     //    * shouldn't be an issue.
     //    */
     //   if (isUpsertTriple) {
-    //     yield* _(upsertTriple(triple), retryEffect);
     //     yield* _(upsertEntitySpace({ space_id: triple.space_id, entity_id: triple.entity_id }), retryEffect);
     //   }
 
@@ -168,58 +165,6 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
     //      * the entity space from the public.entity_spaces table.
     //      */
     //     yield* _(maybeDeleteEntitySpace({ space_id: triple.space_id, entity_id: triple.entity_id }), retryEffect);
-    //   }
-
-    //   /**
-    //    * We associate the triple data for the name and description triples with the entity itself to make
-    //    * querying the name and description of an entity easier.
-    //    *
-    //    * There's probably a better way to do this in SQL.
-    //    */
-    //   if (isNameCreateOp) {
-    //     // Currently we manually insert the new name if there's a new triple for the name attribute. A name
-    //     // might be defined in _many_ spaces, so this action will overwrite a previous name if it exists.
-    //     yield* _(upsertEntityName(triple, block, createdById), retryEffect);
-    //   }
-
-    //   /**
-    //    * We associate the triple data for the name and description triples with the entity itself to make
-    //    * querying the name and description of an entity easier.
-    //    *
-    //    * There's probably a better way to do this in SQL.
-    //    */
-    //   if (isNameDeleteOp) {
-    //     /**
-    //      * There might be more than one name triple defined on an entity at any given time. We need to make sure
-    //      * we fall back to a random name if we're deleting the current name. There's probably a better way to
-    //      * do this with derived/computed columns in SQL. We will also likely handle this in a FTS index that knows
-    //      * how to handle entities with multiple names/spaces in the future.
-    //      *
-    //      * We have already processed any name triples that are to be deleted in the same proposal. We should be safe
-    //      * to query for any current name triples for the entity without worrying about colliding with a name triple
-    //      * that has yet to be deleted.
-    //      */
-    //     yield* _(maybeUpdateEntityNameAfterDeletedNameTriple(triple, block, createdById), retryEffect);
-    //   }
-
-    //   /**
-    //    * We associate the triple data for the name and description triples with the entity itself to make
-    //    * querying the name and description of an entity easier.
-    //    *
-    //    * There's probably a better way to do this in SQL.
-    //    */
-    //   if (isDescriptionCreateAction) {
-    //     yield* _(upsertEntityDescription(triple, block, createdById), retryEffect);
-    //   }
-
-    //   /**
-    //    * We associate the triple data for the name and description triples with the entity itself to make
-    //    * querying the name and description of an entity easier.
-    //    *
-    //    * There's probably a better way to do this in SQL using triggers.
-    //    */
-    //   if (isDescriptionDeleteAction) {
-    //     yield* _(deleteEntityDescription(triple, block, createdById), retryEffect);
     //   }
 
     //   /**
@@ -341,49 +286,13 @@ function getRelationTriplesFromSchemaTriples(
   };
 }
 
-function upsertTriple(triple: Schema.triples.Insertable) {
-  return Effect.gen(function* (_) {
-    const insertTripleEffect = Effect.tryPromise({
-      try: () => Triples.upsert([triple]),
-      // @TODO: More specifically typed error
-      catch: error =>
-        new Error(`Failed to insert triple
-      triple: ${JSON.stringify(triple, null, 2)}
-      error:  ${String(error)}`),
-    });
-
-    yield* _(insertTripleEffect, retryEffect);
-  });
-}
-
-function deleteTriple(triple: Schema.triples.Whereable) {
-  return Effect.gen(function* (_) {
-    const deleteEffect = Effect.tryPromise({
-      try: () =>
-        Triples.remove({
-          space_id: triple.space_id,
-          entity_id: triple.entity_id,
-          attribute_id: triple.attribute_id,
-        }),
-      catch: error =>
-        new Error(
-          `Failed to delete triple with space id ${triple.space_id} attribute id ${triple.attribute_id} and entity id ${
-            triple.entity_id
-          }. ${(error as Error).message}`
-        ),
-    });
-
-    yield* _(deleteEffect, retryEffect);
-  });
-}
-
-function upsertEntitySpace({ space_id, entity_id }: Schema.entity_spaces.Insertable) {
+function upsertEntitySpace({ space_id, version_id }: Schema.entity_spaces.Insertable) {
   return Effect.gen(function* (_) {
     const insertEntitySpaceEffect = Effect.tryPromise({
-      try: () => EntitySpaces.upsert([{ space_id, entity_id }]),
+      try: () => EntitySpaces.upsert([{ space_id, version_id }]),
       catch: error =>
         new Error(
-          `Failed to insert entity space for triple with space id ${space_id} and entity id ${entity_id} ${String(
+          `Failed to insert entity space for triple with space id ${space_id} and version id ${version_id} ${String(
             error
           )}`
         ),
@@ -393,26 +302,26 @@ function upsertEntitySpace({ space_id, entity_id }: Schema.entity_spaces.Inserta
   });
 }
 
-function maybeDeleteEntitySpace({ space_id, entity_id }: Schema.entity_spaces.Whereable) {
+function maybeDeleteEntitySpace({ space_id, version_id }: Schema.entity_spaces.Whereable) {
   return Effect.gen(function* (_) {
     const triplesForEntitySpace = yield* _(
       Effect.tryPromise({
         try: () =>
           Triples.select({
-            entity_id: entity_id,
+            version_id: version_id,
             space_id: space_id,
           }),
         catch: error =>
-          new Error(`Failed to fetch triples with space id ${space_id} and entity id ${entity_id} ${String(error)}`),
+          new Error(`Failed to fetch triples with space id ${space_id} and version id ${version_id} ${String(error)}`),
       })
     );
 
     if (triplesForEntitySpace.length === 0) {
       const deleteEntitySpaceEffect = Effect.tryPromise({
-        try: () => EntitySpaces.remove({ space_id: space_id, entity_id: entity_id }),
+        try: () => EntitySpaces.remove({ space_id, version_id }),
         catch: error =>
           new Error(
-            `Failed to delete entity space for triple with space id ${space_id} and entity id ${entity_id} ${String(
+            `Failed to delete entity space for triple with space id ${space_id} and version id ${version_id} ${String(
               error
             )}`
           ),
@@ -513,83 +422,13 @@ function maybeUpdateEntityNameAfterDeletedNameTriple(
   });
 }
 
-function upsertEntityDescription(triple: Schema.triples.Insertable, block: BlockEvent, createdById: string) {
-  return Effect.gen(function* (_) {
-    const insertDescriptionEffect = Effect.tryPromise({
-      try: () =>
-        db
-          .upsert(
-            'entities',
-            {
-              id: triple.entity_id,
-              description: triple.text_value,
-              created_by_id: createdById,
-              created_at: block.timestamp,
-              created_at_block: block.blockNumber,
-              updated_at: block.timestamp,
-              updated_at_block: block.blockNumber,
-            },
-            'id',
-            {
-              updateColumns: ['description'],
-              noNullUpdateColumns: ['name'],
-            }
-          )
-          .run(pool),
-      catch: error =>
-        new Error(
-          `Failed to create description ${String(triple.text_value)} for triple triple ${triple.space_id}:${
-            triple.entity_id
-          }:${triple.attribute_id}. ${(error as Error).message}`
-        ),
-    });
-
-    yield* _(insertDescriptionEffect, retryEffect);
-  });
-}
-
-function deleteEntityDescription(triple: Schema.triples.Insertable, block: BlockEvent, createdById: string) {
-  return Effect.gen(function* (_) {
-    const deleteDescriptionEffect = Effect.tryPromise({
-      try: () =>
-        db
-          .upsert(
-            'entities',
-            {
-              id: triple.entity_id,
-              description: null,
-              created_by_id: createdById,
-              created_at: block.timestamp,
-              created_at_block: block.blockNumber,
-              updated_at: block.timestamp,
-              updated_at_block: block.blockNumber,
-            },
-            'id',
-            {
-              updateColumns: ['description'],
-              noNullUpdateColumns: ['name'],
-            }
-          )
-          .run(pool),
-      catch: error =>
-        new Error(
-          `Failed to delete description ${String(triple.text_value)} for triple triple ${triple.space_id}:${
-            triple.entity_id
-          }:${triple.attribute_id}. ${(error as Error).message}`
-        ),
-    });
-
-    yield* _(deleteDescriptionEffect, retryEffect);
-  });
-}
-
 function upsertEntityType(triple: Schema.triples.Insertable, block: BlockEvent) {
   return Effect.gen(function* (_) {
     const insertTypeEffect = Effect.tryPromise({
       try: () =>
         Types.upsert([
           {
-            entity_id: triple.entity_id,
+            version_id: triple.version_id,
             type_id: triple.entity_value_id!.toString(),
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
@@ -619,7 +458,7 @@ function upsertEntityTypeViaRelation(relation: Schema.relations.Insertable, bloc
       try: async () => {
         return await Types.upsert([
           {
-            entity_id: relation.from_entity_id,
+            version_id: relation.from_entity_id,
             type_id: relation.to_entity_id,
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
@@ -686,7 +525,7 @@ function deleteEntityType(triple: Schema.triples.Insertable) {
     const deleteTypeEffect = Effect.tryPromise({
       try: () =>
         Types.remove({
-          entity_id: triple.entity_id,
+          version_id: triple.version_id,
           type_id: triple.entity_value_id?.toString(),
         }),
       catch: () => new Error('Failed to delete type'),
@@ -699,7 +538,7 @@ function deleteEntityType(triple: Schema.triples.Insertable) {
 function deleteEntityTypeViaRelation(relation: Schema.relations.Insertable) {
   return Effect.gen(function* (_) {
     const deleteTypeEffect = Effect.tryPromise({
-      try: () => Types.remove({ entity_id: relation.from_entity_id, type_id: relation.type_of_id }),
+      try: () => Types.remove({ version_id: relation.from_entity_id, type_id: relation.type_of_id }),
       catch: () => new Error('Failed to delete type'),
     });
 

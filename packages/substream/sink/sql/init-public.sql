@@ -39,14 +39,6 @@ CREATE TABLE public.spaces (
     personal_space_admin_plugin_address text
 );
 
-CREATE TABLE public.entity_types (
-    PRIMARY KEY (entity_id, type_id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
-    type_id text NOT NULL REFERENCES public.entities(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
-);
-
 CREATE TABLE public.relations (
     id text PRIMARY KEY NOT NULL,
     type_of_id text REFERENCES public.entities(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
@@ -118,6 +110,14 @@ CREATE TABLE public.versions (
     proposal_id text NOT NULL REFERENCES public.proposals(id),
     entity_id text NOT NULL REFERENCES public.entities(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
+);
+
+CREATE TABLE public.entity_types (
+    PRIMARY KEY (version_id, type_id),
+    version_id text NOT NULL REFERENCES public.versions(id),
+    type_id text NOT NULL REFERENCES public.entities(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL
 );
 
 CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URI', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
@@ -203,8 +203,8 @@ CREATE TABLE public.geo_blocks (
 );
 
 CREATE TABLE public.entity_spaces (
-    PRIMARY KEY (entity_id, space_id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
+    PRIMARY KEY (version_id, space_id),
+    version_id text NOT NULL REFERENCES public.versions(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
 );
 

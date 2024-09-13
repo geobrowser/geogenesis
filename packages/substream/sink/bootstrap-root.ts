@@ -428,7 +428,7 @@ export function bootstrapRoot() {
           await Types.upsert(
             typesToWrite.map(r => ({
               type_id: r.type_of_id,
-              entity_id: r.from_entity_id,
+              version_id: r.from_entity_id,
               created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
               created_at: ROOT_SPACE_CREATED_AT,
             }))
@@ -436,15 +436,15 @@ export function bootstrapRoot() {
           await Types.upsert(
             attributesToWrite.map(r => ({
               type_id: r.type_of_id,
-              entity_id: r.to_entity_id,
+              version_id: r.to_entity_id,
               created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
               created_at: ROOT_SPACE_CREATED_AT,
             }))
           );
 
-          await EntitySpaces.upsert(geoEntities.map(e => ({ entity_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID })));
+          await EntitySpaces.upsert(geoEntities.map(e => ({ version_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID })));
           await EntitySpaces.upsert(
-            entitiesForRelations.map(e => ({ entity_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }))
+            entitiesForRelations.map(e => ({ version_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }))
           );
         },
         catch: error => new BootstrapRootError(String(error)),
