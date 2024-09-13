@@ -12,7 +12,7 @@ export interface OpWithCreatedBy {
 export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string; versonId: string };
 
 export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
-  const squashedOps = squashOps(edit.ops, edit.spaceId);
+  const squashedOps = squashOps(edit.ops, edit.spaceId, edit.versonId);
 
   return squashedOps.map((op): OpWithCreatedBy => {
     const triple = getTripleFromOp(op, edit.spaceId, edit.versonId, block);
@@ -25,10 +25,10 @@ export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpW
   });
 }
 
-function squashOps(ops: Op[], spaceId: string): Op[] {
+function squashOps(ops: Op[], spaceId: string, versionId: string): Op[] {
   // We take the last op for each (S,E,A) tuple
   const squashedOps = ops.reduce((acc, op) => {
-    const idForOp = `${spaceId}:${op.triple.entity}:${op.triple.attribute}`;
+    const idForOp = `${spaceId}:${op.triple.entity}:${op.triple.attribute}:${versionId}`;
     acc.set(idForOp, op);
     return acc;
   }, new Map<string, Op>());

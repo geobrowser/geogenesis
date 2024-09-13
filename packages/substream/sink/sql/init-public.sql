@@ -218,6 +218,9 @@ ALTER TABLE
     public.entities DISABLE TRIGGER ALL;
 
 ALTER TABLE
+    public.entity_spaces DISABLE TRIGGER ALL;
+
+ALTER TABLE
     public.entity_types DISABLE TRIGGER ALL;
 
 ALTER TABLE

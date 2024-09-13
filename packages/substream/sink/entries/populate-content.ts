@@ -1,4 +1,6 @@
 import { Effect } from 'effect';
+import { dedupeWith } from 'effect/ReadonlyArray';
+import type { S } from 'vitest/dist/reporters-xEmem8D4.js';
 import type * as Schema from 'zapatos/schema';
 
 import { Entities } from '../db';
@@ -16,8 +18,8 @@ export function populateContent(
   block: BlockEvent
 ) {
   return Effect.gen(function* (awaited) {
-    const triplesToWrite: OpWithCreatedBy[] = [];
-    const entitiesToWrite: Schema.entities.Insertable[] = [];
+    const entities: Schema.entities.Insertable[] = [];
+    const triples: OpWithCreatedBy[] = [];
 
     // We might get multiple proposals at once in the same block that change the same set of entities.
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
@@ -32,7 +34,7 @@ export function populateContent(
         updated_at_block: block.blockNumber,
       };
 
-      entitiesToWrite.push(entity);
+      entities.push(entity);
 
       const editWithCreatedById: SchemaTripleEdit = {
         versonId: version.id.toString(),
@@ -41,19 +43,23 @@ export function populateContent(
         ops: opsByVersionId.get(version.id.toString())!,
       };
 
-      triplesToWrite.push(...mapSchemaTriples(editWithCreatedById, block));
+      triples.push(...mapSchemaTriples(editWithCreatedById, block));
     }
+
+    const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
+
+    console.log('ops length', triples.length);
 
     yield* awaited(
       Effect.all([
         Effect.tryPromise({
           // We update the name and description for an entity when mapping
           // through triples.
-          try: () => Entities.upsert(entitiesToWrite),
+          try: () => Entities.upsert(uniqueEntities),
           catch: error => new Error(`Failed to insert entity. ${(error as Error).message}`),
         }),
         populateTriples({
-          schemaTriples: triplesToWrite,
+          schemaTriples: triples,
           block,
         }),
       ])
