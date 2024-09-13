@@ -41,8 +41,44 @@ function populateEntityNames(schemaTriples: OpWithCreatedBy[], block: BlockEvent
         try: () =>
           db
             .upsert('entities', entities, 'id', {
-              updateColumns: ['name', 'description', 'updated_at', 'updated_at_block', 'created_by_id'],
+              updateColumns: ['name', 'updated_at', 'updated_at_block', 'created_by_id'],
               noNullUpdateColumns: ['description'],
+            })
+            .run(pool),
+        catch: error => new Error(`Failed to create name for entities. ${(error as Error).message}`),
+      })
+    );
+  });
+}
+
+function populateEntityDescriptions(schemaTriples: OpWithCreatedBy[], block: BlockEvent) {
+  return Effect.gen(function* (_) {
+    const lastNameOpsByEntityId = schemaTriples
+      .filter(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION)
+      .reduce((acc, op) => {
+        acc.set(op.triple.entity_id.toString(), op);
+        return acc;
+      }, new Map<string, OpWithCreatedBy>());
+
+    const entities = [...lastNameOpsByEntityId.values()].map(op => {
+      return {
+        id: op.triple.entity_id,
+        description: op.triple.text_value,
+        created_by_id: op.createdById,
+        created_at: block.timestamp,
+        created_at_block: block.blockNumber,
+        updated_at: block.timestamp,
+        updated_at_block: block.blockNumber,
+      } satisfies Schema.entities.Insertable;
+    });
+
+    yield* _(
+      Effect.tryPromise({
+        try: () =>
+          db
+            .upsert('entities', entities, 'id', {
+              updateColumns: ['description', 'updated_at', 'updated_at_block', 'created_by_id'],
+              noNullUpdateColumns: ['name'],
             })
             .run(pool),
         catch: error => new Error(`Failed to create name for entities. ${(error as Error).message}`),
@@ -53,6 +89,8 @@ function populateEntityNames(schemaTriples: OpWithCreatedBy[], block: BlockEvent
 
 export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
   return Effect.gen(function* (_) {
+    // @TODO: Get triples from previous version of entity and filter out any
+    // that are deleted as part of this work.
     yield* _(
       Effect.tryPromise({
         try: () =>
@@ -64,9 +102,10 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
       })
     );
 
-    yield* _(populateEntityNames(schemaTriples, block));
+    // Update the names and descriptions of the entities in this block
+    yield* _(Effect.all([populateEntityNames(schemaTriples, block), populateEntityDescriptions(schemaTriples, block)]));
+
     // @TODO: Get relations so we can map relations and other dependent types
-    // @TODO: description
     // @TODO: space
     // @TODO: types
 
