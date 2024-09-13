@@ -123,7 +123,7 @@ CREATE TABLE public.versions (
 CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URI', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
 
 CREATE TABLE public.triples (
-    PRIMARY KEY (space_id, entity_id, attribute_id),
+    PRIMARY KEY (space_id, entity_id, attribute_id, version_id),
     space_id text NOT NULL REFERENCES public.spaces(id),
     entity_id text NOT NULL REFERENCES public.entities(id),
     attribute_id text NOT NULL REFERENCES public.entities(id),
