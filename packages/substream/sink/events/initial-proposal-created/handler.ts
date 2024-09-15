@@ -104,7 +104,14 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
     }
 
     const populateResult = yield* _(
-      Effect.either(populateContent(schemaEditProposals.versions, schemaEditProposals.opsByVersionId, block))
+      Effect.either(
+        populateContent(
+          schemaEditProposals.versions,
+          schemaEditProposals.opsByVersionId,
+          schemaEditProposals.edits,
+          block
+        )
+      )
     );
 
     if (Either.isRight(populateResult)) {

@@ -197,25 +197,28 @@ const relationTypes: Record<string, string[]> = {
   [SYSTEM_IDS.ATTRIBUTES]: [SYSTEM_IDS.VALUE_TYPE],
 };
 
-const geoEntities: s.entities.Insertable[] = entities.map(entity => ({
-  id: entity,
-  name: names[entity],
-  created_by_id: ROOT_SPACE_CREATED_BY_ID,
-  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-  created_at: ROOT_SPACE_CREATED_AT,
-  updated_at: ROOT_SPACE_CREATED_AT,
-  updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-}));
+const geoEntities: s.entities.Insertable[] = entities.map(
+  (entity): s.entities.Insertable => ({
+    id: entity,
+    name: names[entity],
+    created_by_id: ROOT_SPACE_CREATED_BY_ID,
+    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    created_at: ROOT_SPACE_CREATED_AT,
+    updated_at: ROOT_SPACE_CREATED_AT,
+    updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+  })
+);
 
-const versions: s.versions.Insertable[] = entities.map(entity => ({
-  id: createGeoId(),
-  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-  created_at: ROOT_SPACE_CREATED_AT,
-  created_by_id: ROOT_SPACE_CREATED_BY_ID,
-  entity_id: entity,
-  space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-  proposal_id: '0',
-}));
+const versions: s.versions.Insertable[] = entities.map(
+  (entity): s.versions.Insertable => ({
+    id: createGeoId(),
+    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    created_at: ROOT_SPACE_CREATED_AT,
+    created_by_id: ROOT_SPACE_CREATED_BY_ID,
+    entity_id: entity,
+    edit_id: '0',
+  })
+);
 
 const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
   ([id, name]): s.triples.Insertable => ({
@@ -419,11 +422,14 @@ export function bootstrapRoot() {
 
             Proposals.upsert([proposal]),
             Edits.upsert([edit]),
+          ]);
+
+          await Promise.all([
+            Triples.insert(namesTriples),
+            Triples.upsert(triplesForTypesAndAttributes),
             Versions.upsert(versions),
             Relations.upsert(relationsForTypesAndAttributes),
           ]);
-
-          await Promise.all([Triples.insert(namesTriples), Triples.upsert(triplesForTypesAndAttributes)]);
 
           await Types.upsert(
             typesToWrite.map(r => ({

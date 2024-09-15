@@ -145,7 +145,14 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
     });
 
     const populateResult = yield* _(
-      Effect.either(populateContent(schemaEditProposals.versions, schemaEditProposals.opsByVersionId, block))
+      Effect.either(
+        populateContent(
+          schemaEditProposals.versions,
+          schemaEditProposals.opsByVersionId,
+          schemaEditProposals.edits,
+          block
+        )
+      )
     );
 
     if (Either.isRight(populateResult)) {

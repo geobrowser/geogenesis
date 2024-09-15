@@ -8,6 +8,14 @@ export class Versions {
     return await db.upsert('versions', versions, ['id'], { updateColumns: db.doNothing }).run(pool);
   }
 
+  static findOne(where: S.versions.Whereable) {
+    return db.selectOne('versions', where).run(pool);
+  }
+
+  static findMany(where: S.versions.Whereable) {
+    return db.select('versions', where).run(pool);
+  }
+
   static async findLatestValid(entityId: string) {
     const res = await db
       .select(
