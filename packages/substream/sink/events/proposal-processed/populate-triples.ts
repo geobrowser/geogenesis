@@ -89,10 +89,12 @@ function populateEntityDescriptions(schemaTriples: OpWithCreatedBy[], block: Blo
   });
 }
 
+/**
+ * Handles writing triples to the database. At this point any triples from previous versions
+ * of an entity are already part of the schemaTriples list, so this function just writes them.
+ */
 export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
   return Effect.gen(function* (_) {
-    // @TODO: Get triples from previous version of entity and filter out any
-    // that are deleted as part of this work.
     yield* _(
       Effect.tryPromise({
         try: () =>
@@ -105,34 +107,14 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
     );
 
     // Update the names and descriptions of the entities in this block
+    // @TODO: Name and description should be written into the version and not the entity
     yield* _(Effect.all([populateEntityNames(schemaTriples, block), populateEntityDescriptions(schemaTriples, block)]));
-
-    // -- mapping dependent tables should probably only happen after processing the proposals vs now ---
-    // -- alternatively we add the types and spaces, etc., on the version and not the entity --
-    // @TODO: Get relations so we can map relations and other dependent types
-
-    // --- These should probably be done after processing the proposals vs now ---
-    // @TODO: space
-    // @TODO: types
 
     /**
      * Changes to data in Geo are modeled as "operations (ops)." You can create a triple or delete a triple.
-     * A client might publish _many_ ops, some of which are operations on the same triple. e.g., Set, Delete,
-     * Set, Delete, Set.
-     *
-     * Therefore, we need to process all actions serially to ensure that the final result of the data
-     * is correct.
      *
      * Set operations applied to a given triple are considered "upserts." Additionally, a triple is unique for
      * a given database by its (Space, Entity, Attribute) id tuple.
-     *
-     * Right now (January 23, 2024) the Geo Genesis client _does_ squash actions before publishing, but this
-     * wasn't always the case and other clients might not implement the squashing mechanism.
-     *
-     * @TODO(performance): This is obviously fairly slow as we may perform many async operations for each Set
-     * or Delete action. One way to speed this up is to "squash" all of the actions corresponding to each triple
-     * ahead of time to generate the minimum number of actions for each triple. Additionally there's a lot of
-     * optimizations we can do with _how_ we're processing the data serially.
      */
     // for (const { op, triple, createdById } of schemaTriples) {
     //   const isUpsertTriple = op === 'SET_TRIPLE';

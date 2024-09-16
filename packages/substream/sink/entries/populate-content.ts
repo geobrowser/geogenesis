@@ -53,25 +53,46 @@ export function populateContent(args: PopulateContentArgs) {
 
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
 
-    const res = yield* awaited(
-      Effect.either(
-        Effect.all([
-          Effect.tryPromise({
-            // We update the name and description for an entity when mapping
-            // through triples.
-            try: () => Entities.upsert(uniqueEntities),
-            catch: error => new Error(`Failed to insert entity. ${(error as Error).message}`),
-          }),
-          populateTriples({
-            schemaTriples: tripleEdits.flatMap(e => mapSchemaTriples(e, block)),
-            block,
-          }),
-        ])
-      )
+    yield* awaited(
+      Effect.all([
+        Effect.tryPromise({
+          // We update the name and description for an entity when mapping
+          // through triples.
+          try: () => Entities.upsert(uniqueEntities),
+          catch: error => new Error(`Failed to insert entity. ${(error as Error).message}`),
+        }),
+        populateTriples({
+          schemaTriples: tripleEdits.flatMap(e => mapSchemaTriples(e, block)),
+          block,
+        }),
+      ])
     );
 
-    if (Either.isLeft(res)) {
-      console.log('populateContent error', res.left);
-    }
+    /**
+     * @TODO: Get relations so we can map relations and other dependent types
+     *
+     * -- mapping dependent tables should probably only happen after processing the proposals vs now ---
+     * -- alternatively we add the types and spaces, etc., on the version and not the entity --
+     *
+     * Everything related to _data_ is mapped to Versions and not Entities. This is so we have a unified
+     * interface for interacting with an entity at a given point in time. This means that when we add
+     * triples, we're adding them to a specific _version_ of an entity. When we add relations we need to
+     * do the same thing.
+     *
+     * Relations are a bit more complex in that they reference _four_ entities, and not just one. We need
+     * to update these four entity references to now point to versions instead of entities.
+     *
+     * 1. Id of the relation row should point to a version
+     * 2. The from and to entity ids should point to versions
+     * 3. The type of the relation should point to a version
+     *
+     * To add more complexity, the versions they point to might be getting changed within this block, so
+     * we'll need to keep that in sync. Lastly the _relation itself_ might be getting changed as well.
+     * Lots to keep in sync.
+     */
+
+    // --- These should probably be done after processing the proposals vs now ---
+    // @TODO: space
+    // @TODO: types
   });
 }
