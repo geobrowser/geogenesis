@@ -159,8 +159,14 @@ function commitMergedVersions(proposals: EditProposal[], block: BlockEvent) {
       })
     );
 
-    // @TODO: Lift aggregation of "previous" ops above populateContent
-    yield* _(populateContent(newVersions, newOpsByVersionId, edits, block));
+    yield* _(
+      populateContent({
+        versions: newVersions,
+        opsByVersionId: newOpsByVersionId,
+        edits,
+        block,
+      })
+    );
   });
 }
 

@@ -1,5 +1,6 @@
 import { Effect, Either } from 'effect';
 
+import { mergeOpsWithPreviousVersions } from '../merge-ops-with-previous-versions';
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
 import { Accounts, Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
@@ -144,14 +145,22 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       message: 'Created proposals written successfully!',
     });
 
+    const opsByVersionId = yield* _(
+      mergeOpsWithPreviousVersions({
+        edits: schemaEditProposals.edits,
+        opsByVersionId: schemaEditProposals.opsByVersionId,
+        versions: schemaEditProposals.versions,
+      })
+    );
+
     const populateResult = yield* _(
       Effect.either(
-        populateContent(
-          schemaEditProposals.versions,
-          schemaEditProposals.opsByVersionId,
-          schemaEditProposals.edits,
-          block
-        )
+        populateContent({
+          versions: schemaEditProposals.versions,
+          opsByVersionId,
+          edits: schemaEditProposals.edits,
+          block,
+        })
       )
     );
 

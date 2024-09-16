@@ -1,5 +1,6 @@
 import { Effect, Either } from 'effect';
 
+import { mergeOpsWithPreviousVersions } from '../merge-ops-with-previous-versions';
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
 import { Accounts, Proposals, Versions } from '~/sink/db';
@@ -103,14 +104,22 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       return;
     }
 
+    const opsByVersionId = yield* _(
+      mergeOpsWithPreviousVersions({
+        edits: schemaEditProposals.edits,
+        opsByVersionId: schemaEditProposals.opsByVersionId,
+        versions: schemaEditProposals.versions,
+      })
+    );
+
     const populateResult = yield* _(
       Effect.either(
-        populateContent(
-          schemaEditProposals.versions,
-          schemaEditProposals.opsByVersionId,
-          schemaEditProposals.edits,
-          block
-        )
+        populateContent({
+          versions: schemaEditProposals.versions,
+          opsByVersionId,
+          edits: schemaEditProposals.edits,
+          block,
+        })
       )
     );
 

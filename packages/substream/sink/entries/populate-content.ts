@@ -7,12 +7,15 @@ import { type SchemaTripleEdit, mapSchemaTriples } from '../events/proposal-proc
 import { populateTriples } from '../events/proposal-processed/populate-triples';
 import type { BlockEvent, Op } from '../types';
 
-export function populateContent(
-  versions: Schema.versions.Insertable[],
-  opsByVersionId: Map<string, Op[]>,
-  edits: Schema.edits.Insertable[],
-  block: BlockEvent
-) {
+interface PopulateContentArgs {
+  versions: Schema.versions.Insertable[];
+  opsByVersionId: Map<string, Op[]>;
+  edits: Schema.edits.Insertable[];
+  block: BlockEvent;
+}
+
+export function populateContent(args: PopulateContentArgs) {
+  const { versions, opsByVersionId, edits, block } = args;
   const spaceIdByEditId = new Map<string, string>();
 
   for (const edit of edits) {
@@ -37,43 +40,6 @@ export function populateContent(
       };
 
       entities.push(entity);
-
-      // // @TODO(performance): We probably want to precalculate this instead of doing it blocking in the loop
-      // const lastVersion = yield* awaited(Effect.promise(() => Versions.findLatestValid(entity.id.toString())));
-
-      // if (lastVersion) {
-      //   const lastVersionTriples = yield* awaited(Effect.promise(() => Triples.select({ version_id: lastVersion.id })));
-
-      //   if (version.entity_id.toString() === '1d5d0c2adb23466ca0b09abe879df457' && lastVersionTriples.length > 0) {
-      //     console.log({
-      //       version,
-      //       lastVersionTriples,
-      //     });
-      //   }
-
-      //   const editWithCreatedById: SchemaTripleEdit = {
-      //     versonId: version.id.toString(),
-      //     createdById: version.created_by_id.toString(),
-      //     spaceId: spaceIdByEditId.get(version.edit_id.toString())!,
-      //     ops: lastVersionTriples.map((t): Op => {
-      //       return {
-      //         type: 'SET_TRIPLE',
-      //         triple: {
-      //           entity: t.entity_id,
-      //           attribute: t.attribute_id,
-      //           value: {
-      //             type: t.value_type,
-      //             value: (t.value_type === 'ENTITY' ? t.entity_value_id : t.text_value) as string,
-      //           },
-      //         },
-      //       };
-      //     }),
-      //   };
-
-      //   // Make sure that we put the last version's ops before the new version's
-      //   // ops so that when we squash the ops later they're ordered correctly.
-      //   tripleEdits.push(editWithCreatedById);
-      // }
 
       const editWithCreatedById: SchemaTripleEdit = {
         versonId: version.id.toString(),
