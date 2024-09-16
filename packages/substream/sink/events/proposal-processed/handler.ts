@@ -43,21 +43,7 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
       message: `${dbProposals.length} proposals set to accepted successfully`,
     });
 
-    // @TODO: Merge versions from the same entity into a new super version. This will require
-    // writing all their ops to the new version. Will need to do this for relations as well.
-    //
-    // 1. Get all versions from DB from these proposals
-    // 2. Find the entity ids with more than one version
-    // 3. Get the triples for those versions
-    // 4. Create a new version containing the triples from those versions
-    // 5. Populate triples for these
-    //
-    // Q:
-    // Which proposal do we link the version to?
-    // How do we do ordering if this all happens in the same block?
-    //
-    // @NOTE:
-    // We don't need to go to IPFS for proposals processed anymore. We only need proposal ids.
+    // See comment above function definition for more details as to why we do this.
     yield* _(commitMergedVersions(ipfsProposals, block));
 
     // @TODO: Write relations in populateTriples or populateContent
@@ -70,22 +56,30 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
   });
 }
 
+/**
+ * Merges versions from the same entity into a new version. If many versions change
+ * the same entity in the same block we need to make sure that there exists a version
+ * that contains all of the changes from each of the versions. If we don't, then we
+ * end up in a situation where there are many valid versions for the same entity at one
+ * time, and none of them contain all of the changes from the other versions.
+ *
+ * There's a few ways to solve this issue:
+ * 1. At query time we materialize all of the "valid" versions for an entity and merge
+ *    them before returning to the caller. This is effectively duplicating the work in
+ *    the API server that the indexer is already doing for versions.
+ * 2. We can make a new version at indexing time to handle the aggregated versions. The
+ *    downside of this approach is that we create more duplicated triples as well as
+ *    rewrites history. This acts similarly to how "merge" commit works in git.
+ * 3. We don't merge at all and rely on the clients to merge all concurrently valid versions.
+ *    This won't work as each version wouldn't correctly handle possible deleted triples
+ *    across versions unless we stored the triples as ops with their opType, which we
+ *    don't currently do.
+ *
+ * This function implements #2. The implementation might change in the future as we get more
+ * feedback on our versioning mechanisms.
+ */
 function commitMergedVersions(proposals: EditProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
-    yield* _(Effect.log('commitMergedVersions'));
-    // @TODO: Merge versions from the same entity into a new super version. This will require
-    // writing all their ops to the new version. Will need to do this for relations as well.
-    //
-    // 1. Get all versions from DB from these proposals
-    // 2. Find the entity ids with more than one version
-    // 3. Get the triples for those versions
-    // 4. Create a new version containing the triples from those versions
-    // 5. Populate triples for these
-    //
-    // Q:
-    // Which proposal do we link the version to?
-    // How do we do ordering if this all happens in the same block?
-    //
     // @NOTE:
     // We still use the re-fetched data from IPFS since we need to re-apply all of the ops
     // from each of the merged versions into the new version.
@@ -96,78 +90,100 @@ function commitMergedVersions(proposals: EditProposal[], block: BlockEvent) {
     // deleted in on of the merged versions still existing on the merged version. Alternatively
     // we could store the ops in the db as well, but for now we'll just re-fetch from IPFS since
     // we already have that workflow in place.
-
-    // 1.
     const {
       schemaEditProposals: { opsByVersionId, versions, edits },
     } = mapIpfsProposalToSchemaProposalByType(proposals, block);
 
+    // Get the versions that have more than one version for the same entity id
     const manyVersionsByEntityId = aggregateMergableVersions(versions);
-    const newOpsByVersionId = new Map<string, Op[]>();
 
     // Merge the versions in this block with the same entity id into a new aggregated version
     // containing all the changes from each of the versions.
-    const newVersions = [...manyVersionsByEntityId.entries()].map(
-      ([entityId, versionsByEntityId]): S.versions.Insertable => {
-        const newVersionId = createVersionId({
-          entityId,
-          proposalId: createGeoId(), // This won't be deterministic
-        });
-
-        for (const version of versionsByEntityId) {
-          const opsForVersion = opsByVersionId.get(version.id.toString());
-
-          if (opsForVersion) {
-            const previousOpsForNewVersion = newOpsByVersionId.get(newVersionId);
-
-            if (previousOpsForNewVersion) {
-              newOpsByVersionId.set(newVersionId, [...previousOpsForNewVersion, ...opsForVersion]);
-            } else {
-              newOpsByVersionId.set(newVersionId, opsForVersion);
-            }
-          }
-        }
-
-        const firstVersion = versionsByEntityId[0]!;
-
-        return {
-          id: newVersionId,
-          // For now we use the first version's data as the data for the new version
-          // to keep things simple. This obviously isn't completely non-destructive.
-          // Ideally we can reference the versions and edits that we use to derive
-          // this new version.
-          //
-          // The obvious approach is to make versions -> edit mapping a many-to-many
-          // relationship, but we're intentionally avoiding the complexity for now to
-          // hit launch date.
-          //
-          // This approach might also make querying for the edit more complex in the
-          // most common scenario where there's only one edit per version.
-          created_at: Number(firstVersion.created_at),
-          created_at_block: block.blockNumber,
-          created_by_id: firstVersion.created_by_id,
-          edit_id: firstVersion.edit_id,
-          entity_id: firstVersion.entity_id,
-        };
-      }
-    );
+    const { mergedOpsByVersionId, mergedVersions } = aggregateMergableOps({
+      manyVersionsByEntityId,
+      opsByVersionId,
+      block,
+    });
 
     yield* _(
       Effect.tryPromise({
-        try: () => Versions.upsert(newVersions),
+        try: () => Versions.upsert(mergedVersions),
         catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
       })
     );
 
     yield* _(
       populateContent({
-        versions: newVersions,
-        opsByVersionId: newOpsByVersionId,
+        versions: mergedVersions,
+        opsByVersionId: mergedOpsByVersionId,
         edits,
         block,
       })
     );
   });
+}
+
+interface AggregateMergableVersionsArgs {
+  manyVersionsByEntityId: Map<string, S.versions.Insertable[]>;
+  opsByVersionId: Map<string, Op[]>;
+  block: BlockEvent;
+}
+
+function aggregateMergableOps(args: AggregateMergableVersionsArgs) {
+  const { manyVersionsByEntityId, opsByVersionId, block } = args;
+  const newOpsByVersionId = new Map<string, Op[]>();
+
+  const newVersions = [...manyVersionsByEntityId.entries()].map(
+    ([entityId, versionsByEntityId]): S.versions.Insertable => {
+      const newVersionId = createVersionId({
+        entityId,
+        proposalId: createGeoId(), // This won't be deterministic
+      });
+
+      for (const version of versionsByEntityId) {
+        const opsForVersion = opsByVersionId.get(version.id.toString());
+
+        if (opsForVersion) {
+          const previousOpsForNewVersion = newOpsByVersionId.get(newVersionId);
+
+          if (previousOpsForNewVersion) {
+            // Make sure that we put the last version's ops before the new version's
+            // ops so that when we squash the ops later they're ordered correctly.
+            newOpsByVersionId.set(newVersionId, [...previousOpsForNewVersion, ...opsForVersion]);
+          } else {
+            newOpsByVersionId.set(newVersionId, opsForVersion);
+          }
+        }
+      }
+
+      const firstVersion = versionsByEntityId[0]!;
+
+      return {
+        id: newVersionId,
+        // For now we use the first version's data as the data for the new version
+        // to keep things simple. This obviously isn't completely non-destructive.
+        // Ideally we can reference the versions and edits that we use to derive
+        // this new version.
+        //
+        // The obvious approach is to make versions -> edit mapping a many-to-many
+        // relationship, but we're intentionally avoiding the complexity for now to
+        // hit launch date.
+        //
+        // This approach might also make querying for the edit more complex in the
+        // most common scenario where there's only one edit per version.
+        created_at: Number(firstVersion.created_at),
+        created_at_block: block.blockNumber,
+        created_by_id: firstVersion.created_by_id,
+        edit_id: firstVersion.edit_id,
+        entity_id: firstVersion.entity_id,
+      };
+    }
+  );
+
+  return {
+    mergedVersions: newVersions,
+    mergedOpsByVersionId: newOpsByVersionId,
+  };
 }
 
 function aggregateMergableVersions(versions: S.versions.Insertable[]) {
