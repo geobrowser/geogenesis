@@ -29,13 +29,6 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
       if (lastVersion) {
         const lastVersionTriples = yield* _(Effect.promise(() => Triples.select({ version_id: lastVersion.id })));
 
-        if (version.entity_id.toString() === '1d5d0c2adb23466ca0b09abe879df457' && lastVersionTriples.length > 0) {
-          console.log({
-            version,
-            lastVersionTriples,
-          });
-        }
-
         const editWithCreatedById: SchemaTripleEdit = {
           versonId: version.id.toString(),
           createdById: version.created_by_id.toString(),
@@ -55,11 +48,11 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
           }),
         };
 
-        // Make sure that we put the last version's ops before the new version's
-        // ops so that when we squash the ops later they're ordered correctly.
         const previousOpsForNewVersion = opsByVersionId.get(version.id.toString());
 
         if (previousOpsForNewVersion) {
+          // Make sure that we put the last version's ops before the new version's
+          // ops so that when we squash the ops later they're ordered correctly.
           newOpsByVersionId.set(version.id.toString(), [...previousOpsForNewVersion, ...editWithCreatedById.ops]);
         }
       }
