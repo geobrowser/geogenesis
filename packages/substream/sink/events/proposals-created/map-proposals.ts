@@ -240,11 +240,11 @@ function mapEditProposalToSchema(
         created_at_block: block.blockNumber,
         created_at: Number(p.startTime),
         created_by_id: p.creator,
-        proposal_id: p.proposalId,
-        space_id: p.space,
+        edit_id: p.proposalId,
       } satisfies S.versions.Insertable);
 
-      opsByVersionId.set(id, p.ops);
+      const opsForEntityId = p.ops.filter(o => o.triple.entity === entityId);
+      opsByVersionId.set(id, opsForEntityId);
     }
   }
 

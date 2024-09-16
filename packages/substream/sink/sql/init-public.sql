@@ -107,9 +107,8 @@ CREATE TABLE public.versions (
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
-    proposal_id text NOT NULL REFERENCES public.proposals(id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
-    space_id text NOT NULL REFERENCES public.spaces(id)
+    edit_id text NOT NULL REFERENCES public.edits(id),
+    entity_id text NOT NULL REFERENCES public.entities(id)
 );
 
 CREATE TABLE public.entity_types (
@@ -123,6 +122,20 @@ CREATE TABLE public.entity_types (
 CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URI', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
 
 CREATE TABLE public.triples (
+    PRIMARY KEY (space_id, entity_id, attribute_id, version_id),
+    space_id text NOT NULL REFERENCES public.spaces(id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    attribute_id text NOT NULL REFERENCES public.entities(id),
+    value_type triple_value_type NOT NULL,
+    number_value text,
+    text_value text,
+    entity_value_id text REFERENCES public.entities(id),
+    created_at integer NOT NULL,
+    created_at_block integer NOT NULL,
+    version_id text NOT NULL REFERENCES public.versions(id)
+);
+
+CREATE TABLE public.ops (
     PRIMARY KEY (space_id, entity_id, attribute_id, version_id),
     space_id text NOT NULL REFERENCES public.spaces(id),
     entity_id text NOT NULL REFERENCES public.entities(id),
@@ -230,6 +243,9 @@ ALTER TABLE
     public.triples DISABLE TRIGGER ALL;
 
 ALTER TABLE
+    public.ops DISABLE TRIGGER ALL;
+
+ALTER TABLE
     public.space_subspaces DISABLE TRIGGER ALL;
 
 ALTER TABLE
@@ -237,6 +253,9 @@ ALTER TABLE
 
 ALTER TABLE
     public.versions DISABLE TRIGGER ALL;
+ALTER TABLE
+
+    public.edits DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.space_editors DISABLE TRIGGER ALL;

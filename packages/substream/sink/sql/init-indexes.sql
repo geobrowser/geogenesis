@@ -23,17 +23,14 @@ CREATE INDEX edits_created_by_id
 CREATE INDEX proposal_edit_id
     on proposals (edit_id);
 
-CREATE INDEX versions_proposal_id
-    on versions (proposal_id);
+CREATE INDEX versions_edit_id
+    on versions (edit_id);
 
 CREATE INDEX versions_created_by_id
     on versions (created_by_id);
 
 CREATE INDEX versions_entity_id
     on versions (entity_id);
-
-CREATE INDEX versions_space_id
-    on versions (space_id);
 
 CREATE INDEX relations_to_entity_id
     on relations (to_entity_id);
