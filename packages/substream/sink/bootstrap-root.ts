@@ -264,8 +264,8 @@ const makeTypeRelations = () => {
       // @TODO: we don't need entity_id if we can use the id as the entity_id
       id: typeRelationshipTriples[0]!.entity_id,
       type_of_id: SYSTEM_IDS.TYPES, // Making a relation of Type -> Type, i.e., this entity is a Type
-      from_entity_id: typeEntityId,
-      to_entity_id: SYSTEM_IDS.SCHEMA_TYPE,
+      from_version_id: typeEntityId,
+      to_version_id: SYSTEM_IDS.SCHEMA_TYPE,
       index: INITIAL_COLLECTION_ITEM_INDEX,
       entity_id: typeRelationshipTriples[0]!.entity_id,
     });
@@ -299,9 +299,9 @@ const makeTypeRelations = () => {
       relationsToWrite.push({
         // @TODO: we don't need entity_id if we can use the id as the entity_id
         id: relationshipTriples[0]!.entity_id,
-        from_entity_id: typeId,
+        from_version_id: typeId,
         type_of_id: SYSTEM_IDS.ATTRIBUTES, // Making a relation of type Attribute
-        to_entity_id: attributeId,
+        to_version_id: attributeId,
         index: INITIAL_COLLECTION_ITEM_INDEX,
         entity_id: relationshipTriples[0]!.entity_id,
       });
@@ -311,9 +311,9 @@ const makeTypeRelations = () => {
       if (!relationsToWrite.find(r => r.id === attributeId)) {
         relationsToWrite.push({
           id: attributeId,
-          from_entity_id: attributeId,
+          from_version_id: attributeId,
           type_of_id: SYSTEM_IDS.TYPES,
-          to_entity_id: SYSTEM_IDS.ATTRIBUTES,
+          to_version_id: SYSTEM_IDS.ATTRIBUTES,
           index: INITIAL_COLLECTION_ITEM_INDEX,
           entity_id: attributeId,
         });
@@ -329,9 +329,9 @@ const makeTypeRelations = () => {
         if (!relationsToWrite.find(r => r.id === relationValueTypeRelationId)) {
           relationsToWrite.push({
             id: relationValueTypeRelationId,
-            from_entity_id: attributeId,
+            from_version_id: attributeId,
             type_of_id: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
-            to_entity_id: relationValueTypeIdForAttribute,
+            to_version_id: relationValueTypeIdForAttribute,
             index: INITIAL_COLLECTION_ITEM_INDEX,
             entity_id: relationValueTypeRelationId,
           });
@@ -434,7 +434,7 @@ export function bootstrapRoot() {
           await Types.upsert(
             typesToWrite.map(r => ({
               type_id: r.type_of_id,
-              version_id: r.from_entity_id,
+              version_id: r.from_version_id,
               created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
               created_at: ROOT_SPACE_CREATED_AT,
             }))
@@ -442,7 +442,7 @@ export function bootstrapRoot() {
           await Types.upsert(
             attributesToWrite.map(r => ({
               type_id: r.type_of_id,
-              version_id: r.to_entity_id,
+              version_id: r.from_version_id,
               created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
               created_at: ROOT_SPACE_CREATED_AT,
             }))

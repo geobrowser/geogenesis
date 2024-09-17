@@ -39,15 +39,6 @@ CREATE TABLE public.spaces (
     personal_space_admin_plugin_address text
 );
 
-CREATE TABLE public.relations (
-    id text PRIMARY KEY NOT NULL,
-    type_of_id text REFERENCES public.entities(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
-    to_entity_id text REFERENCES public.entities(id) NOT NULL, -- the entity the relation is pointing to
-    index text, -- the fractional index of the relation relative to other relations of the same type
-    from_entity_id text REFERENCES public.entities(id) NOT NULL, -- the entity the relation is pointing from
-    entity_id text REFERENCES public.entities(id) NOT NULL -- the entity id of the relation entity itself
-);
-
 CREATE TYPE public.proposal_type as ENUM ('ADD_EDIT', 'ADD_SUBSPACE', 'REMOVE_SUBSPACE', 'ADD_EDITOR', 'REMOVE_EDITOR', 'ADD_MEMBER', 'REMOVE_MEMBER');
 CREATE TYPE public.proposal_status as ENUM ('proposed', 'accepted', 'rejected', 'canceled', 'executed');
 
@@ -109,6 +100,15 @@ CREATE TABLE public.versions (
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     edit_id text NOT NULL REFERENCES public.edits(id),
     entity_id text NOT NULL REFERENCES public.entities(id)
+);
+
+CREATE TABLE public.relations (
+    id text PRIMARY KEY NOT NULL,
+    type_of_id text REFERENCES public.versions(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
+    to_version_id text REFERENCES public.versions(id) NOT NULL, -- the entity the relation is pointing to
+    index text, -- the fractional index of the relation relative to other relations of the same type
+    from_version_id text REFERENCES public.versions(id) NOT NULL, -- the entity the relation is pointing from
+    entity_id text REFERENCES public.entities(id) NOT NULL -- the entity id of the relation entity itself
 );
 
 CREATE TABLE public.entity_types (

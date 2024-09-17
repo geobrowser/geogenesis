@@ -260,8 +260,8 @@ function getRelationTriplesFromSchemaTriples(
 
   return {
     id: entityId,
-    to_entity_id: toId.toString(),
-    from_entity_id: fromId.toString(),
+    to_version_id: toId.toString(),
+    from_version_id: fromId.toString(),
     entity_id: entityId,
     type_of_id: typeId.toString(),
     index: indexValue,
@@ -440,8 +440,8 @@ function upsertEntityTypeViaRelation(relation: Schema.relations.Insertable, bloc
       try: async () => {
         return await Types.upsert([
           {
-            version_id: relation.from_entity_id,
-            type_id: relation.to_entity_id,
+            version_id: relation.from_version_id,
+            type_id: relation.to_version_id,
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
           },
@@ -461,12 +461,12 @@ function upsertSpaceMetadata(relation: Schema.relations.Insertable, space_id: st
         SpaceMetadata.upsert([
           {
             space_id: space_id,
-            entity_id: relation.from_entity_id,
+            entity_id: relation.from_version_id,
           },
         ]),
       catch: error =>
         new Error(
-          `Failed to insert space metadata with id ${relation.from_entity_id?.toString()} for space ${space_id} ${String(
+          `Failed to insert space metadata with id ${relation.from_version_id?.toString()} for space ${space_id} ${String(
             error
           )}`
         ),
@@ -520,7 +520,7 @@ function deleteEntityType(triple: Schema.triples.Insertable) {
 function deleteEntityTypeViaRelation(relation: Schema.relations.Insertable) {
   return Effect.gen(function* (_) {
     const deleteTypeEffect = Effect.tryPromise({
-      try: () => Types.remove({ version_id: relation.from_entity_id, type_id: relation.type_of_id }),
+      try: () => Types.remove({ version_id: relation.from_version_id, type_id: relation.type_of_id }),
       catch: () => new Error('Failed to delete type'),
     });
 
@@ -533,12 +533,12 @@ function deleteSpaceMetadata(relation: Schema.relations.Insertable, space_id: st
     const deleteSpaceMetadataEffect = Effect.tryPromise({
       try: () =>
         SpaceMetadata.remove({
-          entity_id: relation.from_entity_id,
+          entity_id: relation.from_version_id,
           space_id: space_id,
         }),
       catch: error =>
         new Error(
-          `Failed to delete space metadata with id ${relation.from_entity_id?.toString()} for space ${space_id} ${String(
+          `Failed to delete space metadata with id ${relation.from_version_id?.toString()} for space ${space_id} ${String(
             error
           )}`
         ),
