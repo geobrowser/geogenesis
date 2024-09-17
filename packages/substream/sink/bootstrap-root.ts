@@ -12,6 +12,10 @@ import { Accounts, Entities, EntitySpaces, Proposals, Spaces, Triples, Types, Ve
 import { Edits } from './db/edits';
 import { Relations } from './db/relations';
 import { getTripleFromOp } from './events/get-triple-from-op';
+import { createVersionId } from './utils/id';
+
+const PROPOSAL_ID = '0';
+const EDIT_ID = '0';
 
 const entities: string[] = [
   SYSTEM_IDS.TYPES,
@@ -77,6 +81,20 @@ const entities: string[] = [
   SYSTEM_IDS.PLACEHOLDER_TEXT,
   SYSTEM_IDS.PLACEHOLDER_IMAGE,
 ];
+
+const versions: s.versions.Insertable[] = entities.map(e => {
+  return {
+    id: createVersionId({
+      entityId: e,
+      proposalId: PROPOSAL_ID,
+    }),
+    created_at: ROOT_SPACE_CREATED_AT,
+    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    created_by_id: ROOT_SPACE_CREATED_BY_ID,
+    edit_id: EDIT_ID,
+    entity_id: e,
+  };
+});
 
 const names: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: 'Types',
@@ -209,17 +227,6 @@ const geoEntities: s.entities.Insertable[] = entities.map(
   })
 );
 
-const versions: s.versions.Insertable[] = entities.map(
-  (entity): s.versions.Insertable => ({
-    id: createGeoId(),
-    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-    created_at: ROOT_SPACE_CREATED_AT,
-    created_by_id: ROOT_SPACE_CREATED_BY_ID,
-    entity_id: entity,
-    edit_id: '0',
-  })
-);
-
 const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
   ([id, name]): s.triples.Insertable => ({
     version_id: createGeoId(),
@@ -261,11 +268,10 @@ const makeTypeRelations = () => {
 
     // Make a relation of Types -> Type
     relationsToWrite.push({
-      // @TODO: we don't need entity_id if we can use the id as the entity_id
-      id: typeRelationshipTriples[0]!.entity_id,
-      type_of_id: SYSTEM_IDS.TYPES, // Making a relation of Type -> Type, i.e., this entity is a Type
-      from_version_id: typeEntityId,
-      to_version_id: SYSTEM_IDS.SCHEMA_TYPE,
+      id: createGeoId(), // Not deterministic
+      type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.TYPES)!.id, // Making a relation of Type -> Type, i.e., this entity is a Type
+      from_version_id: versions.find(v => v.entity_id === typeEntityId)!.id,
+      to_version_id: versions.find(v => v.entity_id === SYSTEM_IDS.SCHEMA_TYPE)!.id,
       index: INITIAL_COLLECTION_ITEM_INDEX,
       entity_id: typeRelationshipTriples[0]!.entity_id,
     });
@@ -299,9 +305,9 @@ const makeTypeRelations = () => {
       relationsToWrite.push({
         // @TODO: we don't need entity_id if we can use the id as the entity_id
         id: relationshipTriples[0]!.entity_id,
-        from_version_id: typeId,
-        type_of_id: SYSTEM_IDS.ATTRIBUTES, // Making a relation of type Attribute
-        to_version_id: attributeId,
+        from_version_id: versions.find(v => v.entity_id === typeId)!.id,
+        type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.ATTRIBUTES)!.id, // Making a relation of type Attribute
+        to_version_id: versions.find(v => v.entity_id === attributeId)!.id,
         index: INITIAL_COLLECTION_ITEM_INDEX,
         entity_id: relationshipTriples[0]!.entity_id,
       });
@@ -311,9 +317,9 @@ const makeTypeRelations = () => {
       if (!relationsToWrite.find(r => r.id === attributeId)) {
         relationsToWrite.push({
           id: attributeId,
-          from_version_id: attributeId,
-          type_of_id: SYSTEM_IDS.TYPES,
-          to_version_id: SYSTEM_IDS.ATTRIBUTES,
+          from_version_id: versions.find(v => v.entity_id === attributeId)!.id,
+          type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.TYPES)!.id,
+          to_version_id: versions.find(v => v.entity_id === SYSTEM_IDS.ATTRIBUTES)!.id,
           index: INITIAL_COLLECTION_ITEM_INDEX,
           entity_id: attributeId,
         });
@@ -329,9 +335,9 @@ const makeTypeRelations = () => {
         if (!relationsToWrite.find(r => r.id === relationValueTypeRelationId)) {
           relationsToWrite.push({
             id: relationValueTypeRelationId,
-            from_version_id: attributeId,
-            type_of_id: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
-            to_version_id: relationValueTypeIdForAttribute,
+            from_version_id: versions.find(v => v.entity_id === attributeId)!.id,
+            type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE)!.id,
+            to_version_id: versions.find(v => v.entity_id === relationValueTypeIdForAttribute)!.id,
             index: INITIAL_COLLECTION_ITEM_INDEX,
             entity_id: relationValueTypeRelationId,
           });
@@ -361,7 +367,7 @@ const account: s.accounts.Insertable = {
 };
 
 const proposal: s.proposals.Insertable = {
-  id: '0',
+  id: PROPOSAL_ID,
   onchain_proposal_id: '-1',
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
   plugin_address: '',

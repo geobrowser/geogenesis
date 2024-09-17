@@ -1,6 +1,6 @@
 import { SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
-import { Effect, Either } from 'effect';
-import { dedupeWith, groupBy } from 'effect/ReadonlyArray';
+import { Effect } from 'effect';
+import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
 import { Entities, Versions } from '../db';
@@ -107,6 +107,10 @@ export function populateContent(args: PopulateContentArgs) {
      *    to a map if so. We'll use this map later when writing relations.
      * 2. If there are from, to, or type entities that are _not_ in the block, then we need to fetch their
      *    latest versions and write them to the mapping.
+     *
+     * @TODO:
+     * 1. Merge relations from previous versions
+     * 2. Merge relations from committed squashed versions
      *
      * Q:
      * * How do we merge previous relations into new versions? Need to check for relation deletions
