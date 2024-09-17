@@ -1,9 +1,15 @@
-import { Effect } from 'effect';
-import { dedupeWith } from 'effect/ReadonlyArray';
+import { SYSTEM_IDS, createGeoId } from '@geogenesis/sdk';
+import { Effect, Either } from 'effect';
+import { dedupeWith, groupBy } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Entities } from '../db';
-import { type SchemaTripleEdit, mapSchemaTriples } from '../events/proposal-processed/map-triples';
+import { Entities, Versions } from '../db';
+import { Relations } from '../db/relations';
+import {
+  type OpWithCreatedBy,
+  type SchemaTripleEdit,
+  mapSchemaTriples,
+} from '../events/proposal-processed/map-triples';
 import { populateTriples } from '../events/proposal-processed/populate-triples';
 import type { BlockEvent, Op } from '../types';
 
@@ -52,6 +58,8 @@ export function populateContent(args: PopulateContentArgs) {
     }
 
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
+    const triples = tripleEdits.flatMap(e => mapSchemaTriples(e, block));
+    const relations = yield* awaited(aggregateRelations({ triples, versions, edits }));
 
     yield* awaited(
       Effect.all([
@@ -59,11 +67,15 @@ export function populateContent(args: PopulateContentArgs) {
           // We update the name and description for an entity when mapping
           // through triples.
           try: () => Entities.upsert(uniqueEntities),
-          catch: error => new Error(`Failed to insert entity. ${(error as Error).message}`),
+          catch: error => new Error(`Failed to insert entities. ${(error as Error).message}`),
         }),
         populateTriples({
-          schemaTriples: tripleEdits.flatMap(e => mapSchemaTriples(e, block)),
+          schemaTriples: triples,
           block,
+        }),
+        Effect.tryPromise({
+          try: () => Relations.upsert(relations, { chunked: true }),
+          catch: error => new Error(`Failed to insert relations. ${(error as Error).message}`),
         }),
       ])
     );
@@ -96,13 +108,149 @@ export function populateContent(args: PopulateContentArgs) {
      * 2. If there are from, to, or type entities that are _not_ in the block, then we need to fetch their
      *    latest versions and write them to the mapping.
      *
-     *
      * Q:
      * * How do we merge previous relations into new versions? Need to check for relation deletions
+     * * How do we update "approved" relations to point to the latest version and not the version at
+     *   the time of creation in the case that we commit a new version?
      */
 
     // --- These should probably be done after processing the proposals vs now ---
     // @TODO: space
     // @TODO: types
   });
+}
+
+interface AggregateRelationsArgs {
+  triples: OpWithCreatedBy[];
+  versions: Schema.versions.Insertable[];
+  edits: Schema.edits.Insertable[];
+}
+
+function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs) {
+  const entitiesReferencedByRelations = versions.flatMap(v => {
+    const entities = getEntitiesReferencedByRelations(triples, v.entity_id.toString());
+    return entities ?? [];
+  });
+
+  return Effect.gen(function* (_) {
+    const relationsToWrite: Schema.relations.Insertable[] = [];
+
+    // These are the valid versions that exist in the db already and aren't any new versions
+    // that are created in this edit. We don't set versions as "valid" until we process the
+    // proposal state, therefore we know that any versions in this edit haven't been set to
+    // accepted yet.
+    const dbVersionsForEntitiesReferencedByRelations = (yield* _(
+      Effect.all(
+        entitiesReferencedByRelations.map(entityId => {
+          return Effect.promise(() => Versions.findLatestValid(entityId));
+        })
+      )
+    )).flatMap(v => (v ? [v] : []));
+
+    /**
+     * We process relations by edit id so that we can use either the latest or any version
+     * in the specific edit when referencing to, from, and type within a relation. Otherwise
+     * we can have relations referencing versions in different edits which doesn't make sense.
+     */
+
+    // For each edit we need to find the latest version for each entity referenced by each
+    // relation in the edit. We also need to check if there is a version in this edit that
+    // is newer than the latest version in the db.
+    for (const edit of edits) {
+      const latestVersionsByEntityId = new Map<string, string>();
+      const blockVersionsForEdit = versions.filter(v => v.edit_id.toString() === edit.id.toString());
+
+      // Merge the versions from this block for this edit with any versions for this entity
+      // from the database. We favor any versions from the block over the versions in the
+      // database.
+      const allVersionsReferencedByRelations = [...dbVersionsForEntitiesReferencedByRelations, ...blockVersionsForEdit];
+
+      for (const version of allVersionsReferencedByRelations) {
+        latestVersionsByEntityId.set(version.entity_id.toString(), version.id.toString());
+      }
+
+      const relationsFromEdit = blockVersionsForEdit.flatMap(v => {
+        const relationsForEntity = getRelationTriplesFromSchemaTriples(
+          triples,
+          v.entity_id.toString(),
+          latestVersionsByEntityId
+        );
+        return relationsForEntity ?? [];
+      });
+
+      relationsToWrite.push(...relationsFromEdit);
+    }
+
+    return relationsToWrite;
+  });
+}
+
+function getEntitiesReferencedByRelations(schemaTriples: OpWithCreatedBy[], entityId: string): string[] | null {
+  // Grab other triples in this edit that match the collection item's entity id. We
+  // want to add all of the collection item properties to the item in the
+  // collection_items table.
+  const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
+
+  const to = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+  const from = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+  const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+
+  const toId = to?.triple.entity_value_id;
+  const fromId = from?.triple.entity_value_id;
+  const typeId = type?.triple.entity_value_id;
+
+  if (!toId || !fromId || !typeId) {
+    return null;
+  }
+
+  return [toId.toString(), fromId.toString(), typeId.toString()];
+}
+
+/**
+ * Handle creating the database representation of a collection item when a new collection item
+ * is created. We need to gather all of the required triples to fully flesh out the collection
+ * item's data. We could do this linearly, but we want to ensure that all of the properties
+ * exist before creating the item. If not all properties exist we don't create the collection
+ * item.
+ */
+function getRelationTriplesFromSchemaTriples(
+  schemaTriples: OpWithCreatedBy[],
+  entityId: string,
+  latestVersionsByEntityId: Map<string, string>
+): Schema.relations.Insertable | null {
+  // Grab other triples in this edit that match the collection item's entity id. We
+  // want to add all of the collection item properties to the item in the
+  // collection_items table.
+  const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
+
+  const collectionItemIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_INDEX);
+  const to = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
+  const from = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
+  const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
+
+  const indexValue = collectionItemIndex?.triple.text_value;
+  const toId = to?.triple.entity_value_id;
+  const fromId = from?.triple.entity_value_id;
+  const typeId = type?.triple.entity_value_id;
+
+  if (!indexValue || !toId || !fromId || !typeId) {
+    return null;
+  }
+
+  const toVersion = latestVersionsByEntityId.get(toId.toString());
+  const fromVersion = latestVersionsByEntityId.get(fromId.toString());
+  const typeVersion = latestVersionsByEntityId.get(typeId.toString());
+
+  if (!toVersion || !fromVersion || !typeVersion) {
+    return null;
+  }
+
+  return {
+    id: createGeoId(), // Not deterministic
+    to_version_id: toId.toString(),
+    from_version_id: fromId.toString(),
+    entity_id: entityId,
+    type_of_id: typeId.toString(),
+    index: indexValue,
+  };
 }

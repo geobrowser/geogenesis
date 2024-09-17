@@ -22,7 +22,7 @@ export class Versions {
         'versions',
         { entity_id: entityId },
         {
-          columns: ['id'],
+          columns: ['id', 'entity_id', 'edit_id'],
           order: {
             by: 'created_at',
             direction: 'DESC',

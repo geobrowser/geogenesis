@@ -228,46 +228,6 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
   });
 }
 
-/**
- * Handle creating the database representation of a collection item when a new collection item
- * is created. We need to gather all of the required triples to fully flesh out the collection
- * item's data. We could do this linearly, but we want to ensure that all of the properties
- * exist before creating the item. If not all properties exist we don't create the collection
- * item.
- */
-function getRelationTriplesFromSchemaTriples(
-  schemaTriples: OpWithCreatedBy[],
-  entityId: string
-): Schema.relations.Insertable | null {
-  // Grab other triples in this edit that match the collection item's entity id. We
-  // want to add all of the collection item properties to the item in the
-  // collection_items table.
-  const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
-
-  const collectionItemIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_INDEX);
-  const to = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
-  const from = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
-  const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
-
-  const indexValue = collectionItemIndex?.triple.text_value;
-  const toId = to?.triple.entity_value_id;
-  const fromId = from?.triple.entity_value_id;
-  const typeId = type?.triple.entity_value_id;
-
-  if (!indexValue || !toId || !fromId || !typeId) {
-    return null;
-  }
-
-  return {
-    id: entityId,
-    to_version_id: toId.toString(),
-    from_version_id: fromId.toString(),
-    entity_id: entityId,
-    type_of_id: typeId.toString(),
-    index: indexValue,
-  };
-}
-
 function upsertEntitySpace({ space_id, version_id }: Schema.entity_spaces.Insertable) {
   return Effect.gen(function* (_) {
     const insertEntitySpaceEffect = Effect.tryPromise({
