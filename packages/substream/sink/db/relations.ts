@@ -49,7 +49,7 @@ export class Relations {
 
   static async select(relation: S.relations.Whereable) {
     return await db
-      .selectOne('relations', relation, {
+      .select('relations', relation, {
         columns: ['id', 'entity_id', 'from_version_id', 'to_version_id', 'type_of_id', 'index'],
       })
       .run(pool);

@@ -75,6 +75,20 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
       new Map<string, string>()
     );
 
+    // For all of the referenced versions, both from the edit and from the past, we
+    // need to fetch the relations for each version so we can merge into new versions.
+    // @TODO: We can do this before the edit loop
+    const latestRelationsFromDbForVersions = (yield* _(
+      Effect.all(
+        [...lastDbVersionForEntitiesReferencedByNewRelations.values()].map(version => {
+          return Effect.promise(() => Relations.select({ from_version_id: version }));
+        })
+      )
+    ))
+      // flattest of flattenings
+      .flatMap(r => (r ? [r] : []))
+      .flat();
+
     // We process relations by edit id so that we can use either the latest or any version
     // in the specific edit when referencing to, from, and type within a relation. Otherwise
     // we can have relations referencing versions in different edits which doesn't make sense.
@@ -97,33 +111,15 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
         latestVersionForChangedEntities.set(version.entity_id.toString(), version.id.toString());
       }
 
-      // For all of the referenced versions, both from the edit and from the past, we
-      // need to fetch the relations for each version so we can merge into new versions.
-      // @TODO: We can do this before the edit loop
-      const latestRelationsFromDbForVersions = (yield* _(
-        Effect.all(
-          [...latestVersionForChangedEntities.values()].map(version => {
-            return Effect.promise(() => Relations.select({ from_version_id: version }));
-          })
-        )
-      )).flatMap(r => (r ? [r] : []));
-
       for (const relation of latestRelationsFromDbForVersions) {
         latestVersionForChangedEntities.set(relation.to_version_id, relation.from_version_id);
-      }
-
-      // @TODO: Why am I not getting the last version correctly?
-      const spaceConfigLatestId = latestVersionForChangedEntities.get(SYSTEM_IDS.SPACE_CONFIGURATION);
-
-      if (spaceConfigLatestId) {
-        // Should be e74c548d5be3497c9ad06f6259a7e49c
-        console.log('space config entity latest version', { spaceConfigLatestId });
       }
 
       const deletedRelationEntityIds = collectDeletedRelationsEntityIds(
         triples,
         new Set(...latestRelationsFromDbForVersions.map(r => r.entity_id))
       );
+
       const nonDeletedDbRelations = latestRelationsFromDbForVersions.filter(
         r => !deletedRelationEntityIds.has(r.entity_id)
       );
@@ -148,14 +144,14 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
               // can fall back to the last version.
               type_of_id: latestVersionForChangedEntities.get(r.type_of_id) ?? r.type_of_id,
               to_version_id: latestVersionForChangedEntities.get(r.to_version_id) ?? r.to_version_id,
-              from_version_id: v.id,
+              from_version_id: r.from_version_id,
               index: r.index,
               entity_id: r.entity_id,
             };
           });
 
         if (v.entity_id === SYSTEM_IDS.SPACE_CONFIGURATION) {
-          console.log('space config relations from db', relationsForEntity);
+          console.log('space config relations from db', { relationsForEntity, lastVersionForEntityId });
         }
 
         return relationsForEntity;

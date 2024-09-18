@@ -1,14 +1,12 @@
-import { createGeoId } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
-import type * as S from 'zapatos/schema';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
 import { Proposals, Versions } from '~/sink/db';
 import { populateContent } from '~/sink/entries/populate-content';
-import type { BlockEvent, Op } from '~/sink/types';
-import { createVersionId } from '~/sink/utils/id';
+import type { BlockEvent } from '~/sink/types';
 import { slog } from '~/sink/utils/slog';
 
 export class ProposalDoesNotExistError extends Error {
