@@ -131,28 +131,37 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
           return [];
         }
 
-        const relationsForEntity = nonDeletedDbRelations
-          .filter(v => v.from_version_id === lastVersionForEntityId)
-          .map((r): Schema.relations.Insertable => {
-            return {
-              id: createGeoId(), // Not deterministic
-              // We look up the latest version for both the type and to versions
-              // so they're updated before writing to the db. The latest version
-              // can come from the db or come from the current edit.
-              //
-              // If the type_of or to_version aren't changed in this edit then we
-              // can fall back to the last version.
-              type_of_id: latestVersionForChangedEntities.get(r.type_of_id) ?? r.type_of_id,
-              to_version_id: latestVersionForChangedEntities.get(r.to_version_id) ?? r.to_version_id,
-              from_version_id: r.from_version_id,
-              index: r.index,
-              entity_id: r.entity_id,
-            };
-          });
+        const nonDeletedRelationsFromPreviousVersion = nonDeletedDbRelations.filter(
+          v => v.from_version_id === lastVersionForEntityId
+        );
 
         if (v.entity_id === SYSTEM_IDS.SPACE_CONFIGURATION) {
-          console.log('space config relations from db', { relationsForEntity, lastVersionForEntityId });
+          console.log('space config relations from db', {
+            nonDeletedRelationsFromPreviousVersion,
+            lastVersionForEntityId,
+          });
         }
+
+        const relationsForEntity = nonDeletedRelationsFromPreviousVersion.map((r): Schema.relations.Insertable => {
+          return {
+            id: createGeoId(), // Not deterministic
+            // We look up the latest version for both the type and to versions
+            // so they're updated before writing to the db. The latest version
+            // can come from the db or come from the current edit.
+            //
+            // If the type_of or to_version aren't changed in this edit then we
+            // can fall back to the last version.
+            //
+            // @TOOD: Sometimes these are version ids and sometimes they're entity ids,
+            // so the data we're mapping isn't accurate
+            type_of_id: latestVersionForChangedEntities.get(r.type_of_id) ?? r.type_of_id,
+            to_version_id: latestVersionForChangedEntities.get(r.to_version_id) ?? r.to_version_id,
+
+            from_version_id: v.id,
+            index: r.index,
+            entity_id: r.entity_id,
+          };
+        });
 
         return relationsForEntity;
       });
