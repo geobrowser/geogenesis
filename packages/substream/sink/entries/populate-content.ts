@@ -49,7 +49,7 @@ export function populateContent(args: PopulateContentArgs) {
         versonId: version.id.toString(),
         createdById: version.created_by_id.toString(),
         spaceId: spaceIdByEditId.get(version.edit_id.toString())!,
-        ops: opsByVersionId.get(version.id.toString()),
+        ops: opsByVersionId.get(version.id.toString()) ?? [],
       };
 
       tripleEdits.push(editWithCreatedById);

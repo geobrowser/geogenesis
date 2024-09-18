@@ -9,14 +9,9 @@ export interface OpWithCreatedBy {
   triple: S.triples.Insertable;
 }
 
-export type SchemaTripleEdit = { ops?: Op[]; spaceId: string; createdById: string; versonId: string };
+export type SchemaTripleEdit = { ops: Op[]; spaceId: string; createdById: string; versonId: string };
 
 export function mapSchemaTriples(edit: SchemaTripleEdit, block: BlockEvent): OpWithCreatedBy[] {
-  if (edit.ops === undefined) {
-    console.log('invalid edit', { edit });
-    return [];
-  }
-
   const squashedOps = squashOps(edit.ops, edit.spaceId, edit.versonId);
 
   return squashedOps.map((op): OpWithCreatedBy => {

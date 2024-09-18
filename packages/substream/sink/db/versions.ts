@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
