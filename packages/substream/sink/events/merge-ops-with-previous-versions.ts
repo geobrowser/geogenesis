@@ -29,31 +29,36 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
       if (lastVersion) {
         const lastVersionTriples = yield* _(Effect.promise(() => Triples.select({ version_id: lastVersion.id })));
 
+        if (lastVersion.id === 'e74c548d5be3497c9ad06f6259a7e49c') {
+          console.log('last version triples', lastVersionTriples);
+        }
+
         const editWithCreatedById: SchemaTripleEdit = {
           versonId: version.id.toString(),
           createdById: version.created_by_id.toString(),
           spaceId: spaceIdByEditId.get(version.edit_id.toString())!,
-          ops: lastVersionTriples.map((t): Op => {
-            return {
-              type: 'SET_TRIPLE',
-              triple: {
-                entity: t.entity_id,
-                attribute: t.attribute_id,
-                value: {
-                  type: t.value_type,
-                  value: (t.value_type === 'ENTITY' ? t.entity_value_id : t.text_value) as string,
-                },
-              },
-            };
-          }),
+          ops: opsByVersionId.get(version.id.toString())!,
         };
 
-        const previousOpsForNewVersion = opsByVersionId.get(version.id.toString());
-
-        if (previousOpsForNewVersion) {
+        if (lastVersionTriples.length > 0) {
           // Make sure that we put the last version's ops before the new version's
           // ops so that when we squash the ops later they're ordered correctly.
-          newOpsByVersionId.set(version.id.toString(), [...previousOpsForNewVersion, ...editWithCreatedById.ops]);
+          newOpsByVersionId.set(version.id.toString(), [
+            ...lastVersionTriples.map((t): Op => {
+              return {
+                type: 'SET_TRIPLE',
+                triple: {
+                  entity: t.entity_id,
+                  attribute: t.attribute_id,
+                  value: {
+                    type: t.value_type,
+                    value: (t.value_type === 'ENTITY' ? t.entity_value_id : t.text_value) as string,
+                  },
+                },
+              };
+            }),
+            ...(editWithCreatedById.ops ?? []),
+          ]);
         }
       }
     }

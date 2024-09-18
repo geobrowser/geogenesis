@@ -46,6 +46,9 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
 
     // See comment above function definition for more details as to why we do this.
     yield* _(commitMergedVersions(ipfsProposals, block));
+    // commitMergedRelations
+    // commitMergedEntityTypes
+    // commitMergedEntitySpaces
 
     // @TODO: Write relations in populateTriples or populateContent
     // 1. Aggregate all exsting relations for every version in the set of proposals in
@@ -119,6 +122,7 @@ function commitMergedVersions(proposals: EditProposal[], block: BlockEvent) {
         opsByVersionId: mergedOpsByVersionId,
         edits,
         block,
+        isMerging: true,
       })
     );
   });

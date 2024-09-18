@@ -67,6 +67,11 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
     // @TODO: We need a special function to map a proposal endtime to be now
     const { schemaEditProposals } = mapIpfsProposalToSchemaProposalByType(proposalsFromIpfs, block);
 
+    console.log(
+      'ops for 146e22ba35a24ee880e642c8ef11f454',
+      schemaEditProposals.opsByVersionId.get('146e22ba35a24ee880e642c8ef11f454')
+    );
+
     slog({
       requestId: block.requestId,
       message: `Writing ${schemaEditProposals.proposals.length} proposals for edits without proposals`,

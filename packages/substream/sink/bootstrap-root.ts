@@ -229,7 +229,7 @@ const geoEntities: s.entities.Insertable[] = entities.map(
 
 const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
   ([id, name]): s.triples.Insertable => ({
-    version_id: createGeoId(),
+    version_id: versions.find(v => v.entity_id === id)!.id,
     entity_id: id,
     attribute_id: SYSTEM_IDS.NAME,
     value_type: 'TEXT',
@@ -376,6 +376,7 @@ const proposal: s.proposals.Insertable = {
   status: 'accepted',
   start_time: ROOT_SPACE_CREATED_AT,
   end_time: ROOT_SPACE_CREATED_AT,
+  edit_id: EDIT_ID,
 };
 
 const edit: s.edits.Insertable = {
