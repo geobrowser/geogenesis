@@ -137,9 +137,35 @@ interface AggregateRelationsArgs {
  *
  * The latest version references for a relation may also be created in the edit
  * where the relation was created.
+ *
+ * There's a lot of work needed to collect all of the relations to write for a
+ * given new version.
+ * 1. Collect all of the entity ids referenced by all new relations in this block
+ * 2. Get the last valid version for each entity id referenced by new relations
+ * 3. For each edit (to ensure we are referencing new versions from the correct edit)
+ *    a. Select the last version either from the db or from the edit for each entity id
+ *    b. Get all of the db relations for each last valid version in this edit
+ *    c. Get which of the db relations are being deleted in this edit
+ *    d. Filter out any of the db relations that are being deleted
+ *    e. Map the still-valid db relations to any new versions in this edit
+ *    f. Map new relations in this edit using the new triples and the latest versions
+ *       for each entity id
+ * 4. Return all of the relations to write
+ *
+ * @NOTE: This level of complexity is mostly only necessary because we are pointing
+ * relations to specific versions instead of just the entity id. The benefit of this
+ * is that we can read a relation at any point and time and know that it's pointing to
+ * the correct version at the same point in time. Otherwise we would need to traverse
+ * the versions for each entity in a relation and find the correct version for the
+ * relation at the time the relation was created.
+ *
+ * @params versions - The versions that have been created in this block as array of {@link Schema.versions.Insertable}
+ * @params edits - The edits that have been created in this block as array of {@link Schema.edits.Insertable}
+ * @params triples - The triples that have been created in this block as array of {@link Schema.triples.Insertable}
+ * @returns relations – The relations to write as array of {@link Schema.relations.Insertable}
  */
 function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs) {
-  const entitiesReferencedByRelations = versions.flatMap(v => {
+  const entitiesReferencedByNewRelations = versions.flatMap(v => {
     const entities = getEntitiesReferencedByRelations(triples, v.entity_id.toString());
     return entities ?? [];
   });
@@ -151,67 +177,69 @@ function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs
     // that are created in this edit. We don't set versions as "valid" until we process the
     // proposal state, therefore we know that any versions in this edit haven't been set to
     // accepted yet.
-    const dbVersionsForEntitiesReferencedByRelations = (yield* _(
+    const dbVersionsForEntitiesReferencedByNewRelations = (yield* _(
       Effect.all(
-        entitiesReferencedByRelations.map(entityId => {
+        entitiesReferencedByNewRelations.map(entityId => {
           return Effect.promise(() => Versions.findLatestValid(entityId));
         })
       )
     )).flatMap(v => (v ? [v] : []));
 
-    const lastDbVersionForEntityId = dbVersionsForEntitiesReferencedByRelations.reduce((acc, v) => {
-      acc.set(v.entity_id.toString(), v.id.toString());
-      return acc;
-    }, new Map<string, string>());
+    const lastDbVersionForEntitiesReferencedByNewRelations = dbVersionsForEntitiesReferencedByNewRelations.reduce(
+      (acc, v) => {
+        acc.set(v.entity_id.toString(), v.id.toString());
+        return acc;
+      },
+      new Map<string, string>()
+    );
 
-    /**
-     * We process relations by edit id so that we can use either the latest or any version
-     * in the specific edit when referencing to, from, and type within a relation. Otherwise
-     * we can have relations referencing versions in different edits which doesn't make sense.
-     */
-
-    // For each edit we need to find the latest version for each entity referenced by each
-    // relation in the edit. We also need to check if there is a version in this edit that
-    // is newer than the latest version in the db.
+    // We process relations by edit id so that we can use either the latest or any version
+    // in the specific edit when referencing to, from, and type within a relation. Otherwise
+    // we can have relations referencing versions in different edits which doesn't make sense.
     for (const edit of edits) {
-      const latestVersionsByEntityId = new Map<string, string>();
+      const latestVersionForChangedEntities = new Map<string, string>();
       const blockVersionsForEdit = versions.filter(v => v.edit_id.toString() === edit.id.toString());
 
       // Merge the versions from this block for this edit with any versions for this entity
       // from the database. We favor any versions from the block over the versions in the
       // database.
-      const allVersionsReferencedByRelations = [...dbVersionsForEntitiesReferencedByRelations, ...blockVersionsForEdit];
+      const allVersionsReferencedByRelations = [
+        ...dbVersionsForEntitiesReferencedByNewRelations,
+        ...blockVersionsForEdit,
+      ];
 
-      // Iterates over all of the versions referenced by relations in this block and map
-      // them to their entity id. We overwrite the db version with the edit version if
-      // it exists, e.g., there's a new version in this edit for the same entity id.
+      // Iterates over all of the versions referenced by new relations in this block and
+      // map them to their entity id. We overwrite the db version with the edit version
+      // if it exists, e.g., there's a new version in this edit for the same entity id.
       for (const version of allVersionsReferencedByRelations) {
-        latestVersionsByEntityId.set(version.entity_id.toString(), version.id.toString());
+        latestVersionForChangedEntities.set(version.entity_id.toString(), version.id.toString());
       }
 
       // For all of the referenced versions, both from the edit and from the past, we
       // need to fetch the relations for each version so we can merge into new versions.
+      // @TODO: We can do this before the edit loop
       const latestRelationsFromDbForVersions = (yield* _(
         Effect.all(
-          [...latestVersionsByEntityId.values()].map(version => {
+          [...latestVersionForChangedEntities.values()].map(version => {
             return Effect.promise(() => Relations.select({ from_version_id: version }));
           })
         )
       )).flatMap(r => (r ? [r] : []));
 
-      const entityIdsForDbRelations = new Set(...latestRelationsFromDbForVersions.map(r => r.entity_id));
-
       for (const relation of latestRelationsFromDbForVersions) {
-        latestVersionsByEntityId.set(relation.to_version_id, relation.from_version_id);
+        latestVersionForChangedEntities.set(relation.to_version_id, relation.from_version_id);
       }
 
-      const deletedRelationEntityIds = collectDeletedRelationsEntityIds(triples, entityIdsForDbRelations);
+      const deletedRelationEntityIds = collectDeletedRelationsEntityIds(
+        triples,
+        new Set(...latestRelationsFromDbForVersions.map(r => r.entity_id))
+      );
       const nonDeletedDbRelations = latestRelationsFromDbForVersions.filter(
         r => !deletedRelationEntityIds.has(r.entity_id)
       );
 
       const relationsFromDbToWrite = blockVersionsForEdit.flatMap(v => {
-        const lastVersionForEntityId = lastDbVersionForEntityId.get(v.entity_id.toString());
+        const lastVersionForEntityId = lastDbVersionForEntitiesReferencedByNewRelations.get(v.entity_id.toString());
 
         if (!lastVersionForEntityId) {
           return [];
@@ -225,8 +253,11 @@ function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs
               // We look up the latest version for both the type and to versions
               // so they're updated before writing to the db. The latest version
               // can come from the db or come from the current edit.
-              type_of_id: latestVersionsByEntityId.get(r.type_of_id)!,
-              to_version_id: latestVersionsByEntityId.get(r.to_version_id)!,
+              //
+              // If the type_of or to_version aren't changed in this edit then we
+              // can fall back to the last version.
+              type_of_id: latestVersionForChangedEntities.get(r.type_of_id) ?? r.type_of_id,
+              to_version_id: latestVersionForChangedEntities.get(r.to_version_id) ?? r.to_version_id,
               from_version_id: v.id,
               index: r.index,
               entity_id: r.entity_id,
@@ -244,7 +275,7 @@ function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs
         const relationsForEntity = getRelationTriplesFromSchemaTriples(
           triples,
           v.entity_id.toString(),
-          latestVersionsByEntityId
+          latestVersionForChangedEntities
         );
 
         return relationsForEntity ?? [];
