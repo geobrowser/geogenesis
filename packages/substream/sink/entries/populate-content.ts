@@ -151,6 +151,10 @@ function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs
       )
     )).flatMap(v => (v ? [v] : []));
 
+    // @TODO: Figure out which relations have been deleted between versions.
+    // @TODO: Get relations for the previous versions of entities in this block. Add them to
+    // relationsToWrite. Need to handle if there are any relations that are deleted.
+
     /**
      * We process relations by edit id so that we can use either the latest or any version
      * in the specific edit when referencing to, from, and type within a relation. Otherwise
