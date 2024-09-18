@@ -130,6 +130,14 @@ interface AggregateRelationsArgs {
   edits: Schema.edits.Insertable[];
 }
 
+/**
+ * Aggregate all relations for any new versions in this block. Relations point
+ * to versions for the type, from, and to entities. This means we need to collect
+ * the latest versions for each entity referenced by a relation.
+ *
+ * The latest version references for a relation may also be created in the edit
+ * where the relation was created.
+ */
 function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs) {
   const entitiesReferencedByRelations = versions.flatMap(v => {
     const entities = getEntitiesReferencedByRelations(triples, v.entity_id.toString());
@@ -151,9 +159,10 @@ function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs
       )
     )).flatMap(v => (v ? [v] : []));
 
-    // @TODO: Figure out which relations have been deleted between versions.
-    // @TODO: Get relations for the previous versions of entities in this block. Add them to
-    // relationsToWrite. Need to handle if there are any relations that are deleted.
+    const lastDbVersionForEntityId = dbVersionsForEntitiesReferencedByRelations.reduce((acc, v) => {
+      acc.set(v.entity_id.toString(), v.id.toString());
+      return acc;
+    }, new Map<string, string>());
 
     /**
      * We process relations by edit id so that we can use either the latest or any version
@@ -173,9 +182,63 @@ function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs
       // database.
       const allVersionsReferencedByRelations = [...dbVersionsForEntitiesReferencedByRelations, ...blockVersionsForEdit];
 
+      // Iterates over all of the versions referenced by relations in this block and map
+      // them to their entity id. We overwrite the db version with the edit version if
+      // it exists, e.g., there's a new version in this edit for the same entity id.
       for (const version of allVersionsReferencedByRelations) {
         latestVersionsByEntityId.set(version.entity_id.toString(), version.id.toString());
       }
+
+      // For all of the referenced versions, both from the edit and from the past, we
+      // need to fetch the relations for each version so we can merge into new versions.
+      const latestRelationsFromDbForVersions = (yield* _(
+        Effect.all(
+          [...latestVersionsByEntityId.values()].map(version => {
+            return Effect.promise(() => Relations.select({ from_version_id: version }));
+          })
+        )
+      )).flatMap(r => (r ? [r] : []));
+
+      const entityIdsForDbRelations = new Set(...latestRelationsFromDbForVersions.map(r => r.entity_id));
+
+      for (const relation of latestRelationsFromDbForVersions) {
+        latestVersionsByEntityId.set(relation.to_version_id, relation.from_version_id);
+      }
+
+      const deletedRelationEntityIds = collectDeletedRelationsEntityIds(triples, entityIdsForDbRelations);
+      const nonDeletedDbRelations = latestRelationsFromDbForVersions.filter(
+        r => !deletedRelationEntityIds.has(r.entity_id)
+      );
+
+      const relationsFromDbToWrite = blockVersionsForEdit.flatMap(v => {
+        const lastVersionForEntityId = lastDbVersionForEntityId.get(v.entity_id.toString());
+
+        if (!lastVersionForEntityId) {
+          return [];
+        }
+
+        const relationsForEntity = nonDeletedDbRelations
+          .filter(v => v.from_version_id === lastVersionForEntityId)
+          .map((r): Schema.relations.Insertable => {
+            return {
+              id: createGeoId(), // Not deterministic
+              // We look up the latest version for both the type and to versions
+              // so they're updated before writing to the db. The latest version
+              // can come from the db or come from the current edit.
+              type_of_id: latestVersionsByEntityId.get(r.type_of_id)!,
+              to_version_id: latestVersionsByEntityId.get(r.to_version_id)!,
+              from_version_id: v.id,
+              index: r.index,
+              entity_id: r.entity_id,
+            };
+          });
+
+        if (v.entity_id === SYSTEM_IDS.SPACE_CONFIGURATION) {
+          console.log('space config relations from db', relationsForEntity);
+        }
+
+        return relationsForEntity;
+      });
 
       const relationsFromEdit = blockVersionsForEdit.flatMap(v => {
         const relationsForEntity = getRelationTriplesFromSchemaTriples(
@@ -183,14 +246,58 @@ function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs
           v.entity_id.toString(),
           latestVersionsByEntityId
         );
+
         return relationsForEntity ?? [];
       });
 
+      relationsToWrite.push(...relationsFromDbToWrite);
       relationsToWrite.push(...relationsFromEdit);
     }
 
     return relationsToWrite;
   });
+}
+
+/**
+ * Check if any of the triples in the block are deleting a relation. Right now
+ * we don't store the value for deleted ops on IPFS, so we have to rely on a
+ * heuristic + lookup to know if the triple we're deleting if for an entity
+ * defined as a relation.
+ *
+ * To do this we look up all entity ids for relations in this block. If we
+ * encounter a triple in this block that deletes a triple with an attribute id
+ * of TYPES _and_ the entity id is for a relation entity, then we know that
+ * we're deleting a relation.
+ *
+ * @TODO: Relations should be scoped to a space, so this deleting step should
+ * be space-aware so that we delete the correct relation in the case where
+ * a relation entity has multiple triples in multiple spacs.
+ */
+function collectDeletedRelationsEntityIds(
+  schemaTriples: OpWithCreatedBy[],
+  entityIdsForDbRelations: Set<string>
+): Set<string> {
+  const deletedIds = schemaTriples.flatMap(t => {
+    // The problem is that we don't actually know what the value of the deleted
+    // type is. We mock it in get-triple-from-op, but the actual IPFS op doesn't
+    // contain the value of the op.
+    //
+    // Should we have a CREATE_RELATION and a DELETE_RELATION op type?
+    //
+    // Alternatively we can look up the relations and see if it's a delete or not
+    // specifically for a relation entity id.
+    if (t.op === 'DELETE_TRIPLE' && t.triple.attribute_id === SYSTEM_IDS.TYPES) {
+      const deletedTripleEntityId = t.triple.entity_id.toString();
+
+      if (entityIdsForDbRelations.has(deletedTripleEntityId)) {
+        return [deletedTripleEntityId];
+      }
+    }
+
+    return [];
+  });
+
+  return new Set(deletedIds);
 }
 
 function getEntitiesReferencedByRelations(schemaTriples: OpWithCreatedBy[], entityId: string): string[] | null {
