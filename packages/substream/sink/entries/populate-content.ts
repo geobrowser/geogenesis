@@ -161,7 +161,7 @@ interface AggregateRelationsArgs {
  *
  * @params versions - The versions that have been created in this block as array of {@link Schema.versions.Insertable}
  * @params edits - The edits that have been created in this block as array of {@link Schema.edits.Insertable}
- * @params triples - The triples that have been created in this block as array of {@link Schema.triples.Insertable}
+ * @params triples - The triples that have been created in this block as array of {@link OpWithCreatedBy}
  * @returns relations – The relations to write as array of {@link Schema.relations.Insertable}
  */
 function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs) {
