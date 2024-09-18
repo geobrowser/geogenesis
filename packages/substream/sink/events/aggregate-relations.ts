@@ -111,10 +111,6 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
         latestVersionForChangedEntities.set(version.entity_id.toString(), version.id.toString());
       }
 
-      for (const relation of latestRelationsFromDbForVersions) {
-        latestVersionForChangedEntities.set(relation.to_version_id, relation.from_version_id);
-      }
-
       const deletedRelationEntityIds = collectDeletedRelationsEntityIds(
         triples,
         new Set(...latestRelationsFromDbForVersions.map(r => r.entity_id))
@@ -146,16 +142,18 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
           return {
             id: createGeoId(), // Not deterministic
             // We look up the latest version for both the type and to versions
-            // so they're updated before writing to the db. The latest version
-            // can come from the db or come from the current edit.
+            // using their entity ids so they're updated before writing to the
+            // db. The latest version can come from the db or come from the
+            // current edit.
             //
             // If the type_of or to_version aren't changed in this edit then we
             // can fall back to the last version.
-            //
-            // @TOOD: Sometimes these are version ids and sometimes they're entity ids,
-            // so the data we're mapping isn't accurate
-            type_of_id: latestVersionForChangedEntities.get(r.type_of_id) ?? r.type_of_id,
-            to_version_id: latestVersionForChangedEntities.get(r.to_version_id) ?? r.to_version_id,
+            type_of_id: r.type_of?.entity_id
+              ? latestVersionForChangedEntities.get(r.type_of.entity_id) ?? r.type_of_id
+              : r.type_of_id,
+            to_version_id: r.to_entity?.entity_id
+              ? latestVersionForChangedEntities.get(r.to_entity.entity_id) ?? r.to_version_id
+              : r.to_version_id,
 
             from_version_id: v.id,
             index: r.index,

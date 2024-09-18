@@ -51,6 +51,10 @@ export class Relations {
     return await db
       .select('relations', relation, {
         columns: ['id', 'entity_id', 'from_version_id', 'to_version_id', 'type_of_id', 'index'],
+        lateral: {
+          to_entity: db.selectOne('versions', { id: db.parent('to_version_id') }, { columns: ['entity_id'] }),
+          type_of: db.selectOne('versions', { id: db.parent('type_of_id') }, { columns: ['entity_id'] }),
+        },
       })
       .run(pool);
   }
