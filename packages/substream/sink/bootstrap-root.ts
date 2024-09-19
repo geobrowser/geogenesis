@@ -421,44 +421,33 @@ export function bootstrapRoot() {
 
           await Spaces.upsert([space]);
           // @TODO: Add types from relations to db.entity_types
-          // @TODO: Create versions for the entities
-          await Promise.all([
-            Accounts.upsert([account]),
-            Entities.upsert(geoEntities),
-            Entities.upsert(entitiesForRelations),
+          await Promise.all([Accounts.upsert([account]), Proposals.upsert([proposal]), Edits.upsert([edit])]);
 
-            Proposals.upsert([proposal]),
-            Edits.upsert([edit]),
-          ]);
+          // We write these separately since they might change the same entity which
+          // results in a INSERT ON CONFLICT DO error
+          await Entities.upsert(geoEntities);
+          await Entities.upsert(entitiesForRelations);
+
+          const entitySpaces = geoEntities.map(e => ({ version_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }));
+          const relationSpaces = entitiesForRelations.map(e => ({
+            version_id: e.id,
+            space_id: SYSTEM_IDS.ROOT_SPACE_ID,
+          }));
 
           await Promise.all([
-            Triples.insert(namesTriples),
-            Triples.upsert(triplesForTypesAndAttributes),
             Versions.upsert(versions),
             Relations.upsert(relationsForTypesAndAttributes),
+            Triples.insert([...namesTriples, ...triplesForTypesAndAttributes]),
+            Types.upsert(
+              [...typesToWrite, ...attributesToWrite].map(r => ({
+                type_id: r.type_of_id,
+                version_id: r.from_version_id,
+                created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+                created_at: ROOT_SPACE_CREATED_AT,
+              }))
+            ),
+            EntitySpaces.upsert([...entitySpaces, ...relationSpaces]),
           ]);
-
-          await Types.upsert(
-            typesToWrite.map(r => ({
-              type_id: r.type_of_id,
-              version_id: r.from_version_id,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-            }))
-          );
-          await Types.upsert(
-            attributesToWrite.map(r => ({
-              type_id: r.type_of_id,
-              version_id: r.from_version_id,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-            }))
-          );
-
-          await EntitySpaces.upsert(geoEntities.map(e => ({ version_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID })));
-          await EntitySpaces.upsert(
-            entitiesForRelations.map(e => ({ version_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }))
-          );
         },
         catch: error => new BootstrapRootError(String(error)),
       })
