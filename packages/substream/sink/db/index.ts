@@ -8,7 +8,7 @@ export * from './space-editors';
 export * from './spaces';
 export * from './subspaces';
 export * from './triples';
-export * from './ops';
+export * from './current-versions';
 export * from './versions';
 export * from './edits';
 export * from './entities';

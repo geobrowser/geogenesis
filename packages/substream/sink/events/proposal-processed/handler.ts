@@ -1,10 +1,10 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
+import type * as S from 'zapatos/schema';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
-import { Proposals, Versions } from '~/sink/db';
+import { CurrentVersions, Proposals, Versions } from '~/sink/db';
 import { populateContent } from '~/sink/entries/populate-content';
 import type { BlockEvent } from '~/sink/types';
 import { slog } from '~/sink/utils/slog';
@@ -21,9 +21,11 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
     });
 
     // See comment above function definition for more details as to why we do this.
-    const { mergedOpsByVersionId, mergedVersions, edits } = aggregateMergedVersions(ipfsProposals, block);
+    const { mergedOpsByVersionId, mergedVersions, edits, versions } = aggregateMergedVersions(ipfsProposals, block);
     // commitMergedEntityTypes
     // commitMergedEntitySpaces
+
+    const currentVersions = aggregateCurrentVersions(versions, mergedVersions);
 
     const dbProposals = yield* _(
       Effect.all(
@@ -31,6 +33,10 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
           Effect.tryPromise({
             try: () => Versions.upsert(mergedVersions),
             catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
+          }),
+          Effect.tryPromise({
+            try: () => CurrentVersions.upsert(currentVersions),
+            catch: error => new Error(`Failed to insert current versions. ${(error as Error).message}`),
           }),
           populateContent({
             versions: mergedVersions,
@@ -58,14 +64,26 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
       requestId: block.requestId,
       message: `${dbProposals.length} proposals set to accepted successfully`,
     });
+  });
+}
 
-    // @TODO: Write relations in populateTriples or populateContent
-    // 1. Aggregate all exsting relations for every version in the set of proposals in
-    //    the block
-    // 2. If there are any changes, e.g., to fractional index, then write those changes along
-    //    with duplicated relations to the db that map to the new version id. Make sure to check
-    //    if any of the duplicated relations should be deleted in the new version.
-    // 3. Aggregate any _new_ relations for the new version and write those to the db.
+function aggregateCurrentVersions(
+  versions: S.versions.Insertable[],
+  mergedVersions: S.versions.Insertable[]
+): S.current_versions.Insertable[] {
+  // entityId -> versionId
+  const currentVersions = new Map<string, string>();
+
+  // Favor merged versions over versions
+  for (const version of [...versions, ...mergedVersions]) {
+    currentVersions.set(version.entity_id.toString(), version.id.toString());
+  }
+
+  return [...currentVersions.entries()].map(([entityId, versionId]): S.current_versions.Insertable => {
+    return {
+      entity_id: entityId,
+      version_id: versionId,
+    };
   });
 }
 
@@ -75,6 +93,9 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
  * that contains all of the changes from each of the versions. If we don't, then we
  * end up in a situation where there are many valid versions for the same entity at one
  * time, and none of them contain all of the changes from the other versions.
+ *
+ * @NOTE that this only occurs in scenarios where many versions for the same entity are
+ * approved/executed in the same block.
  *
  * There's a few ways to solve this issue:
  * 1. At query time we materialize all of the "valid" versions for an entity and merge
@@ -121,5 +142,6 @@ function aggregateMergedVersions(proposals: EditProposal[], block: BlockEvent) {
     mergedVersions,
     mergedOpsByVersionId,
     edits,
+    versions,
   };
 }

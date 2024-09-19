@@ -102,6 +102,20 @@ CREATE TABLE public.versions (
     entity_id text NOT NULL REFERENCES public.entities(id)
 );
 
+
+-- For now we use a current_versions JOIN table to create the association between
+-- a specific version and an entity. This does add an extra JOIN to the query when
+-- looking up the latest version for an entity, but we alleviate it via indexes
+-- for now. We'll monitor performance and storage constrants over time to see if
+-- it makes more sense to use a different approach.
+-- ALTER TABLE public.entities ADD COLUMN current_version text;
+-- ALTER TABLE entities ADD CONSTRAINT fk_current_version FOREIGN KEY (current_version) REFERENCES public.versions(id);
+CREATE TABLE public.current_versions (
+    PRIMARY KEY (entity_id),
+    entity_id text NOT NULL REFERENCES public.entities(id),
+    version_id text NOT NULL REFERENCES public.versions(id)
+);
+
 CREATE TABLE public.relations (
     id text PRIMARY KEY NOT NULL,
     type_of_id text REFERENCES public.versions(id) NOT NULL, -- type of the relation, e.g., "Type", "Attribute", "Friend"
@@ -122,20 +136,6 @@ CREATE TABLE public.entity_types (
 CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URI', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
 
 CREATE TABLE public.triples (
-    PRIMARY KEY (space_id, entity_id, attribute_id, version_id),
-    space_id text NOT NULL REFERENCES public.spaces(id),
-    entity_id text NOT NULL REFERENCES public.entities(id),
-    attribute_id text NOT NULL REFERENCES public.entities(id),
-    value_type triple_value_type NOT NULL,
-    number_value text,
-    text_value text,
-    entity_value_id text REFERENCES public.entities(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL,
-    version_id text NOT NULL REFERENCES public.versions(id)
-);
-
-CREATE TABLE public.ops (
     PRIMARY KEY (space_id, entity_id, attribute_id, version_id),
     space_id text NOT NULL REFERENCES public.spaces(id),
     entity_id text NOT NULL REFERENCES public.entities(id),
@@ -241,9 +241,6 @@ ALTER TABLE
 
 ALTER TABLE
     public.triples DISABLE TRIGGER ALL;
-
-ALTER TABLE
-    public.ops DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.space_subspaces DISABLE TRIGGER ALL;
