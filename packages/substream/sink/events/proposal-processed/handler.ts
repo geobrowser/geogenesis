@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
@@ -19,16 +20,33 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
       message: `Updating processed proposals to accepted`,
     });
 
+    // See comment above function definition for more details as to why we do this.
+    const { mergedOpsByVersionId, mergedVersions, edits } = aggregateMergedVersions(ipfsProposals, block);
+    // commitMergedEntityTypes
+    // commitMergedEntitySpaces
+
     const dbProposals = yield* _(
       Effect.all(
-        ipfsProposals.map(proposal => {
-          return Effect.tryPromise({
-            try: () => Proposals.setAcceptedById(proposal.proposalId),
-            catch: error => {
-              return new ProposalDoesNotExistError(String(error));
-            },
-          });
-        }),
+        [
+          Effect.tryPromise({
+            try: () => Versions.upsert(mergedVersions),
+            catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
+          }),
+          populateContent({
+            versions: mergedVersions,
+            opsByVersionId: mergedOpsByVersionId,
+            edits,
+            block,
+          }),
+          ...ipfsProposals.map(proposal => {
+            return Effect.tryPromise({
+              try: () => Proposals.setAcceptedById(proposal.proposalId),
+              catch: error => {
+                return new ProposalDoesNotExistError(String(error));
+              },
+            });
+          }),
+        ],
         {
           concurrency: 75,
           mode: 'either',
@@ -40,12 +58,6 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
       requestId: block.requestId,
       message: `${dbProposals.length} proposals set to accepted successfully`,
     });
-
-    // See comment above function definition for more details as to why we do this.
-    yield* _(commitMergedVersions(ipfsProposals, block));
-    // commitMergedRelations
-    // commitMergedEntityTypes
-    // commitMergedEntitySpaces
 
     // @TODO: Write relations in populateTriples or populateContent
     // 1. Aggregate all exsting relations for every version in the set of proposals in
@@ -79,48 +91,35 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
  * This function implements #2. The implementation might change in the future as we get more
  * feedback on our versioning mechanisms.
  */
-function commitMergedVersions(proposals: EditProposal[], block: BlockEvent) {
-  return Effect.gen(function* (_) {
-    // @NOTE:
-    // We still use the re-fetched data from IPFS since we need to re-apply all of the ops
-    // from each of the merged versions into the new version.
-    //
-    // One approach we could attempt instead is to read the triples from the db (vs IPFS) for
-    // each version and then write all of those to the new version. The problem with this approach
-    // is that it doesn't account for deletions, so you can end up with a triple that was
-    // deleted in one of the merged versions still existing on the merged version. Alternatively
-    // we could store the ops in the db as well, but for now we'll just re-fetch from IPFS since
-    // we already have that workflow in place.
-    const {
-      schemaEditProposals: { opsByVersionId, versions, edits },
-    } = mapIpfsProposalToSchemaProposalByType(proposals, block);
+function aggregateMergedVersions(proposals: EditProposal[], block: BlockEvent) {
+  // @NOTE:
+  // We still use the re-fetched data from IPFS since we need to re-apply all of the ops
+  // from each of the merged versions into the new version.
+  //
+  // One approach we could attempt instead is to read the triples from the db (vs IPFS) for
+  // each version and then write all of those to the new version. The problem with this approach
+  // is that it doesn't account for deletions, so you can end up with a triple that was
+  // deleted in one of the merged versions still existing on the merged version. Alternatively
+  // we could store the ops in the db as well, but for now we'll just re-fetch from IPFS since
+  // we already have that workflow in place.
+  const {
+    schemaEditProposals: { opsByVersionId, versions, edits },
+  } = mapIpfsProposalToSchemaProposalByType(proposals, block);
 
-    // Get the versions that have more than one version for the same entity id
-    const manyVersionsByEntityId = aggregateMergableVersions(versions);
+  // Get the versions that have more than one version for the same entity id
+  const manyVersionsByEntityId = aggregateMergableVersions(versions);
 
-    // Merge the versions in this block with the same entity id into a new aggregated version
-    // containing all the changes from each of the versions.
-    const { mergedOpsByVersionId, mergedVersions } = aggregateMergableOps({
-      manyVersionsByEntityId,
-      opsByVersionId,
-      block,
-    });
-
-    yield* _(
-      Effect.tryPromise({
-        try: () => Versions.upsert(mergedVersions),
-        catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
-      })
-    );
-
-    yield* _(
-      populateContent({
-        versions: mergedVersions,
-        opsByVersionId: mergedOpsByVersionId,
-        edits,
-        block,
-        isMerging: true,
-      })
-    );
+  // Merge the versions in this block with the same entity id into a new aggregated version
+  // containing all the changes from each of the versions.
+  const { mergedOpsByVersionId, mergedVersions } = aggregateMergableOps({
+    manyVersionsByEntityId,
+    opsByVersionId,
+    block,
   });
+
+  return {
+    mergedVersions,
+    mergedOpsByVersionId,
+    edits,
+  };
 }
