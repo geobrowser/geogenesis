@@ -32,6 +32,12 @@ CREATE INDEX versions_created_by_id
 CREATE INDEX versions_entity_id
     on versions (entity_id);
 
+CREATE INDEX current_versions_entity_id
+    on versions (entity_id);
+
+CREATE INDEX current_versions_version_id
+    on versions (version_id);
+
 CREATE INDEX relations_type_of_id
     on relations (type_of_id);
 
