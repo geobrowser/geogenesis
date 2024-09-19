@@ -16,7 +16,7 @@
     "zapatos": "pnpm dotenv -e .env -- npx zapatos",
     "start": "pnpm dotenv -e .env -- node dist/index.js",
     "initialize": "./sink/sql/init-all.sh && pnpm zapatos",
-    "test": "vitest --update"
+    "test": "vitest"
   },
   "dependencies": {
     "@bufbuild/buf": "^1.31.0",
