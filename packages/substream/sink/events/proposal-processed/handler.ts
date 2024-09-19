@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
