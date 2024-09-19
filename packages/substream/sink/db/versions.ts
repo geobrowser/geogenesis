@@ -22,14 +22,20 @@ export class Versions {
         'versions',
         { entity_id: entityId },
         {
-          columns: ['id'],
+          columns: ['id', 'entity_id', 'edit_id'],
           order: {
             by: 'created_at',
             direction: 'DESC',
           },
-          limit: 1,
+          // @TODO(performance): Can't figure out how to conditionally select
+          // the version where it's proposal is accepted, so we just query
+          // all versions and filter out the ones that aren't accepted in JS.
           lateral: {
-            proposal: db.selectOne('proposals', { status: 'accepted' }, { columns: ['id'] }),
+            proposal: db.selectOne(
+              'proposals',
+              { status: 'accepted', edit_id: db.parent('edit_id') },
+              { columns: ['id'] }
+            ),
           },
         }
       )
@@ -39,6 +45,7 @@ export class Versions {
       return null;
     }
 
-    return res[0];
+    const latestApprovedVersion = res.filter(v => v.proposal !== null)[0];
+    return latestApprovedVersion ?? null;
   }
 }

@@ -89,10 +89,12 @@ function populateEntityDescriptions(schemaTriples: OpWithCreatedBy[], block: Blo
   });
 }
 
+/**
+ * Handles writing triples to the database. At this point any triples from previous versions
+ * of an entity are already part of the schemaTriples list, so this function just writes them.
+ */
 export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
   return Effect.gen(function* (_) {
-    // @TODO: Get triples from previous version of entity and filter out any
-    // that are deleted as part of this work.
     yield* _(
       Effect.tryPromise({
         try: () =>
@@ -105,34 +107,14 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
     );
 
     // Update the names and descriptions of the entities in this block
+    // @TODO: Name and description should be written into the version and not the entity
     yield* _(Effect.all([populateEntityNames(schemaTriples, block), populateEntityDescriptions(schemaTriples, block)]));
-
-    // -- mapping dependent tables should probably only happen after processing the proposals vs now ---
-    // -- alternatively we add the types and spaces, etc., on the version and not the entity --
-    // @TODO: Get relations so we can map relations and other dependent types
-
-    // --- These should probably be done after processing the proposals vs now ---
-    // @TODO: space
-    // @TODO: types
 
     /**
      * Changes to data in Geo are modeled as "operations (ops)." You can create a triple or delete a triple.
-     * A client might publish _many_ ops, some of which are operations on the same triple. e.g., Set, Delete,
-     * Set, Delete, Set.
-     *
-     * Therefore, we need to process all actions serially to ensure that the final result of the data
-     * is correct.
      *
      * Set operations applied to a given triple are considered "upserts." Additionally, a triple is unique for
      * a given database by its (Space, Entity, Attribute) id tuple.
-     *
-     * Right now (January 23, 2024) the Geo Genesis client _does_ squash actions before publishing, but this
-     * wasn't always the case and other clients might not implement the squashing mechanism.
-     *
-     * @TODO(performance): This is obviously fairly slow as we may perform many async operations for each Set
-     * or Delete action. One way to speed this up is to "squash" all of the actions corresponding to each triple
-     * ahead of time to generate the minimum number of actions for each triple. Additionally there's a lot of
-     * optimizations we can do with _how_ we're processing the data serially.
      */
     // for (const { op, triple, createdById } of schemaTriples) {
     //   const isUpsertTriple = op === 'SET_TRIPLE';
@@ -244,46 +226,6 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
     //   }
     // }
   });
-}
-
-/**
- * Handle creating the database representation of a collection item when a new collection item
- * is created. We need to gather all of the required triples to fully flesh out the collection
- * item's data. We could do this linearly, but we want to ensure that all of the properties
- * exist before creating the item. If not all properties exist we don't create the collection
- * item.
- */
-function getRelationTriplesFromSchemaTriples(
-  schemaTriples: OpWithCreatedBy[],
-  entityId: string
-): Schema.relations.Insertable | null {
-  // Grab other triples in this edit that match the collection item's entity id. We
-  // want to add all of the collection item properties to the item in the
-  // collection_items table.
-  const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
-
-  const collectionItemIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_INDEX);
-  const to = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
-  const from = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
-  const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
-
-  const indexValue = collectionItemIndex?.triple.text_value;
-  const toId = to?.triple.entity_value_id;
-  const fromId = from?.triple.entity_value_id;
-  const typeId = type?.triple.entity_value_id;
-
-  if (!indexValue || !toId || !fromId || !typeId) {
-    return null;
-  }
-
-  return {
-    id: entityId,
-    to_entity_id: toId.toString(),
-    from_entity_id: fromId.toString(),
-    entity_id: entityId,
-    type_of_id: typeId.toString(),
-    index: indexValue,
-  };
 }
 
 function upsertEntitySpace({ space_id, version_id }: Schema.entity_spaces.Insertable) {
@@ -458,8 +400,8 @@ function upsertEntityTypeViaRelation(relation: Schema.relations.Insertable, bloc
       try: async () => {
         return await Types.upsert([
           {
-            version_id: relation.from_entity_id,
-            type_id: relation.to_entity_id,
+            version_id: relation.from_version_id,
+            type_id: relation.to_version_id,
             created_at: block.timestamp,
             created_at_block: block.blockNumber,
           },
@@ -479,12 +421,12 @@ function upsertSpaceMetadata(relation: Schema.relations.Insertable, space_id: st
         SpaceMetadata.upsert([
           {
             space_id: space_id,
-            entity_id: relation.from_entity_id,
+            entity_id: relation.from_version_id,
           },
         ]),
       catch: error =>
         new Error(
-          `Failed to insert space metadata with id ${relation.from_entity_id?.toString()} for space ${space_id} ${String(
+          `Failed to insert space metadata with id ${relation.from_version_id?.toString()} for space ${space_id} ${String(
             error
           )}`
         ),
@@ -538,7 +480,7 @@ function deleteEntityType(triple: Schema.triples.Insertable) {
 function deleteEntityTypeViaRelation(relation: Schema.relations.Insertable) {
   return Effect.gen(function* (_) {
     const deleteTypeEffect = Effect.tryPromise({
-      try: () => Types.remove({ version_id: relation.from_entity_id, type_id: relation.type_of_id }),
+      try: () => Types.remove({ version_id: relation.from_version_id, type_id: relation.type_of_id }),
       catch: () => new Error('Failed to delete type'),
     });
 
@@ -551,12 +493,12 @@ function deleteSpaceMetadata(relation: Schema.relations.Insertable, space_id: st
     const deleteSpaceMetadataEffect = Effect.tryPromise({
       try: () =>
         SpaceMetadata.remove({
-          entity_id: relation.from_entity_id,
+          entity_id: relation.from_version_id,
           space_id: space_id,
         }),
       catch: error =>
         new Error(
-          `Failed to delete space metadata with id ${relation.from_entity_id?.toString()} for space ${space_id} ${String(
+          `Failed to delete space metadata with id ${relation.from_version_id?.toString()} for space ${space_id} ${String(
             error
           )}`
         ),

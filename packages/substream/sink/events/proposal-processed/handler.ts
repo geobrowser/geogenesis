@@ -1,14 +1,12 @@
-import { createGeoId } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
-import type * as S from 'zapatos/schema';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
 import { Proposals, Versions } from '~/sink/db';
 import { populateContent } from '~/sink/entries/populate-content';
-import type { BlockEvent, Op } from '~/sink/types';
-import { createVersionId } from '~/sink/utils/id';
+import type { BlockEvent } from '~/sink/types';
 import { slog } from '~/sink/utils/slog';
 
 export class ProposalDoesNotExistError extends Error {
@@ -46,6 +44,9 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
 
     // See comment above function definition for more details as to why we do this.
     yield* _(commitMergedVersions(ipfsProposals, block));
+    // commitMergedRelations
+    // commitMergedEntityTypes
+    // commitMergedEntitySpaces
 
     // @TODO: Write relations in populateTriples or populateContent
     // 1. Aggregate all exsting relations for every version in the set of proposals in
@@ -119,6 +120,7 @@ function commitMergedVersions(proposals: EditProposal[], block: BlockEvent) {
         opsByVersionId: mergedOpsByVersionId,
         edits,
         block,
+        isMerging: true,
       })
     );
   });

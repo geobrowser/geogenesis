@@ -244,6 +244,11 @@ function mapEditProposalToSchema(
       } satisfies S.versions.Insertable);
 
       const opsForEntityId = p.ops.filter(o => o.triple.entity === entityId);
+
+      if (opsForEntityId.length === 0) {
+        console.log('invalid edit ops', { id });
+      }
+
       opsByVersionId.set(id, opsForEntityId);
     }
   }

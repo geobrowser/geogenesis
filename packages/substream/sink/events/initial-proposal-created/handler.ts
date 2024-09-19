@@ -72,7 +72,7 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       message: `Writing ${schemaEditProposals.proposals.length} proposals for edits without proposals`,
     });
 
-    // @TODO: Put this in a transaction since all these writes are related
+    // @TODO: Put this in a transaction by edit id since all these writes are related
     const writtenProposals = yield* _(
       Effect.tryPromise({
         try: async () => {

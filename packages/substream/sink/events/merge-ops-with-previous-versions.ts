@@ -13,27 +13,33 @@ interface MergeOpsWithPreviousVersionArgs {
 
 export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionArgs) {
   const spaceIdByEditId = new Map<string, string>();
+  const { versions, opsByVersionId } = args;
 
   for (const edit of args.edits) {
     spaceIdByEditId.set(edit.id.toString(), edit.space_id.toString());
   }
 
   return Effect.gen(function* (_) {
-    const { versions, opsByVersionId } = args;
     const newOpsByVersionId = new Map<string, Op[]>();
 
     for (const version of versions) {
+      const editWithCreatedById: SchemaTripleEdit = {
+        versonId: version.id.toString(),
+        createdById: version.created_by_id.toString(),
+        spaceId: spaceIdByEditId.get(version.edit_id.toString())!,
+        ops: opsByVersionId.get(version.id.toString()) ?? [],
+      };
+
       // @TODO(performance): We probably want to prefetch this instead of doing it blocking in the loop
       const lastVersion = yield* _(Effect.promise(() => Versions.findLatestValid(version.entity_id.toString())));
 
       if (lastVersion) {
         const lastVersionTriples = yield* _(Effect.promise(() => Triples.select({ version_id: lastVersion.id })));
 
-        const editWithCreatedById: SchemaTripleEdit = {
-          versonId: version.id.toString(),
-          createdById: version.created_by_id.toString(),
-          spaceId: spaceIdByEditId.get(version.edit_id.toString())!,
-          ops: lastVersionTriples.map((t): Op => {
+        // Make sure that we put the last version's ops before the new version's
+        // ops so that when we squash the ops later they're ordered correctly.
+        newOpsByVersionId.set(version.id.toString(), [
+          ...lastVersionTriples.map((t): Op => {
             return {
               type: 'SET_TRIPLE',
               triple: {
@@ -46,15 +52,10 @@ export function mergeOpsWithPreviousVersions(args: MergeOpsWithPreviousVersionAr
               },
             };
           }),
-        };
-
-        const previousOpsForNewVersion = opsByVersionId.get(version.id.toString());
-
-        if (previousOpsForNewVersion) {
-          // Make sure that we put the last version's ops before the new version's
-          // ops so that when we squash the ops later they're ordered correctly.
-          newOpsByVersionId.set(version.id.toString(), [...previousOpsForNewVersion, ...editWithCreatedById.ops]);
-        }
+          ...(editWithCreatedById.ops ?? []),
+        ]);
+      } else {
+        newOpsByVersionId.set(version.id.toString(), editWithCreatedById.ops ?? []);
       }
     }
 
