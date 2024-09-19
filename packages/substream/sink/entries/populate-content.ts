@@ -57,6 +57,8 @@ export function populateContent(args: PopulateContentArgs) {
     const triples = tripleEdits.flatMap(e => mapSchemaTriples(e, block));
     const relations = yield* awaited(aggregateRelations({ triples, versions, edits }));
 
+    // @TODO: Derive name, cover, types, spaces from triples and relations
+
     yield* awaited(
       Effect.all([
         Effect.tryPromise({
@@ -75,47 +77,5 @@ export function populateContent(args: PopulateContentArgs) {
         }),
       ])
     );
-
-    /**
-     * @TODO: Get relations so we can map relations and other dependent types
-     *
-     * -- we add the types and spaces, etc., on the version and not the entity --
-     *
-     * Everything related to _data_ is mapped to Versions and not Entities. This is so we have a unified
-     * interface for interacting with an entity at a given point in time. This means that when we add
-     * triples, we're adding them to a specific _version_ of an entity. When we add relations we need to
-     * do the same thing.
-     *
-     * Relations are a bit more complex in that they reference _four_ entities, and not just one. We need
-     * to update these four entity references to now point to versions instead of entities.
-     *
-     * 1. ~~Id of the relation row should point to a version~~ don't think this is necessary. It can just
-     *    be an entity id.
-     * 2. The from and to entity ids should point to versions
-     * 3. The type of the relation should point to a version
-     *
-     * To add more complexity, the versions they point to might be getting changed within this block, so
-     * we'll need to keep that in sync. Lastly the _relation itself_ might be getting changed as well.
-     * Lots to keep in sync.
-     *
-     * Algorithm
-     * 1. See if there are any from, to, or type entities that have new versions in this block. Write these
-     *    to a map if so. We'll use this map later when writing relations.
-     * 2. If there are from, to, or type entities that are _not_ in the block, then we need to fetch their
-     *    latest versions and write them to the mapping.
-     *
-     * @TODO:
-     * 1. Merge relations from previous versions
-     * 2. Merge relations from committed squashed versions
-     *
-     * Q:
-     * * How do we merge previous relations into new versions? Need to check for relation deletions
-     * * How do we update "approved" relations to point to the latest version and not the version at
-     *   the time of creation in the case that we commit a new version?
-     */
-
-    // --- These should probably be done after processing the proposals vs now ---
-    // @TODO: space
-    // @TODO: types
   });
 }
