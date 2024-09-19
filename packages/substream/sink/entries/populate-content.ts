@@ -1,4 +1,3 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
@@ -15,7 +14,6 @@ interface PopulateContentArgs {
   opsByVersionId: Map<string, Op[]>;
   edits: Schema.edits.Insertable[];
   block: BlockEvent;
-  isMerging?: boolean;
 }
 
 export function populateContent(args: PopulateContentArgs) {
@@ -58,10 +56,6 @@ export function populateContent(args: PopulateContentArgs) {
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
     const triples = tripleEdits.flatMap(e => mapSchemaTriples(e, block));
     const relations = yield* awaited(aggregateRelations({ triples, versions, edits }));
-
-    if (args.isMerging) {
-      console.log('relations', { relations, typeVersion: versions.filter(v => v.entity_id === SYSTEM_IDS.TYPES) });
-    }
 
     yield* awaited(
       Effect.all([
