@@ -1,11 +1,16 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Entities } from '../db';
+import { Entities, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import { aggregateRelations } from '../events/aggregate-relations';
-import { type SchemaTripleEdit, mapSchemaTriples } from '../events/proposal-processed/map-triples';
+import {
+  type OpWithCreatedBy,
+  type SchemaTripleEdit,
+  mapSchemaTriples,
+} from '../events/proposal-processed/map-triples';
 import { populateTriples } from '../events/proposal-processed/populate-triples';
 import type { BlockEvent, Op } from '../types';
 
@@ -24,10 +29,12 @@ export function populateContent(args: PopulateContentArgs) {
     spaceIdByEditId.set(edit.id.toString(), edit.space_id.toString());
   }
 
-  return Effect.gen(function* (awaited) {
-    const entities: Schema.entities.Insertable[] = [];
-    const tripleEdits: SchemaTripleEdit[] = [];
+  const entities: Schema.entities.Insertable[] = [];
+  const triplesWithCreatedBy: OpWithCreatedBy[] = [];
+  const versionsWithMetadata: Schema.versions.Insertable[] = [];
+  const versionSpaces: Schema.version_spaces.Insertable[] = [];
 
+  return Effect.gen(function* (awaited) {
     // We might get multiple proposals at once in the same block that change the same set of entities.
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
@@ -47,27 +54,70 @@ export function populateContent(args: PopulateContentArgs) {
         versonId: version.id.toString(),
         createdById: version.created_by_id.toString(),
         spaceId: spaceIdByEditId.get(version.edit_id.toString())!,
+        // @TODO: These can just be passed into the function as OpsWithCreatedBy instead of Ops
         ops: opsByVersionId.get(version.id.toString()) ?? [],
       };
 
-      tripleEdits.push(editWithCreatedById);
+      const triplesForVersion = mapSchemaTriples(editWithCreatedById, block);
+      triplesWithCreatedBy.push(...triplesForVersion);
+
+      // @TODO: Derive name, cover, types, spaces from triples and relations
+      const setTriples = triplesForVersion.filter(t => t.op === 'SET_TRIPLE');
+      const nameTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.NAME);
+      const descriptionTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION);
+
+      const name = nameTriple?.triple.text_value?.toString();
+      const description = descriptionTriple?.triple.text_value?.toString();
+
+      versionsWithMetadata.push({
+        ...version,
+        name,
+        description,
+      } satisfies Schema.versions.Insertable);
+
+      // @TODO: Get spaces for versions
+      const spaces = triplesForVersion.reduce(
+        (acc, t) => {
+          acc.set(version.id.toString(), t.triple.space_id.toString());
+          return acc;
+        },
+        // version id -> space id
+        new Map<string, string>()
+      );
+
+      for (const [versionId, spaceId] of spaces.entries()) {
+        versionSpaces.push({
+          version_id: versionId,
+          space_id: spaceId,
+        });
+      }
     }
 
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
-    const triples = tripleEdits.flatMap(e => mapSchemaTriples(e, block));
-    const relations = yield* awaited(aggregateRelations({ triples, versions, edits }));
+    const relations = yield* awaited(aggregateRelations({ triples: triplesWithCreatedBy, versions, edits }));
+
+    // @TODO: Get types for versions. Types can come either from triples or from relations
+    // @TODO: Get space metadata
+    // @TODO: Update relation index
 
     yield* awaited(
       Effect.all([
+        Effect.tryPromise({
+          try: () => Versions.upsertMetadata(versionsWithMetadata),
+          catch: error => new Error(`Failed to insert versions with metadata. ${(error as Error).message}`),
+        }),
         Effect.tryPromise({
           // We update the name and description for an entity when mapping
           // through triples.
           try: () => Entities.upsert(uniqueEntities),
           catch: error => new Error(`Failed to insert entities. ${(error as Error).message}`),
         }),
+        Effect.tryPromise({
+          try: () => VersionSpaces.upsert(versionSpaces),
+          catch: error => new Error(`Failed to insert version spaces. ${(error as Error).message}`),
+        }),
         populateTriples({
-          schemaTriples: triples,
-          block,
+          schemaTriples: triplesWithCreatedBy,
         }),
         Effect.tryPromise({
           try: () => Relations.upsert(relations, { chunked: true }),
@@ -76,46 +126,66 @@ export function populateContent(args: PopulateContentArgs) {
       ])
     );
 
-    /**
-     * @TODO: Get relations so we can map relations and other dependent types
-     *
-     * -- we add the types and spaces, etc., on the version and not the entity --
-     *
-     * Everything related to _data_ is mapped to Versions and not Entities. This is so we have a unified
-     * interface for interacting with an entity at a given point in time. This means that when we add
-     * triples, we're adding them to a specific _version_ of an entity. When we add relations we need to
-     * do the same thing.
-     *
-     * Relations are a bit more complex in that they reference _four_ entities, and not just one. We need
-     * to update these four entity references to now point to versions instead of entities.
-     *
-     * 1. ~~Id of the relation row should point to a version~~ don't think this is necessary. It can just
-     *    be an entity id.
-     * 2. The from and to entity ids should point to versions
-     * 3. The type of the relation should point to a version
-     *
-     * To add more complexity, the versions they point to might be getting changed within this block, so
-     * we'll need to keep that in sync. Lastly the _relation itself_ might be getting changed as well.
-     * Lots to keep in sync.
-     *
-     * Algorithm
-     * 1. See if there are any from, to, or type entities that have new versions in this block. Write these
-     *    to a map if so. We'll use this map later when writing relations.
-     * 2. If there are from, to, or type entities that are _not_ in the block, then we need to fetch their
-     *    latest versions and write them to the mapping.
-     *
-     * @TODO:
-     * 1. Merge relations from previous versions
-     * 2. Merge relations from committed squashed versions
-     *
-     * Q:
-     * * How do we merge previous relations into new versions? Need to check for relation deletions
-     * * How do we update "approved" relations to point to the latest version and not the version at
-     *   the time of creation in the case that we commit a new version?
-     */
+    // We run this after versions are written so that we can fetch all of the types for the
+    // type entity and compare them against the type_of_id version for each relatons to see
+    // of the type_of_id is for the type entity.
+    const versionTypes = yield* awaited(
+      aggregateTypesFromRelationsAndTriples({ relations, triples: triplesWithCreatedBy })
+    );
 
-    // --- These should probably be done after processing the proposals vs now ---
-    // @TODO: space
-    // @TODO: types
+    yield* awaited(
+      Effect.tryPromise({
+        try: () => Types.upsert(versionTypes),
+        catch: error => new Error(`Failed to insert version types. ${(error as Error).message}`),
+      })
+    );
+  });
+}
+
+interface AggregateTypesFromRelationsAndTriplesArgs {
+  relations: Schema.relations.Insertable[];
+  triples: OpWithCreatedBy[];
+}
+
+function aggregateTypesFromRelationsAndTriples({ relations, triples }: AggregateTypesFromRelationsAndTriplesArgs) {
+  return Effect.gen(function* (_) {
+    const types = new Map<string, string[]>();
+    const typeVersions = new Set(
+      (yield* _(Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES })))).map(v => v.id)
+    );
+
+    for (const relation of relations) {
+      const fromVersionId = relation.from_version_id.toString();
+      const toVersionId = relation.to_version_id.toString();
+
+      if (typeVersions.has(relation.type_of_id.toString())) {
+        const alreadyFoundTypes = types.get(fromVersionId) ?? [];
+        types.set(fromVersionId, [...alreadyFoundTypes, toVersionId]);
+      }
+    }
+
+    for (const { triple } of triples.filter(t => t.op === 'SET_TRIPLE')) {
+      if (triple.value_type === 'ENTITY' && triple.attribute_id === SYSTEM_IDS.TYPES) {
+        // @TODO: Triple entity values should be version_values that point to a version
+        // and not an entity.
+        const type = triple.entity_value_id?.toString();
+
+        if (type) {
+          const versionId = triple.version_id.toString();
+          const alreadyFoundTypes = types.get(versionId) ?? [];
+
+          types.set(versionId, [...alreadyFoundTypes, type]);
+        }
+      }
+    }
+
+    return [...types.entries()].flatMap(([versionId, typeIds]) => {
+      return typeIds.map((typeId): Schema.version_types.Insertable => {
+        return {
+          type_id: typeId,
+          version_id: versionId,
+        };
+      });
+    });
   });
 }

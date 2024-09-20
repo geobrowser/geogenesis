@@ -8,8 +8,16 @@ export class Versions {
     return await db.upsert('versions', versions, ['id'], { updateColumns: db.doNothing }).run(pool);
   }
 
+  static async upsertMetadata(versions: S.versions.Insertable[]) {
+    return await db.upsert('versions', versions, ['id'], { updateColumns: ['name', 'description'] }).run(pool);
+  }
+
   static findOne(where: S.versions.Whereable) {
     return db.selectOne('versions', where).run(pool);
+  }
+
+  static select(where: S.versions.Whereable) {
+    return db.select('versions', where).run(pool);
   }
 
   static findMany(where: S.versions.Whereable) {

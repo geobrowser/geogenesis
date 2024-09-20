@@ -15,4 +15,4 @@ export * from './entities';
 export * from './blocks';
 export * from './space-metadata';
 export * from './types';
-export * from './entity-spaces';
+export * from './version-spaces';

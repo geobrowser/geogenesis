@@ -14,10 +14,6 @@ COMMENT ON TABLE public.cursors IS '@name substreamCursor';
 
 CREATE TABLE public.entities (
     id text PRIMARY KEY,
-    name character varying,
-    description character varying,
-    cover text,
-    avatar text,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
@@ -95,13 +91,14 @@ CREATE TABLE public.space_subspaces (
 
 CREATE TABLE public.versions (
     id text PRIMARY KEY,
+    name text,
+    description text,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     edit_id text NOT NULL REFERENCES public.edits(id),
     entity_id text NOT NULL REFERENCES public.entities(id)
 );
-
 
 -- For now we use a current_versions JOIN table to create the association between
 -- a specific version and an entity. This does add an extra JOIN to the query when
@@ -125,12 +122,10 @@ CREATE TABLE public.relations (
     entity_id text REFERENCES public.entities(id) NOT NULL -- the entity id of the relation entity itself
 );
 
-CREATE TABLE public.entity_types (
+CREATE TABLE public.version_types (
     PRIMARY KEY (version_id, type_id),
     version_id text NOT NULL REFERENCES public.versions(id),
-    type_id text NOT NULL REFERENCES public.entities(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
+    type_id text NOT NULL REFERENCES public.versions(id)
 );
 
 CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URI', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
@@ -215,7 +210,7 @@ CREATE TABLE public.geo_blocks (
     timestamp text NOT NULL
 );
 
-CREATE TABLE public.entity_spaces (
+CREATE TABLE public.version_spaces (
     PRIMARY KEY (version_id, space_id),
     version_id text NOT NULL REFERENCES public.versions(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
@@ -231,10 +226,10 @@ ALTER TABLE
     public.entities DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.entity_spaces DISABLE TRIGGER ALL;
+    public.version_spaces DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.entity_types DISABLE TRIGGER ALL;
+    public.version_types DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.proposals DISABLE TRIGGER ALL;
