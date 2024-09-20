@@ -8,7 +8,7 @@ import {
   ROOT_SPACE_CREATED_AT_BLOCK,
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
-import { Accounts, Entities, EntitySpaces, Proposals, Spaces, Triples, Types, Versions } from './db';
+import { Accounts, CurrentVersions, Entities, EntitySpaces, Proposals, Spaces, Triples, Types, Versions } from './db';
 import { Edits } from './db/edits';
 import { Relations } from './db/relations';
 import { getTripleFromOp } from './events/get-triple-from-op';
@@ -82,20 +82,6 @@ const entities: string[] = [
   SYSTEM_IDS.PLACEHOLDER_IMAGE,
 ];
 
-const versions: s.versions.Insertable[] = entities.map(e => {
-  return {
-    id: createVersionId({
-      entityId: e,
-      proposalId: PROPOSAL_ID,
-    }),
-    created_at: ROOT_SPACE_CREATED_AT,
-    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-    created_by_id: ROOT_SPACE_CREATED_BY_ID,
-    edit_id: EDIT_ID,
-    entity_id: e,
-  };
-});
-
 const names: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: 'Types',
   [SYSTEM_IDS.NAME]: 'Name',
@@ -151,6 +137,21 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.RELATION_TO_ATTRIBUTE]: 'To entity',
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: 'From entity',
 };
+
+const versions: s.versions.Insertable[] = entities.map(e => {
+  return {
+    id: createVersionId({
+      entityId: e,
+      proposalId: PROPOSAL_ID,
+    }),
+    name: names[e],
+    created_at: ROOT_SPACE_CREATED_AT,
+    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    created_by_id: ROOT_SPACE_CREATED_BY_ID,
+    edit_id: EDIT_ID,
+    entity_id: e,
+  };
+});
 
 const attributes: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: SYSTEM_IDS.RELATION,
@@ -218,7 +219,6 @@ const relationTypes: Record<string, string[]> = {
 const geoEntities: s.entities.Insertable[] = entities.map(
   (entity): s.entities.Insertable => ({
     id: entity,
-    name: names[entity],
     created_by_id: ROOT_SPACE_CREATED_BY_ID,
     created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
     created_at: ROOT_SPACE_CREATED_AT,
@@ -390,6 +390,13 @@ const edit: s.edits.Insertable = {
   space_id: SYSTEM_IDS.ROOT_SPACE_ID,
 };
 
+const currentVersions: s.current_versions.Insertable[] = versions.map(v => {
+  return {
+    entity_id: v.entity_id,
+    version_id: v.id,
+  };
+});
+
 export class BootstrapRootError extends Error {
   _tag: 'BootstrapRootError' = 'BootstrapRootError';
 }
@@ -448,6 +455,8 @@ export function bootstrapRoot() {
             ),
             EntitySpaces.upsert([...entitySpaces, ...relationSpaces]),
           ]);
+
+          await CurrentVersions.upsert(currentVersions);
         },
         catch: error => new BootstrapRootError(String(error)),
       })

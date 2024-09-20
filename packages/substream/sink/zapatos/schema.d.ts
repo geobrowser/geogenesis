@@ -584,30 +584,6 @@ declare module 'zapatos/schema' {
       */
       id: string;
       /**
-      * **entities.name**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      name: string | null;
-      /**
-      * **entities.description**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      description: string | null;
-      /**
-      * **entities.cover**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      cover: string | null;
-      /**
-      * **entities.avatar**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      avatar: string | null;
-      /**
       * **entities.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -645,30 +621,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       id: string;
-      /**
-      * **entities.name**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      name: string | null;
-      /**
-      * **entities.description**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      description: string | null;
-      /**
-      * **entities.cover**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      cover: string | null;
-      /**
-      * **entities.avatar**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      avatar: string | null;
       /**
       * **entities.created_by_id**
       * - `text` in database
@@ -708,30 +660,6 @@ declare module 'zapatos/schema' {
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
-      * **entities.name**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **entities.description**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **entities.cover**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      cover?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
-      * **entities.avatar**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      avatar?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
-      /**
       * **entities.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -770,30 +698,6 @@ declare module 'zapatos/schema' {
       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
-      * **entities.name**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
-      /**
-      * **entities.description**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
-      /**
-      * **entities.cover**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      cover?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
-      /**
-      * **entities.avatar**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      avatar?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
-      /**
       * **entities.created_by_id**
       * - `text` in database
       * - `NOT NULL`, no default
@@ -831,30 +735,6 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
-      /**
-      * **entities.name**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
-      /**
-      * **entities.description**
-      * - `varchar` in database
-      * - Nullable, no default
-      */
-      description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
-      /**
-      * **entities.cover**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      cover?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
-      /**
-      * **entities.avatar**
-      * - `text` in database
-      * - Nullable, no default
-      */
-      avatar?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **entities.created_by_id**
       * - `text` in database
@@ -3862,6 +3742,18 @@ declare module 'zapatos/schema' {
       */
       id: string;
       /**
+      * **versions.name**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      name: string | null;
+      /**
+      * **versions.description**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      description: string | null;
+      /**
       * **versions.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -3899,6 +3791,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       id: string;
+      /**
+      * **versions.name**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      name: string | null;
+      /**
+      * **versions.description**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      description: string | null;
       /**
       * **versions.created_at**
       * - `int4` in database
@@ -3938,6 +3842,18 @@ declare module 'zapatos/schema' {
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
       /**
+      * **versions.name**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      name?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
+      * **versions.description**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      description?: string | db.Parameter<string> | db.SQLFragment | db.ParentColumn | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment | db.ParentColumn>;
+      /**
       * **versions.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -3976,6 +3892,18 @@ declare module 'zapatos/schema' {
       */
       id: string | db.Parameter<string> | db.SQLFragment;
       /**
+      * **versions.name**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
+      * **versions.description**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment;
+      /**
       * **versions.created_at**
       * - `int4` in database
       * - `NOT NULL`, no default
@@ -4013,6 +3941,18 @@ declare module 'zapatos/schema' {
       * - `NOT NULL`, no default
       */
       id?: string | db.Parameter<string> | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | db.SQLFragment>;
+      /**
+      * **versions.name**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      name?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
+      /**
+      * **versions.description**
+      * - `text` in database
+      * - Nullable, no default
+      */
+      description?: string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment | db.SQLFragment<any, string | db.Parameter<string> | null | db.DefaultType | db.SQLFragment>;
       /**
       * **versions.created_at**
       * - `int4` in database

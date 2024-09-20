@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Entities } from '../db';
+import { Entities, Versions } from '../db';
 import { Relations } from '../db/relations';
 import { aggregateRelations } from '../events/aggregate-relations';
 import {
@@ -31,11 +31,10 @@ export function populateContent(args: PopulateContentArgs) {
 
   const namesByVersionId = new Map<string, string>();
   const descriptionsByVersionId = new Map<string, string>();
+  const entities: Schema.entities.Insertable[] = [];
+  const triplesWithCreatedBy: OpWithCreatedBy[] = [];
 
   return Effect.gen(function* (awaited) {
-    const entities: Schema.entities.Insertable[] = [];
-    const triplesWithCreatedBy: OpWithCreatedBy[] = [];
-
     // We might get multiple proposals at once in the same block that change the same set of entities.
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
@@ -87,12 +86,20 @@ export function populateContent(args: PopulateContentArgs) {
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
     const relations = yield* awaited(aggregateRelations({ triples: triplesWithCreatedBy, versions, edits }));
 
-    console.log('names + descriptions', { namesByVersionId, descriptionsByEntityId: descriptionsByVersionId });
-
-    // @TODO: Write names and descriptions to versions
+    const versionsWithMetadata = versions.map(
+      (v): Schema.versions.Insertable => ({
+        ...v,
+        name: namesByVersionId.get(v.id.toString()) ?? null,
+        description: descriptionsByVersionId.get(v.id.toString()) ?? null,
+      })
+    );
 
     yield* awaited(
       Effect.all([
+        Effect.tryPromise({
+          try: () => Versions.upsertMetadata(versionsWithMetadata),
+          catch: error => new Error(`Failed to insert versions with metadata. ${(error as Error).message}`),
+        }),
         Effect.tryPromise({
           // We update the name and description for an entity when mapping
           // through triples.
@@ -101,7 +108,6 @@ export function populateContent(args: PopulateContentArgs) {
         }),
         populateTriples({
           schemaTriples: triplesWithCreatedBy,
-          block,
         }),
         Effect.tryPromise({
           try: () => Relations.upsert(relations, { chunked: true }),

@@ -1,10 +1,7 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
-import * as db from 'zapatos/db';
 import type * as Schema from 'zapatos/schema';
 
 import { type BlockEvent } from '../../types';
-import { pool } from '../../utils/pool';
 import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
 import { EntitySpaces, SpaceMetadata, Triples, Types } from '~/sink/db';
@@ -12,88 +9,13 @@ import { Relations } from '~/sink/db/relations';
 
 interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
-  block: BlockEvent;
-}
-
-function populateEntityNames(schemaTriples: OpWithCreatedBy[], block: BlockEvent) {
-  return Effect.gen(function* (_) {
-    const lastNameOpsByEntityId = schemaTriples
-      .filter(t => t.triple.attribute_id === SYSTEM_IDS.NAME)
-      .reduce((acc, op) => {
-        acc.set(op.triple.entity_id.toString(), op);
-        return acc;
-      }, new Map<string, OpWithCreatedBy>());
-
-    // @TODO: In the case of a delete we need to check if there's another triple
-    // with the name triple for that entity id and set the name to that
-    const entities = [...lastNameOpsByEntityId.values()].map(op => {
-      return {
-        id: op.triple.entity_id,
-        name: op.triple.text_value,
-        created_by_id: op.createdById,
-        created_at: block.timestamp,
-        created_at_block: block.blockNumber,
-        updated_at: block.timestamp,
-        updated_at_block: block.blockNumber,
-      } satisfies Schema.entities.Insertable;
-    });
-
-    yield* _(
-      Effect.tryPromise({
-        try: () =>
-          db
-            .upsert('entities', entities, 'id', {
-              updateColumns: ['name', 'updated_at', 'updated_at_block', 'created_by_id'],
-              noNullUpdateColumns: ['description'],
-            })
-            .run(pool),
-        catch: error => new Error(`Failed to create name for entities. ${(error as Error).message}`),
-      })
-    );
-  });
-}
-
-function populateEntityDescriptions(schemaTriples: OpWithCreatedBy[], block: BlockEvent) {
-  return Effect.gen(function* (_) {
-    const lastNameOpsByEntityId = schemaTriples
-      .filter(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION)
-      .reduce((acc, op) => {
-        acc.set(op.triple.entity_id.toString(), op);
-        return acc;
-      }, new Map<string, OpWithCreatedBy>());
-
-    const entities = [...lastNameOpsByEntityId.values()].map(op => {
-      return {
-        id: op.triple.entity_id,
-        description: op.triple.text_value,
-        created_by_id: op.createdById,
-        created_at: block.timestamp,
-        created_at_block: block.blockNumber,
-        updated_at: block.timestamp,
-        updated_at_block: block.blockNumber,
-      } satisfies Schema.entities.Insertable;
-    });
-
-    yield* _(
-      Effect.tryPromise({
-        try: () =>
-          db
-            .upsert('entities', entities, 'id', {
-              updateColumns: ['description', 'updated_at', 'updated_at_block', 'created_by_id'],
-              noNullUpdateColumns: ['name'],
-            })
-            .run(pool),
-        catch: error => new Error(`Failed to create name for entities. ${(error as Error).message}`),
-      })
-    );
-  });
 }
 
 /**
  * Handles writing triples to the database. At this point any triples from previous versions
  * of an entity are already part of the schemaTriples list, so this function just writes them.
  */
-export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
+export function populateTriples({ schemaTriples }: PopulateTriplesArgs) {
   return Effect.gen(function* (_) {
     yield* _(
       Effect.tryPromise({
@@ -105,10 +27,6 @@ export function populateTriples({ schemaTriples, block }: PopulateTriplesArgs) {
         catch: error => new Error(`Failed to insert bulk triples. ${(error as Error).message}`),
       })
     );
-
-    // Update the names and descriptions of the entities in this block
-    // @TODO: Name and description should be written into the version and not the entity
-    yield* _(Effect.all([populateEntityNames(schemaTriples, block), populateEntityDescriptions(schemaTriples, block)]));
 
     /**
      * Changes to data in Geo are modeled as "operations (ops)." You can create a triple or delete a triple.
@@ -271,96 +189,6 @@ function maybeDeleteEntitySpace({ space_id, version_id }: Schema.entity_spaces.W
 
       yield* _(deleteEntitySpaceEffect, retryEffect);
     }
-  });
-}
-
-function maybeUpdateEntityNameAfterDeletedNameTriple(
-  triple: Schema.triples.Insertable,
-  block: BlockEvent,
-  createdById: string
-) {
-  return Effect.gen(function* (_) {
-    const maybeNameTripleForEntityEffect = Effect.tryPromise({
-      try: () =>
-        db
-          .selectOne('triples', {
-            entity_id: triple.entity_id,
-            attribute_id: SYSTEM_IDS.NAME,
-            value_type: 'TEXT',
-          })
-          .run(pool),
-      catch: error =>
-        new Error(
-          `Failed to fetch pre-existing name triple for entity ${triple.entity_id}. ${(error as Error).message}`
-        ),
-    });
-
-    const maybeNameTripleForEntity = yield* _(maybeNameTripleForEntityEffect);
-
-    // If there's a new name triple for the entity, we need to update the name
-    if (maybeNameTripleForEntity) {
-      const updateNameEffect = Effect.tryPromise({
-        try: () =>
-          db
-            .upsert(
-              'entities',
-              {
-                id: maybeNameTripleForEntity.entity_id,
-                name: maybeNameTripleForEntity ? maybeNameTripleForEntity.text_value : null,
-                created_by_id: createdById,
-                created_at: block.timestamp,
-                created_at_block: block.blockNumber,
-                updated_at: block.timestamp,
-                updated_at_block: block.blockNumber,
-              },
-              'id',
-              {
-                updateColumns: ['name'],
-                noNullUpdateColumns: ['description'],
-              }
-            )
-            .run(pool),
-        catch: error =>
-          new Error(
-            `Failed to delete name ${String(triple.text_value)} for triple triple ${triple.space_id}:${
-              triple.entity_id
-            }:${triple.attribute_id}. ${(error as Error).message}`
-          ),
-      });
-
-      return yield* _(updateNameEffect, retryEffect);
-    }
-
-    const deleteNameEffect = Effect.tryPromise({
-      try: () =>
-        db
-          .upsert(
-            'entities',
-            {
-              id: triple.entity_id,
-              name: null,
-              created_by_id: createdById,
-              created_at: block.timestamp,
-              created_at_block: block.blockNumber,
-              updated_at: block.timestamp,
-              updated_at_block: block.blockNumber,
-            },
-            'id',
-            {
-              updateColumns: ['name'],
-              noNullUpdateColumns: ['description'],
-            }
-          )
-          .run(pool),
-      catch: error =>
-        new Error(
-          `Failed to delete name ${String(triple.text_value)} for triple ${triple.space_id}:${triple.entity_id}:${
-            triple.attribute_id
-          }. ${(error as Error).message}`
-        ),
-    });
-
-    yield* _(deleteNameEffect, retryEffect);
   });
 }
 

@@ -14,10 +14,6 @@ COMMENT ON TABLE public.cursors IS '@name substreamCursor';
 
 CREATE TABLE public.entities (
     id text PRIMARY KEY,
-    name character varying,
-    description character varying,
-    cover text,
-    avatar text,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
@@ -95,13 +91,14 @@ CREATE TABLE public.space_subspaces (
 
 CREATE TABLE public.versions (
     id text PRIMARY KEY,
+    name text,
+    description text,
     created_at integer NOT NULL,
     created_at_block integer NOT NULL,
     created_by_id text NOT NULL REFERENCES public.accounts(id),
     edit_id text NOT NULL REFERENCES public.edits(id),
     entity_id text NOT NULL REFERENCES public.entities(id)
 );
-
 
 -- For now we use a current_versions JOIN table to create the association between
 -- a specific version and an entity. This does add an extra JOIN to the query when
