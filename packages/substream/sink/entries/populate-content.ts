@@ -1,3 +1,4 @@
+import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
@@ -5,7 +6,11 @@ import type * as Schema from 'zapatos/schema';
 import { Entities } from '../db';
 import { Relations } from '../db/relations';
 import { aggregateRelations } from '../events/aggregate-relations';
-import { type SchemaTripleEdit, mapSchemaTriples } from '../events/proposal-processed/map-triples';
+import {
+  type OpWithCreatedBy,
+  type SchemaTripleEdit,
+  mapSchemaTriples,
+} from '../events/proposal-processed/map-triples';
 import { populateTriples } from '../events/proposal-processed/populate-triples';
 import type { BlockEvent, Op } from '../types';
 
@@ -24,14 +29,19 @@ export function populateContent(args: PopulateContentArgs) {
     spaceIdByEditId.set(edit.id.toString(), edit.space_id.toString());
   }
 
+  const namesByVersionId = new Map<string, string>();
+  const descriptionsByVersionId = new Map<string, string>();
+
   return Effect.gen(function* (awaited) {
     const entities: Schema.entities.Insertable[] = [];
-    const tripleEdits: SchemaTripleEdit[] = [];
+    const triplesWithCreatedBy: OpWithCreatedBy[] = [];
 
     // We might get multiple proposals at once in the same block that change the same set of entities.
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
     for (const version of versions) {
+      const versionId = version.id.toString();
+
       const entity: Schema.entities.Insertable = {
         id: version.entity_id,
         created_by_id: version.created_by_id,
@@ -47,17 +57,39 @@ export function populateContent(args: PopulateContentArgs) {
         versonId: version.id.toString(),
         createdById: version.created_by_id.toString(),
         spaceId: spaceIdByEditId.get(version.edit_id.toString())!,
+        // @TODO: These can just be passed into the function as OpsWithCreatedBy instead of Ops
         ops: opsByVersionId.get(version.id.toString()) ?? [],
       };
 
-      tripleEdits.push(editWithCreatedById);
+      const triplesForVersion = mapSchemaTriples(editWithCreatedById, block);
+      triplesWithCreatedBy.push(...triplesForVersion);
+
+      // @TODO: Derive name, cover, types, spaces from triples and relations
+      const setTriples = triplesForVersion.filter(t => t.op === 'SET_TRIPLE');
+      const nameTriples = setTriples.filter(t => t.triple.attribute_id === SYSTEM_IDS.NAME);
+      const descriptionTriples = setTriples.filter(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION);
+
+      for (const nameTriple of nameTriples) {
+        const name = nameTriple.triple.text_value?.toString();
+        if (name) {
+          namesByVersionId.set(versionId, name);
+        }
+      }
+
+      for (const descriptionTriple of descriptionTriples) {
+        const description = descriptionTriple.triple.text_value?.toString();
+        if (description) {
+          descriptionsByVersionId.set(versionId, description);
+        }
+      }
     }
 
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
-    const triples = tripleEdits.flatMap(e => mapSchemaTriples(e, block));
-    const relations = yield* awaited(aggregateRelations({ triples, versions, edits }));
+    const relations = yield* awaited(aggregateRelations({ triples: triplesWithCreatedBy, versions, edits }));
 
-    // @TODO: Derive name, cover, types, spaces from triples and relations
+    console.log('names + descriptions', { namesByVersionId, descriptionsByEntityId: descriptionsByVersionId });
+
+    // @TODO: Write names and descriptions to versions
 
     yield* awaited(
       Effect.all([
@@ -68,7 +100,7 @@ export function populateContent(args: PopulateContentArgs) {
           catch: error => new Error(`Failed to insert entities. ${(error as Error).message}`),
         }),
         populateTriples({
-          schemaTriples: triples,
+          schemaTriples: triplesWithCreatedBy,
           block,
         }),
         Effect.tryPromise({
