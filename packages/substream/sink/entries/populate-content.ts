@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Entities, Versions } from '../db';
+import { Entities, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import { aggregateRelations } from '../events/aggregate-relations';
 import {
@@ -29,18 +29,17 @@ export function populateContent(args: PopulateContentArgs) {
     spaceIdByEditId.set(edit.id.toString(), edit.space_id.toString());
   }
 
-  const namesByVersionId = new Map<string, string>();
-  const descriptionsByVersionId = new Map<string, string>();
   const entities: Schema.entities.Insertable[] = [];
   const triplesWithCreatedBy: OpWithCreatedBy[] = [];
+  const versionsWithMetadata: Schema.versions.Insertable[] = [];
+  const versionSpaces: Schema.version_spaces.Insertable[] = [];
+  const versionTypes: Schema.entity_types.Insertable[] = [];
 
   return Effect.gen(function* (awaited) {
     // We might get multiple proposals at once in the same block that change the same set of entities.
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
     for (const version of versions) {
-      const versionId = version.id.toString();
-
       const entity: Schema.entities.Insertable = {
         id: version.entity_id,
         created_by_id: version.created_by_id,
@@ -65,34 +64,42 @@ export function populateContent(args: PopulateContentArgs) {
 
       // @TODO: Derive name, cover, types, spaces from triples and relations
       const setTriples = triplesForVersion.filter(t => t.op === 'SET_TRIPLE');
-      const nameTriples = setTriples.filter(t => t.triple.attribute_id === SYSTEM_IDS.NAME);
-      const descriptionTriples = setTriples.filter(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION);
+      const nameTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.NAME);
+      const descriptionTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION);
 
-      for (const nameTriple of nameTriples) {
-        const name = nameTriple.triple.text_value?.toString();
-        if (name) {
-          namesByVersionId.set(versionId, name);
-        }
-      }
+      const name = nameTriple?.triple.text_value?.toString();
+      const description = descriptionTriple?.triple.text_value?.toString();
 
-      for (const descriptionTriple of descriptionTriples) {
-        const description = descriptionTriple.triple.text_value?.toString();
-        if (description) {
-          descriptionsByVersionId.set(versionId, description);
-        }
+      versionsWithMetadata.push({
+        ...version,
+        name,
+        description,
+      } satisfies Schema.versions.Insertable);
+
+      // @TODO: Get spaces for versions
+      const spaces = triplesForVersion.reduce(
+        (acc, t) => {
+          acc.set(version.id.toString(), t.triple.space_id.toString());
+          return acc;
+        },
+        // version id -> space id
+        new Map<string, string>()
+      );
+
+      for (const [versionId, spaceId] of spaces.entries()) {
+        versionSpaces.push({
+          version_id: versionId,
+          space_id: spaceId,
+        });
       }
     }
 
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
     const relations = yield* awaited(aggregateRelations({ triples: triplesWithCreatedBy, versions, edits }));
 
-    const versionsWithMetadata = versions.map(
-      (v): Schema.versions.Insertable => ({
-        ...v,
-        name: namesByVersionId.get(v.id.toString()) ?? null,
-        description: descriptionsByVersionId.get(v.id.toString()) ?? null,
-      })
-    );
+    // @TODO: Get types for versions. Types can come either from triples or from relations
+    // @TODO: Get space metadata
+    // @TODO: Update relation index
 
     yield* awaited(
       Effect.all([
@@ -105,6 +112,10 @@ export function populateContent(args: PopulateContentArgs) {
           // through triples.
           try: () => Entities.upsert(uniqueEntities),
           catch: error => new Error(`Failed to insert entities. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () => VersionSpaces.upsert(versionSpaces),
+          catch: error => new Error(`Failed to insert version spaces. ${(error as Error).message}`),
         }),
         populateTriples({
           schemaTriples: triplesWithCreatedBy,

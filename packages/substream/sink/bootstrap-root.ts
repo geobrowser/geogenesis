@@ -8,7 +8,7 @@ import {
   ROOT_SPACE_CREATED_AT_BLOCK,
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
-import { Accounts, CurrentVersions, Entities, EntitySpaces, Proposals, Spaces, Triples, Types, Versions } from './db';
+import { Accounts, CurrentVersions, Entities, Proposals, Spaces, Triples, Types, VersionSpaces, Versions } from './db';
 import { Edits } from './db/edits';
 import { Relations } from './db/relations';
 import { getTripleFromOp } from './events/get-triple-from-op';
@@ -435,8 +435,13 @@ export function bootstrapRoot() {
           await Entities.upsert(geoEntities);
           await Entities.upsert(entitiesForRelations);
 
-          const entitySpaces = geoEntities.map(e => ({ version_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }));
+          const entitySpaces = geoEntities.map(e => ({
+            version_id: versions.find(v => v.entity_id === e.id)!.id,
+            space_id: SYSTEM_IDS.ROOT_SPACE_ID,
+          }));
           const relationSpaces = entitiesForRelations.map(e => ({
+            // @TODO: This version may not exist
+            // version_id: versions.find(v => v.entity_id === e.id)!.id,
             version_id: e.id,
             space_id: SYSTEM_IDS.ROOT_SPACE_ID,
           }));
@@ -453,7 +458,7 @@ export function bootstrapRoot() {
                 created_at: ROOT_SPACE_CREATED_AT,
               }))
             ),
-            EntitySpaces.upsert([...entitySpaces, ...relationSpaces]),
+            VersionSpaces.upsert([...entitySpaces, ...relationSpaces]),
           ]);
 
           await CurrentVersions.upsert(currentVersions);

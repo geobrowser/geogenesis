@@ -212,7 +212,7 @@ CREATE TABLE public.geo_blocks (
     timestamp text NOT NULL
 );
 
-CREATE TABLE public.entity_spaces (
+CREATE TABLE public.version_spaces (
     PRIMARY KEY (version_id, space_id),
     version_id text NOT NULL REFERENCES public.versions(id),
     space_id text NOT NULL REFERENCES public.spaces(id)
@@ -228,7 +228,7 @@ ALTER TABLE
     public.entities DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.entity_spaces DISABLE TRIGGER ALL;
+    public.version_spaces DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.entity_types DISABLE TRIGGER ALL;

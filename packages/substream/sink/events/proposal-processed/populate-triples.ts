@@ -4,7 +4,7 @@ import type * as Schema from 'zapatos/schema';
 import { type BlockEvent } from '../../types';
 import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
-import { EntitySpaces, SpaceMetadata, Triples, Types } from '~/sink/db';
+import { SpaceMetadata, Triples, Types } from '~/sink/db';
 import { Relations } from '~/sink/db/relations';
 
 interface PopulateTriplesArgs {
@@ -143,52 +143,6 @@ export function populateTriples({ schemaTriples }: PopulateTriplesArgs) {
     //     }
     //   }
     // }
-  });
-}
-
-function upsertEntitySpace({ space_id, version_id }: Schema.entity_spaces.Insertable) {
-  return Effect.gen(function* (_) {
-    const insertEntitySpaceEffect = Effect.tryPromise({
-      try: () => EntitySpaces.upsert([{ space_id, version_id }]),
-      catch: error =>
-        new Error(
-          `Failed to insert entity space for triple with space id ${space_id} and version id ${version_id} ${String(
-            error
-          )}`
-        ),
-    });
-
-    yield* _(insertEntitySpaceEffect, retryEffect);
-  });
-}
-
-function maybeDeleteEntitySpace({ space_id, version_id }: Schema.entity_spaces.Whereable) {
-  return Effect.gen(function* (_) {
-    const triplesForEntitySpace = yield* _(
-      Effect.tryPromise({
-        try: () =>
-          Triples.select({
-            version_id: version_id,
-            space_id: space_id,
-          }),
-        catch: error =>
-          new Error(`Failed to fetch triples with space id ${space_id} and version id ${version_id} ${String(error)}`),
-      })
-    );
-
-    if (triplesForEntitySpace.length === 0) {
-      const deleteEntitySpaceEffect = Effect.tryPromise({
-        try: () => EntitySpaces.remove({ space_id, version_id }),
-        catch: error =>
-          new Error(
-            `Failed to delete entity space for triple with space id ${space_id} and version id ${version_id} ${String(
-              error
-            )}`
-          ),
-      });
-
-      yield* _(deleteEntitySpaceEffect, retryEffect);
-    }
   });
 }
 
