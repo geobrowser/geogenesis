@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Entities, VersionSpaces, Versions } from '../db';
+import { Entities, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import { aggregateRelations } from '../events/aggregate-relations';
 import {
@@ -33,7 +33,6 @@ export function populateContent(args: PopulateContentArgs) {
   const triplesWithCreatedBy: OpWithCreatedBy[] = [];
   const versionsWithMetadata: Schema.versions.Insertable[] = [];
   const versionSpaces: Schema.version_spaces.Insertable[] = [];
-  const versionTypes: Schema.entity_types.Insertable[] = [];
 
   return Effect.gen(function* (awaited) {
     // We might get multiple proposals at once in the same block that change the same set of entities.
@@ -126,5 +125,67 @@ export function populateContent(args: PopulateContentArgs) {
         }),
       ])
     );
+
+    // We run this after versions are written so that we can fetch all of the types for the
+    // type entity and compare them against the type_of_id version for each relatons to see
+    // of the type_of_id is for the type entity.
+    const versionTypes = yield* awaited(
+      aggregateTypesFromRelationsAndTriples({ relations, triples: triplesWithCreatedBy })
+    );
+
+    yield* awaited(
+      Effect.tryPromise({
+        try: () => Types.upsert(versionTypes),
+        catch: error => new Error(`Failed to insert version types. ${(error as Error).message}`),
+      })
+    );
+  });
+}
+
+interface AggregateTypesFromRelationsAndTriplesArgs {
+  relations: Schema.relations.Insertable[];
+  triples: OpWithCreatedBy[];
+}
+
+function aggregateTypesFromRelationsAndTriples({ relations, triples }: AggregateTypesFromRelationsAndTriplesArgs) {
+  return Effect.gen(function* (_) {
+    const types = new Map<string, string[]>();
+    const typeVersions = new Set(
+      (yield* _(Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES })))).map(v => v.id)
+    );
+
+    for (const relation of relations) {
+      const fromVersionId = relation.from_version_id.toString();
+      const toVersionId = relation.to_version_id.toString();
+
+      if (typeVersions.has(relation.type_of_id.toString())) {
+        const alreadyFoundTypes = types.get(fromVersionId) ?? [];
+        types.set(fromVersionId, [...alreadyFoundTypes, toVersionId]);
+      }
+    }
+
+    for (const { triple } of triples.filter(t => t.op === 'SET_TRIPLE')) {
+      if (triple.value_type === 'ENTITY' && triple.attribute_id === SYSTEM_IDS.TYPES) {
+        // @TODO: Triple entity values should be version_values that point to a version
+        // and not an entity.
+        const type = triple.entity_value_id?.toString();
+
+        if (type) {
+          const versionId = triple.version_id.toString();
+          const alreadyFoundTypes = types.get(versionId) ?? [];
+
+          types.set(versionId, [...alreadyFoundTypes, type]);
+        }
+      }
+    }
+
+    return [...types.entries()].flatMap(([versionId, typeIds]) => {
+      return typeIds.map((typeId): Schema.version_types.Insertable => {
+        return {
+          type_id: typeId,
+          version_id: versionId,
+        };
+      });
+    });
   });
 }

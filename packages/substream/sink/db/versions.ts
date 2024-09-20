@@ -16,6 +16,10 @@ export class Versions {
     return db.selectOne('versions', where).run(pool);
   }
 
+  static select(where: S.versions.Whereable) {
+    return db.select('versions', where).run(pool);
+  }
+
   static findMany(where: S.versions.Whereable) {
     return db.select('versions', where).run(pool);
   }

@@ -122,12 +122,10 @@ CREATE TABLE public.relations (
     entity_id text REFERENCES public.entities(id) NOT NULL -- the entity id of the relation entity itself
 );
 
-CREATE TABLE public.entity_types (
+CREATE TABLE public.version_types (
     PRIMARY KEY (version_id, type_id),
     version_id text NOT NULL REFERENCES public.versions(id),
-    type_id text NOT NULL REFERENCES public.entities(id),
-    created_at integer NOT NULL,
-    created_at_block integer NOT NULL
+    type_id text NOT NULL REFERENCES public.versions(id)
 );
 
 CREATE TYPE public.triple_value_type as ENUM ('NUMBER', 'TEXT', 'ENTITY', 'COLLECTION', 'URI', 'CHECKBOX', 'TIME', 'GEO_LOCATION');
@@ -231,7 +229,7 @@ ALTER TABLE
     public.version_spaces DISABLE TRIGGER ALL;
 
 ALTER TABLE
-    public.entity_types DISABLE TRIGGER ALL;
+    public.version_types DISABLE TRIGGER ALL;
 
 ALTER TABLE
     public.proposals DISABLE TRIGGER ALL;

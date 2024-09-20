@@ -1,10 +1,9 @@
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
-import { type BlockEvent } from '../../types';
 import { retryEffect } from '../../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
-import { SpaceMetadata, Triples, Types } from '~/sink/db';
+import { SpaceMetadata, Triples } from '~/sink/db';
 import { Relations } from '~/sink/db/relations';
 
 interface PopulateTriplesArgs {
@@ -146,56 +145,6 @@ export function populateTriples({ schemaTriples }: PopulateTriplesArgs) {
   });
 }
 
-function upsertEntityType(triple: Schema.triples.Insertable, block: BlockEvent) {
-  return Effect.gen(function* (_) {
-    const insertTypeEffect = Effect.tryPromise({
-      try: () =>
-        Types.upsert([
-          {
-            version_id: triple.version_id,
-            type_id: triple.entity_value_id!.toString(),
-            created_at: block.timestamp,
-            created_at_block: block.blockNumber,
-          },
-        ]),
-      catch: () => new Error('Failed to create type'),
-    });
-
-    yield* _(insertTypeEffect, retryEffect);
-  });
-}
-
-function upsertRelation(relation: Schema.relations.Insertable) {
-  return Effect.gen(function* (_) {
-    const insertRelationEffect = Effect.tryPromise({
-      try: () => Relations.upsert([relation]),
-      catch: error => new Error(`Failed to relation ${String(error)}`),
-    });
-
-    yield* _(insertRelationEffect, retryEffect);
-  });
-}
-
-function upsertEntityTypeViaRelation(relation: Schema.relations.Insertable, block: BlockEvent) {
-  return Effect.gen(function* (_) {
-    const insertTypeEffect = Effect.tryPromise({
-      try: async () => {
-        return await Types.upsert([
-          {
-            version_id: relation.from_version_id,
-            type_id: relation.to_version_id,
-            created_at: block.timestamp,
-            created_at_block: block.blockNumber,
-          },
-        ]);
-      },
-      catch: error => new Error(`Failed to create type from relation ${String(error)}`),
-    });
-
-    yield* _(insertTypeEffect, retryEffect);
-  });
-}
-
 function upsertSpaceMetadata(relation: Schema.relations.Insertable, space_id: string) {
   return Effect.gen(function* (_) {
     const insertSpaceMetadataEffect = Effect.tryPromise({
@@ -230,62 +179,5 @@ function updateRelationIndex(triple: Schema.triples.Insertable) {
     });
 
     yield* _(insertCollectionItemIndexEffect, retryEffect);
-  });
-}
-
-function deleteRelation(id: string) {
-  return Effect.gen(function* (_) {
-    const deleteRelationEffect = Effect.tryPromise({
-      try: () => Relations.remove({ id: id }),
-      catch: error => new Error(`Failed to delete relation ${String(error)}`),
-    });
-
-    yield* _(deleteRelationEffect, retryEffect);
-  });
-}
-
-function deleteEntityType(triple: Schema.triples.Insertable) {
-  return Effect.gen(function* (_) {
-    const deleteTypeEffect = Effect.tryPromise({
-      try: () =>
-        Types.remove({
-          version_id: triple.version_id,
-          type_id: triple.entity_value_id?.toString(),
-        }),
-      catch: () => new Error('Failed to delete type'),
-    });
-
-    yield* _(deleteTypeEffect, retryEffect);
-  });
-}
-
-function deleteEntityTypeViaRelation(relation: Schema.relations.Insertable) {
-  return Effect.gen(function* (_) {
-    const deleteTypeEffect = Effect.tryPromise({
-      try: () => Types.remove({ version_id: relation.from_version_id, type_id: relation.type_of_id }),
-      catch: () => new Error('Failed to delete type'),
-    });
-
-    yield* _(deleteTypeEffect, retryEffect);
-  });
-}
-
-function deleteSpaceMetadata(relation: Schema.relations.Insertable, space_id: string) {
-  return Effect.gen(function* (_) {
-    const deleteSpaceMetadataEffect = Effect.tryPromise({
-      try: () =>
-        SpaceMetadata.remove({
-          entity_id: relation.from_version_id,
-          space_id: space_id,
-        }),
-      catch: error =>
-        new Error(
-          `Failed to delete space metadata with id ${relation.from_version_id?.toString()} for space ${space_id} ${String(
-            error
-          )}`
-        ),
-    });
-
-    yield* _(deleteSpaceMetadataEffect, retryEffect);
   });
 }

@@ -6,7 +6,7 @@ CREATE INDEX idx_space_editors ON public.space_editors(account_id, space_id);
 CREATE INDEX idx_space_members ON public.space_members(account_id, space_id);
 CREATE INDEX space_metadata ON public.spaces_metadata(entity_id, space_id);
 CREATE INDEX version_spaces_version_id ON public.version_spaces(version_id, space_id);
-CREATE INDEX entity_types_version_id ON public.entity_types(version_id, type_id);
+CREATE INDEX version_types_version_id ON public.version_types(version_id, type_id);
 
 CREATE INDEX triple_entity_id
     on triples (entity_id);
@@ -33,10 +33,10 @@ CREATE INDEX versions_entity_id
     on versions (entity_id);
 
 CREATE INDEX current_versions_entity_id
-    on versions (entity_id);
+    on current_versions (entity_id);
 
 CREATE INDEX current_versions_version_id
-    on versions (version_id);
+    on current_versions (version_id);
 
 CREATE INDEX relations_type_of_id
     on relations (type_of_id);
