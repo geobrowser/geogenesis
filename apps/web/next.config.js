@@ -42,6 +42,11 @@ const nextConfig = {
         destination: 'https://forms.gle/8BN2VrZZieeYnkMd9',
         permanent: false,
       },
+      {
+        source: '/join',
+        destination: 'https://www.geobrowser.io/',
+        permanent: false,
+      },
     ];
   },
 };
