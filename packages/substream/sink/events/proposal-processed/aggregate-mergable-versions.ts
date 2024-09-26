@@ -1,4 +1,4 @@
-import { createGeoId } from '@geogenesis/sdk';
+import { createGeoId } from '@geobrowser/gdk';
 import type * as S from 'zapatos/schema';
 
 import type { BlockEvent, Op } from '~/sink/types';

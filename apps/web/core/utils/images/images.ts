@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, createImageEntityOps } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createImageEntityOps } from '@geobrowser/gdk';
 
 import { Values } from '../value';
 

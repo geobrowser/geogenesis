@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Match } from 'effect';
 

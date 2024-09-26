@@ -1,7 +1,7 @@
 'use client';
 
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
-import { createMembershipProposal } from '@geogenesis/sdk/proto';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geobrowser/gdk/abis';
+import { createMembershipProposal } from '@geobrowser/gdk/proto';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData, getAddress, stringToHex } from 'viem';

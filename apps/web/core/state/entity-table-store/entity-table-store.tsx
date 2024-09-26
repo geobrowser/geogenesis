@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { useQuery } from '@tanstack/react-query';
 import { atom, useAtom } from 'jotai';
 

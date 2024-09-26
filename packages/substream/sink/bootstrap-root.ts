@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, createGeoId, createRelationship } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createGeoId, createRelationship } from '@geobrowser/gdk';
 import { Effect } from 'effect';
 import type * as s from 'zapatos/schema';
 

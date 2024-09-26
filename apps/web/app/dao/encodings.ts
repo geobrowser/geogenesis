@@ -1,10 +1,10 @@
 import { CreateDaoParams } from '@aragon/sdk-client';
-import { VotingMode } from '@geogenesis/sdk';
+import { VotingMode } from '@geobrowser/gdk';
 import {
   GOVERNANCE_PLUGIN_REPO_ADDRESS,
   PERSONAL_SPACE_ADMIN_PLUGIN_REPO_ADDRESS,
   SPACE_PLUGIN_REPO_ADDRESS,
-} from '@geogenesis/sdk/contracts';
+} from '@geobrowser/gdk/contracts';
 import { encodeAbiParameters } from 'viem';
 
 import { ZERO_ADDRESS } from '~/core/constants';

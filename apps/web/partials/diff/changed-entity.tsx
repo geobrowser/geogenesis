@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';

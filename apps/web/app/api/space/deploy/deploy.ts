@@ -9,9 +9,9 @@ import {
 import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
-import { Op, SYSTEM_IDS, VotingMode, createImageEntityOps, createRelationship } from '@geogenesis/sdk';
-import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
-import { createEditProposal } from '@geogenesis/sdk/proto';
+import { Op, SYSTEM_IDS, VotingMode, createImageEntityOps, createRelationship } from '@geobrowser/gdk';
+import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geobrowser/gdk/contracts';
+import { createEditProposal } from '@geobrowser/gdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { providers } from 'ethers';
 import { v4 as uuid } from 'uuid';

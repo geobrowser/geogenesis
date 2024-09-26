@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { useQuery } from '@tanstack/react-query';
 import { dedupeWith } from 'effect/Array';
 

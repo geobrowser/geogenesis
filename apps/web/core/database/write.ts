@@ -1,4 +1,4 @@
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geobrowser/gdk/constants';
 import { atom } from 'jotai';
 
 import { getAppTripleId } from '../id/create-id';

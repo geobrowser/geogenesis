@@ -1,4 +1,4 @@
-import { ProposalStatus } from '@geogenesis/sdk';
+import { ProposalStatus } from '@geobrowser/gdk';
 
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 

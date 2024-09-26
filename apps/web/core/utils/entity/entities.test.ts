@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { describe, expect, it } from 'vitest';
 
 import { Triple } from '~/core/types';

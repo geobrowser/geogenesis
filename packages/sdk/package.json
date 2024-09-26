@@ -23,7 +23,15 @@
     "./proto": {
       "types": "./dist/proto.d.ts",
       "import": "./dist/proto.js"
-    }
+    },
+		"./abis": {
+			"types": "./dist/abis.d.ts",
+			"import": "./dist/abis.js"
+		},
+		"./ids": {
+			"types": "./dist/ids.d.ts",
+			"import": "./dist/ids.js"
+		}
   },
 	"files": [
 		"dist"

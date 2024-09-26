@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { useAtom, useSetAtom } from 'jotai';
 
 import { useCallback, useRef, useState } from 'react';

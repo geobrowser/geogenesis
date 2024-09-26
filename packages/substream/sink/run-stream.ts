@@ -1,6 +1,6 @@
 import { createGrpcTransport } from '@connectrpc/connect-node';
-import { createGeoId } from '@geogenesis/sdk';
-import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
+import { createGeoId } from '@geobrowser/gdk';
+import { NETWORK_IDS } from '@geobrowser/gdk/ids';
 import { authIssue, createAuthInterceptor, createRegistry } from '@substreams/core';
 import { readPackageFromFile } from '@substreams/manifest';
 import { Data, Duration, Effect, Secret, Stream } from 'effect';

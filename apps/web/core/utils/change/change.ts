@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { Effect, Record } from 'effect';
 
 import { mergeEntityAsync } from '~/core/database/entities';

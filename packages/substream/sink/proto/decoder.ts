@@ -1,5 +1,5 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { Edit, ImportEdit, IpfsMetadata, Membership, Subspace } from '@geogenesis/sdk/proto';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
+import { Edit, ImportEdit, IpfsMetadata, Membership, Subspace } from '@geobrowser/gdk/proto';
 import { Effect, Either } from 'effect';
 import { z } from 'zod';
 
