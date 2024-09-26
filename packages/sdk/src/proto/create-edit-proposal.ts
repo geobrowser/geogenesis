@@ -1,6 +1,6 @@
-import type { Op } from '../..';
-import { createGeoId } from '../id';
-import { ActionType, Edit, OpType, Triple, Op as OpBinary } from './gen/src/proto/ipfs_pb';
+import type { Op } from '../../index.js';
+import { createGeoId } from '../id.js';
+import { ActionType, Edit, OpType, Triple, Op as OpBinary } from './gen/src/proto/ipfs_pb.js';
 
 interface CreateEditProposalArgs {
 	name: string;

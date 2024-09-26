@@ -267,8 +267,8 @@ export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = '0x68930a23A91A8FA97C6053cD
 // migrate types to new data model
 
 // Root space
-export const ROOT_SPACE = `0x170b749413328ac9a94762031a7A05b00c1D2e34`; // @TODO(migration): update when we deploy new root space
-export const ROOT_SPACE_CONFIGURATION = `f1b9fd886388436e95b551aafaea77e5`;
+export const ROOT_SPACE = "0x170b749413328ac9a94762031a7A05b00c1D2e34"; // @TODO(migration): update when we deploy new root space
+export const ROOT_SPACE_CONFIGURATION = "f1b9fd886388436e95b551aafaea77e5";
 
 // Page types
 export const POSTS_PAGE = 'e73c3db8320042309ae952eddb73b566';

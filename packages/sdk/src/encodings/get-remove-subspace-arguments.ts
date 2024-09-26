@@ -1,6 +1,6 @@
 import { encodeFunctionData, stringToHex } from 'viem';
 import { SpaceAbi } from '../abis';
-import { VoteOption } from '../..';
+import { VoteOption } from '../../index.js';
 
 export function getRemoveSubspaceArguments({
 	spacePluginAddress,

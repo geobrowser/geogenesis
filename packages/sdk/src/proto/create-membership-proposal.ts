@@ -1,6 +1,6 @@
-import type { MembershipProposalMetadata } from '../..';
-import { createGeoId } from '../id';
-import { ActionType, Membership } from '.';
+import type { MembershipProposalMetadata } from '../../index.js';
+import { createGeoId } from '../id.js';
+import { ActionType, Membership } from './index.js';
 
 function getActionTypeFromType(type: MembershipProposalMetadata['type']): ActionType {
 	switch (type) {

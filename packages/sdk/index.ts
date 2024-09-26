@@ -1,4 +1,4 @@
-export * from './src/types';
+export * from './src/types.js';
 
 export { createGeoId, createTripleId } from './src/id';
 export {

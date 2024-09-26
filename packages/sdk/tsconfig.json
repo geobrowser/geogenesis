@@ -1,10 +1,11 @@
 {
+	"include": ["./**/*.ts"],
 	"compilerOptions": {
 		/* Basic Options */
 		"esModuleInterop": true,
 		"skipLibCheck": true,
 		"target": "ES2022",
-		// "verbatimModuleSyntax": true,
+		"verbatimModuleSyntax": true,
 		"resolveJsonModule": true,
 		"moduleDetection": "force",
 
@@ -36,11 +37,12 @@
 		"declaration": true,
 
 		/* When building a library in a monorepo */
-		"composite": true,
+		// "composite": true,
 		"declarationMap": true,
 		"paths": {
 			"~/*": ["./*"],
 			"@geogenesis/*": ["../*"]
-		}
-	}
+		},
+	},
+
 }

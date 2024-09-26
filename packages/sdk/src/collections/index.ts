@@ -1,3 +1,3 @@
-export * from './create-collection';
-export * from './create-relation';
-export * from './reorder-collection-item';
+export * from './create-collection.js';
+export * from './create-relation.js';
+export * from './reorder-collection-item.js';

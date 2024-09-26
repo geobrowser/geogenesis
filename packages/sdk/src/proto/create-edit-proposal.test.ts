@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createEditProposal } from './create-edit-proposal';
-import { ActionType, Edit } from './gen/src/proto/ipfs_pb';
+import { createEditProposal } from './create-edit-proposal.js';
+import { ActionType, Edit } from './gen/src/proto/ipfs_pb.js';
 
 describe('create-edit-proposal', () => {
 	it('encodes and decodes Edit correctly', () => {
@@ -25,7 +25,7 @@ describe('create-edit-proposal', () => {
 		const result = Edit.fromBinary(editBinary);
 		expect(result.name).toBe('test');
 		expect(result.type).toBe(ActionType.ADD_EDIT);
-		expect(result.version).toBe('0.0.1');
+		expect(result.version).toBe('1.0.0');
 		expect(result.ops).toMatchSnapshot();
 	});
 });

@@ -1,4 +1,4 @@
-import { createGeoId } from './id';
+import { createGeoId } from './id.js';
 import { SYSTEM_IDS } from './system-ids';
 
 type CreateImageEntityOpsReturnType = [

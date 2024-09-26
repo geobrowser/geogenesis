@@ -1,26 +1,51 @@
 {
-	"private": true,
-	"name": "@geogenesis/sdk",
+	"name": "@geobrowser/gdk",
 	"version": "0.0.1",
 	"license": "MIT",
-	"module": "./index.ts",
-	"types": "./index.ts",
-	"main": "./index.ts",
+	"module": "./dist/index.js",
+	"main": "./dist/index.ts",
 	"ascMain": "./index.ts",
 	"type": "module",
-	"files": ["dist"],
+	"exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+		"./constants": {
+			"types": "./dist/constants.d.ts",
+			"import": "./dist/constants.js"
+		},
+    "./contracts": {
+      "types": "./dist/contracts.d.ts",
+      "import": "./dist/contracts.js"
+    },
+    "./proto": {
+      "types": "./dist/proto.d.ts",
+      "import": "./dist/proto.js"
+    }
+  },
+	"files": [
+		"dist"
+	],
 	"homepage": "https://geobrowser.io",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/geobrowser/geogenesis.git"
 	},
-	"keywords": ["geo", "the graph", "knowledge graph"],
+	"keywords": [
+		"geo",
+		"the graph",
+		"knowledge graph"
+	],
 	"bugs": {
 		"url": "https://github.com/geobrowser/geogenesis/issues"
 	},
 	"scripts": {
+		"build": "tsup",
 		"test": "vitest",
-		"generate:protobuf": "npx buf generate"
+		"generate:protobuf": "npx buf generate",
+		"check-exports": "attw --pack . --ignore-rules=cjs-resolves-to-esm"
 	},
 	"dependencies": {
 		"@biomejs/biome": "^1.9.2",
@@ -30,9 +55,11 @@
 		"viem": "^1.16.0"
 	},
 	"devDependencies": {
+		"@arethetypeswrong/cli": "^0.16.4",
 		"@bufbuild/buf": "^1.31.0",
 		"@bufbuild/protoc-gen-es": "^1.9.0",
 		"@types/uuid": "^9.0.8",
+		"tsup": "^8.3.0",
 		"typescript": "^5.4.5",
 		"vite": "^5.2.11",
 		"vitest": "^1.6.0"

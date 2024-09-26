@@ -1,6 +1,6 @@
 import { encodeFunctionData, stringToHex } from 'viem';
 import { MainVotingAbi } from '../abis';
-import { VoteOption } from '../..';
+import { VoteOption } from '../../index.js';
 
 export function getAcceptEditorArguments({
 	votingPluginAddress,

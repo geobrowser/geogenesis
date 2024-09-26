@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, createGeoId } from '../../';
+import { SYSTEM_IDS, createGeoId } from '../../index.js';
 
 interface CreateCollectionReturnType {
 	type: 'SET_TRIPLE';
