@@ -237,47 +237,47 @@ export async function getActiveProposalDiff(
   // return { changes, proposals };
 }
 
-const getBlockTypeFromTriples = (triples: TripleType[]): BlockValueType => {
-  const tripleWithContent = triples.find(triple => CONTENT_ATTRIBUTE_IDS.includes(triple.attributeId));
+// const getBlockTypeFromTriples = (triples: TripleType[]): BlockValueType => {
+//   const tripleWithContent = triples.find(triple => CONTENT_ATTRIBUTE_IDS.includes(triple.attributeId));
 
-  // @TODO replace with better fallback
-  if (!tripleWithContent) return 'markdownContent';
+//   // @TODO replace with better fallback
+//   if (!tripleWithContent) return 'markdownContent';
 
-  switch (tripleWithContent.attributeId) {
-    case SYSTEM_IDS.ROW_TYPE:
-    case SYSTEM_IDS.TABLE_BLOCK:
-      return 'tableBlock';
-    case SYSTEM_IDS.IMAGE_BLOCK:
-      return 'imageBlock';
-    case SYSTEM_IDS.MARKDOWN_CONTENT:
-      return 'markdownContent';
-    case SYSTEM_IDS.FILTER:
-      return 'tableFilter';
-    default:
-      // @TODO replace with better fallback
-      return 'markdownContent';
-  }
-};
+//   switch (tripleWithContent.attributeId) {
+//     case SYSTEM_IDS.ROW_TYPE:
+//     case SYSTEM_IDS.TABLE_BLOCK:
+//       return 'tableBlock';
+//     case SYSTEM_IDS.IMAGE_BLOCK:
+//       return 'imageBlock';
+//     case SYSTEM_IDS.MARKDOWN_CONTENT:
+//       return 'markdownContent';
+//     case SYSTEM_IDS.FILTER:
+//       return 'tableFilter';
+//     default:
+//       // @TODO replace with better fallback
+//       return 'markdownContent';
+//   }
+// };
 
-const CONTENT_ATTRIBUTE_IDS = [
-  SYSTEM_IDS.ROW_TYPE,
-  SYSTEM_IDS.TABLE_BLOCK,
-  SYSTEM_IDS.IMAGE_BLOCK,
-  SYSTEM_IDS.MARKDOWN_CONTENT,
-  SYSTEM_IDS.FILTER,
-];
+// const CONTENT_ATTRIBUTE_IDS = [
+//   SYSTEM_IDS.ROW_TYPE,
+//   SYSTEM_IDS.TABLE_BLOCK,
+//   SYSTEM_IDS.IMAGE_BLOCK,
+//   SYSTEM_IDS.MARKDOWN_CONTENT,
+//   SYSTEM_IDS.FILTER,
+// ];
 
-const getBlockValueFromTriples = (triples: TripleType[]) => {
-  const tripleWithContent = triples.find(triple => CONTENT_ATTRIBUTE_IDS.includes(triple.attributeId));
+// const getBlockValueFromTriples = (triples: TripleType[]) => {
+//   const tripleWithContent = triples.find(triple => CONTENT_ATTRIBUTE_IDS.includes(triple.attributeId));
 
-  // @TODO replace with better fallback
-  if (!tripleWithContent) {
-    return '';
-  }
+//   // @TODO replace with better fallback
+//   if (!tripleWithContent) {
+//     return '';
+//   }
 
-  if (tripleWithContent.attributeId === SYSTEM_IDS.ROW_TYPE) {
-    return tripleWithContent.entityName;
-  }
+//   if (tripleWithContent.attributeId === SYSTEM_IDS.ROW_TYPE) {
+//     return tripleWithContent.entityName;
+//   }
 
-  return Triples.getValue(tripleWithContent);
-};
+//   return Triples.getValue(tripleWithContent);
+// };
