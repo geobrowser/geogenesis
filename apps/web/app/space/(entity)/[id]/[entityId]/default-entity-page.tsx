@@ -28,6 +28,7 @@ interface Props {
   showCover?: boolean;
   showHeading?: boolean;
   showHeader?: boolean;
+  notice?: React.ReactNode;
 }
 
 export default async function DefaultEntityPage({
@@ -35,6 +36,7 @@ export default async function DefaultEntityPage({
   showCover = true,
   showHeading = true,
   showHeader = true,
+  notice = null,
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
@@ -62,7 +64,8 @@ export default async function DefaultEntityPage({
           <EntityPageContentContainer>
             {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
             {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />}
-            {showSpacer && <Spacer height={40} />}
+            {notice}
+            {(showSpacer || !!notice) && <Spacer height={40} />}
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
             <ToggleEntityPage {...props} />
             <Spacer height={40} />

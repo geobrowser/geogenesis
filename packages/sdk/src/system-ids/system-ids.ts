@@ -279,6 +279,7 @@ export const JOBS_PAGE = 'abb4700856554b27bae8e7dba063b394';
 export const PROJECTS_PAGE = '7171ce7a83b940a2abe2751a54c1c245';
 export const FINANCES_PAGE = 'f20af8deb57c472ab13d0247c46a8eeb';
 export const SPACES_PAGE = '970e41c7196e42d3af0ecee755651d5b';
+export const TEAM_PAGE = '979eb04cefa942b6bd10229bf7f0ce21';
 
 // Page templates
 export const COMPANY_SPACE_CONFIGURATION_TEMPLATE = '8f5e618f781644cbb795300e8078bf15';

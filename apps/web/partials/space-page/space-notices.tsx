@@ -100,11 +100,22 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
       return (
         <NoticesContainer>
           <Notice
+            id="personFillProfile"
+            color="green"
+            media={<img src="/showcase.png" alt="" className="h-24 w-auto object-contain" />}
+            title={`Showcase your company to the rest of Geo`}
+            description={`Fill out your company profile by adding events, jobs and more!`}
+          />
+          <Notice
             id="companyAddTeamMembers"
             color="blue"
             media={<img src="/team.png" alt="" className="h-24 w-auto object-contain" />}
             title={`Add team members to your company`}
-            action={<SimpleButton href={`/space/${spaceId}/team`}>Add team members</SimpleButton>}
+            action={
+              <div className="flex h-[38px] items-end">
+                <SimpleButton href={`/space/${spaceId}/team`}>Add team members</SimpleButton>
+              </div>
+            }
           />
           <Notice
             id="companyFirstPost"
@@ -112,21 +123,11 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
             media={<img src="/posts.png" alt="" className="h-24 w-auto object-contain" />}
             title={`Write and publish your first post`}
             action={
-              <SimpleButton href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.POST_TYPE)}>
-                Write a post
-              </SimpleButton>
-            }
-          />
-          <Notice
-            id="companyFirstProductOrService"
-            color="yellow"
-            media={<img src="/posts.png" alt="" className="h-24 w-auto object-contain" />}
-            title={`Add products and services that your company offers`}
-            action={
-              <>
-                <SimpleButton href={`/space/${spaceId}/products`}>Add products</SimpleButton>
-                <SimpleButton href={`/space/${spaceId}/services`}>Add services</SimpleButton>
-              </>
+              <div className="flex h-[38px] items-end">
+                <SimpleButton href={NavUtils.toEntity(spaceId, ID.createEntityId(), SYSTEM_IDS.POST_TYPE)}>
+                  Write a post
+                </SimpleButton>
+              </div>
             }
           />
         </NoticesContainer>
