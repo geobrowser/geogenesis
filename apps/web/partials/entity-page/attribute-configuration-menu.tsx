@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { Command } from 'cmdk';
 
 import * as React from 'react';

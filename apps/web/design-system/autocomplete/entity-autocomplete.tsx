@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';

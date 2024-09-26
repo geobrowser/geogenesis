@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { pipe } from '@mobily/ts-belt';
 import { useQuery } from '@tanstack/react-query';
 

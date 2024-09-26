@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { notFound } from 'next/navigation';
 
 import { TableBlockSdk } from '~/core/blocks-sdk';

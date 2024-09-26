@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { parse } from 'csv/sync';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';

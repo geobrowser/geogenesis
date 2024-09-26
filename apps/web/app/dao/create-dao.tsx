@@ -1,9 +1,9 @@
 'use client';
 
 import { Client, Context, CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-client';
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { VotingMode, createGeoId } from '@geogenesis/sdk';
-import { createEditProposal } from '@geogenesis/sdk/proto';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
+import { VotingMode, createGeoId } from '@geobrowser/gdk';
+import { createEditProposal } from '@geobrowser/gdk/proto';
 import { getAddress, hexToBytes } from 'viem';
 
 import { useAragon } from '~/core/hooks/use-aragon';

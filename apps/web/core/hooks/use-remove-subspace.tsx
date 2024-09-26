@@ -1,7 +1,7 @@
 'use client';
 
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
-import { createSubspaceProposal } from '@geogenesis/sdk/proto';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geobrowser/gdk/abis';
+import { createSubspaceProposal } from '@geobrowser/gdk/proto';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { useRouter } from 'next/navigation';

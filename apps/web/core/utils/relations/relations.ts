@@ -1,4 +1,4 @@
-import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createRelationship } from '@geobrowser/gdk';
 
 import { Triple } from '~/core/types';
 

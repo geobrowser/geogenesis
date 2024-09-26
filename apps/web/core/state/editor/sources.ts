@@ -1,5 +1,5 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
+import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geobrowser/gdk/constants';
 import { Match } from 'effect';
 
 import { StoreRelation } from '~/core/database/types';

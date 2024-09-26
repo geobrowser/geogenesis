@@ -1,4 +1,4 @@
-import { createGeoId } from '@geogenesis/sdk';
+import { createGeoId } from '@geobrowser/gdk';
 import { describe, expect, it } from 'vitest';
 
 import { getProposalsForSpaceIds } from './get-proposals-for-space-ids';

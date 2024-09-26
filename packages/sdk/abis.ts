@@ -1,1 +1,1 @@
-export * from './src/abis'
+export * from './src/abis';

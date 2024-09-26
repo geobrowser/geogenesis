@@ -1,5 +1,5 @@
-import { VoteOption } from '@geogenesis/sdk';
-import { MainVotingAbi } from '@geogenesis/sdk/abis';
+import { VoteOption } from '@geobrowser/gdk';
+import { MainVotingAbi } from '@geobrowser/gdk/abis';
 import { useMutation } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { encodeFunctionData } from 'viem';

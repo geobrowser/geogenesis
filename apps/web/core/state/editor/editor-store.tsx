@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS, reorderCollectionItem } from '@geogenesis/sdk';
+import { SYSTEM_IDS, reorderCollectionItem } from '@geobrowser/gdk';
 import { A } from '@mobily/ts-belt';
 import { generateJSON as generateServerJSON } from '@tiptap/html';
 import { JSONContent, generateJSON } from '@tiptap/react';

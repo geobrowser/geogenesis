@@ -1,8 +1,11 @@
 import { Effect, Either } from 'effect';
 
+import { mergeOpsWithPreviousVersions } from '../merge-ops-with-previous-versions';
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
-import { Accounts, Ops, Proposals, ProposedVersions } from '~/sink/db';
+import { Accounts, Proposals, Versions } from '~/sink/db';
+import { Edits } from '~/sink/db/edits';
+import { populateContent } from '~/sink/entries/populate-content';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
@@ -69,18 +72,15 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       message: `Writing ${schemaEditProposals.proposals.length} proposals for edits without proposals`,
     });
 
-    // @TODO: Put this in a transaction since all these writes are related
+    // @TODO: Put this in a transaction by edit id since all these writes are related
     const writtenProposals = yield* _(
       Effect.tryPromise({
         try: async () => {
-          // @TODO: Batch since there might be postgres byte limits. See upsertChunked
+          // @TODO: Transaction
           await Promise.all([
-            // @TODO: Should we only attempt to write to the db for the correct content type?
-            // What if we get multiple proposals in the same block with different content types?
-            // Content proposals
+            Edits.upsert(schemaEditProposals.edits),
             Proposals.upsert(schemaEditProposals.proposals),
-            ProposedVersions.upsert(schemaEditProposals.proposedVersions),
-            Ops.upsert(schemaEditProposals.ops, { chunk: true }),
+            Versions.upsert(schemaEditProposals.versions),
           ]);
         },
         catch: error => {
@@ -102,6 +102,32 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       });
 
       return;
+    }
+
+    const opsByVersionId = yield* _(
+      mergeOpsWithPreviousVersions({
+        edits: schemaEditProposals.edits,
+        opsByVersionId: schemaEditProposals.opsByVersionId,
+        versions: schemaEditProposals.versions,
+      })
+    );
+
+    const populateResult = yield* _(
+      Effect.either(
+        populateContent({
+          versions: schemaEditProposals.versions,
+          opsByVersionId,
+          edits: schemaEditProposals.edits,
+          block,
+        })
+      )
+    );
+
+    if (Either.isRight(populateResult)) {
+      slog({
+        requestId: block.requestId,
+        message: 'Edits from content proposals written successfully!',
+      });
     }
 
     slog({

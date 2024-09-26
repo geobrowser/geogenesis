@@ -1,15 +1,15 @@
 import { v4 } from 'uuid';
 
 export function createGeoId() {
-  return v4().split('-').join('');
+	return v4().split('-').join('');
 }
 
 type CreateTripleIdArgs = {
-  spaceId: string;
-  entityId: string;
-  attributeId: string;
+	spaceId: string;
+	entityId: string;
+	attributeId: string;
 };
 
 export function createTripleId(args: CreateTripleIdArgs): string {
-  return `${args.spaceId}:${args.entityId}:${args.attributeId}`;
+	return `${args.spaceId}:${args.entityId}:${args.attributeId}`;
 }

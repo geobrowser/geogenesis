@@ -1,6 +1,6 @@
-import { Op } from '@geogenesis/sdk';
-import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geogenesis/sdk/abis';
-import { createEditProposal } from '@geogenesis/sdk/proto';
+import { Op } from '@geobrowser/gdk';
+import { MainVotingAbi, PersonalSpaceAdminAbi } from '@geobrowser/gdk/abis';
+import { createEditProposal } from '@geobrowser/gdk/proto';
 import { Effect, Either } from 'effect';
 import { encodeFunctionData, stringToHex } from 'viem';
 

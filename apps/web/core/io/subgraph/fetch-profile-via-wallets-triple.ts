@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 
 import { Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';

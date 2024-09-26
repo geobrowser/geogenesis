@@ -22,7 +22,7 @@
     "@ethersproject/abi": "^5.6.4",
     "@ethersproject/hash": "^5.7.0",
     "@ethersproject/providers": "^5.6.8",
-    "@geogenesis/sdk": "workspace:*",
+    "@geobrowser/gdk": "workspace:*",
     "@liveblocks/client": "^1.0.0",
     "@liveblocks/react": "^1.0.0",
     "@mobily/ts-belt": "^4.0.0-rc.2",

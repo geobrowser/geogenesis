@@ -1,6 +1,6 @@
 'use client';
 
-import { MemberAccessAbi } from '@geogenesis/sdk/abis';
+import { MemberAccessAbi } from '@geobrowser/gdk/abis';
 import { Effect, Either } from 'effect';
 import { encodeFunctionData } from 'viem';
 

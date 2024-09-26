@@ -1,0 +1,57 @@
+name: gdk – CI
+
+on:
+  pull_request:
+  push:
+    paths:
+      - packages/sdk/**
+    branches:
+      - stream/1.0.0
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 7.30.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm --filter=@geobrowser/gdk install
+
+      - name: Build
+        run: pnpm turbo run --filter=@geobrowser/gdk build
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 7.30.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm --filter=@geobrowser/gdk install
+
+      - name: Test
+        run: pnpm turbo run --filter=@geobrowser/gdk test

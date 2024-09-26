@@ -1,4 +1,4 @@
-import { Op, Value } from '@geogenesis/sdk';
+import { Op, Value } from '@geobrowser/gdk';
 
 interface CreateArgs {
   entity: string;

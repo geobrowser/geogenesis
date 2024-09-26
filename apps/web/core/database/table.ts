@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import { dedupeWith } from 'effect/Array';
 
 import { createFiltersFromGraphQLStringAndSource } from '../blocks-sdk/table';

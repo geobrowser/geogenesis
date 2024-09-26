@@ -1,7 +1,7 @@
 'use client';
 
 import { Client, Context, CreateDaoParams, DaoCreationSteps } from '@aragon/sdk-client';
-import { VotingMode } from '@geogenesis/sdk';
+import { VotingMode } from '@geobrowser/gdk';
 import { Duration, Effect, Either, Schedule } from 'effect';
 import { useRouter } from 'next/navigation';
 import { getAddress, hexToBytes } from 'viem';

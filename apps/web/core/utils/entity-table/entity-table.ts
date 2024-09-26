@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 
 import { Entity } from '~/core/io/dto/entities';
 import { Triple as ITriple, Row, Schema } from '~/core/types';

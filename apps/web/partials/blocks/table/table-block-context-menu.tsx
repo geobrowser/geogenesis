@@ -1,6 +1,6 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import cx from 'classnames';
 import { useAtom } from 'jotai';

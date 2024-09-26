@@ -1,4 +1,4 @@
-import { createGeoId } from '@geogenesis/sdk';
+import { createGeoId } from '@geobrowser/gdk';
 import { v4, validate, version } from 'uuid';
 
 import { EntityId } from '../io/schema';

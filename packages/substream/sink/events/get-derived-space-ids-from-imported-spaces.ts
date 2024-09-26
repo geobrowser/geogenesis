@@ -1,4 +1,4 @@
-import { ActionType, Import, IpfsMetadata } from '@geogenesis/sdk/proto';
+import { Import } from '@geobrowser/gdk/proto';
 import { Effect, Either } from 'effect';
 
 import { getFetchIpfsContentEffect } from '../ipfs';

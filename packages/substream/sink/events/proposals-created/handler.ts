@@ -1,15 +1,10 @@
 import { Effect, Either } from 'effect';
 
+import { mergeOpsWithPreviousVersions } from '../merge-ops-with-previous-versions';
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
-import {
-  Accounts,
-  Ops,
-  Proposals,
-  ProposedEditors,
-  ProposedMembers,
-  ProposedSubspaces,
-  ProposedVersions,
-} from '~/sink/db';
+import { Accounts, Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
+import { Edits } from '~/sink/db/edits';
+import { populateContent } from '~/sink/entries/populate-content';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
 import type {
@@ -108,9 +103,9 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
         try: async () => {
           await Promise.all([
             // Content proposals
+            Edits.upsert(schemaEditProposals.edits),
             Proposals.upsert(schemaEditProposals.proposals),
-            ProposedVersions.upsert(schemaEditProposals.proposedVersions),
-            Ops.upsert(schemaEditProposals.ops, { chunk: true }),
+            Versions.upsert(schemaEditProposals.versions),
 
             // Subspace proposals
             Proposals.upsert(schemaSubspaceProposals.proposals),
@@ -136,8 +131,6 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       const error = writtenProposals.left;
       telemetry.captureException(error);
 
-      console.log('error', error);
-
       slog({
         requestId: block.requestId,
         message: `Could not write created proposals: ${error.message} ${error.cause}`,
@@ -151,5 +144,31 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
       requestId: block.requestId,
       message: 'Created proposals written successfully!',
     });
+
+    const opsByVersionId = yield* _(
+      mergeOpsWithPreviousVersions({
+        edits: schemaEditProposals.edits,
+        opsByVersionId: schemaEditProposals.opsByVersionId,
+        versions: schemaEditProposals.versions,
+      })
+    );
+
+    const populateResult = yield* _(
+      Effect.either(
+        populateContent({
+          versions: schemaEditProposals.versions,
+          opsByVersionId,
+          edits: schemaEditProposals.edits,
+          block,
+        })
+      )
+    );
+
+    if (Either.isRight(populateResult)) {
+      slog({
+        requestId: block.requestId,
+        message: 'Edits from content proposals written successfully!',
+      });
+    }
   });
 }

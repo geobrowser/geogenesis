@@ -1,6 +1,7 @@
-import { NETWORK_IDS } from '@geogenesis/sdk/src/system-ids';
+import { NETWORK_IDS } from '@geobrowser/gdk/ids';
 import md5 from 'md5';
 import { v4 } from 'uuid';
+import { describe, expect, it } from 'vitest';
 
 import { createSpaceId } from './id';
 
@@ -23,7 +24,7 @@ function createIdFromUniqueString(text: string) {
 }
 
 function hexToBytesArray(hex: string) {
-  let bytes: number[] = [];
+  const bytes: number[] = [];
 
   for (let character = 0; character < hex.length; character += 2) {
     bytes.push(parseInt(hex.slice(character, character + 2), 16));

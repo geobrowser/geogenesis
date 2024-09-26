@@ -1,5 +1,5 @@
 // this is the UI for the rendered Entity description in the Move Entity Review -- it is similar to the -entity-page.tsx comoponents
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 
 import { Triple } from '~/core/types';
 import { NavUtils, groupBy } from '~/core/utils/utils';

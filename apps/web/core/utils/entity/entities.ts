@@ -1,4 +1,4 @@
-import { SYSTEM_IDS } from '@geogenesis/sdk';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
 
 import { Entity, Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';

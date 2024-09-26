@@ -1,7 +1,7 @@
 'use client';
 
-import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geogenesis/sdk/constants';
+import { SYSTEM_IDS } from '@geobrowser/gdk';
+import { INITIAL_COLLECTION_ITEM_INDEX_VALUE } from '@geobrowser/gdk/constants';
 
 import { useMemo } from 'react';
 

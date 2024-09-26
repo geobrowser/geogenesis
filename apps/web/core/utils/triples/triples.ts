@@ -1,4 +1,4 @@
-import { Op } from '@geogenesis/sdk';
+import { Op } from '@geobrowser/gdk';
 import { A, pipe } from '@mobily/ts-belt';
 
 import { StoredTriple } from '~/core/database/types';

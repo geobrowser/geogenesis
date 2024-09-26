@@ -2,7 +2,7 @@
 
 import { SupportedNetworks } from '@aragon/osx-commons-configs';
 import { ContextParams } from '@aragon/sdk-client-common';
-import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS } from '@geogenesis/sdk/contracts';
+import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS } from '@geobrowser/gdk/contracts';
 import { providers } from 'ethers';
 
 import * as React from 'react';
