@@ -3,734 +3,755 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialMessage, PlainMessage } from "@bufbuild/protobuf";
-import { Message, proto3 } from "@bufbuild/protobuf";
+import type {
+	BinaryReadOptions,
+	FieldList,
+	JsonReadOptions,
+	JsonValue,
+	PartialMessage,
+	PlainMessage,
+} from '@bufbuild/protobuf';
+import { Message, proto3 } from '@bufbuild/protobuf';
 
 /**
  * @generated from enum OpType
  */
 export enum OpType {
-  /**
-   * @generated from enum value: NONE = 0;
-   */
-  NONE = 0,
+	/**
+	 * @generated from enum value: NONE = 0;
+	 */
+	NONE = 0,
 
-  /**
-   * @generated from enum value: SET_TRIPLE = 1;
-   */
-  SET_TRIPLE = 1,
+	/**
+	 * @generated from enum value: SET_TRIPLE = 1;
+	 */
+	SET_TRIPLE = 1,
 
-  /**
-   * @generated from enum value: DELETE_TRIPLE = 2;
-   */
-  DELETE_TRIPLE = 2,
+	/**
+	 * @generated from enum value: DELETE_TRIPLE = 2;
+	 */
+	DELETE_TRIPLE = 2,
 }
 // Retrieve enum metadata with: proto3.getEnumType(OpType)
-proto3.util.setEnumType(OpType, "OpType", [
-  { no: 0, name: "NONE" },
-  { no: 1, name: "SET_TRIPLE" },
-  { no: 2, name: "DELETE_TRIPLE" },
+proto3.util.setEnumType(OpType, 'OpType', [
+	{ no: 0, name: 'NONE' },
+	{ no: 1, name: 'SET_TRIPLE' },
+	{ no: 2, name: 'DELETE_TRIPLE' },
 ]);
 
 /**
  * @generated from enum ValueType
  */
 export enum ValueType {
-  /**
-   * @generated from enum value: UNKNOWN = 0;
-   */
-  UNKNOWN = 0,
+	/**
+	 * @generated from enum value: UNKNOWN = 0;
+	 */
+	UNKNOWN = 0,
 
-  /**
-   * @generated from enum value: TEXT = 1;
-   */
-  TEXT = 1,
+	/**
+	 * @generated from enum value: TEXT = 1;
+	 */
+	TEXT = 1,
 
-  /**
-   * @generated from enum value: NUMBER = 2;
-   */
-  NUMBER = 2,
+	/**
+	 * @generated from enum value: NUMBER = 2;
+	 */
+	NUMBER = 2,
 
-  /**
-   * @generated from enum value: ENTITY = 3;
-   */
-  ENTITY = 3,
+	/**
+	 * @generated from enum value: ENTITY = 3;
+	 */
+	ENTITY = 3,
 
-  /**
-   * @generated from enum value: URI = 4;
-   */
-  URI = 4,
+	/**
+	 * @generated from enum value: URI = 4;
+	 */
+	URI = 4,
 
-  /**
-   * @generated from enum value: CHECKBOX = 5;
-   */
-  CHECKBOX = 5,
+	/**
+	 * @generated from enum value: CHECKBOX = 5;
+	 */
+	CHECKBOX = 5,
 
-  /**
-   * @generated from enum value: TIME = 6;
-   */
-  TIME = 6,
+	/**
+	 * @generated from enum value: TIME = 6;
+	 */
+	TIME = 6,
 
-  /**
-   * @generated from enum value: GEO_LOCATION = 7;
-   */
-  GEO_LOCATION = 7,
+	/**
+	 * @generated from enum value: GEO_LOCATION = 7;
+	 */
+	GEO_LOCATION = 7,
 }
 // Retrieve enum metadata with: proto3.getEnumType(ValueType)
-proto3.util.setEnumType(ValueType, "ValueType", [
-  { no: 0, name: "UNKNOWN" },
-  { no: 1, name: "TEXT" },
-  { no: 2, name: "NUMBER" },
-  { no: 3, name: "ENTITY" },
-  { no: 4, name: "URI" },
-  { no: 5, name: "CHECKBOX" },
-  { no: 6, name: "TIME" },
-  { no: 7, name: "GEO_LOCATION" },
+proto3.util.setEnumType(ValueType, 'ValueType', [
+	{ no: 0, name: 'UNKNOWN' },
+	{ no: 1, name: 'TEXT' },
+	{ no: 2, name: 'NUMBER' },
+	{ no: 3, name: 'ENTITY' },
+	{ no: 4, name: 'URI' },
+	{ no: 5, name: 'CHECKBOX' },
+	{ no: 6, name: 'TIME' },
+	{ no: 7, name: 'GEO_LOCATION' },
 ]);
 
 /**
  * @generated from enum ActionType
  */
 export enum ActionType {
-  /**
-   * @generated from enum value: EMPTY = 0;
-   */
-  EMPTY = 0,
+	/**
+	 * @generated from enum value: EMPTY = 0;
+	 */
+	EMPTY = 0,
 
-  /**
-   * @generated from enum value: ADD_EDIT = 1;
-   */
-  ADD_EDIT = 1,
+	/**
+	 * @generated from enum value: ADD_EDIT = 1;
+	 */
+	ADD_EDIT = 1,
 
-  /**
-   * @generated from enum value: IMPORT_SPACE = 2;
-   */
-  IMPORT_SPACE = 2,
+	/**
+	 * @generated from enum value: IMPORT_SPACE = 2;
+	 */
+	IMPORT_SPACE = 2,
 
-  /**
-   * @generated from enum value: ADD_SUBSPACE = 3;
-   */
-  ADD_SUBSPACE = 3,
+	/**
+	 * @generated from enum value: ADD_SUBSPACE = 3;
+	 */
+	ADD_SUBSPACE = 3,
 
-  /**
-   * @generated from enum value: REMOVE_SUBSPACE = 4;
-   */
-  REMOVE_SUBSPACE = 4,
+	/**
+	 * @generated from enum value: REMOVE_SUBSPACE = 4;
+	 */
+	REMOVE_SUBSPACE = 4,
 
-  /**
-   * @generated from enum value: ADD_EDITOR = 5;
-   */
-  ADD_EDITOR = 5,
+	/**
+	 * @generated from enum value: ADD_EDITOR = 5;
+	 */
+	ADD_EDITOR = 5,
 
-  /**
-   * @generated from enum value: REMOVE_EDITOR = 6;
-   */
-  REMOVE_EDITOR = 6,
+	/**
+	 * @generated from enum value: REMOVE_EDITOR = 6;
+	 */
+	REMOVE_EDITOR = 6,
 
-  /**
-   * @generated from enum value: ADD_MEMBER = 7;
-   */
-  ADD_MEMBER = 7,
+	/**
+	 * @generated from enum value: ADD_MEMBER = 7;
+	 */
+	ADD_MEMBER = 7,
 
-  /**
-   * @generated from enum value: REMOVE_MEMBER = 8;
-   */
-  REMOVE_MEMBER = 8,
+	/**
+	 * @generated from enum value: REMOVE_MEMBER = 8;
+	 */
+	REMOVE_MEMBER = 8,
 }
 // Retrieve enum metadata with: proto3.getEnumType(ActionType)
-proto3.util.setEnumType(ActionType, "ActionType", [
-  { no: 0, name: "EMPTY" },
-  { no: 1, name: "ADD_EDIT" },
-  { no: 2, name: "IMPORT_SPACE" },
-  { no: 3, name: "ADD_SUBSPACE" },
-  { no: 4, name: "REMOVE_SUBSPACE" },
-  { no: 5, name: "ADD_EDITOR" },
-  { no: 6, name: "REMOVE_EDITOR" },
-  { no: 7, name: "ADD_MEMBER" },
-  { no: 8, name: "REMOVE_MEMBER" },
+proto3.util.setEnumType(ActionType, 'ActionType', [
+	{ no: 0, name: 'EMPTY' },
+	{ no: 1, name: 'ADD_EDIT' },
+	{ no: 2, name: 'IMPORT_SPACE' },
+	{ no: 3, name: 'ADD_SUBSPACE' },
+	{ no: 4, name: 'REMOVE_SUBSPACE' },
+	{ no: 5, name: 'ADD_EDITOR' },
+	{ no: 6, name: 'REMOVE_EDITOR' },
+	{ no: 7, name: 'ADD_MEMBER' },
+	{ no: 8, name: 'REMOVE_MEMBER' },
 ]);
 
 /**
  * @generated from message IpfsMetadata
  */
 export class IpfsMetadata extends Message<IpfsMetadata> {
-  /**
-   * @generated from field: ActionType type = 1;
-   */
-  type = ActionType.EMPTY;
+	/**
+	 * @generated from field: ActionType type = 1;
+	 */
+	type = ActionType.EMPTY;
 
-  /**
-   * We version the data structured used to represent proposal metadata. Each
-   * proposal type has their own metadata and versioning that we can change
-   * independently of other proposal types.
-   *
-   * @generated from field: string version = 2;
-   */
-  version = "";
+	/**
+	 * We version the data structured used to represent proposal metadata. Each
+	 * proposal type has their own metadata and versioning that we can change
+	 * independently of other proposal types.
+	 *
+	 * @generated from field: string version = 2;
+	 */
+	version = '';
 
-  /**
-   * @generated from field: string id = 3;
-   */
-  id = "";
+	/**
+	 * @generated from field: string id = 3;
+	 */
+	id = '';
 
-  /**
-   * @generated from field: string name = 4;
-   */
-  name = "";
+	/**
+	 * @generated from field: string name = 4;
+	 */
+	name = '';
 
-  constructor(data?: PartialMessage<IpfsMetadata>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
+	constructor(data?: PartialMessage<IpfsMetadata>) {
+		super();
+		proto3.util.initPartial(data, this);
+	}
 
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "IpfsMetadata";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-  ]);
+	static readonly runtime: typeof proto3 = proto3;
+	static readonly typeName = 'IpfsMetadata';
+	static readonly fields: FieldList = proto3.util.newFieldList(() => [
+		{ no: 1, name: 'type', kind: 'enum', T: proto3.getEnumType(ActionType) },
+		{ no: 2, name: 'version', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 3, name: 'id', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 4, name: 'name', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+	]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IpfsMetadata {
-    return new IpfsMetadata().fromBinary(bytes, options);
-  }
+	static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IpfsMetadata {
+		return new IpfsMetadata().fromBinary(bytes, options);
+	}
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): IpfsMetadata {
-    return new IpfsMetadata().fromJson(jsonValue, options);
-  }
+	static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): IpfsMetadata {
+		return new IpfsMetadata().fromJson(jsonValue, options);
+	}
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): IpfsMetadata {
-    return new IpfsMetadata().fromJsonString(jsonString, options);
-  }
+	static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): IpfsMetadata {
+		return new IpfsMetadata().fromJsonString(jsonString, options);
+	}
 
-  static equals(a: IpfsMetadata | PlainMessage<IpfsMetadata> | undefined, b: IpfsMetadata | PlainMessage<IpfsMetadata> | undefined): boolean {
-    return proto3.util.equals(IpfsMetadata, a, b);
-  }
+	static equals(
+		a: IpfsMetadata | PlainMessage<IpfsMetadata> | undefined,
+		b: IpfsMetadata | PlainMessage<IpfsMetadata> | undefined,
+	): boolean {
+		return proto3.util.equals(IpfsMetadata, a, b);
+	}
 }
 
 /**
  * @generated from message Edit
  */
 export class Edit extends Message<Edit> {
-  /**
-   * @generated from field: ActionType type = 1;
-   */
-  type = ActionType.EMPTY;
+	/**
+	 * @generated from field: ActionType type = 1;
+	 */
+	type = ActionType.EMPTY;
 
-  /**
-   * @generated from field: string version = 2;
-   */
-  version = "";
+	/**
+	 * @generated from field: string version = 2;
+	 */
+	version = '';
 
-  /**
-   * @generated from field: string id = 3;
-   */
-  id = "";
+	/**
+	 * @generated from field: string id = 3;
+	 */
+	id = '';
 
-  /**
-   * @generated from field: string name = 4;
-   */
-  name = "";
+	/**
+	 * @generated from field: string name = 4;
+	 */
+	name = '';
 
-  /**
-   * @generated from field: repeated Op ops = 5;
-   */
-  ops: Op[] = [];
+	/**
+	 * @generated from field: repeated Op ops = 5;
+	 */
+	ops: Op[] = [];
 
-  /**
-   * @generated from field: repeated string authors = 6;
-   */
-  authors: string[] = [];
+	/**
+	 * @generated from field: repeated string authors = 6;
+	 */
+	authors: string[] = [];
 
-  constructor(data?: PartialMessage<Edit>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
+	constructor(data?: PartialMessage<Edit>) {
+		super();
+		proto3.util.initPartial(data, this);
+	}
 
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Edit";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "ops", kind: "message", T: Op, repeated: true },
-    { no: 6, name: "authors", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-  ]);
+	static readonly runtime: typeof proto3 = proto3;
+	static readonly typeName = 'Edit';
+	static readonly fields: FieldList = proto3.util.newFieldList(() => [
+		{ no: 1, name: 'type', kind: 'enum', T: proto3.getEnumType(ActionType) },
+		{ no: 2, name: 'version', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 3, name: 'id', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 4, name: 'name', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 5, name: 'ops', kind: 'message', T: Op, repeated: true },
+		{ no: 6, name: 'authors', kind: 'scalar', T: 9 /* ScalarType.STRING */, repeated: true },
+	]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Edit {
-    return new Edit().fromBinary(bytes, options);
-  }
+	static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Edit {
+		return new Edit().fromBinary(bytes, options);
+	}
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Edit {
-    return new Edit().fromJson(jsonValue, options);
-  }
+	static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Edit {
+		return new Edit().fromJson(jsonValue, options);
+	}
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Edit {
-    return new Edit().fromJsonString(jsonString, options);
-  }
+	static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Edit {
+		return new Edit().fromJsonString(jsonString, options);
+	}
 
-  static equals(a: Edit | PlainMessage<Edit> | undefined, b: Edit | PlainMessage<Edit> | undefined): boolean {
-    return proto3.util.equals(Edit, a, b);
-  }
+	static equals(a: Edit | PlainMessage<Edit> | undefined, b: Edit | PlainMessage<Edit> | undefined): boolean {
+		return proto3.util.equals(Edit, a, b);
+	}
 }
 
 /**
  * @generated from message ImportEdit
  */
 export class ImportEdit extends Message<ImportEdit> {
-  /**
-   * @generated from field: ActionType type = 1;
-   */
-  type = ActionType.EMPTY;
+	/**
+	 * @generated from field: ActionType type = 1;
+	 */
+	type = ActionType.EMPTY;
 
-  /**
-   * @generated from field: string version = 2;
-   */
-  version = "";
+	/**
+	 * @generated from field: string version = 2;
+	 */
+	version = '';
 
-  /**
-   * @generated from field: string id = 3;
-   */
-  id = "";
+	/**
+	 * @generated from field: string id = 3;
+	 */
+	id = '';
 
-  /**
-   * @generated from field: string name = 4;
-   */
-  name = "";
+	/**
+	 * @generated from field: string name = 4;
+	 */
+	name = '';
 
-  /**
-   * @generated from field: repeated Op ops = 5;
-   */
-  ops: Op[] = [];
+	/**
+	 * @generated from field: repeated Op ops = 5;
+	 */
+	ops: Op[] = [];
 
-  /**
-   * @generated from field: repeated string authors = 6;
-   */
-  authors: string[] = [];
+	/**
+	 * @generated from field: repeated string authors = 6;
+	 */
+	authors: string[] = [];
 
-  /**
-   * @generated from field: string createdBy = 7;
-   */
-  createdBy = "";
+	/**
+	 * @generated from field: string createdBy = 7;
+	 */
+	createdBy = '';
 
-  /**
-   * @generated from field: string createdAt = 8;
-   */
-  createdAt = "";
+	/**
+	 * @generated from field: string createdAt = 8;
+	 */
+	createdAt = '';
 
-  /**
-   * @generated from field: string blockHash = 9;
-   */
-  blockHash = "";
+	/**
+	 * @generated from field: string blockHash = 9;
+	 */
+	blockHash = '';
 
-  /**
-   * @generated from field: string blockNumber = 10;
-   */
-  blockNumber = "";
+	/**
+	 * @generated from field: string blockNumber = 10;
+	 */
+	blockNumber = '';
 
-  /**
-   * @generated from field: string transactionHash = 11;
-   */
-  transactionHash = "";
+	/**
+	 * @generated from field: string transactionHash = 11;
+	 */
+	transactionHash = '';
 
-  constructor(data?: PartialMessage<ImportEdit>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
+	constructor(data?: PartialMessage<ImportEdit>) {
+		super();
+		proto3.util.initPartial(data, this);
+	}
 
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "ImportEdit";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "ops", kind: "message", T: Op, repeated: true },
-    { no: 6, name: "authors", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 7, name: "createdBy", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 8, name: "createdAt", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 9, name: "blockHash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 10, name: "blockNumber", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 11, name: "transactionHash", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-  ]);
+	static readonly runtime: typeof proto3 = proto3;
+	static readonly typeName = 'ImportEdit';
+	static readonly fields: FieldList = proto3.util.newFieldList(() => [
+		{ no: 1, name: 'type', kind: 'enum', T: proto3.getEnumType(ActionType) },
+		{ no: 2, name: 'version', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 3, name: 'id', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 4, name: 'name', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 5, name: 'ops', kind: 'message', T: Op, repeated: true },
+		{ no: 6, name: 'authors', kind: 'scalar', T: 9 /* ScalarType.STRING */, repeated: true },
+		{ no: 7, name: 'createdBy', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 8, name: 'createdAt', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 9, name: 'blockHash', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 10, name: 'blockNumber', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 11, name: 'transactionHash', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+	]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ImportEdit {
-    return new ImportEdit().fromBinary(bytes, options);
-  }
+	static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ImportEdit {
+		return new ImportEdit().fromBinary(bytes, options);
+	}
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ImportEdit {
-    return new ImportEdit().fromJson(jsonValue, options);
-  }
+	static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ImportEdit {
+		return new ImportEdit().fromJson(jsonValue, options);
+	}
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ImportEdit {
-    return new ImportEdit().fromJsonString(jsonString, options);
-  }
+	static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ImportEdit {
+		return new ImportEdit().fromJsonString(jsonString, options);
+	}
 
-  static equals(a: ImportEdit | PlainMessage<ImportEdit> | undefined, b: ImportEdit | PlainMessage<ImportEdit> | undefined): boolean {
-    return proto3.util.equals(ImportEdit, a, b);
-  }
+	static equals(
+		a: ImportEdit | PlainMessage<ImportEdit> | undefined,
+		b: ImportEdit | PlainMessage<ImportEdit> | undefined,
+	): boolean {
+		return proto3.util.equals(ImportEdit, a, b);
+	}
 }
 
 /**
  * @generated from message Op
  */
 export class Op extends Message<Op> {
-  /**
-   * @generated from field: OpType type = 1;
-   */
-  type = OpType.NONE;
+	/**
+	 * @generated from field: OpType type = 1;
+	 */
+	type = OpType.NONE;
 
-  /**
-   * @generated from field: Triple triple = 2;
-   */
-  triple?: Triple;
+	/**
+	 * @generated from field: Triple triple = 2;
+	 */
+	triple?: Triple;
 
-  constructor(data?: PartialMessage<Op>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
+	constructor(data?: PartialMessage<Op>) {
+		super();
+		proto3.util.initPartial(data, this);
+	}
 
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Op";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(OpType) },
-    { no: 2, name: "triple", kind: "message", T: Triple },
-  ]);
+	static readonly runtime: typeof proto3 = proto3;
+	static readonly typeName = 'Op';
+	static readonly fields: FieldList = proto3.util.newFieldList(() => [
+		{ no: 1, name: 'type', kind: 'enum', T: proto3.getEnumType(OpType) },
+		{ no: 2, name: 'triple', kind: 'message', T: Triple },
+	]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Op {
-    return new Op().fromBinary(bytes, options);
-  }
+	static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Op {
+		return new Op().fromBinary(bytes, options);
+	}
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Op {
-    return new Op().fromJson(jsonValue, options);
-  }
+	static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Op {
+		return new Op().fromJson(jsonValue, options);
+	}
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Op {
-    return new Op().fromJsonString(jsonString, options);
-  }
+	static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Op {
+		return new Op().fromJsonString(jsonString, options);
+	}
 
-  static equals(a: Op | PlainMessage<Op> | undefined, b: Op | PlainMessage<Op> | undefined): boolean {
-    return proto3.util.equals(Op, a, b);
-  }
+	static equals(a: Op | PlainMessage<Op> | undefined, b: Op | PlainMessage<Op> | undefined): boolean {
+		return proto3.util.equals(Op, a, b);
+	}
 }
 
 /**
  * @generated from message Triple
  */
 export class Triple extends Message<Triple> {
-  /**
-   * @generated from field: string entity = 1;
-   */
-  entity = "";
+	/**
+	 * @generated from field: string entity = 1;
+	 */
+	entity = '';
 
-  /**
-   * @generated from field: string attribute = 2;
-   */
-  attribute = "";
+	/**
+	 * @generated from field: string attribute = 2;
+	 */
+	attribute = '';
 
-  /**
-   * @generated from field: Value value = 3;
-   */
-  value?: Value;
+	/**
+	 * @generated from field: Value value = 3;
+	 */
+	value?: Value;
 
-  constructor(data?: PartialMessage<Triple>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
+	constructor(data?: PartialMessage<Triple>) {
+		super();
+		proto3.util.initPartial(data, this);
+	}
 
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Triple";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "entity", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "attribute", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "value", kind: "message", T: Value },
-  ]);
+	static readonly runtime: typeof proto3 = proto3;
+	static readonly typeName = 'Triple';
+	static readonly fields: FieldList = proto3.util.newFieldList(() => [
+		{ no: 1, name: 'entity', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 2, name: 'attribute', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 3, name: 'value', kind: 'message', T: Value },
+	]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Triple {
-    return new Triple().fromBinary(bytes, options);
-  }
+	static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Triple {
+		return new Triple().fromBinary(bytes, options);
+	}
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Triple {
-    return new Triple().fromJson(jsonValue, options);
-  }
+	static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Triple {
+		return new Triple().fromJson(jsonValue, options);
+	}
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Triple {
-    return new Triple().fromJsonString(jsonString, options);
-  }
+	static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Triple {
+		return new Triple().fromJsonString(jsonString, options);
+	}
 
-  static equals(a: Triple | PlainMessage<Triple> | undefined, b: Triple | PlainMessage<Triple> | undefined): boolean {
-    return proto3.util.equals(Triple, a, b);
-  }
+	static equals(a: Triple | PlainMessage<Triple> | undefined, b: Triple | PlainMessage<Triple> | undefined): boolean {
+		return proto3.util.equals(Triple, a, b);
+	}
 }
 
 /**
  * @generated from message Value
  */
 export class Value extends Message<Value> {
-  /**
-   * @generated from field: ValueType type = 1;
-   */
-  type = ValueType.UNKNOWN;
+	/**
+	 * @generated from field: ValueType type = 1;
+	 */
+	type = ValueType.UNKNOWN;
 
-  /**
-   * @generated from field: string value = 2;
-   */
-  value = "";
+	/**
+	 * @generated from field: string value = 2;
+	 */
+	value = '';
 
-  constructor(data?: PartialMessage<Value>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
+	constructor(data?: PartialMessage<Value>) {
+		super();
+		proto3.util.initPartial(data, this);
+	}
 
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Value";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ValueType) },
-    { no: 2, name: "value", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-  ]);
+	static readonly runtime: typeof proto3 = proto3;
+	static readonly typeName = 'Value';
+	static readonly fields: FieldList = proto3.util.newFieldList(() => [
+		{ no: 1, name: 'type', kind: 'enum', T: proto3.getEnumType(ValueType) },
+		{ no: 2, name: 'value', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+	]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Value {
-    return new Value().fromBinary(bytes, options);
-  }
+	static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Value {
+		return new Value().fromBinary(bytes, options);
+	}
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Value {
-    return new Value().fromJson(jsonValue, options);
-  }
+	static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Value {
+		return new Value().fromJson(jsonValue, options);
+	}
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Value {
-    return new Value().fromJsonString(jsonString, options);
-  }
+	static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Value {
+		return new Value().fromJsonString(jsonString, options);
+	}
 
-  static equals(a: Value | PlainMessage<Value> | undefined, b: Value | PlainMessage<Value> | undefined): boolean {
-    return proto3.util.equals(Value, a, b);
-  }
+	static equals(a: Value | PlainMessage<Value> | undefined, b: Value | PlainMessage<Value> | undefined): boolean {
+		return proto3.util.equals(Value, a, b);
+	}
 }
 
 /**
  * @generated from message Membership
  */
 export class Membership extends Message<Membership> {
-  /**
-   * @generated from field: ActionType type = 1;
-   */
-  type = ActionType.EMPTY;
+	/**
+	 * @generated from field: ActionType type = 1;
+	 */
+	type = ActionType.EMPTY;
 
-  /**
-   * @generated from field: string name = 2;
-   */
-  name = "";
+	/**
+	 * @generated from field: string name = 2;
+	 */
+	name = '';
 
-  /**
-   * @generated from field: string version = 3;
-   */
-  version = "";
+	/**
+	 * @generated from field: string version = 3;
+	 */
+	version = '';
 
-  /**
-   * @generated from field: string id = 4;
-   */
-  id = "";
+	/**
+	 * @generated from field: string id = 4;
+	 */
+	id = '';
 
-  /**
-   * @generated from field: string user = 5;
-   */
-  user = "";
+	/**
+	 * @generated from field: string user = 5;
+	 */
+	user = '';
 
-  constructor(data?: PartialMessage<Membership>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
+	constructor(data?: PartialMessage<Membership>) {
+		super();
+		proto3.util.initPartial(data, this);
+	}
 
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Membership";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "user", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-  ]);
+	static readonly runtime: typeof proto3 = proto3;
+	static readonly typeName = 'Membership';
+	static readonly fields: FieldList = proto3.util.newFieldList(() => [
+		{ no: 1, name: 'type', kind: 'enum', T: proto3.getEnumType(ActionType) },
+		{ no: 2, name: 'name', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 3, name: 'version', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 4, name: 'id', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 5, name: 'user', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+	]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Membership {
-    return new Membership().fromBinary(bytes, options);
-  }
+	static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Membership {
+		return new Membership().fromBinary(bytes, options);
+	}
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Membership {
-    return new Membership().fromJson(jsonValue, options);
-  }
+	static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Membership {
+		return new Membership().fromJson(jsonValue, options);
+	}
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Membership {
-    return new Membership().fromJsonString(jsonString, options);
-  }
+	static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Membership {
+		return new Membership().fromJsonString(jsonString, options);
+	}
 
-  static equals(a: Membership | PlainMessage<Membership> | undefined, b: Membership | PlainMessage<Membership> | undefined): boolean {
-    return proto3.util.equals(Membership, a, b);
-  }
+	static equals(
+		a: Membership | PlainMessage<Membership> | undefined,
+		b: Membership | PlainMessage<Membership> | undefined,
+	): boolean {
+		return proto3.util.equals(Membership, a, b);
+	}
 }
 
 /**
  * @generated from message Subspace
  */
 export class Subspace extends Message<Subspace> {
-  /**
-   * @generated from field: ActionType type = 1;
-   */
-  type = ActionType.EMPTY;
+	/**
+	 * @generated from field: ActionType type = 1;
+	 */
+	type = ActionType.EMPTY;
 
-  /**
-   * @generated from field: string name = 2;
-   */
-  name = "";
+	/**
+	 * @generated from field: string name = 2;
+	 */
+	name = '';
 
-  /**
-   * @generated from field: string version = 3;
-   */
-  version = "";
+	/**
+	 * @generated from field: string version = 3;
+	 */
+	version = '';
 
-  /**
-   * @generated from field: string id = 4;
-   */
-  id = "";
+	/**
+	 * @generated from field: string id = 4;
+	 */
+	id = '';
 
-  /**
-   * @generated from field: string subspace = 5;
-   */
-  subspace = "";
+	/**
+	 * @generated from field: string subspace = 5;
+	 */
+	subspace = '';
 
-  constructor(data?: PartialMessage<Subspace>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
+	constructor(data?: PartialMessage<Subspace>) {
+		super();
+		proto3.util.initPartial(data, this);
+	}
 
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Subspace";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "subspace", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-  ]);
+	static readonly runtime: typeof proto3 = proto3;
+	static readonly typeName = 'Subspace';
+	static readonly fields: FieldList = proto3.util.newFieldList(() => [
+		{ no: 1, name: 'type', kind: 'enum', T: proto3.getEnumType(ActionType) },
+		{ no: 2, name: 'name', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 3, name: 'version', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 4, name: 'id', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 5, name: 'subspace', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+	]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Subspace {
-    return new Subspace().fromBinary(bytes, options);
-  }
+	static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Subspace {
+		return new Subspace().fromBinary(bytes, options);
+	}
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Subspace {
-    return new Subspace().fromJson(jsonValue, options);
-  }
+	static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Subspace {
+		return new Subspace().fromJson(jsonValue, options);
+	}
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Subspace {
-    return new Subspace().fromJsonString(jsonString, options);
-  }
+	static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Subspace {
+		return new Subspace().fromJsonString(jsonString, options);
+	}
 
-  static equals(a: Subspace | PlainMessage<Subspace> | undefined, b: Subspace | PlainMessage<Subspace> | undefined): boolean {
-    return proto3.util.equals(Subspace, a, b);
-  }
+	static equals(
+		a: Subspace | PlainMessage<Subspace> | undefined,
+		b: Subspace | PlainMessage<Subspace> | undefined,
+	): boolean {
+		return proto3.util.equals(Subspace, a, b);
+	}
 }
 
 /**
  * @generated from message Import
  */
 export class Import extends Message<Import> {
-  /**
-   * @generated from field: ActionType type = 1;
-   */
-  type = ActionType.EMPTY;
+	/**
+	 * @generated from field: ActionType type = 1;
+	 */
+	type = ActionType.EMPTY;
 
-  /**
-   * @generated from field: string version = 2;
-   */
-  version = "";
+	/**
+	 * @generated from field: string version = 2;
+	 */
+	version = '';
 
-  /**
-   * @generated from field: string previousNetwork = 3;
-   */
-  previousNetwork = "";
+	/**
+	 * @generated from field: string previousNetwork = 3;
+	 */
+	previousNetwork = '';
 
-  /**
-   * @generated from field: string previousContractAddress = 4;
-   */
-  previousContractAddress = "";
+	/**
+	 * @generated from field: string previousContractAddress = 4;
+	 */
+	previousContractAddress = '';
 
-  /**
-   * @generated from field: repeated string edits = 5;
-   */
-  edits: string[] = [];
+	/**
+	 * @generated from field: repeated string edits = 5;
+	 */
+	edits: string[] = [];
 
-  constructor(data?: PartialMessage<Import>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
+	constructor(data?: PartialMessage<Import>) {
+		super();
+		proto3.util.initPartial(data, this);
+	}
 
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Import";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "type", kind: "enum", T: proto3.getEnumType(ActionType) },
-    { no: 2, name: "version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "previousNetwork", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 4, name: "previousContractAddress", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 5, name: "edits", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-  ]);
+	static readonly runtime: typeof proto3 = proto3;
+	static readonly typeName = 'Import';
+	static readonly fields: FieldList = proto3.util.newFieldList(() => [
+		{ no: 1, name: 'type', kind: 'enum', T: proto3.getEnumType(ActionType) },
+		{ no: 2, name: 'version', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 3, name: 'previousNetwork', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 4, name: 'previousContractAddress', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 5, name: 'edits', kind: 'scalar', T: 9 /* ScalarType.STRING */, repeated: true },
+	]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Import {
-    return new Import().fromBinary(bytes, options);
-  }
+	static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Import {
+		return new Import().fromBinary(bytes, options);
+	}
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Import {
-    return new Import().fromJson(jsonValue, options);
-  }
+	static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Import {
+		return new Import().fromJson(jsonValue, options);
+	}
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Import {
-    return new Import().fromJsonString(jsonString, options);
-  }
+	static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Import {
+		return new Import().fromJsonString(jsonString, options);
+	}
 
-  static equals(a: Import | PlainMessage<Import> | undefined, b: Import | PlainMessage<Import> | undefined): boolean {
-    return proto3.util.equals(Import, a, b);
-  }
+	static equals(a: Import | PlainMessage<Import> | undefined, b: Import | PlainMessage<Import> | undefined): boolean {
+		return proto3.util.equals(Import, a, b);
+	}
 }
 
 /**
  * @generated from message Options
  */
 export class Options extends Message<Options> {
-  /**
-   * @generated from field: string format = 1;
-   */
-  format = "";
+	/**
+	 * @generated from field: string format = 1;
+	 */
+	format = '';
 
-  /**
-   * @generated from field: string crop = 2;
-   */
-  crop = "";
+	/**
+	 * @generated from field: string crop = 2;
+	 */
+	crop = '';
 
-  constructor(data?: PartialMessage<Options>) {
-    super();
-    proto3.util.initPartial(data, this);
-  }
+	constructor(data?: PartialMessage<Options>) {
+		super();
+		proto3.util.initPartial(data, this);
+	}
 
-  static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "Options";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "format", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "crop", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-  ]);
+	static readonly runtime: typeof proto3 = proto3;
+	static readonly typeName = 'Options';
+	static readonly fields: FieldList = proto3.util.newFieldList(() => [
+		{ no: 1, name: 'format', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+		{ no: 2, name: 'crop', kind: 'scalar', T: 9 /* ScalarType.STRING */ },
+	]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Options {
-    return new Options().fromBinary(bytes, options);
-  }
+	static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Options {
+		return new Options().fromBinary(bytes, options);
+	}
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Options {
-    return new Options().fromJson(jsonValue, options);
-  }
+	static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Options {
+		return new Options().fromJson(jsonValue, options);
+	}
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Options {
-    return new Options().fromJsonString(jsonString, options);
-  }
+	static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Options {
+		return new Options().fromJsonString(jsonString, options);
+	}
 
-  static equals(a: Options | PlainMessage<Options> | undefined, b: Options | PlainMessage<Options> | undefined): boolean {
-    return proto3.util.equals(Options, a, b);
-  }
+	static equals(
+		a: Options | PlainMessage<Options> | undefined,
+		b: Options | PlainMessage<Options> | undefined,
+	): boolean {
+		return proto3.util.equals(Options, a, b);
+	}
 }
-

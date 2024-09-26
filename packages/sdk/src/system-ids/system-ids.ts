@@ -11,7 +11,7 @@ export const ATTRIBUTE = '808a04ceb21c4d888ad12e240613e5ca';
  *
  * They act similarly to Join Tables in a relational database, but are designed
  * around the graph-based nature of the Geo data model.
- * 
+ *
  * Relations are themselves entities, so can store any metadata about the relation
  * as triples. Currently Relation entities cannot have their own relations. This is a
  * technical limitation to avoid infinitely creating recursive relations.
@@ -44,7 +44,7 @@ export const RELATION_TO_ATTRIBUTE = 'c1f4cb6fece44c3ca447ab005b756972';
 /**
  * The type of the Relation. e.g., Type, Attribute, Friend, Married to
  */
-export const RELATION_TYPE_ATTRIBUTE = 'd747a35a6aa14f468f76e6c2064c7036'
+export const RELATION_TYPE_ATTRIBUTE = 'd747a35a6aa14f468f76e6c2064c7036';
 // export const RELATION_TYPE_OF_ATTRIBUTE = 'c167ef23fb2a40449ed945123ce7d277'
 
 /**
@@ -63,13 +63,13 @@ export const COLLECTION_TYPE = 'c373a33052df47b3a6d2df552bda4b44';
  * Data entities in Geo can specify one or many data sources. These data sources
  * might fall into various categories which determine how data for these sources
  * are fetched.
- * 
+ *
  * A collection data source points to a collection with one or many collection item
  * relations coming from it.
- * 
+ *
  * A query data source points to one, many, or no spaces. This determines which spaces
  * we query data from.
- * 
+ *
  * An all-of-geo data source doesn't point to any spaces, and instead queries the
  * entirety of the knowledge graph.
  */
@@ -83,7 +83,7 @@ export const ALL_OF_GEO_DATA_SOURCE = '21417aaa69b745509f4297e59ffd8e2b';
  * The collection item relation type is used to identify the relations that point to
  * collection items from a collection.
  */
-export const COLLECTION_ITEM_RELATION_TYPE = '66579048ca0d47b1-8ac1c9de1ddfd4bd'
+export const COLLECTION_ITEM_RELATION_TYPE = '66579048ca0d47b1-8ac1c9de1ddfd4bd';
 
 /*
   Example Usage: Rhonda Patrick > TYPES > Person
@@ -145,7 +145,7 @@ export const CLAIM_TYPE = 'fa8e8e54f7424c00b73c05adee2b4545';
 export const PAGE_TYPE = '1a9fc4a00fec4eeaa075eec7ebd0d043';
 export const TAB_TYPE = '2c72ace7540444559d2265272a94e874';
 export const POST_TYPE = '682fbeff41e242cda7f9c4909136a8c5';
-export const PAGE_TYPE_TYPE = '5ec8adc335334c3cbfa4acdfaa877bac'
+export const PAGE_TYPE_TYPE = '5ec8adc335334c3cbfa4acdfaa877bac';
 
 export const VALUES_ATTRIBUTE = 'c8e8fd5f011d4c8e8aaf1a2ffc5b48fd';
 export const VISION_ATTRIBUTE = 'c670247893c74af48f2a285a46cc19ca';
@@ -193,7 +193,7 @@ export const SHOWN_COLUMNS = '388ad59b1cc7413ca0bb34a4de48c758';
 export const PLACEHOLDER_TEXT = '0e5f84e4c85a44698a665a7d46fe2786';
 export const PLACEHOLDER_IMAGE = '3f20832090704795a046206a6efb9557';
 
-export const VIEW_TYPE = '2a734759874246efaac4c16b53f3a542'
+export const VIEW_TYPE = '2a734759874246efaac4c16b53f3a542';
 export const VIEW_ATTRIBUTE = 'f062fc5a6f114859ba70e644be6caea5';
 export const TABLE_VIEW = 'a2a136e1d1da4853bf3b0960982f8162';
 export const LIST_VIEW = '70db74421c6e425291c8a807466d8668';
@@ -241,7 +241,7 @@ export const MEMBERSHIP_CONTRACT_ADDRESS = '0x34a94160f4B0f86d932927DFfb326354dB
 
 // This is the address for the Root Space.
 export const ROOT_SPACE_ADDRESS = '0xEcC4016C71fF38B32f01538207B6F0FdcbCF99f5';
-export const ROOT_SPACE_ID = 'ab7d4b9e02f840dab9746d352acb0ac6'
+export const ROOT_SPACE_ID = 'ab7d4b9e02f840dab9746d352acb0ac6';
 
 // This represents the beacon for the first set of deployed permissioned spaces.
 // We should use this beacon for all new permissioned spaces. We need to track the beacon
@@ -267,44 +267,34 @@ export const PERMISSIONLESS_SPACE_REGISTRY_ADDRESS = '0x68930a23A91A8FA97C6053cD
 // migrate types to new data model
 
 // Root space
-export const ROOT_SPACE = `0x170b749413328ac9a94762031a7A05b00c1D2e34` // @TODO(migration): update when we deploy new root space
-export const ROOT_SPACE_CONFIGURATION = `f1b9fd886388436e95b551aafaea77e5`
+export const ROOT_SPACE = `0x170b749413328ac9a94762031a7A05b00c1D2e34`; // @TODO(migration): update when we deploy new root space
+export const ROOT_SPACE_CONFIGURATION = `f1b9fd886388436e95b551aafaea77e5`;
 
 // Page types
-export const POSTS_PAGE = 'e73c3db8320042309ae952eddb73b566'
-export const PRODUCTS_PAGE = '6764f3827ff247e2b2ad295791153705'
-export const SERVICES_PAGE = 'e5d69a755ede4a56b43344e5d3fde7bc'
-export const EVENTS_PAGE = 'bb2917434c394223afba91a08aa83478'
-export const JOBS_PAGE = 'abb4700856554b27bae8e7dba063b394'
-export const PROJECTS_PAGE = '7171ce7a83b940a2abe2751a54c1c245'
-export const FINANCES_PAGE = 'f20af8deb57c472ab13d0247c46a8eeb'
-export const SPACES_PAGE = '970e41c7196e42d3af0ecee755651d5b'
+export const POSTS_PAGE = 'e73c3db8320042309ae952eddb73b566';
+export const PRODUCTS_PAGE = '6764f3827ff247e2b2ad295791153705';
+export const SERVICES_PAGE = 'e5d69a755ede4a56b43344e5d3fde7bc';
+export const EVENTS_PAGE = 'bb2917434c394223afba91a08aa83478';
+export const JOBS_PAGE = 'abb4700856554b27bae8e7dba063b394';
+export const PROJECTS_PAGE = '7171ce7a83b940a2abe2751a54c1c245';
+export const FINANCES_PAGE = 'f20af8deb57c472ab13d0247c46a8eeb';
+export const SPACES_PAGE = '970e41c7196e42d3af0ecee755651d5b';
 
 // Page templates
-export const COMPANY_SPACE_CONFIGURATION_TEMPLATE =
-  '8f5e618f781644cbb795300e8078bf15'
-export const COMPANY_POSTS_PAGE_TEMPLATE =
-  '90bd4735b2214059a5cd4f3215ab79d1'
-export const COMPANY_PRODUCTS_PAGE_TEMPLATE =
-  '6e9da70f357a4fc5b9d58de5840db16a'
-export const COMPANY_SERVICES_PAGE_TEMPLATE =
-  'd572b1248b5e40948c6c25e531fc8a33'
-export const COMPANY_EVENTS_PAGE_TEMPLATE =
-  '6885104d79ea4db2a64cc8e8512533ea'
-export const COMPANY_JOBS_PAGE_TEMPLATE = '9a7528b37fb041c492c31650b70aae69'
+export const COMPANY_SPACE_CONFIGURATION_TEMPLATE = '8f5e618f781644cbb795300e8078bf15';
+export const COMPANY_POSTS_PAGE_TEMPLATE = '90bd4735b2214059a5cd4f3215ab79d1';
+export const COMPANY_PRODUCTS_PAGE_TEMPLATE = '6e9da70f357a4fc5b9d58de5840db16a';
+export const COMPANY_SERVICES_PAGE_TEMPLATE = 'd572b1248b5e40948c6c25e531fc8a33';
+export const COMPANY_EVENTS_PAGE_TEMPLATE = '6885104d79ea4db2a64cc8e8512533ea';
+export const COMPANY_JOBS_PAGE_TEMPLATE = '9a7528b37fb041c492c31650b70aae69';
 
-export const NONPROFIT_SPACE_CONFIGURATION_TEMPLATE =
-  'df388a8b27f54676b2376a59ca4a3e79'
-export const NONPROFIT_POSTS_PAGE_TEMPLATE =
-  'd370fe7af7784a5283984140cdc9bbad'
-export const NONPROFIT_PROJECTS_PAGE_TEMPLATE =
-  'ddce09f82413449e973551e2998551b9'
-export const NONPROFIT_FINANCES_PAGE_TEMPLATE =
-  '3be01e21822742e0bd40868957e3ede2'
+export const NONPROFIT_SPACE_CONFIGURATION_TEMPLATE = 'df388a8b27f54676b2376a59ca4a3e79';
+export const NONPROFIT_POSTS_PAGE_TEMPLATE = 'd370fe7af7784a5283984140cdc9bbad';
+export const NONPROFIT_PROJECTS_PAGE_TEMPLATE = 'ddce09f82413449e973551e2998551b9';
+export const NONPROFIT_FINANCES_PAGE_TEMPLATE = '3be01e21822742e0bd40868957e3ede2';
 
-export const PERSON_SPACE_CONFIGURATION_TEMPLATE =
-  '25d4b5bb2f3a4854a9fedf2f5f12b5e4'
-export const PERSON_POSTS_PAGE_TEMPLATE = '026362d45d414b8db6ef8ed10ecd0d89'
+export const PERSON_SPACE_CONFIGURATION_TEMPLATE = '25d4b5bb2f3a4854a9fedf2f5f12b5e4';
+export const PERSON_POSTS_PAGE_TEMPLATE = '026362d45d414b8db6ef8ed10ecd0d89';
 
 // Entity templates
 export const TEMPLATE_ATTRIBUTE = 'babd29fb968147d08b58cdafc3890e12';
