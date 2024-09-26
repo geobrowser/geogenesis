@@ -9,6 +9,7 @@
     "lint": "turbo run lint",
     "format": "turbo run format",
     "dev": "turbo run dev",
+    "turbo": "turbo",
     "clean": "turbo run clean && rimraf \"**/.turbo\"",
     "clean-node-modules": "rimraf \"**/node_modules\""
   },
