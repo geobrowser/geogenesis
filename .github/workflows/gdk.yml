@@ -3,6 +3,8 @@ name: gdk – CI
 on:
   pull_request:
   push:
+    paths:
+      - packages/sdk/**
     branches:
       - stream/1.0.0
 
