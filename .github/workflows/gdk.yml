@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  gdk:
     runs-on: ubuntu-latest
 
     steps:
@@ -30,4 +30,5 @@ jobs:
         run: pnpm --filter=@geobrowser/gdk install
 
       - name: Build
-        run: turbo run --filter=@geobrowser/gdk build
+        # @TODO: use local turbo version
+        run: pnpm dlx turbo run --filter=@geobrowser/gdk build
