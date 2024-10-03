@@ -96,10 +96,6 @@ export function populateContent(args: PopulateContentArgs) {
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
     const relations = yield* awaited(aggregateRelations({ triples: triplesWithCreatedBy, versions, edits }));
 
-    // @TODO: Get types for versions. Types can come either from triples or from relations
-    // @TODO: Get space metadata
-    // @TODO: Update relation index
-
     yield* awaited(
       Effect.all([
         Effect.tryPromise({
@@ -132,6 +128,9 @@ export function populateContent(args: PopulateContentArgs) {
     const versionTypes = yield* awaited(
       aggregateTypesFromRelationsAndTriples({ relations, triples: triplesWithCreatedBy })
     );
+
+    // @TODO: Get space metadata
+    // @TODO: Update relation index
 
     yield* awaited(
       Effect.tryPromise({
