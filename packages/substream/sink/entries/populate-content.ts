@@ -19,13 +19,26 @@ interface PopulateContentArgs {
   opsByVersionId: Map<string, Op[]>;
   edits: Schema.edits.Insertable[];
   block: BlockEvent;
+
+  /**
+   * We pass in any imported edits to write to the db since we need to
+   * write the imported edits as if they are a single atomic unit rather
+   * than treating them as individual edits.
+   *
+   * This is mostly required for versioning to ensure that for non-imports
+   * we scope version references to the edit they are created in. But for
+   * imports there may be edits that reference edits in the same import.
+   * These are all processed in the same block, so we need to aggregate the
+   * versions as a single unit.
+   */
+  importedEdits?: Schema.edits.Insertable[];
 }
 
 export function populateContent(args: PopulateContentArgs) {
-  const { versions, opsByVersionId, edits, block } = args;
+  const { versions, opsByVersionId, edits, block, importedEdits = [] } = args;
   const spaceIdByEditId = new Map<string, string>();
 
-  for (const edit of edits) {
+  for (const edit of [...edits, ...importedEdits]) {
     spaceIdByEditId.set(edit.id.toString(), edit.space_id.toString());
   }
 
@@ -34,7 +47,7 @@ export function populateContent(args: PopulateContentArgs) {
   const versionsWithMetadata: Schema.versions.Insertable[] = [];
   const versionSpaces: Schema.version_spaces.Insertable[] = [];
 
-  return Effect.gen(function* (awaited) {
+  return Effect.gen(function* (_) {
     // We might get multiple proposals at once in the same block that change the same set of entities.
     // We need to make sure that we process the proposals in order to avoid conflicts when writing to
     // the DB as well as to make sure we preserve the proposal ordering as they're received from the chain.
@@ -61,7 +74,6 @@ export function populateContent(args: PopulateContentArgs) {
       const triplesForVersion = mapSchemaTriples(editWithCreatedById, block);
       triplesWithCreatedBy.push(...triplesForVersion);
 
-      // @TODO: Derive name, cover, types, spaces from triples and relations
       const setTriples = triplesForVersion.filter(t => t.op === 'SET_TRIPLE');
       const nameTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.NAME);
       const descriptionTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION);
@@ -75,7 +87,6 @@ export function populateContent(args: PopulateContentArgs) {
         description,
       } satisfies Schema.versions.Insertable);
 
-      // @TODO: Get spaces for versions
       const spaces = triplesForVersion.reduce(
         (acc, t) => {
           acc.set(version.id.toString(), t.triple.space_id.toString());
@@ -94,9 +105,24 @@ export function populateContent(args: PopulateContentArgs) {
     }
 
     const uniqueEntities = dedupeWith(entities, (a, b) => a.id.toString() === b.id.toString());
-    const relations = yield* awaited(aggregateRelations({ triples: triplesWithCreatedBy, versions, edits }));
+    const relations = yield* _(
+      aggregateRelations({
+        triples: triplesWithCreatedBy,
+        versions,
 
-    yield* awaited(
+        // Probably a better way to model this by using a discriminated field
+        edits: importedEdits.length > 0 ? importedEdits : edits,
+        isImported: importedEdits.length > 0,
+      })
+    );
+
+    /**
+     * 1. Write versions with primitive metadata (e.g., name, description)
+     * 2. Write any new entities
+     * 3. Write spaces that a version belongs to
+     * 4. Write triples + relations
+     */
+    yield* _(
       Effect.all([
         Effect.tryPromise({
           try: () => Versions.upsertMetadata(versionsWithMetadata),
@@ -125,14 +151,13 @@ export function populateContent(args: PopulateContentArgs) {
     // We run this after versions are written so that we can fetch all of the types for the
     // type entity and compare them against the type_of_id version for each relatons to see
     // of the type_of_id is for the type entity.
-    const versionTypes = yield* awaited(
-      aggregateTypesFromRelationsAndTriples({ relations, triples: triplesWithCreatedBy })
-    );
+    const versionTypes = yield* _(aggregateTypesFromRelationsAndTriples({ relations, triples: triplesWithCreatedBy }));
 
     // @TODO: Get space metadata
     // @TODO: Update relation index
+    // yield* awaited(aggregateSpacesFromRelations(relations));
 
-    yield* awaited(
+    yield* _(
       Effect.tryPromise({
         try: () => Types.upsert(versionTypes),
         catch: error => new Error(`Failed to insert version types. ${(error as Error).message}`),
@@ -149,7 +174,7 @@ interface AggregateTypesFromRelationsAndTriplesArgs {
 function aggregateTypesFromRelationsAndTriples({ relations, triples }: AggregateTypesFromRelationsAndTriplesArgs) {
   return Effect.gen(function* (_) {
     const types = new Map<string, string[]>();
-    const typeVersions = new Set(
+    const typeVersionIds = new Set(
       (yield* _(Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES })))).map(v => v.id)
     );
 
@@ -157,7 +182,7 @@ function aggregateTypesFromRelationsAndTriples({ relations, triples }: Aggregate
       const fromVersionId = relation.from_version_id.toString();
       const toVersionId = relation.to_version_id.toString();
 
-      if (typeVersions.has(relation.type_of_id.toString())) {
+      if (typeVersionIds.has(relation.type_of_id.toString())) {
         const alreadyFoundTypes = types.get(fromVersionId) ?? [];
         types.set(fromVersionId, [...alreadyFoundTypes, toVersionId]);
       }
@@ -186,5 +211,39 @@ function aggregateTypesFromRelationsAndTriples({ relations, triples }: Aggregate
         };
       });
     });
+  });
+}
+
+function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) {
+  return Effect.gen(function* (_) {
+    const spaces = new Map<string, string[]>();
+
+    const [typesVersions, spaceConfigsVersions] = yield* _(
+      Effect.all([
+        Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES })),
+        Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.SPACE_CONFIGURATION })),
+      ])
+    );
+
+    const typeVersionIds = new Set(typesVersions.map(v => v.id.toString()));
+    const spaceConfigVersionIds = new Set(spaceConfigsVersions.map(v => v.id.toString()));
+
+    for (const relation of relations) {
+      const fromVersionId = relation.from_version_id.toString();
+      const toVersionId = relation.to_version_id.toString();
+
+      if (spaceConfigVersionIds.has(toVersionId)) {
+        console.log('found');
+      }
+
+      if (typeVersionIds.has(relation.type_of_id.toString()) && spaceConfigVersionIds.has(toVersionId)) {
+        const alreadyFoundSpaces = spaces.get(fromVersionId) ?? [];
+        spaces.set(fromVersionId, [...alreadyFoundSpaces, toVersionId]);
+      }
+    }
+
+    console.log('spaces', { spaces, spaceConfigVersionIds });
+
+    return [];
   });
 }

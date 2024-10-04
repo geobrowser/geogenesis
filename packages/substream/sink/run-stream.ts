@@ -459,10 +459,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             const personalSpaceIds = personalSpacesWithEdits.flatMap(s => (s ? [s] : []));
 
             // Combine all the spaces by their uniue id that need proposals written ensuring that we order
-            // it correctly to process the created spaces data first.
-            const spaceIdsWithMissingProposals = [
-              ...new Set([...(createdSpaceIds ?? []), ...personalSpaceIds]).values(),
-            ];
+            // it correctly to process the created spaces data first. Alternatively we could model proposals
+            // as being optional and only write them for spaces that have voting. This might affect how we
+            // handle querying for versions.
+            const spaceIdsWithMissingProposals = [...(createdSpaceIds ?? []), ...personalSpaceIds];
 
             /**
              * We track the spaces that were created in this block and check if any of the proposals executed

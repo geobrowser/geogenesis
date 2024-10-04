@@ -117,18 +117,30 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
         populateContent({
           versions: schemaEditProposals.versions,
           opsByVersionId,
-          edits: schemaEditProposals.edits,
+          edits: [],
+          importedEdits: schemaEditProposals.edits,
           block,
         })
       )
     );
 
-    if (Either.isRight(populateResult)) {
-      slog({
-        requestId: block.requestId,
-        message: 'Edits from content proposals written successfully!',
-      });
-    }
+    Either.match(populateResult, {
+      onRight: () => {
+        slog({
+          requestId: block.requestId,
+          message: 'Edits from content proposals written successfully!',
+        });
+      },
+      onLeft: error => {
+        telemetry.captureException(error);
+
+        slog({
+          requestId: block.requestId,
+          message: `Could not write proposals for edits without proposals ${error.message}`,
+          level: 'error',
+        });
+      },
+    });
 
     slog({
       requestId: block.requestId,

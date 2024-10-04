@@ -2,6 +2,7 @@ import * as db from 'zapatos/db';
 import type * as S from 'zapatos/schema';
 
 import { pool } from '../utils/pool';
+import { CurrentVersions } from './current-versions';
 
 export class Versions {
   static async upsert(versions: S.versions.Insertable[]) {
@@ -25,10 +26,16 @@ export class Versions {
   }
 
   static async findLatestValid(entityId: string) {
+    const currentVersion = await CurrentVersions.selectOne({ entity_id: entityId });
+
+    if (!currentVersion) {
+      return null;
+    }
+
     const res = await db
-      .select(
+      .selectOne(
         'versions',
-        { entity_id: entityId },
+        { id: currentVersion.version_id },
         {
           columns: ['id', 'entity_id', 'edit_id'],
           order: {
@@ -49,11 +56,6 @@ export class Versions {
       )
       .run(pool);
 
-    if (res.length === 0) {
-      return null;
-    }
-
-    const latestApprovedVersion = res.filter(v => v.proposal !== null)[0];
-    return latestApprovedVersion ?? null;
+    return res;
   }
 }
