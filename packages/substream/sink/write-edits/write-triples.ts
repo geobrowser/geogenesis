@@ -1,10 +1,7 @@
 import { Effect } from 'effect';
-import type * as Schema from 'zapatos/schema';
 
-import { retryEffect } from '../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
-import { SpaceMetadata, Triples } from '~/sink/db';
-import { Relations } from '~/sink/db/relations';
+import { Triples } from '~/sink/db';
 
 interface PopulateTriplesArgs {
   schemaTriples: OpWithCreatedBy[];
@@ -142,42 +139,5 @@ export function writeTriples({ schemaTriples }: PopulateTriplesArgs) {
     //     }
     //   }
     // }
-  });
-}
-
-function upsertSpaceMetadata(relation: Schema.relations.Insertable, space_id: string) {
-  return Effect.gen(function* (_) {
-    const insertSpaceMetadataEffect = Effect.tryPromise({
-      try: () =>
-        SpaceMetadata.upsert([
-          {
-            space_id: space_id,
-            entity_id: relation.from_version_id,
-          },
-        ]),
-      catch: error =>
-        new Error(
-          `Failed to insert space metadata with id ${relation.from_version_id?.toString()} for space ${space_id} ${String(
-            error
-          )}`
-        ),
-    });
-
-    yield* _(insertSpaceMetadataEffect, retryEffect);
-  });
-}
-
-function updateRelationIndex(triple: Schema.triples.Insertable) {
-  return Effect.gen(function* (_) {
-    const insertCollectionItemIndexEffect = Effect.tryPromise({
-      try: () =>
-        Relations.update({
-          id: triple.entity_id,
-          index: triple.text_value,
-        }),
-      catch: error => new Error(`Failed to update relation fractional index ${String(error)}`),
-    });
-
-    yield* _(insertCollectionItemIndexEffect, retryEffect);
   });
 }
