@@ -5,15 +5,20 @@ import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-
 import type { EditProposal } from '../proposals-created/parser';
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
 import { CurrentVersions, Proposals, Versions } from '~/sink/db';
-import { populateContent } from '~/sink/entries/populate-content';
 import type { BlockEvent } from '~/sink/types';
 import { slog } from '~/sink/utils/slog';
+import { populateContent } from '~/sink/write-edits/populate-content';
 
 export class ProposalDoesNotExistError extends Error {
   readonly _tag = 'ProposalDoesNotExistError';
 }
 
-export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: BlockEvent) {
+/**
+ * Handles when the EditsPublished event is emitted by a space contract. When this
+ * event is emitted depends on the governance mechanism that a space has configured
+ * (voting vs no voting).
+ */
+export function handleEditsPublished(ipfsProposals: EditProposal[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
@@ -22,8 +27,22 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
 
     // See comment above function definition for more details as to why we do this.
     const { mergedOpsByVersionId, mergedVersions, edits, versions } = aggregateMergedVersions(ipfsProposals, block);
-    // commitMergedEntityTypes
-    // commitMergedEntitySpaces
+
+    /**
+     * 1. Merge relations
+     * 2. Write merged relations
+     * 3. Write merged entity types
+     * 4. Write merged entity spaces
+     * 5. Write merged space metadatas
+     *
+     * TODOs
+     * * Rename to `editsSubmitted`
+     * * Create module for `write-edits` to contain all the code needed to populateContent (rename)
+     *   and to merge versions, ops, and relations
+     *
+     * 1. Test mergd versions for imported entities that haven't been bootstrapped
+     *
+     */
 
     const currentVersions = aggregateCurrentVersions(versions, mergedVersions);
 

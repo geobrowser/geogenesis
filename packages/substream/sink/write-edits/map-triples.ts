@@ -1,6 +1,6 @@
 import type * as S from 'zapatos/schema';
 
-import { getTripleFromOp } from '../get-triple-from-op';
+import { getTripleFromOp } from '../events/get-triple-from-op';
 import { type BlockEvent, type Op, type TripleOp } from '~/sink/types';
 
 export interface OpWithCreatedBy {

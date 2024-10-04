@@ -4,7 +4,7 @@ import type * as Schema from 'zapatos/schema';
 
 import { Versions } from '../db';
 import { Relations } from '../db/relations';
-import type { OpWithCreatedBy } from './proposal-processed/map-triples';
+import type { OpWithCreatedBy } from './map-triples';
 
 interface AggregateRelationsArgs {
   triples: OpWithCreatedBy[];

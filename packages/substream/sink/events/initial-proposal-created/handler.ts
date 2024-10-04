@@ -1,16 +1,16 @@
 import { Effect, Either } from 'effect';
 
-import { mergeOpsWithPreviousVersions } from '../merge-ops-with-previous-versions';
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
 import { Accounts, Proposals, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
-import { populateContent } from '~/sink/entries/populate-content';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
+import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
+import { populateContent } from '~/sink/write-edits/populate-content';
 
 class CouldNotWriteInitialSpaceProposalsError extends Error {
   _tag: 'CouldNotWriteInitialSpaceProposalsError' = 'CouldNotWriteInitialSpaceProposalsError';

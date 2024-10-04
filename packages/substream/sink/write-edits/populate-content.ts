@@ -5,14 +5,10 @@ import type * as Schema from 'zapatos/schema';
 
 import { Entities, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
-import { aggregateRelations } from '../events/aggregate-relations';
-import {
-  type OpWithCreatedBy,
-  type SchemaTripleEdit,
-  mapSchemaTriples,
-} from '../events/proposal-processed/map-triples';
-import { populateTriples } from '../events/proposal-processed/populate-triples';
 import type { BlockEvent, Op } from '../types';
+import { aggregateRelations } from './aggregate-relations';
+import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
+import { populateTriples } from './populate-triples';
 
 interface PopulateContentArgs {
   versions: Schema.versions.Insertable[];
@@ -155,7 +151,7 @@ export function populateContent(args: PopulateContentArgs) {
 
     // @TODO: Get space metadata
     // @TODO: Update relation index
-    // yield* awaited(aggregateSpacesFromRelations(relations));
+    yield* _(aggregateSpacesFromRelations(relations));
 
     yield* _(
       Effect.tryPromise({

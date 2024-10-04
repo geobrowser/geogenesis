@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import type * as Schema from 'zapatos/schema';
 
-import { retryEffect } from '../../utils/retry-effect';
+import { retryEffect } from '../utils/retry-effect';
 import { type OpWithCreatedBy } from './map-triples';
 import { SpaceMetadata, Triples } from '~/sink/db';
 import { Relations } from '~/sink/db/relations';
