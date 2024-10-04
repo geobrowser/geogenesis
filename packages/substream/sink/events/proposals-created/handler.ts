@@ -17,7 +17,7 @@ import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
 import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
-import { populateContent } from '~/sink/write-edits/populate-content';
+import { writeEdits } from '~/sink/write-edits/write-edits';
 
 class CouldNotWriteCreatedProposalsError extends Error {
   _tag: 'CouldNotWriteCreatedProposalsError' = 'CouldNotWriteCreatedProposalsError';
@@ -155,7 +155,7 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
 
     const populateResult = yield* _(
       Effect.either(
-        populateContent({
+        writeEdits({
           versions: schemaEditProposals.versions,
           opsByVersionId,
           edits: schemaEditProposals.edits,

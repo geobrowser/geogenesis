@@ -7,7 +7,7 @@ import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mer
 import { CurrentVersions, Proposals, Versions } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';
 import { slog } from '~/sink/utils/slog';
-import { populateContent } from '~/sink/write-edits/populate-content';
+import { writeEdits } from '~/sink/write-edits/write-edits';
 
 export class ProposalDoesNotExistError extends Error {
   readonly _tag = 'ProposalDoesNotExistError';
@@ -57,7 +57,7 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], block: Block
             try: () => CurrentVersions.upsert(currentVersions),
             catch: error => new Error(`Failed to insert current versions. ${(error as Error).message}`),
           }),
-          populateContent({
+          writeEdits({
             versions: mergedVersions,
             opsByVersionId: mergedOpsByVersionId,
             edits,

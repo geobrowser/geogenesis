@@ -14,7 +14,7 @@ interface PopulateTriplesArgs {
  * Handles writing triples to the database. At this point any triples from previous versions
  * of an entity are already part of the schemaTriples list, so this function just writes them.
  */
-export function populateTriples({ schemaTriples }: PopulateTriplesArgs) {
+export function writeTriples({ schemaTriples }: PopulateTriplesArgs) {
   return Effect.gen(function* (_) {
     yield* _(
       Effect.tryPromise({

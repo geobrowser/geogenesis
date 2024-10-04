@@ -8,7 +8,7 @@ import { Relations } from '../db/relations';
 import type { BlockEvent, Op } from '../types';
 import { aggregateRelations } from './aggregate-relations';
 import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from './map-triples';
-import { populateTriples } from './populate-triples';
+import { writeTriples } from './write-triples';
 
 interface PopulateContentArgs {
   versions: Schema.versions.Insertable[];
@@ -30,7 +30,7 @@ interface PopulateContentArgs {
   importedEdits?: Schema.edits.Insertable[];
 }
 
-export function populateContent(args: PopulateContentArgs) {
+export function writeEdits(args: PopulateContentArgs) {
   const { versions, opsByVersionId, edits, block, importedEdits = [] } = args;
   const spaceIdByEditId = new Map<string, string>();
 
@@ -134,7 +134,7 @@ export function populateContent(args: PopulateContentArgs) {
           try: () => VersionSpaces.upsert(versionSpaces),
           catch: error => new Error(`Failed to insert version spaces. ${(error as Error).message}`),
         }),
-        populateTriples({
+        writeTriples({
           schemaTriples: triplesWithCreatedBy,
         }),
         Effect.tryPromise({
