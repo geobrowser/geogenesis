@@ -5,15 +5,21 @@ import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-
 import type { EditProposal } from '../proposals-created/parser';
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
 import { CurrentVersions, Proposals, Versions } from '~/sink/db';
-import { populateContent } from '~/sink/entries/populate-content';
 import type { BlockEvent } from '~/sink/types';
+import { partition } from '~/sink/utils';
 import { slog } from '~/sink/utils/slog';
+import { writeEdits } from '~/sink/write-edits/write-edits';
 
 export class ProposalDoesNotExistError extends Error {
   readonly _tag = 'ProposalDoesNotExistError';
 }
 
-export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: BlockEvent) {
+/**
+ * Handles when the EditsPublished event is emitted by a space contract. When this
+ * event is emitted depends on the governance mechanism that a space has configured
+ * (voting vs no voting).
+ */
+export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpaceIds: string[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
@@ -22,47 +28,65 @@ export function handleProposalsProcessed(ipfsProposals: EditProposal[], block: B
 
     // See comment above function definition for more details as to why we do this.
     const { mergedOpsByVersionId, mergedVersions, edits, versions } = aggregateMergedVersions(ipfsProposals, block);
-    // commitMergedEntityTypes
-    // commitMergedEntitySpaces
 
+    /**
+     * We treat imported edits and non-imported edits as separate units of work since
+     * imports have separate requirements for how they handle merging data for versions.
+     * See comment in {@link writeEdits} for more details.
+     */
     const currentVersions = aggregateCurrentVersions(versions, mergedVersions);
+    const [importedEdits, defaultEdits] = partition(edits, e => createdSpaceIds.includes(e.space_id.toString()));
+    const [importedVersions, defaultVersions] = partition(mergedVersions, v =>
+      importedEdits.some(e => e.id.toString() === v.edit_id.toString())
+    );
 
-    const dbProposals = yield* _(
-      Effect.all(
-        [
-          Effect.tryPromise({
-            try: () => Versions.upsert(mergedVersions),
-            catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
-          }),
-          Effect.tryPromise({
-            try: () => CurrentVersions.upsert(currentVersions),
-            catch: error => new Error(`Failed to insert current versions. ${(error as Error).message}`),
-          }),
-          populateContent({
-            versions: mergedVersions,
-            opsByVersionId: mergedOpsByVersionId,
-            edits,
-            block,
-          }),
-          ...ipfsProposals.map(proposal => {
-            return Effect.tryPromise({
-              try: () => Proposals.setAcceptedById(proposal.proposalId),
-              catch: error => {
-                return new ProposalDoesNotExistError(String(error));
-              },
-            });
-          }),
-        ],
-        {
-          concurrency: 75,
-          mode: 'either',
-        }
-      )
+    yield* _(
+      Effect.all([
+        Effect.tryPromise({
+          try: () => Versions.upsert(mergedVersions),
+          catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () => CurrentVersions.upsert(currentVersions),
+          catch: error => new Error(`Failed to insert current versions. ${(error as Error).message}`),
+        }),
+        writeEdits({
+          versions: defaultVersions,
+          opsByVersionId: mergedOpsByVersionId,
+          edits: defaultEdits,
+          block,
+          // @TODO: How do we handle imported edits? How do we know?
+          editType: 'DEFAULT',
+        }),
+        ...ipfsProposals.map(proposal => {
+          return Effect.tryPromise({
+            try: () => Proposals.setAcceptedById(proposal.proposalId),
+            catch: error => {
+              return new ProposalDoesNotExistError(String(error));
+            },
+          });
+        }),
+      ])
+    );
+
+    /**
+     * We treat imported edits and non-imported edits as separate units of work since
+     * imports have separate requirements for how they handle merging data for versions.
+     * See comment in {@link writeEdits} for more details.
+     */
+    yield* _(
+      writeEdits({
+        versions: importedVersions,
+        opsByVersionId: mergedOpsByVersionId,
+        block,
+        edits: importedEdits,
+        editType: 'IMPORT',
+      })
     );
 
     slog({
       requestId: block.requestId,
-      message: `${dbProposals.length} proposals set to accepted successfully`,
+      message: `${ipfsProposals.length} proposals set to accepted successfully`,
     });
   });
 }

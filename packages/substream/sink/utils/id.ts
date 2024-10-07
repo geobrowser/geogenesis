@@ -1,6 +1,10 @@
 import { createHash } from 'crypto';
 import { v4 } from 'uuid';
 
+export function createMergedVersionId(mergedVersionIds: string[]) {
+  return createIdFromUniqueString(mergedVersionIds.join(','));
+}
+
 export function createVersionId({ proposalId, entityId }: { proposalId: string; entityId: string }): string {
   return createIdFromUniqueString(`${proposalId}:${entityId}`);
 }

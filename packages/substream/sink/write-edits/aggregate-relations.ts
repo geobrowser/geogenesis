@@ -4,12 +4,13 @@ import type * as Schema from 'zapatos/schema';
 
 import { Versions } from '../db';
 import { Relations } from '../db/relations';
-import type { OpWithCreatedBy } from './proposal-processed/map-triples';
+import type { OpWithCreatedBy } from './map-triples';
 
 interface AggregateRelationsArgs {
   triples: OpWithCreatedBy[];
   versions: Schema.versions.Insertable[];
   edits: Schema.edits.Insertable[];
+  editType: 'IMPORT' | 'DEFAULT';
 }
 
 /**
@@ -47,7 +48,7 @@ interface AggregateRelationsArgs {
  * @params triples - The triples that have been created in this block as array of {@link OpWithCreatedBy}
  * @returns relations – The relations to write as array of {@link Schema.relations.Insertable}
  */
-export function aggregateRelations({ triples, versions, edits }: AggregateRelationsArgs) {
+export function aggregateRelations({ triples, versions, edits, editType }: AggregateRelationsArgs) {
   const entitiesReferencedByNewRelations = [
     ...new Set(
       versions.flatMap(v => {
@@ -72,17 +73,16 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
       )
     )).flatMap(v => (v ? [v] : []));
 
-    const lastByVersionByEntityId = dbVersionsForEntitiesReferencedInBlock.reduce((acc, v) => {
+    const lastDbVersionByEntityId = dbVersionsForEntitiesReferencedInBlock.reduce((acc, v) => {
       acc.set(v.entity_id.toString(), v.id.toString());
       return acc;
     }, new Map<string, string>());
 
     // For all of the referenced versions, both from the edit and from the past, we
     // need to fetch the relations for each version so we can merge into new versions.
-    // @TODO: We can do this before the edit loop
     const latestRelationsFromDbForVersions = (yield* _(
       Effect.all(
-        [...lastByVersionByEntityId.values()].map(version => {
+        [...lastDbVersionByEntityId.values()].map(version => {
           return Effect.promise(() => Relations.select({ from_version_id: version }));
         })
       )
@@ -94,20 +94,34 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
     // We process relations by edit id so that we can use either the latest or any version
     // in the specific edit when referencing to, from, and type within a relation. Otherwise
     // we can have relations referencing versions in different edits which doesn't make sense.
+    //
+    // @TODO we can run into a situation during space imports where we have entities referencing
+    // an entity that was created in a previous edit. Since imports are all processed in the same
+    // block, these entities aren't approved yet, so any logic that looks for previous versions
+    // of an entity (like relations) will fail.
     for (const edit of edits) {
-      const latestVersionForChangedEntities = new Map<string, string>();
+      const latestVersionForChangedEntities: Record<string, string> = {};
       const blockVersionsForEdit = versions.filter(v => v.edit_id.toString() === edit.id.toString());
 
       // Merge the versions from this block for this edit with any versions for this entity
       // from the database. We favor any versions from the block over the versions in the
       // database.
-      const allVersionsReferencedByRelations = [...dbVersionsForEntitiesReferencedInBlock, ...blockVersionsForEdit];
+      const allVersionsReferencedByRelations = [
+        ...dbVersionsForEntitiesReferencedInBlock,
+
+        // If we're reading a set of imported edits we want to use all of the versions
+        // from the set and not just the versions from the current edit. This is because
+        // an edit in an import might reference an edit in the import that hasn't been
+        // "accepted" yet. We should treat these edits as if they are a single atomic
+        // unit that will eventually be accepted.
+        ...(editType === 'IMPORT' ? versions : blockVersionsForEdit),
+      ];
 
       // Iterates over all of the versions referenced by new relations in this block and
       // map them to their entity id. We overwrite the db version with the edit version
       // if it exists, e.g., there's a new version in this edit for the same entity id.
       for (const version of allVersionsReferencedByRelations) {
-        latestVersionForChangedEntities.set(version.entity_id.toString(), version.id.toString());
+        latestVersionForChangedEntities[version.entity_id.toString()] = version.id.toString();
       }
 
       const deletedRelationEntityIds = collectDeletedRelationsEntityIds(
@@ -120,14 +134,14 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
       );
 
       const relationsFromDbToWrite = blockVersionsForEdit.flatMap(v => {
-        const lastVersionForEntityId = lastByVersionByEntityId.get(v.entity_id.toString());
+        const lastDbVersionForEntityId = lastDbVersionByEntityId.get(v.entity_id.toString());
 
-        if (!lastVersionForEntityId) {
+        if (!lastDbVersionForEntityId) {
           return [];
         }
 
         const nonDeletedRelationsFromPreviousVersion = nonDeletedDbRelations.filter(
-          v => v.from_version_id === lastVersionForEntityId
+          v => v.from_version_id === lastDbVersionForEntityId
         );
 
         const relationsForEntity = nonDeletedRelationsFromPreviousVersion.map((r): Schema.relations.Insertable => {
@@ -141,10 +155,10 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
             // If the type_of or to_version aren't changed in this edit then we
             // can fall back to the last version.
             type_of_id: r.type_of?.entity_id
-              ? latestVersionForChangedEntities.get(r.type_of.entity_id) ?? r.type_of_id
+              ? latestVersionForChangedEntities[r.type_of.entity_id] ?? r.type_of_id
               : r.type_of_id,
             to_version_id: r.to_entity?.entity_id
-              ? latestVersionForChangedEntities.get(r.to_entity.entity_id) ?? r.to_version_id
+              ? latestVersionForChangedEntities[r.to_entity.entity_id] ?? r.to_version_id
               : r.to_version_id,
 
             from_version_id: v.id,
@@ -157,7 +171,7 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
       });
 
       const relationsFromEdit = blockVersionsForEdit.flatMap(v => {
-        const relationsForEntity = getRelationTriplesFromSchemaTriples(
+        const relationsForEntity = getRelationFromTriples(
           triples,
           v.entity_id.toString(),
           latestVersionForChangedEntities
@@ -189,7 +203,7 @@ export function aggregateRelations({ triples, versions, edits }: AggregateRelati
  *
  * @TODO Relations should be scoped to a space, so this deleting step should
  * be space-aware so that we delete the correct relation in the case where
- * a relation entity has multiple triples in multiple spacs.
+ * a relation entity has multiple triples in multiple spaces.
  */
 function collectDeletedRelationsEntityIds(
   schemaTriples: OpWithCreatedBy[],
@@ -238,44 +252,46 @@ function getEntitiesReferencedByRelations(schemaTriples: OpWithCreatedBy[], enti
  * exist before creating the item. If not all properties exist we don't create the collection
  * item.
  */
-function getRelationTriplesFromSchemaTriples(
+function getRelationFromTriples(
   schemaTriples: OpWithCreatedBy[],
   entityId: string,
-  latestVersionsByEntityId: Map<string, string>
+  latestVersionForChangedEntities: Record<string, string>
 ): Schema.relations.Insertable | null {
   // Grab other triples in this edit that match the relation's entity id. We
   // want to add all of the relation properties to the item in the
   // collection_items table.
   const otherTriples = schemaTriples.filter(t => t.triple.entity_id === entityId && t.op === 'SET_TRIPLE');
 
-  const collectionItemIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_INDEX);
+  const relationIndex = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_INDEX);
   const to = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TO_ATTRIBUTE);
   const from = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_FROM_ATTRIBUTE);
   const type = otherTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE);
 
-  const indexValue = collectionItemIndex?.triple.text_value;
-  const toId = to?.triple.entity_value_id;
-  const fromId = from?.triple.entity_value_id;
-  const typeId = type?.triple.entity_value_id;
+  const indexValue = relationIndex?.triple.text_value?.toString();
+  const toId = to?.triple.entity_value_id?.toString();
+  const fromId = from?.triple.entity_value_id?.toString();
+  const typeId = type?.triple.entity_value_id?.toString();
 
-  if (!indexValue || !toId || !fromId || !typeId) {
+  if (!toId || !fromId || !typeId) {
     return null;
   }
 
-  const toVersion = latestVersionsByEntityId.get(toId.toString());
-  const fromVersion = latestVersionsByEntityId.get(fromId.toString());
-  const typeVersion = latestVersionsByEntityId.get(typeId.toString());
+  const toVersion = latestVersionForChangedEntities[toId];
+  const fromVersion = latestVersionForChangedEntities[fromId];
+  const typeVersion = latestVersionForChangedEntities[typeId];
 
   if (!toVersion || !fromVersion || !typeVersion) {
     return null;
   }
 
+  const relationId = createGeoId(); // Not deterministic
+
   return {
-    id: createGeoId(), // Not deterministic
-    to_version_id: toId.toString(),
-    from_version_id: fromId.toString(),
+    id: relationId,
+    to_version_id: toVersion,
+    from_version_id: fromVersion,
     entity_id: entityId,
-    type_of_id: typeId.toString(),
+    type_of_id: typeVersion,
     index: indexValue,
   };
 }

@@ -3,7 +3,7 @@ import type * as Schema from 'zapatos/schema';
 
 import { Triples, Versions } from '../db';
 import type { Op } from '../types';
-import type { SchemaTripleEdit } from './proposal-processed/map-triples';
+import type { SchemaTripleEdit } from '../write-edits/map-triples';
 
 interface MergeOpsWithPreviousVersionArgs {
   versions: Schema.versions.Insertable[];

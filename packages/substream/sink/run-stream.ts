@@ -13,6 +13,8 @@ import { handleEditorsAdded } from './events/editor-added/handler';
 import { ZodEditorAddedStreamResponse } from './events/editor-added/parser';
 import { handleEditorRemoved } from './events/editor-removed/handler';
 import { ZodEditorRemovedStreamResponse } from './events/editor-removed/parser';
+import { getEditsProposalsFromIpfsUri } from './events/edits-published/get-edits-proposal-from-processed-proposal';
+import { handleEditsPublished } from './events/edits-published/handler';
 import { getDerivedSpaceIdsFromImportedSpaces } from './events/get-derived-space-ids-from-imported-spaces';
 import { getProposalsForSpaceIds } from './events/get-proposals-for-space-ids';
 import { handleNewGeoBlock } from './events/handle-new-geo-block';
@@ -26,8 +28,6 @@ import { handleMemberAdded } from './events/member-added/handler';
 import { ZodMemberAddedStreamResponse } from './events/member-added/parser';
 import { handleMemberRemoved } from './events/member-removed/handler';
 import { ZodMemberRemovedStreamResponse } from './events/member-removed/parser';
-import { getEditsProposalsFromIpfsUri } from './events/proposal-processed/get-edits-proposal-from-processed-proposal';
-import { handleProposalsProcessed } from './events/proposal-processed/handler';
 import { handleProposalsCreated } from './events/proposals-created/handler';
 import {
   ZodProposalCreatedStreamResponse,
@@ -459,10 +459,10 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             const personalSpaceIds = personalSpacesWithEdits.flatMap(s => (s ? [s] : []));
 
             // Combine all the spaces by their uniue id that need proposals written ensuring that we order
-            // it correctly to process the created spaces data first.
-            const spaceIdsWithMissingProposals = [
-              ...new Set([...(createdSpaceIds ?? []), ...personalSpaceIds]).values(),
-            ];
+            // it correctly to process the created spaces data first. Alternatively we could model proposals
+            // as being optional and only write them for spaces that have voting. This might affect how we
+            // handle querying for versions.
+            const spaceIdsWithMissingProposals = [...(createdSpaceIds ?? []), ...personalSpaceIds];
 
             /**
              * We track the spaces that were created in this block and check if any of the proposals executed
@@ -483,7 +483,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             }
 
             yield* _(
-              handleProposalsProcessed(proposals, {
+              handleEditsPublished(proposals, createdSpaceIds ?? [], {
                 blockNumber,
                 cursor,
                 timestamp,

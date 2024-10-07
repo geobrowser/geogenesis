@@ -1,10 +1,8 @@
 import { Effect, Either } from 'effect';
 
-import { mergeOpsWithPreviousVersions } from '../merge-ops-with-previous-versions';
 import { getProposalFromIpfs } from './get-proposal-from-ipfs';
 import { Accounts, Proposals, ProposedEditors, ProposedMembers, ProposedSubspaces, Versions } from '~/sink/db';
 import { Edits } from '~/sink/db/edits';
-import { populateContent } from '~/sink/entries/populate-content';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { mapIpfsProposalToSchemaProposalByType } from '~/sink/events/proposals-created/map-proposals';
 import type {
@@ -18,6 +16,8 @@ import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
+import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
+import { writeEdits } from '~/sink/write-edits/write-edits';
 
 class CouldNotWriteCreatedProposalsError extends Error {
   _tag: 'CouldNotWriteCreatedProposalsError' = 'CouldNotWriteCreatedProposalsError';
@@ -155,11 +155,12 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
 
     const populateResult = yield* _(
       Effect.either(
-        populateContent({
+        writeEdits({
           versions: schemaEditProposals.versions,
           opsByVersionId,
-          edits: schemaEditProposals.edits,
           block,
+          editType: 'DEFAULT',
+          edits: schemaEditProposals.edits,
         })
       )
     );
