@@ -29,6 +29,17 @@ interface PopulateContentArgs {
   edits: Schema.edits.Insertable[];
 }
 
+/**
+ * We pass in any imported edits to write to the db since we need to
+ * write the imported edits as if they are a single atomic unit rather
+ * than treating them as individual edits.
+ *
+ * This is mostly required for versioning to ensure that for non-imports
+ * we scope version references to the edit they are created in. But for
+ * imports there may be edits that reference edits in the same import.
+ * These are all processed in the same block, so we need to aggregate the
+ * versions as a single unit.
+ */
 export function writeEdits(args: PopulateContentArgs) {
   const { versions, opsByVersionId, edits, block, editType } = args;
   const spaceIdByEditId = new Map<string, string>();

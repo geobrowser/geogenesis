@@ -1,4 +1,4 @@
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 import type * as S from 'zapatos/schema';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
@@ -30,26 +30,15 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
     const { mergedOpsByVersionId, mergedVersions, edits, versions } = aggregateMergedVersions(ipfsProposals, block);
 
     /**
-     * Need to merge imported versions correctly.
-     * Publisher id: "15234a4c061f46ee90a0c44cd9414cbe"
-     * Space config id: "1d5d0c2adb23466ca0b09abe879df457"
-     *
-     * Latest version we're getting for publisher: "6c7c2fef23b14326a477436f80c193e4"
+     * We treat imported edits and non-imported edits as separate units of work since
+     * imports have separate requirements for how they handle merging data for versions.
+     * See comment in {@link writeEdits} for more details.
      */
     const currentVersions = aggregateCurrentVersions(versions, mergedVersions);
     const [importedEdits, defaultEdits] = partition(edits, e => createdSpaceIds.includes(e.space_id.toString()));
     const [importedVersions, defaultVersions] = partition(mergedVersions, v =>
       importedEdits.some(e => e.id.toString() === v.edit_id.toString())
     );
-
-    console.log('imported', {
-      importedEdits: importedEdits.length,
-      importedVersions: importedVersions.length,
-      defaultEdits: defaultEdits.length,
-      defaultVersions: defaultVersions.length,
-      mergedVersions: mergedVersions.length,
-      edits: edits.length,
-    });
 
     yield* _(
       Effect.all([
@@ -80,8 +69,11 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpace
       ])
     );
 
-    // We write imported edits separately in order to treat the entirety of the
-    // edit as a single atomic unit. See comment in writeEdits for more details.
+    /**
+     * We treat imported edits and non-imported edits as separate units of work since
+     * imports have separate requirements for how they handle merging data for versions.
+     * See comment in {@link writeEdits} for more details.
+     */
     yield* _(
       writeEdits({
         versions: importedVersions,
