@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
-import { Entities, Types, VersionSpaces, Versions } from '../db';
+import { Entities, SpaceMetadata, Types, VersionSpaces, Versions } from '../db';
 import { Relations } from '../db/relations';
 import type { BlockEvent, Op } from '../types';
 import { aggregateRelations } from './aggregate-relations';
@@ -157,16 +157,19 @@ export function writeEdits(args: PopulateContentArgs) {
     // type entity and compare them against the type_of_id version for each relatons to see
     // of the type_of_id is for the type entity.
     const versionTypes = yield* _(aggregateTypesFromRelationsAndTriples({ relations, triples: triplesWithCreatedBy }));
-
-    // @TODO: Get space metadata
-    // @TODO: Update relation index
-    yield* _(aggregateSpacesFromRelations(relations));
+    const spaceMetadata = yield* _(aggregateSpacesFromRelations(relations, versions, spaceIdByEditId));
 
     yield* _(
-      Effect.tryPromise({
-        try: () => Types.upsert(versionTypes),
-        catch: error => new Error(`Failed to insert version types. ${(error as Error).message}`),
-      })
+      Effect.all([
+        Effect.tryPromise({
+          try: () => Types.upsert(versionTypes),
+          catch: error => new Error(`Failed to insert version types. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () => SpaceMetadata.upsert(spaceMetadata),
+          catch: error => new Error(`Failed to insert space metadata. ${(error as Error).message}`),
+        }),
+      ])
     );
   });
 }
@@ -219,7 +222,11 @@ function aggregateTypesFromRelationsAndTriples({ relations, triples }: Aggregate
   });
 }
 
-function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) {
+function aggregateSpacesFromRelations(
+  relations: Schema.relations.Insertable[],
+  versions: Schema.versions.Insertable[],
+  spaceIdByEditId: Map<string, string>
+) {
   return Effect.gen(function* (_) {
     const spaces = new Map<string, string[]>();
 
@@ -243,6 +250,47 @@ function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) 
       }
     }
 
-    return [];
+    const entityIdByVersionId = new Map<string, string>();
+
+    for (const version of versions) {
+      entityIdByVersionId.set(version.id.toString(), version.entity_id.toString());
+    }
+
+    const versionIdToEditId = versions.reduce(
+      (acc, v) => {
+        acc.set(v.id.toString(), v.edit_id.toString());
+        return acc;
+      },
+      // version id -> edit id
+      new Map<string, string>()
+    );
+
+    const spaceVersions = [...versionIdToEditId.entries()].reduce(
+      (acc, [versionId, editId]) => {
+        acc.set(versionId, spaceIdByEditId.get(editId)!);
+        return acc;
+      },
+      // version id -> space id
+      new Map<string, string>()
+    );
+
+    return [...spaces.entries()].flatMap(([versionId, spaceIds]) => {
+      const entityIdForVersionId = entityIdByVersionId.get(versionId);
+      if (!entityIdForVersionId) {
+        return [];
+      }
+
+      // I need the actual space id somewhere. Right now it's just two version ids
+      return spaceIds
+        .map(fromVersionId => {
+          const spaceMetadata: Schema.spaces_metadata.Insertable = {
+            space_id: spaceVersions.get(fromVersionId)!,
+            entity_id: entityIdForVersionId,
+          };
+
+          return spaceMetadata;
+        })
+        .filter(m => m !== null);
+    });
   });
 }
