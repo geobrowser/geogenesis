@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import type * as S from 'zapatos/schema';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
@@ -6,6 +6,7 @@ import type { EditProposal } from '../proposals-created/parser';
 import { aggregateMergableOps, aggregateMergableVersions } from './aggregate-mergable-versions';
 import { CurrentVersions, Proposals, Versions } from '~/sink/db';
 import type { BlockEvent } from '~/sink/types';
+import { partition } from '~/sink/utils';
 import { slog } from '~/sink/utils/slog';
 import { writeEdits } from '~/sink/write-edits/write-edits';
 
@@ -18,7 +19,7 @@ export class ProposalDoesNotExistError extends Error {
  * event is emitted depends on the governance mechanism that a space has configured
  * (voting vs no voting).
  */
-export function handleEditsPublished(ipfsProposals: EditProposal[], block: BlockEvent) {
+export function handleEditsPublished(ipfsProposals: EditProposal[], createdSpaceIds: string[], block: BlockEvent) {
   return Effect.gen(function* (_) {
     slog({
       requestId: block.requestId,
@@ -29,59 +30,71 @@ export function handleEditsPublished(ipfsProposals: EditProposal[], block: Block
     const { mergedOpsByVersionId, mergedVersions, edits, versions } = aggregateMergedVersions(ipfsProposals, block);
 
     /**
-     * 1. Merge relations
-     * 2. Write merged relations
-     * 3. Write merged entity types
-     * 4. Write merged entity spaces
-     * 5. Write merged space metadatas
+     * Need to merge imported versions correctly.
+     * Publisher id: "15234a4c061f46ee90a0c44cd9414cbe"
+     * Space config id: "1d5d0c2adb23466ca0b09abe879df457"
      *
-     * TODOs
-     * * Rename to `editsSubmitted`
-     * * Create module for `write-edits` to contain all the code needed to populateContent (rename)
-     *   and to merge versions, ops, and relations
-     *
-     * 1. Test mergd versions for imported entities that haven't been bootstrapped
-     *
+     * Latest version we're getting for publisher: "6c7c2fef23b14326a477436f80c193e4"
      */
-
     const currentVersions = aggregateCurrentVersions(versions, mergedVersions);
+    const [importedEdits, defaultEdits] = partition(edits, e => createdSpaceIds.includes(e.space_id.toString()));
+    const [importedVersions, defaultVersions] = partition(mergedVersions, v =>
+      importedEdits.some(e => e.id.toString() === v.edit_id.toString())
+    );
 
-    const dbProposals = yield* _(
-      Effect.all(
-        [
-          Effect.tryPromise({
-            try: () => Versions.upsert(mergedVersions),
-            catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
-          }),
-          Effect.tryPromise({
-            try: () => CurrentVersions.upsert(currentVersions),
-            catch: error => new Error(`Failed to insert current versions. ${(error as Error).message}`),
-          }),
-          writeEdits({
-            versions: mergedVersions,
-            opsByVersionId: mergedOpsByVersionId,
-            edits,
-            block,
-          }),
-          ...ipfsProposals.map(proposal => {
-            return Effect.tryPromise({
-              try: () => Proposals.setAcceptedById(proposal.proposalId),
-              catch: error => {
-                return new ProposalDoesNotExistError(String(error));
-              },
-            });
-          }),
-        ],
-        {
-          concurrency: 75,
-          mode: 'either',
-        }
-      )
+    console.log('imported', {
+      importedEdits: importedEdits.length,
+      importedVersions: importedVersions.length,
+      defaultEdits: defaultEdits.length,
+      defaultVersions: defaultVersions.length,
+      mergedVersions: mergedVersions.length,
+      edits: edits.length,
+    });
+
+    yield* _(
+      Effect.all([
+        Effect.tryPromise({
+          try: () => Versions.upsert(mergedVersions),
+          catch: error => new Error(`Failed to insert merged versions. ${(error as Error).message}`),
+        }),
+        Effect.tryPromise({
+          try: () => CurrentVersions.upsert(currentVersions),
+          catch: error => new Error(`Failed to insert current versions. ${(error as Error).message}`),
+        }),
+        writeEdits({
+          versions: defaultVersions,
+          opsByVersionId: mergedOpsByVersionId,
+          edits: defaultEdits,
+          block,
+          // @TODO: How do we handle imported edits? How do we know?
+          editType: 'DEFAULT',
+        }),
+        ...ipfsProposals.map(proposal => {
+          return Effect.tryPromise({
+            try: () => Proposals.setAcceptedById(proposal.proposalId),
+            catch: error => {
+              return new ProposalDoesNotExistError(String(error));
+            },
+          });
+        }),
+      ])
+    );
+
+    // We write imported edits separately in order to treat the entirety of the
+    // edit as a single atomic unit. See comment in writeEdits for more details.
+    yield* _(
+      writeEdits({
+        versions: importedVersions,
+        opsByVersionId: mergedOpsByVersionId,
+        block,
+        edits: importedEdits,
+        editType: 'IMPORT',
+      })
     );
 
     slog({
       requestId: block.requestId,
-      message: `${dbProposals.length} proposals set to accepted successfully`,
+      message: `${ipfsProposals.length} proposals set to accepted successfully`,
     });
   });
 }

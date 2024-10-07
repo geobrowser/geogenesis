@@ -10,7 +10,7 @@ interface AggregateRelationsArgs {
   triples: OpWithCreatedBy[];
   versions: Schema.versions.Insertable[];
   edits: Schema.edits.Insertable[];
-  isImported: boolean;
+  editType: 'IMPORT' | 'DEFAULT';
 }
 
 /**
@@ -48,7 +48,7 @@ interface AggregateRelationsArgs {
  * @params triples - The triples that have been created in this block as array of {@link OpWithCreatedBy}
  * @returns relations – The relations to write as array of {@link Schema.relations.Insertable}
  */
-export function aggregateRelations({ triples, versions, edits, isImported }: AggregateRelationsArgs) {
+export function aggregateRelations({ triples, versions, edits, editType }: AggregateRelationsArgs) {
   const entitiesReferencedByNewRelations = [
     ...new Set(
       versions.flatMap(v => {
@@ -114,7 +114,7 @@ export function aggregateRelations({ triples, versions, edits, isImported }: Agg
         // an edit in an import might reference an edit in the import that hasn't been
         // "accepted" yet. We should treat these edits as if they are a single atomic
         // unit that will eventually be accepted.
-        ...(isImported ? versions : blockVersionsForEdit),
+        ...(editType === 'IMPORT' ? versions : blockVersionsForEdit),
       ];
 
       // Iterates over all of the versions referenced by new relations in this block and
@@ -123,10 +123,6 @@ export function aggregateRelations({ triples, versions, edits, isImported }: Agg
       for (const version of allVersionsReferencedByRelations) {
         latestVersionForChangedEntities[version.entity_id.toString()] = version.id.toString();
       }
-
-      // 1. Get all of the versions for this edit, either from the editor or from the db
-      // 2. Write all of the db relations for each version
-      // 3. Write all the new relations in this edit for each version
 
       const deletedRelationEntityIds = collectDeletedRelationsEntityIds(
         triples,
@@ -277,14 +273,6 @@ function getRelationFromTriples(
   const typeId = type?.triple.entity_value_id?.toString();
 
   if (!toId || !fromId || !typeId) {
-    if (fromId === '15234a4c061f46ee90a0c44cd9414cbe') {
-      console.log(`missing relation data for ${fromId}`, {
-        latestVersionsByEntityId: Object.keys(latestVersionForChangedEntities).length,
-        toId,
-        fromId,
-        typeId,
-      });
-    }
     return null;
   }
 
@@ -293,33 +281,13 @@ function getRelationFromTriples(
   const typeVersion = latestVersionForChangedEntities[typeId];
 
   if (!toVersion || !fromVersion || !typeVersion) {
-    if (fromId === '15234a4c061f46ee90a0c44cd9414cbe' && !fromVersion && toVersion && typeVersion) {
-      console.log(`missing versioned relation data for ${fromId}`, {
-        latestVersionsByEntityId: Object.keys(latestVersionForChangedEntities).length,
-        toVersion,
-        fromVersion,
-        typeVersion,
-        toId,
-        fromId,
-        typeId,
-      });
-    }
     return null;
   }
 
-  if (fromId === '15234a4c061f46ee90a0c44cd9414cbe') {
-    console.log(`relation from ${fromId}`, {
-      toId,
-      fromId,
-      typeId,
-      toVersion,
-      fromVersion,
-      typeVersion,
-    });
-  }
+  const relationId = createGeoId(); // Not deterministic
 
   return {
-    id: createGeoId(), // Not deterministic
+    id: relationId,
     to_version_id: toVersion,
     from_version_id: fromVersion,
     entity_id: entityId,

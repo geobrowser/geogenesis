@@ -117,9 +117,12 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
         writeEdits({
           versions: schemaEditProposals.versions,
           opsByVersionId,
-          edits: [],
-          importedEdits: schemaEditProposals.edits,
           block,
+
+          // We treat all edits that occur at the same time the space is created
+          // as imported edits.
+          editType: 'IMPORT',
+          edits: schemaEditProposals.edits,
         })
       )
     );

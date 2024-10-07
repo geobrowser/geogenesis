@@ -483,7 +483,7 @@ export function runStream({ startBlockNumber, shouldUseCursor }: StreamConfig) {
             }
 
             yield* _(
-              handleEditsPublished(proposals, {
+              handleEditsPublished(proposals, createdSpaceIds ?? [], {
                 blockNumber,
                 cursor,
                 timestamp,

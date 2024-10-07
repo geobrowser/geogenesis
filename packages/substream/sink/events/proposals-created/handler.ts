@@ -158,8 +158,9 @@ export function handleProposalsCreated(proposalsCreated: ProposalCreated[], bloc
         writeEdits({
           versions: schemaEditProposals.versions,
           opsByVersionId,
-          edits: schemaEditProposals.edits,
           block,
+          editType: 'DEFAULT',
+          edits: schemaEditProposals.edits,
         })
       )
     );

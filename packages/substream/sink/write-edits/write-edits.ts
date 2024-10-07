@@ -11,11 +11,9 @@ import { type OpWithCreatedBy, type SchemaTripleEdit, mapSchemaTriples } from '.
 import { writeTriples } from './write-triples';
 
 interface PopulateContentArgs {
+  block: BlockEvent;
   versions: Schema.versions.Insertable[];
   opsByVersionId: Map<string, Op[]>;
-  edits: Schema.edits.Insertable[];
-  block: BlockEvent;
-
   /**
    * We pass in any imported edits to write to the db since we need to
    * write the imported edits as if they are a single atomic unit rather
@@ -27,14 +25,15 @@ interface PopulateContentArgs {
    * These are all processed in the same block, so we need to aggregate the
    * versions as a single unit.
    */
-  importedEdits?: Schema.edits.Insertable[];
+  editType: 'IMPORT' | 'DEFAULT';
+  edits: Schema.edits.Insertable[];
 }
 
 export function writeEdits(args: PopulateContentArgs) {
-  const { versions, opsByVersionId, edits, block, importedEdits = [] } = args;
+  const { versions, opsByVersionId, edits, block, editType } = args;
   const spaceIdByEditId = new Map<string, string>();
 
-  for (const edit of [...edits, ...importedEdits]) {
+  for (const edit of edits) {
     spaceIdByEditId.set(edit.id.toString(), edit.space_id.toString());
   }
 
@@ -72,6 +71,7 @@ export function writeEdits(args: PopulateContentArgs) {
 
       const setTriples = triplesForVersion.filter(t => t.op === 'SET_TRIPLE');
       const nameTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.NAME);
+
       const descriptionTriple = setTriples.find(t => t.triple.attribute_id === SYSTEM_IDS.DESCRIPTION);
 
       const name = nameTriple?.triple.text_value?.toString();
@@ -105,10 +105,8 @@ export function writeEdits(args: PopulateContentArgs) {
       aggregateRelations({
         triples: triplesWithCreatedBy,
         versions,
-
-        // Probably a better way to model this by using a discriminated field
-        edits: importedEdits.length > 0 ? importedEdits : edits,
-        isImported: importedEdits.length > 0,
+        edits,
+        editType,
       })
     );
 
@@ -228,17 +226,11 @@ function aggregateSpacesFromRelations(relations: Schema.relations.Insertable[]) 
       const fromVersionId = relation.from_version_id.toString();
       const toVersionId = relation.to_version_id.toString();
 
-      if (spaceConfigVersionIds.has(toVersionId)) {
-        console.log('found');
-      }
-
       if (typeVersionIds.has(relation.type_of_id.toString()) && spaceConfigVersionIds.has(toVersionId)) {
         const alreadyFoundSpaces = spaces.get(fromVersionId) ?? [];
         spaces.set(fromVersionId, [...alreadyFoundSpaces, toVersionId]);
       }
     }
-
-    console.log('spaces', { spaces, spaceConfigVersionIds });
 
     return [];
   });
