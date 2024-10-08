@@ -119,8 +119,6 @@ export function useTableBlock() {
         skip: pageNumber * PAGE_SIZE,
       };
 
-      console.log('filter string', filterString);
-
       // Depending on the source type we use different queries to aggregate the data
       // for the data view.
       const entities = await Match.value(source).pipe(
