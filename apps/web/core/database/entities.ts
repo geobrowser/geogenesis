@@ -55,8 +55,6 @@ export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relat
     )
   );
 
-  // console.log('relations', { relations, initial: JSON.stringify(initialOrRemoteEntity?.relations, null, 2) });
-
   const name = React.useMemo(() => {
     return Entities.name(triples);
   }, [triples]);

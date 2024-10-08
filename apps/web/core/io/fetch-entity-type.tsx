@@ -12,7 +12,12 @@ import { graphql } from './subgraph/graphql';
 function getFetchEntityTypeQuery(id: string) {
   return `query {
     entity(id: "${id}") {
-      ${versionTypesFragment}
+      id
+      currentVersion {
+        version {
+          ${versionTypesFragment}
+        }
+      }
     }
   }`;
 }
@@ -22,7 +27,7 @@ interface FetchEntityTypeOptions {
 }
 
 interface NetworkResult {
-  entity: { entityTypes: { nodes: { type: SubstreamType }[] } } | null;
+  entity: { currentVersion: { version: { versionTypes: { nodes: { type: SubstreamType }[] } } } } | null;
 }
 
 export async function fetchEntityType(options: FetchEntityTypeOptions) {
@@ -74,7 +79,9 @@ export async function fetchEntityType(options: FetchEntityTypeOptions) {
     return [];
   }
 
-  const decodeEntityTypes = Schema.decodeEither(SubstreamVersionTypes)(result.entity.entityTypes);
+  const decodeEntityTypes = Schema.decodeEither(SubstreamVersionTypes)(
+    result.entity.currentVersion.version.versionTypes
+  );
 
   if (Either.isLeft(decodeEntityTypes)) {
     slog({

@@ -25,6 +25,7 @@ export const versionTypesFragment = `
     nodes {
       type {
         id
+        entityId
         name
       }
     }

@@ -316,8 +316,6 @@ const getData = async (spaceId: string) => {
     redirect(`/space/${spaceId}/entities`);
   }
 
-  console.log('entity relations', entity.relationsOut);
-
   const blockIds = entity?.relationsOut
     .filter(r => r.typeOf.id === EntityId(SYSTEM_IDS.BLOCKS))
     ?.map(r => r.toEntity.id);

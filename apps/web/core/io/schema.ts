@@ -7,15 +7,16 @@ import { Brand } from 'effect';
 export type TypeId = string & Brand.Brand<'TypeId'>;
 export const TypeId = Brand.nominal<TypeId>();
 
+export type EntityId = string & Brand.Brand<'EntityId'>;
+export const EntityId = Brand.nominal<EntityId>();
+
 const SubstreamType = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(TypeId)),
+  entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
   name: Schema.NullOr(Schema.String),
 });
 
 export type SubstreamType = Schema.Schema.Type<typeof SubstreamType>;
-
-export type EntityId = string & Brand.Brand<'EntityId'>;
-export const EntityId = Brand.nominal<EntityId>();
 
 const Nameable = Schema.Struct({
   name: Schema.NullOr(Schema.String),
