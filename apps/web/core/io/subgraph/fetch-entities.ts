@@ -21,9 +21,9 @@ function getFetchEntitiesQuery(
 ) {
   const typeIdsString =
     typeIds && typeIds.length > 0
-      ? `entityTypes: { some: { typeId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } }`
+      ? `versionTypes: { some: { typeId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } }`
       : // Filter out block entities by default
-        `entityTypes: { every: { typeId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.TABLE_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.INDEXED_SPACE}"] } } }`;
+        `versionTypes: { every: { typeId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.TABLE_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.INDEXED_SPACE}"] } } }`;
 
   const constructedWhere =
     entityOfWhere !== ''
@@ -38,9 +38,20 @@ function getFetchEntitiesQuery(
       : `{name: {startsWithInsensitive: ${JSON.stringify(query)}} ${typeIdsString} }`;
 
   return `query {
-    entities(filter: ${constructedWhere} first: ${first} offset: ${skip} orderBy: NAME_ASC) {
+    entities(
+      filter: {
+        currentVersion: {
+          version: ${constructedWhere}
+        }
+      } 
+      first: ${first} offset: ${skip}
+    ) {
       nodes {
-        ${versionFragment}
+        currentVersion {
+          version {
+            ${versionFragment}
+          }
+        }
       }
     }
   }`;
@@ -77,7 +88,10 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
     fieldFilters['attribute-id'] && `attribute: { id: {equalTo: ${JSON.stringify(fieldFilters['attribute-id'])}} }`,
 
     // Until we have OR we can't search for name_contains OR value string contains
-    fieldFilters.value && `entityValue: {name: {startsWithInsensitive: ${JSON.stringify(fieldFilters.value)}}}`,
+    fieldFilters.value &&
+      `entityValue: {currentVersion: {version: {name: {startsWithInsensitive: ${JSON.stringify(
+        fieldFilters.value
+      )}}}}}`,
     fieldFilters['linked-to'] && `entityValueId: {equalTo: ${JSON.stringify(fieldFilters['linked-to'])}}`,
   ]
     .filter(Boolean)
@@ -139,7 +153,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
 
       return Either.match(decodedSpace, {
         onLeft: error => {
-          console.error(`Unable to decode entity ${e.id} with error ${error}`);
+          console.error(`Unable to decode entity ${e.currentVersion.version.id} with error ${error}`);
           return null;
         },
         onRight: entity => {

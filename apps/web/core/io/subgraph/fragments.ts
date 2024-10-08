@@ -157,7 +157,11 @@ export const spaceFragment = `
   spacesMetadata {
     nodes {
       entity {
-        ${versionFragment}
+        currentVersion {
+          version {
+            ${versionFragment}
+          }
+        }
       }
     }
   }

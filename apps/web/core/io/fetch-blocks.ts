@@ -14,7 +14,11 @@ const query = (ids: string[]) => {
   return `query {
     entities(filter: { id: { in: ${stringifiedIds} } }) {
       nodes {
-        ${versionFragment}
+        currentVersion {
+          version {
+            ${versionFragment}
+          }
+        }
       }
     }
   }`;
