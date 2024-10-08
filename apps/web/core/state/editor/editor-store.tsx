@@ -262,6 +262,7 @@ export function useEditorStore() {
 
         const markdownTripleForBlockId = markdownTriplesForBlockId[0];
         const relationForBlockId = blocks.find(r => r.block.id === blockId);
+
         const toEntity = relationForBlockId?.block;
 
         // if (value?.type === 'IMAGE') {
