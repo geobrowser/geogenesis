@@ -1,7 +1,7 @@
-import { SubstreamType } from '~/core/io/schema';
+import { EntityId } from '~/core/io/schema';
 
 interface Props {
-  type: SubstreamType;
+  type: { id: EntityId; name: string | null };
 }
 
 export function EntityPageTypeChip({ type }: Props) {

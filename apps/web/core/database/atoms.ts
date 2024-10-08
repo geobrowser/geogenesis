@@ -5,7 +5,6 @@ import { Relation } from '~/core/io/dto/entities';
 
 import { StoredRelation } from './types';
 
-// @TODO: This should read from local relations atom instead of local ops atom
 export const createRelationsAtom = (initialRelations: Relation[]) => {
   return atom((get): StoredRelation[] => {
     const localRelations = get(localRelationsAtom);

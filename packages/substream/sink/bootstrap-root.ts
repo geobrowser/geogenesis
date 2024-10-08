@@ -8,9 +8,14 @@ import {
   ROOT_SPACE_CREATED_AT_BLOCK,
   ROOT_SPACE_CREATED_BY_ID,
 } from './constants/constants';
-import { Accounts, Entities, EntitySpaces, Proposals, Spaces, Triples, Types } from './db';
+import { Accounts, CurrentVersions, Entities, Proposals, Spaces, Triples, Types, VersionSpaces, Versions } from './db';
+import { Edits } from './db/edits';
 import { Relations } from './db/relations';
 import { getTripleFromOp } from './events/get-triple-from-op';
+import { createVersionId } from './utils/id';
+
+const PROPOSAL_ID = '0';
+const EDIT_ID = '0';
 
 const entities: string[] = [
   SYSTEM_IDS.TYPES,
@@ -133,6 +138,21 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: 'From entity',
 };
 
+const versions: s.versions.Insertable[] = entities.map(e => {
+  return {
+    id: createVersionId({
+      entityId: e,
+      proposalId: PROPOSAL_ID,
+    }),
+    name: names[e],
+    created_at: ROOT_SPACE_CREATED_AT,
+    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    created_by_id: ROOT_SPACE_CREATED_BY_ID,
+    edit_id: EDIT_ID,
+    entity_id: e,
+  };
+});
+
 const attributes: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
@@ -196,18 +216,20 @@ const relationTypes: Record<string, string[]> = {
   [SYSTEM_IDS.ATTRIBUTES]: [SYSTEM_IDS.VALUE_TYPE],
 };
 
-const geoEntities: s.entities.Insertable[] = entities.map(entity => ({
-  id: entity,
-  name: names[entity],
-  created_by_id: ROOT_SPACE_CREATED_BY_ID,
-  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-  created_at: ROOT_SPACE_CREATED_AT,
-  updated_at: ROOT_SPACE_CREATED_AT,
-  updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-}));
+const geoEntities: s.entities.Insertable[] = entities.map(
+  (entity): s.entities.Insertable => ({
+    id: entity,
+    created_by_id: ROOT_SPACE_CREATED_BY_ID,
+    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+    created_at: ROOT_SPACE_CREATED_AT,
+    updated_at: ROOT_SPACE_CREATED_AT,
+    updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+  })
+);
 
 const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
   ([id, name]): s.triples.Insertable => ({
+    version_id: versions.find(v => v.entity_id === id)!.id,
     entity_id: id,
     attribute_id: SYSTEM_IDS.NAME,
     value_type: 'TEXT',
@@ -228,13 +250,15 @@ const makeTypeRelations = () => {
   // Make the relation triples for the type entity. For every type we need
   // to make a relation entity to represent the type
   for (const [typeEntityId] of Object.entries(types)) {
+    const versionId = entities.find(e => e === typeEntityId)!;
+
     // Create all the relationship triples for the Types -> Type relation
     const typeRelationshipTriples = createRelationship({
       relationTypeId: SYSTEM_IDS.TYPES,
       fromId: typeEntityId,
       toId: SYSTEM_IDS.SCHEMA_TYPE,
     }).map(op =>
-      getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, {
+      getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, versionId, {
         blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
         cursor: '',
         requestId: '',
@@ -244,11 +268,10 @@ const makeTypeRelations = () => {
 
     // Make a relation of Types -> Type
     relationsToWrite.push({
-      // @TODO: we don't need entity_id if we can use the id as the entity_id
-      id: typeRelationshipTriples[0]!.entity_id,
-      type_of_id: SYSTEM_IDS.TYPES, // Making a relation of Type -> Type, i.e., this entity is a Type
-      from_entity_id: typeEntityId,
-      to_entity_id: SYSTEM_IDS.SCHEMA_TYPE,
+      id: createGeoId(), // Not deterministic
+      type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.TYPES)!.id, // Making a relation of Type -> Type, i.e., this entity is a Type
+      from_version_id: versions.find(v => v.entity_id === typeEntityId)!.id,
+      to_version_id: versions.find(v => v.entity_id === SYSTEM_IDS.SCHEMA_TYPE)!.id,
       index: INITIAL_COLLECTION_ITEM_INDEX,
       entity_id: typeRelationshipTriples[0]!.entity_id,
     });
@@ -263,12 +286,14 @@ const makeTypeRelations = () => {
     // Person -> Attribute -> Age
     // Person -> Attribute -> Date of Birth
     for (const attributeId of attributeIds) {
+      const versionId = entities.find(e => e === attributeId)!;
+
       const relationshipTriples = createRelationship({
         relationTypeId: SYSTEM_IDS.ATTRIBUTES,
         fromId: typeId,
         toId: attributeId,
       }).map(op =>
-        getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, {
+        getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, versionId, {
           blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
           cursor: '',
           requestId: '',
@@ -280,9 +305,9 @@ const makeTypeRelations = () => {
       relationsToWrite.push({
         // @TODO: we don't need entity_id if we can use the id as the entity_id
         id: relationshipTriples[0]!.entity_id,
-        from_entity_id: typeId,
-        type_of_id: SYSTEM_IDS.ATTRIBUTES, // Making a relation of type Attribute
-        to_entity_id: attributeId,
+        from_version_id: versions.find(v => v.entity_id === typeId)!.id,
+        type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.ATTRIBUTES)!.id, // Making a relation of type Attribute
+        to_version_id: versions.find(v => v.entity_id === attributeId)!.id,
         index: INITIAL_COLLECTION_ITEM_INDEX,
         entity_id: relationshipTriples[0]!.entity_id,
       });
@@ -292,9 +317,9 @@ const makeTypeRelations = () => {
       if (!relationsToWrite.find(r => r.id === attributeId)) {
         relationsToWrite.push({
           id: attributeId,
-          from_entity_id: attributeId,
-          type_of_id: SYSTEM_IDS.TYPES,
-          to_entity_id: SYSTEM_IDS.ATTRIBUTES,
+          from_version_id: versions.find(v => v.entity_id === attributeId)!.id,
+          type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.TYPES)!.id,
+          to_version_id: versions.find(v => v.entity_id === SYSTEM_IDS.ATTRIBUTES)!.id,
           index: INITIAL_COLLECTION_ITEM_INDEX,
           entity_id: attributeId,
         });
@@ -310,9 +335,9 @@ const makeTypeRelations = () => {
         if (!relationsToWrite.find(r => r.id === relationValueTypeRelationId)) {
           relationsToWrite.push({
             id: relationValueTypeRelationId,
-            from_entity_id: attributeId,
-            type_of_id: SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
-            to_entity_id: relationValueTypeIdForAttribute,
+            from_version_id: versions.find(v => v.entity_id === attributeId)!.id,
+            type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE)!.id,
+            to_version_id: versions.find(v => v.entity_id === relationValueTypeIdForAttribute)!.id,
             index: INITIAL_COLLECTION_ITEM_INDEX,
             entity_id: relationValueTypeRelationId,
           });
@@ -342,19 +367,35 @@ const account: s.accounts.Insertable = {
 };
 
 const proposal: s.proposals.Insertable = {
-  id: '0',
+  id: PROPOSAL_ID,
   onchain_proposal_id: '-1',
   created_by_id: ROOT_SPACE_CREATED_BY_ID,
-  created_at: ROOT_SPACE_CREATED_AT,
   plugin_address: '',
   space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-  name: `Creating initial types for ${ROOT_SPACE_CREATED_BY_ID}`,
   type: 'ADD_EDIT',
   status: 'accepted',
   start_time: ROOT_SPACE_CREATED_AT,
   end_time: ROOT_SPACE_CREATED_AT,
+  edit_id: EDIT_ID,
 };
+
+const edit: s.edits.Insertable = {
+  id: '0',
+  name: 'Root Space Bootstrap',
+  description: null,
+  uri: '',
+  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK.toString(),
+  created_at: ROOT_SPACE_CREATED_AT,
+  created_by_id: ROOT_SPACE_CREATED_BY_ID,
+  space_id: SYSTEM_IDS.ROOT_SPACE_ID,
+};
+
+const currentVersions: s.current_versions.Insertable[] = versions.map(v => {
+  return {
+    entity_id: v.entity_id,
+    version_id: v.id,
+  };
+});
 
 export class BootstrapRootError extends Error {
   _tag: 'BootstrapRootError' = 'BootstrapRootError';
@@ -387,41 +428,40 @@ export function bootstrapRoot() {
 
           await Spaces.upsert([space]);
           // @TODO: Add types from relations to db.entity_types
-          // @TODO: Create versions for the entities
+          await Promise.all([Accounts.upsert([account]), Proposals.upsert([proposal]), Edits.upsert([edit])]);
+
+          // We write these separately since they might change the same entity which
+          // results in a INSERT ON CONFLICT DO error
+          await Entities.upsert(geoEntities);
+          await Entities.upsert(entitiesForRelations);
+
+          const entitySpaces = geoEntities.map(e => ({
+            version_id: versions.find(v => v.entity_id === e.id)!.id,
+            space_id: SYSTEM_IDS.ROOT_SPACE_ID,
+          }));
+          const relationSpaces = entitiesForRelations.map(e => ({
+            // @TODO: This version may not exist
+            // version_id: versions.find(v => v.entity_id === e.id)!.id,
+            version_id: e.id,
+            space_id: SYSTEM_IDS.ROOT_SPACE_ID,
+          }));
+
           await Promise.all([
-            Accounts.upsert([account]),
-            Entities.upsert(geoEntities),
-            Entities.upsert(entitiesForRelations),
-
-            Triples.insert(namesTriples),
-            Triples.upsert(triplesForTypesAndAttributes),
-            // Triples.insert(attributeTriples),
-
-            Proposals.upsert([proposal]),
+            Versions.upsert(versions),
             Relations.upsert(relationsForTypesAndAttributes),
+            Triples.insert([...namesTriples, ...triplesForTypesAndAttributes]),
+            Types.upsert(
+              [...typesToWrite, ...attributesToWrite].map(r => ({
+                type_id: r.type_of_id,
+                version_id: r.from_version_id,
+                created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
+                created_at: ROOT_SPACE_CREATED_AT,
+              }))
+            ),
+            VersionSpaces.upsert([...entitySpaces, ...relationSpaces]),
           ]);
 
-          await Types.upsert(
-            typesToWrite.map(r => ({
-              type_id: r.type_of_id,
-              entity_id: r.from_entity_id,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-            }))
-          );
-          await Types.upsert(
-            attributesToWrite.map(r => ({
-              type_id: r.type_of_id,
-              entity_id: r.to_entity_id,
-              created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-              created_at: ROOT_SPACE_CREATED_AT,
-            }))
-          );
-
-          await EntitySpaces.upsert(geoEntities.map(e => ({ entity_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID })));
-          await EntitySpaces.upsert(
-            entitiesForRelations.map(e => ({ entity_id: e.id, space_id: SYSTEM_IDS.ROOT_SPACE_ID }))
-          );
+          await CurrentVersions.upsert(currentVersions);
         },
         catch: error => new BootstrapRootError(String(error)),
       })

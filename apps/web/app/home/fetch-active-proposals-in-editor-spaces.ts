@@ -81,7 +81,11 @@ export async function getActiveProposalsForSpacesWhereEditor(
           spacesMetadata {
             nodes {
               entity {
-                ${spaceMetadataFragment}
+                currentVersion {
+                  version {
+                    ${spaceMetadataFragment}
+                  }
+                }
               }
             }
           }

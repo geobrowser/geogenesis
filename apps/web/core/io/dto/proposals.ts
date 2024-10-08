@@ -2,10 +2,8 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { AppOp, OmitStrict, Profile, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import { ProposalStatus, ProposalType, SubstreamEntity, SubstreamProposal, SubstreamVote } from '../schema';
+import { ProposalStatus, ProposalType, SubstreamProposal, SubstreamVote } from '../schema';
 import { EntityDto } from './entities';
-import { OpDto } from './ops';
-import { extractValue } from './triples';
 
 export type VoteWithProfile = SubstreamVote & { voter: Profile };
 
@@ -48,12 +46,12 @@ export function ProposalDto(
     profileLink: null,
   };
 
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
+  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity;
   const entity = spaceConfig ? EntityDto(spaceConfig) : null;
 
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
-    name: spaceConfig?.name ?? null,
+    name: entity?.name ?? null,
     image: Entities.avatar(entity?.relationsOut) ?? Entities.cover(entity?.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
   };
 
@@ -104,7 +102,6 @@ export function ProposalDto(
       },
       createdAt: 0,
       createdAtBlock: 0,
-      ops: pv.ops.nodes.map(OpDto),
       entity: pv.entity,
     })),
   };
@@ -125,12 +122,12 @@ export function ProposalWithoutVotersDto(
     profileLink: null,
   };
 
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
+  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity;
   const entity = spaceConfig ? EntityDto(spaceConfig) : null;
 
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
-    name: spaceConfig?.name ?? null,
+    name: entity?.name ?? null,
     image: Entities.avatar(entity?.relationsOut) ?? Entities.cover(entity?.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
   };
 
@@ -169,7 +166,6 @@ export type ProposedVersion = {
   createdBy: Profile;
   createdAt: number;
   createdAtBlock: number;
-  ops: AppOp[];
   entity: {
     id: string;
     name: string | null;

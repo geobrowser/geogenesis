@@ -2,12 +2,15 @@ import { Effect, Either } from 'effect';
 
 import { mapIpfsProposalToSchemaProposalByType } from '../proposals-created/map-proposals';
 import type { EditProposal } from '../proposals-created/parser';
-import { Accounts, Ops, Proposals, ProposedVersions } from '~/sink/db';
+import { Accounts, Proposals, Versions } from '~/sink/db';
+import { Edits } from '~/sink/db/edits';
 import { CouldNotWriteAccountsError } from '~/sink/errors';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { retryEffect } from '~/sink/utils/retry-effect';
 import { slog } from '~/sink/utils/slog';
+import { mergeOpsWithPreviousVersions } from '~/sink/write-edits/merge-ops-with-previous-versions';
+import { writeEdits } from '~/sink/write-edits/write-edits';
 
 class CouldNotWriteInitialSpaceProposalsError extends Error {
   _tag: 'CouldNotWriteInitialSpaceProposalsError' = 'CouldNotWriteInitialSpaceProposalsError';
@@ -69,18 +72,15 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
       message: `Writing ${schemaEditProposals.proposals.length} proposals for edits without proposals`,
     });
 
-    // @TODO: Put this in a transaction since all these writes are related
+    // @TODO: Put this in a transaction by edit id since all these writes are related
     const writtenProposals = yield* _(
       Effect.tryPromise({
         try: async () => {
-          // @TODO: Batch since there might be postgres byte limits. See upsertChunked
+          // @TODO: Transaction
           await Promise.all([
-            // @TODO: Should we only attempt to write to the db for the correct content type?
-            // What if we get multiple proposals in the same block with different content types?
-            // Content proposals
+            Edits.upsert(schemaEditProposals.edits),
             Proposals.upsert(schemaEditProposals.proposals),
-            ProposedVersions.upsert(schemaEditProposals.proposedVersions),
-            Ops.upsert(schemaEditProposals.ops, { chunk: true }),
+            Versions.upsert(schemaEditProposals.versions),
           ]);
         },
         catch: error => {
@@ -103,6 +103,47 @@ export function handleInitialProposalsCreated(proposalsFromIpfs: EditProposal[],
 
       return;
     }
+
+    const opsByVersionId = yield* _(
+      mergeOpsWithPreviousVersions({
+        edits: schemaEditProposals.edits,
+        opsByVersionId: schemaEditProposals.opsByVersionId,
+        versions: schemaEditProposals.versions,
+      })
+    );
+
+    const populateResult = yield* _(
+      Effect.either(
+        writeEdits({
+          versions: schemaEditProposals.versions,
+          opsByVersionId,
+          block,
+
+          // We treat all edits that occur at the same time the space is created
+          // as imported edits.
+          editType: 'IMPORT',
+          edits: schemaEditProposals.edits,
+        })
+      )
+    );
+
+    Either.match(populateResult, {
+      onRight: () => {
+        slog({
+          requestId: block.requestId,
+          message: 'Edits from content proposals written successfully!',
+        });
+      },
+      onLeft: error => {
+        telemetry.captureException(error);
+
+        slog({
+          requestId: block.requestId,
+          message: `Could not write proposals for edits without proposals ${error.message}`,
+          level: 'error',
+        });
+      },
+    });
 
     slog({
       requestId: block.requestId,

@@ -10,6 +10,5 @@ import type { EditProposal } from './proposals-created/parser';
  * any downstream relations that point to the Proposal in the DB.
  */
 export function getProposalsForSpaceIds(spacesCreated: string[], proposals: EditProposal[]) {
-  const spaceAddresses = new Set(spacesCreated);
-  return proposals.filter(p => spaceAddresses.has(p.space));
+  return proposals.filter(p => spacesCreated.includes(p.space));
 }

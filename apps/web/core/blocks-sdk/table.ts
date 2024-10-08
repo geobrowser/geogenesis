@@ -280,7 +280,7 @@ export function createGraphQLStringFromFiltersV2(
     .map(filter => {
       // Assume we can only filter by one type at a time for now
       if (filter.columnId === SYSTEM_IDS.TYPES && filter.valueType === 'ENTITY') {
-        return `entityTypes: { some: { typeId: { equalTo: "${filter.value}" } } }`;
+        return `versionTypes: { some: { type: { entityId: {equalTo: "${filter.value}" } } } }`;
       }
 
       // We treat Name and Space as special filters even though they are not always
@@ -292,7 +292,7 @@ export function createGraphQLStringFromFiltersV2(
       }
 
       if (filter.columnId === SYSTEM_IDS.SPACE && filter.valueType === 'TEXT') {
-        return `entitySpaces: {
+        return `versionSpaces: {
           some: {
             spaceId: { equalTo: "${filter.value}" }
           }
@@ -315,11 +315,11 @@ export function createGraphQLStringFromFiltersV2(
     .flatMap(f => (f ? [f] : []));
 
   if (filtersAsStrings.length === 1) {
-    return `{ ${filtersAsStrings[0]} }`;
+    return `${filtersAsStrings[0]}`;
   }
 
   // Wrap each filter expression in curly brackets
   const multiFilterQuery = filtersAsStrings.map(f => `{ ${f} }`).join(', ');
 
-  return `{ and: [${multiFilterQuery}] }`;
+  return `and: [${multiFilterQuery}]`;
 }

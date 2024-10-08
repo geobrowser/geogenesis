@@ -14,16 +14,27 @@ import { graphql } from './graphql';
 function getFetchResultsQuery(query: string | undefined, typeIds?: string[], first = 100, skip = 0) {
   const typeIdsString =
     typeIds && typeIds.length > 0
-      ? `entityTypes: { some: { typeId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } }`
+      ? `versionTypes: { some: { typeId: { in: [${typeIds?.map(t => `"${t}"`).join(', ')}] } } }`
       : // Filter out block entities by default
-        `entityTypes: { every: { typeId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.TABLE_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.INDEXED_SPACE}"] } } }`;
+        `versionTypes: { every: { typeId: { notIn: ["${SYSTEM_IDS.TEXT_BLOCK}", "${SYSTEM_IDS.TABLE_BLOCK}", "${SYSTEM_IDS.IMAGE_BLOCK}", "${SYSTEM_IDS.INDEXED_SPACE}"] } } }`;
 
   const constructedWhere = `{name: {startsWithInsensitive: ${JSON.stringify(query)}} ${typeIdsString} }`;
 
   return `query {
-    entities(filter: ${constructedWhere} first: ${first} offset: ${skip} orderBy: NAME_ASC) {
+    entities(filter: {
+        currentVersion: {
+          version: ${constructedWhere}
+        }
+      } 
+      first: ${first} offset: ${skip}
+    ) {
       nodes {
-        ${resultEntityFragment}
+       id
+        currentVersion {
+          version {
+            ${resultEntityFragment}
+          }
+        }
       }
     }
   }`;

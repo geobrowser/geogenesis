@@ -6,15 +6,15 @@ import { Environment } from '~/core/environment';
 
 import { Entity, EntityDto } from '../dto/entities';
 import { SubstreamEntity } from '../schema';
-import { entityFragment } from './fragments';
+import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
 const query = (collectionId: string) => {
   return `{
-    relations(filter: { fromEntityId: { equalTo: "${collectionId}" } }) {
+    relations(filter: { fromVersionId: { equalTo: "${collectionId}" } }) {
       nodes {
-        toEntity {
-          ${entityFragment}
+        toVersion {
+          ${versionFragment}
         }
       }
     }

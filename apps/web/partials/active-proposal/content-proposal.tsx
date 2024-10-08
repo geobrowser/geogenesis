@@ -24,7 +24,7 @@ export async function ContentProposal({ proposal }: { proposal: Proposal }) {
 
   // const changedEntityIds = Object.keys(changes);
 
-  const changes = proposal.proposedVersions.map(pv => fromProposedVersion(pv.ops, pv.entity));
+  const changes = proposal.proposedVersions.map(pv => fromProposedVersion([], pv.entity));
 
   return (
     <div className="flex flex-col gap-16 divide-y divide-grey-02">

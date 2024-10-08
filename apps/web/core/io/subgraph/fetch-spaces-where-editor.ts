@@ -7,7 +7,7 @@ import { Environment } from '~/core/environment';
 
 import { SpaceConfigEntity, SpaceMetadataDto } from '../dto/spaces';
 import { SpaceId, SubstreamEntity } from '../schema';
-import { entityFragment } from './fragments';
+import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
 const getFetchSpacesWhereEditorQuery = (address: string) => `query {
@@ -17,7 +17,7 @@ const getFetchSpacesWhereEditorQuery = (address: string) => `query {
       spacesMetadata {
         nodes {
           entity {
-            ${entityFragment}
+            ${versionFragment}
           }
         }
       }

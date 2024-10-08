@@ -25,8 +25,11 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
         id
         spacesMetadata {
         nodes {
-            entity {
-              ${spaceMetadataFragment}
+          entity {
+            currentVersion {
+              version {
+                ${spaceMetadataFragment}
+              }
             }
           }
         }

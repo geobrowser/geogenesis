@@ -1,4 +1,4 @@
-import type { EditProposal, ProposalProcessed } from '../proposals-created/parser';
+import type { ProposalProcessed } from '../proposals-created/parser';
 import type { SpacePluginCreated } from './parser';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
 
