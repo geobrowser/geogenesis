@@ -14,6 +14,7 @@ import { graphql } from './graphql';
 function getFetchEntityQuery(id: string) {
   return `query {
     entity(id: ${JSON.stringify(id)}) {
+      id
       currentVersion {
         version {
           ${versionFragment}

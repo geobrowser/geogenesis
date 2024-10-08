@@ -14,6 +14,7 @@ const query = (ids: string[]) => {
   return `query {
     entities(filter: { id: { in: ${stringifiedIds} } }) {
       nodes {
+        id
         currentVersion {
           version {
             ${versionFragment}

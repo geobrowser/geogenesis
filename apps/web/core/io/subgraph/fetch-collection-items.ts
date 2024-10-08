@@ -11,9 +11,9 @@ import { graphql } from './graphql';
 
 const query = (collectionId: string) => {
   return `{
-    relations(filter: { fromEntityId: { equalTo: "${collectionId}" } }) {
+    relations(filter: { fromVersionId: { equalTo: "${collectionId}" } }) {
       nodes {
-        toEntity {
+        toVersion {
           ${versionFragment}
         }
       }

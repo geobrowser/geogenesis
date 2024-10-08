@@ -33,6 +33,7 @@ export const versionTypesFragment = `
 
 export const tripleFragment = `
   attribute {
+    id
     currentVersion {
       version {
         id
@@ -41,6 +42,7 @@ export const tripleFragment = `
     }
   }
   entity {
+    id
     currentVersion {
       version {
         id
@@ -49,6 +51,7 @@ export const tripleFragment = `
     }
   }
   entityValue {
+    id
     currentVersion {
       version {
         id
@@ -157,6 +160,7 @@ export const spaceFragment = `
   spacesMetadata {
     nodes {
       entity {
+        id
         currentVersion {
           version {
             ${versionFragment}

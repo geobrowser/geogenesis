@@ -47,6 +47,7 @@ function getFetchEntitiesQuery(
       first: ${first} offset: ${skip}
     ) {
       nodes {
+        id
         currentVersion {
           version {
             ${versionFragment}
@@ -153,7 +154,7 @@ export async function fetchEntities(options: FetchEntitiesOptions): Promise<Enti
 
       return Either.match(decodedSpace, {
         onLeft: error => {
-          console.error(`Unable to decode entity ${e.currentVersion.version.id} with error ${error}`);
+          console.error(`Unable to decode entity ${e.id} with error ${error}`);
           return null;
         },
         onRight: entity => {

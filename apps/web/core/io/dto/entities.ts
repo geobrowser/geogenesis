@@ -52,7 +52,7 @@ export function EntityDto(substreamEntity: SubstreamEntity): Entity {
   const entityTypes = entity.versionTypes.nodes.map(t => t.type);
 
   return {
-    id: entity.id,
+    id: substreamEntity.id,
     name: entity.name,
     description: Entities.description(triples),
     nameTripleSpaces: nameTriples.map(t => t.space),

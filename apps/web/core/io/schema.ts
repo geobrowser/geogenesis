@@ -97,6 +97,7 @@ const SubstreamEntityValue = Schema.Struct({
   valueType: Schema.Literal('ENTITY'),
   textValue: Schema.Null,
   entityValue: Schema.Struct({
+    id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
     currentVersion: Schema.Struct({
       version: Schema.Struct({
         id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
@@ -146,11 +147,13 @@ export const SubstreamTriple = Schema.extend(
   SubstreamValue,
   Schema.Struct({
     entity: Schema.Struct({
+      id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
       currentVersion: Schema.Struct({
         version: Schema.extend(Identifiable, Nameable),
       }),
     }),
     attribute: Schema.Struct({
+      id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
       currentVersion: Schema.Struct({
         version: Schema.extend(Identifiable, Nameable),
       }),
@@ -196,6 +199,7 @@ export type SubstreamRelation = Schema.Schema.Type<typeof SubstreamRelation>;
  * Entities
  */
 export const SubstreamEntity = Schema.Struct({
+  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
   currentVersion: Schema.Struct({
     version: Schema.Struct({
       id: Schema.String.pipe(Schema.fromBrand(EntityId)),

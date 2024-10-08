@@ -10,7 +10,7 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
       const entityValue = networkTriple.entityValue.currentVersion.version;
       return {
         type: 'ENTITY',
-        value: entityValue.id,
+        value: networkTriple.entityValue.id,
         name: entityValue.name,
       };
     }
@@ -22,14 +22,14 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
 }
 
 export function TripleDto(triple: SubstreamTriple) {
-  const entity = triple.entity.currentVersion.version;
-  const attribute = triple.attribute.currentVersion.version;
+  const entity = triple.entity;
+  const attribute = triple.attribute;
 
   return {
     entityId: entity.id,
-    entityName: entity.name,
+    entityName: entity.currentVersion.version.name,
     attributeId: attribute.id,
-    attributeName: attribute.name,
+    attributeName: attribute.currentVersion.version.name,
     value: extractValue(triple),
     space: triple.space.id,
   };
