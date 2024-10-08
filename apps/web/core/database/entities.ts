@@ -5,7 +5,7 @@ import { dedupeWith } from 'effect/Array';
 import * as React from 'react';
 
 import { Entity, Relation } from '../io/dto/entities';
-import { EntityId, TypeId } from '../io/schema';
+import { EntityId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
 import { queryClient } from '../query-client';
 import { Schema, Triple, TripleWithEntityValue } from '../types';
@@ -235,7 +235,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
  * The triples and relations here should already be merged with the entity's
  * local and remote state.
  */
-export function readTypes(triples: Triple[], relations: Relation[]): { id: TypeId; name: string | null }[] {
+export function readTypes(triples: Triple[], relations: Relation[]): { id: EntityId; name: string | null }[] {
   const typesViaTriples = triples
     .filter(
       triple => triple.attributeId === SYSTEM_IDS.TYPES && triple.value.type === 'ENTITY' && triple.value.value !== ''
@@ -244,7 +244,7 @@ export function readTypes(triples: Triple[], relations: Relation[]): { id: TypeI
       // Safe to cast here since we verified that it's an entity value above.
       const value = triple.value as TripleWithEntityValue['value'];
       return {
-        id: TypeId(value.value),
+        id: EntityId(value.value),
         name: value.name,
       };
     });
@@ -252,7 +252,7 @@ export function readTypes(triples: Triple[], relations: Relation[]): { id: TypeI
   const typeIdsViaRelations = relations
     .filter(r => r.typeOf.id === SYSTEM_IDS.TYPES)
     .map(r => ({
-      id: TypeId(r.toEntity.id),
+      id: EntityId(r.toEntity.id),
       name: r.toEntity.name,
     }));
 

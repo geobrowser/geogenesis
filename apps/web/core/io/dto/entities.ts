@@ -11,7 +11,7 @@ export type Entity = {
   name: string | null;
   description: string | null;
   nameTripleSpaces: string[];
-  types: SubstreamType[];
+  types: { id: EntityId; name: string | null }[];
   relationsOut: Relation[];
   triples: Triple[];
 };
@@ -49,7 +49,12 @@ export function EntityDto(substreamEntity: SubstreamEntity): Entity {
   const networkTriples = entity.triples.nodes;
   const triples = networkTriples.map(TripleDto);
   const nameTriples = Entities.nameTriples(triples);
-  const entityTypes = entity.versionTypes.nodes.map(t => t.type);
+  const entityTypes = entity.versionTypes.nodes.map(t => {
+    return {
+      id: t.type.entityId,
+      name: t.type.name,
+    };
+  });
 
   return {
     id: substreamEntity.id,
@@ -76,7 +81,8 @@ export function EntityDto(substreamEntity: SubstreamEntity): Entity {
         t.typeOf.entityId === EntityId(SYSTEM_IDS.AVATAR_ATTRIBUTE);
 
       return {
-        ...t,
+        id: t.id,
+        index: t.index,
         typeOf: {
           id: t.typeOf.entityId,
           name: t.typeOf.name,
@@ -94,7 +100,7 @@ export function EntityDto(substreamEntity: SubstreamEntity): Entity {
           // render it depending on their use case.
           renderableType: isCoverOrAvatar ? 'IMAGE' : renderableType,
           // Right now we only support images and entity ids as the value of the To entity.
-          value: isCoverOrAvatar || renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : t.toVersion.id,
+          value: isCoverOrAvatar || renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : t.toVersion.entityId,
         },
       };
     }),
