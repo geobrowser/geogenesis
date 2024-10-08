@@ -52,8 +52,7 @@ export function Menu({
       <Trigger asChild={asChild}>{trigger}</Trigger>
       <AnimatePresence>
         {open && (
-          <MotionContent
-            forceMount
+          <PopoverContent
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -67,7 +66,7 @@ export function Menu({
             className={contentStyles({ align, className })}
           >
             {children}
-          </MotionContent>
+          </PopoverContent>
         )}
       </AnimatePresence>
     </Root>
