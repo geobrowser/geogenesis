@@ -8,7 +8,7 @@ import { SpaceGovernanceType } from '~/core/types';
 
 import { Subspace, SubspaceDto } from '../dto/subspaces';
 import { SubstreamEntity, SubstreamSubspace } from '../schema';
-import { entityFragment } from './fragments';
+import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
 const getFetchSpacesQuery = (spaceId: string) => `query {
@@ -30,7 +30,7 @@ const getFetchSpacesQuery = (spaceId: string) => `query {
         spacesMetadata {
           nodes {
             entity {
-              ${entityFragment}
+              ${versionFragment}
             }
           }
         }

@@ -7,7 +7,7 @@ import { Environment } from '~/core/environment';
 
 import { Entity, EntityDto } from '../dto/entities';
 import { SubstreamEntity } from '../schema';
-import { entityFragment } from './fragments';
+import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
 // this differs from the fetchEntities method in that we pass in a custom graphql string that represents
@@ -22,7 +22,7 @@ function getFetchTableRowsQuery(filter: string, first = 100, skip = 0) {
   return `query {
     entities(${maybeFilter} first: ${first} offset: ${skip} orderBy: UPDATED_AT_DESC) {
       nodes {
-        ${entityFragment}
+        ${versionFragment}
       }
     }
   }`;

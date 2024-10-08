@@ -7,10 +7,11 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
     case 'TEXT':
       return { type: 'TEXT', value: networkTriple.textValue };
     case 'ENTITY': {
+      const entityValue = networkTriple.entityValue.currentVersion.version;
       return {
         type: 'ENTITY',
-        value: networkTriple.entityValue.id,
-        name: networkTriple.entityValue.name,
+        value: entityValue.id,
+        name: entityValue.name,
       };
     }
     case 'TIME':
@@ -21,11 +22,14 @@ export function extractValue(networkTriple: SubstreamTriple): Value {
 }
 
 export function TripleDto(triple: SubstreamTriple) {
+  const entity = triple.entity.currentVersion.version;
+  const attribute = triple.attribute.currentVersion.version;
+
   return {
-    entityId: triple.entity.id,
-    entityName: triple.entity.name,
-    attributeId: triple.attribute.id,
-    attributeName: triple.attribute.name,
+    entityId: entity.id,
+    entityName: entity.name,
+    attributeId: attribute.id,
+    attributeName: attribute.name,
     value: extractValue(triple),
     space: triple.space.id,
   };

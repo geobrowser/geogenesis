@@ -44,11 +44,12 @@ export type Relation = {
   };
 };
 
-export function EntityDto(entity: SubstreamEntity): Entity {
+export function EntityDto(substreamEntity: SubstreamEntity): Entity {
+  const entity = substreamEntity.currentVersion.version;
   const networkTriples = entity.triples.nodes;
   const triples = networkTriples.map(TripleDto);
   const nameTriples = Entities.nameTriples(triples);
-  const entityTypes = entity.entityTypes.nodes.map(t => t.type);
+  const entityTypes = entity.versionTypes.nodes.map(t => t.type);
 
   return {
     id: entity.id,
@@ -56,9 +57,9 @@ export function EntityDto(entity: SubstreamEntity): Entity {
     description: Entities.description(triples),
     nameTripleSpaces: nameTriples.map(t => t.space),
     types: entityTypes,
-    relationsOut: entity.relationsByFromEntityId.nodes.map(t => {
-      const toEntityTriples = t.toEntity.triples.nodes.map(TripleDto);
-      const toEntityTypes = t.toEntity.entityTypes.nodes.map(t => t.type);
+    relationsOut: entity.relationsByFromVersionId.nodes.map(t => {
+      const toEntityTriples = t.toVersion.triples.nodes.map(TripleDto);
+      const toEntityTypes = t.toVersion.versionTypes.nodes.map(t => t.type);
 
       // If the entity is an image then we should already have the triples used to define
       // the image URI for that image. We need to parse the triples to find the correct
@@ -75,16 +76,17 @@ export function EntityDto(entity: SubstreamEntity): Entity {
 
       return {
         ...t,
+        fromEntity: t.fromVersion,
         toEntity: {
-          id: t.toEntity.id,
-          name: t.toEntity.name,
+          id: t.toVersion.id,
+          name: t.toVersion.name,
 
           // The "Renderable Type" for an entity provides a hint to the consumer
           // of the entity to _what_ the entity is so they know how they should
           // render it depending on their use case.
           renderableType: isCoverOrAvatar ? 'IMAGE' : renderableType,
           // Right now we only support images and entity ids as the value of the To entity.
-          value: isCoverOrAvatar || renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : t.toEntity.id,
+          value: isCoverOrAvatar || renderableType === 'IMAGE' ? imageEntityUrlValue ?? '' : t.toVersion.id,
         },
       };
     }),

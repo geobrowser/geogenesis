@@ -46,7 +46,7 @@ export const AddressWithValidation = Schema.String.pipe(
  * Entity types are a field that exist on any entity query. These define the types
  * for that entity. e.g., Person, Space, Nonprofit, etc.
  */
-export const SubstreamEntityTypes = Schema.Struct({
+export const SubstreamVersionTypes = Schema.Struct({
   nodes: Schema.Array(
     Schema.Struct({
       type: SubstreamType,
@@ -54,7 +54,7 @@ export const SubstreamEntityTypes = Schema.Struct({
   ),
 });
 
-export type SubstreamEntityTypes = Schema.Schema.Type<typeof SubstreamEntityTypes>;
+export type SubstreamEntityTypes = Schema.Schema.Type<typeof SubstreamVersionTypes>;
 
 /*******************************************************************************
  * Triples
@@ -97,9 +97,13 @@ const SubstreamEntityValue = Schema.Struct({
   valueType: Schema.Literal('ENTITY'),
   textValue: Schema.Null,
   entityValue: Schema.Struct({
-    id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
-    name: Schema.NullOr(Schema.String),
-    entityTypes: SubstreamEntityTypes,
+    currentVersion: Schema.Struct({
+      version: Schema.Struct({
+        id: Schema.String.pipe(Schema.fromBrand(EntityId), Schema.length(32)),
+        name: Schema.NullOr(Schema.String),
+        versionTypes: SubstreamVersionTypes,
+      }),
+    }),
   }),
 });
 
@@ -141,8 +145,16 @@ type SubstreamSpaceWithoutMetadata = Schema.Schema.Type<typeof SubstreamSpaceWit
 export const SubstreamTriple = Schema.extend(
   SubstreamValue,
   Schema.Struct({
-    entity: Schema.extend(Identifiable, Nameable),
-    attribute: Schema.extend(Identifiable, Nameable),
+    entity: Schema.Struct({
+      currentVersion: Schema.Struct({
+        version: Schema.extend(Identifiable, Nameable),
+      }),
+    }),
+    attribute: Schema.Struct({
+      currentVersion: Schema.Struct({
+        version: Schema.extend(Identifiable, Nameable),
+      }),
+    }),
     space: SubstreamSpaceWithoutMetadata.pick('id'),
   })
 );
@@ -162,15 +174,14 @@ const SubstreamRelation = Schema.Struct({
   // @TODO: Picking from SubstreamEntity here creates a circular schema which is not
   // allowed atm. For now we hard-code which fields from SubstreamEntity we want to
   // use from the SubstreamRelation.
-  fromEntity: Schema.Struct({
+  fromVersion: Schema.Struct({
     id: Schema.String.pipe(Schema.fromBrand(EntityId)),
     name: Schema.NullOr(Schema.String),
   }),
-  toEntity: Schema.Struct({
+  toVersion: Schema.Struct({
     id: Schema.String.pipe(Schema.fromBrand(EntityId)),
     name: Schema.NullOr(Schema.String),
-
-    entityTypes: SubstreamEntityTypes,
+    versionTypes: SubstreamVersionTypes,
 
     // Currently our relation query only returns triples where the value type is URI
     triples: Schema.Struct({
@@ -185,15 +196,19 @@ export type SubstreamRelation = Schema.Schema.Type<typeof SubstreamRelation>;
  * Entities
  */
 export const SubstreamEntity = Schema.Struct({
-  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  name: Schema.NullOr(Schema.String),
-  description: Schema.NullOr(Schema.String),
-  entityTypes: SubstreamEntityTypes,
-  relationsByFromEntityId: Schema.Struct({
-    nodes: Schema.Array(SubstreamRelation),
-  }),
-  triples: Schema.Struct({
-    nodes: Schema.Array(SubstreamTriple),
+  currentVersion: Schema.Struct({
+    version: Schema.Struct({
+      id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+      name: Schema.NullOr(Schema.String),
+      description: Schema.NullOr(Schema.String),
+      versionTypes: SubstreamVersionTypes,
+      relationsByFromVersionId: Schema.Struct({
+        nodes: Schema.Array(SubstreamRelation),
+      }),
+      triples: Schema.Struct({
+        nodes: Schema.Array(SubstreamTriple),
+      }),
+    }),
   }),
 });
 
@@ -256,14 +271,15 @@ export type SubstreamSubspace = Schema.Schema.Type<typeof SubstreamSubspace>;
  *
  * An entity belongs to a space when it has at least one triple in that space.
  */
-export const SubstreamSearchResult = Schema.extend(
-  SubstreamEntity.pick('id', 'name', 'entityTypes', 'description'),
-  Schema.Struct({
-    entitySpaces: Schema.Struct({
-      nodes: Schema.Array(Schema.Struct({ space: SubstreamSpace })),
-    }),
-  })
-);
+export const SubstreamSearchResult = Schema.Struct({
+  id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+  name: Schema.NullOr(Schema.String),
+  description: Schema.NullOr(Schema.String),
+  versionTypes: SubstreamVersionTypes,
+  versionSpaces: Schema.Struct({
+    nodes: Schema.Array(Schema.Struct({ space: SubstreamSpace })),
+  }),
+});
 
 export type SubstreamSearchResult = Schema.Schema.Type<typeof SubstreamSearchResult>;
 

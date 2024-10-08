@@ -5,14 +5,14 @@ import { v4 as uuid } from 'uuid';
 
 import { Environment } from '../environment';
 import { slog } from '../utils/utils';
-import { SubstreamEntityTypes, SubstreamType } from './schema';
-import { entityTypesFragment } from './subgraph/fragments';
+import { SubstreamType, SubstreamVersionTypes } from './schema';
+import { versionTypesFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
 
 function getFetchEntityTypeQuery(id: string) {
   return `query {
     entity(id: "${id}") {
-      ${entityTypesFragment}
+      ${versionTypesFragment}
     }
   }`;
 }
@@ -74,7 +74,7 @@ export async function fetchEntityType(options: FetchEntityTypeOptions) {
     return [];
   }
 
-  const decodeEntityTypes = Schema.decodeEither(SubstreamEntityTypes)(result.entity.entityTypes);
+  const decodeEntityTypes = Schema.decodeEither(SubstreamVersionTypes)(result.entity.entityTypes);
 
   if (Either.isLeft(decodeEntityTypes)) {
     slog({

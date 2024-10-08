@@ -5,7 +5,7 @@ import { v4 } from 'uuid';
 import { Environment } from '../environment';
 import { Entity, EntityDto } from './dto/entities';
 import { SubstreamEntity } from './schema';
-import { entityFragment } from './subgraph/fragments';
+import { versionFragment } from './subgraph/fragments';
 import { graphql } from './subgraph/graphql';
 
 const query = (ids: string[]) => {
@@ -14,7 +14,7 @@ const query = (ids: string[]) => {
   return `query {
     entities(filter: { id: { in: ${stringifiedIds} } }) {
       nodes {
-        ${entityFragment}
+        ${versionFragment}
       }
     }
   }`;

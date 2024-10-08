@@ -8,13 +8,17 @@ import { Entity } from '~/core/io/dto/entities';
 
 import { EntityDto } from '../dto/entities';
 import { SubstreamEntity } from '../schema';
-import { entityFragment } from './fragments';
+import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
 function getFetchEntityQuery(id: string) {
   return `query {
     entity(id: ${JSON.stringify(id)}) {
-      ${entityFragment}
+      currentVersion {
+        version {
+          ${versionFragment}
+        }
+      }
     }
   }`;
 }
@@ -88,7 +92,7 @@ export async function fetchEntity(options: FetchEntityOptions): Promise<Entity |
 
   const decodedEntity = Either.match(entityOrError, {
     onLeft: error => {
-      console.error(`Unable to decode entity ${entity.id} with error ${error}`);
+      console.error(`Unable to decode entity ${entity.currentVersion.version.id} with error ${error}`);
       return null;
     },
     onRight: entity => {

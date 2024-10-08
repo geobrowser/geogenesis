@@ -9,7 +9,7 @@ import { FilterField, FilterState } from '~/core/types';
 
 import { Entity, EntityDto } from '../dto/entities';
 import { SubstreamEntity } from '../schema';
-import { entityFragment } from './fragments';
+import { versionFragment } from './fragments';
 import { graphql } from './graphql';
 
 function getFetchEntitiesQuery(
@@ -40,7 +40,7 @@ function getFetchEntitiesQuery(
   return `query {
     entities(filter: ${constructedWhere} first: ${first} offset: ${skip} orderBy: NAME_ASC) {
       nodes {
-        ${entityFragment}
+        ${versionFragment}
       }
     }
   }`;
