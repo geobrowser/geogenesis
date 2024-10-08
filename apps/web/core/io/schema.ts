@@ -326,7 +326,6 @@ export const SubstreamProposedVersion = Schema.Struct({
   createdAtBlock: Schema.String,
   space: SubstreamSpace,
   entity: SubstreamEntity,
-  // @TODO: Ops
 });
 
 export const ProposalType = Schema.Union(
@@ -383,9 +382,6 @@ export const SubstreamProposal = Schema.Struct({
         entity: Schema.Struct({
           id: Schema.String.pipe(Schema.fromBrand(EntityId)),
           name: Schema.NullOr(Schema.String),
-        }),
-        ops: Schema.Struct({
-          nodes: Schema.Array(SubstreamOp),
         }),
       })
     ),
