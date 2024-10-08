@@ -172,6 +172,7 @@ const SubstreamRelation = Schema.Struct({
   index: Schema.String,
   typeOf: Schema.Struct({
     id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+    entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
     name: Schema.NullOr(Schema.String),
   }),
   // @TODO: Picking from SubstreamEntity here creates a circular schema which is not
@@ -179,10 +180,12 @@ const SubstreamRelation = Schema.Struct({
   // use from the SubstreamRelation.
   fromVersion: Schema.Struct({
     id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+    entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
     name: Schema.NullOr(Schema.String),
   }),
   toVersion: Schema.Struct({
     id: Schema.String.pipe(Schema.fromBrand(EntityId)),
+    entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
     name: Schema.NullOr(Schema.String),
     versionTypes: SubstreamVersionTypes,
 

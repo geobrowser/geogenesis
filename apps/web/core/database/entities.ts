@@ -55,11 +55,11 @@ export function useEntity(id: EntityId, initialData?: { triples: Triple[]; relat
     )
   );
 
+  // console.log('relations', { relations, initial: JSON.stringify(initialOrRemoteEntity?.relations, null, 2) });
+
   const name = React.useMemo(() => {
     return Entities.name(triples);
   }, [triples]);
-
-  console.log('triples', { triples: JSON.stringify(triples, null, 2), name });
 
   const nameTripleSpaces = React.useMemo(() => {
     return triples.filter(t => t.attributeId === SYSTEM_IDS.NAME).map(t => t.space);

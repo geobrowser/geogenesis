@@ -78,14 +78,17 @@ export const relationFragment = `
   typeOf {
     id
     name
+    entityId
   }
   fromVersion {
     id
     name
+    entityId
   }
   toVersion {
     id
     name
+    entityId
     ${versionTypesFragment}
     triples {
       nodes {

@@ -72,13 +72,21 @@ export function EntityDto(substreamEntity: SubstreamEntity): Entity {
       // @TODO(relations): Until we fix the migrations we'll manually check for cover and avatar
       // relations and set the renderable typ to image.
       const isCoverOrAvatar =
-        t.typeOf.id === EntityId(SYSTEM_IDS.COVER_ATTRIBUTE) || t.typeOf.id === EntityId(SYSTEM_IDS.AVATAR_ATTRIBUTE);
+        t.typeOf.entityId === EntityId(SYSTEM_IDS.COVER_ATTRIBUTE) ||
+        t.typeOf.entityId === EntityId(SYSTEM_IDS.AVATAR_ATTRIBUTE);
 
       return {
         ...t,
-        fromEntity: t.fromVersion,
+        typeOf: {
+          id: t.typeOf.entityId,
+          name: t.typeOf.name,
+        },
+        fromEntity: {
+          id: t.fromVersion.entityId,
+          name: t.fromVersion.name,
+        },
         toEntity: {
-          id: t.toVersion.id,
+          id: t.toVersion.entityId,
           name: t.toVersion.name,
 
           // The "Renderable Type" for an entity provides a hint to the consumer
