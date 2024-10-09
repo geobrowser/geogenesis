@@ -29,7 +29,6 @@ export type Proposal = {
     totalCount: number;
     nodes: VoteWithProfile[];
   };
-  proposedVersions: ProposedVersion[];
 };
 
 export function ProposalDto(
@@ -90,24 +89,10 @@ export function ProposalDto(
         };
       }),
     },
-    proposedVersions: proposal.proposedVersions.nodes.map(pv => ({
-      id: pv.id,
-      createdBy: {
-        id: '',
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: '0x0000000000000000000000000000000000000000',
-        profileLink: null,
-      },
-      createdAt: 0,
-      createdAtBlock: 0,
-      entity: pv.entity,
-    })),
   };
 }
 
-export type ProposalWithoutVoters = OmitStrict<Proposal, 'proposalVotes' | 'proposedVersions'>;
+export type ProposalWithoutVoters = OmitStrict<Proposal, 'proposalVotes'>;
 
 export function ProposalWithoutVotersDto(
   proposal: SubstreamProposal,

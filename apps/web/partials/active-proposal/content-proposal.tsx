@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { Proposal } from '~/core/io/dto/proposals';
-import { fromProposedVersion } from '~/core/utils/change/from-proposed-version';
+import { EntityChange } from '~/core/utils/change/types';
 
 import { ChangedEntity } from '../diff/changed-entity';
 
@@ -24,7 +24,7 @@ export async function ContentProposal({ proposal }: { proposal: Proposal }) {
 
   // const changedEntityIds = Object.keys(changes);
 
-  const changes = proposal.proposedVersions.map(pv => fromProposedVersion([], pv.entity));
+  const changes: EntityChange[] = [];
 
   return (
     <div className="flex flex-col gap-16 divide-y divide-grey-02">
