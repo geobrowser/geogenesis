@@ -79,5 +79,5 @@ export type EntityChange = {
   id: EntityId;
   name: string | null;
   blockChanges: RenderableChange[];
-  changes: Record<string, RenderableChange[]>;
+  changes: RenderableChange[];
 };

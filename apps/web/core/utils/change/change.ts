@@ -162,13 +162,11 @@ function aggregateChanges({ spaceId, afterEntities, beforeEntities }: AggregateC
     // @TODO: map block diffs into a renderable format
     const blockChanges = relationChanges.filter(c => c.attribute.id === SYSTEM_IDS.BLOCKS);
 
-    const grouped = groupBy(realChanges, change => change.attribute.id);
-
     return {
       id: entity.id,
       name: entity.name,
       blockChanges,
-      changes: grouped,
+      changes: realChanges,
     };
   });
 }

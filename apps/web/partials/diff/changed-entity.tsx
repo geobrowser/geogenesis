@@ -9,7 +9,7 @@ import * as React from 'react';
 import { useCallback } from 'react';
 
 import { EntityChange, RelationChange } from '~/core/utils/change/types';
-import { GeoDate } from '~/core/utils/utils';
+import { GeoDate, groupBy } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 import { Blank } from '~/design-system/icons/blank';
@@ -266,7 +266,9 @@ const ChangedAttribute = ({ changes }: ChangedAttributeProps) => {
   //   }
   // };
 
-  return Object.entries(changes).map(([attributeId, changes]) => {
+  const groupedChanges = groupBy(changes, c => c.attribute.id);
+
+  return Object.entries(groupedChanges).map(([attributeId, changes]) => {
     // Don't show page blocks
     if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
