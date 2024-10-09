@@ -10,7 +10,7 @@ interface VersionChangesArgs {
 }
 
 export const useVersionChanges = (args: VersionChangesArgs) => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['version-changes', args],
     queryFn: async () => {
       const [beforeVersion, afterVersion] = await Promise.all([
@@ -28,8 +28,6 @@ export const useVersionChanges = (args: VersionChangesArgs) => {
         spaceId: args.spaceId,
       });
 
-      console.log('changes', { beforeVersion, afterVersion });
-
       return {
         changes,
         beforeVersion,
@@ -37,6 +35,10 @@ export const useVersionChanges = (args: VersionChangesArgs) => {
       };
     },
   });
+
+  if (error) {
+    console.log('has error', error);
+  }
 
   return [data, isLoading] as const;
 };

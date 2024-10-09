@@ -111,8 +111,9 @@ function aggregateChanges({ spaceId, afterEntities, beforeEntities }: AggregateC
 
     for (const afterTriple of Object.values(afterTriplesForEntity)) {
       const beforeTriple: Triple | null = beforeTriplesForEntity[afterTriple.attributeId] ?? null;
-      const before = getBeforeTripleChange(afterTriple.value, beforeTriple.value);
-      const after = getAfterTripleChange(afterTriple.value, beforeTriple.value);
+      const beforeValue = beforeTriple ? beforeTriple.value : null;
+      const before = getBeforeTripleChange(afterTriple.value, beforeValue);
+      const after = getAfterTripleChange(afterTriple.value, beforeValue);
 
       tripleChanges.push({
         attribute: {
