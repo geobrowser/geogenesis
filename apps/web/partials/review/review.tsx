@@ -10,7 +10,6 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useTriples } from '~/core/database/triples';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePublish } from '~/core/hooks/use-publish';
-import { SpaceId } from '~/core/io/schema';
 import { fetchSpacesById } from '~/core/io/subgraph/fetch-spaces-by-id';
 import { useDiff } from '~/core/state/diff-store';
 import { useStatusBar } from '~/core/state/status-bar-store';

@@ -22,6 +22,11 @@ const query = (entityId: string, page = 0) => {
     versions(filter: { entityId: {equalTo: ${JSON.stringify(entityId)}}}) {
       nodes {
         ${versionFragment}
+        edit {
+          name
+          createdAt
+          createdById
+        }
       }
     }
   }`;

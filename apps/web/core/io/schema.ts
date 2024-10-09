@@ -353,6 +353,11 @@ export type SubstreamProposal = Schema.Schema.Type<typeof SubstreamProposal>;
 export const SubstreamVersion = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
   entityId: Schema.String.pipe(Schema.fromBrand(EntityId)),
+  edit: Schema.Struct({
+    name: Schema.String,
+    createdAt: Schema.Number,
+    createdById: Schema.String,
+  }),
   name: Schema.NullOr(Schema.String),
   description: Schema.NullOr(Schema.String),
   versionTypes: SubstreamVersionTypes,

@@ -46,7 +46,6 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
     versions.pages[versions.pages.length - 1]?.[0]?.id === versions.pages[versions.pages.length - 2]?.[0]?.id;
 
   const renderedVersions = !isLastPage ? versions?.pages : versions?.pages.slice(0, -1);
-
   const showMore = !isOnePage && !isLastPage;
 
   return (
@@ -76,7 +75,7 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
                   changeCount={0}
                   createdAt={v.createdAt}
                   createdBy={v.createdBy}
-                  name={v.name}
+                  name={v.editName}
                 />
               ))}
             </React.Fragment>
