@@ -24,7 +24,7 @@ export function VersionDto(version: SubstreamVersion): Version {
       avatarUrl: '',
       coverUrl: '',
       id: version.edit.createdById,
-      name: '',
+      name: null,
       profileLink: '',
     },
   };

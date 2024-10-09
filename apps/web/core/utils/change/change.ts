@@ -4,7 +4,7 @@ import { Effect, Record } from 'effect';
 import { mergeEntityAsync } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
-import { Relation } from '~/core/io/dto/entities';
+import { Entity, Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { queryClient } from '~/core/query-client';
@@ -57,47 +57,61 @@ export async function fromLocal(spaceId?: string) {
 
   const { remoteEntities, localEntities } = await Effect.runPromise(collectEntities);
 
+  return aggregateChanges({
+    spaceId,
+    beforeEntities: remoteEntities,
+    afterEntities: localEntities,
+  });
+}
+
+interface AggregateChangesArgs {
+  spaceId: string | undefined;
+  afterEntities: Entity[];
+  beforeEntities: Entity[];
+}
+
+function aggregateChanges({ spaceId, afterEntities, beforeEntities }: AggregateChangesArgs) {
   // Aggregate remote triples into a map of entities -> attributes and attributes -> triples
   // Each map is 1:1 with each entity only having one attribute per attribute id and one triple per attribute id
   //
   // Additionally, make sure that we're filtering out triples that don't match the current space id.
-  const localTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(triples);
-  const remoteTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
-    remoteEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
+  const afterTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(afterEntities.flatMap(e => e.triples));
+  const beforeTriplesByEntityId = groupTriplesByEntityIdAndAttributeId(
+    beforeEntities.flatMap(e => e.triples).filter(t => (spaceId ? t.space === spaceId : true))
   );
 
-  const localRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(localRelations);
-  const remoteRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(remoteEntities.flatMap(e => e.relationsOut));
+  const afterRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(afterEntities.flatMap(e => e.relationsOut));
+  const beforeRelationsByEntityId = groupRelationsByEntityIdAndAttributeId(beforeEntities.flatMap(e => e.relationsOut));
 
   // This might be a performance bottleneck for large sets of ops, so we'll need
   // to monitor this over time.
-  return localEntities.map((entity): EntityChange => {
+  return afterEntities.map((entity): EntityChange => {
     const tripleChanges: TripleChange[] = [];
     const relationChanges: RelationChange[] = [];
 
-    const localTriplesForEntity = localTriplesByEntityId[entity.id] ?? {};
-    const remoteTriplesForEntity = remoteTriplesByEntityId[entity.id] ?? {};
-    const localRelationsForEntity = localRelationsByEntityId[entity.id] ?? {};
-    const remoteRelationsForEntity = remoteRelationsByEntityId[entity.id] ?? {};
+    const afterTriplesForEntity = afterTriplesByEntityId[entity.id] ?? {};
+    const beforeTriplesForEntity = beforeTriplesByEntityId[entity.id] ?? {};
+    const afterRelationsForEntity = afterRelationsByEntityId[entity.id] ?? {};
+    const beforeRelationsForEntity = beforeRelationsByEntityId[entity.id] ?? {};
 
-    for (const triple of Object.values(localTriplesForEntity)) {
-      const remoteTriple: Triple | null = remoteTriplesForEntity[triple.attributeId] ?? null;
-      const before = getBeforeTripleChange(triple.value, remoteTriple.value);
-      const after = getAfterTripleChange(triple.value, remoteTriple.value);
+    for (const afterTriple of Object.values(afterTriplesForEntity)) {
+      const beforeTriple: Triple | null = beforeTriplesForEntity[afterTriple.attributeId] ?? null;
+      const before = getBeforeTripleChange(afterTriple.value, beforeTriple.value);
+      const after = getAfterTripleChange(afterTriple.value, beforeTriple.value);
 
       tripleChanges.push({
         attribute: {
-          id: triple.attributeId,
-          name: triple.attributeName,
+          id: afterTriple.attributeId,
+          name: afterTriple.attributeName,
         },
-        type: triple.value.type,
+        type: afterTriple.value.type,
         before,
         after,
       });
     }
 
-    for (const relations of Object.values(localRelationsForEntity)) {
-      const remoteRelationsForAttributeId = remoteRelationsForEntity[entity.id] ?? null;
+    for (const relations of Object.values(afterRelationsForEntity)) {
+      const remoteRelationsForAttributeId = beforeRelationsForEntity[entity.id] ?? null;
 
       for (const relation of relations) {
         const before = getBeforeRelationChange(relation, remoteRelationsForAttributeId);
