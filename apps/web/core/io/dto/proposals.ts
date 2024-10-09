@@ -145,29 +145,3 @@ export function ProposalWithoutVotersDto(
     createdBy: profile,
   };
 }
-
-export type Version = {
-  id: string;
-  name: string | null;
-  description: string | null;
-  createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: string;
-  space: SpaceWithImage;
-  triples: Triple[];
-  entity: {
-    id: string;
-    name: string;
-  };
-};
-
-export type ProposedVersion = {
-  id: string;
-  createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: number;
-  entity: {
-    id: string;
-    name: string | null;
-  };
-};

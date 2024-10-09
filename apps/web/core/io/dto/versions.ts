@@ -7,6 +7,7 @@ export type Version = Entity & {
   createdAt: number;
   createdBy: Profile;
   editName: string;
+  versionId: string;
 };
 
 export function VersionDto(version: SubstreamVersion): Version {
@@ -17,6 +18,7 @@ export function VersionDto(version: SubstreamVersion): Version {
         version,
       },
     }),
+    versionId: version.id,
     editName: version.edit.name,
     createdAt: version.edit.createdAt,
     createdBy: {

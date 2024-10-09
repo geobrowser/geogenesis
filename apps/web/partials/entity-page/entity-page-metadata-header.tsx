@@ -67,8 +67,8 @@ export function EntityPageMetadataHeader({ id, spaceId }: EntityPageMetadataHead
                   key={v.id}
                   onClick={() => {
                     setCompareMode('versions');
-                    setPreviousVersion(group[index + 1]?.id ?? '');
-                    setSelectedVersion(v.id);
+                    setPreviousVersion(group[index + 1]?.versionId ?? '');
+                    setSelectedVersion(v.versionId);
                     setIsCompareOpen(true);
                   }}
                   // @TODO: Fix change count
