@@ -1,11 +1,20 @@
 'use client';
 
+import pluralize from 'pluralize';
+
 import * as React from 'react';
 
+import { useVersionChanges } from '~/core/hooks/use-version-changes';
+import { EntityId } from '~/core/io/schema';
 import { useDiff } from '~/core/state/diff-store';
+import { formatShortAddress } from '~/core/utils/utils';
 
+import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
+import { PrefetchLink } from '~/design-system/prefetch-link';
 import { SlideUp } from '~/design-system/slide-up';
+
+import { ChangedEntity } from '../diff/changed-entity';
 
 export const Compare = () => {
   const { isCompareOpen, setIsCompareOpen } = useDiff();
@@ -42,142 +51,133 @@ const CompareChanges = () => {
 
 const Versions = () => {
   const { selectedVersion, previousVersion, setIsCompareOpen } = useDiff();
-  // const [data, isLoading] = useChangesFromVersions(selectedVersion, previousVersion);
+  const [data, isLoading] = useVersionChanges({
+    spaceId: undefined,
+    afterVersionId: selectedVersion,
+    beforeVersionId: previousVersion,
+  });
 
-  return <div>Versions temporarily disabled</div>;
+  if (isLoading) {
+    return <div className="text-metadataMedium">Loading...</div>;
+  }
 
-  //   if (isLoading) {
-  //     return <div className="text-metadataMedium">Loading...</div>;
-  //   }
+  if (data === undefined || data === null) {
+    return <div className="text-metadataMedium">No versions found.</div>;
+  }
 
-  //   if (data === undefined) {
-  //     console.log('data is undefined');
-  //     return <div className="text-metadataMedium">No versions found.</div>;
-  //   }
+  const { beforeVersion, afterVersion, changes } = data;
 
-  //   const { changes, versions } = data;
+  // @TODO: Fix change count
+  const selectedVersionChangeCount = 0;
 
-  //   if (!versions.selected) {
-  //     console.log('No selected version');
-  //     return <div className="text-metadataMedium">No versions found.</div>;
-  //   }
+  const selectedVersionLastEditedDate = afterVersion.createdAt * 1000;
 
-  //   const changedEntityIds = Object.keys(changes);
+  const selectedVersionFormattedLastEditedDate = new Date(selectedVersionLastEditedDate).toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 
-  //   // @TODO: Fix change count
-  //   const selectedVersionChangeCount = 0;
+  const selectedVersionLastEditedTime = new Date(selectedVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 
-  //   const selectedVersionLastEditedDate = versions.selected.createdAt * 1000;
+  let previousVersionChangeCount;
+  let previousVersionFormattedLastEditedDate;
+  let previousVersionLastEditedTime;
 
-  //   const selectedVersionFormattedLastEditedDate = new Date(selectedVersionLastEditedDate).toLocaleDateString(undefined, {
-  //     day: '2-digit',
-  //     month: 'short',
-  //     year: 'numeric',
-  //   });
+  if (beforeVersion) {
+    // @TODO: Fix change count
+    previousVersionChangeCount = 0;
 
-  //   const selectedVersionLastEditedTime = new Date(selectedVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
-  //     hour: '2-digit',
-  //     minute: '2-digit',
-  //     hour12: false,
-  //   });
+    previousVersionFormattedLastEditedDate = new Date(beforeVersion.createdAt * 1000).toLocaleDateString(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
 
-  //   let previousVersionChangeCount;
-  //   let previousVersionFormattedLastEditedDate;
-  //   let previousVersionLastEditedTime;
+    previousVersionLastEditedTime = new Date(previousVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
 
-  //   if (versions.previous) {
-  //     // @TODO: Fix change count
-  //     previousVersionChangeCount = 0;
-
-  //     previousVersionFormattedLastEditedDate = new Date(versions.previous.createdAt * 1000).toLocaleDateString(
-  //       undefined,
-  //       {
-  //         day: '2-digit',
-  //         month: 'short',
-  //         year: 'numeric',
-  //       }
-  //     );
-
-  //     previousVersionLastEditedTime = new Date(previousVersionFormattedLastEditedDate).toLocaleTimeString(undefined, {
-  //       hour: '2-digit',
-  //       minute: '2-digit',
-  //       hour12: false,
-  //     });
-  //   }
-
-  //   return (
-  //     <div className="relative flex flex-col gap-16">
-  //       <div>
-  //         <div className="flex gap-8">
-  //           <div className="flex-1">
-  //             <div className="text-body">Previous version</div>
-  //             {versions.previous && (
-  //               <>
-  //                 <div className="text-mediumTitle">{versions.previous.name}</div>
-  //                 <div className="mt-1 flex items-center gap-4">
-  //                   <Link
-  //                     href={versions.previous.createdBy.profileLink ? versions.previous.createdBy.profileLink : ''}
-  //                     className="inline-flex items-center gap-1"
-  //                     onClick={() => setIsCompareOpen(false)}
-  //                   >
-  //                     <div className="relative h-3 w-3 overflow-hidden rounded-full">
-  //                       <Avatar
-  //                         alt={`Avatar for ${versions.previous.createdBy.name ?? versions.previous.createdBy.id}`}
-  //                         avatarUrl={versions.previous.createdBy.avatarUrl}
-  //                         value={versions.previous.createdBy.name ?? versions.previous.createdBy.id}
-  //                       />
-  //                     </div>
-  //                     <p className="text-smallButton">
-  //                       {versions.previous.createdBy.name ?? formatShortAddress(versions.previous.createdBy.id)}
-  //                     </p>
-  //                   </Link>
-  //                   <div>
-  //                     <p className="text-smallButton">
-  //                       {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
-  //                       {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
-  //                     </p>
-  //                   </div>
-  //                 </div>
-  //               </>
-  //             )}
-  //           </div>
-  //           <div className="flex-1">
-  //             <div className="text-body">Selected version</div>
-  //             <div className="text-mediumTitle">{versions.selected.name}</div>
-  //             <div className="mt-1 flex items-center gap-4">
-  //               <Link
-  //                 href={versions.selected.createdBy.profileLink ? versions.selected.createdBy.profileLink : ''}
-  //                 className="inline-flex items-center gap-1"
-  //                 onClick={() => setIsCompareOpen(false)}
-  //               >
-  //                 <div className="relative h-3 w-3 overflow-hidden rounded-full">
-  //                   <Avatar
-  //                     alt={`Avatar for ${versions.selected.createdBy.name ?? versions.selected.createdBy.id}`}
-  //                     avatarUrl={versions.selected.createdBy.avatarUrl}
-  //                     value={versions.selected.createdBy.name ?? versions.selected.createdBy.id}
-  //                   />
-  //                 </div>
-  //                 <p className="text-smallButton">
-  //                   {versions.selected.createdBy.name ?? formatShortAddress(versions.selected.createdBy.id)}
-  //                 </p>
-  //               </Link>
-  //               <div>
-  //                 <p className="text-smallButton">
-  //                   {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
-  //                   {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
-  //                 </p>
-  //               </div>
-  //             </div>
-  //           </div>
-  //         </div>
-  //       </div>
-  //       <div className="flex flex-col gap-16 divide-y divide-grey-02">
-  //         {changedEntityIds.map((entityId: EntityId) => (
-  //           <ChangedEntity key={entityId} change={changes[entityId]} entityId={entityId} />
-  //         ))}
-  //       </div>
-  //     </div>
-  //   );
+  return (
+    <div className="relative flex flex-col gap-16">
+      <div>
+        <div className="flex gap-8">
+          <div className="flex-1">
+            <div className="text-body">Previous version</div>
+            {beforeVersion && (
+              <>
+                <div className="text-mediumTitle">{beforeVersion.name}</div>
+                <div className="mt-1 flex items-center gap-4">
+                  <PrefetchLink
+                    href={beforeVersion.createdBy.profileLink ? beforeVersion.createdBy.profileLink : ''}
+                    className="inline-flex items-center gap-1"
+                    onClick={() => setIsCompareOpen(false)}
+                  >
+                    <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                      <Avatar
+                        alt={`Avatar for ${beforeVersion.createdBy.name ?? beforeVersion.createdBy.id}`}
+                        avatarUrl={beforeVersion.createdBy.avatarUrl}
+                        value={beforeVersion.createdBy.name ?? beforeVersion.createdBy.id}
+                      />
+                    </div>
+                    <p className="text-smallButton">
+                      {beforeVersion.createdBy.name ?? formatShortAddress(beforeVersion.createdBy.id)}
+                    </p>
+                  </PrefetchLink>
+                  <div>
+                    <p className="text-smallButton">
+                      {previousVersionChangeCount} {pluralize('edit', previousVersionChangeCount)} ·{' '}
+                      {previousVersionFormattedLastEditedDate} · {previousVersionLastEditedTime}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="text-body">Selected version</div>
+            <div className="text-mediumTitle">{afterVersion.name}</div>
+            <div className="mt-1 flex items-center gap-4">
+              <PrefetchLink
+                href={afterVersion.createdBy.profileLink ? afterVersion.createdBy.profileLink : ''}
+                className="inline-flex items-center gap-1"
+                onClick={() => setIsCompareOpen(false)}
+              >
+                <div className="relative h-3 w-3 overflow-hidden rounded-full">
+                  <Avatar
+                    alt={`Avatar for ${afterVersion.createdBy.name ?? afterVersion.createdBy.id}`}
+                    avatarUrl={afterVersion.createdBy.avatarUrl}
+                    value={afterVersion.createdBy.name ?? afterVersion.createdBy.id}
+                  />
+                </div>
+                <p className="text-smallButton">
+                  {afterVersion.createdBy.name ?? formatShortAddress(afterVersion.createdBy.id)}
+                </p>
+              </PrefetchLink>
+              <div>
+                <p className="text-smallButton">
+                  {selectedVersionChangeCount} {pluralize('edit', selectedVersionChangeCount)} ·{' '}
+                  {selectedVersionFormattedLastEditedDate} · {selectedVersionLastEditedTime}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col gap-16 divide-y divide-grey-02">
+        {changes.map(change => (
+          <ChangedEntity key={change.id} change={change} />
+        ))}
+      </div>
+    </div>
+  );
 };
 
 const Proposals = () => {

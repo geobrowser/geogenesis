@@ -81,7 +81,7 @@ export function EntityDto(substreamEntity: SubstreamEntity): Entity {
         t.typeOf.entityId === EntityId(SYSTEM_IDS.AVATAR_ATTRIBUTE);
 
       return {
-        id: t.id,
+        id: t.entityId,
         index: t.index,
         typeOf: {
           id: t.typeOf.entityId,

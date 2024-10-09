@@ -52,7 +52,6 @@ export function EditableEntityPage({ id, spaceId, triples: serverTriples }: Prop
 
   return (
     <>
-      {/* @TODO: Unify the component between the readable and editable pages */}
       <div className="rounded-lg border border-grey-02 shadow-button">
         <div className="flex flex-col gap-6 p-5">
           {Object.entries(renderablesGroupedByAttributeId).map(([attributeId, renderables]) => {

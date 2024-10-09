@@ -75,6 +75,7 @@ export const tripleFragment = `
  */
 export const relationFragment = `
   id
+  entityId
   index
   typeOf {
     id
@@ -109,6 +110,7 @@ export const spacePluginsFragment = `
 
 export const versionFragment = `
   id
+  entityId
   name
   description
   ${versionTypesFragment}
