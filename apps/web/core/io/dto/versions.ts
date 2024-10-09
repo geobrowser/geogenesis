@@ -10,7 +10,6 @@ export type Version = Entity & {
 };
 
 export function VersionDto(version: SubstreamVersion): Version {
-  // @TODO: This should probably be inversed where the EntityDto accepts a version
   return {
     ...EntityDto({
       id: version.entityId,
