@@ -36,9 +36,5 @@ export const useVersionChanges = (args: VersionChangesArgs) => {
     },
   });
 
-  if (error) {
-    console.log('has error', error);
-  }
-
   return [data, isLoading] as const;
 };
