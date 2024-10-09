@@ -5,12 +5,14 @@ import { mergeEntityAsync } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import { Entity, Relation } from '~/core/io/dto/entities';
+import { Proposal } from '~/core/io/dto/proposals';
 import { Version } from '~/core/io/dto/versions';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { queryClient } from '~/core/query-client';
 import type { Triple } from '~/core/types';
 
+import { groupBy } from '../utils';
 import { getAfterTripleChange, getBeforeTripleChange } from './get-triple-change';
 import { EntityChange, RelationChange, RelationChangeValue, TripleChange, TripleChangeValue } from './types';
 
@@ -77,6 +79,14 @@ export function fromVersions({ beforeVersion, afterVersion }: FromVersionsArgs):
     afterEntities: [afterVersion],
     beforeEntities: beforeVersion ? [beforeVersion] : [],
   });
+}
+
+export async function fromActiveProposal(proposal: Proposal): Promise<EntityChange[]> {
+  return [];
+}
+
+export async function fromEndedProposal(proposalId: string): Promise<EntityChange[]> {
+  return [];
 }
 
 interface AggregateChangesArgs {
@@ -152,11 +162,13 @@ function aggregateChanges({ spaceId, afterEntities, beforeEntities }: AggregateC
     // @TODO: map block diffs into a renderable format
     const blockChanges = relationChanges.filter(c => c.attribute.id === SYSTEM_IDS.BLOCKS);
 
+    const grouped = groupBy(realChanges, change => change.attribute.id);
+
     return {
       id: entity.id,
       name: entity.name,
       blockChanges,
-      changes: realChanges,
+      changes: grouped,
     };
   });
 }
