@@ -21,6 +21,7 @@ import { Blank } from '~/design-system/icons/blank';
 import { Close } from '~/design-system/icons/close';
 import { Dash } from '~/design-system/icons/dash';
 import { Tick } from '~/design-system/icons/tick';
+import { Trash } from '~/design-system/icons/trash';
 import { SlideUp } from '~/design-system/slide-up';
 
 import { ChangedEntity } from '../diff/changed-entity';
@@ -131,6 +132,28 @@ const ReviewChanges = () => {
 
   const { makeProposal } = usePublish();
   const [changes, isLoading] = useLocalChanges(activeSpace);
+
+  const handleDeleteActions = useCallback(() => {
+    // @TODO(database)
+  }, []);
+
+  const handleStaging = (attributeId: string, unstaged: boolean) => {
+    // if (!unstaged) {
+    //   setUnstagedChanges({
+    //     ...unstagedChanges,
+    //     [entityId]: {
+    //       ...(unstagedChanges[entityId] ?? {}),
+    //       [attributeId]: true,
+    //     },
+    //   });
+    // } else {
+    //   const newUnstagedChanges: Record<string, Record<string, boolean>> = { ...unstagedChanges };
+    //   if (newUnstagedChanges?.[entityId] && newUnstagedChanges?.[entityId]?.[attributeId]) {
+    //     delete newUnstagedChanges?.[entityId]?.[attributeId];
+    //   }
+    //   setUnstagedChanges(newUnstagedChanges);
+    // }
+  };
 
   const handlePublish = useCallback(async () => {
     if (!activeSpace) return;
@@ -252,8 +275,24 @@ const ReviewChanges = () => {
                 <ChangedEntity
                   key={change.id}
                   change={change}
-                  // unstagedChanges={unstagedChanges}
-                  // setUnstagedChanges={setUnstagedChanges}
+                  deleteAllComponent={
+                    <div className="absolute right-0 top-0">
+                      <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
+                    </div>
+                  }
+                  renderAttributeStagingComponent={attributeId => (
+                    <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
+                      <SquareButton
+                        onClick={handleDeleteActions}
+                        icon={<Trash />}
+                        className="opacity-0 group-hover:opacity-100"
+                      />
+                      <SquareButton
+                        onClick={() => handleStaging(attributeId, false)}
+                        icon={false ? <Blank /> : <Tick />}
+                      />
+                    </div>
+                  )}
                 />
               ))}
             </div>
