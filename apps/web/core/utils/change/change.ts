@@ -13,6 +13,7 @@ import { queryClient } from '~/core/query-client';
 import type { Triple } from '~/core/types';
 
 import { groupBy } from '../utils';
+import { fetchPreviousVersionByCreatedAt } from './fetch-previous-version-by-created-at';
 import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';
 import { getAfterTripleChange, getBeforeTripleChange } from './get-triple-change';
 import { EntityChange, RelationChange, RelationChangeValue, TripleChange, TripleChangeValue } from './types';
@@ -95,8 +96,24 @@ export async function fromActiveProposal(proposal: Proposal): Promise<EntityChan
   });
 }
 
-export async function fromEndedProposal(proposalId: string): Promise<EntityChange[]> {
-  return [];
+export async function fromEndedProposal(proposal: Proposal): Promise<EntityChange[]> {
+  const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId });
+
+  const previousVersions = await Promise.all(
+    versionsByEditId.map(v =>
+      fetchPreviousVersionByCreatedAt({
+        createdAt: proposal.createdAt,
+        entityId: v.id,
+      })
+    )
+  );
+
+  // 4. Aggregate changes between the two sets of versions
+  return aggregateChanges({
+    spaceId: proposal.space.id,
+    beforeEntities: previousVersions.filter(e => e !== null),
+    afterEntities: versionsByEditId,
+  });
 }
 
 interface AggregateChangesArgs {
