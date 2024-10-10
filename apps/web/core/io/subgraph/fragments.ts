@@ -190,24 +190,3 @@ export const resultEntityFragment = `
     }
   }
 `;
-
-export const opFragment = `
-  id
-  type
-`;
-
-export const proposedVersionFragment = `
-  id
-  entity {
-    id
-    name
-  }
-  ops {
-    nodes {
-      ${opFragment}
-      ${tripleFragment}
-      attributeId
-      entityId
-    }
-  }
-`;

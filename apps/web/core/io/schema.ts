@@ -333,16 +333,18 @@ export type ProposalType = Schema.Schema.Type<typeof ProposalType>;
 
 export const SubstreamProposal = Schema.Struct({
   id: Schema.String.pipe(Schema.fromBrand(EntityId)),
-  name: Schema.NullOr(Schema.String),
   type: ProposalType,
   onchainProposalId: Schema.String,
-  createdBy: Account,
-  createdAt: Schema.Number,
-  createdAtBlock: Schema.Number,
+  createdById: AddressWithValidation,
   space: SubstreamSpaceEntityConfig,
   startTime: Schema.Number,
   endTime: Schema.Number,
   status: ProposalStatus,
+  edit: Schema.Struct({
+    name: Schema.String,
+    createdAt: Schema.Number,
+    createdAtBlock: Schema.Number,
+  }),
   proposalVotes: Schema.Struct({
     nodes: Schema.Array(SubstreamVote),
     totalCount: Schema.Number,

@@ -35,12 +35,13 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
         }
       }
 
-      createdAtBlock
-      createdBy {
-        id
+      edit {
+        name
+        createdAt
+        createdAtBlock
       }
-      
-      createdAt
+
+      createdById
       startTime
       endTime
       status
@@ -49,18 +50,6 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
         totalCount
         nodes {
           vote
-        }
-      }
-
-      proposedVersions {
-        nodes {
-          id
-          createdById
-          entity {
-            id
-            name
-          }
-
         }
       }
     }
@@ -108,7 +97,7 @@ export async function fetchProposals({
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} page: ${page}
-            
+
             queryString: ${getFetchSpaceProposalsQuery(spaceId, first, offset)}
             `,
             error.message

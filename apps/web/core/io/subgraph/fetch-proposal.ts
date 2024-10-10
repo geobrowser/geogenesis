@@ -9,7 +9,7 @@ import { Proposal, ProposalDto } from '../dto/proposals';
 import { SubstreamProposal } from '../schema';
 import { fetchProfile } from './fetch-profile';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { proposedVersionFragment, spaceMetadataFragment } from './fragments';
+import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 export const getFetchProposalQuery = (id: string) => `query {
@@ -17,7 +17,14 @@ export const getFetchProposalQuery = (id: string) => `query {
     id
     type
     onchainProposalId
-    name
+
+    edit {
+      name
+      createdAt
+      createdAtBlock
+    }
+
+    createdById
 
     space {
       id
@@ -30,8 +37,33 @@ export const getFetchProposalQuery = (id: string) => `query {
       }
     }
 
-    createdAtBlock
-    createdAt
+    startTime
+    endTime
+    status
+
+    proposalVotes {
+      totalCount
+      nodes {
+        vote
+        account {
+          id
+          profileLink
+          avatarUrl
+          name
+        }
+    }
+
+    space {
+      id
+      spacesMetadata {
+        nodes {
+          entity {
+            ${spaceMetadataFragment}
+          }
+        }
+      }
+    }
+
     createdBy {
       id
     }
@@ -46,12 +78,6 @@ export const getFetchProposalQuery = (id: string) => `query {
         account {
           id
         }
-      }
-    }
-
-    proposedVersions {
-      nodes {
-        ${proposedVersionFragment}
       }
     }
   }
