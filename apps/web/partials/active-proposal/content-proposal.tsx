@@ -18,7 +18,7 @@ export async function ContentProposal({ proposal }: { proposal: Proposal }) {
   // entities in the proposal as they existed at the time the proposal ended.
   const changes = getIsProposalEnded(proposal.status, proposal.endTime)
     ? await Change.fromActiveProposal(proposal)
-    : await Change.fromEndedProposal(proposal.id);
+    : await Change.fromActiveProposal(proposal);
 
   return (
     <div className="flex flex-col gap-16 divide-y divide-grey-02">

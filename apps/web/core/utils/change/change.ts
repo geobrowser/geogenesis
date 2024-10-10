@@ -90,8 +90,8 @@ export async function fromActiveProposal(proposal: Proposal): Promise<EntityChan
 
   return aggregateChanges({
     spaceId: proposal.space.id,
-    afterEntities: currentVersionsForEntityIds.filter(v => v !== null),
-    beforeEntities: versionsByEditId,
+    beforeEntities: currentVersionsForEntityIds.filter(v => v !== null),
+    afterEntities: versionsByEditId,
   });
 }
 
