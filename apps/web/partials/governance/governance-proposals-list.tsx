@@ -157,7 +157,7 @@ const getFetchActiveProposalsQuery = (
   proposals(
     first: ${first}
     offset: ${skip}
-    orderBy: EDIT_BY_EDIT_ID__CREATED_AT_ASC
+    orderBy: EDIT_BY_EDIT_ID__CREATED_AT_DESC
     filter: {
       spaceId: { equalTo: "${spaceId}" }
       or: [
