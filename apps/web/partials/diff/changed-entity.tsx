@@ -11,24 +11,18 @@ import { useCallback } from 'react';
 import { EntityChange, RelationChange } from '~/core/utils/change/types';
 import { GeoDate, groupBy } from '~/core/utils/utils';
 
-import { SmallButton, SquareButton } from '~/design-system/button';
-import { Blank } from '~/design-system/icons/blank';
 import { Minus } from '~/design-system/icons/minus';
-import { Tick } from '~/design-system/icons/tick';
-import { Trash } from '~/design-system/icons/trash';
 import { Spacer } from '~/design-system/spacer';
 
 type ChangedEntityProps = {
   change: EntityChange;
+  deleteAllComponent?: React.ReactNode;
+  renderAttributeStagingComponent?: (attributeId: string) => React.ReactNode;
   // unstagedChanges: Record<string, Record<string, boolean>>;
   // setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
-export const ChangedEntity = ({ change }: ChangedEntityProps) => {
-  const handleDeleteActions = useCallback(() => {
-    // @TODO(database)
-  }, []);
-
+export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagingComponent }: ChangedEntityProps) => {
   if (change.changes.length === 0) {
     return (
       <h2 className="text-center text-mediumTitle" key={change.id}>
@@ -44,10 +38,8 @@ export const ChangedEntity = ({ change }: ChangedEntityProps) => {
         <div className="flex gap-8">
           <div className="flex-1 text-body">Current version</div>
           <div className="relative flex-1 text-body">
-            Your proposed edits
-            <div className="absolute right-0 top-0">
-              <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
-            </div>
+            Proposed edits
+            {deleteAllComponent}
           </div>
         </div>
       </div>
@@ -60,10 +52,9 @@ export const ChangedEntity = ({ change }: ChangedEntityProps) => {
       )} */}
       <div className="mt-2">
         <ChangedAttribute
+          renderAttributeStagingComponent={renderAttributeStagingComponent}
           key={`${change.id}-${change.id}`}
           changes={change.changes}
-          // unstagedChanges={unstagedChanges}
-          // setUnstagedChanges={setUnstagedChanges}
         />
       </div>
     </div>
@@ -247,33 +238,10 @@ export const ChangedEntity = ({ change }: ChangedEntityProps) => {
 
 type ChangedAttributeProps = {
   changes: EntityChange['changes'];
-  // unstagedChanges: Record<string, Record<string, boolean>>;
-  // setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
+  renderAttributeStagingComponent?: (attributeId: string) => React.ReactNode;
 };
 
-const ChangedAttribute = ({ changes }: ChangedAttributeProps) => {
-  const handleDeleteActions = useCallback(() => {
-    // @TODO(database)
-  }, []);
-
-  // const handleStaging = (attributeId: string, unstaged: boolean) => {
-  //   if (!unstaged) {
-  //     setUnstagedChanges({
-  //       ...unstagedChanges,
-  //       [entityId]: {
-  //         ...(unstagedChanges[entityId] ?? {}),
-  //         [attributeId]: true,
-  //       },
-  //     });
-  //   } else {
-  //     const newUnstagedChanges: Record<string, Record<string, boolean>> = { ...unstagedChanges };
-  //     if (newUnstagedChanges?.[entityId] && newUnstagedChanges?.[entityId]?.[attributeId]) {
-  //       delete newUnstagedChanges?.[entityId]?.[attributeId];
-  //     }
-  //     setUnstagedChanges(newUnstagedChanges);
-  //   }
-  // };
-
+const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedAttributeProps) => {
   const groupedChanges = groupBy(changes, c => c.attribute.id);
 
   return Object.entries(groupedChanges).map(([attributeId, changes]) => {
@@ -287,9 +255,6 @@ const ChangedAttribute = ({ changes }: ChangedAttributeProps) => {
     const changeType = changes[0].type;
     const attributeName = changes[0].attribute.name;
     const name = attributeName ?? attributeId;
-
-    // const unstaged = Object.hasOwn(unstagedChanges[entityId] ?? {}, attributeId);
-    const unstaged = false;
 
     switch (changeType) {
       case 'TEXT': {
@@ -314,17 +279,7 @@ const ChangedAttribute = ({ changes }: ChangedAttributeProps) => {
               </div>
             </div>
             <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
-              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-                <SquareButton
-                  onClick={handleDeleteActions}
-                  icon={<Trash />}
-                  className="opacity-0 group-hover:opacity-100"
-                />
-                <SquareButton
-                  // onClick={() => handleStaging(attributeId, unstaged)}
-                  icon={unstaged ? <Blank /> : <Tick />}
-                />
-              </div>
+              {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
                 {changes.map(c => {
@@ -359,17 +314,7 @@ const ChangedAttribute = ({ changes }: ChangedAttributeProps) => {
               </div>
             </div>
             <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-                <SquareButton
-                  onClick={handleDeleteActions}
-                  icon={<Trash />}
-                  className="opacity-0 group-hover:opacity-100"
-                />
-                <SquareButton
-                  // onClick={() => handleStaging(attributeId, unstaged)}
-                  icon={unstaged ? <Blank /> : <Tick />}
-                />
-              </div>
+              {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="flex flex-wrap gap-2">
                 {changes.map(c => {
@@ -433,17 +378,7 @@ const ChangedAttribute = ({ changes }: ChangedAttributeProps) => {
               </div>
             </div>
             <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-                <SquareButton
-                  onClick={handleDeleteActions}
-                  icon={<Trash />}
-                  className="opacity-0 group-hover:opacity-100"
-                />
-                <SquareButton
-                  // onClick={() => handleStaging(attributeId, unstaged)}
-                  icon={unstaged ? <Blank /> : <Tick />}
-                />
-              </div>
+              {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
                 {changes.map(c => {
@@ -477,17 +412,7 @@ const ChangedAttribute = ({ changes }: ChangedAttributeProps) => {
               </div>
             </div>
             <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-                <SquareButton
-                  onClick={handleDeleteActions}
-                  icon={<Trash />}
-                  className="opacity-0 group-hover:opacity-100"
-                />
-                <SquareButton
-                  // onClick={() => handleStaging(attributeId, unstaged)}
-                  icon={unstaged ? <Blank /> : <Tick />}
-                />
-              </div>
+              {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="truncate text-ctaPrimary no-underline">
                 {changes.map(c => {
