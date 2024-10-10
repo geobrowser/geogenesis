@@ -11,6 +11,7 @@ import { useCallback } from 'react';
 import { EntityChange, RelationChange } from '~/core/utils/change/types';
 import { GeoDate, groupBy } from '~/core/utils/utils';
 
+import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 
 type ChangedEntityProps = {
