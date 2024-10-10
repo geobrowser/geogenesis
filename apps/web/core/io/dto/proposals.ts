@@ -1,5 +1,5 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { AppOp, OmitStrict, Profile, Triple } from '~/core/types';
+import { OmitStrict, Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { ProposalStatus, ProposalType, SubstreamProposal, SubstreamVote } from '../schema';
@@ -15,6 +15,7 @@ type SpaceWithImage = {
 
 export type Proposal = {
   id: string;
+  editId: string;
   type: ProposalType;
   onchainProposalId: string;
   name: string | null;
@@ -56,6 +57,7 @@ export function ProposalDto(
 
   return {
     id: proposal.id,
+    editId: proposal.edit.id,
     name: proposal.edit.name,
     type: proposal.type,
     onchainProposalId: proposal.onchainProposalId,
@@ -118,6 +120,7 @@ export function ProposalWithoutVotersDto(
 
   return {
     id: proposal.id,
+    editId: proposal.edit.id,
     name: proposal.edit.name,
     type: proposal.type,
     onchainProposalId: proposal.onchainProposalId,

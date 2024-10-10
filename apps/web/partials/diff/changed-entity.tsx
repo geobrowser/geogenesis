@@ -29,6 +29,14 @@ export const ChangedEntity = ({ change }: ChangedEntityProps) => {
     // @TODO(database)
   }, []);
 
+  if (change.changes.length === 0) {
+    return (
+      <h2 className="text-center text-mediumTitle" key={change.id}>
+        There are no changes between the two versions
+      </h2>
+    );
+  }
+
   return (
     <div className="relative -top-12 pt-12">
       <div className="flex flex-col gap-5">
@@ -271,6 +279,10 @@ const ChangedAttribute = ({ changes }: ChangedAttributeProps) => {
   return Object.entries(groupedChanges).map(([attributeId, changes]) => {
     // Don't show page blocks
     if (attributeId === SYSTEM_IDS.BLOCKS) return null;
+
+    if (changes.length === 0) {
+      return <h2 key={attributeId}>This entity has no changes between the two versions.</h2>;
+    }
 
     const changeType = changes[0].type;
     const attributeName = changes[0].attribute.name;

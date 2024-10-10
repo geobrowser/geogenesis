@@ -13,6 +13,7 @@ import { queryClient } from '~/core/query-client';
 import type { Triple } from '~/core/types';
 
 import { groupBy } from '../utils';
+import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';
 import { getAfterTripleChange, getBeforeTripleChange } from './get-triple-change';
 import { EntityChange, RelationChange, RelationChangeValue, TripleChange, TripleChangeValue } from './types';
 
@@ -82,7 +83,16 @@ export function fromVersions({ beforeVersion, afterVersion }: FromVersionsArgs):
 }
 
 export async function fromActiveProposal(proposal: Proposal): Promise<EntityChange[]> {
-  return [];
+  const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId });
+
+  // Version entity ids are mapped to the version.id
+  const currentVersionsForEntityIds = await Promise.all(versionsByEditId.map(v => fetchEntity({ id: v.id })));
+
+  return aggregateChanges({
+    spaceId: proposal.space.id,
+    afterEntities: currentVersionsForEntityIds.filter(v => v !== null),
+    beforeEntities: versionsByEditId,
+  });
 }
 
 export async function fromEndedProposal(proposalId: string): Promise<EntityChange[]> {

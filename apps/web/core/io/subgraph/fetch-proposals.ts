@@ -36,6 +36,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
       }
 
       edit {
+        id
         name
         createdAt
         createdAtBlock

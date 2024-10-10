@@ -19,6 +19,7 @@ export const getFetchProposalQuery = (id: string) => `query {
     onchainProposalId
 
     edit {
+      id
       name
       createdAt
       createdAtBlock

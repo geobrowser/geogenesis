@@ -170,6 +170,7 @@ const getFetchActiveProposalsQuery = (
     nodes {
       id
       edit {
+        id
         name
         createdAt
         createdAtBlock

@@ -341,6 +341,7 @@ export const SubstreamProposal = Schema.Struct({
   endTime: Schema.Number,
   status: ProposalStatus,
   edit: Schema.Struct({
+    id: Schema.String.pipe(Schema.fromBrand(EntityId)),
     name: Schema.String,
     createdAt: Schema.Number,
     createdAtBlock: Schema.String,
