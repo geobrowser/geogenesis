@@ -20,7 +20,7 @@ export type Proposal = {
   name: string | null;
   createdBy: Profile;
   createdAt: number;
-  createdAtBlock: number;
+  createdAtBlock: string;
   space: SpaceWithImage;
   startTime: number;
   endTime: number;

@@ -113,7 +113,7 @@ type ActiveProposal = {
   onchainProposalId: string;
   createdBy: Profile;
   createdAt: number;
-  createdAtBlock: number;
+  createdAtBlock: string;
   startTime: number;
   endTime: number;
   status: ProposalStatus;
