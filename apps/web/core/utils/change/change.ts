@@ -104,6 +104,7 @@ export async function fromEndedProposal(proposal: Proposal): Promise<EntityChang
       fetchPreviousVersionByCreatedAt({
         createdAt: proposal.createdAt,
         entityId: v.id,
+        spaceId: proposal.space.id,
       })
     )
   );

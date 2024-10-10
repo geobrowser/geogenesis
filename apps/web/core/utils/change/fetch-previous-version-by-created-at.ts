@@ -11,14 +11,15 @@ import { graphql } from '~/core/io/subgraph/graphql';
 interface FetchVersionsArgs {
   createdAt: number;
   entityId: string;
+  spaceId: string;
 }
 
-const query = (createdAt: number, entityId: string) => {
+const query = (createdAt: number, entityId: string, spaceId: string) => {
   return `query {
     versions(filter: {
         entityId: { equalTo: "${entityId}"}
         createdAt: {lessThanOrEqualTo: ${createdAt}}
-        edit: { proposals: { some: { status: { equalTo: ACCEPTED } } } }
+        edit: { spaceId: { equalTo: "${spaceId}" } proposals: { some: { status: { equalTo: ACCEPTED } } } }
       }
     ) {
       nodes {
@@ -43,7 +44,7 @@ export async function fetchPreviousVersionByCreatedAt(args: FetchVersionsArgs) {
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint,
-    query: query(args.createdAt, args.entityId),
+    query: query(args.createdAt, args.entityId, args.spaceId),
   });
 
   const withFallbacks = Effect.gen(function* () {
@@ -60,7 +61,7 @@ export async function fetchPreviousVersionByCreatedAt(args: FetchVersionsArgs) {
                 args.entityId
               }
 
-                queryString: ${query(args.createdAt, args.entityId)}
+                queryString: ${query(args.createdAt, args.entityId, args.spaceId)}
                 `,
               error.message
             );
