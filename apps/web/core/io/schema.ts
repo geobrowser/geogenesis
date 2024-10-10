@@ -343,7 +343,7 @@ export const SubstreamProposal = Schema.Struct({
   edit: Schema.Struct({
     name: Schema.String,
     createdAt: Schema.Number,
-    createdAtBlock: Schema.Number,
+    createdAtBlock: Schema.String,
   }),
   proposalVotes: Schema.Struct({
     nodes: Schema.Array(SubstreamVote),

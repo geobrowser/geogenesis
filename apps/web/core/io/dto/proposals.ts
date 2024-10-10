@@ -37,11 +37,11 @@ export function ProposalDto(
   voterProfiles: Profile[]
 ): Proposal {
   const profile = maybeCreatorProfile ?? {
-    id: proposal.createdBy.id,
+    id: proposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
-    address: proposal.createdBy.id as `0x${string}`,
+    address: proposal.createdById as `0x${string}`,
     profileLink: null,
   };
 
@@ -56,11 +56,11 @@ export function ProposalDto(
 
   return {
     id: proposal.id,
-    name: proposal.name,
+    name: proposal.edit.name,
     type: proposal.type,
     onchainProposalId: proposal.onchainProposalId,
-    createdAt: proposal.createdAt,
-    createdAtBlock: proposal.createdAtBlock,
+    createdAt: proposal.edit.createdAt,
+    createdAtBlock: proposal.edit.createdAtBlock,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
@@ -99,11 +99,11 @@ export function ProposalWithoutVotersDto(
   maybeCreatorProfile?: Profile | null
 ): ProposalWithoutVoters {
   const profile = maybeCreatorProfile ?? {
-    id: proposal.createdBy.id,
+    id: proposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
-    address: proposal.createdBy.id as `0x${string}`,
+    address: proposal.createdById as `0x${string}`,
     profileLink: null,
   };
 
@@ -118,11 +118,11 @@ export function ProposalWithoutVotersDto(
 
   return {
     id: proposal.id,
-    name: proposal.name,
+    name: proposal.edit.name,
     type: proposal.type,
     onchainProposalId: proposal.onchainProposalId,
-    createdAt: proposal.createdAt,
-    createdAtBlock: proposal.createdAtBlock,
+    createdAt: proposal.edit.createdAt,
+    createdAtBlock: proposal.edit.createdAtBlock,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,

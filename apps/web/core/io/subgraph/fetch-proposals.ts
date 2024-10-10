@@ -17,7 +17,6 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
   )}}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
     nodes {
       id
-      name
       type
       onchainProposalId
 
@@ -26,6 +25,7 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
         spacesMetadata {
         nodes {
           entity {
+            id
             currentVersion {
               version {
                 ${spaceMetadataFragment}
@@ -124,7 +124,7 @@ export async function fetchProposals({
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const proposals = result.proposals.nodes;
-  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdBy.id));
+  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdById));
 
   return proposals
     .map(p => {
@@ -136,7 +136,7 @@ export async function fetchProposals({
           return null;
         },
         onRight: proposal => {
-          const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
+          const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdById);
           return ProposalWithoutVotersDto(proposal, maybeProfile);
         },
       });

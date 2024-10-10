@@ -26,17 +26,6 @@ export const getFetchProposalQuery = (id: string) => `query {
 
     createdById
 
-    space {
-      id
-      spacesMetadata {
-        nodes {
-          entity {
-            ${spaceMetadataFragment}
-          }
-        }
-      }
-    }
-
     startTime
     endTime
     status
@@ -47,10 +36,8 @@ export const getFetchProposalQuery = (id: string) => `query {
         vote
         account {
           id
-          profileLink
-          avatarUrl
-          name
         }
+      }
     }
 
     space {
@@ -58,15 +45,18 @@ export const getFetchProposalQuery = (id: string) => `query {
       spacesMetadata {
         nodes {
           entity {
-            ${spaceMetadataFragment}
+            id
+            currentVersion {
+              version {
+                ${spaceMetadataFragment}
+              }
+            }
           }
         }
       }
     }
 
-    createdBy {
-      id
-    }
+    createdById
     startTime
     endTime
     status
@@ -145,7 +135,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   }
 
   const [profile, voterProfiles] = await Promise.all([
-    fetchProfile({ address: proposal.createdBy.id }),
+    fetchProfile({ address: proposal.createdById }),
     fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.account.id)),
   ]);
 

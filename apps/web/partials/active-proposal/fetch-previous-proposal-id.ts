@@ -8,7 +8,7 @@ import { graphql } from '~/core/io/subgraph/graphql';
 const getFetchSpaceProposalsQuery = (spaceId: string, createdAt: number) => `query {
   proposals(first: 1, filter: {spaceId: { equalTo: ${JSON.stringify(
     spaceId
-  )} }, createdAt: { lessThan: ${createdAt} } status: { equalTo: ACCEPTED} }) {
+  )} }, edit: { createdAt: { lessThan: ${createdAt} } } status: { equalTo: ACCEPTED} }) {
     nodes {
       id
     }
@@ -47,7 +47,7 @@ export async function fetchPreviousProposalId({ spaceId, createdAt }: FetchPropo
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchPreviousProposal. queryId: ${queryId} spaceId: ${spaceId} createdAt: ${createdAt}
-            
+
             queryString: ${getFetchSpaceProposalsQuery(spaceId, createdAt)}
             `,
             error.message
