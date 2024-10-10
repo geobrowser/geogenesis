@@ -182,6 +182,8 @@ const ReviewChanges = () => {
   const totalChanges = changes.length;
   const totalEdits = changes.flatMap(c => c.changes).length;
 
+  const unstaged = false;
+
   return (
     <>
       <div className="flex w-full items-center justify-between gap-1 bg-white px-4 py-1 shadow-big md:px-4 md:py-3">
@@ -289,7 +291,7 @@ const ReviewChanges = () => {
                       />
                       <SquareButton
                         onClick={() => handleStaging(attributeId, false)}
-                        icon={false ? <Blank /> : <Tick />}
+                        icon={unstaged ? <Blank /> : <Tick />}
                       />
                     </div>
                   )}
