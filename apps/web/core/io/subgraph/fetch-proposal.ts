@@ -9,7 +9,7 @@ import { Proposal, ProposalDto } from '../dto/proposals';
 import { SubstreamProposal } from '../schema';
 import { fetchProfile } from './fetch-profile';
 import { fetchProfilesByAddresses } from './fetch-profiles-by-ids';
-import { proposedVersionFragment, spaceMetadataFragment } from './fragments';
+import { spaceMetadataFragment } from './fragments';
 import { graphql } from './graphql';
 
 export const getFetchProposalQuery = (id: string) => `query {
@@ -17,24 +17,16 @@ export const getFetchProposalQuery = (id: string) => `query {
     id
     type
     onchainProposalId
-    name
 
-    space {
+    edit {
       id
-      spacesMetadata {
-        nodes {
-          entity {
-            ${spaceMetadataFragment}
-          }
-        }
-      }
+      name
+      createdAt
+      createdAtBlock
     }
 
-    createdAtBlock
-    createdAt
-    createdBy {
-      id
-    }
+    createdById
+
     startTime
     endTime
     status
@@ -49,9 +41,34 @@ export const getFetchProposalQuery = (id: string) => `query {
       }
     }
 
-    proposedVersions {
+    space {
+      id
+      spacesMetadata {
+        nodes {
+          entity {
+            id
+            currentVersion {
+              version {
+                ${spaceMetadataFragment}
+              }
+            }
+          }
+        }
+      }
+    }
+
+    createdById
+    startTime
+    endTime
+    status
+
+    proposalVotes {
+      totalCount
       nodes {
-        ${proposedVersionFragment}
+        vote
+        account {
+          id
+        }
       }
     }
   }
@@ -119,7 +136,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   }
 
   const [profile, voterProfiles] = await Promise.all([
-    fetchProfile({ address: proposal.createdBy.id }),
+    fetchProfile({ address: proposal.createdById }),
     fetchProfilesByAddresses(proposal.proposalVotes.nodes.map(v => v.account.id)),
   ]);
 

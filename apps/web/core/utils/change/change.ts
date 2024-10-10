@@ -5,12 +5,16 @@ import { mergeEntityAsync } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import { Entity, Relation } from '~/core/io/dto/entities';
+import { Proposal } from '~/core/io/dto/proposals';
 import { Version } from '~/core/io/dto/versions';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { queryClient } from '~/core/query-client';
 import type { Triple } from '~/core/types';
 
+import { groupBy } from '../utils';
+import { fetchPreviousVersionByCreatedAt } from './fetch-previous-version-by-created-at';
+import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';
 import { getAfterTripleChange, getBeforeTripleChange } from './get-triple-change';
 import { EntityChange, RelationChange, RelationChangeValue, TripleChange, TripleChangeValue } from './types';
 
@@ -76,6 +80,40 @@ export function fromVersions({ beforeVersion, afterVersion }: FromVersionsArgs):
     spaceId: undefined,
     afterEntities: [afterVersion],
     beforeEntities: beforeVersion ? [beforeVersion] : [],
+  });
+}
+
+export async function fromActiveProposal(proposal: Proposal): Promise<EntityChange[]> {
+  const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId });
+
+  // Version entity ids are mapped to the version.id
+  const currentVersionsForEntityIds = await Promise.all(versionsByEditId.map(v => fetchEntity({ id: v.id })));
+
+  return aggregateChanges({
+    spaceId: proposal.space.id,
+    beforeEntities: currentVersionsForEntityIds.filter(v => v !== null),
+    afterEntities: versionsByEditId,
+  });
+}
+
+export async function fromEndedProposal(proposal: Proposal): Promise<EntityChange[]> {
+  const versionsByEditId = await fetchVersionsByEditId({ editId: proposal.editId });
+
+  const previousVersions = await Promise.all(
+    versionsByEditId.map(v =>
+      fetchPreviousVersionByCreatedAt({
+        createdAt: proposal.createdAt,
+        entityId: v.id,
+        spaceId: proposal.space.id,
+      })
+    )
+  );
+
+  // 4. Aggregate changes between the two sets of versions
+  return aggregateChanges({
+    spaceId: proposal.space.id,
+    beforeEntities: previousVersions.filter(e => e !== null),
+    afterEntities: versionsByEditId,
   });
 }
 

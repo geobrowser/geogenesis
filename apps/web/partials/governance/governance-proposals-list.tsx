@@ -113,7 +113,7 @@ type ActiveProposal = {
   onchainProposalId: string;
   createdBy: Profile;
   createdAt: number;
-  createdAtBlock: number;
+  createdAtBlock: string;
   startTime: number;
   endTime: number;
   status: ProposalStatus;
@@ -126,16 +126,19 @@ type ActiveProposal = {
 
 function ActiveProposalsDto(activeProposal: SubstreamActiveProposal, maybeProfile?: Profile): ActiveProposal {
   const profile = maybeProfile ?? {
-    id: activeProposal.createdBy.id,
+    id: activeProposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
-    address: activeProposal.createdBy.id as `0x${string}`,
+    address: activeProposal.createdById as `0x${string}`,
     profileLink: null,
   };
 
   return {
     ...activeProposal,
+    name: activeProposal.edit.name,
+    createdAt: activeProposal.edit.createdAt,
+    createdAtBlock: activeProposal.edit.createdAtBlock,
     createdBy: profile,
     userVotes: activeProposal.userVotes.nodes.map(v => v), // remove readonly
     proposalVotes: {
@@ -145,7 +148,7 @@ function ActiveProposalsDto(activeProposal: SubstreamActiveProposal, maybeProfil
   };
 }
 
-const getFetchSpaceProposalsQuery = (
+const getFetchActiveProposalsQuery = (
   spaceId: string,
   first: number,
   skip: number,
@@ -154,7 +157,7 @@ const getFetchSpaceProposalsQuery = (
   proposals(
     first: ${first}
     offset: ${skip}
-    orderBy: CREATED_AT_DESC
+    orderBy: EDIT_BY_EDIT_ID__CREATED_AT_DESC
     filter: {
       spaceId: { equalTo: "${spaceId}" }
       or: [
@@ -166,17 +169,17 @@ const getFetchSpaceProposalsQuery = (
   ) {
     nodes {
       id
-      name
+      edit {
+        id
+        name
+        createdAt
+        createdAtBlock
+      }
       type
       onchainProposalId
 
-      createdAtBlock
+      createdById
 
-      createdBy {
-        id
-      }
-
-      createdAt
       startTime
       endTime
       status
@@ -218,7 +221,7 @@ async function fetchActiveProposals({
 
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
-    query: getFetchSpaceProposalsQuery(spaceId, first, offset, connectedAddress),
+    query: getFetchActiveProposalsQuery(spaceId, first, offset, connectedAddress),
   });
 
   const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
@@ -236,8 +239,8 @@ async function fetchActiveProposals({
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in governance proposals list. spaceId: ${spaceId} page: ${page}
-            
-            queryString: ${getFetchSpaceProposalsQuery(spaceId, first, offset, connectedAddress)}
+
+            queryString: ${getFetchActiveProposalsQuery(spaceId, first, offset, connectedAddress)}
             `,
             error.message
           );
@@ -261,10 +264,10 @@ async function fetchActiveProposals({
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const proposals = result.proposals.nodes;
-  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdBy.id));
+  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdById));
 
   return proposals.map(p => {
-    const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
+    const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdById);
 
     return ActiveProposalsDto(p, maybeProfile);
   });

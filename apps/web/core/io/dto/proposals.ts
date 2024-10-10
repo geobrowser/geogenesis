@@ -1,5 +1,5 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { AppOp, OmitStrict, Profile, Triple } from '~/core/types';
+import { OmitStrict, Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { ProposalStatus, ProposalType, SubstreamProposal, SubstreamVote } from '../schema';
@@ -15,12 +15,13 @@ type SpaceWithImage = {
 
 export type Proposal = {
   id: string;
+  editId: string;
   type: ProposalType;
   onchainProposalId: string;
   name: string | null;
   createdBy: Profile;
   createdAt: number;
-  createdAtBlock: number;
+  createdAtBlock: string;
   space: SpaceWithImage;
   startTime: number;
   endTime: number;
@@ -37,11 +38,11 @@ export function ProposalDto(
   voterProfiles: Profile[]
 ): Proposal {
   const profile = maybeCreatorProfile ?? {
-    id: proposal.createdBy.id,
+    id: proposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
-    address: proposal.createdBy.id as `0x${string}`,
+    address: proposal.createdById as `0x${string}`,
     profileLink: null,
   };
 
@@ -56,11 +57,12 @@ export function ProposalDto(
 
   return {
     id: proposal.id,
-    name: proposal.name,
+    editId: proposal.edit.id,
+    name: proposal.edit.name,
     type: proposal.type,
     onchainProposalId: proposal.onchainProposalId,
-    createdAt: proposal.createdAt,
-    createdAtBlock: proposal.createdAtBlock,
+    createdAt: proposal.edit.createdAt,
+    createdAtBlock: proposal.edit.createdAtBlock,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
@@ -99,11 +101,11 @@ export function ProposalWithoutVotersDto(
   maybeCreatorProfile?: Profile | null
 ): ProposalWithoutVoters {
   const profile = maybeCreatorProfile ?? {
-    id: proposal.createdBy.id,
+    id: proposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
-    address: proposal.createdBy.id as `0x${string}`,
+    address: proposal.createdById as `0x${string}`,
     profileLink: null,
   };
 
@@ -118,11 +120,12 @@ export function ProposalWithoutVotersDto(
 
   return {
     id: proposal.id,
-    name: proposal.name,
+    editId: proposal.edit.id,
+    name: proposal.edit.name,
     type: proposal.type,
     onchainProposalId: proposal.onchainProposalId,
-    createdAt: proposal.createdAt,
-    createdAtBlock: proposal.createdAtBlock,
+    createdAt: proposal.edit.createdAt,
+    createdAtBlock: proposal.edit.createdAtBlock,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,

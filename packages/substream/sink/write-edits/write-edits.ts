@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
@@ -160,16 +160,22 @@ export function writeEdits(args: PopulateContentArgs) {
     const spaceMetadata = yield* _(aggregateSpacesFromRelations(relations, versions, spaceIdByEditId));
 
     yield* _(
-      Effect.all([
-        Effect.tryPromise({
-          try: () => Types.upsert(versionTypes),
-          catch: error => new Error(`Failed to insert version types. ${(error as Error).message}`),
-        }),
+      Effect.tryPromise({
+        try: () => Types.upsert(versionTypes),
+        catch: error => new Error(`Failed to insert version types. ${(error as Error).message}`),
+      })
+    );
+
+    // @TODO: temporarily allow space metadata writing to fail gracefully. There is a space
+    // written during testing that is breaking this flow. Once we start back from the correct
+    // root space state this should be removed.
+    yield* _(
+      Effect.either(
         Effect.tryPromise({
           try: () => SpaceMetadata.upsert(spaceMetadata),
           catch: error => new Error(`Failed to insert space metadata. ${(error as Error).message}`),
-        }),
-      ])
+        })
+      )
     );
   });
 }
