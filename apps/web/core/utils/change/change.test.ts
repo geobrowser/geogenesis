@@ -7,6 +7,18 @@ import { Triple } from '~/core/types';
 import { aggregateChanges } from './change';
 import { EntityChange } from './types';
 
+function makeStubEntity(tripleFn: () => Triple): Entity {
+  return {
+    id: EntityId('1'),
+    types: [],
+    description: null,
+    name: 'Entity Name From Text Test',
+    nameTripleSpaces: [],
+    relationsOut: [],
+    triples: [tripleFn()],
+  };
+}
+
 function makeStubTextTriple(value: string): Triple {
   return {
     attributeId: 'text-attribute-from-test',
@@ -52,27 +64,26 @@ function makeStubTimeTriple(value: string): Triple {
   };
 }
 
+function makeStubEntityTriple(value: string): Triple {
+  return {
+    attributeId: 'text-attribute-from-test',
+    attributeName: 'Text Attribute from Test',
+    entityId: EntityId('1'),
+    entityName: 'Entity Name From URI Test',
+    id: EntityId('1-1'),
+    space: 'text-space-from-test',
+    value: {
+      type: 'ENTITY',
+      value: value,
+      name: 'Entity Value Name From Entity Test',
+    },
+  };
+}
+
 describe('Change', () => {
   it('diffs a text triple with different values', () => {
-    const before: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubTextTriple('text-value-1-from-text')],
-    };
-
-    const after: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubTextTriple('text-value-2-from-text')],
-    };
+    const before = makeStubEntity(() => makeStubTextTriple('text-value-1-from-text'));
+    const after = makeStubEntity(() => makeStubTextTriple('text-value-2-from-text'));
 
     const changes = aggregateChanges({
       spaceId: undefined,
@@ -111,25 +122,8 @@ describe('Change', () => {
   });
 
   it('diffs a text triple with same values', () => {
-    const before: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubTextTriple('text-value-1-from-text')],
-    };
-
-    const after: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubTextTriple('text-value-1-from-text')],
-    };
+    const before = makeStubEntity(() => makeStubTextTriple('text-value-1-from-text'));
+    const after = makeStubEntity(() => makeStubTextTriple('text-value-1-from-text'));
 
     const changes = aggregateChanges({
       spaceId: undefined,
@@ -150,25 +144,8 @@ describe('Change', () => {
   });
 
   it('diffs a uri triple with different values', () => {
-    const before: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubUriTriple('text-value-1-from-text')],
-    };
-
-    const after: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubUriTriple('text-value-2-from-text')],
-    };
+    const before = makeStubEntity(() => makeStubUriTriple('text-value-1-from-text'));
+    const after = makeStubEntity(() => makeStubUriTriple('text-value-2-from-text'));
 
     const changes = aggregateChanges({
       spaceId: undefined,
@@ -207,25 +184,8 @@ describe('Change', () => {
   });
 
   it('diffs a uri triple with same values', () => {
-    const before: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubUriTriple('text-value-1-from-text')],
-    };
-
-    const after: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubUriTriple('text-value-1-from-text')],
-    };
+    const before = makeStubEntity(() => makeStubUriTriple('text-value-1-from-text'));
+    const after = makeStubEntity(() => makeStubUriTriple('text-value-1-from-text'));
 
     const changes = aggregateChanges({
       spaceId: undefined,
@@ -246,25 +206,8 @@ describe('Change', () => {
   });
 
   it('diffs a time triple with different values', () => {
-    const before: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubTimeTriple('text-value-1-from-text')],
-    };
-
-    const after: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubTimeTriple('text-value-2-from-text')],
-    };
+    const before = makeStubEntity(() => makeStubTimeTriple('text-value-1-from-text'));
+    const after = makeStubEntity(() => makeStubTimeTriple('text-value-2-from-text'));
 
     const changes = aggregateChanges({
       spaceId: undefined,
@@ -303,25 +246,8 @@ describe('Change', () => {
   });
 
   it('diffs a time triple with same values', () => {
-    const before: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubTimeTriple('text-value-1-from-text')],
-    };
-
-    const after: Entity = {
-      id: EntityId('1'),
-      types: [],
-      description: null,
-      name: 'Entity Name From Text Test',
-      nameTripleSpaces: [],
-      relationsOut: [],
-      triples: [makeStubTimeTriple('text-value-1-from-text')],
-    };
+    const before = makeStubEntity(() => makeStubTimeTriple('text-value-1-from-text'));
+    const after = makeStubEntity(() => makeStubTimeTriple('text-value-1-from-text'));
 
     const changes = aggregateChanges({
       spaceId: undefined,
