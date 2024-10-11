@@ -98,7 +98,7 @@ export async function fetchProposalsByUser({
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchProposalsByUser. queryId: ${queryId} userId: ${userId} page: ${page}
-            
+
             queryString: ${getFetchUserProposalsQuery(userId, offset)}
             `,
             error.message
@@ -125,10 +125,10 @@ export async function fetchProposalsByUser({
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const proposals = result.proposals.nodes;
-  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdBy.id));
+  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdById));
 
   return proposals.map(p => {
-    const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
+    const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdById);
     return ProposalWithoutVotersDto(p, maybeProfile);
   });
 }

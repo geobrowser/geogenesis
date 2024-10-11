@@ -44,7 +44,6 @@ export default async function DefaultEntityPage({
 
   const avatarUrl = Entities.avatar(props.relationsOut) ?? props.serverAvatarUrl;
   const coverUrl = Entities.cover(props.relationsOut) ?? props.serverCoverUrl;
-  const types = props.types;
 
   return (
     <EntityStoreProvider
@@ -63,7 +62,7 @@ export default async function DefaultEntityPage({
           {showCover && <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />}
           <EntityPageContentContainer>
             {showHeading && <EditableHeading spaceId={props.spaceId} entityId={props.id} />}
-            {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} types={types} />}
+            {showHeader && <EntityPageMetadataHeader id={props.id} spaceId={props.spaceId} />}
             {notice}
             {(showSpacer || !!notice) && <Spacer height={40} />}
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />

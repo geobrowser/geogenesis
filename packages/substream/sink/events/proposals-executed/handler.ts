@@ -1,12 +1,10 @@
 import { Effect, Either } from 'effect';
-import * as db from 'zapatos/db';
 
 import type { ProposalExecuted } from './parser';
 import { Proposals } from '~/sink/db';
 import { Telemetry } from '~/sink/telemetry';
 import type { BlockEvent } from '~/sink/types';
 import { getChecksumAddress } from '~/sink/utils/get-checksum-address';
-import { pool } from '~/sink/utils/pool';
 import { slog } from '~/sink/utils/slog';
 
 class CouldNotWriteExecutedProposalError extends Error {

@@ -81,12 +81,16 @@ export async function getActiveProposalsForSpacesWhereEditor(
           spacesMetadata {
             nodes {
               entity {
-                ${spaceMetadataFragment}
+                currentVersion {
+                  version {
+                    ${spaceMetadataFragment}
+                  }
+                }
               }
             }
           }
         }
-        
+
         createdAtBlock
         createdBy {
           id
@@ -95,7 +99,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
         startTime
         endTime
         status
-  
+
         proposalVotes {
           totalCount
           nodes {
@@ -137,14 +141,14 @@ export async function getActiveProposalsForSpacesWhereEditor(
 
   const result = await Effect.runPromise(proposalsInSpacesWhereEditor);
   const proposals = result.proposals.nodes;
-  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdBy.id));
+  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdById));
 
   return {
     totalCount: result.proposals.totalCount,
     proposals: proposals
       .map(p => {
         const decodedProposal = Schema.decodeEither(SubstreamProposal)(p);
-        const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
+        const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdById);
 
         const proposal = Either.match(decodedProposal, {
           onLeft: error => {

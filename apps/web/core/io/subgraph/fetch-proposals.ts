@@ -17,7 +17,6 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
   )}}}, orderBy: CREATED_AT_DESC, offset: ${skip}) {
     nodes {
       id
-      name
       type
       onchainProposalId
 
@@ -25,19 +24,25 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
         id
         spacesMetadata {
         nodes {
-            entity {
-              ${spaceMetadataFragment}
+          entity {
+            id
+            currentVersion {
+              version {
+                ${spaceMetadataFragment}
+              }
             }
           }
         }
       }
 
-      createdAtBlock
-      createdBy {
+      edit {
         id
+        name
+        createdAt
+        createdAtBlock
       }
-      
-      createdAt
+
+      createdById
       startTime
       endTime
       status
@@ -46,18 +51,6 @@ const getFetchSpaceProposalsQuery = (spaceId: string, first: number, skip: numbe
         totalCount
         nodes {
           vote
-        }
-      }
-
-      proposedVersions {
-        nodes {
-          id
-          createdById
-          entity {
-            id
-            name
-          }
-
         }
       }
     }
@@ -105,7 +98,7 @@ export async function fetchProposals({
         case 'GraphqlRuntimeError':
           console.error(
             `Encountered runtime graphql error in fetchProposals. queryId: ${queryId} spaceId: ${spaceId} page: ${page}
-            
+
             queryString: ${getFetchSpaceProposalsQuery(spaceId, first, offset)}
             `,
             error.message
@@ -132,7 +125,7 @@ export async function fetchProposals({
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
   const proposals = result.proposals.nodes;
-  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdBy.id));
+  const profilesForProposals = await fetchProfilesByAddresses(proposals.map(p => p.createdById));
 
   return proposals
     .map(p => {
@@ -144,7 +137,7 @@ export async function fetchProposals({
           return null;
         },
         onRight: proposal => {
-          const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdBy.id);
+          const maybeProfile = profilesForProposals.find(profile => profile.address === p.createdById);
           return ProposalWithoutVotersDto(proposal, maybeProfile);
         },
       });

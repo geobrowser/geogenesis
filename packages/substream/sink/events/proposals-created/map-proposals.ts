@@ -1,9 +1,8 @@
-import { createGeoId } from '@geogenesis/sdk';
 import type * as S from 'zapatos/schema';
 
 import { createVersionId } from '../../utils/id';
 import type { EditProposal, EditorshipProposal, MembershipProposal, SubspaceProposal } from './parser';
-import type { BlockEvent } from '~/sink/types';
+import type { BlockEvent, Op } from '~/sink/types';
 
 function groupProposalsByType(
   proposals: (MembershipProposal | SubspaceProposal | EditorshipProposal | EditProposal)[]
@@ -47,10 +46,7 @@ function mapEditorshipProposalsToSchema(
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
       plugin_address: p.pluginAddress,
-      name: p.name,
       type: p.type,
-      created_at: Number(p.startTime),
-      created_at_block: block.blockNumber,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -105,10 +101,7 @@ function mapMembershipProposalsToSchema(
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
       plugin_address: p.pluginAddress,
-      name: p.name,
       type: p.type,
-      created_at: Number(p.startTime),
-      created_at_block: block.blockNumber,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -161,10 +154,7 @@ function mapSubspaceProposalsToSchema(
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
       plugin_address: p.pluginAddress,
-      name: p.name,
       type: p.type,
-      created_at: Number(p.startTime),
-      created_at_block: block.blockNumber,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
@@ -198,77 +188,76 @@ function mapEditProposalToSchema(
   block: BlockEvent
 ): {
   proposals: S.proposals.Insertable[];
-  proposedVersions: S.proposed_versions.Insertable[];
-  ops: S.ops.Insertable[];
+  versions: S.versions.Insertable[];
+  edits: S.edits.Insertable[];
+  opsByVersionId: Map<string, Op[]>;
 } {
   const proposalsToWrite: S.proposals.Insertable[] = [];
-  const proposedVersionsToWrite: S.proposed_versions.Insertable[] = [];
-  const opsToWrite: S.ops.Insertable[] = [];
+  const versionsToWrite: S.versions.Insertable[] = [];
+  const editsToWrite: S.edits.Insertable[] = [];
+  const opsByVersionId = new Map<string, Op[]>();
 
   for (const p of proposals) {
     const spaceId = p.space;
+
+    editsToWrite.push({
+      id: p.proposalId,
+      name: p.name,
+      description: null,
+      uri: p.metadataUri,
+      created_at_block: block.blockNumber.toString(),
+      created_at: Number(p.startTime),
+      created_by_id: p.creator,
+      space_id: spaceId,
+    } satisfies S.edits.Insertable);
 
     proposalsToWrite.push({
       id: p.proposalId,
       onchain_proposal_id: p.onchainProposalId,
       plugin_address: p.pluginAddress,
-      name: p.name,
       type: 'ADD_EDIT',
-      created_at: Number(p.startTime),
-      created_at_block: block.blockNumber,
       created_by_id: p.creator,
       start_time: Number(p.startTime),
       end_time: Number(p.endTime),
+      edit_id: p.proposalId,
       space_id: spaceId,
       status: 'proposed',
-      uri: p.metadataUri,
     } satisfies S.proposals.Insertable);
 
-    const uniqueEntityIds = new Set(p.ops.map(action => action.triple.entity));
+    const uniqueEntityIds = new Set(p.ops.map(op => op.triple.entity));
 
     for (const entityId of [...uniqueEntityIds.values()]) {
-      proposedVersionsToWrite.push({
-        // For now we use a deterministic version for the proposed version id
-        // so we can easily derive it for the op -> proposed version mapping.
-        id: createVersionId({
-          entityId,
-          proposalId: p.proposalId,
-        }),
+      // For now we use a deterministic version for the proposed version id
+      // so we can easily derive it for the op -> proposed version mapping.
+      const id = createVersionId({
+        entityId,
+        proposalId: p.proposalId,
+      });
+
+      versionsToWrite.push({
+        id,
         entity_id: entityId,
         created_at_block: block.blockNumber,
         created_at: Number(p.startTime),
         created_by_id: p.creator,
-        proposal_id: p.proposalId,
-        space_id: spaceId,
-      } satisfies S.proposed_versions.Insertable);
-    }
+        edit_id: p.proposalId,
+      } satisfies S.versions.Insertable);
 
-    for (const op of p.ops) {
-      opsToWrite.push({
-        id: createGeoId(),
-        type: op.type,
-        entity_id: op.triple.entity,
-        attribute_id: op.triple.attribute,
-        value_type: op.triple.value.type,
-        text_value: op.triple.value.type !== 'ENTITY' ? op.triple.value.value : null,
-        entity_value_id: op.triple.value.type === 'ENTITY' ? op.triple.value.value : null,
-        created_at: Number(p.startTime),
-        created_at_block: block.blockNumber,
-        space_id: spaceId,
-        // For now we use a deterministic version for the proposed version id
-        // so we can easily derive it for this op -> proposed version mapping.
-        proposed_version_id: createVersionId({
-          entityId: op.triple.entity,
-          proposalId: p.proposalId,
-        }),
-      } satisfies S.ops.Insertable);
+      const opsForEntityId = p.ops.filter(o => o.triple.entity === entityId);
+
+      if (opsForEntityId.length === 0) {
+        console.log('invalid edit ops', { id });
+      }
+
+      opsByVersionId.set(id, opsForEntityId);
     }
   }
 
   return {
     proposals: proposalsToWrite,
-    proposedVersions: proposedVersionsToWrite,
-    ops: opsToWrite,
+    versions: versionsToWrite,
+    edits: editsToWrite,
+    opsByVersionId,
   };
 }
 

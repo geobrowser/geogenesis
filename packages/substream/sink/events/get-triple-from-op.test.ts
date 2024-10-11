@@ -17,6 +17,7 @@ describe('tripleFromOp', () => {
         },
       },
       '0x1234',
+      '0',
       {
         blockNumber: 0,
         cursor: '',
@@ -27,15 +28,14 @@ describe('tripleFromOp', () => {
 
     expect(triple).toEqual({
       attribute_id: 'attribute-id',
-      collection_value_id: null,
       created_at: 0,
       created_at_block: 0,
       entity_id: 'entity-id',
       entity_value_id: null,
-      is_stale: false,
       space_id: '0x1234',
       text_value: 'test value',
       value_type: 'TEXT',
+      version_id: '0',
     });
   });
 
@@ -50,6 +50,7 @@ describe('tripleFromOp', () => {
         },
       },
       '0x1234',
+      '0',
       {
         blockNumber: 0,
         cursor: '',
@@ -60,15 +61,14 @@ describe('tripleFromOp', () => {
 
     expect(triple).toEqual({
       attribute_id: 'attribute-id',
-      collection_value_id: null,
       created_at: 0,
       created_at_block: 0,
       entity_id: 'entity-id',
       entity_value_id: null,
-      is_stale: false,
       space_id: '0x1234',
       text_value: null,
       value_type: 'TEXT',
+      version_id: '0',
     });
   });
 });

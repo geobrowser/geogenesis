@@ -1,11 +1,9 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { AppOp, OmitStrict, Profile, Triple } from '~/core/types';
+import { OmitStrict, Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
-import { ProposalStatus, ProposalType, SubstreamEntity, SubstreamProposal, SubstreamVote } from '../schema';
+import { ProposalStatus, ProposalType, SubstreamProposal, SubstreamVote } from '../schema';
 import { EntityDto } from './entities';
-import { OpDto } from './ops';
-import { extractValue } from './triples';
 
 export type VoteWithProfile = SubstreamVote & { voter: Profile };
 
@@ -17,12 +15,13 @@ type SpaceWithImage = {
 
 export type Proposal = {
   id: string;
+  editId: string;
   type: ProposalType;
   onchainProposalId: string;
   name: string | null;
   createdBy: Profile;
   createdAt: number;
-  createdAtBlock: number;
+  createdAtBlock: string;
   space: SpaceWithImage;
   startTime: number;
   endTime: number;
@@ -31,7 +30,6 @@ export type Proposal = {
     totalCount: number;
     nodes: VoteWithProfile[];
   };
-  proposedVersions: ProposedVersion[];
 };
 
 export function ProposalDto(
@@ -40,30 +38,31 @@ export function ProposalDto(
   voterProfiles: Profile[]
 ): Proposal {
   const profile = maybeCreatorProfile ?? {
-    id: proposal.createdBy.id,
+    id: proposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
-    address: proposal.createdBy.id as `0x${string}`,
+    address: proposal.createdById as `0x${string}`,
     profileLink: null,
   };
 
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
+  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity;
   const entity = spaceConfig ? EntityDto(spaceConfig) : null;
 
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
-    name: spaceConfig?.name ?? null,
+    name: entity?.name ?? null,
     image: Entities.avatar(entity?.relationsOut) ?? Entities.cover(entity?.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
   };
 
   return {
     id: proposal.id,
-    name: proposal.name,
+    editId: proposal.edit.id,
+    name: proposal.edit.name,
     type: proposal.type,
     onchainProposalId: proposal.onchainProposalId,
-    createdAt: proposal.createdAt,
-    createdAtBlock: proposal.createdAtBlock,
+    createdAt: proposal.edit.createdAt,
+    createdAtBlock: proposal.edit.createdAtBlock,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
@@ -92,55 +91,41 @@ export function ProposalDto(
         };
       }),
     },
-    proposedVersions: proposal.proposedVersions.nodes.map(pv => ({
-      id: pv.id,
-      createdBy: {
-        id: '',
-        name: null,
-        avatarUrl: null,
-        coverUrl: null,
-        address: '0x0000000000000000000000000000000000000000',
-        profileLink: null,
-      },
-      createdAt: 0,
-      createdAtBlock: 0,
-      ops: pv.ops.nodes.map(OpDto),
-      entity: pv.entity,
-    })),
   };
 }
 
-export type ProposalWithoutVoters = OmitStrict<Proposal, 'proposalVotes' | 'proposedVersions'>;
+export type ProposalWithoutVoters = OmitStrict<Proposal, 'proposalVotes'>;
 
 export function ProposalWithoutVotersDto(
   proposal: SubstreamProposal,
   maybeCreatorProfile?: Profile | null
 ): ProposalWithoutVoters {
   const profile = maybeCreatorProfile ?? {
-    id: proposal.createdBy.id,
+    id: proposal.createdById,
     name: null,
     avatarUrl: null,
     coverUrl: null,
-    address: proposal.createdBy.id as `0x${string}`,
+    address: proposal.createdById as `0x${string}`,
     profileLink: null,
   };
 
-  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity as SubstreamEntity | undefined;
+  const spaceConfig = proposal.space.spacesMetadata.nodes[0].entity;
   const entity = spaceConfig ? EntityDto(spaceConfig) : null;
 
   const spaceWithMetadata: SpaceWithImage = {
     id: proposal.space.id,
-    name: spaceConfig?.name ?? null,
+    name: entity?.name ?? null,
     image: Entities.avatar(entity?.relationsOut) ?? Entities.cover(entity?.relationsOut) ?? PLACEHOLDER_SPACE_IMAGE,
   };
 
   return {
     id: proposal.id,
-    name: proposal.name,
+    editId: proposal.edit.id,
+    name: proposal.edit.name,
     type: proposal.type,
     onchainProposalId: proposal.onchainProposalId,
-    createdAt: proposal.createdAt,
-    createdAtBlock: proposal.createdAtBlock,
+    createdAt: proposal.edit.createdAt,
+    createdAtBlock: proposal.edit.createdAtBlock,
     startTime: proposal.startTime,
     endTime: proposal.endTime,
     status: proposal.status,
@@ -148,30 +133,3 @@ export function ProposalWithoutVotersDto(
     createdBy: profile,
   };
 }
-
-export type Version = {
-  id: string;
-  name: string | null;
-  description: string | null;
-  createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: string;
-  space: SpaceWithImage;
-  triples: Triple[];
-  entity: {
-    id: string;
-    name: string;
-  };
-};
-
-export type ProposedVersion = {
-  id: string;
-  createdBy: Profile;
-  createdAt: number;
-  createdAtBlock: number;
-  ops: AppOp[];
-  entity: {
-    id: string;
-    name: string | null;
-  };
-};

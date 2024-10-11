@@ -4,32 +4,32 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { diffWords } from 'diff';
-import type { Change as Difference } from 'diff';
 
 import * as React from 'react';
 import { useCallback } from 'react';
 
-import { EntityId } from '~/core/io/schema';
-import { EntityChange } from '~/core/utils/change/types';
-import { GeoDate } from '~/core/utils/utils';
+import { EntityChange, RelationChange } from '~/core/utils/change/types';
+import { GeoDate, groupBy } from '~/core/utils/utils';
 
-import { SmallButton, SquareButton } from '~/design-system/button';
-import { Blank } from '~/design-system/icons/blank';
 import { Minus } from '~/design-system/icons/minus';
-import { Tick } from '~/design-system/icons/tick';
-import { Trash } from '~/design-system/icons/trash';
 import { Spacer } from '~/design-system/spacer';
 
 type ChangedEntityProps = {
   change: EntityChange;
+  deleteAllComponent?: React.ReactNode;
+  renderAttributeStagingComponent?: (attributeId: string) => React.ReactNode;
   // unstagedChanges: Record<string, Record<string, boolean>>;
   // setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
 };
 
-export const ChangedEntity = ({ change }: ChangedEntityProps) => {
-  const handleDeleteActions = useCallback(() => {
-    // @TODO(database)
-  }, []);
+export const ChangedEntity = ({ change, deleteAllComponent, renderAttributeStagingComponent }: ChangedEntityProps) => {
+  if (change.changes.length === 0) {
+    return (
+      <h2 className="text-center text-mediumTitle" key={change.id}>
+        There are no changes between the two versions
+      </h2>
+    );
+  }
 
   return (
     <div className="relative -top-12 pt-12">
@@ -38,10 +38,8 @@ export const ChangedEntity = ({ change }: ChangedEntityProps) => {
         <div className="flex gap-8">
           <div className="flex-1 text-body">Current version</div>
           <div className="relative flex-1 text-body">
-            Your proposed edits
-            <div className="absolute right-0 top-0">
-              <SmallButton onClick={handleDeleteActions}>Delete all</SmallButton>
-            </div>
+            Proposed edits
+            {deleteAllComponent}
           </div>
         </div>
       </div>
@@ -54,11 +52,9 @@ export const ChangedEntity = ({ change }: ChangedEntityProps) => {
       )} */}
       <div className="mt-2">
         <ChangedAttribute
+          renderAttributeStagingComponent={renderAttributeStagingComponent}
           key={`${change.id}-${change.id}`}
           changes={change.changes}
-          entityId={change.id}
-          // unstagedChanges={unstagedChanges}
-          // setUnstagedChanges={setUnstagedChanges}
         />
       </div>
     </div>
@@ -242,86 +238,63 @@ export const ChangedEntity = ({ change }: ChangedEntityProps) => {
 
 type ChangedAttributeProps = {
   changes: EntityChange['changes'];
-  entityId: EntityId;
-  // unstagedChanges: Record<string, Record<string, boolean>>;
-  // setUnstagedChanges: (value: Record<string, Record<string, boolean>>) => void;
+  renderAttributeStagingComponent?: (attributeId: string) => React.ReactNode;
 };
 
-const ChangedAttribute = ({ changes, entityId }: ChangedAttributeProps) => {
-  const handleDeleteActions = useCallback(() => {
-    // @TODO(database)
-  }, []);
+const ChangedAttribute = ({ changes, renderAttributeStagingComponent }: ChangedAttributeProps) => {
+  const groupedChanges = groupBy(changes, c => c.attribute.id);
 
-  // const handleStaging = (attributeId: string, unstaged: boolean) => {
-  //   if (!unstaged) {
-  //     setUnstagedChanges({
-  //       ...unstagedChanges,
-  //       [entityId]: {
-  //         ...(unstagedChanges[entityId] ?? {}),
-  //         [attributeId]: true,
-  //       },
-  //     });
-  //   } else {
-  //     const newUnstagedChanges: Record<string, Record<string, boolean>> = { ...unstagedChanges };
-  //     if (newUnstagedChanges?.[entityId] && newUnstagedChanges?.[entityId]?.[attributeId]) {
-  //       delete newUnstagedChanges?.[entityId]?.[attributeId];
-  //     }
-  //     setUnstagedChanges(newUnstagedChanges);
-  //   }
-  // };
-
-  return changes.map(change => {
-    const attributeId = change.attribute.id;
+  return Object.entries(groupedChanges).map(([attributeId, changes]) => {
     // Don't show page blocks
     if (attributeId === SYSTEM_IDS.BLOCKS) return null;
 
-    const { before, after } = change;
-    const name = change.attribute.name ?? change.attribute.id;
+    if (changes.length === 0) {
+      return <h2 key={attributeId}>This entity has no changes between the two versions.</h2>;
+    }
 
-    // const unstaged = Object.hasOwn(unstagedChanges[entityId] ?? {}, attributeId);
-    const unstaged = false;
+    const changeType = changes[0].type;
+    const attributeName = changes[0].attribute.name;
+    const name = attributeName ?? attributeId;
 
-    switch (change.type) {
+    switch (changeType) {
       case 'TEXT': {
-        const checkedBefore = before ? before.value : '';
-        const checkedAfter = after ? after.value : '';
-        const differences = diffWords(checkedBefore, checkedAfter);
-
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
             <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
-                {differences
-                  .filter(item => !item.added)
-                  .map((difference, index) => (
-                    <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-                      {difference.value}
-                    </span>
-                  ))}
+                {changes.map(c => {
+                  const checkedBefore = c.before ? c.before.value : '';
+                  const checkedAfter = c.after ? c.after.value : '';
+                  const differences = diffWords(checkedBefore, checkedAfter);
+
+                  return differences
+                    .filter(item => !item.added)
+                    .map((difference, index) => (
+                      <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+                        {difference.value}
+                      </span>
+                    ));
+                })}
               </div>
             </div>
             <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
-              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-                <SquareButton
-                  onClick={handleDeleteActions}
-                  icon={<Trash />}
-                  className="opacity-0 group-hover:opacity-100"
-                />
-                <SquareButton
-                  // onClick={() => handleStaging(attributeId, unstaged)}
-                  icon={unstaged ? <Blank /> : <Tick />}
-                />
-              </div>
+              {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
-                {differences
-                  .filter(item => !item.removed)
-                  .map((difference, index) => (
-                    <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                      {difference.value}
-                    </span>
-                  ))}
+                {changes.map(c => {
+                  const checkedBefore = c.before ? c.before.value : '';
+                  const checkedAfter = c.after ? c.after.value : '';
+                  const differences = diffWords(checkedBefore, checkedAfter);
+
+                  return differences
+                    .filter(item => !item.removed)
+                    .map((difference, index) => (
+                      <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                        {difference.value}
+                      </span>
+                    ));
+                })}
               </div>
             </div>
           </div>
@@ -334,26 +307,24 @@ const ChangedAttribute = ({ changes, entityId }: ChangedAttributeProps) => {
             <div className="flex-1 border border-grey-02 p-4 first:rounded-b-lg last:rounded-t-lg">
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="flex flex-wrap gap-2">
-                {/* @TODO: Support entity triple diffs */}
-                {before && <Chip status="unchanged">{before.valueName ?? before.value}</Chip>}
+                {changes.map(c => {
+                  const { before } = c;
+                  return before && <Chip status={before.type}>{before.valueName ?? before.value}</Chip>;
+                })}
               </div>
             </div>
             <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-                <SquareButton
-                  onClick={handleDeleteActions}
-                  icon={<Trash />}
-                  className="opacity-0 group-hover:opacity-100"
-                />
-                <SquareButton
-                  // onClick={() => handleStaging(attributeId, unstaged)}
-                  icon={unstaged ? <Blank /> : <Tick />}
-                />
-              </div>
+              {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="flex flex-wrap gap-2">
-                {/* @TODO: Support entity triple diffs */}
-                <Chip status="added">{after?.valueName ?? after?.value}</Chip>
+                {changes.map(c => {
+                  const { after } = c;
+                  return (
+                    <Chip key={after.value} status={after.type}>
+                      {after.valueName ?? after.value}
+                    </Chip>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -400,69 +371,63 @@ const ChangedAttribute = ({ changes, entityId }: ChangedAttributeProps) => {
             <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
-                {before && <DateTimeDiff mode="before" before={before.value} after={after.value} />}
+                {changes.map(c => {
+                  const { before, after } = c;
+                  return before && <DateTimeDiff mode="before" before={before.value} after={after.value} />;
+                })}
               </div>
             </div>
             <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-                <SquareButton
-                  onClick={handleDeleteActions}
-                  icon={<Trash />}
-                  className="opacity-0 group-hover:opacity-100"
-                />
-                <SquareButton
-                  // onClick={() => handleStaging(attributeId, unstaged)}
-                  icon={unstaged ? <Blank /> : <Tick />}
-                />
-              </div>
+              {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="text-body">
-                {after && <DateTimeDiff mode="after" before={before?.value ?? null} after={after.value} />}
+                {changes.map(c => {
+                  const { before, after } = c;
+                  return before && <DateTimeDiff mode="after" before={before.value} after={after.value} />;
+                })}
               </div>
             </div>
           </div>
         );
       }
       case 'URI': {
-        const checkedBefore = before ? before.value : '';
-        const checkedAfter = after ? after.value : '';
-        const differences = diffWords(checkedBefore, checkedAfter);
-
         return (
           <div key={attributeId} className="-mt-px flex gap-8">
             <div className="flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="truncate text-ctaPrimary no-underline">
-                {differences
-                  .filter(item => !item.added)
-                  .map((difference: Difference, index: number) => (
-                    <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
-                      {difference.value}
-                    </span>
-                  ))}
+                {changes.map(c => {
+                  const checkedBefore = c.before ? c.before.value : '';
+                  const checkedAfter = c.after ? c.after.value : '';
+                  const differences = diffWords(checkedBefore, checkedAfter);
+
+                  return differences
+                    .filter(item => !item.added)
+                    .map((difference, index) => (
+                      <span key={index} className={cx(difference.removed && 'bg-errorTertiary line-through')}>
+                        {difference.value}
+                      </span>
+                    ));
+                })}
               </div>
             </div>
             <div className="group relative flex-1 border border-grey-02 p-4 first:rounded-t-lg last:rounded-b-lg">
-              <div className="absolute right-0 top-0 inline-flex items-center gap-4 p-4">
-                <SquareButton
-                  onClick={handleDeleteActions}
-                  icon={<Trash />}
-                  className="opacity-0 group-hover:opacity-100"
-                />
-                <SquareButton
-                  // onClick={() => handleStaging(attributeId, unstaged)}
-                  icon={unstaged ? <Blank /> : <Tick />}
-                />
-              </div>
+              {renderAttributeStagingComponent?.(attributeId)}
               <div className="text-bodySemibold capitalize">{name}</div>
               <div className="truncate text-ctaPrimary no-underline">
-                {differences
-                  .filter(item => !item.removed)
-                  .map((difference: Difference, index: number) => (
-                    <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
-                      {difference.value}
-                    </span>
-                  ))}
+                {changes.map(c => {
+                  const checkedBefore = c.before ? c.before.value : '';
+                  const checkedAfter = c.after ? c.after.value : '';
+                  const differences = diffWords(checkedBefore, checkedAfter);
+
+                  return differences
+                    .filter(item => !item.removed)
+                    .map((difference, index) => (
+                      <span key={index} className={cx(difference.added && 'bg-successTertiary')}>
+                        {difference.value}
+                      </span>
+                    ));
+                })}
               </div>
             </div>
           </div>
@@ -560,7 +525,7 @@ const labelClassNames = `text-footnote text-grey-04`;
 const timeClassNames = `w-[21px] tabular-nums bg-transparent p-0 m-0 text-body`;
 
 type ChipProps = {
-  status?: 'added' | 'removed' | 'unchanged';
+  status?: RelationChange['after']['type'] | 'UNCHANGED';
   children: React.ReactNode;
 };
 
@@ -569,15 +534,16 @@ const chip = cva(
   {
     variants: {
       status: {
-        added: 'bg-successTertiary',
-        removed: 'bg-errorTertiary line-through',
-        unchanged: 'bg-white',
+        ADD: 'bg-successTertiary',
+        UPDATE: 'bg-successTertiary',
+        REMOVE: 'bg-errorTertiary line-through',
+        UNCHANGED: 'bg-white',
       },
     },
   }
 );
 
-export const Chip = ({ status = 'unchanged', children }: ChipProps) => {
+export const Chip = ({ status = 'UNCHANGED', children }: ChipProps) => {
   return <span className={chip({ status })}>{children}</span>;
 };
 

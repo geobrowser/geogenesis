@@ -95,7 +95,7 @@ export default async function ProfileLayout({ children, params }: Props) {
           <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
           <EntityPageContentContainer>
             <EditableHeading spaceId={params.id} entityId={entityId} />
-            <EntityPageMetadataHeader id={profile.id} spaceId={params.id} types={profile.types} />
+            <EntityPageMetadataHeader id={profile.id} spaceId={params.id} />
 
             <Spacer height={40} />
             <TabGroup

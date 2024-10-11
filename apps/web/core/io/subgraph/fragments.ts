@@ -20,11 +20,12 @@ export const imageValueTypeTripleFragment = `
  *  }
  * `
  */
-export const entityTypesFragment = `
-  entityTypes {
+export const versionTypesFragment = `
+  versionTypes {
     nodes {
       type {
         id
+        entityId
         name
       }
     }
@@ -34,17 +35,31 @@ export const entityTypesFragment = `
 export const tripleFragment = `
   attribute {
     id
-    name
+    currentVersion {
+      version {
+        id
+        name
+      }
+    }
   }
-  entityId
   entity {
     id
-    name
+    currentVersion {
+      version {
+        id
+        name
+      }
+    }
   }
   entityValue {
     id
-    name
-    ${entityTypesFragment}
+    currentVersion {
+      version {
+        id
+        name
+        ${versionTypesFragment}
+      }
+    }
   }
   numberValue
   textValue
@@ -60,19 +75,23 @@ export const tripleFragment = `
  */
 export const relationFragment = `
   id
+  entityId
   index
   typeOf {
     id
     name
+    entityId
   }
-  fromEntity {
+  fromVersion {
     id
     name
+    entityId
   }
-  toEntity {
+  toVersion {
     id
     name
-    ${entityTypesFragment}
+    entityId
+    ${versionTypesFragment}
     triples {
       nodes {
         ${tripleFragment}
@@ -89,12 +108,13 @@ export const spacePluginsFragment = `
   spacePluginAddress
 `;
 
-export const entityFragment = `
+export const versionFragment = `
   id
+  entityId
   name
   description
-  ${entityTypesFragment}
-  relationsByFromEntityId {
+  ${versionTypesFragment}
+  relationsByFromVersionId {
     nodes {
       ${relationFragment}
     }
@@ -110,8 +130,8 @@ export const spaceMetadataFragment = `
   id
   name
   description
-  ${entityTypesFragment}
-  relationsByFromEntityId {
+  ${versionTypesFragment}
+  relationsByFromVersionId {
     nodes {
       ${relationFragment}
     }
@@ -146,7 +166,12 @@ export const spaceFragment = `
   spacesMetadata {
     nodes {
       entity {
-        ${entityFragment}
+        id
+        currentVersion {
+          version {
+            ${versionFragment}
+          }
+        }
       }
     }
   }
@@ -156,33 +181,12 @@ export const resultEntityFragment = `
   id
   name
   description
-  ${entityTypesFragment}
-  entitySpaces {
+  ${versionTypesFragment}
+  versionSpaces {
     nodes {
       space {
         ${spaceFragment}
       }
-    }
-  }
-`;
-
-export const opFragment = `
-  id
-  type
-`;
-
-export const proposedVersionFragment = `
-  id
-  entity {
-    id
-    name
-  }
-  ops {
-    nodes {
-      ${opFragment}
-      ${tripleFragment}
-      attributeId
-      entityId
     }
   }
 `;

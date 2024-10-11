@@ -3,10 +3,10 @@ import type * as S from 'zapatos/schema';
 
 import { pool } from '../utils/pool';
 
-export class ProposedVersions {
-  static async upsert(proposedVersions: S.proposed_versions.Insertable[]) {
+export class VersionSpaces {
+  static async upsert(entities: S.version_spaces.Insertable[]) {
     return await db
-      .upsert('proposed_versions', proposedVersions, ['id'], {
+      .upsert('version_spaces', entities, db.constraint('version_spaces_pkey'), {
         updateColumns: db.doNothing,
       })
       .run(pool);
