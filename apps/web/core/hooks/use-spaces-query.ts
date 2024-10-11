@@ -31,6 +31,7 @@ const spacesQuery = (name: string) => `
         spacesMetadata {
           nodes {
             entity {
+              id
               currentVersion {
               version {
                 ${spaceMetadataFragment}

@@ -29,6 +29,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const space = await cachedFetchSpace(spaceId);
   const entity = space?.spaceConfig;
 
+  console.log('spac', { space, entity });
+
   if (!entity) {
     console.log(`Redirecting to /space/${spaceId}/entities`);
     redirect(`/space/${spaceId}/entities`);
