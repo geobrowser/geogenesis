@@ -37,6 +37,21 @@ function makeStubUriTriple(value: string): Triple {
   };
 }
 
+function makeStubTimeTriple(value: string): Triple {
+  return {
+    attributeId: 'text-attribute-from-test',
+    attributeName: 'Text Attribute from Test',
+    entityId: EntityId('1'),
+    entityName: 'Entity Name From URI Test',
+    id: EntityId('1-1'),
+    space: 'text-space-from-test',
+    value: {
+      type: 'TIME',
+      value: value,
+    },
+  };
+}
+
 describe('Change', () => {
   it('diffs a text triple with different values', () => {
     const before: Entity = {
@@ -210,6 +225,102 @@ describe('Change', () => {
       nameTripleSpaces: [],
       relationsOut: [],
       triples: [makeStubUriTriple('text-value-1-from-text')],
+    };
+
+    const changes = aggregateChanges({
+      spaceId: undefined,
+      afterEntities: [after],
+      beforeEntities: [before],
+    });
+
+    const expected: EntityChange[] = [
+      {
+        id: EntityId('1'),
+        name: 'Entity Name From Text Test',
+        blockChanges: [],
+        changes: [],
+      },
+    ];
+
+    expect(changes).toStrictEqual(expected);
+  });
+
+  it('diffs a time triple with different values', () => {
+    const before: Entity = {
+      id: EntityId('1'),
+      types: [],
+      description: null,
+      name: 'Entity Name From Text Test',
+      nameTripleSpaces: [],
+      relationsOut: [],
+      triples: [makeStubTimeTriple('text-value-1-from-text')],
+    };
+
+    const after: Entity = {
+      id: EntityId('1'),
+      types: [],
+      description: null,
+      name: 'Entity Name From Text Test',
+      nameTripleSpaces: [],
+      relationsOut: [],
+      triples: [makeStubTimeTriple('text-value-2-from-text')],
+    };
+
+    const changes = aggregateChanges({
+      spaceId: undefined,
+      afterEntities: [after],
+      beforeEntities: [before],
+    });
+
+    const expected: EntityChange[] = [
+      {
+        id: EntityId('1'),
+        name: 'Entity Name From Text Test',
+        blockChanges: [],
+        changes: [
+          {
+            type: 'TIME',
+            attribute: {
+              id: 'text-attribute-from-test',
+              name: 'Text Attribute from Test',
+            },
+            after: {
+              type: 'UPDATE',
+              valueName: null,
+              value: 'text-value-2-from-text',
+            },
+            before: {
+              type: 'UPDATE',
+              valueName: null,
+              value: 'text-value-1-from-text',
+            },
+          },
+        ],
+      },
+    ];
+
+    expect(changes).toStrictEqual(expected);
+  });
+
+  it('diffs a time triple with same values', () => {
+    const before: Entity = {
+      id: EntityId('1'),
+      types: [],
+      description: null,
+      name: 'Entity Name From Text Test',
+      nameTripleSpaces: [],
+      relationsOut: [],
+      triples: [makeStubTimeTriple('text-value-1-from-text')],
+    };
+
+    const after: Entity = {
+      id: EntityId('1'),
+      types: [],
+      description: null,
+      name: 'Entity Name From Text Test',
+      nameTripleSpaces: [],
+      relationsOut: [],
+      triples: [makeStubTimeTriple('text-value-1-from-text')],
     };
 
     const changes = aggregateChanges({
