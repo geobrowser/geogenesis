@@ -79,4 +79,43 @@ describe('Change', () => {
 
     expect(changes).toStrictEqual(expected);
   });
+
+  it('diffs a text triple with same values', () => {
+    const before: Entity = {
+      id: EntityId('1'),
+      types: [],
+      description: null,
+      name: 'Entity Name From Text Test',
+      nameTripleSpaces: [],
+      relationsOut: [],
+      triples: [makeStubTextTriple('text-value-1-from-text')],
+    };
+
+    const after: Entity = {
+      id: EntityId('1'),
+      types: [],
+      description: null,
+      name: 'Entity Name From Text Test',
+      nameTripleSpaces: [],
+      relationsOut: [],
+      triples: [makeStubTextTriple('text-value-1-from-text')],
+    };
+
+    const changes = aggregateChanges({
+      spaceId: undefined,
+      afterEntities: [after],
+      beforeEntities: [before],
+    });
+
+    const expected: EntityChange[] = [
+      {
+        id: EntityId('1'),
+        name: 'Entity Name From Text Test',
+        blockChanges: [],
+        changes: [],
+      },
+    ];
+
+    expect(changes).toStrictEqual(expected);
+  });
 });
