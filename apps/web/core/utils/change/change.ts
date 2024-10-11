@@ -12,7 +12,6 @@ import { fetchEntity } from '~/core/io/subgraph';
 import { queryClient } from '~/core/query-client';
 import type { Triple } from '~/core/types';
 
-import { groupBy } from '../utils';
 import { fetchPreviousVersionByCreatedAt } from './fetch-previous-version-by-created-at';
 import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';
 import { getAfterTripleChange, getBeforeTripleChange } from './get-triple-change';
@@ -123,7 +122,7 @@ interface AggregateChangesArgs {
   beforeEntities: Entity[];
 }
 
-function aggregateChanges({ spaceId, afterEntities, beforeEntities }: AggregateChangesArgs): EntityChange[] {
+export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: AggregateChangesArgs): EntityChange[] {
   // Aggregate remote triples into a map of entities -> attributes and attributes -> triples
   // Each map is 1:1 with each entity only having one attribute per attribute id and one triple per attribute id
   //
