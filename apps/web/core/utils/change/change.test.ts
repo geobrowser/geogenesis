@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { Entity } from '~/core/io/dto/entities';
+import { Entity, Relation } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
 import { Triple } from '~/core/types';
 
 import { aggregateChanges } from './change';
 import { EntityChange } from './types';
 
-function makeStubEntity(tripleFn: () => Triple): Entity {
+function makeStubEntity(tripleFn?: () => Triple, relationFn?: () => Relation): Entity {
   return {
     id: EntityId('1'),
     types: [],
     description: null,
     name: 'Entity Name from Test',
     nameTripleSpaces: [],
-    relationsOut: [],
-    triples: [tripleFn()],
+    relationsOut: relationFn ? [relationFn()] : [],
+    triples: tripleFn ? [tripleFn()] : [],
   };
 }
 
@@ -76,6 +76,27 @@ function makeStubEntityTriple(value: string): Triple {
       type: 'ENTITY',
       value: value,
       name: value,
+    },
+  };
+}
+
+function makeStubRelation(value: string): Relation {
+  return {
+    id: EntityId('1-1'),
+    index: 'a0',
+    fromEntity: {
+      id: EntityId('1'),
+      name: 'From Entity Name From Relation Test',
+    },
+    toEntity: {
+      id: EntityId(value),
+      name: value,
+      renderableType: 'RELATION',
+      value: value,
+    },
+    typeOf: {
+      id: EntityId('TypeOf-Entity-Id-From-Relation-Test'),
+      name: 'Type Of Entity Name From Relation Test',
     },
   };
 }
@@ -310,6 +331,68 @@ describe('Change', () => {
   it('diffs an entity triple with same values', () => {
     const before = makeStubEntity(() => makeStubEntityTriple('entity-value-1-from-test'));
     const after = makeStubEntity(() => makeStubEntityTriple('entity-value-1-from-test'));
+
+    const changes = aggregateChanges({
+      spaceId: undefined,
+      afterEntities: [after],
+      beforeEntities: [before],
+    });
+
+    const expected: EntityChange[] = [
+      {
+        id: EntityId('1'),
+        name: 'Entity Name from Test',
+        blockChanges: [],
+        changes: [],
+      },
+    ];
+
+    expect(changes).toStrictEqual(expected);
+  });
+
+  it('diffs a relation with different values', () => {
+    const before = makeStubEntity(undefined, () => makeStubRelation('relation-value-1-from-test'));
+    const after = makeStubEntity(undefined, () => makeStubRelation('relation-value-2-from-test'));
+
+    const changes = aggregateChanges({
+      spaceId: undefined,
+      afterEntities: [after],
+      beforeEntities: [before],
+    });
+
+    const expected: EntityChange[] = [
+      {
+        id: EntityId('1'),
+        name: 'Entity Name from Test',
+        blockChanges: [],
+        changes: [
+          {
+            type: 'RELATION',
+            attribute: {
+              id: 'TypeOf-Entity-Id-From-Relation-Test',
+              name: 'Type Of Entity Name From Relation Test',
+            },
+            after: {
+              type: 'UPDATE',
+              valueName: 'relation-value-2-from-test',
+              value: 'relation-value-2-from-test',
+            },
+            before: {
+              type: 'UPDATE',
+              valueName: 'relation-value-1-from-test',
+              value: 'relation-value-1-from-test',
+            },
+          },
+        ],
+      },
+    ];
+
+    expect(changes).toStrictEqual(expected);
+  });
+
+  it('diffs a relation with same values', () => {
+    const before = makeStubEntity(undefined, () => makeStubRelation('relation-value-1-from-test'));
+    const after = makeStubEntity(undefined, () => makeStubRelation('relation-value-1-from-test'));
 
     const changes = aggregateChanges({
       spaceId: undefined,

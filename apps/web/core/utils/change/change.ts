@@ -165,9 +165,9 @@ export function aggregateChanges({ spaceId, afterEntities, beforeEntities }: Agg
 
     for (const relations of Object.values(afterRelationsForEntity)) {
       for (const relation of relations) {
-        const remoteRelationsForAttributeId = beforeRelationsForEntity[relation.typeOf.id] ?? null;
-        const before = getBeforeRelationChange(relation, remoteRelationsForAttributeId);
-        const after = getAfterRelationChange(relation, remoteRelationsForAttributeId);
+        const beforeRelationsForAttributeId = beforeRelationsForEntity[relation.typeOf.id] ?? null;
+        const before = getBeforeRelationChange(relation, beforeRelationsForAttributeId);
+        const after = getAfterRelationChange(relation, beforeRelationsForAttributeId);
 
         relationChanges.push({
           attribute: {
