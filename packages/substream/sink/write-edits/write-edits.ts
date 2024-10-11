@@ -1,5 +1,5 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
-import { Effect, Either } from 'effect';
+import { Effect } from 'effect';
 import { dedupeWith } from 'effect/ReadonlyArray';
 import type * as Schema from 'zapatos/schema';
 
@@ -234,7 +234,8 @@ function aggregateSpacesFromRelations(
   spaceIdByEditId: Map<string, string>
 ) {
   return Effect.gen(function* (_) {
-    const spaces = new Map<string, string[]>();
+    // space entity id -> entityIds[]
+    const spaceConfigEntityVersionIds = new Set<string>();
 
     const [typesVersions, spaceConfigsVersions] = yield* _(
       Effect.all([
@@ -251,11 +252,12 @@ function aggregateSpacesFromRelations(
       const toVersionId = relation.to_version_id.toString();
 
       if (typeVersionIds.has(relation.type_of_id.toString()) && spaceConfigVersionIds.has(toVersionId)) {
-        const alreadyFoundSpaces = spaces.get(fromVersionId) ?? [];
-        spaces.set(fromVersionId, [...alreadyFoundSpaces, toVersionId]);
+        spaceConfigEntityVersionIds.add(fromVersionId);
       }
     }
 
+    // Map space config entity versions to their entity ids
+    // Map all space config entity version ids from this block to their entity ids and space ids
     const entityIdByVersionId = new Map<string, string>();
 
     for (const version of versions) {
@@ -280,23 +282,20 @@ function aggregateSpacesFromRelations(
       new Map<string, string>()
     );
 
-    return [...spaces.entries()].flatMap(([versionId, spaceIds]) => {
-      const entityIdForVersionId = entityIdByVersionId.get(versionId);
-      if (!entityIdForVersionId) {
-        return [];
-      }
+    return [...spaceConfigEntityVersionIds.values()]
+      .map(spaceConfigEntityVersionId => {
+        const entityIdForVersionId = entityIdByVersionId.get(spaceConfigEntityVersionId);
+        if (!entityIdForVersionId) {
+          return null;
+        }
 
-      // I need the actual space id somewhere. Right now it's just two version ids
-      return spaceIds
-        .map(fromVersionId => {
-          const spaceMetadata: Schema.spaces_metadata.Insertable = {
-            space_id: spaceVersions.get(fromVersionId)!,
-            entity_id: entityIdForVersionId,
-          };
+        const spaceMetadata: Schema.spaces_metadata.Insertable = {
+          space_id: spaceVersions.get(spaceConfigEntityVersionId)!,
+          entity_id: entityIdForVersionId,
+        };
 
-          return spaceMetadata;
-        })
-        .filter(m => m !== null);
-    });
+        return spaceMetadata;
+      })
+      .filter(m => m !== null);
   });
 }
