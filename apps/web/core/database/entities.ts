@@ -214,7 +214,6 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
   // and Pet both have Avatar as part of their schema.
   return dedupeWith(
     [
-      ...schema,
       // Name, description, and types are always required for every entity even
       // if they aren't defined in the schema.
       {
@@ -235,6 +234,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
         // in the UI differently.
         valueType: SYSTEM_IDS.TEXT,
       },
+      ...schema,
     ],
     (a, b) => a.id === b.id
   );
