@@ -187,6 +187,7 @@ interface AggregateTypesFromRelationsAndTriplesArgs {
 
 function aggregateTypesFromRelationsAndTriples({ relations, triples }: AggregateTypesFromRelationsAndTriplesArgs) {
   return Effect.gen(function* (_) {
+    // entity version id -> type version ids
     const types = new Map<string, string[]>();
     const typeVersionIds = new Set(
       (yield* _(Effect.promise(() => Versions.select({ entity_id: SYSTEM_IDS.TYPES })))).map(v => v.id)
@@ -202,18 +203,35 @@ function aggregateTypesFromRelationsAndTriples({ relations, triples }: Aggregate
       }
     }
 
-    for (const { triple } of triples.filter(t => t.op === 'SET_TRIPLE')) {
-      if (triple.value_type === 'ENTITY' && triple.attribute_id === SYSTEM_IDS.TYPES) {
-        // @TODO: Triple entity values should be version_values that point to a version
-        // and not an entity.
-        const type = triple.entity_value_id?.toString();
+    const triplesThatSetAType = triples.filter(
+      t => t.op === 'SET_TRIPLE' && t.triple.attribute_id === SYSTEM_IDS.TYPES && t.triple.value_type === 'ENTITY'
+    );
 
-        if (type) {
-          const versionId = triple.version_id.toString();
-          const alreadyFoundTypes = types.get(versionId) ?? [];
+    const typeEntityIdsFromTriples = triplesThatSetAType
+      .map(t => t.triple.entity_value_id?.toString())
+      .filter(entityId => entityId !== undefined);
 
-          types.set(versionId, [...alreadyFoundTypes, type]);
-        }
+    const versionsForTypeEntityIdsFromTriples = (yield* _(
+      Effect.all(
+        typeEntityIdsFromTriples.map(entityId =>
+          Effect.promise(() => {
+            return Versions.findLatestValid(entityId);
+          })
+        )
+      )
+    )).flatMap(v => (v ? [v] : []));
+
+    for (const { triple } of triplesThatSetAType) {
+      // Find a version for the entity being used as the type
+      const typeVersionId = versionsForTypeEntityIdsFromTriples
+        .find(v => v.entity_id.toString() === triple.entity_value_id?.toString())
+        ?.id.toString();
+
+      if (typeVersionId) {
+        const versionId = triple.version_id.toString();
+        const alreadyFoundTypes = types.get(versionId) ?? [];
+
+        types.set(versionId, [...alreadyFoundTypes, typeVersionId]);
       }
     }
 
