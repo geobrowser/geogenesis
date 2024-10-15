@@ -1,21 +1,17 @@
-import { SYSTEM_IDS, createGeoId, createRelationship } from '@geogenesis/sdk';
+import { SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
 import { Effect } from 'effect';
-import type * as s from 'zapatos/schema';
 
+import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
+import { handleEditsPublished } from './events/edits-published/handler';
 import {
-  INITIAL_COLLECTION_ITEM_INDEX,
-  ROOT_SPACE_CREATED_AT,
-  ROOT_SPACE_CREATED_AT_BLOCK,
-  ROOT_SPACE_CREATED_BY_ID,
-} from './constants/constants';
-import { Accounts, CurrentVersions, Entities, Proposals, Spaces, Triples, Types, VersionSpaces, Versions } from './db';
-import { Edits } from './db/edits';
-import { Relations } from './db/relations';
-import { getTripleFromOp } from './events/get-triple-from-op';
-import { createVersionId } from './utils/id';
-
-const PROPOSAL_ID = '0';
-const EDIT_ID = '0';
+  handleInitialGovernanceSpaceEditorsAdded,
+  handleInitialPersonalSpaceEditorsAdded,
+} from './events/initial-editors-added/handler';
+import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
+import type { EditProposal } from './events/proposals-created/parser';
+import { handleProposalsExecuted } from './events/proposals-executed/handler';
+import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
+import type { Op } from './types';
 
 const entities: string[] = [
   SYSTEM_IDS.TYPES,
@@ -138,21 +134,6 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.RELATION_FROM_ATTRIBUTE]: 'From entity',
 };
 
-const versions: s.versions.Insertable[] = entities.map(e => {
-  return {
-    id: createVersionId({
-      entityId: e,
-      proposalId: PROPOSAL_ID,
-    }),
-    name: names[e],
-    created_at: ROOT_SPACE_CREATED_AT,
-    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-    created_by_id: ROOT_SPACE_CREATED_BY_ID,
-    edit_id: EDIT_ID,
-    entity_id: e,
-  };
-});
-
 const attributes: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: SYSTEM_IDS.RELATION,
   [SYSTEM_IDS.TEMPLATE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
@@ -211,260 +192,134 @@ const types: Record<string, string[]> = {
   ],
 };
 
+const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
+  return {
+    type: 'SET_TRIPLE',
+    triple: {
+      attribute: SYSTEM_IDS.NAME,
+      entity: entityId!,
+      value: {
+        type: 'TEXT',
+        value: name!,
+      },
+    },
+  } satisfies Op;
+});
+
+const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attributeId, valueType]) => {
+  return createRelationship({
+    fromId: attributeId,
+    toId: valueType,
+    relationTypeId: SYSTEM_IDS.VALUE_TYPE,
+  });
+});
+
+const typeOps: Op[] = Object.keys(types).flatMap(typeId => {
+  return createRelationship({
+    fromId: typeId,
+    toId: SYSTEM_IDS.SCHEMA_TYPE,
+    relationTypeId: SYSTEM_IDS.TYPES,
+  });
+});
+
+const typeSchemaOps: Op[] = Object.entries(types).flatMap(([typeId, attributeIds]) => {
+  return attributeIds.flatMap(attributeId => {
+    return createRelationship({
+      fromId: typeId,
+      toId: attributeId,
+      relationTypeId: SYSTEM_IDS.ATTRIBUTES,
+    });
+  });
+});
+
 const relationTypes: Record<string, string[]> = {
   [SYSTEM_IDS.TYPES]: [SYSTEM_IDS.ATTRIBUTES],
   [SYSTEM_IDS.ATTRIBUTES]: [SYSTEM_IDS.VALUE_TYPE],
 };
 
-const geoEntities: s.entities.Insertable[] = entities.map(
-  (entity): s.entities.Insertable => ({
-    id: entity,
-    created_by_id: ROOT_SPACE_CREATED_BY_ID,
-    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-    created_at: ROOT_SPACE_CREATED_AT,
-    updated_at: ROOT_SPACE_CREATED_AT,
-    updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-  })
-);
-
-const namesTriples: s.triples.Insertable[] = Object.entries(names).map(
-  ([id, name]): s.triples.Insertable => ({
-    version_id: versions.find(v => v.entity_id === id)!.id,
-    entity_id: id,
-    attribute_id: SYSTEM_IDS.NAME,
-    value_type: 'TEXT',
-    text_value: name,
-    space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-    created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-    created_at: ROOT_SPACE_CREATED_AT,
-  })
-);
-
-// @TODO: Make attribute relations
-
-// Make the type entities themselves and any relations that they have
-const makeTypeRelations = () => {
-  const relationsToWrite: s.relations.Insertable[] = [];
-  const triplesToWrite: s.triples.Insertable[] = [];
-
-  // Make the relation triples for the type entity. For every type we need
-  // to make a relation entity to represent the type
-  for (const [typeEntityId] of Object.entries(types)) {
-    const versionId = entities.find(e => e === typeEntityId)!;
-
-    // Create all the relationship triples for the Types -> Type relation
-    const typeRelationshipTriples = createRelationship({
-      relationTypeId: SYSTEM_IDS.TYPES,
-      fromId: typeEntityId,
-      toId: SYSTEM_IDS.SCHEMA_TYPE,
-    }).map(op =>
-      getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, versionId, {
-        blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
-        cursor: '',
-        requestId: '',
-        timestamp: ROOT_SPACE_CREATED_AT,
-      })
-    );
-
-    // Make a relation of Types -> Type
-    relationsToWrite.push({
-      id: createGeoId(), // Not deterministic
-      type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.TYPES)!.id, // Making a relation of Type -> Type, i.e., this entity is a Type
-      from_version_id: versions.find(v => v.entity_id === typeEntityId)!.id,
-      to_version_id: versions.find(v => v.entity_id === SYSTEM_IDS.SCHEMA_TYPE)!.id,
-      index: INITIAL_COLLECTION_ITEM_INDEX,
-      entity_id: typeRelationshipTriples[0]!.entity_id,
-    });
-
-    triplesToWrite.push(...typeRelationshipTriples);
-  }
-
-  // For every attribute on the type we need to create a relations entity
-  for (const [typeId, attributeIds] of Object.entries(types)) {
-    // Create a relationship and all of the triples for each Attribute on the Type
-    // e.g.,
-    // Person -> Attribute -> Age
-    // Person -> Attribute -> Date of Birth
-    for (const attributeId of attributeIds) {
-      const versionId = entities.find(e => e === attributeId)!;
-
-      const relationshipTriples = createRelationship({
-        relationTypeId: SYSTEM_IDS.ATTRIBUTES,
-        fromId: typeId,
-        toId: attributeId,
-      }).map(op =>
-        getTripleFromOp(op, SYSTEM_IDS.ROOT_SPACE_ID, versionId, {
-          blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
-          cursor: '',
-          requestId: '',
-          timestamp: ROOT_SPACE_CREATED_AT,
-        })
-      );
-
-      // Create the relation of Relation type -> Attributes
-      relationsToWrite.push({
-        // @TODO: we don't need entity_id if we can use the id as the entity_id
-        id: relationshipTriples[0]!.entity_id,
-        from_version_id: versions.find(v => v.entity_id === typeId)!.id,
-        type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.ATTRIBUTES)!.id, // Making a relation of type Attribute
-        to_version_id: versions.find(v => v.entity_id === attributeId)!.id,
-        index: INITIAL_COLLECTION_ITEM_INDEX,
-        entity_id: relationshipTriples[0]!.entity_id,
-      });
-
-      // Make the relation of Type -> Attribute for the attribute entity
-      // Don't add this relation if it already exists.
-      if (!relationsToWrite.find(r => r.id === attributeId)) {
-        relationsToWrite.push({
-          id: attributeId,
-          from_version_id: versions.find(v => v.entity_id === attributeId)!.id,
-          type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.TYPES)!.id,
-          to_version_id: versions.find(v => v.entity_id === SYSTEM_IDS.ATTRIBUTES)!.id,
-          index: INITIAL_COLLECTION_ITEM_INDEX,
-          entity_id: attributeId,
-        });
-      }
-
-      const relationValueTypeIdForAttribute = attributes[attributeId];
-
-      if (relationValueTypeIdForAttribute) {
-        const relationValueTypeRelationId = createGeoId();
-
-        // Make the relation of Relation Value Type -> Value Type for the attribute entity.
-        // Don't add this relation if it already exists.
-        if (!relationsToWrite.find(r => r.id === relationValueTypeRelationId)) {
-          relationsToWrite.push({
-            id: relationValueTypeRelationId,
-            from_version_id: versions.find(v => v.entity_id === attributeId)!.id,
-            type_of_id: versions.find(v => v.entity_id === SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE)!.id,
-            to_version_id: versions.find(v => v.entity_id === relationValueTypeIdForAttribute)!.id,
-            index: INITIAL_COLLECTION_ITEM_INDEX,
-            entity_id: relationValueTypeRelationId,
-          });
-        }
-      }
-
-      triplesToWrite.push(...relationshipTriples);
-    }
-  }
-
-  return {
-    relationsForTypesAndAttributes: relationsToWrite,
-    triplesForTypesAndAttributes: triplesToWrite,
-  };
-};
-
-const space: s.spaces.Insertable = {
-  id: SYSTEM_IDS.ROOT_SPACE_ID,
-  dao_address: SYSTEM_IDS.ROOT_SPACE_ADDRESS,
-  is_root_space: true,
-  type: 'public',
-  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-};
-
-const account: s.accounts.Insertable = {
-  id: ROOT_SPACE_CREATED_BY_ID,
-};
-
-const proposal: s.proposals.Insertable = {
-  id: PROPOSAL_ID,
-  onchain_proposal_id: '-1',
-  created_by_id: ROOT_SPACE_CREATED_BY_ID,
-  plugin_address: '',
-  space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-  type: 'ADD_EDIT',
-  status: 'accepted',
-  start_time: ROOT_SPACE_CREATED_AT,
-  end_time: ROOT_SPACE_CREATED_AT,
-  edit_id: EDIT_ID,
-};
-
-const edit: s.edits.Insertable = {
-  id: '0',
-  name: 'Root Space Bootstrap',
-  description: null,
-  uri: '',
-  created_at_block: ROOT_SPACE_CREATED_AT_BLOCK.toString(),
-  created_at: ROOT_SPACE_CREATED_AT,
-  created_by_id: ROOT_SPACE_CREATED_BY_ID,
-  space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-};
-
-const currentVersions: s.current_versions.Insertable[] = versions.map(v => {
-  return {
-    entity_id: v.entity_id,
-    version_id: v.id,
-  };
-});
-
 export class BootstrapRootError extends Error {
   _tag: 'BootstrapRootError' = 'BootstrapRootError';
 }
 
-export function bootstrapRoot() {
-  return Effect.gen(function* (_) {
-    // When binding the attributes schema to a type entity we
-    // create collections to store many attributes. We need
-    // to insert these collections into the Collections table.
-    const { relationsForTypesAndAttributes, triplesForTypesAndAttributes } = makeTypeRelations();
-    const entitiesForRelations = relationsForTypesAndAttributes.map(
-      (r): s.entities.Insertable => ({
-        id: r.entity_id,
-        created_by_id: ROOT_SPACE_CREATED_BY_ID,
-        created_at: ROOT_SPACE_CREATED_AT,
-        created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-        updated_at: ROOT_SPACE_CREATED_AT,
-        updated_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-      })
-    );
+const SPACE_ID = 'ab7d4b9e02f840dab9746d352acb0ac6';
+const DAO_ADDRESS = '0x9e2342C55080f2fCb6163c739a88c4F2915163C4';
+const SPACE_ADDRESS = '0x7a260AC2D569994AA22a259B19763c9F681Ff84c';
+const MAIN_VOTING_ADDRESS = '0x379408c230817DC7aA36033BEDC05DCBAcE7DF50';
+const MEMBER_ACCESS_ADDRESS = '0xd09225EAe465f562719B9cA07da2E8ab286DBB36';
 
-    yield _(
-      Effect.tryPromise({
-        try: async () => {
-          const typesToWrite = relationsForTypesAndAttributes.filter(r => r.type_of_id === SYSTEM_IDS.TYPES);
-          const attributesToWrite = relationsForTypesAndAttributes.filter(
-            r => r.type_of_id === SYSTEM_IDS.RELATION_TYPE
-          );
+const editProposal: EditProposal = {
+  type: 'ADD_EDIT',
+  proposalId: '-1',
+  onchainProposalId: '-1',
+  creator: ROOT_SPACE_CREATED_BY_ID,
+  name: 'Root Space Bootstrap',
+  endTime: ROOT_SPACE_CREATED_AT.toString(),
+  startTime: ROOT_SPACE_CREATED_AT.toString(),
+  metadataUri: 'bootstrapped-so-no-uri',
+  ops: [...nameOps, ...attributeValueTypeOps, ...typeOps, ...typeSchemaOps],
+  pluginAddress: MAIN_VOTING_ADDRESS,
+  space: SYSTEM_IDS.ROOT_SPACE_ID,
+};
 
-          await Spaces.upsert([space]);
-          // @TODO: Add types from relations to db.entity_types
-          await Promise.all([Accounts.upsert([account]), Proposals.upsert([proposal]), Edits.upsert([edit])]);
+const INITIAL_BLOCK = {
+  blockNumber: ROOT_SPACE_CREATED_AT_BLOCK,
+  cursor: '0',
+  requestId: '-1',
+  timestamp: ROOT_SPACE_CREATED_AT,
+};
 
-          // We write these separately since they might change the same entity which
-          // results in a INSERT ON CONFLICT DO error
-          await Entities.upsert(geoEntities);
-          await Entities.upsert(entitiesForRelations);
-
-          const entitySpaces = geoEntities.map(e => ({
-            version_id: versions.find(v => v.entity_id === e.id)!.id,
-            space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-          }));
-          const relationSpaces = entitiesForRelations.map(e => ({
-            // @TODO: This version may not exist
-            // version_id: versions.find(v => v.entity_id === e.id)!.id,
-            version_id: e.id,
-            space_id: SYSTEM_IDS.ROOT_SPACE_ID,
-          }));
-
-          await Promise.all([
-            Versions.upsert(versions),
-            Relations.upsert(relationsForTypesAndAttributes),
-            Triples.insert([...namesTriples, ...triplesForTypesAndAttributes]),
-            Types.upsert(
-              [...typesToWrite, ...attributesToWrite].map(r => ({
-                type_id: r.type_of_id,
-                version_id: r.from_version_id,
-                created_at_block: ROOT_SPACE_CREATED_AT_BLOCK,
-                created_at: ROOT_SPACE_CREATED_AT,
-              }))
-            ),
-            VersionSpaces.upsert([...entitySpaces, ...relationSpaces]),
-          ]);
-
-          await CurrentVersions.upsert(currentVersions);
+export const bootstrapRoot = Effect.gen(function* (_) {
+  yield* _(
+    handleSpacesCreated(
+      [
+        {
+          daoAddress: DAO_ADDRESS,
+          spaceAddress: SPACE_ADDRESS,
+          id: SPACE_ID,
         },
-        catch: error => new BootstrapRootError(String(error)),
-      })
-    );
-  });
-}
+      ],
+      INITIAL_BLOCK
+    )
+  );
+
+  yield* _(
+    handleGovernancePluginCreated(
+      [
+        {
+          daoAddress: DAO_ADDRESS,
+          mainVotingAddress: MAIN_VOTING_ADDRESS,
+          memberAccessAddress: MEMBER_ACCESS_ADDRESS,
+        },
+      ],
+      INITIAL_BLOCK
+    )
+  );
+
+  yield* _(
+    handleInitialGovernanceSpaceEditorsAdded(
+      [
+        {
+          addresses: [ROOT_SPACE_CREATED_BY_ID],
+          pluginAddress: MAIN_VOTING_ADDRESS,
+        },
+      ],
+      INITIAL_BLOCK
+    )
+  );
+
+  yield* _(handleInitialProposalsCreated([editProposal], INITIAL_BLOCK));
+  yield* _(handleEditsPublished([editProposal], [SPACE_ID], INITIAL_BLOCK));
+  yield* _(handleProposalsExecuted([editProposal], INITIAL_BLOCK));
+
+  /**
+    {
+              "id": "ab7d4b9e02f840dab9746d352acb0ac6",
+              "type": "PUBLIC",
+              "daoAddress": "0x9e2342C55080f2fCb6163c739a88c4F2915163C4",
+              "spacePluginAddress": "0x7a260AC2D569994AA22a259B19763c9F681Ff84c",
+              "mainVotingPluginAddress": "0x379408c230817DC7aA36033BEDC05DCBAcE7DF50",
+              "memberAccessPluginAddress": "0xd09225EAe465f562719B9cA07da2E8ab286DBB36",
+              "personalSpaceAdminPluginAddress": null
+            },
+    */
+});
