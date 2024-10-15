@@ -8,7 +8,7 @@ import { Entity, Relation } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
 import { queryClient } from '../query-client';
-import { Schema, Triple, TripleWithEntityValue } from '../types';
+import { Schema, Triple, TripleWithEntityValue, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
 import { getTriples, useTriples } from './triples';
@@ -179,7 +179,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
     })
   );
 
-  const attributes = schemaEntities.flatMap((e): Schema[] => {
+  const schemaWithoutValueType = schemaEntities.flatMap((e): Schema[] => {
     const attributeRelations = e.relationsOut.filter(t => t.typeOf.id === SYSTEM_IDS.ATTRIBUTES);
 
     if (attributeRelations.length === 0) {
@@ -189,9 +189,24 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
     return attributeRelations.map(a => ({
       id: a.toEntity.id,
       name: a.toEntity.name,
-      // @TODO: Real value type
+      // We add the correct value type below.
       valueType: SYSTEM_IDS.TEXT,
     }));
+  });
+
+  const attributes = await Promise.all(schemaWithoutValueType.map(a => mergeEntityAsync(EntityId(a.id))));
+  const valueTypes = attributes.map(a => {
+    const valueTypeId = a.relationsOut.find(r => r.typeOf.id === SYSTEM_IDS.VALUE_TYPE)?.toEntity.id;
+    return {
+      attributeId: a.id,
+      valueTypeId,
+    };
+  });
+  const schema = schemaWithoutValueType.map(s => {
+    return {
+      ...s,
+      valueType: (valueTypes.find(v => v.attributeId === s.id)?.valueTypeId ?? SYSTEM_IDS.TEXT) as ValueTypeId,
+    } satisfies Schema;
   });
 
   // If the schema exists already in the list then we should dedupe it.
@@ -199,7 +214,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
   // and Pet both have Avatar as part of their schema.
   return dedupeWith(
     [
-      ...attributes,
+      ...schema,
       // Name, description, and types are always required for every entity even
       // if they aren't defined in the schema.
       {
@@ -215,10 +230,10 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
       {
         id: EntityId(SYSTEM_IDS.TYPES),
         name: 'Types',
-        valueType: SYSTEM_IDS.TEXT,
         // @TODO: Should specify that this attribute is a relation. We probably want
         // a want to distinguish  between the schema value type so we can render it
         // in the UI differently.
+        valueType: SYSTEM_IDS.TEXT,
       },
     ],
     (a, b) => a.id === b.id
