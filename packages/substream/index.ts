@@ -9,8 +9,6 @@ import { Telemetry, TelemetryLive } from './sink/telemetry';
 import { resetPublicTablesToGenesis } from './sink/utils/reset-public-tables-to-genesis';
 import { slog } from './sink/utils/slog';
 
-function initialize() {}
-
 async function main() {
   const program = new Command();
   program
@@ -35,7 +33,9 @@ async function main() {
       process.exit(1);
     }
 
-    const bootstrap = await pipe(bootstrapRoot(), Effect.either, Effect.runPromise);
+    const bootstrap = await pipe(
+      bootstrapRoot.pipe(Effect.provideService(Telemetry, TelemetryLive), Effect.either, Effect.runPromise)
+    );
 
     if (Either.isLeft(bootstrap)) {
       TelemetryLive.captureMessage('Could not bootstrap system entities');
