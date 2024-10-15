@@ -206,6 +206,14 @@ const nameOps: Op[] = Object.entries(names).map(([entityId, name]) => {
   } satisfies Op;
 });
 
+const attributeOps: Op[] = Object.keys(attributes).flatMap(attributeId => {
+  return createRelationship({
+    fromId: attributeId,
+    toId: SYSTEM_IDS.ATTRIBUTE,
+    relationTypeId: SYSTEM_IDS.TYPES,
+  });
+});
+
 const attributeValueTypeOps: Op[] = Object.entries(attributes).flatMap(([attributeId, valueType]) => {
   return createRelationship({
     fromId: attributeId,
@@ -256,7 +264,7 @@ const editProposal: EditProposal = {
   endTime: ROOT_SPACE_CREATED_AT.toString(),
   startTime: ROOT_SPACE_CREATED_AT.toString(),
   metadataUri: 'bootstrapped-so-no-uri',
-  ops: [...nameOps, ...attributeValueTypeOps, ...typeOps, ...typeSchemaOps],
+  ops: [...nameOps, ...attributeOps, ...attributeValueTypeOps, ...typeOps, ...typeSchemaOps],
   pluginAddress: MAIN_VOTING_ADDRESS,
   space: SYSTEM_IDS.ROOT_SPACE_ID,
 };
