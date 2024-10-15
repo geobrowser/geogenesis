@@ -154,7 +154,7 @@ export function mergeEntity({ id, mergeWith }: MergeEntityArgs): EntityWithSchem
  * Fetch by space id so we can scope the triples and relations to a specific space.
  */
 export async function mergeEntityAsync(id: EntityId): Promise<EntityWithSchema> {
-  const cachedEntity = await await queryClient.fetchQuery({
+  const cachedEntity = await queryClient.fetchQuery({
     queryKey: ['entity-for-merging', id],
     queryFn: ({ signal }) => fetchEntity({ id, signal }),
     staleTime: Infinity,
@@ -189,6 +189,7 @@ export async function getSchemaFromTypeIds(typesIds: string[]): Promise<Schema[]
     return attributeRelations.map(a => ({
       id: a.toEntity.id,
       name: a.toEntity.name,
+      // @TODO: Real value type
       valueType: SYSTEM_IDS.TEXT,
     }));
   });

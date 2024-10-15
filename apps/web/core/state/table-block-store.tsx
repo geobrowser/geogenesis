@@ -12,11 +12,16 @@ import {
 } from '../blocks-sdk/table';
 import { mergeEntityAsync, useEntity } from '../database/entities';
 import { useRelations } from '../database/relations';
-import { MergeTableEntitiesArgs, mergeCollectionItemEntitiesAsync, mergeTableEntities } from '../database/table';
+import {
+  MergeTableEntitiesArgs,
+  mergeCollectionItemEntitiesAsync,
+  mergeColumns,
+  mergeTableEntities,
+} from '../database/table';
 import { useWriteOps } from '../database/write';
 import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
-import { Schema, ValueType as TripleValueType } from '../types';
+import { ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
 import { Values } from '../utils/value';
 import { getSource, removeSources, upsertSource } from './editor/sources';
@@ -91,17 +96,10 @@ export function useTableBlock() {
   // We need the entities before we can fetch the columns since we need to know the
   // types of the entities when rendering a collection source.
   const { data: columns, isLoading: isLoadingColumns } = useQuery({
-    queryKey: ['table-block-columns'],
+    queryKey: ['table-block-columns', filterState],
     queryFn: async () => {
-      // @TODO(data blocks): Fetch columns based on source type or entities schemas
-      return [
-        {
-          id: EntityId(SYSTEM_IDS.NAME),
-          name: 'Name',
-          valueType: SYSTEM_IDS.TEXT,
-        },
-      ] satisfies Schema[];
-      // return await mergeColumns(EntityId(selectedType.entityId));
+      const typesInFilter = filterState?.filter(f => f.columnId === SYSTEM_IDS.TYPES).map(f => f.value) ?? [];
+      return await mergeColumns(typesInFilter);
     },
   });
 
