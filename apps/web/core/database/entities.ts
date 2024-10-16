@@ -4,11 +4,11 @@ import { dedupeWith } from 'effect/Array';
 
 import * as React from 'react';
 
-import { Entity, Relation } from '../io/dto/entities';
+import { Entity } from '../io/dto/entities';
 import { EntityId } from '../io/schema';
 import { fetchEntity } from '../io/subgraph';
 import { queryClient } from '../query-client';
-import { Schema, Triple, TripleWithEntityValue, ValueTypeId } from '../types';
+import { Relation, Schema, Triple, TripleWithEntityValue, ValueTypeId } from '../types';
 import { Entities } from '../utils/entity';
 import { getRelations, useRelations } from './relations';
 import { getTriples, useTriples } from './triples';

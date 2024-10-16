@@ -4,8 +4,7 @@ import { motion } from 'framer-motion';
 
 import * as React from 'react';
 
-import { Relation } from '~/core/io/dto/entities';
-import { Triple } from '~/core/types';
+import { Relation, Triple } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
 

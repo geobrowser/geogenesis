@@ -17,6 +17,7 @@ import Image from 'next/image';
 import * as React from 'react';
 import { useState } from 'react';
 
+import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { SearchResult } from '~/core/io/dto/search';
@@ -27,6 +28,7 @@ import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Row, Schema } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { EntityCell } from '~/core/utils/entity-table/entity-table';
+import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -77,7 +79,7 @@ const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedC
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, table, cell }) => {
-    const space = table.options.meta!.space;
+    const spaceId = table.options.meta!.space;
     const cellId = `${row.original.id}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
 
@@ -92,6 +94,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const valueType = columnValueType(cellData.columnId, columns);
 
+    // @TODO: Use toRenderables for editable table cell and entity table cell
     const cellTriples = getTriples({
       mergeWith: cellData.triples,
       selector: triple => {
@@ -101,6 +104,25 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
         return isRowCell && isColCell && isCurrentValueType;
       },
+    });
+
+    const cellRelations = getRelations({
+      // @TODO: Should have cell relations or just be renderables
+      mergeWith: cellData.relations,
+      selector: relation => {
+        const isRowCell = relation.fromEntity.id === cellData.entityId;
+        const isColCell = relation.typeOf.id === cellData.columnId;
+
+        return isRowCell && isColCell;
+      },
+    });
+
+    const renderables = toRenderables({
+      entityId: cellData.entityId,
+      entityName: Entities.name(cellTriples),
+      spaceId,
+      triples: cellTriples,
+      relations: cellRelations,
     });
 
     if (isEditable) {
@@ -114,7 +136,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           key={Entities.name(cellTriples)}
           triples={cellTriples}
           cell={cellData}
-          space={space}
+          space={spaceId}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}
           columnRelationTypes={columnRelationTypes[cellData.columnId]}
@@ -125,9 +147,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     return (
       <EntityTableCell
         key={Entities.name(cellTriples)}
-        cell={cellData}
-        triples={cellTriples}
-        space={space}
+        entityId={cellData.entityId}
+        columnId={cellData.columnId}
+        renderables={renderables}
+        space={spaceId}
         isExpanded={isExpanded}
       />
     );

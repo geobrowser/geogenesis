@@ -1,8 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Entity, Relation } from '~/core/io/dto/entities';
+import { Entity } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
-import { Triple as ITriple, ValueTypeId } from '~/core/types';
+import { Triple as ITriple, Relation, ValueTypeId } from '~/core/types';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the

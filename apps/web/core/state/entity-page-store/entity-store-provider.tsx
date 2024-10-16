@@ -3,8 +3,7 @@
 import * as React from 'react';
 import { createContext, useContext, useMemo } from 'react';
 
-import { Relation } from '~/core/io/dto/entities';
-import { OmitStrict, Triple } from '~/core/types';
+import { OmitStrict, Relation, Triple } from '~/core/types';
 
 const EntityStoreContext = createContext<OmitStrict<Props, 'children'> | undefined>(undefined);
 

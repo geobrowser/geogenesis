@@ -9,8 +9,8 @@ import * as React from 'react';
 
 import { useWriteOps } from '~/core/database/write';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { Relation } from '~/core/io/dto/entities';
 import { useTableBlock } from '~/core/state/table-block-store';
+import { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';

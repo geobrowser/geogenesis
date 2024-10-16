@@ -1,8 +1,7 @@
 import * as React from 'react';
 
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { Relation } from '~/core/io/dto/entities';
-import { RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
+import { Relation, RelationRenderableProperty, Triple, TripleRenderableProperty } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { LinkableChip, LinkableRelationChip } from '~/design-system/chip';

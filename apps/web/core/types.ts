@@ -180,10 +180,39 @@ export interface Schema {
   valueType: ValueTypeId;
 }
 
+export type Relation = {
+  id: EntityId;
+  index: string;
+  typeOf: {
+    id: EntityId;
+    name: string | null;
+  };
+  fromEntity: {
+    id: EntityId;
+    name: string | null;
+  };
+  toEntity: {
+    id: EntityId;
+    name: string | null;
+
+    // The "Renderable Type" for an entity provides a hint to the consumer
+    // of the entity to _what_ the entity is so they know how they should
+    // render it depending on their use case.
+    renderableType: RenderableEntityType;
+
+    // The value of the To entity depends on the type of the To entity. e.g.,
+    // if the entity is an image, the value is the URL of the image. If it's
+    // a regular entity, the valu is the ID. It's a bit duplicative, but will
+    // make more sense when we add support for other entity types.
+    value: string;
+  };
+};
+
 export interface Cell {
   columnId: string;
   entityId: string;
   triples: Triple[];
+  relations: Relation[];
 }
 
 export type Row = Record<string, Cell>;

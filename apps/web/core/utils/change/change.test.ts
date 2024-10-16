@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { Entity, Relation } from '~/core/io/dto/entities';
+import { Entity } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
-import { Triple } from '~/core/types';
+import { Relation, Triple } from '~/core/types';
 
 import { aggregateChanges } from './change';
 import { EntityChange } from './types';

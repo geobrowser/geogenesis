@@ -63,7 +63,8 @@ export function useEntityTable() {
     queryKey: ['table-block-columns', selectedType?.entityId],
     queryFn: async () => {
       if (!selectedType) return [];
-      return await mergeColumns(EntityId(selectedType.entityId));
+      return [];
+      // return await mergeColumns(EntityId(selectedType.entityId));
     },
   });
 

@@ -4,12 +4,13 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
-import { Entity, Relation } from '~/core/io/dto/entities';
+import { Entity } from '~/core/io/dto/entities';
 import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId, TypeId } from '~/core/io/schema';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
+import { Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils, getOpenGraphMetadataForEntity } from '~/core/utils/utils';
 
