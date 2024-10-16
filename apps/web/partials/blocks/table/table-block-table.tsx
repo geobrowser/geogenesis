@@ -117,6 +117,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       },
     });
 
+    // @TODO: Might need to add placeholders for each column that we're rendering
     const renderables = toRenderables({
       entityId: cellData.entityId,
       entityName: Entities.name(cellTriples),
