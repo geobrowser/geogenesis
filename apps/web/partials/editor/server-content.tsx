@@ -30,44 +30,22 @@ const Block = ({ block }: BlockProps) => {
       return (
         <div className="react-renderer node-paragraph">
           <div className="whitespace-normal">
-            <p>
-              {block.content.map((block, index) => (
-                <Block key={index} block={block} />
-              ))}
-            </p>
+            <p>{block.content?.map((block, index) => <Block key={index} block={block} />)}</p>
           </div>
         </div>
       );
     }
 
     case 'bulletList': {
-      return (
-        <ul>
-          {block.content.map((block, index) => (
-            <Block key={index} block={block} />
-          ))}
-        </ul>
-      );
+      return <ul>{block.content?.map((block, index) => <Block key={index} block={block} />)}</ul>;
     }
 
     case 'orderedList': {
-      return (
-        <ol>
-          {block.content.map((block, index) => (
-            <Block key={index} block={block} />
-          ))}
-        </ol>
-      );
+      return <ol>{block.content?.map((block, index) => <Block key={index} block={block} />)}</ol>;
     }
 
     case 'listItem': {
-      return (
-        <li>
-          {block.content.map((block, index) => (
-            <Block key={index} block={block} />
-          ))}
-        </li>
-      );
+      return <li>{block.content?.map((block, index) => <Block key={index} block={block} />)}</li>;
     }
 
     case 'heading': {
@@ -75,11 +53,7 @@ const Block = ({ block }: BlockProps) => {
 
       return (
         <div className="react-renderer node-heading">
-          <Component>
-            {block.content.map((block, index) => (
-              <Block key={index} block={block} />
-            ))}
-          </Component>
+          <Component>{block.content?.map((block, index) => <Block key={index} block={block} />)}</Component>
         </div>
       );
     }

@@ -2,58 +2,54 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 
 import { cloneEntity } from './clone-entity';
 
-export const generateTriplesForCompany = async (
-  spaceConfigEntityId: string,
-  spaceName: string,
-  spaceAddress: string
-) => {
+export const generateOpsForCompany = async (spaceConfigEntityId: string, spaceName: string) => {
   const [
-    spaceConfigurationActions,
-    postsPageActions,
-    // productsPageActions,
-    // servicesPageActions,
-    eventsPageActions,
-    jobsPageActions,
+    spaceConfigurationOps,
+    postsPageOps,
+    // productsPageOps,
+    // servicesPageOps,
+    eventsPageOps,
+    // teamPageOps,
+    jobsPageOps,
   ] = await Promise.all([
     cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
       entityId: spaceConfigEntityId,
       entityName: spaceName,
-      spaceId: spaceAddress,
     }),
     cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_POSTS_PAGE_TEMPLATE,
       entityName: 'Posts',
-      spaceId: spaceAddress,
     }),
     // cloneEntity({
     //   oldEntityId: SYSTEM_IDS.COMPANY_PRODUCTS_PAGE_TEMPLATE,
     //   entityName: 'Products',
-    //   spaceId: spaceAddress,
     // }),
     // cloneEntity({
     //   oldEntityId: SYSTEM_IDS.COMPANY_SERVICES_PAGE_TEMPLATE,
     //   entityName: 'Services',
-    //   spaceId: spaceAddress,
     // }),
     cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_EVENTS_PAGE_TEMPLATE,
-      entityName: 'Services',
-      spaceId: spaceAddress,
+      entityName: 'Events',
     }),
+    // cloneEntity({
+    //   oldEntityId: SYSTEM_IDS.COMPANY_TEAM_PAGE_TEMPLATE,
+    //   entityName: 'Team',
+    // }),
     cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_JOBS_PAGE_TEMPLATE,
       entityName: 'Jobs',
-      spaceId: spaceAddress,
     }),
   ]);
 
   return [
-    ...spaceConfigurationActions,
-    ...postsPageActions,
-    // ...productsPageActions,
-    // ...servicesPageActions,
-    ...eventsPageActions,
-    ...jobsPageActions,
+    ...spaceConfigurationOps,
+    ...postsPageOps,
+    // ...productsPageOps,
+    // ...servicesPageOps,
+    ...eventsPageOps,
+    // ...teamPageOps,
+    ...jobsPageOps,
   ];
 };
