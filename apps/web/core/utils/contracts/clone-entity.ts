@@ -11,7 +11,7 @@ type Options = {
   entityId?: string;
   entityName?: string;
 };
-1;
+
 export const cloneEntity = async (options: Options): Promise<Array<Op>> => {
   if (!options.oldEntityId) {
     throw new Error(`Must specify entity to clone.`);
