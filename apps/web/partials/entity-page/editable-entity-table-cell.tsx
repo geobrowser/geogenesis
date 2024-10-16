@@ -3,15 +3,23 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import { memo } from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
-import { RenderableProperty, TripleRenderableProperty } from '~/core/types';
+import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { NavUtils, getImagePath } from '~/core/utils/utils';
 
-import { TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { SquareButton } from '~/design-system/button';
+import { DeletableChipButton, LinkableRelationChip } from '~/design-system/chip';
+import { DateField } from '~/design-system/editable-fields/date-field';
+import { ImageZoom, PageStringField, TableStringField } from '~/design-system/editable-fields/editable-fields';
+import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
+import { Create } from '~/design-system/icons/create';
+import { SelectEntity } from '~/design-system/select-entity';
+import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
 interface Props {
   entityId: string;
   attributeId: string;
-  space: string;
+  spaceId: string;
   renderables: RenderableProperty[];
   valueType: string;
   columnName: string;
@@ -19,7 +27,7 @@ interface Props {
 }
 
 export const EditableEntityTableCell = memo(function EditableEntityTableCell({
-  space,
+  spaceId,
   entityId,
   attributeId,
   renderables,
@@ -32,8 +40,8 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   const send = useEditEvents({
     context: {
       entityId: entityId,
-      spaceId: space,
-      entityName: entityName,
+      spaceId,
+      entityName,
     },
   });
 
@@ -64,5 +72,172 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
     );
   }
 
-  return <div className="flex w-full flex-wrap gap-2"></div>;
+  const firstRenderable = renderables[0] as RenderableProperty | undefined;
+  const isRelation = firstRenderable?.type === 'RELATION' || firstRenderable?.type === 'IMAGE';
+
+  if (isRelation) {
+    const hasPlaceholders = renderables.some(r => r.placeholder === true);
+    const typeOfId = firstRenderable.attributeId;
+    const typeOfName = firstRenderable.attributeName;
+    const relationRenderables = renderables as RelationRenderableProperty[];
+
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {relationRenderables.map(r => {
+          const relationId = r.relationId;
+          const relationName = r.valueName;
+          const renderableType = r.type;
+          const relationValue = r.value;
+
+          if (renderableType === 'IMAGE') {
+            return (
+              <ImageZoom key={`image-${relationId}-${relationValue}`} imageSrc={getImagePath(relationValue ?? '')} />
+            );
+          }
+
+          if (r.placeholder === true) {
+            return (
+              <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
+                <SelectEntity
+                  spaceId={spaceId}
+                  onDone={result => {
+                    send({
+                      type: 'UPSERT_RELATION',
+                      payload: {
+                        fromEntityId: entityId,
+                        toEntityId: result.id,
+                        toEntityName: result.name,
+                        typeOfId: r.attributeId,
+                        typeOfName: r.attributeName,
+                      },
+                    });
+                  }}
+                  variant="fixed"
+                />
+              </div>
+            );
+          }
+
+          return (
+            <>
+              <div key={`relation-${relationId}-${relationValue}`} className="mt-1">
+                <LinkableRelationChip
+                  onDelete={() => {
+                    send({
+                      type: 'DELETE_RENDERABLE',
+                      payload: {
+                        renderable: r,
+                      },
+                    });
+                  }}
+                  entityHref={NavUtils.toEntity(spaceId, relationValue ?? '')}
+                  relationHref={NavUtils.toEntity(spaceId, relationId)}
+                >
+                  {relationName ?? relationValue}
+                </LinkableRelationChip>
+              </div>
+              {!hasPlaceholders && (
+                <div className="mt-1">
+                  <SelectEntityAsPopover
+                    trigger={<SquareButton icon={<Create />} />}
+                    onDone={result => {
+                      send({
+                        type: 'UPSERT_RELATION',
+                        payload: {
+                          fromEntityId: entityId,
+                          toEntityId: result.id,
+                          toEntityName: result.name,
+                          typeOfId: typeOfId,
+                          typeOfName: typeOfName,
+                        },
+                      });
+                    }}
+                    spaceId={spaceId}
+                  />
+                </div>
+              )}
+            </>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex w-full flex-wrap gap-2">
+      {renderables.map(renderable => {
+        switch (renderable.type) {
+          case 'TEXT':
+            return (
+              <PageStringField
+                key={renderable.attributeId}
+                variant="body"
+                placeholder="Add value..."
+                aria-label="text-field"
+                value={renderable.value}
+                onChange={e => {
+                  send({
+                    type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                    payload: {
+                      renderable,
+                      value: {
+                        type: 'TEXT',
+                        value: e.target.value,
+                      },
+                    },
+                  });
+                }}
+              />
+            );
+          case 'TIME':
+            return <DateField key={renderable.attributeId} isEditing={true} value={renderable.value} />;
+          case 'URI':
+            return (
+              <WebUrlField
+                key={renderable.attributeId}
+                placeholder="Add a URI"
+                isEditing={true}
+                value={renderable.value}
+              />
+            );
+          case 'ENTITY': {
+            if (renderable.value.value === '') {
+              return (
+                <div key={renderable.attributeId} data-testid="select-entity" className="w-full">
+                  <SelectEntity
+                    spaceId={spaceId}
+                    onDone={result => {
+                      send({
+                        type: 'UPSERT_RENDERABLE_TRIPLE_VALUE',
+                        payload: {
+                          renderable,
+                          value: {
+                            type: 'ENTITY',
+                            value: result.id,
+                            name: result.name,
+                          },
+                        },
+                      });
+                    }}
+                    variant="fixed"
+                  />
+                </div>
+              );
+            }
+
+            return (
+              <div key={`entity-${renderable.value.value}`}>
+                <DeletableChipButton
+                  href={NavUtils.toEntity(renderable.spaceId, renderable.value.value)}
+                  // onClick={() => removeOrResetEntityTriple(triple)}
+                >
+                  {renderable.value.name || renderable.value.value}
+                </DeletableChipButton>
+              </div>
+            );
+          }
+        }
+      })}
+    </div>
+  );
 });

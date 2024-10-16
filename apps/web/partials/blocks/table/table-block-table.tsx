@@ -107,7 +107,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     });
 
     const cellRelations = getRelations({
-      // @TODO: Should have cell relations or just be renderables
       mergeWith: cellData.relations,
       selector: relation => {
         const isRowCell = relation.fromEntity.id === cellData.entityId;
@@ -139,7 +138,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           renderables={renderables}
           attributeId={cellData.columnId}
           entityId={cellData.entityId}
-          space={spaceId}
+          spaceId={spaceId}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}
           columnRelationTypes={columnRelationTypes[cellData.columnId]}
