@@ -117,13 +117,14 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       },
     });
 
-    // @TODO: Might need to add placeholders for each column that we're rendering
     const renderables = toRenderables({
       entityId: cellData.entityId,
       entityName: Entities.name(cellTriples),
       spaceId,
       triples: cellTriples,
       relations: cellRelations,
+      // @TODO: Might need to add placeholders for each column that we're rendering
+      placeholderRenderables: [],
     });
 
     if (isEditable) {
@@ -135,8 +136,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           // cell in the previous selectedType. For now we can use a key to force the
           // cell to re-mount when the selectedType and name changes.
           key={Entities.name(cellTriples)}
-          triples={cellTriples}
-          cell={cellData}
+          renderables={renderables}
+          attributeId={cellData.columnId}
+          entityId={cellData.entityId}
           space={spaceId}
           valueType={valueType}
           columnName={columnName(cellData.columnId, columns)}
