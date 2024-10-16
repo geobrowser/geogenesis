@@ -27,7 +27,6 @@ import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Row, Schema } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { EntityCell } from '~/core/utils/entity-table/entity-table';
 import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
@@ -325,7 +324,7 @@ export const TableBlockTable = React.memo(
         return (
           <div className="flex flex-col gap-4">
             {rows.map((row, index: number) => {
-              const nameCell = row[SYSTEM_IDS.NAME] as EntityCell;
+              const nameCell = row[SYSTEM_IDS.NAME];
               const { entityId, name, description, image } = nameCell;
 
               return (
@@ -355,7 +354,7 @@ export const TableBlockTable = React.memo(
         return (
           <div className="grid grid-cols-3 gap-x-4 gap-y-10">
             {rows.map((row, index: number) => {
-              const nameCell = row[SYSTEM_IDS.NAME] as EntityCell;
+              const nameCell = row[SYSTEM_IDS.NAME];
               const { entityId, name, image } = nameCell;
 
               return (

@@ -208,12 +208,15 @@ export type Relation = {
   };
 };
 
-export interface Cell {
+export type Cell = {
+  name: string | null;
   columnId: string;
   entityId: string;
   triples: Triple[];
   relations: Relation[];
-}
+  description?: string | null;
+  image?: string | null;
+};
 
 export type Row = Record<string, Cell>;
 
