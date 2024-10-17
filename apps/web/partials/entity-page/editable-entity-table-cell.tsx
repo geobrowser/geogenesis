@@ -47,7 +47,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
   const isNameCell = attributeId === SYSTEM_IDS.NAME;
 
-  const typesToFilter = columnRelationTypes
+  const allowedTypes = columnRelationTypes
     ? columnRelationTypes.length > 0
       ? columnRelationTypes
       : undefined
@@ -100,6 +100,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
               <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
                 <SelectEntity
                   spaceId={spaceId}
+                  // allowedTypes={allowedTypes}
                   onDone={result => {
                     send({
                       type: 'UPSERT_RELATION',
@@ -136,29 +137,30 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
                   {relationName ?? relationValue}
                 </LinkableRelationChip>
               </div>
-              {!hasPlaceholders && (
-                <div className="mt-1">
-                  <SelectEntityAsPopover
-                    trigger={<SquareButton icon={<Create />} />}
-                    onDone={result => {
-                      send({
-                        type: 'UPSERT_RELATION',
-                        payload: {
-                          fromEntityId: entityId,
-                          toEntityId: result.id,
-                          toEntityName: result.name,
-                          typeOfId: typeOfId,
-                          typeOfName: typeOfName,
-                        },
-                      });
-                    }}
-                    spaceId={spaceId}
-                  />
-                </div>
-              )}
             </>
           );
         })}
+        {!hasPlaceholders && (
+          <div className="mt-1">
+            <SelectEntityAsPopover
+              trigger={<SquareButton icon={<Create />} />}
+              // allowedTypes={allowedTypes}
+              onDone={result => {
+                send({
+                  type: 'UPSERT_RELATION',
+                  payload: {
+                    fromEntityId: entityId,
+                    toEntityId: result.id,
+                    toEntityName: result.name,
+                    typeOfId: typeOfId,
+                    typeOfName: typeOfName,
+                  },
+                });
+              }}
+              spaceId={spaceId}
+            />
+          </div>
+        )}
       </div>
     );
   }

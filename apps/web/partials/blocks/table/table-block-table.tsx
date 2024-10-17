@@ -93,7 +93,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const valueType = columnValueType(cellData.columnId, columns);
 
-    // @TODO: Use toRenderables for editable table cell and entity table cell
+    // @TODO: This is super slow since every single cell needs to be merged
+    // with local triples and relations. We need a nice way to only re-render
+    // cells that have changed _without_ doing computation. We could just store
+    // local renderable state changes instead of using the global state?
     const cellTriples = getTriples({
       mergeWith: cellData.triples,
       selector: triple => {
@@ -132,7 +135,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       spaceId,
       triples: cellTriples,
       relations: cellRelations,
-      // If the cell is empty then we render a placeholder value
+      // If the cell is empty in edit mode then we render a placeholder value
       // until the user enters a real value.
       placeholderRenderables: isEditable ? [placeholder] : undefined,
     });
