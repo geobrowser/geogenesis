@@ -41,7 +41,7 @@ const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedC
   const columnSize = 1200 / columns.length;
 
   return columns.map((column, i) =>
-    columnHelper.accessor(row => row[column.id], {
+    columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
         const isNameColumn = column.id === SYSTEM_IDS.NAME;
@@ -71,7 +71,7 @@ const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedC
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, table, cell }) => {
     const spaceId = table.options.meta!.space;
-    const cellId = `${row.original.id}-${cell.column.id}`;
+    const cellId = `${row.original.entityId}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
 
     // We know that cell is rendered as a React component by react-table
@@ -129,8 +129,6 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           attributeId={cellData.columnId}
           entityId={cellData.entityId}
           spaceId={spaceId}
-          valueType={valueType}
-          columnName={columnName(cellData.columnId, columns)}
           columnRelationTypes={[]}
         />
       );
@@ -214,7 +212,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
             return (
               <tr key={entityId ?? index} className="hover:bg-bg">
                 {cells.map(cell => {
-                  const cellId = `${row.original.id}-${cell.column.id}`;
+                  const cellId = `${row.original.entityId}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
                   const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
 

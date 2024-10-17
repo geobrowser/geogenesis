@@ -7,29 +7,37 @@ import { Entities } from '../entity';
 
 export function fromColumnsAndRows(entities: Entity[], columns: Schema[]): Row[] {
   return entities.map(({ name, triples, id, relationsOut, description }) => {
-    return columns.reduce((acc, column) => {
-      // @TODO: Might be relations for attribute id as well
-      const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
-      const cellTriples = triplesForAttribute.length ? triplesForAttribute : [];
-      const cellRelations = relationsOut.filter(t => t.typeOf.id === column.id);
+    const newColumns = columns.reduce(
+      (acc, column) => {
+        // @TODO: Might be relations for attribute id as well
+        const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
+        const cellTriples = triplesForAttribute.length ? triplesForAttribute : [];
+        const cellRelations = relationsOut.filter(t => t.typeOf.id === column.id);
 
-      const cell: Cell = {
-        columnId: column.id,
-        entityId: id,
-        triples: cellTriples,
-        relations: cellRelations,
-        name,
-      };
+        const cell: Cell = {
+          columnId: column.id,
+          entityId: id,
+          triples: cellTriples,
+          relations: cellRelations,
+          name,
+        };
 
-      if (column.id === SYSTEM_IDS.NAME) {
-        cell.description = description;
-        cell.image = Entities.cover(relationsOut) || Entities.avatar(relationsOut) || null;
-      }
+        if (column.id === SYSTEM_IDS.NAME) {
+          cell.description = description;
+          cell.image = Entities.cover(relationsOut) || Entities.avatar(relationsOut) || null;
+        }
 
-      return {
-        ...acc,
-        [column.id]: cell,
-      };
-    }, {} as Row);
+        return {
+          ...acc,
+          [column.id]: cell,
+        };
+      },
+      {} as Record<string, Cell>
+    );
+
+    return {
+      entityId: id,
+      columns: newColumns,
+    };
   });
 }

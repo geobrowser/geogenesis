@@ -218,7 +218,11 @@ export type Cell = {
   image?: string | null;
 };
 
-export type Row = Record<string, Cell>;
+export type Row = {
+  entityId: string;
+  // attributeId -> Cell
+  columns: Record<string, Cell>;
+};
 
 export type Profile = {
   id: string;

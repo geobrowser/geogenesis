@@ -59,10 +59,6 @@ export function empty(spaceId: string, entityId: string, type: TripleValueType =
   };
 }
 
-/**
- * This would be a lot easier as a local first representation with the same  model both
- * for query time merging and ad-hoc runtime merging of the two triples sources.
- */
 export function merge(local: StoredTriple[], remote: Triple[]): StoredTriple[] {
   const localTripleIds = new Set(local.map(t => t.id));
   const remoteTriplesWithoutLocalTriples = remote.filter(t => !localTripleIds.has(getAppTripleId(t, t.space)));

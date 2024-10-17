@@ -21,8 +21,6 @@ interface Props {
   attributeId: string;
   spaceId: string;
   renderables: RenderableProperty[];
-  valueType: string;
-  columnName: string;
   columnRelationTypes?: { typeId: string; typeName: string | null }[];
 }
 
@@ -31,8 +29,6 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
   entityId,
   attributeId,
   renderables,
-  columnName,
-  valueType,
   columnRelationTypes,
 }: Props) {
   const entityName = Entities.nameFromRenderable(renderables) ?? '';

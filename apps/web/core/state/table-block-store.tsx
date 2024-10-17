@@ -55,6 +55,7 @@ export function useTableBlock() {
 
           // Return all local relations pointing to the collection id in the source block
           // @TODO(data blocks): Merge with any remote collection items
+          // @TODO: flatten collection items to point to data block instead of collection entity
           return r.fromEntity.id === source.value && r.typeOf.id === EntityId(SYSTEM_IDS.COLLECTION_ITEM_RELATION_TYPE);
         },
       };
@@ -103,9 +104,8 @@ export function useTableBlock() {
     },
   });
 
-  const { data: rows, isLoading: isLoadingRows } = useQuery({
-    placeholderData: keepPreviousData,
-    queryKey: ['table-block-rows', columns, pageNumber, entityId, filterState, source, collectionItems],
+  const { data: tableEntities, isLoading: isLoadingEntities } = useQuery({
+    queryKey: ['table-block-entities', columns, pageNumber, entityId, filterState, source, collectionItems],
     queryFn: async () => {
       if (!columns || !filterState) return [];
 
@@ -119,15 +119,29 @@ export function useTableBlock() {
 
       // Depending on the source type we use different queries to aggregate the data
       // for the data view.
-      const entities = await Match.value(source).pipe(
+      return await Match.value(source).pipe(
         Match.when({ type: 'COLLECTION' }, source => mergeCollectionItemEntitiesAsync(source.value)),
         Match.when({ type: 'SPACES' }, () => mergeTableEntities({ options: params, source })),
         Match.orElse(() => [])
       );
-
-      return EntityTable.fromColumnsAndRows(entities, columns);
     },
   });
+
+  // @TODO:
+  // 1) We need a way to make each row reactive to changes made locally. This eventually
+  // gets rendered by table blocks, and we probably want to handle reactivity here instead
+  // of doing it in the table block.
+  //
+  // We know the entities in the table from first time querying. Future queries need to be
+  // reactive to any changes to entities in the list, however.
+  //
+  // 2) Alternatively we need to make render cells really cheap and let cells handle
+  // calculating their own merged state. Maybe we can do this by keeping track of local state
+  // of each cell and write any updates to the local state and not read the global state?
+  const rows = React.useMemo(() => {
+    if (!tableEntities || !columns) return [];
+    return EntityTable.fromColumnsAndRows(tableEntities, columns);
+  }, [tableEntities, columns]);
 
   const { data: columnRelationTypes } = useQuery({
     queryKey: ['table-block-column-relation-types', columns],
@@ -228,7 +242,7 @@ export function useTableBlock() {
     entityId,
     spaceId,
 
-    isLoading: isLoadingColumns || isLoadingRows || isLoadingFilterState,
+    isLoading: isLoadingColumns || isLoadingEntities || isLoadingFilterState,
 
     name: blockEntity.name,
     setName,
