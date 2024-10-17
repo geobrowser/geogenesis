@@ -41,7 +41,7 @@ import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 
-import { columnName, columnValueType } from './utils';
+import { columnName, columnValueType, makePlaceholderFromValueType } from './utils';
 import { editingColumnsAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
@@ -115,14 +115,26 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       },
     });
 
+    const columnType = columnValueType(cellData.columnId, columns);
+    const attributeName = columnName(cellData.columnId, columns);
+
+    const placeholder = makePlaceholderFromValueType({
+      attributeId: cellData.columnId,
+      attributeName: attributeName,
+      entityId: cellData.entityId,
+      spaceId,
+      valueType: columnType,
+    });
+
     const renderables = toRenderables({
       entityId: cellData.entityId,
       entityName: Entities.name(cellTriples),
       spaceId,
       triples: cellTriples,
       relations: cellRelations,
-      // @TODO: Might need to add placeholders for each column that we're rendering
-      placeholderRenderables: [],
+      // If the cell is empty then we render a placeholder value
+      // until the user enters a real value.
+      placeholderRenderables: isEditable ? [placeholder] : undefined,
     });
 
     if (isEditable) {
@@ -139,7 +151,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           entityId={cellData.entityId}
           spaceId={spaceId}
           valueType={valueType}
-          columnName={columnName(cellData.columnId, columns)}
+          columnName={attributeName}
           columnRelationTypes={columnRelationTypes[cellData.columnId]}
         />
       );
