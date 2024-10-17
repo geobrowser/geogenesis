@@ -3,7 +3,7 @@ import { SYSTEM_IDS } from '@geogenesis/sdk';
 import type { ReactNode } from 'react';
 
 import { ID } from '~/core/id';
-import { Subgraph } from '~/core/io';
+import { fetchTabEntityId } from '~/core/io/subgraph/fetch-tab';
 
 import { EmptyTab } from '~/partials/tab/empty-tab';
 
@@ -18,11 +18,14 @@ type TabProps = {
 export const Tab = async (props: TabProps) => {
   const { slug } = props;
   const spaceId = props.params.id;
-  const pageTypeId = getPageTypeId(slug);
+  const pageTypeEntityId = getPageTypeEntityId(slug);
 
-  if (!spaceId || !pageTypeId) return null;
+  if (!spaceId || !pageTypeEntityId) return null;
 
-  const entityId = await getEntityId(spaceId, pageTypeId);
+  const entityId = await fetchTabEntityId({
+    spaceId,
+    pageTypeEntityId,
+  });
 
   if (!entityId) {
     const newEntityId = ID.createEntityId();
@@ -49,11 +52,11 @@ export const Tab = async (props: TabProps) => {
   return <DefaultEntityPage params={params} showCover={false} showHeading={false} showHeader={false} notice={notice} />;
 };
 
-const getPageTypeId = (slug: string): string | null => {
-  return pageTypeIds?.[slug] ?? null;
+const getPageTypeEntityId = (slug: string): string | null => {
+  return pageTypeEntityIds?.[slug] ?? null;
 };
 
-const pageTypeIds: Record<string, string> = {
+const pageTypeEntityIds: Record<string, string> = {
   posts: SYSTEM_IDS.POSTS_PAGE,
   products: SYSTEM_IDS.PRODUCTS_PAGE,
   services: SYSTEM_IDS.SERVICES_PAGE,
@@ -63,17 +66,4 @@ const pageTypeIds: Record<string, string> = {
   projects: SYSTEM_IDS.PROJECTS_PAGE,
   finances: SYSTEM_IDS.FINANCES_PAGE,
   spaces: SYSTEM_IDS.SPACES_PAGE,
-};
-
-const getEntityId = async (spaceId: string, pageTypeId: string) => {
-  const pageTypeTriples = await Subgraph.fetchTriples({
-    space: spaceId,
-    query: '',
-    skip: 0,
-    first: 1000,
-    filter: [{ field: 'attribute-id', value: SYSTEM_IDS.PAGE_TYPE_TYPE }],
-  });
-
-  const entityId = pageTypeTriples.find(triple => triple.value.value === pageTypeId)?.entityId;
-  return entityId ?? null;
 };

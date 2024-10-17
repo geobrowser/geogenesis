@@ -9,7 +9,7 @@ import {
 import { DaoCreationSteps } from '@aragon/sdk-client';
 import { ContextParams, DaoCreationError, MissingExecPermissionError, PermissionIds } from '@aragon/sdk-client-common';
 import { id } from '@ethersproject/hash';
-import { Op, SYSTEM_IDS, VotingMode, createImageEntityOps, createRelationship } from '@geogenesis/sdk';
+import { SYSTEM_IDS, VotingMode } from '@geogenesis/sdk';
 import { DAO_FACTORY_ADDRESS, ENS_REGISTRY_ADDRESS, PLUGIN_SETUP_PROCESSOR_ADDRESS } from '@geogenesis/sdk/contracts';
 import { createEditProposal } from '@geogenesis/sdk/proto';
 import { Duration, Effect, Either, Schedule } from 'effect';
@@ -19,13 +19,9 @@ import { encodeFunctionData, getAddress, stringToHex, zeroAddress } from 'viem';
 
 import { Environment } from '~/core/environment';
 import { IpfsUploadError } from '~/core/errors';
-import { ID } from '~/core/id';
 import { graphql } from '~/core/io/subgraph/graphql';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
-import { generateTriplesForCompany } from '~/core/utils/contracts/generate-triples-for-company';
-import { generateTriplesForNonprofit } from '~/core/utils/contracts/generate-triples-for-nonprofit';
-import { Ops } from '~/core/utils/ops';
-import { Triples } from '~/core/utils/triples';
+import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { slog } from '~/core/utils/utils';
 
 import { publicClient, signer, walletClient } from '../../client';
@@ -153,68 +149,6 @@ export function deploySpace(args: DeployArgs) {
       catch: e => new DeployDaoError(`Failed creating DAO: ${e}`),
     });
   });
-}
-
-async function generateOpsForSpaceType({ type, spaceName, spaceAvatarUri }: DeployArgs) {
-  const ops: Op[] = [];
-  const newEntityId = ID.createEntityId();
-
-  // Add triples for a Person entity
-  if (type === 'default' || type === 'personal') {
-    ops.push(
-      Ops.create({
-        entity: newEntityId,
-        attribute: SYSTEM_IDS.NAME,
-        value: {
-          type: 'TEXT',
-          value: spaceName,
-        },
-      })
-    );
-
-    ops.push(
-      ...createRelationship({
-        fromId: newEntityId,
-        toId: SYSTEM_IDS.SPACE_CONFIGURATION,
-        relationTypeId: SYSTEM_IDS.TYPES,
-      })
-    );
-
-    // @TODO: Do we add the Person type? That would mean this has to be a relation
-  }
-
-  // @TODO: Clone entity for the other governance types
-
-  if (type === 'company') {
-    // Space address doesn't matter here since we're immediately writing the ops and not persisting
-    // in the local db.
-    const companyTriples = await generateTriplesForCompany(newEntityId, spaceName, 'bogus space');
-    ops.push(...Triples.prepareTriplesForPublishing(companyTriples, 'bogus space'));
-  }
-
-  if (type === 'nonprofit') {
-    const nonprofitTriples = await generateTriplesForNonprofit(newEntityId, spaceName, 'bogus space');
-    ops.push(...Triples.prepareTriplesForPublishing(nonprofitTriples, 'bogus space'));
-  }
-
-  if (spaceAvatarUri) {
-    const [typeOp, srcOp] = createImageEntityOps(spaceAvatarUri);
-
-    // Creates the image entity
-    ops.push(typeOp);
-    ops.push(srcOp);
-
-    // Creates the triple pointing to the image entity
-    ops.push(
-      ...createRelationship({
-        fromId: newEntityId,
-        toId: typeOp.triple.entity, // Set the avatar relation to point to the entity id of the new entity
-        relationTypeId: SYSTEM_IDS.AVATAR_ATTRIBUTE,
-      })
-    );
-  }
-
-  return ops;
 }
 
 function getGovernanceTypeForSpaceType(type: SpaceType, governanceType?: SpaceGovernanceType): SpaceGovernanceType {

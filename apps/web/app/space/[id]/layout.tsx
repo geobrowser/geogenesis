@@ -4,10 +4,12 @@ import { redirect } from 'next/navigation';
 import * as React from 'react';
 
 import { Subgraph } from '~/core/io';
+import { Entity } from '~/core/io/dto/entities';
 import { fetchBlocks } from '~/core/io/fetch-blocks';
 import { EntityId } from '~/core/io/schema';
 import { fetchInFlightSubspaceProposalsForSpaceId } from '~/core/io/subgraph/fetch-in-flight-subspace-proposals';
 import { fetchSubspacesBySpaceId } from '~/core/io/subgraph/fetch-subspaces';
+import { fetchTabs } from '~/core/io/subgraph/fetch-tabs';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TypesStoreServerContainer } from '~/core/state/types-store/types-store-server-container';
@@ -50,25 +52,19 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   const typeIds = types.map(t => t.id);
   const tabs = [];
 
+  const spaceId = params.id;
+
   let teamCount = 0;
 
-  const pageTriples = await Subgraph.fetchTriples({
-    space: params.id,
-    query: '',
-    skip: 0,
-    first: 1000,
-    filter: [{ field: 'attribute-id', value: SYSTEM_IDS.PAGE_TYPE_TYPE }],
-  });
+  const tabEntities = await fetchTabs({ spaceId });
 
-  // We only fetch triples whose attribute is PAGE_TYPE_TYPE so we don't need to filter on
-  // the attribute id
-  const hasPostsPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.POSTS_PAGE);
-  // const hasProductsPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.PRODUCTS_PAGE);
-  // const hasServicesPage = !!pageTriples.find(triple => triple.value.id === SYSTEM_IDS.SERVICES_PAGE);
-  const hasEventsPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.EVENTS_PAGE);
-  const hasProjectsPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.PROJECTS_PAGE);
-  const hasJobsPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.JOBS_PAGE);
-  const hasFinancesPage = !!pageTriples.find(triple => triple.value.value === SYSTEM_IDS.FINANCES_PAGE);
+  const hasPostsPage = getHasPage(tabEntities, SYSTEM_IDS.POSTS_PAGE);
+  // const hasProductsPage = getHasPage(tabEntities, SYSTEM_IDS.PRODUCTS_PAGE);
+  // const hasServicesPage = getHasPage(tabEntities, SYSTEM_IDS.SERVICES_PAGE);
+  const hasEventsPage = getHasPage(tabEntities, SYSTEM_IDS.EVENTS_PAGE);
+  const hasProjectsPage = getHasPage(tabEntities, SYSTEM_IDS.PROJECTS_PAGE);
+  const hasJobsPage = getHasPage(tabEntities, SYSTEM_IDS.JOBS_PAGE);
+  const hasFinancesPage = getHasPage(tabEntities, SYSTEM_IDS.FINANCES_PAGE);
 
   if (typeIds.includes(SYSTEM_IDS.COMPANY_TYPE) || typeIds.includes(SYSTEM_IDS.NONPROFIT_TYPE)) {
     const roleTriples = await Subgraph.fetchTriples({
@@ -96,7 +92,7 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
       priority: 1 as const,
       hidden: !hasPostsPage,
     },
-    // be sure to also restore actions in `generate-actions-for-company.ts`
+    // be sure to also restore actions in `generate-ops-for-company.ts`
     // {
     //   label: 'Products',
     //   href: `${NavUtils.toSpace(params.id)}/products`,
@@ -238,8 +234,12 @@ async function buildTabsForSpacePage(types: EntityType[], params: Props['params'
   return [...seen.values()].sort((a, b) => a.priority - b.priority);
 }
 
+const getHasPage = (tabEntities: Entity[], pageTypeId: string) => {
+  return !!tabEntities.find(entity => entity.relationsOut.find(relation => relation.toEntity.id === pageTypeId));
+};
+
 export default async function Layout({ children, params }: Props) {
-  const [props, subspaces, inflightSubspaces] = await await Promise.all([
+  const [props, subspaces, inflightSubspaces] = await Promise.all([
     getData(params.id),
     fetchSubspacesBySpaceId(params.id),
     fetchInFlightSubspaceProposalsForSpaceId(params.id),

@@ -145,7 +145,7 @@ export const CLAIM_TYPE = 'fa8e8e54f7424c00b73c05adee2b4545';
 export const PAGE_TYPE = '1a9fc4a00fec4eeaa075eec7ebd0d043';
 export const TAB_TYPE = '2c72ace7540444559d2265272a94e874';
 export const POST_TYPE = '682fbeff41e242cda7f9c4909136a8c5';
-export const PAGE_TYPE_TYPE = '5ec8adc335334c3cbfa4acdfaa877bac'
+export const PAGE_TYPE_ATTRIBUTE = '5ec8adc335334c3cbfa4acdfaa877bac'
 
 export const VALUES_ATTRIBUTE = 'c8e8fd5f011d4c8e8aaf1a2ffc5b48fd';
 export const VISION_ATTRIBUTE = 'c670247893c74af48f2a285a46cc19ca';
@@ -292,6 +292,7 @@ export const COMPANY_SERVICES_PAGE_TEMPLATE =
   'd572b1248b5e40948c6c25e531fc8a33'
 export const COMPANY_EVENTS_PAGE_TEMPLATE =
   '6885104d79ea4db2a64cc8e8512533ea'
+export const COMPANY_TEAM_PAGE_TEMPLATE = '' // @TODO add
 export const COMPANY_JOBS_PAGE_TEMPLATE = '9a7528b37fb041c492c31650b70aae69'
 
 export const NONPROFIT_SPACE_CONFIGURATION_TEMPLATE =

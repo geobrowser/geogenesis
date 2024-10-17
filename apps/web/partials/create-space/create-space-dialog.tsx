@@ -47,10 +47,10 @@ export function CreateSpaceDialog() {
   const { deploy } = useDeploySpace();
 
   const spaceType = useAtomValue(spaceTypeAtom);
-  const name = useAtomValue(nameAtom);
-  const avatar = useAtomValue(avatarAtom);
+  const [name, setName] = useAtom(nameAtom);
+  const [avatar, setAvatar] = useAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
-  const governanceType = useAtomValue(governanceTypeAtom);
+  const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
 
   // Show retry immediately if workflow already started before initial render
@@ -100,7 +100,16 @@ export function CreateSpaceDialog() {
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Trigger>New space</Dialog.Trigger>
+      <Dialog.Trigger
+        onClick={() => {
+          setName('');
+          setAvatar('');
+          setGovernanceType(null);
+          setStep('select-type');
+        }}
+      >
+        New space
+      </Dialog.Trigger>
 
       <Dialog.Portal>
         <Dialog.Content
