@@ -68,7 +68,7 @@ export const generateOpsForSpaceType = async ({ type, spaceName, spaceAvatarUri 
     ops.push(typeOp);
     ops.push(srcOp);
 
-    // Creates the triple pointing to the image entity
+    // Creates the relation pointing to the image entity
     ops.push(
       ...createRelationship({
         fromId: newEntityId,

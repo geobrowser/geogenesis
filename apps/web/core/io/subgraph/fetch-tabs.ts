@@ -88,7 +88,7 @@ export async function fetchTabs(options: FetchTabsOptions): Promise<Entity[]> {
           };
 
         default:
-          console.error(`${error._tag}: Unable to fetch entities, queryId: ${queryId} spaceId: ${options.spaceId}`);
+          console.error(`${error._tag}: Unable to fetch tabs, queryId: ${queryId} spaceId: ${options.spaceId}`);
           return {
             entities: { nodes: [] },
           };
@@ -106,7 +106,7 @@ export async function fetchTabs(options: FetchTabsOptions): Promise<Entity[]> {
 
       return Either.match(decodedSpace, {
         onLeft: error => {
-          console.error(`Unable to decode entity ${e.id} with error ${error}`);
+          console.error(`Unable to decode tab ${e.id} with error ${error}`);
           return null;
         },
         onRight: entity => {

@@ -81,14 +81,6 @@ export function deploySpace(args: DeployArgs) {
       ops,
     });
 
-    console.log(
-      JSON.stringify(
-        ops.filter((op: any) => op.triple.attribute === SYSTEM_IDS.FILTER),
-        null,
-        2
-      )
-    );
-
     const firstBlockContentUri = yield* Effect.tryPromise({
       try: () => new IpfsService(Environment.getConfig().ipfs).upload(initialContent),
       catch: e => new IpfsUploadError(`IPFS upload failed: ${e}`),

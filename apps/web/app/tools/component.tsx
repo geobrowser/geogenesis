@@ -12,7 +12,7 @@ import { Subgraph } from '~/core/io';
 import { FetchEntitiesOptions } from '~/core/io/subgraph';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 
-import { cloneSpaceIdAtom, cloneSpaceNameAtom, cloneTriplesAtom } from './atoms';
+import { cloneOpsAtom, cloneSpaceIdAtom, cloneSpaceNameAtom } from './atoms';
 
 export const Tools = () => {
   return (
@@ -227,31 +227,15 @@ const FindEntities = () => {
 const CloneEntity = () => {
   const [spaceName, setSpaceName] = useAtom(cloneSpaceNameAtom);
   const [spaceId, setSpaceId] = useAtom(cloneSpaceIdAtom);
-  const [actions, setActions] = useAtom(cloneTriplesAtom);
-
-  // const { addActions } = useActionsStore();
+  const [ops, setOps] = useAtom(cloneOpsAtom);
 
   const handleCloneEntity = async () => {
-    const newActions = await cloneEntity({
+    const newOps = await cloneEntity({
       oldEntityId: SYSTEM_IDS.COMPANY_SPACE_CONFIGURATION_TEMPLATE,
       entityName: spaceName,
     });
-    setActions(newActions as any);
+    setOps(newOps);
   };
-
-  // const handleAddActions = () => {
-
-  //   addActions(
-  //     actions.map(
-  //       (t): StoreOp => {
-  //         ...t,
-  //         id: ID.createTripleId(t),
-  //         space: t.space,
-  //         type: 'SET_TRIPLE',
-  //       })
-  //     )
-  //   );
-  // };
 
   return (
     <div className="space-y-4">
@@ -267,10 +251,9 @@ const CloneEntity = () => {
       />
       <div className="flex gap-4">
         <Button onClick={handleCloneEntity}>clone entity</Button>
-        {/* {actions.length > 0 && <Button onClick={handleAddActions}>generate actions</Button>} */}
       </div>
       <div className="flex gap-4">
-        <Block className="aspect-[21/9] w-full overflow-y-scroll">{actions}</Block>
+        <Block className="aspect-[21/9] w-full overflow-y-scroll">{ops}</Block>
       </div>
     </div>
   );
