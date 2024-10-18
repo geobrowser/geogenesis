@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 
-import { Entity, Relation } from '~/core/io/dto/entities';
-import { OmitStrict } from '~/core/types';
+import { Entity } from '~/core/io/dto/entities';
+import { OmitStrict, Relation } from '~/core/types';
 
 const EditorContext = React.createContext<OmitStrict<Props, 'children'> | null>(null);
 

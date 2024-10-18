@@ -1,6 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { RenderableEntityType, Triple } from '~/core/types';
+import { Relation, RenderableEntityType, Triple } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { EntityId, SubstreamEntity, SubstreamType } from '../schema';
@@ -14,34 +14,6 @@ export type Entity = {
   types: { id: EntityId; name: string | null }[];
   relationsOut: Relation[];
   triples: Triple[];
-};
-
-export type Relation = {
-  id: EntityId;
-  index: string;
-  typeOf: {
-    id: EntityId;
-    name: string | null;
-  };
-  fromEntity: {
-    id: EntityId;
-    name: string | null;
-  };
-  toEntity: {
-    id: EntityId;
-    name: string | null;
-
-    // The "Renderable Type" for an entity provides a hint to the consumer
-    // of the entity to _what_ the entity is so they know how they should
-    // render it depending on their use case.
-    renderableType: RenderableEntityType;
-
-    // The value of the To entity depends on the type of the To entity. e.g.,
-    // if the entity is an image, the value is the URL of the image. If it's
-    // a regular entity, the valu is the ID. It's a bit duplicative, but will
-    // make more sense when we add support for other entity types.
-    value: string;
-  };
 };
 
 export function EntityDto(substreamEntity: SubstreamEntity): Entity {

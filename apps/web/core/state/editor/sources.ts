@@ -4,8 +4,8 @@ import { Match } from 'effect';
 
 import { StoreRelation } from '~/core/database/types';
 import { DB } from '~/core/database/write';
-import { Relation } from '~/core/io/dto/entities';
 import { EntityId, SpaceId } from '~/core/io/schema';
+import { Relation } from '~/core/types';
 
 import { Source } from './types';
 

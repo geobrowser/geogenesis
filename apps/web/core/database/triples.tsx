@@ -1,6 +1,8 @@
 'use client';
 
-import { atom, useAtomValue } from 'jotai';
+import { Hash } from 'effect';
+import { useAtomValue } from 'jotai';
+import { selectAtom } from 'jotai/utils';
 
 import * as React from 'react';
 
@@ -17,19 +19,25 @@ interface UseTriplesArgs {
   includeDeleted?: boolean;
 }
 
-const makeLocalActionsAtomWithSelector = ({ selector, includeDeleted = false, mergeWith = [] }: UseTriplesArgs) => {
-  return atom(get => {
-    const mergedTriples = Triples.merge(get(localOpsAtom), mergeWith);
-    return mergedTriples.filter(t => {
-      return (selector ? selector(t) : true) && (includeDeleted ? true : isNotDeletedSelector(t));
-    });
-  });
-};
+function makeLocalOpsAtomWithSelector({ selector, includeDeleted = false, mergeWith = [] }: UseTriplesArgs) {
+  return selectAtom(
+    localOpsAtom,
+    ops => {
+      const mergedTriples = Triples.merge(ops, mergeWith);
+      return mergedTriples.filter(t => {
+        return (selector ? selector(t) : true) && (includeDeleted ? true : isNotDeletedSelector(t));
+      });
+    },
+    (a, b) => Hash.array(a) === Hash.array(b)
+  );
+}
 
 export function useTriples(args?: UseTriplesArgs) {
-  return useAtomValue(React.useMemo(() => makeLocalActionsAtomWithSelector(args ?? {}), [args]));
+  const memoizedArgs = React.useMemo(() => args, [args]);
+  const memoizedAtom = React.useMemo(() => makeLocalOpsAtomWithSelector(memoizedArgs ?? {}), [memoizedArgs]);
+  return useAtomValue(memoizedAtom);
 }
 
 export function getTriples(args: UseTriplesArgs) {
-  return store.get(makeLocalActionsAtomWithSelector(args));
+  return store.get(makeLocalOpsAtomWithSelector(args));
 }

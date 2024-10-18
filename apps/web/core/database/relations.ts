@@ -4,8 +4,8 @@ import { atom, useAtomValue } from 'jotai';
 
 import * as React from 'react';
 
-import { Relation } from '../io/dto/entities';
 import { store } from '../state/jotai-store';
+import { Relation } from '../types';
 import { createRelationsAtom } from './atoms';
 
 interface UseRelationsArgs {

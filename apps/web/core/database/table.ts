@@ -94,14 +94,14 @@ export async function mergeTableEntities({ options, source }: MergeTableEntities
   });
 }
 
-export async function mergeColumns(typeId: EntityId): Promise<Schema[]> {
+export async function mergeColumns(typeIds: string[]): Promise<Schema[]> {
   const cachedColumns = await queryClient.fetchQuery({
-    queryKey: ['table-columns-for-merging', typeId],
-    queryFn: () => fetchColumns({ typeIds: [typeId] }),
+    queryKey: ['table-columns-for-merging', typeIds],
+    queryFn: () => fetchColumns({ typeIds: typeIds }),
   });
 
   const localAttributesForSelectedType = getRelations({
-    selector: r => r.typeOf.id === SYSTEM_IDS.ATTRIBUTES && r.fromEntity.id === typeId,
+    selector: r => r.typeOf.id === SYSTEM_IDS.ATTRIBUTES && typeIds.includes(r.fromEntity.id),
   }).map((r): Schema => {
     return {
       id: r.toEntity.id,

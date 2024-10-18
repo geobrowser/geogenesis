@@ -1,7 +1,6 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Cell, Triple } from '~/core/types';
-import { Entities } from '~/core/utils/entity';
+import { RenderableProperty } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { LinkableChip } from '~/design-system/chip';
@@ -10,42 +9,56 @@ import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { CellContent } from '~/design-system/table/cell-content';
 
 interface Props {
-  cell: Cell;
-  triples: Triple[];
+  entityId: string;
+  columnId: string;
+  renderables: RenderableProperty[];
   space: string;
   isExpanded: boolean;
 }
 
-export const EntityTableCell = ({ cell, triples, space, isExpanded }: Props) => {
-  const isNameCell = cell.columnId === SYSTEM_IDS.NAME;
+export const EntityTableCell = ({ entityId, columnId, renderables, space, isExpanded }: Props) => {
+  const isNameCell = columnId === SYSTEM_IDS.NAME;
 
   if (isNameCell) {
-    const entityId = cell.entityId;
-    const value = Entities.name(triples) || entityId; // the name might exist but be empty, fall back to the entity id in this case.
-
+    // the name might exist but be empty, fall back to the entity id in this case.
+    const value =
+      (renderables.find(r => r.type === 'TEXT' && r.attributeId === SYSTEM_IDS.NAME)?.value as string | undefined) ??
+      entityId;
     return <CellContent key={value} href={NavUtils.toEntity(space, entityId)} isExpanded={isExpanded} value={value} />;
   }
 
   return (
     <div className="flex flex-wrap gap-2">
-      {triples.map(({ value }) => {
-        if (value.type === 'ENTITY') {
+      {renderables.map(renderable => {
+        if (renderable.type === 'ENTITY') {
+          const value = renderable.value.value;
+          const name = renderable.value.name;
           return (
-            <LinkableChip key={value.value} href={NavUtils.toEntity(space, value.value)}>
-              {value.name ?? value.value}
+            <LinkableChip key={value} href={NavUtils.toEntity(space, value)}>
+              {name ?? value}
             </LinkableChip>
           );
         }
 
-        if (value.type === 'URI') {
-          return <WebUrlField variant="tableCell" isEditing={false} key={value.value} value={value.value} />;
+        if (renderable.type === 'RELATION') {
+          const value = renderable.value;
+          const name = renderable.valueName;
+          return (
+            <LinkableChip key={value} href={NavUtils.toEntity(space, value)}>
+              {name ?? value}
+            </LinkableChip>
+          );
         }
 
-        if (value.type === 'TIME') {
-          return <DateField variant="tableCell" isEditing={false} key={value.value} value={value.value} />;
+        if (renderable.type === 'URI') {
+          return <WebUrlField variant="tableCell" isEditing={false} key={renderable.value} value={renderable.value} />;
         }
 
-        return <CellContent key={value.value} isExpanded={isExpanded} value={value.value} />;
+        if (renderable.type === 'TIME') {
+          return <DateField variant="tableCell" isEditing={false} key={renderable.value} value={renderable.value} />;
+        }
+
+        return <CellContent key={renderable.value} isExpanded={isExpanded} value={renderable.value} />;
       })}
     </div>
   );
