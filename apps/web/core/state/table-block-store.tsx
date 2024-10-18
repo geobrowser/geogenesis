@@ -105,6 +105,7 @@ export function useTableBlock() {
   });
 
   const { data: tableEntities, isLoading: isLoadingEntities } = useQuery({
+    placeholderData: keepPreviousData,
     queryKey: ['table-block-entities', columns, pageNumber, entityId, filterState, source, collectionItems],
     queryFn: async () => {
       if (!columns || !filterState) return [];
