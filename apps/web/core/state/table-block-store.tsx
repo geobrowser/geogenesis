@@ -18,6 +18,7 @@ import { Entity } from '../io/dto/entities';
 import { EntityId, SpaceId } from '../io/schema';
 import { Schema, ValueType as TripleValueType } from '../types';
 import { EntityTable } from '../utils/entity-table';
+import { getImagePath } from '../utils/utils';
 import { Values } from '../utils/value';
 import { getSource, removeSources, upsertSource } from './editor/sources';
 import { Source } from './editor/types';
@@ -268,7 +269,8 @@ const getView = (blockEntity: Entity | null | undefined): DataBlockView => {
 
 const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockView) => {
   let text = DEFAULT_PLACEHOLDERS[view].text;
-  // let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
+  // eslint-disable-next-line prefer-const
+  let image = getImagePath(DEFAULT_PLACEHOLDERS[view].image);
 
   if (blockEntity) {
     const placeholderTextTriple = blockEntity.triples.find(
@@ -280,17 +282,11 @@ const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockV
     }
 
     // @TODO(relations): This should be a relation pointing to the image entity
-    // const placeholderImageTriple = blockEntity.triples.find(
-    //   triple => triple.attributeId === SYSTEM_IDS.PLACEHOLDER_IMAGE
-    // );
-
-    // if (placeholderImageTriple && placeholderImageTriple.value.type === 'IMAGE') {
-    //   image = getImagePath(placeholderImageTriple.value.value);
-    // }
+    // const placeholderImageRelation = // find relation with attributeId SYSTEM_IDS.PLACEHOLDER_IMAGE
   }
 
   // @TODO(relations): This should be a relation pointing to the image entity
-  return { text, image: '' };
+  return { text, image };
 };
 
 const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string }> = {
