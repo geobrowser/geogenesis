@@ -9,9 +9,7 @@ export function fromColumnsAndRows(entities: Entity[], columns: Schema[]): Row[]
   return entities.map(({ name, triples, id, relationsOut, description }) => {
     const newColumns = columns.reduce(
       (acc, column) => {
-        // @TODO: Might be relations for attribute id as well
-        const triplesForAttribute = triples.filter(triple => triple.attributeId === column.id);
-        const cellTriples = triplesForAttribute.length ? triplesForAttribute : [];
+        const cellTriples = triples.filter(triple => triple.attributeId === column.id);
         const cellRelations = relationsOut.filter(t => t.typeOf.id === column.id);
 
         const cell: Cell = {
