@@ -41,8 +41,6 @@ export function App({ children }: { children: React.ReactNode }) {
 
   useKeyboardShortcuts(memoizedShortcuts);
 
-  console.log('rerendering app layout');
-
   return (
     <>
       <Navbar onSearchClick={() => setOpen(true)} />

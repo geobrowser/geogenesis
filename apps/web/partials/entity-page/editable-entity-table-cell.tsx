@@ -93,7 +93,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
 
           if (r.placeholder === true) {
             return (
-              <div key={`relation-select-entity-${relationId}`} data-testid="select-entity" className="w-full">
+              <div key={`${r.entityId}-${r.attributeId}-${r.value}`} data-testid="select-entity" className="w-full">
                 <SelectEntity
                   spaceId={spaceId}
                   // allowedTypes={allowedTypes}
@@ -168,7 +168,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           case 'TEXT':
             return (
               <PageStringField
-                key={renderable.attributeId}
+                key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value}`}
                 variant="body"
                 placeholder="Add value..."
                 aria-label="text-field"
@@ -201,7 +201,11 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
           case 'ENTITY': {
             if (renderable.value.value === '') {
               return (
-                <div key={renderable.attributeId} data-testid="select-entity" className="w-full">
+                <div
+                  key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value.value}`}
+                  data-testid="select-entity"
+                  className="w-full"
+                >
                   <SelectEntity
                     spaceId={spaceId}
                     onDone={result => {
@@ -224,7 +228,7 @@ export const EditableEntityTableCell = memo(function EditableEntityTableCell({
             }
 
             return (
-              <div key={`entity-${renderable.value.value}`}>
+              <div key={`${renderable.entityId}-${renderable.attributeId}-${renderable.value.value}`}>
                 <DeletableChipButton
                   href={NavUtils.toEntity(renderable.spaceId, renderable.value.value)}
                   // onClick={() => removeOrResetEntityTriple(triple)}
