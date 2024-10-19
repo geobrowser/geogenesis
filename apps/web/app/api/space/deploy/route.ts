@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   const initialEditorAddress = url.searchParams.get('initialEditorAddress');
   const spaceName = url.searchParams.get('spaceName');
   const spaceAvatarUri = url.searchParams.get('spaceAvatarUri');
+  const spaceCoverUri = url.searchParams.get('spaceCoverUri');
   const type = url.searchParams.get('type') as SpaceType | null;
   const governanceType = url.searchParams.get('governanceType') as SpaceGovernanceType | null;
 
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
       initialEditorAddress,
       spaceName,
       spaceAvatarUri,
+      spaceCoverUri,
       baseUrl: `${protocol}//${baseUrl}`,
       type,
       governanceType: governanceType ?? undefined,

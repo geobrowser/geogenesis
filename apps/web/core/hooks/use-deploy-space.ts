@@ -9,7 +9,8 @@ import { SpaceGovernanceType, SpaceType } from '../types';
 interface DeployArgs {
   type: SpaceType;
   spaceName: string;
-  spaceAvatarUri: string;
+  spaceAvatarUri?: string;
+  spaceCoverUri?: string;
 
   // Governance type is only manually set if the space is a "Blank"/default space.
   // Otherwise we manually set the governance type depending on the space type.
@@ -31,15 +32,19 @@ export function useDeploySpace() {
         return null;
       }
 
-      const { spaceAvatarUri, spaceName, type, governanceType } = args;
+      const { spaceAvatarUri, spaceCoverUri, spaceName, type, governanceType } = args;
 
       const url = new URL(
         `/api/space/deploy?spaceName=${spaceName}&type=${type}&initialEditorAddress=${initialEditorAddress}`,
         window.location.href
       );
 
-      if (spaceAvatarUri !== '') {
+      if (spaceAvatarUri && spaceAvatarUri !== '') {
         url.searchParams.set('spaceAvatarUri', spaceAvatarUri);
+      }
+
+      if (spaceCoverUri && spaceCoverUri !== '') {
+        url.searchParams.set('spaceCoverUri', spaceCoverUri);
       }
 
       if (governanceType) {

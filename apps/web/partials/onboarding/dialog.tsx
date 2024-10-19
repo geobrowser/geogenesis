@@ -292,7 +292,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
           <div className="flex items-center justify-center gap-1.5 pb-4">
             <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
               <SmallButton icon={<Upload />} onClick={handleFileInputClick}>
-                Upload
+                Upload Avatar
               </SmallButton>
             </label>
             <input
@@ -410,7 +410,7 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
   );
 }
 
-const Animation = ({ active = false }) => {
+export const Animation = ({ active = false }) => {
   return (
     <div className="bg-gradient-geo relative flex h-[272px] w-[328px] items-center justify-center overflow-clip rounded">
       <div className="absolute -left-5 top-3">
