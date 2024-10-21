@@ -100,6 +100,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.IMAGE_ATTRIBUTE]: 'Image',
   [SYSTEM_IDS.DESCRIPTION]: 'Description',
   [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
+  [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source space',
   [SYSTEM_IDS.FOREIGN_TYPES]: 'Foreign Types',
 
   // Data blocks
@@ -144,6 +145,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.DESCRIPTION]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.NAME]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.SPACE]: SYSTEM_IDS.TEXT,
+  [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
 
   // Data blocks
   [SYSTEM_IDS.VIEW_ATTRIBUTE]: SYSTEM_IDS.RELATION,
