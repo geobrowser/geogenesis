@@ -4,13 +4,13 @@ import { Effect, Record } from 'effect';
 import { mergeEntityAsync } from '~/core/database/entities';
 import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
-import { Entity, Relation } from '~/core/io/dto/entities';
+import { Entity } from '~/core/io/dto/entities';
 import { Proposal } from '~/core/io/dto/proposals';
 import { Version } from '~/core/io/dto/versions';
 import { EntityId } from '~/core/io/schema';
 import { fetchEntity } from '~/core/io/subgraph';
 import { queryClient } from '~/core/query-client';
-import type { Triple } from '~/core/types';
+import type { Relation, Triple } from '~/core/types';
 
 import { fetchPreviousVersionByCreatedAt } from './fetch-previous-version-by-created-at';
 import { fetchVersionsByEditId } from './fetch-versions-by-edit-id';

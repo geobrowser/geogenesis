@@ -6,9 +6,8 @@ import * as React from 'react';
 
 import { useEditEvents } from '~/core/events/edit-events';
 import { useRenderables } from '~/core/hooks/use-renderables';
-import { Relation } from '~/core/io/dto/entities';
 import { useEntityPageStore } from '~/core/state/entity-page-store/entity-store';
-import { RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
+import { Relation, RelationRenderableProperty, RenderableProperty, TripleRenderableProperty } from '~/core/types';
 import { Triple as ITriple } from '~/core/types';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 

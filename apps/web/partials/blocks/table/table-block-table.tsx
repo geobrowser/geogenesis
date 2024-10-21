@@ -17,7 +17,8 @@ import Image from 'next/image';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { getTriples } from '~/core/database/triples';
+import { useRelations } from '~/core/database/relations';
+import { useTriples } from '~/core/database/triples';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { SearchResult } from '~/core/io/dto/search';
 import { EntityId, SpaceId } from '~/core/io/schema';
@@ -26,7 +27,7 @@ import { Source } from '~/core/state/editor/types';
 import { DataBlockView, useTableBlock } from '~/core/state/table-block-store';
 import { Cell, Row, Schema } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { EntityCell } from '~/core/utils/entity-table/entity-table';
+import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -40,7 +41,7 @@ import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
 import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
 
-import { columnName, columnValueType } from './utils';
+import { columnName, columnValueType, makePlaceholderFromValueType } from './utils';
 import { editingColumnsAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
@@ -49,7 +50,7 @@ const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedC
   const columnSize = 784 / columns.length;
 
   return columns.map((column, i) =>
-    columnHelper.accessor(row => row[column.id], {
+    columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
         const isNameColumn = column.id === SYSTEM_IDS.NAME;
@@ -77,8 +78,8 @@ const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedC
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, table, cell }) => {
-    const space = table.options.meta!.space;
-    const cellId = `${row.original.id}-${cell.column.id}`;
+    const spaceId = table.options.meta!.space;
+    const cellId = `${row.original.entityId}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
 
     // We know that cell is rendered as a React component by react-table
@@ -90,33 +91,84 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     if (!cellData) return null;
 
+    // @TODO: This is super slow since every single cell needs to be merged
+    // with local triples and relations. We need a nice way to only re-render
+    // cells that have changed _without_ doing computation. in each cell. We
+    // could just store local renderable state changes instead of using the
+    // global state?
+    //
+    // We need some mechanism that can pass through the data for each cell
+    // instead of each cell having to calculate its own data. We do some of
+    // this work already in the table block store when we merge rows, but
+    // right now that isn't reactive because we don't re-run that function
+    // when local data changes. Maybe we should somehow.
+    //
+    // Q: Is the table-rerendering when there are local changes? Does this
+    // cause the cells to also re-render even when they don't need to?
     const valueType = columnValueType(cellData.columnId, columns);
+    const attributeName = columnName(cellData.columnId, columns);
 
-    const cellTriples = getTriples({
-      mergeWith: cellData.triples,
-      selector: triple => {
-        const isRowCell = triple.entityId === cellData.entityId;
-        const isColCell = triple.attributeId === cellData.columnId;
-        const isCurrentValueType = triple.value.type === valueTypes[valueType];
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const cellTriples = useTriples(
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      React.useMemo(() => {
+        return {
+          mergeWith: cellData.triples,
+          selector: triple => {
+            const isRowCell = triple.entityId === cellData.entityId;
+            const isColCell = triple.attributeId === cellData.columnId;
+            const isCurrentValueType = triple.value.type === valueTypes[valueType];
 
-        return isRowCell && isColCell && isCurrentValueType;
-      },
+            return isRowCell && isColCell && isCurrentValueType;
+          },
+        };
+      }, [cellData, valueType])
+    );
+
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const cellRelations = useRelations(
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      React.useMemo(() => {
+        return {
+          mergeWith: cellData.relations,
+          selector: relation => {
+            const isRowCell = relation.fromEntity.id === cellData.entityId;
+            const isColCell = relation.typeOf.id === cellData.columnId;
+
+            return isRowCell && isColCell;
+          },
+        };
+      }, [cellData])
+    );
+
+    const placeholder = makePlaceholderFromValueType({
+      attributeId: cellData.columnId,
+      attributeName: attributeName,
+      entityId: cellData.entityId,
+      spaceId,
+      valueType,
+    });
+
+    const entityName = Entities.name(cellTriples);
+
+    const renderables = toRenderables({
+      entityId: cellData.entityId,
+      entityName,
+      spaceId,
+      triples: cellTriples,
+      relations: cellRelations,
+      // If the cell is empty in edit mode then we render a placeholder value
+      // until the user enters a real value.
+      placeholderRenderables: isEditable ? [placeholder] : undefined,
     });
 
     if (isEditable) {
       return (
         <EditableEntityTableCell
-          // HACK (baiirun): For some reason the table value for the name field is stale
-          // when changing the selectedType in edit mode. When debugging it looks like the
-          // cell has the correct data, but the value of the name is the value of the last
-          // cell in the previous selectedType. For now we can use a key to force the
-          // cell to re-mount when the selectedType and name changes.
-          key={Entities.name(cellTriples)}
-          triples={cellTriples}
-          cell={cellData}
-          space={space}
-          valueType={valueType}
-          columnName={columnName(cellData.columnId, columns)}
+          renderables={renderables}
+          attributeId={cellData.columnId}
+          entityId={cellData.entityId}
+          spaceId={spaceId}
           columnRelationTypes={columnRelationTypes[cellData.columnId]}
         />
       );
@@ -124,10 +176,10 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     return (
       <EntityTableCell
-        key={Entities.name(cellTriples)}
-        cell={cellData}
-        triples={cellTriples}
-        space={space}
+        entityId={cellData.entityId}
+        columnId={cellData.columnId}
+        renderables={renderables}
+        space={spaceId}
         isExpanded={isExpanded}
       />
     );
@@ -152,10 +204,8 @@ export const TableBlockTable = React.memo(
     const [expandedCells, setExpandedCells] = useState<Record<string, boolean>>({});
     const isEditable = useUserIsEditing(space);
 
-    // @TODO(data blocks): Somehow need to make a placeholder row
-    // For now we'll make a button where someone can create a new row easily
-
     const table = useReactTable({
+      // @TODO: We can merge local row data here?
       data: rows,
       columns: formatColumns(columns, isEditable, [], SpaceId(space)),
       defaultColumn,
@@ -262,7 +312,7 @@ export const TableBlockTable = React.memo(
                     return (
                       <tr key={entityId ?? index} className="hover:bg-bg">
                         {cells.map(cell => {
-                          const cellId = `${row.original.id}-${cell.column.id}`;
+                          const cellId = `${row.original.entityId}-${cell.column.id}`;
                           const firstTriple = cell.getValue<Cell>()?.triples[0];
                           const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
                           const isShown = shownColumnIds.includes(cell.column.id);
@@ -300,7 +350,7 @@ export const TableBlockTable = React.memo(
         return (
           <div className="flex flex-col gap-4">
             {rows.map((row, index: number) => {
-              const nameCell = row[SYSTEM_IDS.NAME] as EntityCell;
+              const nameCell = row.columns[SYSTEM_IDS.NAME];
               const { entityId, name, description, image } = nameCell;
 
               return (
@@ -330,7 +380,7 @@ export const TableBlockTable = React.memo(
         return (
           <div className="grid grid-cols-3 gap-x-4 gap-y-10">
             {rows.map((row, index: number) => {
-              const nameCell = row[SYSTEM_IDS.NAME] as EntityCell;
+              const nameCell = row.columns[SYSTEM_IDS.NAME];
               const { entityId, name, image } = nameCell;
 
               return (

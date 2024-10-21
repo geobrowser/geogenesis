@@ -1,5 +1,11 @@
-import { Relation } from '../io/dto/entities';
-import { RelationRenderableProperty, RenderableProperty, Schema, Triple, TripleRenderableProperty } from '../types';
+import {
+  Relation,
+  RelationRenderableProperty,
+  RenderableProperty,
+  Schema,
+  Triple,
+  TripleRenderableProperty,
+} from '../types';
 
 interface ToRenderablesArgs {
   entityId: string;

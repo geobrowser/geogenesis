@@ -1,8 +1,8 @@
 import { atom } from 'jotai';
 
 import { localRelationsAtom } from '~/core/database/write';
-import { Relation } from '~/core/io/dto/entities';
 
+import { Relation } from '../types';
 import { StoredRelation } from './types';
 
 export const createRelationsAtom = (initialRelations: Relation[]) => {

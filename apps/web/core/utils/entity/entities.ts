@@ -1,8 +1,8 @@
 import { SYSTEM_IDS } from '@geogenesis/sdk';
 
-import { Entity, Relation } from '~/core/io/dto/entities';
+import { Entity } from '~/core/io/dto/entities';
 import { EntityId } from '~/core/io/schema';
-import { Triple as ITriple, ValueTypeId } from '~/core/types';
+import { Triple as ITriple, Relation, RenderableProperty, ValueTypeId } from '~/core/types';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -34,6 +34,13 @@ export function descriptionTriple(triples: ITriple[]): ITriple | undefined {
 export function name(triples: ITriple[]): string | null {
   const triple = nameTriple(triples);
   return triple?.value.type === 'TEXT' ? triple?.value.value : null;
+}
+
+export function nameFromRenderable(renderables: RenderableProperty[]): string | null {
+  const value = renderables.find(r => r.attributeId === SYSTEM_IDS.NAME && r.type === 'TEXT')?.value as
+    | string
+    | undefined;
+  return value ?? null;
 }
 
 export function nameTriple(triples: ITriple[]): ITriple | undefined {

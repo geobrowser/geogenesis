@@ -14,12 +14,14 @@ import { cx } from 'class-variance-authority';
 
 import { useState } from 'react';
 
+import { getRelations } from '~/core/database/relations';
 import { getTriples } from '~/core/database/triples';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { DEFAULT_PAGE_SIZE } from '~/core/state/entity-table-store/entity-table-store';
 import { useEntityTable } from '~/core/state/entity-table-store/entity-table-store';
 import { Cell, Row, Schema } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { toRenderables } from '~/core/utils/to-renderables';
 import { NavUtils } from '~/core/utils/utils';
 import { valueTypes } from '~/core/value-types';
 
@@ -39,7 +41,7 @@ const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedC
   const columnSize = 1200 / columns.length;
 
   return columns.map((column, i) =>
-    columnHelper.accessor(row => row[column.id], {
+    columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
       header: () => {
         const isNameColumn = column.id === SYSTEM_IDS.NAME;
@@ -68,8 +70,8 @@ const formatColumns = (columns: Schema[] = [], isEditMode: boolean, unpublishedC
 
 const defaultColumn: Partial<ColumnDef<Row>> = {
   cell: ({ getValue, row, table, cell }) => {
-    const space = table.options.meta!.space;
-    const cellId = `${row.original.id}-${cell.column.id}`;
+    const spaceId = table.options.meta!.space;
+    const cellId = `${row.original.entityId}-${cell.column.id}`;
     const isExpanded = Boolean(table.options?.meta?.expandedCells[cellId]);
 
     // We know that cell is rendered as a React component by react-table
@@ -94,6 +96,26 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       },
     });
 
+    const cellRelations = getRelations({
+      mergeWith: cellData.relations,
+      selector: relation => {
+        const isRowCell = relation.fromEntity.id === cellData.entityId;
+        const isColCell = relation.typeOf.id === cellData.columnId;
+
+        return isRowCell && isColCell;
+      },
+    });
+
+    const renderables = toRenderables({
+      entityId: cellData.entityId,
+      entityName: Entities.name(cellTriples),
+      spaceId,
+      triples: cellTriples,
+      relations: cellRelations,
+      // @TODO: Might need to add placeholders for each column that we're rendering
+      placeholderRenderables: [],
+    });
+
     if (isEditable) {
       return (
         <EditableEntityTableCell
@@ -103,23 +125,21 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           // cell in the previous selectedType. For now we can use a key to force the
           // cell to re-mount when the selectedType and name changes.
           key={Entities.name(cellTriples)}
-          triples={cellTriples}
-          cell={cellData}
-          space={space}
-          valueType={valueType}
-          columnName={columnName(cellData.columnId, columns)}
-          // columnRelationTypes={columnRelationTypes[cellData.columnId]}
-          // @TODO: relations
+          renderables={renderables}
+          attributeId={cellData.columnId}
+          entityId={cellData.entityId}
+          spaceId={spaceId}
           columnRelationTypes={[]}
         />
       );
     } else if (cellData) {
       return (
         <EntityTableCell
-          key={Entities.name(cellData.triples)}
-          cell={cellData}
-          triples={cellTriples}
-          space={space}
+          key={Entities.name(cellTriples)}
+          entityId={cellData.entityId}
+          columnId={cellData.columnId}
+          renderables={renderables}
+          space={spaceId}
           isExpanded={isExpanded}
         />
       );
@@ -192,7 +212,7 @@ export const EntityTable = ({ rows, space, columns }: Props) => {
             return (
               <tr key={entityId ?? index} className="hover:bg-bg">
                 {cells.map(cell => {
-                  const cellId = `${row.original.id}-${cell.column.id}`;
+                  const cellId = `${row.original.entityId}-${cell.column.id}`;
                   const firstTriple = cell.getValue<Cell>()?.triples[0];
                   const isExpandable = firstTriple && firstTriple.value.type === 'TEXT';
 
