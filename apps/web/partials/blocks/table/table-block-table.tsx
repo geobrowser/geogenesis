@@ -367,7 +367,7 @@ export const TableBlockTable = React.memo(
                       )}
                     </div>
                     <div>
-                      <div className="truncate text-tableCell font-medium text-text">{name}</div>
+                      <div className="truncate text-mediumTitle font-medium text-text">{name}</div>
                       {description && <div className="mt-0.5 text-metadata text-grey-04">{description}</div>}
                     </div>
                   </Link>
@@ -395,7 +395,7 @@ export const TableBlockTable = React.memo(
                       />
                     )}
                   </div>
-                  <div className={cx('truncate text-tableCell font-medium text-text')}>{name}</div>
+                  <div className="truncate text-mediumTitle font-medium text-text">{name}</div>
                 </Link>
               );
             })}
