@@ -285,7 +285,7 @@ export const TableBlockTable = React.memo(
                           <th
                             key={header.id}
                             className={cx(
-                              'group relative min-w-[250px] border border-b-0 border-grey-02 p-[10px] text-left',
+                              'group relative min-w-[250px] border-b border-grey-02 p-[10px] text-left',
                               headerClassNames
                             )}
                           >
