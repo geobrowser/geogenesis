@@ -32,6 +32,7 @@ import { Animation } from '~/partials/onboarding/dialog';
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
 export const nameAtom = atom<string>('');
+export const avatarAtom = atom<string>('');
 export const coverAtom = atom<string>('');
 export const spaceIdAtom = atom<string>('');
 
@@ -376,6 +377,9 @@ type StepEnterProfileProps = {
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const { ipfs } = Services.useServices();
   const [name, setName] = useAtom(nameAtom);
+  const spaceType = useAtomValue(spaceTypeAtom);
+  const isCompany = spaceType === 'company';
+  const [avatar, setAvatar] = useAtom(avatarAtom);
   const [cover, setCover] = useAtom(coverAtom);
 
   const validName = name.length > 0;
@@ -393,7 +397,11 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
       const file = e.target.files[0];
       const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
-      setCover(imageValue);
+      if (!isCompany) {
+        setCover(imageValue);
+      } else {
+        setAvatar(imageValue);
+      }
     }
   };
 
@@ -406,37 +414,60 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
       <StepContents childKey="onboarding">
         <div className="space-y-4">
           <div className="flex justify-center">
-            <div className="group relative overflow-hidden rounded-lg shadow-lg">
-              {cover ? (
-                <>
-                  <div
-                    style={{
-                      backgroundImage: `url(${getImagePath(cover)})`,
-                      height: 100,
-                      width: 250,
-                      backgroundSize: 'cover',
-                      backgroundRepeat: 'no-repeat',
-                    }}
-                  />
-                  <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
-                    <SquareButton disabled={cover === ''} onClick={() => setCover('')} icon={<Trash />} />
-                  </div>
-                </>
-              ) : (
-                <img src="/placeholder-cover.png" alt="" className="h-[100px] w-[250px] object-cover" />
-              )}
-            </div>
+            {!isCompany ? (
+              <div className="group relative overflow-hidden rounded-lg shadow-lg">
+                {cover ? (
+                  <>
+                    <div
+                      style={{
+                        backgroundImage: `url(${getImagePath(cover)})`,
+                        height: 100,
+                        width: 250,
+                        backgroundSize: 'cover',
+                        backgroundRepeat: 'no-repeat',
+                      }}
+                    />
+                    <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+                      <SquareButton disabled={cover === ''} onClick={() => setCover('')} icon={<Trash />} />
+                    </div>
+                  </>
+                ) : (
+                  <img src="/placeholder-cover.png" alt="" className="h-[100px] w-[250px] object-cover" />
+                )}
+              </div>
+            ) : (
+              <div className="group relative overflow-hidden rounded-lg">
+                {avatar ? (
+                  <>
+                    <div
+                      style={{
+                        backgroundImage: `url(${getImagePath(avatar)})`,
+                        height: 152,
+                        width: 152,
+                        backgroundSize: 'cover',
+                        backgroundRepeat: 'no-repeat',
+                      }}
+                    />
+                    <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+                      <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
+                    </div>
+                  </>
+                ) : (
+                  <img src="/images/onboarding/no-avatar.png" alt="" className="size-[152px] object-cover" />
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-center gap-1.5 pb-4">
-            <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
+            <label htmlFor="file" className="inline-block cursor-pointer text-center hover:underline">
               <SmallButton icon={<Upload />} onClick={handleFileInputClick}>
-                Upload Cover
+                Upload {!isCompany ? 'Cover' : 'Avatar'}
               </SmallButton>
             </label>
             <input
               ref={fileInputRef}
               accept="image/png, image/jpeg"
-              id="avatar-file"
+              id="file"
               onChange={handleChange}
               type="file"
               className="hidden"
@@ -444,7 +475,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
           </div>
         </div>
       </StepContents>
-      <div className="flex w-full flex-col items-center justify-center gap-3 pt-[26px]">
+      <div className={cx('flex w-full flex-col items-center justify-center gap-3', !isCompany && 'pt-[26px]')}>
         <div className="inline-block">
           <input
             placeholder="Space name..."

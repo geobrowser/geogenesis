@@ -14,7 +14,6 @@ import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { Services } from '~/core/services';
-import { SpaceType } from '~/core/types';
 import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 
@@ -61,14 +60,14 @@ export const OnboardingDialog = () => {
 
   if (!address) return null;
 
-  async function createSpaces(accountType: SpaceType) {
-    if (!address || !accountType) return;
+  async function createSpace() {
+    if (!address) return;
 
     try {
       const spaceId = await deploy({
         spaceAvatarUri: avatar,
         spaceName: name,
-        type: accountType,
+        type: 'personal',
       });
 
       if (!spaceId) {
@@ -94,10 +93,10 @@ export const OnboardingDialog = () => {
       case 'enter-profile':
         setStep('create-space');
         await sleep(100);
-        createSpaces('personal');
+        createSpace();
         break;
       case 'create-space':
-        createSpaces('personal');
+        createSpace();
         break;
     }
   }
@@ -279,7 +278,7 @@ function StepOnboarding({ onNext }: StepOnboardingProps) {
                         backgroundRepeat: 'no-repeat',
                       }}
                     />
-                    <div className="absolute bottom-0 right-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+                    <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
                       <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
                     </div>
                   </>
