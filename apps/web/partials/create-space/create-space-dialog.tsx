@@ -397,10 +397,10 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
       const file = e.target.files[0];
       const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
-      if (!isCompany) {
-        setCover(imageValue);
-      } else {
+      if (isCompany) {
         setAvatar(imageValue);
+      } else {
+        setCover(imageValue);
       }
     }
   };
@@ -414,54 +414,56 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
       <StepContents childKey="onboarding">
         <div className="space-y-4">
           <div className="flex justify-center">
-            {!isCompany ? (
-              <div className="group relative overflow-hidden rounded-lg shadow-lg">
-                {cover ? (
-                  <>
-                    <div
-                      style={{
-                        backgroundImage: `url(${getImagePath(cover)})`,
-                        height: 100,
-                        width: 250,
-                        backgroundSize: 'cover',
-                        backgroundRepeat: 'no-repeat',
-                      }}
-                    />
-                    <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
-                      <SquareButton disabled={cover === ''} onClick={() => setCover('')} icon={<Trash />} />
-                    </div>
-                  </>
-                ) : (
-                  <img src="/placeholder-cover.png" alt="" className="h-[100px] w-[250px] object-cover" />
-                )}
-              </div>
-            ) : (
-              <div className="group relative overflow-hidden rounded-lg">
-                {avatar ? (
-                  <>
-                    <div
-                      style={{
-                        backgroundImage: `url(${getImagePath(avatar)})`,
-                        height: 152,
-                        width: 152,
-                        backgroundSize: 'cover',
-                        backgroundRepeat: 'no-repeat',
-                      }}
-                    />
-                    <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
-                      <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
-                    </div>
-                  </>
-                ) : (
-                  <img src="/images/onboarding/no-avatar.png" alt="" className="size-[152px] object-cover" />
-                )}
-              </div>
-            )}
+            <div className="group relative overflow-hidden rounded-lg shadow-lg">
+              {isCompany ? (
+                <>
+                  {avatar ? (
+                    <>
+                      <div
+                        style={{
+                          backgroundImage: `url(${getImagePath(avatar)})`,
+                          height: 152,
+                          width: 152,
+                          backgroundSize: 'cover',
+                          backgroundRepeat: 'no-repeat',
+                        }}
+                      />
+                      <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+                        <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
+                      </div>
+                    </>
+                  ) : (
+                    <img src="/images/onboarding/no-avatar.png" alt="" className="size-[152px] object-cover" />
+                  )}
+                </>
+              ) : (
+                <>
+                  {cover ? (
+                    <>
+                      <div
+                        style={{
+                          backgroundImage: `url(${getImagePath(cover)})`,
+                          height: 100,
+                          width: 250,
+                          backgroundSize: 'cover',
+                          backgroundRepeat: 'no-repeat',
+                        }}
+                      />
+                      <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+                        <SquareButton disabled={cover === ''} onClick={() => setCover('')} icon={<Trash />} />
+                      </div>
+                    </>
+                  ) : (
+                    <img src="/placeholder-cover.png" alt="" className="h-[100px] w-[250px] object-cover" />
+                  )}
+                </>
+              )}
+            </div>
           </div>
           <div className="flex items-center justify-center gap-1.5 pb-4">
             <label htmlFor="file" className="inline-block cursor-pointer text-center hover:underline">
               <SmallButton icon={<Upload />} onClick={handleFileInputClick}>
-                Upload {!isCompany ? 'Cover' : 'Avatar'}
+                Upload {isCompany ? 'Avatar' : 'Cover'}
               </SmallButton>
             </label>
             <input
