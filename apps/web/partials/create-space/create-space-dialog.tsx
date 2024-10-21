@@ -1,11 +1,10 @@
 'use client';
 
 import * as Dialog from '@radix-ui/react-dialog';
-import * as Component from '@radix-ui/react-radio-group';
-import BoringAvatar from 'boring-avatars';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useRouter } from 'next/navigation';
 
 import * as React from 'react';
 import { ChangeEvent, useCallback, useRef, useState } from 'react';
@@ -14,24 +13,27 @@ import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { Services } from '~/core/services';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
-import { getImagePath, sleep } from '~/core/utils/utils';
+import { NavUtils, getImagePath, sleep } from '~/core/utils/utils';
 import { Values } from '~/core/utils/value';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { Close } from '~/design-system/icons/close';
+import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { RadioGroup } from '~/design-system/radio-group';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
+import { Tooltip } from '~/design-system/tooltip';
+
+import { Animation } from '~/partials/onboarding/dialog';
 
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
 export const nameAtom = atom<string>('');
 export const avatarAtom = atom<string>('');
+export const coverAtom = atom<string>('');
 export const spaceIdAtom = atom<string>('');
 
 type Step = 'select-type' | 'select-governance' | 'enter-profile' | 'create-space' | 'completed';
@@ -48,7 +50,7 @@ export function CreateSpaceDialog() {
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const [name, setName] = useAtom(nameAtom);
-  const [avatar, setAvatar] = useAtom(avatarAtom);
+  const [cover, setCover] = useAtom(coverAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
@@ -65,7 +67,8 @@ export function CreateSpaceDialog() {
       const spaceId = await deploy({
         type: spaceType,
         spaceName: name,
-        spaceAvatarUri: avatar,
+        spaceAvatarUri: '',
+        spaceCoverUri: cover,
         governanceType: governanceType ?? undefined,
       });
 
@@ -103,14 +106,13 @@ export function CreateSpaceDialog() {
       <Dialog.Trigger
         onClick={() => {
           setName('');
-          setAvatar('');
+          setCover('');
           setGovernanceType(null);
           setStep('select-type');
         }}
       >
         New space
       </Dialog.Trigger>
-
       <Dialog.Portal>
         <Dialog.Content
           // Only allow closing the dialog by clicking the close button
@@ -167,7 +169,7 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="pointer-events-auto relative z-10 mt-32 h-full max-h-[440px] w-full max-w-[360px] overflow-hidden rounded-lg border border-grey-02 bg-white p-4 shadow-dropdown"
+      className="pointer-events-auto relative z-100 mt-40 flex h-[440px] w-full max-w-[360px] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white p-4 shadow-dropdown"
     >
       {children}
     </motion.div>
@@ -175,8 +177,8 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
 };
 
 const headerText: Record<Step, string> = {
-  'select-type': 'Select space type',
-  'select-governance': 'Select governance type',
+  'select-type': 'Select space template',
+  'select-governance': 'Governance type',
   'enter-profile': '',
   'create-space': '',
   completed: '',
@@ -196,9 +198,9 @@ const StepHeader = () => {
         break;
       case 'enter-profile':
         if (spaceType === 'default') {
-          setStep('select-type');
-        } else {
           setStep('select-governance');
+        } else {
+          setStep('select-type');
         }
         break;
       default:
@@ -216,7 +218,7 @@ const StepHeader = () => {
         )}
       </div>
       <h3 className="text-smallTitle">{headerText[step]}</h3>
-      {step !== 'create-space' ? (
+      {step !== 'create-space' && step !== 'completed' ? (
         <Dialog.Close asChild>
           <SquareButton icon={<Close color="grey-04" />} className="!border-none !bg-transparent" />
         </Dialog.Close>
@@ -241,7 +243,7 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
       animate={{ opacity: 1, left: 0, right: 0 }}
       exit={{ opacity: 0, left: -20 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="relative"
+      className="relative flex flex-grow flex-col"
     >
       {children}
     </motion.div>
@@ -249,118 +251,136 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
 };
 
 function StepSelectType() {
-  const [spaceType, setspaceType] = useAtom(spaceTypeAtom);
+  const setSpaceType = useSetAtom(spaceTypeAtom);
+  const setGovernanceType = useSetAtom(governanceTypeAtom);
   const setStep = useSetAtom(stepAtom);
-
-  const options: { image: string; label: string; value: SpaceType }[] = [
-    // @TODO(migration): Defaulting to default space with governance for now since our templates
-    // have not yet been migrated over. Make sure we're setting the correct value for each
-    // template type.
-    { image: '', label: 'Blank', value: 'default' },
-    { image: '/images/onboarding/academic-field.png', label: 'Academic field', value: 'personal' },
-    { image: '/images/onboarding/company.png', label: 'Company', value: 'company' },
-    { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao' },
-    { image: '/images/onboarding/nonprofit.png', label: 'Government organization', value: 'government-org' },
-    { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit' },
-    { image: '/images/onboarding/interest-group.png', label: 'Interest group', value: 'interest-group' },
-    { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry' },
-    { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol' },
-    { image: '/images/onboarding/region.png', label: 'Region', value: 'region' },
-  ];
-
-  const onNext = () => {
-    // We only let users select the governance type if they select "Blank", otherwise
-    // we default to a specific governance type depending on the space type.
-    if (spaceType === 'default') {
-      setStep('select-governance');
-    } else {
-      setStep('enter-profile');
-    }
-  };
 
   return (
     <>
       <StepContents childKey="account-type">
-        <div className="mt-3">
-          <RadioGroup
-            value={spaceType ?? ''}
-            onValueChange={setspaceType as (value: string) => void}
-            options={options}
-          />
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          {spaceTypeOptions.map(spaceType => {
+            return (
+              <button
+                key={spaceType.value}
+                onClick={() => {
+                  setSpaceType(spaceType.value);
+
+                  if (spaceType.value === 'default') {
+                    setGovernanceType(null);
+                    setStep('select-governance');
+                  } else {
+                    if (spaceType.governance) {
+                      setGovernanceType(spaceType.governance);
+                    }
+                    setStep('enter-profile');
+                  }
+                }}
+                className="flex items-center gap-3 rounded-lg border border-divider bg-white  py-2 pl-2 pr-3 transition-colors duration-150 ease-in-out hover:bg-divider"
+              >
+                <div className="size-8 flex-shrink-0 overflow-clip rounded">
+                  <img src={spaceType.image} alt="" className="block h-full w-full object-cover" />
+                </div>
+                <div className="text-button">{spaceType.label}</div>
+              </button>
+            );
+          })}
         </div>
       </StepContents>
-      <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <Button onClick={onNext} disabled={spaceType === null} className="w-full">
-          Continue
-        </Button>
-      </div>
     </>
   );
 }
+
+const spaceTypeOptions: { image: string; label: string; value: SpaceType; governance?: 'PUBLIC' | 'PERSONAL' }[] = [
+  { image: '/images/onboarding/blank.png', label: 'Blank', value: 'default' },
+  {
+    image: '/images/onboarding/academic-field.png',
+    label: 'Academic field',
+    value: 'academic-field',
+    governance: 'PERSONAL',
+  },
+  { image: '/images/onboarding/company.png', label: 'Company', value: 'company', governance: 'PERSONAL' },
+  { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao', governance: 'PERSONAL' },
+  {
+    image: '/images/onboarding/gov-org.png',
+    label: 'Governmental org',
+    value: 'government-org',
+    governance: 'PERSONAL',
+  },
+  { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry', governance: 'PERSONAL' },
+  {
+    image: '/images/onboarding/interest-group.png',
+    label: 'Interest group',
+    value: 'interest-group',
+    governance: 'PERSONAL',
+  },
+  { image: '/images/onboarding/region.png', label: 'Region', value: 'region', governance: 'PERSONAL' },
+  { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit', governance: 'PERSONAL' },
+  { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol', governance: 'PERSONAL' },
+];
 
 function SelectGovernanceType() {
-  const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
+  const setGovernanceType = useSetAtom(governanceTypeAtom);
   const setStep = useSetAtom(stepAtom);
-
-  const options: GovernanceTypeRadioOption[] = [
-    {
-      label: 'Public',
-      value: 'PUBLIC',
-      image: '/images/onboarding/public.png',
-      sublabel: 'All proposed edits go through governance and are either accepted or rejected by the Editors.',
-    },
-    {
-      label: 'Personal',
-      value: 'PERSONAL',
-      image: '/images/onboarding/personal.png',
-      sublabel: 'All edits are automatically added without a voting period.',
-    },
-  ];
 
   return (
     <>
       <StepContents childKey="account-type">
-        <div className="mt-3">
-          <GovernanceTypeRadioGroup
-            value={governanceType ?? ''}
-            onValueChange={setGovernanceType as (value: string) => void}
-            options={options}
-          />
+        <div className="mt-3 flex flex-grow flex-col gap-3">
+          {governanceTypeOptions.map(({ label, value, image, sublabel }) => {
+            return (
+              <GovernanceTypeButton
+                key={value}
+                onClick={() => {
+                  setGovernanceType(value);
+                  setStep('enter-profile');
+                }}
+                label={label}
+                image={image}
+                sublabel={sublabel}
+              />
+            );
+          })}
         </div>
       </StepContents>
-      <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <Button onClick={() => setStep('enter-profile')} disabled={governanceType === null} className="w-full">
-          Continue
-        </Button>
-      </div>
     </>
   );
 }
+
+type GovernanceTypeOption = {
+  label: string;
+  value: 'PUBLIC' | 'PERSONAL';
+  sublabel: string;
+  image: string;
+};
+
+const governanceTypeOptions: GovernanceTypeOption[] = [
+  {
+    label: 'Public',
+    value: 'PUBLIC',
+    image: '/images/onboarding/public.png',
+    sublabel: 'All proposed edits go through governance and are either accepted or rejected by the Editors.',
+  },
+  {
+    label: 'Personal',
+    value: 'PERSONAL',
+    image: '/images/onboarding/personal.png',
+    sublabel: 'All edits are automatically added without a voting period.',
+  },
+];
 
 type StepEnterProfileProps = {
   onNext: () => void;
   address: string;
 };
 
-const placeholderMessage: Record<SpaceType, string> = {
-  default: 'Space name',
-  company: 'Company name',
-  nonprofit: 'Nonprofit name',
-  personal: 'Personal name',
-  'academic-field': 'Academic field name',
-  region: 'Region name',
-  industry: 'Industry name',
-  protocol: 'Protocol name',
-  dao: 'DAO name',
-  'government-org': 'Government org name',
-  'interest-group': 'Interest group name',
-};
-
-function StepEnterProfile({ onNext, address }: StepEnterProfileProps) {
+function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const { ipfs } = Services.useServices();
-  const spaceType = useAtomValue(spaceTypeAtom);
   const [name, setName] = useAtom(nameAtom);
+  const spaceType = useAtomValue(spaceTypeAtom);
+  const isCompany = spaceType === 'company';
   const [avatar, setAvatar] = useAtom(avatarAtom);
+  const [cover, setCover] = useAtom(coverAtom);
 
   const validName = name.length > 0;
 
@@ -377,46 +397,79 @@ function StepEnterProfile({ onNext, address }: StepEnterProfileProps) {
       const file = e.target.files[0];
       const ipfsUri = await ipfs.uploadFile(file);
       const imageValue = Values.toImageValue(ipfsUri);
-      setAvatar(imageValue);
+      if (isCompany) {
+        setAvatar(imageValue);
+      } else {
+        setCover(imageValue);
+      }
     }
   };
+
+  const governanceType = useAtomValue(governanceTypeAtom);
+
+  if (!governanceType) return null;
 
   return (
     <div className="space-y-4">
       <StepContents childKey="onboarding">
         <div className="space-y-4">
           <div className="flex justify-center">
-            <div className="overflow-hidden rounded-lg bg-cover bg-center shadow-lg">
-              <div className="overflow-hidden rounded-lg">
-                {avatar ? (
-                  <div
-                    style={{
-                      backgroundImage: `url(${getImagePath(avatar)})`,
-                      height: 152,
-                      width: 152,
-                      backgroundSize: 'cover',
-                      backgroundRepeat: 'no-repeat',
-                    }}
-                  />
-                ) : (
-                  <BoringAvatar size={154} name={address} variant="beam" square />
-                )}
-              </div>
+            <div className="group relative overflow-hidden rounded-lg shadow-lg">
+              {isCompany ? (
+                <>
+                  {avatar ? (
+                    <>
+                      <div
+                        style={{
+                          backgroundImage: `url(${getImagePath(avatar)})`,
+                          height: 152,
+                          width: 152,
+                          backgroundSize: 'cover',
+                          backgroundRepeat: 'no-repeat',
+                        }}
+                      />
+                      <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+                        <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
+                      </div>
+                    </>
+                  ) : (
+                    <img src="/images/onboarding/no-avatar.png" alt="" className="size-[152px] object-cover" />
+                  )}
+                </>
+              ) : (
+                <>
+                  {cover ? (
+                    <>
+                      <div
+                        style={{
+                          backgroundImage: `url(${getImagePath(cover)})`,
+                          height: 100,
+                          width: 250,
+                          backgroundSize: 'cover',
+                          backgroundRepeat: 'no-repeat',
+                        }}
+                      />
+                      <div className="absolute right-0 top-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
+                        <SquareButton disabled={cover === ''} onClick={() => setCover('')} icon={<Trash />} />
+                      </div>
+                    </>
+                  ) : (
+                    <img src="/placeholder-cover.png" alt="" className="h-[100px] w-[250px] object-cover" />
+                  )}
+                </>
+              )}
             </div>
           </div>
           <div className="flex items-center justify-center gap-1.5 pb-4">
-            <label htmlFor="avatar-file" className="inline-block cursor-pointer text-center hover:underline">
+            <label htmlFor="file" className="inline-block cursor-pointer text-center hover:underline">
               <SmallButton icon={<Upload />} onClick={handleFileInputClick}>
-                Upload
+                Upload {isCompany ? 'Avatar' : 'Cover'}
               </SmallButton>
             </label>
-            <div>
-              <SquareButton disabled={avatar === ''} onClick={() => setAvatar('')} icon={<Trash />} />
-            </div>
             <input
               ref={fileInputRef}
               accept="image/png, image/jpeg"
-              id="avatar-file"
+              id="file"
               onChange={handleChange}
               type="file"
               className="hidden"
@@ -424,29 +477,51 @@ function StepEnterProfile({ onNext, address }: StepEnterProfileProps) {
           </div>
         </div>
       </StepContents>
-      <div className="flex w-full flex-col items-center justify-center gap-3">
+      <div className={cx('flex w-full flex-col items-center justify-center gap-3', !isCompany && 'pt-[26px]')}>
         <div className="inline-block">
           <input
-            placeholder={placeholderMessage[spaceType as SpaceType]}
+            placeholder="Space name..."
             className="block px-2 py-1 text-center !text-2xl text-mediumTitle placeholder:opacity-25 focus:!outline-none"
             value={name}
             onChange={({ currentTarget: { value } }) => setName(value)}
             autoFocus
           />
         </div>
-        <Text as="h3" variant="body" className="text-center !text-base">
-          You can update this at any time.
-        </Text>
       </div>
-
       <div className="absolute inset-x-4 bottom-4 flex">
-        <Button variant="secondary" disabled={!validName} onClick={onNext} className="w-full">
+        <div className="absolute left-0 right-0 top-0 z-100 flex -translate-y-full justify-center pb-4">
+          <Tooltip
+            trigger={
+              <div className="inline-flex cursor-pointer items-center gap-1 text-grey-04">
+                <Text as="h3" variant="footnote" className="text-center">
+                  {governanceText[governanceType]}
+                </Text>
+                <div>
+                  <QuestionCircle />
+                </div>
+              </div>
+            }
+            label={governanceLabel[governanceType]}
+            position="top"
+          />
+        </div>
+        <Button disabled={!validName} onClick={onNext} className="w-full">
           Create Space
         </Button>
       </div>
     </div>
   );
 }
+
+const governanceText: Record<SpaceGovernanceType, string> = {
+  PERSONAL: 'Personal access controls',
+  PUBLIC: 'Public governance',
+};
+
+const governanceLabel: Record<SpaceGovernanceType, string> = {
+  PERSONAL: 'A vote isn’t required to publish edits in this space',
+  PUBLIC: 'A vote is required to publish edits in this space',
+};
 
 type StepCompleteProps = {
   onRetry: () => void;
@@ -455,95 +530,82 @@ type StepCompleteProps = {
 };
 
 function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
-  const name = useAtomValue(nameAtom);
-  const spaceAddress = useAtomValue(spaceIdAtom);
+  const router = useRouter();
+
+  const spaceId = useAtomValue(spaceIdAtom);
   const step = useAtomValue(stepAtom);
+
+  const hasCompleted = step === 'completed';
+
+  if (hasCompleted) {
+    setTimeout(() => {
+      onDone();
+      const destination = NavUtils.toSpace(spaceId);
+      router.push(destination);
+    }, 3_600);
+  }
 
   return (
     <>
       <StepContents childKey="start">
-        <div className="flex w-full flex-col items-center pt-6">
-          <Text
-            as="h3"
-            variant="bodySemibold"
-            className={cx('mx-auto text-center !text-2xl', step === 'completed' && '-mt-[24px]')}
-          >
-            {step === 'completed' ? `Welcome to Geo!` : `Creating Space`}
+        <div className="flex w-full flex-col items-center pt-3">
+          <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center !text-2xl')}>
+            {step === 'completed' ? `Finalizing details...` : `Creating space...`}
           </Text>
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center !text-base">
-            Setting up your new space
+            Get ready to experience a new way of creating and sharing knowledge.
           </Text>
-
-          {step === 'create-space' && (
+          {step !== 'completed' && (
             <>
-              <Spacer height={24} />
-
-              <div className="w-6">
-                <Dots color="bg-grey-02" />
-              </div>
+              <Spacer height={32} />
+              {showRetry && (
+                <p className=" mt-4 text-center text-smallButton">
+                  Space creation failed
+                  <button onClick={onRetry} className="text-ctaPrimary">
+                    Retry
+                  </button>
+                </p>
+              )}
             </>
-          )}
-
-          {step !== 'completed' && showRetry && (
-            <p className=" mt-4 text-center text-smallButton">
-              Space creation failed{' '}
-              <button onClick={onRetry} className="text-ctaPrimary">
-                Retry
-              </button>
-            </p>
           )}
         </div>
       </StepContents>
-      <div className="absolute inset-x-4 bottom-4 space-y-4">
-        <div className="aspect-video">
-          <img src="/images/onboarding/1.png" alt="" className="inline-block h-full w-full" />
+      <div className="absolute inset-x-4 bottom-4">
+        <div className="absolute left-0 right-0 top-0 z-10 flex -translate-y-1/2 justify-center">
+          <div className="flex size-11 items-center justify-center rounded-full bg-white shadow-card">
+            <Dots />
+          </div>
         </div>
-        <div className="flex justify-center gap-2 whitespace-nowrap">
-          <Link href={`/space/${spaceAddress}`} className="w-full" onClick={onDone}>
-            <Button className="w-full" disabled={step !== 'completed'}>
-              Go to {name}
-            </Button>
-          </Link>
+        <div className="relative z-0">
+          <Animation active={hasCompleted} />
         </div>
       </div>
     </>
   );
 }
 
-type RadioGroupProps = {
-  value: string;
-  onValueChange: (value: string) => void;
-  options: Array<GovernanceTypeRadioOption>;
-};
-
-type GovernanceTypeRadioOption = {
-  value: string;
+type GovernanceTypeButtonProps = {
+  onClick: () => void;
   label: string;
   sublabel: string;
   image: string;
 };
 
-function GovernanceTypeRadioGroup({ value, onValueChange, options, ...rest }: RadioGroupProps) {
+function GovernanceTypeButton({ onClick, label, image, sublabel }: GovernanceTypeButtonProps) {
   return (
-    <Component.Root value={value} onValueChange={onValueChange} className="flex flex-col gap-3" {...rest}>
-      {options.map(({ label, image, value, sublabel, ...rest }) => (
-        <Component.Item
-          key={value}
-          value={value}
-          className={cx(
-            'data-[state=checked]:to-ctaSecondary flex items-center justify-between rounded-lg bg-divider p-4 text-text transition-all duration-300 data-[state=checked]:bg-gradient-to-tr data-[state=checked]:from-[#BAFEFF] data-[state=checked]:via-[#E5C4F6] data-[state=checked]:to-[#FFCBB4]'
-          )}
-          {...rest}
-        >
-          <div className="space-y-7">
-            <div className="space-y-2">
-              <h4 className="text-quoteMedium">{label}</h4>
-              <p className="text-metadata">{sublabel}</p>
-            </div>
-            <img src={image} alt={label} className="max-h-6 w-auto" />
-          </div>
-        </Component.Item>
-      ))}
-    </Component.Root>
+    <button
+      onClick={onClick}
+      className={cx(
+        'flex flex-1 flex-grow items-center justify-between rounded-lg border border-divider bg-white p-4 text-text transition-all duration-300 hover:bg-divider'
+      )}
+    >
+      <div className="space-y-7">
+        <div className="space-y-2">
+          <h4 className="text-quoteMedium">{label}</h4>
+          <p className="text-metadata">{sublabel}</p>
+        </div>
+        <img src={image} alt={label} className="max-h-6 w-auto" />
+      </div>
+    </button>
   );
 }

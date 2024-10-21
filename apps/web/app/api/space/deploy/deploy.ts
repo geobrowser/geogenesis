@@ -56,6 +56,7 @@ interface DeployArgs {
   governanceType?: SpaceGovernanceType;
   spaceName: string;
   spaceAvatarUri: string | null;
+  spaceCoverUri: string | null;
   initialEditorAddress: string;
   baseUrl: string;
 }
