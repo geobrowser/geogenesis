@@ -3,7 +3,7 @@
 import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import * as React from 'react';
 
@@ -32,6 +32,8 @@ const contentStyles = cva('z-10 w-[360px] overflow-hidden rounded-lg border bord
   },
 });
 
+const MotionContent = motion(PopoverContent);
+
 export function Menu({
   children,
   trigger,
@@ -50,14 +52,21 @@ export function Menu({
       <Trigger asChild={asChild}>{trigger}</Trigger>
       <AnimatePresence>
         {open && (
-          <PopoverContent
+          <MotionContent
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            transition={{
+              duration: 0.1,
+              ease: 'easeInOut',
+            }}
             align={align}
             side={side}
             sideOffset={sideOffset}
             className={contentStyles({ align, className })}
           >
             {children}
-          </PopoverContent>
+          </MotionContent>
         )}
       </AnimatePresence>
     </Root>
