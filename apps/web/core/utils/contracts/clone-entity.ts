@@ -2,8 +2,7 @@ import { Op, SYSTEM_IDS, createRelationship } from '@geogenesis/sdk';
 
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
-import { Relation } from '~/core/io/dto/entities';
-import { Triple as TripleType } from '~/core/types';
+import { Relation, Triple as TripleType } from '~/core/types';
 import { Ops } from '~/core/utils/ops';
 
 type Options = {
