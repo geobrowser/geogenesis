@@ -3,80 +3,12 @@ import { Effect } from 'effect';
 
 import { ROOT_SPACE_CREATED_AT, ROOT_SPACE_CREATED_AT_BLOCK, ROOT_SPACE_CREATED_BY_ID } from './constants/constants';
 import { handleEditsPublished } from './events/edits-published/handler';
-import {
-  handleInitialGovernanceSpaceEditorsAdded,
-  handleInitialPersonalSpaceEditorsAdded,
-} from './events/initial-editors-added/handler';
+import { handleInitialGovernanceSpaceEditorsAdded } from './events/initial-editors-added/handler';
 import { handleInitialProposalsCreated } from './events/initial-proposal-created/handler';
 import type { EditProposal } from './events/proposals-created/parser';
 import { handleProposalsExecuted } from './events/proposals-executed/handler';
 import { handleGovernancePluginCreated, handleSpacesCreated } from './events/spaces-created/handler';
 import type { Op } from './types';
-
-const entities: string[] = [
-  SYSTEM_IDS.TYPES,
-  SYSTEM_IDS.ATTRIBUTES,
-  SYSTEM_IDS.SCHEMA_TYPE,
-  SYSTEM_IDS.VALUE_TYPE,
-  SYSTEM_IDS.RELATION,
-  SYSTEM_IDS.COLLECTION_VALUE_TYPE,
-  SYSTEM_IDS.TEXT,
-  SYSTEM_IDS.IMAGE,
-  SYSTEM_IDS.IMAGE_ATTRIBUTE,
-  SYSTEM_IDS.DESCRIPTION,
-  SYSTEM_IDS.NAME,
-  SYSTEM_IDS.SPACE,
-  SYSTEM_IDS.ATTRIBUTE,
-  SYSTEM_IDS.SPACE_CONFIGURATION,
-  SYSTEM_IDS.FOREIGN_TYPES,
-  SYSTEM_IDS.TABLE_BLOCK,
-  SYSTEM_IDS.SHOWN_COLUMNS,
-  SYSTEM_IDS.TEXT_BLOCK,
-  SYSTEM_IDS.IMAGE_BLOCK,
-  SYSTEM_IDS.BLOCKS,
-  SYSTEM_IDS.MARKDOWN_CONTENT,
-  SYSTEM_IDS.ROW_TYPE,
-  SYSTEM_IDS.PARENT_ENTITY,
-  SYSTEM_IDS.RELATION_VALUE_RELATIONSHIP_TYPE,
-  SYSTEM_IDS.DATE,
-  SYSTEM_IDS.WEB_URL,
-  SYSTEM_IDS.PERSON_TYPE,
-  SYSTEM_IDS.AVATAR_ATTRIBUTE,
-  SYSTEM_IDS.COVER_ATTRIBUTE,
-
-  SYSTEM_IDS.WALLETS_ATTRIBUTE,
-  SYSTEM_IDS.FILTER,
-
-  SYSTEM_IDS.BROADER_SPACES,
-
-  // Compound types are value types that are stored as entities but are
-  // selectable as a "native" type for a triple's value type.
-  //
-  // e.g., you can select a Text value type, or a Number, or an Image. The
-  // image is stored as an entity while the others are stored as a primitive
-  // type in the database.
-  SYSTEM_IDS.IMAGE_URL_ATTRIBUTE,
-
-  // Collections
-  SYSTEM_IDS.COLLECTION_TYPE,
-  SYSTEM_IDS.RELATION_TYPE,
-  SYSTEM_IDS.RELATION_INDEX,
-  SYSTEM_IDS.RELATION_TO_ATTRIBUTE,
-  SYSTEM_IDS.RELATION_FROM_ATTRIBUTE,
-  SYSTEM_IDS.RELATION_TYPE_ATTRIBUTE,
-
-  // Templates
-  SYSTEM_IDS.TEMPLATE_ATTRIBUTE,
-
-  // Data block views
-  SYSTEM_IDS.VIEW_TYPE,
-  SYSTEM_IDS.VIEW_ATTRIBUTE,
-  SYSTEM_IDS.GALLERY_VIEW,
-  SYSTEM_IDS.TABLE_VIEW,
-  SYSTEM_IDS.LIST_VIEW,
-  SYSTEM_IDS.PLACEHOLDER_TEXT,
-  SYSTEM_IDS.PLACEHOLDER_IMAGE,
-];
 
 const names: Record<string, string> = {
   [SYSTEM_IDS.TYPES]: 'Types',
@@ -100,6 +32,7 @@ const names: Record<string, string> = {
   [SYSTEM_IDS.IMAGE_ATTRIBUTE]: 'Image',
   [SYSTEM_IDS.DESCRIPTION]: 'Description',
   [SYSTEM_IDS.SPACE_CONFIGURATION]: 'Space',
+  [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: 'Source space',
   [SYSTEM_IDS.FOREIGN_TYPES]: 'Foreign Types',
 
   // Data blocks
@@ -144,6 +77,7 @@ const attributes: Record<string, string> = {
   [SYSTEM_IDS.DESCRIPTION]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.NAME]: SYSTEM_IDS.TEXT,
   [SYSTEM_IDS.SPACE]: SYSTEM_IDS.TEXT,
+  [SYSTEM_IDS.SOURCE_SPACE_ATTRIBUTE]: SYSTEM_IDS.RELATION,
 
   // Data blocks
   [SYSTEM_IDS.VIEW_ATTRIBUTE]: SYSTEM_IDS.RELATION,
