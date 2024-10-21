@@ -235,7 +235,7 @@ export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }
   const PLACEHOLDER_ROWS = new Array(rows).fill(0);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-grey-02 p-0 shadow-button">
+    <div className="overflow-hidden rounded-lg border border-grey-02 p-0">
       <div className={cx('overflow-x-clip rounded-lg', className)}>
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>
@@ -270,7 +270,7 @@ export function TableBlockPlaceholder({ className = '', columns = 3, rows = 10 }
 
 export function TableBlockError({ spaceId, blockId }: { spaceId: string; blockId: string }) {
   return (
-    <div className="overflow-hidden rounded border border-red-02 p-0 shadow-button shadow-red-02">
+    <div className="overflow-hidden rounded border border-red-02 p-0">
       <div className="overflow-x-scroll rounded-sm">
         <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
           <thead>
